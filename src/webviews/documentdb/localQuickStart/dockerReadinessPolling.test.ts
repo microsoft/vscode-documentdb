@@ -9,6 +9,7 @@ import {
     type DockerReadyReadiness,
     type DockerStatusResult,
     InstanceState,
+    QUICK_START_PORT,
 } from '../../../services/localQuickStart/quickStartTypes';
 import { pollDockerReadiness } from './dockerReadinessPolling';
 
@@ -17,7 +18,8 @@ function status(readiness: DockerReadiness): DockerStatusResult {
         readiness,
         status: { state: InstanceState.NotInstalled },
         busy: false,
-        willReuse: false,
+        canReuseExistingData: false,
+        suggestedPort: QUICK_START_PORT,
     };
 }
 

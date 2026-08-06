@@ -5,29 +5,26 @@
 
 import * as vscode from 'vscode';
 import { ext } from '../../extensionVariables';
+import { StorageService } from '../storageService';
 import { disposeQuickStartOutputChannel, type IContainerRuntime } from './ContainerRuntime';
-import { PROVISIONING_LEASE_TTL_MS, readRegistry, upsertInstanceRecord } from './quickStartRegistry';
+
 import { getReadinessTimeoutMessage, QuickStartServiceImpl } from './QuickStartService';
+import { listInstances, PROVISIONING_LEASE_TTL_MS, upsertInstance, writeConnectionString } from './quickStartStore';
 import {
     DEFAULT_ALIAS,
     type DockerReadiness,
-    imageRefKey,
     InstanceState,
-    LEGACY_IMAGE_REF_KEY,
-    LEGACY_SECRET_KEY,
     QUICK_START_ALIAS_LABEL_KEY,
     QUICK_START_LABEL_KEY,
     QUICK_START_PORT,
-    secretKey,
     type StageEvent,
 } from './quickStartTypes';
 
-// The R1 belt-and-suspenders safety path (WI-1): before the activation migration copies the legacy
-// flat secret to the alias-keyed one, the service must still (a) adopt an existing labelled container
-// rather than remove it, and (b) decide `reusing=true` so the data volume is never wiped — both via
-// `readStoredConnectionString`'s legacy fallback. The injectable runtime (WI-0) makes this testable.
+// Volume-safety around stored credentials: whenever an instance's credentials are readable, the
+// service must (a) adopt an existing labelled container rather than remove it, and (b) decide
+// `reusing=true` so the data volume is never wiped. The injectable runtime (WI-0) makes this testable.
 
-const LEGACY_CONN = 'mongodb://u1:p1@localhost:10273/?tls=true&tlsAllowInvalidCertificates=true';
+const STORED_CONN = 'mongodb://u1:p1@localhost:10273/?tls=true&tlsAllowInvalidCertificates=true';
 
 function fakeMemento(): vscode.Memento {
     const store = new Map<string, unknown>();
@@ -67,11 +64,38 @@ function mockRuntime(overrides: Partial<IContainerRuntime>): IContainerRuntime {
         inspectContainer: jest.fn().mockResolvedValue(undefined),
         removeContainer: jest.fn().mockResolvedValue(undefined),
         removeVolume: jest.fn().mockResolvedValue(undefined),
+        isPortFree: jest.fn().mockResolvedValue(true),
         ...overrides,
     } as unknown as IContainerRuntime;
 }
 
-describe('QuickStartService — R1 legacy-fallback safety (WI-1)', () => {
+/**
+ * An ExtensionContext complete enough for {@link StorageService}, which the Quick Start store runs
+ * on: it needs `extension.id` to namespace its keys and `subscriptions` for the SecretStorage
+ * change listener. Installing a fresh backing store also drops the cached `StorageImpl` singletons,
+ * whose short-lived `getItems` cache would otherwise leak a previous test's snapshot into this one.
+ */
+function fakeContext(globalState: vscode.Memento): vscode.ExtensionContext {
+    StorageService._resetForTests();
+    return {
+        globalState,
+        subscriptions: [],
+        extension: { id: 'ms-azuretools.vscode-documentdb' },
+    } as unknown as vscode.ExtensionContext;
+}
+
+/**
+ * Seed an already-provisioned instance: a `ready` record plus its credentials, which is what the
+ * store holds for any instance the user has set up. Must run after {@link fakeContext} installs the
+ * backing state.
+ */
+async function seedInstance(alias: string, connectionString: string): Promise<void> {
+    const port = Number(connectionString.split('@')[1]?.split('/')[0]?.split(':')[1]) || QUICK_START_PORT;
+    await upsertInstance({ alias, displayName: alias, port, phase: 'ready' });
+    await writeConnectionString(alias, connectionString, { displayName: alias, port });
+}
+
+describe('QuickStartService — stored-credential volume safety', () => {
     // jest-mock-vscode's createOutputChannel returns a channel without `appendLine`; stub it so the
     // reconcile branches that log (credential-unavailable surface, duplicate-winner) don't throw.
     beforeAll(() => {
@@ -106,9 +130,10 @@ describe('QuickStartService — R1 legacy-fallback safety (WI-1)', () => {
         ext.context = originalContext;
     });
 
-    it('reconcile() adopts a labelled container via the legacy secret and never removes it or its volume', async () => {
-        ext.secretStorage = fakeSecretStorage({ [LEGACY_SECRET_KEY]: LEGACY_CONN });
-        ext.context = { globalState: fakeMemento() } as unknown as vscode.ExtensionContext;
+    it('reconcile() adopts a labelled container whose credentials we hold, never removing it or its volume', async () => {
+        ext.secretStorage = fakeSecretStorage({});
+        ext.context = fakeContext(fakeMemento());
+        await seedInstance(DEFAULT_ALIAS, STORED_CONN);
 
         const removeContainer = jest.fn().mockResolvedValue(undefined);
         const removeVolume = jest.fn().mockResolvedValue(undefined);
@@ -128,25 +153,26 @@ describe('QuickStartService — R1 legacy-fallback safety (WI-1)', () => {
 
         await service.reconcile();
 
-        // The legacy fallback made the stored-secret read succeed, so the no-secret orphan-removal
-        // branch was skipped: the container is adopted, not removed, and the volume is never touched.
+        // The stored-secret read succeeded, so the no-secret orphan-removal branch was skipped: the
+        // container is adopted, not removed, and the volume is never touched.
         expect(removeContainer).not.toHaveBeenCalled();
         expect(removeVolume).not.toHaveBeenCalled();
         expect(service.getStatus().state).toBe(InstanceState.Stopped);
     });
 
-    it('willReuseExistingInstance() is true when only the legacy secret exists (protects the volume-wipe gate)', async () => {
-        ext.secretStorage = fakeSecretStorage({ [LEGACY_SECRET_KEY]: LEGACY_CONN });
-        ext.context = { globalState: fakeMemento() } as unknown as vscode.ExtensionContext;
+    it('canReuseExistingData() is true when credentials are stored (protects the volume-wipe gate)', async () => {
+        ext.secretStorage = fakeSecretStorage({});
+        ext.context = fakeContext(fakeMemento());
+        await seedInstance(DEFAULT_ALIAS, STORED_CONN);
 
         const service = new QuickStartServiceImpl(mockRuntime({}));
 
-        expect(await service.willReuseExistingInstance()).toBe(true);
+        expect(await service.canReuseExistingData()).toBe(true);
     });
 
     it('reconcile() with NO stored secret surfaces the orphan as credential-unavailable (never removes it or its volume)', async () => {
         ext.secretStorage = fakeSecretStorage({});
-        ext.context = { globalState: fakeMemento() } as unknown as vscode.ExtensionContext;
+        ext.context = fakeContext(fakeMemento());
 
         const removeContainer = jest.fn().mockResolvedValue(undefined);
         const removeVolume = jest.fn().mockResolvedValue(undefined);
@@ -168,21 +194,10 @@ describe('QuickStartService — R1 legacy-fallback safety (WI-1)', () => {
         expect(service.getStatus().state).toBe(InstanceState.CredentialsMissing);
     });
 
-    it('deleteContainer() purges BOTH the alias-keyed and legacy keys (a full clean slate)', async () => {
-        ext.secretStorage = fakeSecretStorage({
-            [secretKey(DEFAULT_ALIAS)]: LEGACY_CONN,
-            [LEGACY_SECRET_KEY]: LEGACY_CONN,
-        });
-        const globalState = fakeMemento();
-        await globalState.update(imageRefKey(DEFAULT_ALIAS), 'ghcr.io/documentdb/documentdb-local:1.0.0');
-        await globalState.update(LEGACY_IMAGE_REF_KEY, 'ghcr.io/documentdb/documentdb-local:1.0.0');
-        await upsertInstanceRecord(globalState, {
-            alias: DEFAULT_ALIAS,
-            displayName: 'DocumentDB Local',
-            port: 10273,
-            phase: 'ready',
-        });
-        ext.context = { globalState } as unknown as vscode.ExtensionContext;
+    it('deleteContainer() drops the record AND the credentials (a full clean slate)', async () => {
+        ext.secretStorage = fakeSecretStorage({});
+        ext.context = fakeContext(fakeMemento());
+        await seedInstance(DEFAULT_ALIAS, STORED_CONN);
 
         const service = new QuickStartServiceImpl(mockRuntime({}));
 
@@ -190,14 +205,10 @@ describe('QuickStartService — R1 legacy-fallback safety (WI-1)', () => {
         // No container to reconcile against ⇒ records/secrets are cleaned and the outcome is 'deleted'.
         expect(outcome).toBe('deleted');
 
-        // Explicit Delete leaves no stale credentials/image behind — neither alias-keyed nor legacy —
-        // so the next provision can never silently reuse them (locks the opus47-N1 fix).
-        expect(await ext.secretStorage.get(secretKey(DEFAULT_ALIAS))).toBeUndefined();
-        expect(await ext.secretStorage.get(LEGACY_SECRET_KEY)).toBeUndefined();
-        expect(globalState.get(imageRefKey(DEFAULT_ALIAS))).toBeUndefined();
-        expect(globalState.get(LEGACY_IMAGE_REF_KEY)).toBeUndefined();
-        // ...and the registry record is gone, so the instance won't linger as a ghost tree row (WI-2).
-        expect(readRegistry(globalState).instances).toHaveLength(0);
+        // Nothing survives that a later provision could silently reuse (locks the opus47-N1 fix), and
+        // the instance won't linger as a ghost tree row.
+        expect(await service.readStoredConnectionString()).toBeUndefined();
+        expect(await listInstances()).toHaveLength(0);
     });
 });
 
@@ -276,11 +287,10 @@ describe('QuickStartService — WI-2d registry-driven reconcile (multi-instance)
     }
 
     it('adopts two labelled containers into isolated per-alias states (running + stopped)', async () => {
-        ext.secretStorage = fakeSecretStorage({
-            [secretKey(DEFAULT_ALIAS)]: CONN_1,
-            [secretKey(ALIAS_2)]: CONN_2,
-        });
-        ext.context = { globalState: fakeMemento() } as unknown as vscode.ExtensionContext;
+        ext.secretStorage = fakeSecretStorage({});
+        ext.context = fakeContext(fakeMemento());
+        await seedInstance(DEFAULT_ALIAS, CONN_1);
+        await seedInstance(ALIAS_2, CONN_2);
         const service = new QuickStartServiceImpl(
             reconcileRuntime({
                 containers: [
@@ -300,16 +310,12 @@ describe('QuickStartService — WI-2d registry-driven reconcile (multi-instance)
         expect(service.getStatus(ALIAS_2).state).toBe(InstanceState.Stopped);
         // listStatuses is ordered DEFAULT-first; both instances are durable + ready.
         expect(service.listStatuses().map((status) => status.alias)).toEqual([DEFAULT_ALIAS, ALIAS_2]);
-        expect(
-            readRegistry(ext.context.globalState)
-                .instances.map((record) => record.alias)
-                .sort(),
-        ).toEqual([ALIAS_2, DEFAULT_ALIAS].sort());
+        expect((await listInstances()).map((record) => record.alias).sort()).toEqual([ALIAS_2, DEFAULT_ALIAS].sort());
     });
 
     it('surfaces a credential-unavailable instance as CredentialsMissing without removing it or its volume (R2)', async () => {
         ext.secretStorage = fakeSecretStorage({}); // no secret for ALIAS_2
-        ext.context = { globalState: fakeMemento() } as unknown as vscode.ExtensionContext;
+        ext.context = fakeContext(fakeMemento());
         const removeContainer = jest.fn().mockResolvedValue(undefined);
         const removeVolume = jest.fn().mockResolvedValue(undefined);
         const service = new QuickStartServiceImpl(
@@ -329,21 +335,23 @@ describe('QuickStartService — WI-2d registry-driven reconcile (multi-instance)
     });
 
     it('marks a ready record whose container vanished as Missing, keeping the record (recoverable)', async () => {
-        ext.secretStorage = fakeSecretStorage({ [secretKey(ALIAS_2)]: CONN_2 });
+        ext.secretStorage = fakeSecretStorage({});
         const globalState = fakeMemento();
-        await upsertInstanceRecord(globalState, { alias: ALIAS_2, displayName: 'Second', port: 10261, phase: 'ready' });
-        ext.context = { globalState } as unknown as vscode.ExtensionContext;
+        ext.context = fakeContext(globalState);
+        await seedInstance(ALIAS_2, CONN_2);
+        await upsertInstance({ alias: ALIAS_2, displayName: 'Second', port: 10261, phase: 'ready' });
         const service = new QuickStartServiceImpl(reconcileRuntime({ containers: [] }));
 
         await service.reconcile();
 
         expect(service.listStatuses().find((status) => status.alias === ALIAS_2)?.missing).toBe(true);
-        expect(readRegistry(globalState).instances.some((record) => record.alias === ALIAS_2)).toBe(true);
+        expect((await listInstances()).some((record) => record.alias === ALIAS_2)).toBe(true);
     });
 
     it('start() after an external container delete surfaces Missing instead of a silent no-op (#2)', async () => {
-        ext.secretStorage = fakeSecretStorage({ [secretKey(DEFAULT_ALIAS)]: CONN_1 });
-        ext.context = { globalState: fakeMemento() } as unknown as vscode.ExtensionContext;
+        ext.secretStorage = fakeSecretStorage({});
+        ext.context = fakeContext(fakeMemento());
+        await seedInstance(DEFAULT_ALIAS, CONN_1);
 
         const startContainer = jest.fn().mockResolvedValue(undefined);
         // Mutable inspect map: present during reconcile (adopted as Stopped), then removed to
@@ -380,9 +388,82 @@ describe('QuickStartService — WI-2d registry-driven reconcile (multi-instance)
         info.mockRestore();
     });
 
+    it('refreshLiveState() fires the status change only on the TRANSITION into Missing (H1)', async () => {
+        ext.secretStorage = fakeSecretStorage({});
+        ext.context = fakeContext(fakeMemento());
+        await seedInstance(DEFAULT_ALIAS, CONN_1);
+
+        const inspect: Record<string, unknown> = {
+            c1: inspectItem('c1', { running: true, port: 10260, image: 'img:1' }),
+        };
+        const service = new QuickStartServiceImpl(
+            mockRuntime({
+                listByLabel: jest
+                    .fn()
+                    .mockResolvedValue([{ id: 'c1', labels: { [QUICK_START_ALIAS_LABEL_KEY]: DEFAULT_ALIAS } }]),
+                inspectContainer: jest.fn((id: string) =>
+                    Promise.resolve(inspect[id]),
+                ) as unknown as IContainerRuntime['inspectContainer'],
+            }),
+        );
+
+        await service.reconcile();
+
+        // The container is removed outside VS Code; the tree then re-renders repeatedly.
+        delete inspect.c1;
+        let fired = 0;
+        service.onDidChangeStatus(() => fired++);
+
+        await service.refreshLiveState();
+        await service.refreshLiveState();
+        await service.refreshLiveState();
+
+        // Pre-fix this fired once per call, and each fire re-entered getChildren() → refreshLiveState()
+        // → a self-sustaining `docker inspect` loop for as long as the view was visible.
+        expect(fired).toBe(1);
+        expect(service.getStatus().missing).toBe(true);
+    });
+
+    it('refreshLiveStateInBackground() de-duplicates and rate-limits the docker probe (M6)', async () => {
+        ext.secretStorage = fakeSecretStorage({});
+        ext.context = fakeContext(fakeMemento());
+        await seedInstance(DEFAULT_ALIAS, CONN_1);
+
+        const inspect: Record<string, unknown> = {
+            c1: inspectItem('c1', { running: true, port: 10260, image: 'img:1' }),
+        };
+        const inspectContainer = jest.fn((id: string) => Promise.resolve(inspect[id]));
+        const service = new QuickStartServiceImpl(
+            mockRuntime({
+                listByLabel: jest
+                    .fn()
+                    .mockResolvedValue([{ id: 'c1', labels: { [QUICK_START_ALIAS_LABEL_KEY]: DEFAULT_ALIAS } }]),
+                inspectContainer: inspectContainer as unknown as IContainerRuntime['inspectContainer'],
+            }),
+        );
+
+        await service.reconcile();
+        inspectContainer.mockClear();
+
+        // The Connections view re-renders many times in a burst (connection add/remove, folder ops,
+        // discovery refresh); getChildren() calls this on every one of them.
+        service.refreshLiveStateInBackground();
+        service.refreshLiveStateInBackground();
+        service.refreshLiveStateInBackground();
+        expect(service.isRefreshingLiveState).toBe(true);
+        await Promise.resolve();
+        await Promise.resolve();
+        await Promise.resolve();
+
+        // One probe for the burst, and the cooldown blocks the re-render the completion event causes.
+        service.refreshLiveStateInBackground();
+        expect(inspectContainer).toHaveBeenCalledTimes(1);
+    });
+
     it('deleteContainer() refuses to remove a container that is not ours, even when surfaced as Missing (#9)', async () => {
-        ext.secretStorage = fakeSecretStorage({ [secretKey(DEFAULT_ALIAS)]: CONN_1 });
-        ext.context = { globalState: fakeMemento() } as unknown as vscode.ExtensionContext;
+        ext.secretStorage = fakeSecretStorage({});
+        ext.context = fakeContext(fakeMemento());
+        await seedInstance(DEFAULT_ALIAS, CONN_1);
 
         const removeContainer = jest.fn().mockResolvedValue(undefined);
         const removeVolume = jest.fn().mockResolvedValue(undefined);
@@ -443,8 +524,9 @@ describe('QuickStartService — WI-2d registry-driven reconcile (multi-instance)
     });
 
     it('start() on a container that drifted to running in another window refreshes without starting', async () => {
-        ext.secretStorage = fakeSecretStorage({ [secretKey(DEFAULT_ALIAS)]: CONN_1 });
-        ext.context = { globalState: fakeMemento() } as unknown as vscode.ExtensionContext;
+        ext.secretStorage = fakeSecretStorage({});
+        ext.context = fakeContext(fakeMemento());
+        await seedInstance(DEFAULT_ALIAS, CONN_1);
 
         const startContainer = jest.fn().mockResolvedValue(undefined);
         // Adopt as Stopped, then the container is actually running (another window started it).
@@ -486,52 +568,53 @@ describe('QuickStartService — WI-2d registry-driven reconcile (multi-instance)
     it('scavenges a STALE provisioning reservation that never produced a container', async () => {
         ext.secretStorage = fakeSecretStorage({});
         const globalState = fakeMemento();
-        await upsertInstanceRecord(globalState, {
+        ext.context = fakeContext(globalState);
+        await upsertInstance({
             alias: ALIAS_2,
             displayName: 'Second',
             port: 10261,
             phase: 'provisioning',
             leaseAt: Date.now() - PROVISIONING_LEASE_TTL_MS - 1_000,
         });
-        ext.context = { globalState } as unknown as vscode.ExtensionContext;
         const service = new QuickStartServiceImpl(reconcileRuntime({ containers: [] }));
 
         await service.reconcile();
 
-        expect(readRegistry(globalState).instances.some((record) => record.alias === ALIAS_2)).toBe(false);
+        expect((await listInstances()).some((record) => record.alias === ALIAS_2)).toBe(false);
         expect(service.getStatus(ALIAS_2).state).toBe(InstanceState.NotInstalled);
     });
 
     it('keeps a FRESH provisioning reservation as Provisioning (not scavenged)', async () => {
         ext.secretStorage = fakeSecretStorage({});
         const globalState = fakeMemento();
-        await upsertInstanceRecord(globalState, {
+        ext.context = fakeContext(globalState);
+        await upsertInstance({
             alias: ALIAS_2,
             displayName: 'Second',
             port: 10261,
             phase: 'provisioning',
             leaseAt: Date.now(),
         });
-        ext.context = { globalState } as unknown as vscode.ExtensionContext;
         const service = new QuickStartServiceImpl(reconcileRuntime({ containers: [] }));
 
         await service.reconcile();
 
-        expect(readRegistry(globalState).instances.some((record) => record.alias === ALIAS_2)).toBe(true);
+        expect((await listInstances()).some((record) => record.alias === ALIAS_2)).toBe(true);
         expect(service.getStatus(ALIAS_2).state).toBe(InstanceState.Provisioning);
     });
 
     it('adopts (never scavenges) a container present under a stale provisioning lease, promoting it to ready (Q4)', async () => {
-        ext.secretStorage = fakeSecretStorage({ [secretKey(ALIAS_2)]: CONN_2 });
+        ext.secretStorage = fakeSecretStorage({});
         const globalState = fakeMemento();
-        await upsertInstanceRecord(globalState, {
+        ext.context = fakeContext(globalState);
+        await seedInstance(ALIAS_2, CONN_2);
+        await upsertInstance({
             alias: ALIAS_2,
             displayName: 'Second',
             port: 10261,
             phase: 'provisioning',
             leaseAt: Date.now() - PROVISIONING_LEASE_TTL_MS - 1_000,
         });
-        ext.context = { globalState } as unknown as vscode.ExtensionContext;
         const service = new QuickStartServiceImpl(
             reconcileRuntime({
                 containers: [{ id: 'c2', alias: ALIAS_2 }],
@@ -542,12 +625,12 @@ describe('QuickStartService — WI-2d registry-driven reconcile (multi-instance)
         await service.reconcile();
 
         expect(service.getStatus(ALIAS_2).state).toBe(InstanceState.Running);
-        expect(readRegistry(globalState).instances.find((record) => record.alias === ALIAS_2)?.phase).toBe('ready');
+        expect((await listInstances()).find((record) => record.alias === ALIAS_2)?.phase).toBe('ready');
     });
 
     it('deleteContainer() removes a surfaced (no-metadata) instance via a live lookup', async () => {
         ext.secretStorage = fakeSecretStorage({});
-        ext.context = { globalState: fakeMemento() } as unknown as vscode.ExtensionContext;
+        ext.context = fakeContext(fakeMemento());
         const removeContainer = jest.fn().mockResolvedValue(undefined);
         const removeVolume = jest.fn().mockResolvedValue(undefined);
         const service = new QuickStartServiceImpl(
@@ -582,7 +665,7 @@ describe('QuickStartService — WI-2d registry-driven reconcile (multi-instance)
         // leaves the volume + records intact so the instance can be retried rather than becoming a
         // credential-missing ghost.
         ext.secretStorage = fakeSecretStorage({});
-        ext.context = { globalState: fakeMemento() } as unknown as vscode.ExtensionContext;
+        ext.context = fakeContext(fakeMemento());
         const removeContainer = jest.fn().mockRejectedValue(new Error('docker daemon unavailable'));
         const removeVolume = jest.fn().mockResolvedValue(undefined);
         const service = new QuickStartServiceImpl(
@@ -618,15 +701,16 @@ describe('QuickStartService — WI-2d registry-driven reconcile (multi-instance)
         // a Docker lookup FAILURE must not be mistaken for "already gone". We cannot verify the
         // container, so surface an error and leave records/secrets intact rather than reporting a clean
         // delete and turning a still-running container into a credential-missing ghost.
-        ext.secretStorage = fakeSecretStorage({ [secretKey(DEFAULT_ALIAS)]: CONN_1 });
+        ext.secretStorage = fakeSecretStorage({});
         const globalState = fakeMemento();
-        await upsertInstanceRecord(globalState, {
+        ext.context = fakeContext(globalState);
+        await seedInstance(DEFAULT_ALIAS, CONN_1);
+        await upsertInstance({
             alias: DEFAULT_ALIAS,
             displayName: 'DocumentDB Local',
             port: 10273,
             phase: 'ready',
         });
-        ext.context = { globalState } as unknown as vscode.ExtensionContext;
         const removeContainer = jest.fn().mockResolvedValue(undefined);
         const removeVolume = jest.fn().mockResolvedValue(undefined);
         const service = new QuickStartServiceImpl(
@@ -645,8 +729,8 @@ describe('QuickStartService — WI-2d registry-driven reconcile (multi-instance)
         expect(removeVolume).not.toHaveBeenCalled();
         expect(errorMessage).toHaveBeenCalled();
         // Records + secrets preserved so the instance stays in the tree and Delete can be retried.
-        expect(await ext.secretStorage.get(secretKey(DEFAULT_ALIAS))).toBe(CONN_1);
-        expect(readRegistry(globalState).instances).toHaveLength(1);
+        expect(await service.readStoredConnectionString()).toBe(CONN_1);
+        expect(await listInstances()).toHaveLength(1);
         errorMessage.mockRestore();
     });
 
@@ -656,8 +740,9 @@ describe('QuickStartService — WI-2d registry-driven reconcile (multi-instance)
         // original container was externally replaced by a NEW labelled same-alias container, Delete must
         // remove the LIVE container (found authoritatively by label), not wipe records and leave a
         // running ghost that resurfaces as CredentialsMissing.
-        ext.secretStorage = fakeSecretStorage({ [secretKey(DEFAULT_ALIAS)]: CONN_1 });
-        ext.context = { globalState: fakeMemento() } as unknown as vscode.ExtensionContext;
+        ext.secretStorage = fakeSecretStorage({});
+        ext.context = fakeContext(fakeMemento());
+        await seedInstance(DEFAULT_ALIAS, CONN_1);
         const removeContainer = jest.fn().mockResolvedValue(undefined);
         const removeVolume = jest.fn().mockResolvedValue(undefined);
         let phase: 'adopt' | 'delete' = 'adopt';
@@ -716,8 +801,9 @@ describe('QuickStartService — WI-2d registry-driven reconcile (multi-instance)
         // inconclusive (it swallows Docker errors). Before wiping records we confirm absence with the
         // non-swallowing label lookup; if THAT fails (Docker unreachable) the outcome is 'error', not a
         // false 'deleted' — the still-live container must not be abandoned as a credential-missing ghost.
-        ext.secretStorage = fakeSecretStorage({ [secretKey(DEFAULT_ALIAS)]: CONN_1 });
-        ext.context = { globalState: fakeMemento() } as unknown as vscode.ExtensionContext;
+        ext.secretStorage = fakeSecretStorage({});
+        ext.context = fakeContext(fakeMemento());
+        await seedInstance(DEFAULT_ALIAS, CONN_1);
         const removeContainer = jest.fn().mockResolvedValue(undefined);
         const removeVolume = jest.fn().mockResolvedValue(undefined);
         let phase: 'adopt' | 'delete' = 'adopt';
@@ -759,7 +845,7 @@ describe('QuickStartService — WI-2d registry-driven reconcile (multi-instance)
         expect(removeVolume).not.toHaveBeenCalled();
         expect(errorMessage).toHaveBeenCalled();
         // Records preserved so the still-live container isn't abandoned; Delete can be retried.
-        expect(await ext.secretStorage.get(secretKey(DEFAULT_ALIAS))).toBe(CONN_1);
+        expect(await service.readStoredConnectionString()).toBe(CONN_1);
         errorMessage.mockRestore();
     });
 
@@ -769,7 +855,7 @@ describe('QuickStartService — WI-2d registry-driven reconcile (multi-instance)
         // Delete is a full clean slate, so it must remove ALL label-matched containers; removing only the
         // first would strand a survivor that resurfaces as a credential-missing ghost.
         ext.secretStorage = fakeSecretStorage({});
-        ext.context = { globalState: fakeMemento() } as unknown as vscode.ExtensionContext;
+        ext.context = fakeContext(fakeMemento());
         const removeContainer = jest.fn().mockResolvedValue(undefined);
         const removeVolume = jest.fn().mockResolvedValue(undefined);
         const service = new QuickStartServiceImpl(
@@ -798,8 +884,9 @@ describe('QuickStartService — WI-2d registry-driven reconcile (multi-instance)
     });
 
     it('is idempotent across repeated reconciles', async () => {
-        ext.secretStorage = fakeSecretStorage({ [secretKey(DEFAULT_ALIAS)]: CONN_1 });
-        ext.context = { globalState: fakeMemento() } as unknown as vscode.ExtensionContext;
+        ext.secretStorage = fakeSecretStorage({});
+        ext.context = fakeContext(fakeMemento());
+        await seedInstance(DEFAULT_ALIAS, CONN_1);
         const service = new QuickStartServiceImpl(
             reconcileRuntime({
                 containers: [{ id: 'c1', alias: DEFAULT_ALIAS }],
@@ -811,9 +898,7 @@ describe('QuickStartService — WI-2d registry-driven reconcile (multi-instance)
         await service.reconcile();
 
         expect(service.getStatus(DEFAULT_ALIAS).state).toBe(InstanceState.Running);
-        expect(
-            readRegistry(ext.context.globalState).instances.filter((record) => record.alias === DEFAULT_ALIAS),
-        ).toHaveLength(1);
+        expect((await listInstances()).filter((record) => record.alias === DEFAULT_ALIAS)).toHaveLength(1);
     });
 });
 
@@ -855,7 +940,7 @@ describe('QuickStartService — WI-2e-1 provision RR4 volume-wipe gate', () => {
 
     function provisionRuntime(opts: {
         containers?: Array<{ id: string; alias?: string }>;
-        findAvailablePort?: number;
+        portFree?: boolean;
         removeContainer?: jest.Mock;
         removeVolume?: jest.Mock;
         readiness?: DockerReadiness;
@@ -878,7 +963,7 @@ describe('QuickStartService — WI-2e-1 provision RR4 volume-wipe gate', () => {
                     labels: container.alias === undefined ? {} : { [QUICK_START_ALIAS_LABEL_KEY]: container.alias },
                 })),
             ),
-            findAvailablePort: jest.fn().mockResolvedValue(opts.findAvailablePort),
+            isPortFree: jest.fn().mockResolvedValue(opts.portFree ?? true),
             removeContainer: opts.removeContainer ?? jest.fn().mockResolvedValue(undefined),
             removeVolume: opts.removeVolume ?? jest.fn().mockResolvedValue(undefined),
         } as unknown as Partial<IContainerRuntime>);
@@ -894,7 +979,7 @@ describe('QuickStartService — WI-2e-1 provision RR4 volume-wipe gate', () => {
         'routes a Docker daemon failure during %s through typed readiness recovery',
         async (failingStage) => {
             ext.secretStorage = fakeSecretStorage({});
-            ext.context = { globalState: fakeMemento() } as unknown as vscode.ExtensionContext;
+            ext.context = fakeContext(fakeMemento());
             const ready: DockerReadiness = {
                 outcome: 'ready',
                 environment: 'linux',
@@ -927,7 +1012,7 @@ describe('QuickStartService — WI-2e-1 provision RR4 volume-wipe gate', () => {
                 isDockerReady,
                 listByLabel: jest.fn().mockResolvedValue([]),
                 removeVolume: jest.fn().mockResolvedValue(undefined),
-                findAvailablePort: jest.fn().mockResolvedValue(QUICK_START_PORT),
+                isPortFree: jest.fn().mockResolvedValue(true),
                 pullImage:
                     failingStage === 'pulling'
                         ? jest.fn().mockRejectedValue(new Error('daemon disappeared during pull'))
@@ -958,7 +1043,7 @@ describe('QuickStartService — WI-2e-1 provision RR4 volume-wipe gate', () => {
     // which made every other Retry click bounce off "Setup is already in progress.".
     it('clears the in-progress guard before reporting a Docker readiness failure', async () => {
         ext.secretStorage = fakeSecretStorage({});
-        ext.context = { globalState: fakeMemento() } as unknown as vscode.ExtensionContext;
+        ext.context = fakeContext(fakeMemento());
         const unavailable: DockerReadiness = {
             outcome: 'diagnosed',
             environment: 'linux',
@@ -991,7 +1076,7 @@ describe('QuickStartService — WI-2e-1 provision RR4 volume-wipe gate', () => {
 
     it('keeps an image failure on the provisioning path when Docker remains ready', async () => {
         ext.secretStorage = fakeSecretStorage({});
-        ext.context = { globalState: fakeMemento() } as unknown as vscode.ExtensionContext;
+        ext.context = fakeContext(fakeMemento());
         const ready: DockerReadiness = {
             outcome: 'ready',
             environment: 'linux',
@@ -1008,7 +1093,7 @@ describe('QuickStartService — WI-2e-1 provision RR4 volume-wipe gate', () => {
             isDockerReady: jest.fn().mockResolvedValue(ready),
             listByLabel: jest.fn().mockResolvedValue([]),
             removeVolume: jest.fn().mockResolvedValue(undefined),
-            findAvailablePort: jest.fn().mockResolvedValue(QUICK_START_PORT),
+            isPortFree: jest.fn().mockResolvedValue(true),
             pullImage: jest.fn().mockRejectedValue(new Error('manifest unknown')),
         });
         const service = new QuickStartServiceImpl(runtime);
@@ -1024,7 +1109,7 @@ describe('QuickStartService — WI-2e-1 provision RR4 volume-wipe gate', () => {
 
     it('keeps the original provisioning error when the follow-up Docker result is indeterminate', async () => {
         ext.secretStorage = fakeSecretStorage({});
-        ext.context = { globalState: fakeMemento() } as unknown as vscode.ExtensionContext;
+        ext.context = fakeContext(fakeMemento());
         const ready: DockerReadiness = {
             outcome: 'ready',
             environment: 'linux',
@@ -1054,7 +1139,7 @@ describe('QuickStartService — WI-2e-1 provision RR4 volume-wipe gate', () => {
             isDockerReady: jest.fn().mockResolvedValueOnce(ready).mockResolvedValueOnce(indeterminate),
             listByLabel: jest.fn().mockResolvedValue([]),
             removeVolume: jest.fn().mockResolvedValue(undefined),
-            findAvailablePort: jest.fn().mockResolvedValue(QUICK_START_PORT),
+            isPortFree: jest.fn().mockResolvedValue(true),
             pullImage: jest.fn().mockRejectedValue(new Error('manifest unknown')),
         });
         const service = new QuickStartServiceImpl(runtime);
@@ -1079,7 +1164,7 @@ describe('QuickStartService — WI-2e-1 provision RR4 volume-wipe gate', () => {
 
     it('aborts (never removes/wipes) when a managed container exists but no secret is recoverable', async () => {
         ext.secretStorage = fakeSecretStorage({});
-        ext.context = { globalState: fakeMemento() } as unknown as vscode.ExtensionContext;
+        ext.context = fakeContext(fakeMemento());
         const removeContainer = jest.fn().mockResolvedValue(undefined);
         const removeVolume = jest.fn().mockResolvedValue(undefined);
         const service = new QuickStartServiceImpl(
@@ -1096,13 +1181,13 @@ describe('QuickStartService — WI-2e-1 provision RR4 volume-wipe gate', () => {
     it('aborts (never wipes) when a durable ready record exists but no secret (container already gone)', async () => {
         ext.secretStorage = fakeSecretStorage({});
         const globalState = fakeMemento();
-        await upsertInstanceRecord(globalState, {
+        ext.context = fakeContext(globalState);
+        await upsertInstance({
             alias: DEFAULT_ALIAS,
             displayName: 'DocumentDB Local',
             port: 10260,
             phase: 'ready',
         });
-        ext.context = { globalState } as unknown as vscode.ExtensionContext;
         const removeVolume = jest.fn().mockResolvedValue(undefined);
         const service = new QuickStartServiceImpl(provisionRuntime({ containers: [], removeVolume }));
 
@@ -1114,26 +1199,70 @@ describe('QuickStartService — WI-2e-1 provision RR4 volume-wipe gate', () => {
 
     it('proceeds to the clean-slate wipe for a truly-fresh alias (no container, no ready record)', async () => {
         ext.secretStorage = fakeSecretStorage({});
-        ext.context = { globalState: fakeMemento() } as unknown as vscode.ExtensionContext;
+        ext.context = fakeContext(fakeMemento());
         const removeVolume = jest.fn().mockResolvedValue(undefined);
-        // findAvailablePort → undefined so provision performs the (safe) wipe then aborts at port pick.
-        const service = new QuickStartServiceImpl(
-            provisionRuntime({ containers: [], findAvailablePort: undefined, removeVolume }),
-        );
+        // The port is busy, so provision performs the (safe) wipe then aborts at the port pre-check.
+        const service = new QuickStartServiceImpl(provisionRuntime({ containers: [], portFree: false, removeVolume }));
 
         await drain(service.provision(new AbortController().signal));
 
         expect(removeVolume).toHaveBeenCalledTimes(1);
     });
 
+    // Review M4 / I2-2: the recreate-vs-fresh decision is the user's explicit Configure-step choice,
+    // not something inferred from whether credentials happen to be readable.
+    it('keeps the data volume when stored credentials exist and "Start fresh" was NOT chosen', async () => {
+        ext.secretStorage = fakeSecretStorage({});
+        ext.context = fakeContext(fakeMemento());
+        await seedInstance(DEFAULT_ALIAS, STORED_CONN);
+        const removeVolume = jest.fn().mockResolvedValue(undefined);
+        const service = new QuickStartServiceImpl(
+            provisionRuntime({ containers: [{ id: 'c1', alias: DEFAULT_ALIAS }], portFree: false, removeVolume }),
+        );
+
+        await drain(service.provision(new AbortController().signal));
+
+        expect(removeVolume).not.toHaveBeenCalled();
+    });
+
+    it('wipes the data volume when "Start fresh" was chosen, even though credentials are readable', async () => {
+        ext.secretStorage = fakeSecretStorage({});
+        ext.context = fakeContext(fakeMemento());
+        await seedInstance(DEFAULT_ALIAS, STORED_CONN);
+        const removeVolume = jest.fn().mockResolvedValue(undefined);
+        const service = new QuickStartServiceImpl(
+            provisionRuntime({ containers: [{ id: 'c1', alias: DEFAULT_ALIAS }], portFree: false, removeVolume }),
+        );
+
+        await drain(service.provision(new AbortController().signal, { startFresh: true }));
+
+        expect(removeVolume).toHaveBeenCalledTimes(1);
+    });
+
+    it('lets an explicit "Start fresh" recover a credential-unavailable instance instead of refusing', async () => {
+        ext.secretStorage = fakeSecretStorage({});
+        ext.context = fakeContext(fakeMemento());
+        const removeVolume = jest.fn().mockResolvedValue(undefined);
+        const service = new QuickStartServiceImpl(
+            provisionRuntime({ containers: [{ id: 'c1', alias: DEFAULT_ALIAS }], portFree: false, removeVolume }),
+        );
+
+        await drain(service.provision(new AbortController().signal, { startFresh: true }));
+
+        // Previously this was a hard refusal (CredentialsMissing) that sent the user hunting for a
+        // separate Delete Container command; the warned Start-fresh path now lives in the wizard.
+        expect(removeVolume).toHaveBeenCalledTimes(1);
+        expect(service.getStatus().state).not.toBe(InstanceState.CredentialsMissing);
+    });
+
     it('continues past an indeterminate readiness result only when explicitly requested', async () => {
         ext.secretStorage = fakeSecretStorage({});
-        ext.context = { globalState: fakeMemento() } as unknown as vscode.ExtensionContext;
+        ext.context = fakeContext(fakeMemento());
         const removeVolume = jest.fn().mockResolvedValue(undefined);
         const service = new QuickStartServiceImpl(
             provisionRuntime({
                 containers: [],
-                findAvailablePort: undefined,
+                portFree: false,
                 removeVolume,
                 readiness: {
                     outcome: 'indeterminate',
@@ -1158,12 +1287,12 @@ describe('QuickStartService — WI-2e-1 provision RR4 volume-wipe gate', () => {
 
     it('does not bypass a diagnosed readiness failure', async () => {
         ext.secretStorage = fakeSecretStorage({});
-        ext.context = { globalState: fakeMemento() } as unknown as vscode.ExtensionContext;
+        ext.context = fakeContext(fakeMemento());
         const removeVolume = jest.fn().mockResolvedValue(undefined);
         const service = new QuickStartServiceImpl(
             provisionRuntime({
                 containers: [],
-                findAvailablePort: undefined,
+                portFree: false,
                 removeVolume,
                 readiness: {
                     outcome: 'diagnosed',

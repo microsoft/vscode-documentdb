@@ -47,6 +47,13 @@ export interface AdvancedQuickStartOptions {
     imageTag?: string;
     /** Seed the image's built-in sample data (default `true`). */
     loadSampleData?: boolean;
+    /**
+     * The user explicitly chose "Start fresh" in the Configure step (review M4): drop the existing
+     * container **and its data volume**, then provision new credentials. This is the only way to
+     * reach the volume wipe when an instance already exists — without it, `provision` reuses the
+     * stored credentials and keeps the volume (or refuses, when the credentials are unreadable).
+     */
+    startFresh?: boolean;
     /** Bypass only an indeterminate readiness diagnosis; the service revalidates this condition. */
     continueAnyway?: boolean;
 }
@@ -69,11 +76,11 @@ export const QUICK_START_VOLUME_NAME = 'vscode-documentdb-local-data';
 export const QUICK_START_DATA_PATH = '/data';
 
 /**
- * Port fallback band (design §8.3): if the canonical port is busy, try random
- * ports in `[QUICK_START_PORT, QUICK_START_PORT_BAND_END)` before giving up.
+ * How far the Configure step scans forward from {@link QUICK_START_PORT} when suggesting a free
+ * host port. This is a *suggestion* bound only: the port the user ends up with is always explicit,
+ * so setup never relocates it behind their back (review L3, "no magic after execute").
  */
-export const QUICK_START_PORT_BAND_END = 10360;
-export const QUICK_START_PORT_FALLBACK_ATTEMPTS = 10;
+export const QUICK_START_PORT_SCAN_LIMIT = 100;
 
 /**
  * Docker labels applied at creation. These are the ONLY way a container is
@@ -82,13 +89,16 @@ export const QUICK_START_PORT_FALLBACK_ATTEMPTS = 10;
  */
 export const QUICK_START_LABEL_KEY = 'vscode.documentdb.quickstart';
 export const QUICK_START_ALIAS_LABEL_KEY = 'vscode.documentdb.alias';
+/**
+ * Per-run nonce stamped on a container at creation, so a provision's cleanup sweep can only ever
+ * remove the container **it** created. Without it, two windows provisioning at once could have the
+ * loser's by-label sweep delete the winner's container (review H4).
+ */
+export const QUICK_START_OPERATION_LABEL_KEY = 'vscode.documentdb.operation';
 
 /**
  * Multi-instance identity (WI-1). Each managed instance is keyed by a stable `alias` — also its
- * Docker container name and `vscode.documentdb.alias` label value. The **default** (first) instance
- * keeps the legacy names so an existing single instance is adopted with **NO rename**:
- * `containerName(DEFAULT_ALIAS) === QUICK_START_CONTAINER_NAME` and
- * `volumeName(DEFAULT_ALIAS) === QUICK_START_VOLUME_NAME`.
+ * Docker container name and `vscode.documentdb.alias` label value.
  */
 export const DEFAULT_ALIAS = QUICK_START_ALIAS;
 
@@ -106,24 +116,6 @@ export function volumeName(alias: string): string {
 export function clusterId(alias: string): string {
     return `quickstart-${alias}`;
 }
-
-/** SecretStorage key holding an instance's connection string (with credentials). */
-export function secretKey(alias: string): string {
-    return `documentdb.quickstart.${alias}.connectionString`;
-}
-
-/** globalState key holding the image reference an instance's data volume was created with. */
-export function imageRefKey(alias: string): string {
-    return `documentdb.quickstart.${alias}.imageRef`;
-}
-
-/**
- * Legacy (pre-multi-instance) flat storage keys. Migrated once to the `DEFAULT_ALIAS`-keyed values
- * at activation (see `quickStartRegistry.migrateLegacyQuickStartKeys`), then deleted. Kept as read
- * fallbacks on destructive paths (belt-and-suspenders against data loss).
- */
-export const LEGACY_SECRET_KEY = 'documentdb.quickstart.connectionString';
-export const LEGACY_IMAGE_REF_KEY = 'documentdb.quickstart.imageRef';
 
 /** Reduced lifecycle state set for the POC (design §6, decision D8). */
 export enum InstanceState {
@@ -342,6 +334,11 @@ export interface QuickStartStatus {
      */
     readonly missing?: boolean;
     /**
+     * The host port this instance is (or is about to be) bound to. Known even while provisioning,
+     * because the port is decided in the Configure step rather than picked mid-run (review L1/L3).
+     */
+    readonly port?: number;
+    /**
      * True while a container kept running after a readiness timeout is still resumable, so the
      * webview can rehydrate the "Wait longer / Start over" actions (§9.1) after it is reopened
      * rather than dropping to the fresh setup form.
@@ -371,11 +368,32 @@ export interface DockerStatusResult {
     readonly status: QuickStartStatus;
     readonly busy: boolean;
     /**
-     * True when a provision would REUSE an existing instance (stored credentials are
-     * present, so the data volume is kept and custom credentials / image tag are ignored)
-     * rather than create a fresh one. Drives the webview's recreate UI independently of the
-     * in-memory `Missing` badge, so an already-provisioned or post-reload instance never
-     * shows credential/image inputs the service would silently ignore.
+     * True when an existing instance's data can be reused: usable stored credentials are present,
+     * so a provision can recreate the container onto the existing data volume. Drives the Configure
+     * step's "Use existing data" / "Start fresh" choice, independently of the in-memory `Missing`
+     * badge, so an already-provisioned or post-reload instance never shows credential/image inputs
+     * the service would silently ignore.
      */
-    readonly willReuse: boolean;
+    readonly canReuseExistingData: boolean;
+    /**
+     * A host port that is free right now, for the Configure step to pre-fill. The port is then
+     * always sent explicitly, so setup binds exactly what the user saw (review L3).
+     *
+     * Omitted on polled calls (review M6-b): the readiness loop only consumes `readiness`, and
+     * suggesting a port binds a probe socket per candidate over a range of up to
+     * {@link QUICK_START_PORT_SCAN_LIMIT} ports on every poll.
+     */
+    readonly suggestedPort?: number;
 }
+
+/**
+ * Pushed to the webview whenever the managed instance's status changes, so the Configure step's
+ * guard describes the instance as it is now rather than as it was when the panel opened (review N1).
+ */
+export interface InstanceStatusUpdate {
+    readonly status: QuickStartStatus;
+    readonly canReuseExistingData: boolean;
+}
+
+/** Why a host port cannot be used, or `'available'` when it can (Configure-step validation, L3). */
+export type PortAvailability = 'available' | 'inUse' | 'takenByAnotherInstance';

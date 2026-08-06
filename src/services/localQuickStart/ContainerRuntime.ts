@@ -38,8 +38,6 @@ import {
     type DockerReadiness,
     type DockerReadinessRequest,
     QUICK_START_PORT,
-    QUICK_START_PORT_BAND_END,
-    QUICK_START_PORT_FALLBACK_ATTEMPTS,
 } from './quickStartTypes';
 
 /**
@@ -112,7 +110,6 @@ export interface CreateContainerOptions {
 export interface IContainerRuntime {
     isDockerReady(request?: DockerReadinessRequest): Promise<DockerReadiness>;
     isPortFree(port?: number): Promise<boolean>;
-    findAvailablePort(preferred?: number, bandEnd?: number, attempts?: number): Promise<number | undefined>;
     pullImage(imageRef: string, token?: vscode.CancellationToken): Promise<void>;
     createAndRunContainer(
         options: CreateContainerOptions,
@@ -193,34 +190,6 @@ class ContainerRuntimeImpl implements IContainerRuntime {
             server.once('listening', () => server.close(() => resolve(true)));
             server.listen(port, '127.0.0.1');
         });
-    }
-
-    /**
-     * Pick an available host port (design §8.3): prefer {@link preferred}, else try
-     * up to {@link attempts} random ports in `[preferred, bandEnd)`. Returns
-     * `undefined` if none are free. Only used for the default (non-explicit) port.
-     */
-    public async findAvailablePort(
-        preferred: number = QUICK_START_PORT,
-        bandEnd: number = QUICK_START_PORT_BAND_END,
-        attempts: number = QUICK_START_PORT_FALLBACK_ATTEMPTS,
-    ): Promise<number | undefined> {
-        if (await this.isPortFree(preferred)) {
-            return preferred;
-        }
-        const span = Math.max(1, bandEnd - preferred);
-        const tried = new Set<number>([preferred]);
-        for (let i = 0; i < attempts; i++) {
-            const candidate = preferred + Math.floor(Math.random() * span);
-            if (tried.has(candidate)) {
-                continue;
-            }
-            tried.add(candidate);
-            if (await this.isPortFree(candidate)) {
-                return candidate;
-            }
-        }
-        return undefined;
     }
 
     public async pullImage(imageRef: string, token?: vscode.CancellationToken): Promise<void> {

@@ -20,7 +20,7 @@ describe('LocalQuickStartItem — CredentialsMissing row (UX review #1)', () => 
     afterEach(() => jest.restoreAllMocks());
 
     it('renders a single actionable, Delete-only instance row', async () => {
-        jest.spyOn(QuickStartService, 'refreshLiveState').mockResolvedValue(undefined);
+        jest.spyOn(QuickStartService, 'refreshLiveStateInBackground').mockReturnValue(undefined);
         jest.spyOn(QuickStartService, 'getStatus').mockReturnValue({
             state: InstanceState.CredentialsMissing,
             metadata: undefined,
@@ -39,5 +39,60 @@ describe('LocalQuickStartItem — CredentialsMissing row (UX review #1)', () => 
         expect(contextValue).toContain('state_credentialsMissing');
         // A single click launches Delete (with its confirmation) — discoverable one-click recovery.
         expect(treeItem.command?.command).toBe('vscode-documentdb.command.localQuickStart.delete');
+    });
+});
+
+// Review §9.2 Q4 / N3 (I2-4): a genuine failure renders ACTIONABLE recovery nodes, not error text.
+// `Missing` / `CredentialsMissing` are service states with their own rows and are deliberately NOT
+// treated this way (I2-Q5) — the test above pins that contract.
+describe('LocalQuickStartItem — error recovery nodes (I2-4)', () => {
+    afterEach(() => jest.restoreAllMocks());
+
+    async function childIds(status: Partial<QuickStartStatus>): Promise<string[]> {
+        jest.spyOn(QuickStartService, 'refreshLiveStateInBackground').mockReturnValue(undefined);
+        jest.spyOn(QuickStartService, 'getStatus').mockReturnValue({
+            state: InstanceState.Error,
+            errorMessage: 'boom',
+            missing: false,
+            canResumeReadiness: false,
+            ...status,
+        } as QuickStartStatus);
+
+        const item = new LocalQuickStartItem('connectionsView/root');
+        const children = await item.getChildren();
+        // The provider caches the failed children only when the element reports a retry node.
+        expect(item.hasRetryNode(children)).toBe(true);
+        return children.map((child) => String(child.id));
+    }
+
+    it('offers retry, the setup log and Delete Container when a container exists', async () => {
+        const ids = await childIds({
+            metadata: {
+                containerId: 'c1',
+                alias: 'vscode-documentdb-local',
+                boundPort: 10260,
+                clusterId: 'quickstart-vscode-documentdb-local',
+                connectionString: 'mongodb://u:p@localhost:10260/',
+                username: 'u',
+            },
+        } as Partial<QuickStartStatus>);
+
+        expect(ids).toEqual([
+            'connectionsView/root/localQuickStart/instance',
+            'connectionsView/root/localQuickStart/retry',
+            'connectionsView/root/localQuickStart/viewLogs',
+            'connectionsView/root/localQuickStart/delete',
+        ]);
+    });
+
+    it('offers retry and the setup log only when nothing was created, and never a message-only row (N3)', async () => {
+        const ids = await childIds({ metadata: undefined });
+
+        expect(ids).toEqual([
+            'connectionsView/root/localQuickStart/start',
+            'connectionsView/root/localQuickStart/retry',
+            'connectionsView/root/localQuickStart/viewLogs',
+        ]);
+        expect(ids).not.toContain('connectionsView/root/localQuickStart/error');
     });
 });

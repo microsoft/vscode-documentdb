@@ -9,6 +9,7 @@ import * as vscode from 'vscode';
 import { AuthMethodId } from '../../documentdb/auth/AuthMethod';
 import { DocumentDBConnectionString } from '../../documentdb/utils/DocumentDBConnectionString';
 import { ContainerRuntime, getQuickStartOutputChannel } from '../../services/localQuickStart/ContainerRuntime';
+import { secretVariants } from '../../services/localQuickStart/quickStartCredentials';
 import { QuickStartService } from '../../services/localQuickStart/QuickStartService';
 import { InstanceState } from '../../services/localQuickStart/quickStartTypes';
 import { type EphemeralClusterCredentials } from '../../tree/documentdb/ClusterItemBase';
@@ -216,6 +217,17 @@ export function copyQuickStartPassword(context: IActionContext): void {
  */
 let activeLogFollow: vscode.CancellationTokenSource | undefined;
 
+/**
+ * Stop the active `docker logs -f` follow. Registered as a subscription at command-registration
+ * time: without it the last follow's child process outlives extension deactivation until the
+ * container stops, since nothing else cancels the token.
+ */
+export function disposeQuickStartLogFollow(): void {
+    activeLogFollow?.cancel();
+    activeLogFollow?.dispose();
+    activeLogFollow = undefined;
+}
+
 export function viewQuickStartLogs(_context: IActionContext): void {
     const channel = getQuickStartOutputChannel();
     channel.show(true);
@@ -242,5 +254,5 @@ export function viewQuickStartLogs(_context: IActionContext): void {
     } catch {
         password = '';
     }
-    void ContainerRuntime.followLogs(metadata.containerId, password ? [password] : [], token);
+    void ContainerRuntime.followLogs(metadata.containerId, secretVariants(password), token);
 }

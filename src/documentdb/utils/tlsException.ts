@@ -19,16 +19,23 @@ import { isLocalOrPrivateHost } from './hostClassification';
  * disables certificate or hostname validation. And because the option is connection-wide, a public
  * host must never be able to disable validation through a pasted/deep-linked URL.
  *
- * This helper makes `emulatorConfiguration.disableEmulatorSecurity` the SINGLE source of truth:
- * - It strips every TLS-bypass param from the connection string (case-insensitive). Local/private
- *   connections re-derive the relaxed TLS posture from the stored flag (the option builders set
- *   `tlsAllowInvalidCertificates`), so no bypass param ever needs to persist in the string. Note a
+ * This helper makes `emulatorConfiguration.disableEmulatorSecurity` the SINGLE source of truth
+ * **for the local/private case, which is the only case it governs**:
+ * - It returns `disableEmulatorSecurity: true` ONLY when a bypass was requested AND **every** host
+ *   is local/private (loopback/RFC1918/etc., per §7.1). A public host (or a mixed seed list) can
+ *   never obtain the stored flag, so a pasted/deep-linked public URL cannot turn it on.
+ * - It strips the TLS-bypass params from the connection string ONLY when that exception is
+ *   actually adopted. The stored flag then re-derives the relaxed posture (the option builders set
+ *   `tlsAllowInvalidCertificates`), so no bypass param needs to persist in the string. Note a
  *   hostname-only bypass request is intentionally promoted to the broader certificate bypass for
  *   local hosts: `tlsAllowInvalidCertificates` (⇒ `rejectUnauthorized: false`) is a superset that
  *   also relaxes hostname checking, which keeps the single-source-of-truth model to one knob.
- * - It returns `disableEmulatorSecurity: true` ONLY when a bypass was requested AND **every** host
- *   is local/private (loopback/RFC1918/etc., per §7.1). For a public host (or a mixed seed list),
- *   the bypass is dropped and the connection validates certificates and hostnames.
+ * - For a public or mixed host the connection string is returned **unchanged**. Stripping there
+ *   would silently break every self-hosted server on a public DNS name with a self-signed /
+ *   internal-CA certificate: the param is the user's only way to express that intent, and
+ *   `resolveAllowInvalidCertificates` deliberately stays silent (never returns `false`) precisely
+ *   so the driver keeps honoring it. Removing it from storage while refusing to replace it with
+ *   the flag left those users with no working configuration at all.
  */
 
 /** TLS-bypass URL params (lower-cased keys) whose value `true` disables certificate/hostname validation. */
@@ -53,7 +60,10 @@ const TLS_BYPASS_KEYS = new Set([
 const REJECT_UNAUTHORIZED_KEY = 'rejectunauthorized';
 
 export interface CanonicalTls {
-    /** The connection string with all TLS-bypass params removed. */
+    /**
+     * The connection string with the TLS-bypass params removed when the exception was adopted
+     * (all hosts local/private); otherwise the original string, unchanged.
+     */
     readonly connectionString: string;
     /** Whether allow-invalid certificates should be enabled (bypass requested AND all hosts local). */
     readonly disableEmulatorSecurity: boolean;
@@ -101,14 +111,19 @@ export function canonicalizeTlsException(connectionString: string): CanonicalTls
         return { connectionString, disableEmulatorSecurity: false };
     }
 
-    const { stripped, bypassRequested } = stripTlsBypassParams(parsed);
-
     // Allow-invalid is connection-wide, so only honor it when EVERY seed host is local/private.
     const allHostsLocal = parsed.hosts.length > 0 && parsed.hosts.every((host) => isLocalOrPrivateHost(host));
+    if (!allHostsLocal) {
+        // Public or mixed: the exception is NOT adopted, so leave the user's string untouched —
+        // stripping it here would delete the only expression of their intent without replacing it.
+        return { connectionString, disableEmulatorSecurity: false };
+    }
+
+    const { stripped, bypassRequested } = stripTlsBypassParams(parsed);
 
     return {
         connectionString: stripped ? parsed.toString() : connectionString,
-        disableEmulatorSecurity: bypassRequested && allHostsLocal,
+        disableEmulatorSecurity: bypassRequested,
     };
 }
 

@@ -21,6 +21,8 @@ import {
     MessageBarActions,
     MessageBarBody,
     MessageBarTitle,
+    Radio,
+    RadioGroup,
     Spinner,
     Switch,
     Table,
@@ -61,6 +63,9 @@ import {
     type DockerReadinessOutcome,
     type DockerRecoveryCommand,
     type DockerStatusResult,
+    InstanceState,
+    type InstanceStatusUpdate,
+    type PortAvailability,
     PROVISION_STAGES,
     type ProvisionStage,
     QUICK_START_CONTAINER_NAME,
@@ -86,6 +91,7 @@ import {
     getDockerExecutionTargetKey,
     getDockerReadinessPresentation,
 } from './dockerReadinessPresentation';
+import { getExistingInstanceGuard, guardBlocksSetup } from './existingInstanceGuard';
 import './localQuickStart.scss';
 
 /**
@@ -330,15 +336,20 @@ const useStyles = makeStyles({
     },
 });
 
-const STAGE_LABELS: Record<ProvisionStage, string> = {
-    checking: l10n.t('Checking Docker'),
-    pulling: l10n.t('Pulling official image'),
-    creating: l10n.t('Creating container'),
-    starting: l10n.t('Starting container'),
-    waiting: l10n.t('Waiting for DocumentDB to accept connections'),
-    done: l10n.t('Done'),
-    error: l10n.t('Error'),
-};
+// Every lookup below is built at CALL time, never at module scope. `WebviewRegistry` imports this
+// component eagerly, so module bodies run before `l10n.config()` in `render()` — a module-scope
+// `l10n.t(...)` is extracted for translation but permanently resolves to the English source string.
+function stageLabels(): Record<ProvisionStage, string> {
+    return {
+        checking: l10n.t('Checking Docker'),
+        pulling: l10n.t('Pulling official image'),
+        creating: l10n.t('Creating container'),
+        starting: l10n.t('Starting container'),
+        waiting: l10n.t('Waiting for DocumentDB to accept connections'),
+        done: l10n.t('Done'),
+        error: l10n.t('Error'),
+    };
+}
 
 interface PlanItem {
     readonly label: string;
@@ -357,270 +368,310 @@ interface SettingItem {
 }
 
 /** Mirrors the wizard's own sequence, so the user recognizes it again on the Set up page. */
-const PLAN_ITEMS: readonly PlanItem[] = [
-    {
-        label: l10n.t('Verify your Docker setup'),
-        detail: l10n.t('Confirms Docker is installed and can run containers on this machine.'),
-    },
-    {
-        label: l10n.t('Download the official image'),
-        detail: l10n.t('Downloaded once, then reused for later setups.'),
-    },
-    {
-        label: l10n.t('Create and start the container'),
-        detail: l10n.t('One container named {0}, using the settings you choose.', QUICK_START_CONTAINER_NAME),
-    },
-    {
-        label: l10n.t('Save the connection'),
-        detail: l10n.t('The connection appears in the Connections view, ready to open.'),
-    },
-];
+function planItems(): readonly PlanItem[] {
+    return [
+        {
+            label: l10n.t('Verify your Docker setup'),
+            detail: l10n.t('Confirms Docker is installed and can run containers on this machine.'),
+        },
+        {
+            label: l10n.t('Download the official image'),
+            detail: l10n.t('Downloaded once, then reused for later setups.'),
+        },
+        {
+            label: l10n.t('Create and start the container'),
+            detail: l10n.t('One container named {0}, using the settings you choose.', QUICK_START_CONTAINER_NAME),
+        },
+        {
+            label: l10n.t('Save the connection'),
+            detail: l10n.t('The connection appears in the Connections view, ready to open.'),
+        },
+    ];
+}
 
-const DOCKER_DAEMON_VALUES: Readonly<Record<DockerReadinessPresentationState, string>> = {
-    ready: l10n.t('Reachable'),
-    cliMissing: l10n.t('Unknown'),
-    accessDenied: l10n.t('Access denied'),
-    accessDeniedPendingRestart: l10n.t('Access denied'),
-    dockerDesktopNotRunning: l10n.t('Docker Desktop not running'),
-    notRunning: l10n.t('Not running'),
-    starting: l10n.t('Starting…'),
-    notAccessibleFromWsl: l10n.t('Not accessible from WSL'),
-    endpointUnreachable: l10n.t('Endpoint unreachable'),
-    contextUnavailable: l10n.t('Context unavailable'),
-    checkTimedOut: l10n.t('Check timed out'),
-    unsupported: l10n.t('Unsupported'),
-    windowsContainers: l10n.t('Linux containers required'),
-    notAccessible: l10n.t('Not accessible'),
-};
+function dockerDaemonValues(): Readonly<Record<DockerReadinessPresentationState, string>> {
+    return {
+        ready: l10n.t('Reachable'),
+        cliMissing: l10n.t('Unknown'),
+        accessDenied: l10n.t('Access denied'),
+        accessDeniedPendingRestart: l10n.t('Access denied'),
+        dockerDesktopNotRunning: l10n.t('Docker Desktop not running'),
+        notRunning: l10n.t('Not running'),
+        starting: l10n.t('Starting…'),
+        notAccessibleFromWsl: l10n.t('Not accessible from WSL'),
+        endpointUnreachable: l10n.t('Endpoint unreachable'),
+        contextUnavailable: l10n.t('Context unavailable'),
+        checkTimedOut: l10n.t('Check timed out'),
+        unsupported: l10n.t('Unsupported'),
+        windowsContainers: l10n.t('Linux containers required'),
+        notAccessible: l10n.t('Not accessible'),
+    };
+}
 
-const DOCKER_FAILURE_LABELS: Readonly<Record<DockerFailureKind, string>> = {
-    cliMissing: l10n.t('Docker CLI not found'),
-    permissionDenied: l10n.t('Docker access denied'),
-    daemonUnavailable: l10n.t('Docker daemon unavailable'),
-    daemonStarting: l10n.t('Docker daemon starting'),
-    contextUnavailable: l10n.t('Docker context unavailable'),
-    endpointUnreachable: l10n.t('Docker endpoint unreachable'),
-    probeTimedOut: l10n.t('Docker check timed out'),
-    unsupportedHost: l10n.t('Unsupported host'),
-    windowsContainers: l10n.t('Windows containers enabled'),
-    unknown: l10n.t('Unknown Docker problem'),
-};
+function dockerFailureLabels(): Readonly<Record<DockerFailureKind, string>> {
+    return {
+        cliMissing: l10n.t('Docker CLI not found'),
+        permissionDenied: l10n.t('Docker access denied'),
+        daemonUnavailable: l10n.t('Docker daemon unavailable'),
+        daemonStarting: l10n.t('Docker daemon starting'),
+        contextUnavailable: l10n.t('Docker context unavailable'),
+        endpointUnreachable: l10n.t('Docker endpoint unreachable'),
+        probeTimedOut: l10n.t('Docker check timed out'),
+        unsupportedHost: l10n.t('Unsupported host'),
+        windowsContainers: l10n.t('Windows containers enabled'),
+        unknown: l10n.t('Unknown Docker problem'),
+    };
+}
 
-const DOCKER_PROVIDER_LABELS: Readonly<Record<DockerProvider, string>> = {
-    dockerDesktop: l10n.t('Docker Desktop'),
-    dockerEngine: l10n.t('Docker Engine'),
-    unknown: l10n.t('Unknown'),
-};
+function dockerProviderLabels(): Readonly<Record<DockerProvider, string>> {
+    return {
+        dockerDesktop: l10n.t('Docker Desktop'),
+        dockerEngine: l10n.t('Docker Engine'),
+        unknown: l10n.t('Unknown'),
+    };
+}
 
-const DOCKER_OUTCOME_VALUES: Readonly<Record<DockerReadinessOutcome, string>> = {
-    ready: l10n.t('Docker is ready'),
-    diagnosed: l10n.t('A specific problem was identified'),
-    indeterminate: l10n.t('No clear answer'),
-};
+function dockerOutcomeValues(): Readonly<Record<DockerReadinessOutcome, string>> {
+    return {
+        ready: l10n.t('Docker is ready'),
+        diagnosed: l10n.t('A specific problem was identified'),
+        indeterminate: l10n.t('No clear answer'),
+    };
+}
 
-const DOCKER_ENDPOINT_KIND_VALUES: Readonly<Record<DockerEndpointKind, string>> = {
-    unixSocket: l10n.t('Unix socket'),
-    namedPipe: l10n.t('Windows named pipe'),
-    tcp: l10n.t('TCP address'),
-    ssh: l10n.t('SSH tunnel'),
-    unknown: l10n.t('Could not be resolved'),
-};
+function dockerEndpointKindValues(): Readonly<Record<DockerEndpointKind, string>> {
+    return {
+        unixSocket: l10n.t('Unix socket'),
+        namedPipe: l10n.t('Windows named pipe'),
+        tcp: l10n.t('TCP address'),
+        ssh: l10n.t('SSH tunnel'),
+        unknown: l10n.t('Could not be resolved'),
+    };
+}
 
 /** How the endpoint the check dialled was chosen. */
-const DOCKER_ENDPOINT_SOURCE_NOTES: Readonly<Record<DockerEndpointProbe['source'], string>> = {
-    dockerHostEnv: l10n.t('Taken from the DOCKER_HOST environment variable, which overrides everything else.'),
-    dockerContextEnv: l10n.t('Taken from the DOCKER_CONTEXT environment variable.'),
-    currentContext: l10n.t('Taken from the Docker context that is currently active.'),
-    platformDefault: l10n.t('No override was set, so the default location for this platform was used.'),
-};
+function dockerEndpointSourceNotes(): Readonly<Record<DockerEndpointProbe['source'], string>> {
+    return {
+        dockerHostEnv: l10n.t('Taken from the DOCKER_HOST environment variable, which overrides everything else.'),
+        dockerContextEnv: l10n.t('Taken from the DOCKER_CONTEXT environment variable.'),
+        currentContext: l10n.t('Taken from the Docker context that is currently active.'),
+        platformDefault: l10n.t('No override was set, so the default location for this platform was used.'),
+    };
+}
 
 /** How the provider above was identified — strongest evidence first. */
-const DOCKER_PROVIDER_EVIDENCE_NOTES: Readonly<Record<DockerProviderEvidence, string>> = {
-    liveDaemon: l10n.t('Read from the daemon that answered the check.'),
-    activeContext: l10n.t('Inferred from the Docker context that is currently active.'),
-    installedApplication: l10n.t('Inferred from the Docker application installed on this machine.'),
-    rememberedProvider: l10n.t('Remembered from the last check on this machine that did reach a daemon.'),
-    none: l10n.t('Nothing identified it: the check reached neither a daemon nor a usable context.'),
-};
+function dockerProviderEvidenceNotes(): Readonly<Record<DockerProviderEvidence, string>> {
+    return {
+        liveDaemon: l10n.t('Read from the daemon that answered the check.'),
+        activeContext: l10n.t('Inferred from the Docker context that is currently active.'),
+        installedApplication: l10n.t('Inferred from the Docker application installed on this machine.'),
+        rememberedProvider: l10n.t('Remembered from the last check on this machine that did reach a daemon.'),
+        none: l10n.t('Nothing identified it: the check reached neither a daemon nor a usable context.'),
+    };
+}
 
-const DOCKER_HOST_ENVIRONMENT_VALUES: Readonly<Record<DockerHostEnvironment, string>> = {
-    windows: l10n.t('Windows'),
-    macos: l10n.t('macOS'),
-    linux: l10n.t('Linux'),
-    wsl: l10n.t('Windows Subsystem for Linux'),
-    ssh: l10n.t('Remote SSH host'),
-    devContainer: l10n.t('Dev container'),
-    codespaces: l10n.t('GitHub Codespaces'),
-    otherRemote: l10n.t('Remote extension host'),
-    unsupported: l10n.t('Unsupported platform'),
-};
+function dockerHostEnvironmentValues(): Readonly<Record<DockerHostEnvironment, string>> {
+    return {
+        windows: l10n.t('Windows'),
+        macos: l10n.t('macOS'),
+        linux: l10n.t('Linux'),
+        wsl: l10n.t('Windows Subsystem for Linux'),
+        ssh: l10n.t('Remote SSH host'),
+        devContainer: l10n.t('Dev container'),
+        codespaces: l10n.t('GitHub Codespaces'),
+        otherRemote: l10n.t('Remote extension host'),
+        unsupported: l10n.t('Unsupported platform'),
+    };
+}
 
-const DOCKER_PERMISSION_DETAIL_VALUES: Readonly<Record<DockerPermissionDetail, string>> = {
-    notInGroup: l10n.t('Your user is not a member of the docker group'),
-    pendingSessionRestart: l10n.t('Your user is in the docker group, but this session predates the change'),
-    unknown: l10n.t('Denied for a reason the check could not narrow down'),
-};
+function dockerPermissionDetailValues(): Readonly<Record<DockerPermissionDetail, string>> {
+    return {
+        notInGroup: l10n.t('Your user is not a member of the docker group'),
+        pendingSessionRestart: l10n.t('Your user is in the docker group, but this session predates the change'),
+        unknown: l10n.t('Denied for a reason the check could not narrow down'),
+    };
+}
 
-const DOCKER_GUIDANCE: Readonly<Record<DockerGuidanceKey, string>> = {
-    installDocker: l10n.t('Install Docker Engine or Docker Desktop, then reopen Quick Start.'),
-    installDockerWindows: l10n.t(
-        'Install Docker Desktop, then restart VS Code. A VS Code that was already running does not pick up the PATH the installer adds, so Docker stays undetected until it is restarted — reloading the window is not enough. Start Docker Desktop and wait until it is ready, then check again.',
-    ),
-    installDockerMac: l10n.t(
-        'Install Docker Desktop, then restart VS Code. A VS Code that was already running does not pick up the PATH the installer adds, so Docker stays undetected until it is restarted. Start Docker Desktop and wait until it is ready, then check again.',
-    ),
-    accessDeniedLinux: l10n.t(
-        'Your user cannot access the Docker socket. Run this command, then sign out and sign back in.',
-    ),
-    accessDeniedWsl: l10n.t(
-        'Your user cannot access the Docker socket. Run this command, then restart the WSL session.',
-    ),
-    accessDeniedRemote: l10n.t(
-        'Your user cannot access the Docker socket on the machine where this extension is running.',
-    ),
-    pendingRestartLinux: l10n.t(
-        'You are in the Docker group, but this session started before that change. Sign out of your desktop session and sign back in. Reloading the window is not enough.',
-    ),
-    pendingRestartWsl: l10n.t(
-        'Your Docker group change requires a new WSL session. Run this command in a Windows terminal. This VS Code window will disconnect. Reconnect to WSL, then open Quick Start again.',
-    ),
-    pendingRestartSsh: l10n.t(
-        'You are in the Docker group on the remote host, but the VS Code server started before that change. Run "Remote-SSH: Kill VS Code Server on Host", then reconnect.',
-    ),
-    pendingRestartContainer: l10n.t(
-        'You are in the Docker group, but this container started before that change. Rebuild the container.',
-    ),
-    dockerDesktopNotRunning: l10n.t('Start Docker Desktop and wait until it is ready.'),
-    daemonNotRunning: l10n.t('Start the Docker service, then check again.'),
-    daemonStarting: l10n.t('Waiting for Docker to start. This can take a minute.'),
-    wslIntegrationUnavailable: l10n.t('Enable Docker Desktop integration for this WSL distribution, then check again.'),
-    remoteDockerUnavailable: l10n.t(
-        'Docker must be available in the remote environment where this extension is running.',
-    ),
-    endpointUnreachable: l10n.t('The configured Docker endpoint did not respond.'),
-    contextUnavailable: l10n.t(
-        'The active Docker context is unavailable. Select or repair a valid context, then check again.',
-    ),
-    checkTimedOut: l10n.t('Docker did not respond before the readiness check timed out.'),
-    unsupportedHost: l10n.t('Local Quick Start is supported when the extension runs on Windows, macOS, or Linux.'),
-    windowsContainers: l10n.t('Switch Docker to Linux containers, then check again.'),
-    notAccessible: l10n.t('The extension could not connect to the Docker daemon.'),
-};
+function dockerGuidance(): Readonly<Record<DockerGuidanceKey, string>> {
+    return {
+        installDocker: l10n.t('Install Docker Engine or Docker Desktop, then reopen Quick Start.'),
+        installDockerWindows: l10n.t(
+            'Install Docker Desktop, then restart VS Code. A VS Code that was already running does not pick up the PATH the installer adds, so Docker stays undetected until it is restarted — reloading the window is not enough. Start Docker Desktop and wait until it is ready, then check again.',
+        ),
+        installDockerMac: l10n.t(
+            'Install Docker Desktop, then restart VS Code. A VS Code that was already running does not pick up the PATH the installer adds, so Docker stays undetected until it is restarted. Start Docker Desktop and wait until it is ready, then check again.',
+        ),
+        accessDeniedLinux: l10n.t(
+            'Your user cannot access the Docker socket. Run this command, then sign out and sign back in.',
+        ),
+        accessDeniedWsl: l10n.t(
+            'Your user cannot access the Docker socket. Run this command, then restart the WSL session.',
+        ),
+        accessDeniedRemote: l10n.t(
+            'Your user cannot access the Docker socket on the machine where this extension is running.',
+        ),
+        pendingRestartLinux: l10n.t(
+            'You are in the Docker group, but this session started before that change. Sign out of your desktop session and sign back in. Reloading the window is not enough.',
+        ),
+        pendingRestartWsl: l10n.t(
+            'Your Docker group change requires a new WSL session. Run this command in a Windows terminal. This VS Code window will disconnect. Reconnect to WSL, then open Quick Start again.',
+        ),
+        pendingRestartSsh: l10n.t(
+            'You are in the Docker group on the remote host, but the VS Code server started before that change. Run "Remote-SSH: Kill VS Code Server on Host", then reconnect.',
+        ),
+        pendingRestartContainer: l10n.t(
+            'You are in the Docker group, but this container started before that change. Rebuild the container.',
+        ),
+        dockerDesktopNotRunning: l10n.t('Start Docker Desktop and wait until it is ready.'),
+        daemonNotRunning: l10n.t('Start the Docker service, then check again.'),
+        daemonStarting: l10n.t('Waiting for Docker to start. This can take a minute.'),
+        wslIntegrationUnavailable: l10n.t(
+            'Enable Docker Desktop integration for this WSL distribution, then check again.',
+        ),
+        remoteDockerUnavailable: l10n.t(
+            'Docker must be available in the remote environment where this extension is running.',
+        ),
+        endpointUnreachable: l10n.t('The configured Docker endpoint did not respond.'),
+        contextUnavailable: l10n.t(
+            'The active Docker context is unavailable. Select or repair a valid context, then check again.',
+        ),
+        checkTimedOut: l10n.t('Docker did not respond before the readiness check timed out.'),
+        unsupportedHost: l10n.t('Local Quick Start is supported when the extension runs on Windows, macOS, or Linux.'),
+        windowsContainers: l10n.t('Switch Docker to Linux containers, then check again.'),
+        notAccessible: l10n.t('The extension could not connect to the Docker daemon.'),
+    };
+}
 
-const DOCKER_GUIDES: Readonly<Record<DockerGuideKey, { readonly label: string; readonly href: string }>> = {
-    install: { label: l10n.t('Open Docker install guide'), href: 'https://docs.docker.com/engine/install/' },
-    installWindowsDesktop: {
-        label: l10n.t('Get Docker Desktop for Windows'),
-        href: 'https://docs.docker.com/desktop/setup/install/windows-install/',
-    },
-    installMacDesktop: {
-        label: l10n.t('Get Docker Desktop for Mac'),
-        href: 'https://docs.docker.com/desktop/setup/install/mac-install/',
-    },
-    linuxPostInstall: {
-        label: l10n.t('Open Linux setup guide'),
-        href: 'https://docs.docker.com/engine/install/linux-postinstall/',
-    },
-    dockerTroubleshooting: {
-        label: l10n.t('Open Docker troubleshooting guide'),
-        href: 'https://docs.docker.com/engine/daemon/troubleshoot/',
-    },
-    dockerContexts: {
-        label: l10n.t('Open Docker context guide'),
-        href: 'https://docs.docker.com/engine/manage-resources/contexts/',
-    },
-    wslIntegration: {
-        label: l10n.t('Open WSL integration guide'),
-        href: 'https://docs.docker.com/desktop/features/wsl/',
-    },
-    remoteDocker: {
-        label: l10n.t('Open remote Docker guide'),
-        href: 'https://docs.docker.com/engine/security/protect-access/',
-    },
-    linuxContainers: {
-        label: l10n.t('Open Linux containers guide'),
-        href: 'https://docs.docker.com/desktop/setup/install/windows-install/',
-    },
-    learnMore: { label: l10n.t('Open Docker documentation'), href: 'https://docs.docker.com/engine/install/' },
-};
+function dockerGuides(): Readonly<Record<DockerGuideKey, { readonly label: string; readonly href: string }>> {
+    return {
+        install: { label: l10n.t('Open Docker install guide'), href: 'https://docs.docker.com/engine/install/' },
+        installWindowsDesktop: {
+            label: l10n.t('Get Docker Desktop for Windows'),
+            href: 'https://docs.docker.com/desktop/setup/install/windows-install/',
+        },
+        installMacDesktop: {
+            label: l10n.t('Get Docker Desktop for Mac'),
+            href: 'https://docs.docker.com/desktop/setup/install/mac-install/',
+        },
+        linuxPostInstall: {
+            label: l10n.t('Open Linux setup guide'),
+            href: 'https://docs.docker.com/engine/install/linux-postinstall/',
+        },
+        dockerTroubleshooting: {
+            label: l10n.t('Open Docker troubleshooting guide'),
+            href: 'https://docs.docker.com/engine/daemon/troubleshoot/',
+        },
+        dockerContexts: {
+            label: l10n.t('Open Docker context guide'),
+            href: 'https://docs.docker.com/engine/manage-resources/contexts/',
+        },
+        wslIntegration: {
+            label: l10n.t('Open WSL integration guide'),
+            href: 'https://docs.docker.com/desktop/features/wsl/',
+        },
+        remoteDocker: {
+            label: l10n.t('Open remote Docker guide'),
+            href: 'https://docs.docker.com/engine/security/protect-access/',
+        },
+        linuxContainers: {
+            label: l10n.t('Open Linux containers guide'),
+            href: 'https://docs.docker.com/desktop/setup/install/windows-install/',
+        },
+        learnMore: { label: l10n.t('Open Docker documentation'), href: 'https://docs.docker.com/engine/install/' },
+    };
+}
 
-const DOCKER_START_LABELS: Readonly<Record<DockerStartLabelKey, string>> = {
-    startDockerDesktop: l10n.t('Start Docker Desktop'),
-    startDocker: l10n.t('Start Docker'),
-};
+function dockerStartLabels(): Readonly<Record<DockerStartLabelKey, string>> {
+    return {
+        startDockerDesktop: l10n.t('Start Docker Desktop'),
+        startDocker: l10n.t('Start Docker'),
+    };
+}
 
-const EXECUTION_TARGET_VALUES: Readonly<Record<ReturnType<typeof getDockerExecutionTargetKey>, string>> = {
-    local: l10n.t('This machine (Docker)'),
-    wsl: l10n.t('This WSL environment (Docker)'),
-    ssh: l10n.t('Remote SSH host (Docker)'),
-    devContainer: l10n.t('This dev container environment (Docker)'),
-    codespaces: l10n.t('This Codespaces environment (Docker)'),
-    otherRemote: l10n.t('This remote extension host (Docker)'),
-};
+function executionTargetValues(): Readonly<Record<ReturnType<typeof getDockerExecutionTargetKey>, string>> {
+    return {
+        local: l10n.t('This machine (Docker)'),
+        wsl: l10n.t('This WSL environment (Docker)'),
+        ssh: l10n.t('Remote SSH host (Docker)'),
+        devContainer: l10n.t('This dev container environment (Docker)'),
+        codespaces: l10n.t('This Codespaces environment (Docker)'),
+        otherRemote: l10n.t('This remote extension host (Docker)'),
+    };
+}
 
-const DOCKER_RECOVERY_NOTES: Readonly<Record<DockerRecoveryNoteKey, string>> = {
-    groupMembershipNewSession: l10n.t('Group membership applies to new login sessions only.'),
-    restartWslDistribution: l10n.t(
-        'This stops all running WSL distributions so the new group membership applies when WSL starts again.',
-    ),
-    runsDockerService: l10n.t('Runs the system Docker service.'),
-};
+function dockerRecoveryNotes(): Readonly<Record<DockerRecoveryNoteKey, string>> {
+    return {
+        groupMembershipNewSession: l10n.t('Group membership applies to new login sessions only.'),
+        restartWslDistribution: l10n.t(
+            'This stops all running WSL distributions so the new group membership applies when WSL starts again.',
+        ),
+        runsDockerService: l10n.t('Runs the system Docker service.'),
+    };
+}
 
 /** Provider names for the stage detail line; an unidentified provider is still "Docker". */
-const DOCKER_DETAIL_PROVIDER_LABELS: Readonly<Record<DockerProvider, string>> = {
-    dockerDesktop: l10n.t('Docker Desktop'),
-    dockerEngine: l10n.t('Docker Engine'),
-    unknown: l10n.t('Docker'),
-};
+function dockerDetailProviderLabels(): Readonly<Record<DockerProvider, string>> {
+    return {
+        dockerDesktop: l10n.t('Docker Desktop'),
+        dockerEngine: l10n.t('Docker Engine'),
+        unknown: l10n.t('Docker'),
+    };
+}
 
-const DOCKER_DETAIL_OS_LABELS: Readonly<Record<'linux' | 'windows', string>> = {
-    linux: l10n.t('Linux'),
-    windows: l10n.t('Windows'),
-};
+function dockerDetailOsLabels(): Readonly<Record<'linux' | 'windows', string>> {
+    return {
+        linux: l10n.t('Linux'),
+        windows: l10n.t('Windows'),
+    };
+}
 
-const DOCKER_DETAIL_TARGET_LABELS: Readonly<Record<ReturnType<typeof getDockerExecutionTargetKey>, string>> = {
-    local: l10n.t('runs on this machine'),
-    wsl: l10n.t('runs in this WSL environment'),
-    ssh: l10n.t('runs on the remote SSH host'),
-    devContainer: l10n.t('runs in this dev container'),
-    codespaces: l10n.t('runs in this Codespace'),
-    otherRemote: l10n.t('runs on the remote extension host'),
-};
+function dockerDetailTargetLabels(): Readonly<Record<ReturnType<typeof getDockerExecutionTargetKey>, string>> {
+    return {
+        local: l10n.t('runs on this machine'),
+        wsl: l10n.t('runs in this WSL environment'),
+        ssh: l10n.t('runs on the remote SSH host'),
+        devContainer: l10n.t('runs in this dev container'),
+        codespaces: l10n.t('runs in this Codespace'),
+        otherRemote: l10n.t('runs on the remote extension host'),
+    };
+}
 
-const DOCKER_DETAIL_FAILURE_LABELS: Readonly<Record<DockerDetailFailureKey, string>> = {
-    noCli: l10n.t('no Docker CLI found'),
-    accessDenied: l10n.t('access denied'),
-    notRunning: l10n.t('not running'),
-    daemonNotRunning: l10n.t('daemon not running'),
-    daemonStarting: l10n.t('daemon starting'),
-    notAvailableInWsl: l10n.t('not available in this WSL distribution'),
-    endpointUnreachable: l10n.t('endpoint unreachable'),
-    contextUnavailable: l10n.t('context unavailable'),
-    checkTimedOut: l10n.t('check timed out'),
-    unsupportedHost: l10n.t('unsupported host'),
-    windowsContainers: l10n.t('Windows containers enabled'),
-    daemonUnreachable: l10n.t('daemon unreachable'),
-};
+function dockerDetailFailureLabels(): Readonly<Record<DockerDetailFailureKey, string>> {
+    return {
+        noCli: l10n.t('no Docker CLI found'),
+        accessDenied: l10n.t('access denied'),
+        notRunning: l10n.t('not running'),
+        daemonNotRunning: l10n.t('daemon not running'),
+        daemonStarting: l10n.t('daemon starting'),
+        notAvailableInWsl: l10n.t('not available in this WSL distribution'),
+        endpointUnreachable: l10n.t('endpoint unreachable'),
+        contextUnavailable: l10n.t('context unavailable'),
+        checkTimedOut: l10n.t('check timed out'),
+        unsupportedHost: l10n.t('unsupported host'),
+        windowsContainers: l10n.t('Windows containers enabled'),
+        daemonUnreachable: l10n.t('daemon unreachable'),
+    };
+}
 
 function formatDockerDetailSegment(segment: DockerDetailSegment): string | undefined {
     switch (segment.kind) {
         case 'provider': {
-            const name = DOCKER_DETAIL_PROVIDER_LABELS[segment.provider];
+            const name = dockerDetailProviderLabels()[segment.provider];
             return segment.version ? l10n.t('{0} {1}', name, segment.version) : name;
         }
         case 'cli':
             return segment.version ? l10n.t('Docker CLI {0} found', segment.version) : l10n.t('Docker CLI found');
         case 'platform': {
-            const osName = segment.osType ? DOCKER_DETAIL_OS_LABELS[segment.osType] : undefined;
+            const osName = segment.osType ? dockerDetailOsLabels()[segment.osType] : undefined;
             if (osName && segment.architecture) {
                 return l10n.t('{0} {1}', osName, segment.architecture);
             }
             return osName ?? segment.architecture;
         }
         case 'executionTarget':
-            return DOCKER_DETAIL_TARGET_LABELS[segment.target];
+            return dockerDetailTargetLabels()[segment.target];
         case 'failure':
-            return DOCKER_DETAIL_FAILURE_LABELS[segment.failure];
+            return dockerDetailFailureLabels()[segment.failure];
     }
 }
 
@@ -687,7 +738,7 @@ function buildDockerDetailRows(
     const rows: DockerDetailRow[] = [
         {
             label: l10n.t('Check result'),
-            value: DOCKER_OUTCOME_VALUES[readiness.outcome],
+            value: dockerOutcomeValues()[readiness.outcome],
             note:
                 readiness.outcome === 'indeterminate'
                     ? l10n.t('Docker answered too vaguely to name a cause, so setup can still be attempted.')
@@ -698,7 +749,7 @@ function buildDockerDetailRows(
     if (readiness.outcome !== 'ready') {
         rows.push({
             label: l10n.t('Detected problem'),
-            value: DOCKER_FAILURE_LABELS[readiness.failureKind ?? 'unknown'],
+            value: dockerFailureLabels()[readiness.failureKind ?? 'unknown'],
         });
     }
 
@@ -716,7 +767,7 @@ function buildDockerDetailRows(
 
     rows.push({
         label: l10n.t('Docker daemon'),
-        value: DOCKER_DAEMON_VALUES[daemonState],
+        value: dockerDaemonValues()[daemonState],
         note: readiness.daemonReachable
             ? l10n.t('The daemon answered, so everything below was reported by Docker itself.')
             : l10n.t('The daemon did not answer, so anything only Docker can report is still unknown.'),
@@ -724,27 +775,27 @@ function buildDockerDetailRows(
 
     rows.push({
         label: l10n.t('Docker endpoint'),
-        value: DOCKER_ENDPOINT_KIND_VALUES[readiness.endpointKind],
+        value: dockerEndpointKindValues()[readiness.endpointKind],
         note: readiness.endpointSource
-            ? DOCKER_ENDPOINT_SOURCE_NOTES[readiness.endpointSource]
+            ? dockerEndpointSourceNotes()[readiness.endpointSource]
             : l10n.t('No endpoint could be resolved, so the check had nothing to dial.'),
     });
 
     if (readiness.permissionDetail) {
         rows.push({
             label: l10n.t('Socket access'),
-            value: DOCKER_PERMISSION_DETAIL_VALUES[readiness.permissionDetail],
+            value: dockerPermissionDetailValues()[readiness.permissionDetail],
             note: l10n.t('Checked by comparing the Docker socket owner group against your user and this process.'),
         });
     }
 
     rows.push({
         label: l10n.t('Provider'),
-        value: DOCKER_PROVIDER_LABELS[readiness.provider],
-        note: DOCKER_PROVIDER_EVIDENCE_NOTES[readiness.providerEvidence],
+        value: dockerProviderLabels()[readiness.provider],
+        note: dockerProviderEvidenceNotes()[readiness.providerEvidence],
     });
 
-    const daemonOs = readiness.osType ? DOCKER_DETAIL_OS_LABELS[readiness.osType] : undefined;
+    const daemonOs = readiness.osType ? dockerDetailOsLabels()[readiness.osType] : undefined;
     const daemonPlatform =
         daemonOs && readiness.daemonArchitecture
             ? l10n.t('{0} {1}', daemonOs, readiness.daemonArchitecture)
@@ -760,8 +811,8 @@ function buildDockerDetailRows(
     rows.push({
         label: l10n.t('This machine'),
         value: readiness.arch
-            ? l10n.t('{0}, {1}', DOCKER_HOST_ENVIRONMENT_VALUES[readiness.environment], readiness.arch)
-            : DOCKER_HOST_ENVIRONMENT_VALUES[readiness.environment],
+            ? l10n.t('{0}, {1}', dockerHostEnvironmentValues()[readiness.environment], readiness.arch)
+            : dockerHostEnvironmentValues()[readiness.environment],
         note:
             readiness.platformSupported === false
                 ? l10n.t('DocumentDB Local images are published for x64 and arm64 only.')
@@ -770,7 +821,7 @@ function buildDockerDetailRows(
 
     rows.push({
         label: l10n.t('Container host'),
-        value: EXECUTION_TARGET_VALUES[getDockerExecutionTargetKey(readiness.executionTarget)],
+        value: executionTargetValues()[getDockerExecutionTargetKey(readiness.executionTarget)],
         note: l10n.t('The container is created here, so localhost refers to this environment.'),
     });
 
@@ -778,7 +829,7 @@ function buildDockerDetailRows(
         label: l10n.t('Check run'),
         value: formatLastChecked(readiness.checkedAtMs, now),
         note: readiness.diagnosticFingerprint
-            ? l10n.t('Diagnostic reference {0} — quote it when reporting this.', readiness.diagnosticFingerprint)
+            ? l10n.t('Diagnostic reference {0}. Quote it when reporting this.', readiness.diagnosticFingerprint)
             : undefined,
     });
 
@@ -876,7 +927,26 @@ export const LocalQuickStart = (): JSX.Element => {
     const [checkReadiness, setCheckReadiness] = useState<DockerReadiness | undefined>(undefined);
     /** A Docker problem reported by a later stage (pull / run), backing that stage's remediation. */
     const [stageDockerFailure, setStageDockerFailure] = useState<DockerReadiness | undefined>(undefined);
-    const [willReuse, setWillReuse] = useState(false);
+    const [canReuseExistingData, setCanReuseExistingData] = useState(false);
+    /**
+     * Live state of the managed instance, backing the Configure step's guard (review §9.2 Q2).
+     * Reaching the wizard while an instance exists should not normally be possible — the tree does
+     * not link to it in that state — but the command palette, a stale panel and cross-window races
+     * all still get here.
+     */
+    const [instanceState, setInstanceState] = useState<InstanceState | undefined>(undefined);
+    /**
+     * True when the container was removed outside VS Code. This is NOT a separate
+     * {@link InstanceState}: the service reports such an instance as `Stopped` with `missing` set,
+     * so a guard that reads only the state would offer "Start" for a container that no longer
+     * exists — a button that cannot do anything.
+     */
+    const [instanceMissing, setInstanceMissing] = useState(false);
+    /**
+     * The user's explicit recreate-vs-fresh choice (review M4). Nothing is inferred from
+     * {@link canReuseExistingData} any more, which is what resolves N1 (a stale inferred value).
+     */
+    const [dataChoice, setDataChoice] = useState<'reuse' | 'fresh'>('reuse');
     const [stageStatus, setStageStatus] = useState<Record<ProvisionStage, StageStatus>>(emptyStageStatus);
     const [errorMessage, setErrorMessage] = useState<string | undefined>(undefined);
     const [successMessage, setSuccessMessage] = useState<string | undefined>(undefined);
@@ -894,8 +964,12 @@ export const LocalQuickStart = (): JSX.Element => {
     const [timedOut, setTimedOut] = useState(false);
 
     // Settings (P1-4). The port and tag fields carry the real defaults rather than placeholder
-    // text, so what the user sees in the box is what will be used.
+    // text, so what the user sees in the box is what will be used. The port is seeded from the
+    // host's suggestion (the first free port) as soon as the status query returns, and is then
+    // ALWAYS sent explicitly — setup binds exactly this port and never relocates it (review L3).
     const [advPort, setAdvPort] = useState(String(QUICK_START_PORT));
+    const [suggestedPort, setSuggestedPort] = useState(QUICK_START_PORT);
+    const [portStatus, setPortStatus] = useState<PortAvailability | 'checking' | undefined>(undefined);
     const [advUser, setAdvUser] = useState('');
     const [advPass, setAdvPass] = useState('');
     const [advTag, setAdvTag] = useState(QUICK_START_DEFAULT_TAG);
@@ -904,12 +978,25 @@ export const LocalQuickStart = (): JSX.Element => {
     const [editingImage, setEditingImage] = useState(false);
     const [customCredentials, setCustomCredentials] = useState(false);
 
-    // The service reuses an existing instance (keeping its data volume) whenever stored
-    // credentials exist, ignoring any custom credentials / image tag. `willReuse` reflects
-    // that exact decision (the same predicate the service uses), so we hide those fields and
-    // relabel the settings whenever — and only when — the service will actually reuse.
-    const isRecreate = willReuse;
+    // The Configure step ASKS whether to keep the existing data (review M4): the service reuses an
+    // instance's stored credentials and data volume only when told to. `canReuseExistingData` says
+    // the choice is available (the same predicate the service uses); `dataChoice` is the answer.
+    //
+    // A CredentialsMissing instance has no readable secret, so its data can never be opened again:
+    // the choice collapses to "Start fresh", stated by a warning MessageBar rather than a radio.
+    const forcedFresh = instanceState === InstanceState.CredentialsMissing;
+    const startFresh = forcedFresh || (canReuseExistingData && dataChoice === 'fresh');
+    const isRecreate = canReuseExistingData && !startFresh;
     const useCustomCredentials = customCredentials && !isRecreate;
+
+    /**
+     * Which existing-instance guard the Configure step shows, if any. See
+     * {@link getExistingInstanceGuard} for why `missing` is checked before the state.
+     */
+    const existingInstanceGuard = getExistingInstanceGuard({ state: instanceState, missing: instanceMissing });
+    // A usable instance is never walked into a destructive recreate: the user is offered the action
+    // they almost certainly meant (open it / start it) instead.
+    const startBlockedByGuard = guardBlocksSetup(existingInstanceGuard);
 
     const subscriptionRef = useRef<{ unsubscribe: () => void } | null>(null);
     const readinessAbortRef = useRef<AbortController | null>(null);
@@ -921,6 +1008,9 @@ export const LocalQuickStart = (): JSX.Element => {
         { readonly problem: DockerReadiness; readonly presentation: DockerReadinessPresentation } | undefined
     >(undefined);
     const dockerWaitTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+    // True once the user edits the port, so a later status refresh never overwrites their choice
+    // with the host's suggestion.
+    const portTouchedRef = useRef(false);
     const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
     // Current settings, synced from the fields below so handleStart (and Retry) always read the
     // latest without re-binding the provisioning subscription.
@@ -947,6 +1037,18 @@ export const LocalQuickStart = (): JSX.Element => {
         const port = advPort.trim();
         if (port && (!/^\d+$/.test(port) || Number(port) < 1024 || Number(port) > 65535)) {
             return { field: 'port', message: l10n.t('Port must be a whole number between 1024 and 65535.') };
+        }
+        if (portStatus === 'inUse') {
+            return {
+                field: 'port',
+                message: l10n.t('Port {0} is already in use. Pick a different one.', port),
+            };
+        }
+        if (portStatus === 'takenByAnotherInstance') {
+            return {
+                field: 'port',
+                message: l10n.t('Port {0} belongs to another DocumentDB Local instance. Pick a different one.', port),
+            };
         }
         if (!isRecreate) {
             const user = advUser.trim();
@@ -991,10 +1093,11 @@ export const LocalQuickStart = (): JSX.Element => {
             return;
         }
         const opts: AdvancedQuickStartOptions = {};
-        // Only an actual change is sent. An explicit port is honored exactly (a conflict errors),
-        // while omitting it lets the service fall back to a free port in the band — so echoing the
-        // default back would silently remove that fallback.
-        if (advPort.trim() && advPort.trim() !== String(QUICK_START_PORT)) opts.port = Number(advPort.trim());
+        // The port is ALWAYS sent (review L3): the field already holds the port the user was shown
+        // and validated against, and the service binds exactly that one rather than relocating on
+        // a conflict. Comparing against the default here used to make an explicitly-typed 10260
+        // silently mean "pick something for me".
+        if (advPort.trim()) opts.port = Number(advPort.trim());
         // Credentials and image tag are ignored by the service when reusing an existing
         // instance, so don't send them (the fields are hidden in that case anyway). Send the
         // trimmed credentials so what we transmit is exactly what the service stores/encodes.
@@ -1004,8 +1107,22 @@ export const LocalQuickStart = (): JSX.Element => {
             if (advTag.trim() && advTag.trim() !== QUICK_START_DEFAULT_TAG) opts.imageTag = advTag.trim();
         }
         if (!advLoadSampleData) opts.loadSampleData = false;
+        // The recreate-vs-fresh decision is sent EXPLICITLY (review M4): the service no longer
+        // infers it from the presence of stored credentials, so nothing can go stale between the
+        // choice the user was shown and the volume the provision drops.
+        if (startFresh) opts.startFresh = true;
         advancedRef.current = Object.keys(opts).length > 0 ? opts : undefined;
-    }, [advPort, advUser, advPass, advTag, advLoadSampleData, advError, isRecreate, useCustomCredentials]);
+    }, [advPort, advUser, advPass, advTag, advLoadSampleData, advError, isRecreate, useCustomCredentials, startFresh]);
+
+    // Built during render, after `l10n.config()` has run, so these ARE translated. Memoized because
+    // the maps are rebuilt on every call by design (see the note on the lookup functions above).
+    const stageLabelsMap = useMemo(() => stageLabels(), []);
+    const planItemList = useMemo(() => planItems(), []);
+    const dockerFailureLabelMap = useMemo(() => dockerFailureLabels(), []);
+    const dockerGuidanceMap = useMemo(() => dockerGuidance(), []);
+    const dockerGuideMap = useMemo(() => dockerGuides(), []);
+    const dockerStartLabelMap = useMemo(() => dockerStartLabels(), []);
+    const dockerRecoveryNoteMap = useMemo(() => dockerRecoveryNotes(), []);
 
     const step = stepForPhase(phase);
     const isProvisioning = phase === 'provisioning';
@@ -1109,7 +1226,18 @@ export const LocalQuickStart = (): JSX.Element => {
                     return undefined;
                 }
                 applyReadiness(result.readiness);
-                setWillReuse(result.willReuse);
+                setCanReuseExistingData(result.canReuseExistingData);
+                setInstanceState(result.status.state);
+                setInstanceMissing(result.status.missing === true);
+                // Absent on polled calls (M6-b); keep the last suggestion in that case.
+                if (result.suggestedPort !== undefined) {
+                    setSuggestedPort(result.suggestedPort);
+                    // Pre-fill the port with the host's suggestion until the user edits it, so the
+                    // Configure summary shows the port that will actually be bound (review L1/L3).
+                    if (!portTouchedRef.current) {
+                        setAdvPort(String(result.suggestedPort));
+                    }
+                }
                 return result;
             } catch {
                 // Readiness never blocks the wizard: the authoritative check is the first setup
@@ -1319,7 +1447,9 @@ export const LocalQuickStart = (): JSX.Element => {
                     onResult: (result) => {
                         latestResult = result;
                         applyReadiness(result.readiness);
-                        setWillReuse(result.willReuse);
+                        setCanReuseExistingData(result.canReuseExistingData);
+                        setInstanceState(result.status.state);
+                        setInstanceMissing(result.status.missing === true);
                     },
                 });
                 if (abortController.signal.aborted) return;
@@ -1328,6 +1458,11 @@ export const LocalQuickStart = (): JSX.Element => {
                     applyDockerRecovery();
                 } else if (outcome === 'deadline') {
                     setDockerActionMessage(l10n.t('Docker did not become ready before the wait timed out.'));
+                } else if (outcome === 'stopped') {
+                    // Docker answered, but with a non-transient problem (e.g. permission denied). The
+                    // readiness card below already updated via onResult; announce the transition too,
+                    // otherwise the spinner just disappears and the Announcer says nothing.
+                    setDockerActionMessage(l10n.t('Docker started, but it is not usable yet. See the details below.'));
                 }
             })
             .catch(() => {
@@ -1349,6 +1484,23 @@ export const LocalQuickStart = (): JSX.Element => {
             }
         });
     }, [applyDockerRecovery, syncDockerStatus]);
+
+    useEffect(() => {
+        // Keep the instance facts live for as long as the panel is open (review N1). Reading them
+        // once on mount left the Configure guard describing an instance that a tree action, another
+        // window, or a `docker rm` in a terminal had already changed underneath it.
+        const subscription = trpcClient.localQuickStart.onInstanceChanged.subscribe(undefined, {
+            onData(update: InstanceStatusUpdate) {
+                setInstanceState(update.status.state);
+                setInstanceMissing(update.status.missing === true);
+                setCanReuseExistingData(update.canReuseExistingData);
+            },
+            onError() {
+                // The mount-time query already seeded these; a dropped stream only stops updates.
+            },
+        });
+        return () => subscription.unsubscribe();
+    }, [trpcClient]);
 
     useEffect(() => {
         // Load the instance facts the settings page needs (and rehydrate a resumable readiness
@@ -1382,6 +1534,34 @@ export const LocalQuickStart = (): JSX.Element => {
         const relativeTimeTimer = setInterval(() => setRelativeTimeNow(Date.now()), 30_000);
         return () => clearInterval(relativeTimeTimer);
     }, []);
+
+    // Validate the port's availability HERE, while the user can still react, rather than letting
+    // setup fail on a Docker bind error minutes later (review L3). Debounced so typing a port digit
+    // by digit doesn't issue a probe per keystroke.
+    useEffect(() => {
+        const port = advPort.trim();
+        if (!/^\d+$/.test(port) || Number(port) < 1024 || Number(port) > 65535) {
+            setPortStatus(undefined);
+            return;
+        }
+        setPortStatus('checking');
+        let cancelled = false;
+        const handle = setTimeout(() => {
+            void trpcClient.localQuickStart.checkPort
+                .query({ port: Number(port) })
+                .then((result) => {
+                    if (!cancelled) setPortStatus(result);
+                })
+                .catch(() => {
+                    // Never block the wizard on a probe failure; setup re-checks the port anyway.
+                    if (!cancelled) setPortStatus(undefined);
+                });
+        }, 400);
+        return () => {
+            cancelled = true;
+            clearTimeout(handle);
+        };
+    }, [advPort, trpcClient]);
 
     // "Wait longer" (§9.1): re-probe the container the service kept running after a readiness
     // timeout, keeping the already-completed stages visible. Optimistically flip the waiting row
@@ -1484,6 +1664,17 @@ export const LocalQuickStart = (): JSX.Element => {
         void trpcClient.localQuickStart.copyConnectionString.mutate().catch(() => undefined);
     }, [trpcClient]);
 
+    /**
+     * Configure-step guard action for a stopped instance: start what is already there instead of
+     * recreating it. The status refresh flips the guard to "healthy" once it comes up.
+     */
+    const handleStartExisting = useCallback((): void => {
+        void trpcClient.localQuickStart.startInstance
+            .mutate()
+            .then(() => syncDockerStatus({ forceRefresh: true }))
+            .catch(() => undefined);
+    }, [syncDockerStatus, trpcClient]);
+
     const goToStep = useCallback((id: string): void => {
         if (id === 'introduction') {
             setErrorMessage(undefined);
@@ -1550,9 +1741,9 @@ export const LocalQuickStart = (): JSX.Element => {
     // region so screen-reader users hear provisioning progress (WCAG 4.1.3). Suppressed once
     // any stage has errored so a stale "…" utterance can't precede the failure announcement.
     const activeStage = PROVISION_STAGES.find((stage) => stageStatus[stage] === 'active');
-    const provisioningStatusMessage = activeStage && !failedStage ? l10n.t('{0}…', STAGE_LABELS[activeStage]) : '';
+    const provisioningStatusMessage = activeStage && !failedStage ? l10n.t('{0}…', stageLabelsMap[activeStage]) : '';
 
-    const effectivePort = advPort.trim() && advValidation?.field !== 'port' ? advPort.trim() : String(QUICK_START_PORT);
+    const effectivePort = advPort.trim() && advValidation?.field !== 'port' ? advPort.trim() : String(suggestedPort);
     const effectiveImage =
         !isRecreate && advTag.trim() && advValidation?.field !== 'tag'
             ? `${QUICK_START_IMAGE_REPOSITORY}:${advTag.trim()}`
@@ -1608,6 +1799,8 @@ export const LocalQuickStart = (): JSX.Element => {
                     {l10n.t('Develop and test locally')}
                 </Text>
                 <Text className={styles.muted}>
+                    {/* Approved product copy, taken verbatim from documentdb.io — exempt from the
+                        repo's "never MongoDB as a bare product name" terminology rule. Do not sweep. */}
                     {l10n.t(
                         'DocumentDB Local gives you an open-source, fully MongoDB-compatible database for development and testing on your machine.',
                     )}
@@ -1618,7 +1811,7 @@ export const LocalQuickStart = (): JSX.Element => {
                     {l10n.t('What will happen in the Set up step')}
                 </Text>
                 <ol className={styles.planList}>
-                    {PLAN_ITEMS.map((item, index) => (
+                    {planItemList.map((item, index) => (
                         <li className={styles.planItem} key={item.label}>
                             {/* Fluent's own default: filled, brand, circular. No colour override. */}
                             <CounterBadge aria-hidden count={index + 1} className={styles.planBadge} />
@@ -1677,18 +1870,26 @@ export const LocalQuickStart = (): JSX.Element => {
             editor: (
                 <Field
                     label={l10n.t('Port')}
-                    hint={l10n.t('The host is always localhost.')}
+                    hint={l10n.t(
+                        'The host is always localhost. This exact port is used. Setup checks it here and never picks a different one later.',
+                    )}
                     validationState={advValidation?.field === 'port' ? 'error' : 'none'}
                     validationMessage={advValidation?.field === 'port' ? advValidation.message : undefined}
                 >
                     <Input
                         type="number"
                         value={advPort}
-                        onChange={(_event, data) => setAdvPort(data.value)}
+                        onChange={(_event, data) => {
+                            portTouchedRef.current = true;
+                            setAdvPort(data.value);
+                        }}
                         contentAfter={resetButton(
-                            l10n.t('Reset port to {0}', String(QUICK_START_PORT)),
-                            () => setAdvPort(String(QUICK_START_PORT)),
-                            advPort === String(QUICK_START_PORT),
+                            l10n.t('Reset port to {0}', String(suggestedPort)),
+                            () => {
+                                portTouchedRef.current = true;
+                                setAdvPort(String(suggestedPort));
+                            },
+                            advPort === String(suggestedPort),
                         )}
                     />
                 </Field>
@@ -1790,6 +1991,99 @@ export const LocalQuickStart = (): JSX.Element => {
         },
     ];
 
+    /**
+     * Existing-instance guard (review §9.2 Q2, I2-3). It lives on the Configure step — the one
+     * screen where the decision is actually made — rather than on the Introduction step. A healthy
+     * or stopped instance is never walked into a destructive recreate; a credential-unavailable one
+     * used to be hard-refused by the service (leaving the user to hunt for Delete Container) and is
+     * now an explicit, warned "Start fresh" path right here.
+     */
+    const existingInstanceNotice = existingInstanceGuard && (
+        <MessageBar intent={existingInstanceGuard === 'credentialsMissing' ? 'warning' : 'info'} layout="multiline">
+            <MessageBarBody className={styles.messageBody}>
+                {existingInstanceGuard === 'healthy' ? (
+                    <>
+                        <MessageBarTitle>{l10n.t('DocumentDB Local is already running')}</MessageBarTitle>
+                        {l10n.t('There is nothing to set up. Open the connection to start using it.')}
+                    </>
+                ) : existingInstanceGuard === 'stopped' ? (
+                    <>
+                        <MessageBarTitle>{l10n.t('DocumentDB Local is already set up')}</MessageBarTitle>
+                        {l10n.t('It is stopped. Start it to use it again, with all your data.')}
+                    </>
+                ) : (
+                    <>
+                        <MessageBarTitle>
+                            {l10n.t('Saved credentials for DocumentDB Local are missing')}
+                        </MessageBarTitle>
+                        {l10n.t(
+                            'Its data can no longer be opened, so setting up will delete the instance and its data, then create a new one.',
+                        )}
+                    </>
+                )}
+            </MessageBarBody>
+            <MessageBarActions>
+                {existingInstanceGuard === 'healthy' && (
+                    <Button appearance="secondary" onClick={handleOpenConnection}>
+                        {l10n.t('Open Connection')}
+                    </Button>
+                )}
+                {existingInstanceGuard === 'stopped' && (
+                    <Button appearance="secondary" onClick={handleStartExisting}>
+                        {l10n.t('Start')}
+                    </Button>
+                )}
+                {startBlockedByGuard && (
+                    <Button appearance="secondary" onClick={handleClose}>
+                        {l10n.t('Close')}
+                    </Button>
+                )}
+            </MessageBarActions>
+        </MessageBar>
+    );
+
+    /**
+     * The recreate-vs-fresh choice (review M4, I2-2). It sits above the settings table because it
+     * decides what those settings mean: reusing keeps the instance's stored credentials and image,
+     * so the credential/image rows are hidden. Per I2-Q4 there is NO extra confirmation dialog:
+     * the destructive option states the data loss in its own label and is never pre-selected.
+     *
+     * The explanation and the choice share one block so they cannot read as competing controls.
+     * `MessageBar` is `role="group"`, which is the right container for a set of related controls.
+     *
+     * Hidden whenever setup cannot run (a healthy or stopped instance): offering a choice next to a
+     * disabled primary action reads as a third, broken control.
+     */
+    const dataChoiceBlock = canReuseExistingData && !forcedFresh && !startBlockedByGuard && (
+        <MessageBar intent="info" layout="multiline">
+            <MessageBarBody className={styles.messageBody}>
+                {instanceMissing && (
+                    <div>
+                        {l10n.t(
+                            'The DocumentDB Local container was removed outside VS Code. Its data is still on this machine, and setting up creates the container again.',
+                        )}
+                    </div>
+                )}
+                <Field
+                    label={
+                        // Only restate where the data came from when the sentence above did not.
+                        instanceMissing
+                            ? l10n.t('What should setup do with the existing data?')
+                            : l10n.t('DocumentDB Local already has data on this machine. What should setup do with it?')
+                    }
+                >
+                    <RadioGroup
+                        value={dataChoice}
+                        onChange={(_event, data) => setDataChoice(data.value === 'fresh' ? 'fresh' : 'reuse')}
+                    >
+                        <Radio value="reuse" label={l10n.t('Keep the existing data')} />
+                        <Radio value="fresh" label={l10n.t('Erase the existing data and start empty')} />
+                    </RadioGroup>
+                </Field>
+            </MessageBarBody>
+        </MessageBar>
+    );
+
     const configure = (
         <section className={styles.section} aria-labelledby="quickstart-configure-heading">
             <div className={styles.sectionHeader}>
@@ -1800,6 +2094,8 @@ export const LocalQuickStart = (): JSX.Element => {
                     {l10n.t('These defaults work for most people. Change them only if you need to.')}
                 </Text>
             </div>
+            {existingInstanceNotice}
+            {dataChoiceBlock}
             <Table size="small" aria-label={l10n.t('Setup settings')}>
                 <colgroup>
                     <col className={styles.settingsColLabel} />
@@ -1859,10 +2155,10 @@ export const LocalQuickStart = (): JSX.Element => {
                         <MessageBarBody className={styles.messageBody}>
                             <div>
                                 <MessageBarTitle>
-                                    {DOCKER_FAILURE_LABELS[shownDocker.problem.failureKind ?? 'unknown']}
+                                    {dockerFailureLabelMap[shownDocker.problem.failureKind ?? 'unknown']}
                                 </MessageBarTitle>{' '}
                                 {
-                                    DOCKER_GUIDANCE[
+                                    dockerGuidanceMap[
                                         startingDocker
                                             ? 'daemonStarting'
                                             : (shownDocker.presentation.guidance ?? 'notAccessible')
@@ -1887,7 +2183,7 @@ export const LocalQuickStart = (): JSX.Element => {
                                         </Button>
                                     </div>
                                     {shownDocker.presentation.recoveryNote && (
-                                        <Text>{DOCKER_RECOVERY_NOTES[shownDocker.presentation.recoveryNote]}</Text>
+                                        <Text>{dockerRecoveryNoteMap[shownDocker.presentation.recoveryNote]}</Text>
                                     )}
                                 </div>
                             )}
@@ -1918,16 +2214,16 @@ export const LocalQuickStart = (): JSX.Element => {
                                 shownDocker.presentation.showStartDockerProvider &&
                                 shownDocker.presentation.startLabel && (
                                     <Button appearance="secondary" onClick={handleStartDocker}>
-                                        {DOCKER_START_LABELS[shownDocker.presentation.startLabel]}
+                                        {dockerStartLabelMap[shownDocker.presentation.startLabel]}
                                     </Button>
                                 )
                             )}
                             {!shownDocker.presentation.showInstall && (
                                 <Button
                                     appearance="secondary"
-                                    onClick={() => handleOpenGuide(DOCKER_GUIDES[shownDocker.presentation.guide].href)}
+                                    onClick={() => handleOpenGuide(dockerGuideMap[shownDocker.presentation.guide].href)}
                                 >
-                                    {DOCKER_GUIDES[shownDocker.presentation.guide].label}
+                                    {dockerGuideMap[shownDocker.presentation.guide].label}
                                 </Button>
                             )}
                             {shownDocker.presentation.showContinueAnyway && (
@@ -2036,7 +2332,7 @@ export const LocalQuickStart = (): JSX.Element => {
                 {PROVISION_STAGES.map((stage) => (
                     <StageRow
                         key={stage}
-                        label={STAGE_LABELS[stage]}
+                        label={stageLabelsMap[stage]}
                         status={stageStatus[stage]}
                         detail={stageDetailFor(stage)}
                         meta={stageMetaFor(stage)}
@@ -2109,7 +2405,7 @@ export const LocalQuickStart = (): JSX.Element => {
                 {PROVISION_STAGES.map((stage) => (
                     <StageRow
                         key={stage}
-                        label={STAGE_LABELS[stage]}
+                        label={stageLabelsMap[stage]}
                         status="done"
                         detail={stage === 'checking' ? checkStageDetail : undefined}
                         reserveDetail={stage === 'checking'}
@@ -2187,14 +2483,27 @@ export const LocalQuickStart = (): JSX.Element => {
             </Button>
         );
     } else if (phase === 'configure') {
+        // The label stays fixed; the note below it is what follows the choice. "Nothing else on your
+        // machine is changed" is true only for a genuinely fresh install and must not render for
+        // either recreate path (review M4 / §10.6).
         primaryLabel = l10n.t('Start DocumentDB Local');
-        primaryDisabled = advError !== undefined;
+        primaryDisabled = advError !== undefined || startBlockedByGuard;
         primaryIcon = <RocketRegular />;
         onPrimary = handleStart;
-        footerNote = l10n.t(
-            'Starting downloads the official image if needed, then creates and starts one container named {0}. Nothing else on your machine is changed.',
-            QUICK_START_CONTAINER_NAME,
-        );
+        footerNote = isRecreate
+            ? l10n.t(
+                  'Recreating replaces the container named {0} and keeps its data volume, so your documents, credentials and image version are preserved.',
+                  QUICK_START_CONTAINER_NAME,
+              )
+            : startFresh
+              ? l10n.t(
+                    'This deletes the container named {0} and its data volume, then creates a new one. Everything stored in DocumentDB Local is erased.',
+                    QUICK_START_CONTAINER_NAME,
+                )
+              : l10n.t(
+                    'Starting downloads the official image if needed, then creates and starts one container named {0}. Nothing else on your machine is changed.',
+                    QUICK_START_CONTAINER_NAME,
+                );
         secondaryActions = (
             <Button appearance="secondary" icon={<ArrowLeftRegular />} onClick={() => setPhase('introduction')}>
                 {l10n.t('Back')}

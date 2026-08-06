@@ -31,6 +31,8 @@ import { QuickStartService } from '../../../services/localQuickStart/QuickStartS
 import {
     type AdvancedQuickStartOptions,
     type DockerStatusResult,
+    type InstanceStatusUpdate,
+    type PortAvailability,
     type QuickStartStatus,
     type StageEvent,
 } from '../../../services/localQuickStart/quickStartTypes';
@@ -79,6 +81,10 @@ const advancedOptionsSchema = z
             .regex(/^[\w][\w.-]*$/, 'Invalid image tag')
             .optional(),
         loadSampleData: z.boolean().optional(),
+        // The user's explicit "Start fresh (erases data)" choice (review M4). The service applies
+        // the RR4 volume-wipe gate: this flag is the only way a provision may drop an existing
+        // instance's data volume.
+        startFresh: z.boolean().optional(),
         continueAnyway: z.boolean().optional(),
     })
     // Mirror the webview's both-or-neither rule server-side: a username without a password
@@ -98,7 +104,7 @@ export type RouterContext = BaseRouterContext & {
 /**
  * Strip the credential-bearing {@link QuickStartStatus.metadata} before returning status to the
  * webview: its `connectionString`/`username` are secrets the renderer never reads (it only uses
- * `canResumeReadiness`, plus `readiness`/`willReuse` from the wrapper). Keeping them out of the
+ * `canResumeReadiness`, plus `readiness`/`canReuseExistingData` from the wrapper). Keeping them out of the
  * renderer process is defense-in-depth — the password never crosses into the webview's JS heap, so a
  * future webview vulnerability can't exfiltrate it. All non-sensitive fields are preserved.
  */
@@ -143,14 +149,25 @@ export const localQuickStartRouter = router({
             // Design §14 quickstart.docker_readiness never includes names, ports, or credentials.
             Object.assign(tctx.actionContext.telemetry.properties, getDockerReadinessTelemetryProperties(readiness));
             tctx.actionContext.telemetry.properties.platformSupported = String(readiness.platformSupported !== false);
-            const willReuse = await QuickStartService.willReuseExistingInstance();
+            const canReuseExistingData = await QuickStartService.canReuseExistingData();
             return {
                 readiness,
                 status: toWebviewStatus(QuickStartService.getStatus()),
                 busy: QuickStartService.isBusy,
-                willReuse,
+                canReuseExistingData,
+                // M6-b: the polled readiness loop reads only `readiness`, and suggestPort() probes a
+                // range of host sockets on every call - skip it while polling.
+                suggestedPort: input?.polled ? undefined : await QuickStartService.suggestPort(),
             };
         }),
+
+    /**
+     * Validate a Configure-step port while the user can still react (review L3). The port is always
+     * sent explicitly afterwards, so setup binds exactly this one instead of silently relocating.
+     */
+    checkPort: publicProcedure
+        .input(z.object({ port: z.number().int().min(1024).max(65535) }))
+        .query(({ input }): Promise<PortAvailability> => QuickStartService.checkPort(input.port)),
 
     /** Lightweight status poll (no docker call). */
     getStatus: publicProcedure.query((): QuickStartStatus => toWebviewStatus(QuickStartService.getStatus())),
@@ -196,6 +213,13 @@ export const localQuickStartRouter = router({
         await revealQuickStartInstance(tctx.actionContext);
     }),
 
+    /**
+     * Start the existing (stopped) instance from the Configure step's guard (review §9.2 Q2): a
+     * stopped instance the user reached the wizard for must never be silently recreated when all
+     * they wanted was to start it.
+     */
+    startInstance: publicProcedure.mutation(() => QuickStartService.start()),
+
     /** Success hand-off (§5.5): copy the managed instance's connection string. */
     copyConnectionString: publicProcedure.mutation(async () => {
         // Delegate to the shared copy command so the webview button gets the same with/without-password
@@ -211,6 +235,56 @@ export const localQuickStartRouter = router({
      * again from a clean slate.
      */
     discardTimedOut: publicProcedure.mutation(() => QuickStartService.discardTimedOutInstance()),
+
+    /**
+     * Push the managed instance's status to the panel whenever it changes (review N1).
+     *
+     * The panel used to read this once on open, so anything that changed the instance afterwards
+     * (a tree action, another VS Code window, a container removed in a terminal) left the Configure
+     * step's guard describing an instance that no longer existed.
+     *
+     * Deliberately cheap: it re-reads already-known state and never calls `isDockerReady()` or
+     * `refreshLiveState()`. The tree's background probe fires this event on a cooldown, so a
+     * Docker call here would put that cost on every panel too.
+     */
+    onInstanceChanged: publicProcedure.subscription(async function* ({
+        ctx,
+    }): AsyncGenerator<InstanceStatusUpdate, void, void> {
+        const myCtx = ctx as BaseRouterContext;
+        let wake: (() => void) | undefined;
+        // Start dirty so a panel that connects after a change still receives the current truth.
+        let dirty = true;
+        let lastStatusKey: string | undefined;
+
+        const subscription = QuickStartService.onDidChangeStatus(() => {
+            dirty = true;
+            wake?.();
+        });
+        const onAbort = (): void => wake?.();
+        myCtx.signal?.addEventListener('abort', onAbort);
+
+        try {
+            while (!myCtx.signal?.aborted) {
+                if (dirty) {
+                    dirty = false;
+                    const status = toWebviewStatus(QuickStartService.getStatus());
+                    const statusKey = JSON.stringify(status);
+                    // The status event also fires when nothing user-visible changed; skipping those
+                    // keeps the credential read below off the repeating path.
+                    if (statusKey !== lastStatusKey) {
+                        lastStatusKey = statusKey;
+                        yield { status, canReuseExistingData: await QuickStartService.canReuseExistingData() };
+                    }
+                    continue;
+                }
+                await new Promise<void>((resolve) => (wake = resolve));
+                wake = undefined;
+            }
+        } finally {
+            myCtx.signal?.removeEventListener('abort', onAbort);
+            subscription.dispose();
+        }
+    }),
 
     /**
      * Provision the managed instance, streaming stage transitions to the webview.

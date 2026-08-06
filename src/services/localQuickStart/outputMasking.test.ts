@@ -65,5 +65,26 @@ describe('outputMasking (Quick Start D14)', () => {
             buffer.push('windows line\r\n');
             expect(emitted).toEqual(['windows line']);
         });
+
+        it('bounds the buffer on newline-less output (L5)', () => {
+            const { emitted, buffer } = collect();
+            // A `docker logs -f` stream with no newline at all (progress bars, a binary blob).
+            buffer.push('x'.repeat(64 * 1024));
+            expect(emitted.length).toBeGreaterThan(0);
+            buffer.flush();
+            // Everything pushed is still emitted exactly once, just in forced chunks.
+            expect(emitted.join('').length).toBe(64 * 1024);
+        });
+
+        it('never splits a secret across a forced flush (L5)', () => {
+            const { emitted, buffer } = collect();
+            const half = Math.floor(PASSWORD.length / 2);
+            // Land the first half of the password exactly at the forced-flush boundary.
+            buffer.push('x'.repeat(16 * 1024 + 1 - half) + PASSWORD.slice(0, half));
+            buffer.push(PASSWORD.slice(half));
+            buffer.flush();
+            expect(emitted.join('')).not.toContain(PASSWORD);
+            expect(emitted.join('')).toContain('***');
+        });
     });
 });

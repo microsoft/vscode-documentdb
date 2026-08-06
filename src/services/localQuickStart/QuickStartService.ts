@@ -31,7 +31,6 @@ import { AuthMethodId } from '../../documentdb/auth/AuthMethod';
 import { ClustersClient } from '../../documentdb/ClustersClient';
 import { CredentialCache } from '../../documentdb/CredentialCache';
 import { DocumentDBConnectionString } from '../../documentdb/utils/DocumentDBConnectionString';
-import { ext } from '../../extensionVariables';
 import {
     ContainerRuntime,
     getBoundHostPort,
@@ -39,16 +38,26 @@ import {
     type IContainerRuntime,
     isRunning,
 } from './ContainerRuntime';
-import { composeConnectionString, generateCredentials, type GeneratedCredentials } from './quickStartCredentials';
+import {
+    composeConnectionString,
+    generateCredentials,
+    type GeneratedCredentials,
+    secretVariants,
+} from './quickStartCredentials';
 import {
     DEFAULT_INSTANCE_DISPLAY_NAME,
+    getInstance,
     isProvisioningLeaseFresh,
+    listInstances,
     type QuickStartInstanceRecord,
-    readRegistry,
-    removeInstanceRecord,
-    updateRegistry,
-    upsertInstanceRecord,
-} from './quickStartRegistry';
+    readConnectionString,
+    removeInstance,
+    removeInstanceIf,
+    scavengeStaleLeases,
+    updateInstance,
+    upsertInstance,
+    writeConnectionString,
+} from './quickStartStore';
 import {
     type AdvancedQuickStartOptions,
     clusterId,
@@ -56,22 +65,20 @@ import {
     DEFAULT_ALIAS,
     type DockerHostEnvironment,
     type DockerReadiness,
-    imageRefKey,
     type InstanceMetadata,
     InstanceState,
     type InstanceStatus,
-    LEGACY_IMAGE_REF_KEY,
-    LEGACY_SECRET_KEY,
+    type PortAvailability,
     type ProvisionStage,
     QUICK_START_ALIAS_LABEL_KEY,
     QUICK_START_DATA_PATH,
     QUICK_START_IMAGE,
     QUICK_START_LABEL_KEY,
+    QUICK_START_OPERATION_LABEL_KEY,
     QUICK_START_PORT,
-    QUICK_START_PORT_BAND_END,
+    QUICK_START_PORT_SCAN_LIMIT,
     type QuickStartStatus,
     resolveQuickStartImage,
-    secretKey,
     type StageEvent,
     volumeName,
 } from './quickStartTypes';
@@ -87,6 +94,29 @@ export const QUICK_START_CLUSTER_ID = clusterId(DEFAULT_ALIAS);
 function credentialUnavailableMessage(): string {
     return l10n.t(
         'DocumentDB Local has data on disk but its saved credentials are missing, so it cannot be opened. Use "Delete Container" to remove it and start fresh (this erases the data).',
+    );
+}
+
+/** Shown when the chosen host port is taken — both by the pre-check and by the Docker bind failure. */
+function portInUseMessage(port: number): string {
+    return l10n.t(
+        'Port {0} is already in use. Go back to Configure to pick a different port, or free it, then try again.',
+        String(port),
+    );
+}
+
+/**
+ * Docker's "port is already allocated" bind failure, in the wordings the CLI emits. The port is
+ * pre-checked before the pull, but the pull can take minutes and something else may claim the port
+ * meanwhile (review M5). Matching here turns a raw daemon string into the same actionable copy as
+ * the pre-check instead of leaking `Bind for 127.0.0.1:10260 failed: port is already allocated`.
+ */
+function isPortAllocationFailure(error: unknown): boolean {
+    const message = errMessage(error).toLowerCase();
+    return (
+        message.includes('port is already allocated') ||
+        message.includes('address already in use') ||
+        (message.includes('bind') && message.includes('failed'))
     );
 }
 const READINESS_TIMEOUT_MS = 180_000;
@@ -113,6 +143,12 @@ const SAMPLE_DATA_DB = 'sampledb';
  */
 const START_CONFIRM_ATTEMPTS = 3;
 const START_CONFIRM_INTERVAL_MS = 1_500;
+
+/**
+ * Minimum gap between two background live-state probes (review M6). The Connections view refreshes
+ * on many unrelated events; without a cooldown the tree would spawn a `docker inspect` per render.
+ */
+const BACKGROUND_REFRESH_COOLDOWN_MS = 5_000;
 
 function errMessage(error: unknown): string {
     return error instanceof Error ? error.message : String(error);
@@ -237,7 +273,16 @@ function delay(ms: number, signal: AbortSignal): Promise<void> {
 }
 
 export class QuickStartServiceImpl {
-    /** Per-alias runtime state (WI-2). See {@link InstanceRuntimeState}. */
+    /**
+     * Per-alias runtime state (WI-2). See {@link InstanceRuntimeState}.
+     *
+     * SCOPE (review §9.2 Q3): exactly **one** instance is supported today. This map, the `alias`
+     * parameter threaded through every public method, {@link reservedPorts} and the `operationId`
+     * labels are deliberate seams kept so a second instance is a focused iteration rather than a
+     * rewrite — but no UI is built on them, and every caller passes {@link DEFAULT_ALIAS}. When
+     * multi-instance is picked up, creating a second instance should most likely start by offering
+     * the one that already exists.
+     */
     private readonly instances = new Map<string, InstanceRuntimeState>();
 
     /** Lazily get (creating a NotInstalled default for) an alias's runtime state. */
@@ -274,6 +319,9 @@ export class QuickStartServiceImpl {
             metadata: entry.metadata,
             errorMessage: entry.errorMessage,
             missing: entry.missing,
+            // Known even while provisioning (the port is decided in the wizard, L1/L3), so the tree
+            // row can show the real address instead of assuming the canonical port.
+            port: entry.metadata?.boundPort ?? entry.port,
             // Only "resumable" once the provision/resume has settled (not mid-wait): pendingReadiness
             // is set BEFORE the probe, so gating on the busy flags keeps a reopened panel from
             // offering "Wait longer" while setup is still actively running (gpt-5.5).
@@ -281,7 +329,12 @@ export class QuickStartServiceImpl {
         };
     }
 
-    /** Snapshot of every known instance for the tree (WI-3), ordered DEFAULT first then by alias. */
+    /**
+     * Snapshot of every known instance for the tree (WI-3), ordered DEFAULT first then by alias.
+     *
+     * Another multi-instance seam (see {@link instances}): the tree renders a single row today and
+     * reads {@link getStatus} instead.
+     */
     public listStatuses(): InstanceStatus[] {
         this.stateFor(DEFAULT_ALIAS); // ensure the default is always represented
         const entries = [...this.instances.values()].sort((a, b) => {
@@ -312,9 +365,9 @@ export class QuickStartServiceImpl {
         };
     }
 
-    /** Legacy single-instance busy getter (kept for the router until WI-4). */
+    /** Default-instance shorthand for {@link isBusyFor} (kept for the router until WI-4). */
     public get isBusy(): boolean {
-        return this.stateFor(DEFAULT_ALIAS).provisioning;
+        return this.isBusyFor(DEFAULT_ALIAS);
     }
 
     /** Alias-scoped busy check (WI-3/4/5). */
@@ -351,49 +404,50 @@ export class QuickStartServiceImpl {
      * container by id (decision D12). All cleanup runs in `finally` so it also
      * fires when the consumer unsubscribes (iterator `return()`).
      */
-    public async *provision(signal: AbortSignal, options?: AdvancedQuickStartOptions): AsyncGenerator<StageEvent> {
-        if (this.stateFor(DEFAULT_ALIAS).provisioning || this.stateFor(DEFAULT_ALIAS).lifecycleBusy) {
+    public async *provision(
+        signal: AbortSignal,
+        options?: AdvancedQuickStartOptions,
+        alias: string = DEFAULT_ALIAS,
+    ): AsyncGenerator<StageEvent> {
+        if (this.stateFor(alias).provisioning || this.stateFor(alias).lifecycleBusy) {
             const message = l10n.t('Setup is already in progress.');
             yield stageEvent('error', 'error', message, message);
             return;
         }
-        this.stateFor(DEFAULT_ALIAS).provisioning = true;
+        this.stateFor(alias).provisioning = true;
         // Starting a fresh run supersedes any container left running by a prior readiness
         // timeout — drop its retained "Wait longer" state (the run below removes the container).
-        this.stateFor(DEFAULT_ALIAS).pendingReadiness = undefined;
-        // The alias this provision targets. WI-2c derives the container/volume/keys from it (still
-        // DEFAULT, so behavior is unchanged); WI-2e allocates a fresh alias here for `+ New`.
-        const alias = DEFAULT_ALIAS;
+        this.stateFor(alias).pendingReadiness = undefined;
         const channel = getQuickStartOutputChannel();
-        // Decide reuse from LIVE durable state, not the in-memory Missing flag: whenever we
-        // still hold the instance's stored credentials (SecretStorage), a data volume bound to
-        // them may exist on disk — even after the container was removed externally or across a
-        // window reload that cleared in-memory state (§6.1, §12). Adopt those credentials and
-        // KEEP the volume rather than wiping it; the stored credentials are what opens the
-        // volume's cluster, so freshly generated ones would fail against existing data. Only
-        // when NO credentials are recoverable is a clean wipe safe (the volume could not be
-        // opened anyway). This makes a true fresh provision the explicit Delete-then-recreate
-        // path, so running setup again can never silently destroy an existing data volume.
-        const reusable = await this.getReusableCredentials(alias);
+        // The user's explicit Configure-step choice (review M4). "Start fresh" is the ONLY way to
+        // reach the volume wipe below when an instance already exists; without it, reuse is decided
+        // from LIVE durable state, not the in-memory Missing flag: whenever we still hold the
+        // instance's stored credentials (SecretStorage), a data volume bound to them may exist on
+        // disk — even after the container was removed externally or across a window reload that
+        // cleared in-memory state (§6.1, §12). Adopt those credentials and KEEP the volume rather
+        // than wiping it; the stored credentials are what opens the volume's cluster, so freshly
+        // generated ones would fail against existing data.
+        const startFresh = options?.startFresh === true;
+        const reusable = startFresh ? undefined : await this.getReusableCredentials(alias);
         const reusing = reusable !== undefined;
         const credentials = reusable ?? resolveProvisionCredentials(options);
-        const secrets: string[] = [credentials.password];
+        const secrets: string[] = secretVariants(credentials.password);
 
         // Advanced overrides (P1-4). When reusing an existing instance we keep its data volume,
         // so custom credentials AND a custom image tag are intentionally IGNORED: the stored
         // credentials are required to open the volume's cluster, and recreating onto it with a
         // different (especially older) image version could leave the on-disk cluster unusable.
-        // The original image is reused — from in-memory metadata, falling back to the durable
-        // globalState record (survives a window reload), then the default if neither is known.
+        // The original image is reused — from in-memory metadata, falling back to the stored record
+        // (survives a window reload), then the default if neither is known.
         const usedCustomCreds = !reusing && !!(options?.username?.trim() && options?.password?.trim());
         const imageRef = reusing
-            ? (this.stateFor(DEFAULT_ALIAS).metadata?.imageRef ??
-              ext.context.globalState.get<string>(imageRefKey(alias)) ??
-              (alias === DEFAULT_ALIAS ? ext.context.globalState.get<string>(LEGACY_IMAGE_REF_KEY) : undefined) ??
-              QUICK_START_IMAGE)
+            ? (this.stateFor(alias).metadata?.imageRef ?? (await getInstance(alias))?.imageRef ?? QUICK_START_IMAGE)
             : resolveQuickStartImage(options?.imageTag);
         const usedCustomImage = !reusing && imageRef !== QUICK_START_IMAGE;
         const explicitPort = typeof options?.port === 'number' ? options.port : undefined;
+        // Always explicit from here on (L3): the wizard suggests and validates the port, so
+        // `provision` binds exactly this one and never relocates it.
+        const chosenPort = explicitPort ?? QUICK_START_PORT;
         const sampleDataRequested = options?.loadSampleData !== false;
         const cts = new vscode.CancellationTokenSource();
         const onAbort = (): void => cts.cancel();
@@ -407,8 +461,17 @@ export class QuickStartServiceImpl {
         let createAttempted = false;
         let envFilePath: string | undefined;
         let success = false;
-        let portFallback = false;
+        let portTaken = false;
         let readinessTimedOut = false;
+        // Owner nonce for this run: stamped on the container (H4) and on the provisioning lease (H3),
+        // so both the cleanup sweep and the registry reservation are provably this run's own. This is
+        // load-bearing today for concurrent windows, not only for the multi-instance seam.
+        const operationId = crypto.randomBytes(8).toString('hex');
+        let leaseHeld = false;
+        // Set once the credentials are persisted BEFORE the readiness wait (H3), together with
+        // whatever was stored before, so a failed attempt can restore the previous state exactly.
+        let earlySecretStored = false;
+        let previousStoredConnectionString: string | undefined;
         let readinessEnvironment: DockerHostEnvironment | undefined;
         let activeDockerStage: Extract<ProvisionStage, 'pulling' | 'creating'> | undefined;
         let provisioningDockerFailureKind: string | undefined;
@@ -420,7 +483,10 @@ export class QuickStartServiceImpl {
         const provisionStartedAt = Date.now();
 
         try {
-            this.setStatus(DEFAULT_ALIAS, InstanceState.Provisioning, undefined, undefined);
+            this.setStatus(alias, InstanceState.Provisioning, undefined, undefined);
+            // Remember the port this attempt will bind so the tree's "Provisioning…" row shows the
+            // real address rather than assuming the canonical default (L1).
+            this.stateFor(alias).port = chosenPort;
 
             // --- checking ---
             yield stageEvent('checking', 'active', 'Checking Docker…');
@@ -442,17 +508,15 @@ export class QuickStartServiceImpl {
             // volume, so the new credentials initialize a clean cluster. When reusing, the volume is
             // intentionally KEPT so existing data survives the recreate.
             const existing = await this.findManagedContainer(alias);
-            // RR4 / §5.2 volume-wipe gate: NEVER silently destroy an existing instance's data when we
-            // can't recover its credentials. A credential-unavailable instance (a managed container
-            // and/or a durable `ready` record, but no readable secret) must be explicitly Deleted —
-            // not wiped by a Set-up/recreate click. Only a truly-fresh alias (no managed container AND
-            // no `ready` record) may reach the wipe below (where it is a safe no-op / clean slate). A
-            // dead failed-attempt orphan has NO managed container (provision's `finally` removed it)
-            // and no `ready` record, so retrying it still works.
-            if (!reusing) {
-                const hasReadyRecord = readRegistry(ext.context.globalState).instances.some(
-                    (record) => record.alias === alias && record.phase === 'ready',
-                );
+            const hasReadyRecord = (await getInstance(alias))?.phase === 'ready';
+            // RR4 / §5.2 volume-wipe gate: NEVER silently destroy an existing instance's data. A
+            // credential-unavailable instance (a managed container and/or a durable `ready` record,
+            // but no readable secret) must not be wiped by a plain Set-up/recreate click. The wipe
+            // below is reachable only for a truly-fresh alias (no managed container AND no `ready`
+            // record, where it is a safe no-op) or when the user explicitly chose "Start fresh" in
+            // the Configure step. A dead failed-attempt orphan has NO managed container (provision's
+            // `finally` removed it) and no `ready` record, so retrying it still works.
+            if (!reusing && !startFresh) {
                 if (existing || hasReadyRecord) {
                     this.setStatus(alias, InstanceState.CredentialsMissing, undefined, credentialUnavailableMessage());
                     yield stageEvent(
@@ -472,50 +536,27 @@ export class QuickStartServiceImpl {
                 await this.runtime.removeVolume(volumeName(alias)).catch(() => undefined);
             }
 
-            // Pick a host port (design §8.3). An explicit Advanced port is honored exactly:
-            // a conflict ERRORS (never auto-relocated, P0-2). Otherwise prefer the canonical
-            // port and fall back to a random free port in the band, noting the substitution.
-            let chosenPort: number;
-            let portFallbackNote: string | undefined;
-            if (explicitPort !== undefined) {
-                if (!(await this.runtime.isPortFree(explicitPort))) {
-                    const message = l10n.t(
-                        'Port {0} is already in use. Choose a different port or free it, then retry.',
-                        String(explicitPort),
-                    );
-                    this.setStatus(DEFAULT_ALIAS, InstanceState.Error, undefined, message);
-                    yield stageEvent('checking', 'error', message, message);
-                    return;
-                }
-                this.throwIfAborted(signal);
-                chosenPort = explicitPort;
-            } else {
-                const available = await this.runtime.findAvailablePort(QUICK_START_PORT);
-                this.throwIfAborted(signal);
-                if (available === undefined) {
-                    // Do NOT claim the whole band was checked: the search samples a handful of ports
-                    // out of it, so "all in use" would be a false statement (#852 / #854).
-                    const message = l10n.t(
-                        'No free port was found in the range {0}-{1}. Free one, or set an explicit port under Advanced, then retry.',
-                        String(QUICK_START_PORT),
-                        String(QUICK_START_PORT_BAND_END - 1),
-                    );
-                    this.setStatus(DEFAULT_ALIAS, InstanceState.Error, undefined, message);
-                    yield stageEvent('checking', 'error', message, message);
-                    return;
-                }
-                chosenPort = available;
-                if (chosenPort !== QUICK_START_PORT) {
-                    portFallback = true;
-                    portFallbackNote = l10n.t(
-                        'Port {0} was busy, using {1} instead.',
-                        String(QUICK_START_PORT),
-                        String(chosenPort),
-                    );
-                    channel.appendLine(portFallbackNote);
-                }
+            // The host port is ALWAYS explicit (review L3, "no magic after execute"): the Configure
+            // step suggests a free port, validates it while the user can still react, and sends it.
+            // Setup never relocates it — a conflict here is a hard, explained error.
+            if (!(await this.runtime.isPortFree(chosenPort))) {
+                const message = portInUseMessage(chosenPort);
+                this.setStatus(alias, InstanceState.Error, undefined, message);
+                yield stageEvent('checking', 'error', message, message);
+                return;
             }
-            yield stageEvent('checking', 'done', portFallbackNote);
+            this.throwIfAborted(signal);
+            yield stageEvent('checking', 'done');
+
+            // Take the durable provisioning lease BEFORE the pull (H3): a host killed anywhere from
+            // here to `finalizeReadyInstance` then reconciles as "Provisioning…" (fresh lease) or is
+            // scavenged (stale lease) instead of dead-ending. Only for a genuinely fresh alias — for
+            // a recreate the existing `ready` record must survive, otherwise a failed recreate would
+            // scavenge the record of an instance whose data volume is still on disk.
+            if (!hasReadyRecord) {
+                leaseHeld = true;
+                await this.renewProvisioningLease(alias, operationId, chosenPort);
+            }
 
             // --- pulling ---
             yield stageEvent('pulling', 'active', 'Pulling the official image…');
@@ -527,6 +568,9 @@ export class QuickStartServiceImpl {
 
             // --- creating (docker run -d creates and starts) ---
             yield stageEvent('creating', 'active', 'Creating container…');
+            if (leaseHeld) {
+                await this.renewProvisioningLease(alias, operationId, chosenPort);
+            }
             createAttempted = true;
             // Write credentials to a temp env-file (deleted in finally) so they never
             // appear on the docker CLI / host process list (design §8.2). The image
@@ -537,7 +581,12 @@ export class QuickStartServiceImpl {
                 {
                     imageRef: imageRef,
                     name: containerName(alias),
-                    labels: { [QUICK_START_LABEL_KEY]: '1', [QUICK_START_ALIAS_LABEL_KEY]: alias },
+                    labels: {
+                        [QUICK_START_LABEL_KEY]: '1',
+                        [QUICK_START_ALIAS_LABEL_KEY]: alias,
+                        // Per-run nonce so this run's cleanup sweep can only remove ITS container (H4).
+                        [QUICK_START_OPERATION_LABEL_KEY]: operationId,
+                    },
                     hostPort: chosenPort,
                     containerPort: QUICK_START_PORT,
                     // Persist data across recreation (§8/§11).
@@ -589,7 +638,21 @@ export class QuickStartServiceImpl {
                 sampleDataRequested,
                 reusing,
             };
-            this.stateFor(DEFAULT_ALIAS).pendingReadiness = pending;
+            this.stateFor(alias).pendingReadiness = pending;
+            // Persist the credentials BEFORE the readiness wait (H3). The wait alone can run for
+            // three minutes, and it used to be the ONLY window in which a reload left a labelled
+            // container behind with no recoverable secret — a dead end whose only exit was deleting
+            // the volume. With the secret written here, a reload mid-wait reconciles into a normal
+            // adoption instead. A failed attempt restores the previous value in `finally`.
+            previousStoredConnectionString = await this.readStoredConnectionString(alias);
+            await writeConnectionString(alias, connectionString, {
+                displayName: alias === DEFAULT_ALIAS ? DEFAULT_INSTANCE_DISPLAY_NAME : alias,
+                port: boundPort,
+            });
+            earlySecretStored = true;
+            if (leaseHeld) {
+                await this.renewProvisioningLease(alias, operationId, boundPort);
+            }
             await this.waitForReadiness(connectionString, signal);
             this.throwIfAborted(signal);
 
@@ -611,8 +674,8 @@ export class QuickStartServiceImpl {
             provisioningDockerFailureKind = dockerReadiness?.failureKind;
             let message = aborted ? l10n.t('Setup was cancelled.') : errMessage(error);
             if (!aborted && error instanceof DockerNotReadyError) {
-                this.stateFor(DEFAULT_ALIAS).pendingReadiness = undefined;
-                this.setStatus(DEFAULT_ALIAS, InstanceState.Error, undefined, message);
+                this.stateFor(alias).pendingReadiness = undefined;
+                this.setStatus(alias, InstanceState.Error, undefined, message);
                 terminalEvent = stageEvent('checking', 'error', message, message);
             } else if (!aborted && error instanceof ReadinessTimeoutError && containerCreated && containerId) {
                 // The container is running but the database did not accept connections within the
@@ -623,17 +686,23 @@ export class QuickStartServiceImpl {
                 readinessTimedOut = true;
                 channel.appendLine(`[readiness-timeout] ${message}`);
                 message = getReadinessTimeoutMessage(readinessEnvironment);
-                this.setStatus(DEFAULT_ALIAS, InstanceState.Error, undefined, message);
+                this.setStatus(alias, InstanceState.Error, undefined, message);
                 terminalEvent = stageEvent('waiting', 'error', message, message, undefined, /* timedOut */ true);
             } else {
                 // Any other failure (or cancel) discards the attempt — drop the retained state so a
                 // stale timeout can't offer "Wait longer" against a container we're about to remove.
-                this.stateFor(DEFAULT_ALIAS).pendingReadiness = undefined;
+                this.stateFor(alias).pendingReadiness = undefined;
                 if (!aborted) {
-                    if (dockerReadiness) {
+                    if (activeDockerStage === 'creating' && isPortAllocationFailure(error)) {
+                        // The port was free at the pre-check but taken while the image downloaded
+                        // (M5). Say so in the same words as the pre-check instead of leaking the
+                        // raw daemon string; the user re-picks the port in Configure.
+                        message = portInUseMessage(chosenPort);
+                        portTaken = true;
+                    } else if (dockerReadiness) {
                         message = l10n.t('Docker became unavailable during setup: {0}', message);
                     }
-                    this.setStatus(DEFAULT_ALIAS, InstanceState.Error, undefined, message);
+                    this.setStatus(alias, InstanceState.Error, undefined, message);
                 }
                 // Buffered and emitted after `finally` (like the timeout event) so a Retry click
                 // driven by this event can't race the still-set `provisioning` guard either
@@ -659,18 +728,45 @@ export class QuickStartServiceImpl {
                     await this.runtime.stopContainer(containerId).catch(() => undefined);
                     await this.runtime.removeContainer(containerId).catch(() => undefined);
                 } else if (createAttempted && !containerId) {
-                    // The CLI may have been killed after the daemon created the
-                    // container but before its id was captured — sweep by label.
-                    const orphan = await this.findManagedContainer();
-                    if (orphan) {
+                    // The CLI may have been killed after the daemon created the container but
+                    // before its id was captured — sweep by label. Scoped to THIS run's
+                    // `operationId` (H4): an unscoped by-alias sweep would happily remove the
+                    // container another window had just created, since the loser of a two-window
+                    // create race reaches exactly this branch (its `docker run` failed on the
+                    // duplicate name).
+                    const orphans = await this.runtime
+                        .listByLabel({
+                            [QUICK_START_LABEL_KEY]: '1',
+                            [QUICK_START_OPERATION_LABEL_KEY]: operationId,
+                        })
+                        .catch(() => []);
+                    for (const orphan of orphans) {
                         channel.appendLine(`Removing orphaned container ${orphan.id}…`);
                         await this.runtime.removeContainer(orphan.id).catch(() => undefined);
                     }
                 }
+                // Restore the credential state this attempt overwrote (H3): a discarded attempt
+                // must not leave its own secret behind, nor clobber the previous instance's.
+                if (earlySecretStored) {
+                    try {
+                        await writeConnectionString(alias, previousStoredConnectionString ?? null, {
+                            displayName: alias === DEFAULT_ALIAS ? DEFAULT_INSTANCE_DISPLAY_NAME : alias,
+                            port: chosenPort,
+                        });
+                    } catch {
+                        // Best-effort restore; a stuck secret is surfaced by the next reconcile.
+                    }
+                }
+                // Drop this run's pre-create reservation so the tree doesn't keep a phantom
+                // "Provisioning…" row until the lease expires. `finalizeReadyInstance` already
+                // promoted the record to `ready` on the success path.
+                if (leaseHeld) {
+                    await this.releaseProvisioningLease(alias, operationId);
+                }
                 // Interrupted before settling (cancel / unsubscribe) → reset state.
                 // The error path already settled to `Error` in `catch`.
-                if (this.stateFor(DEFAULT_ALIAS).state === InstanceState.Provisioning) {
-                    this.setStatus(DEFAULT_ALIAS, InstanceState.NotInstalled, undefined, undefined);
+                if (this.stateFor(alias).state === InstanceState.Provisioning) {
+                    this.setStatus(alias, InstanceState.NotInstalled, undefined, undefined);
                 }
             }
             signal.removeEventListener('abort', onAbort);
@@ -693,7 +789,7 @@ export class QuickStartServiceImpl {
                 telemetryContext.errorHandling.suppressDisplay = true;
                 telemetryContext.telemetry.properties.provisionResult = provisionResult;
                 telemetryContext.telemetry.properties.reused = String(reusing);
-                telemetryContext.telemetry.properties.portFallback = String(portFallback);
+                telemetryContext.telemetry.properties.portTaken = String(portTaken);
                 telemetryContext.telemetry.properties.customPort = String(explicitPort !== undefined);
                 telemetryContext.telemetry.properties.customCreds = String(usedCustomCreds);
                 telemetryContext.telemetry.properties.customImage = String(usedCustomImage);
@@ -701,7 +797,7 @@ export class QuickStartServiceImpl {
                 telemetryContext.telemetry.properties.dockerFailureKind = provisioningDockerFailureKind ?? 'none';
                 telemetryContext.telemetry.measurements.provisionMs = Date.now() - provisionStartedAt;
             });
-            this.stateFor(DEFAULT_ALIAS).provisioning = false;
+            this.stateFor(alias).provisioning = false;
         }
         // Emitted only now — after `finally` cleared `provisioning` — so a "Wait longer" / "Start
         // over" / "Retry" click triggered by this event never races the still-running guard.
@@ -736,20 +832,21 @@ export class QuickStartServiceImpl {
         // sample data", default on) and not already present (idempotent, so recreating onto an
         // existing volume doesn't re-run the init and hit duplicate keys). Best-effort.
         if (pending.sampleDataRequested && !(await this.sampleDataExists(pending.connectionString))) {
-            await this.seedSampleData(pending.containerId, [pending.password], token);
+            await this.seedSampleData(pending.containerId, secretVariants(pending.password), token);
         }
         this.throwIfAborted(signal);
-        await ext.secretStorage.store(secretKey(pending.alias), pending.connectionString);
-        // Durably remember the image this instance's volume was created with, so a recreate
-        // after a window reload (in-memory metadata gone) keeps the same image.
-        await ext.context.globalState.update(imageRefKey(pending.alias), pending.imageRef);
-        // Make the registry authoritative: this instance is now ready on its bound port.
-        // (WI-2 reads the registry to enumerate instances.)
-        await upsertInstanceRecord(ext.context.globalState, {
+        // One write covers the credentials, the image the volume was created with (so a recreate
+        // after a window reload keeps it) and the ready phase the tree and reconcile enumerate.
+        await upsertInstance({
             alias: pending.alias,
             displayName: pending.displayName,
             port: pending.boundPort,
             phase: 'ready',
+            imageRef: pending.imageRef,
+        });
+        await writeConnectionString(pending.alias, pending.connectionString, {
+            displayName: pending.displayName,
+            port: pending.boundPort,
         });
         // Drop any stale client cached under this id (e.g. from a prior run with different
         // credentials) so the next browse uses the fresh credentials.
@@ -778,14 +875,14 @@ export class QuickStartServiceImpl {
      * On another timeout the container is kept and the on-timeout actions are surfaced again; on
      * a hard error the container is still kept so the user can retry or Start over.
      */
-    public async *resumeReadiness(signal: AbortSignal): AsyncGenerator<StageEvent> {
-        const pending = this.stateFor(DEFAULT_ALIAS).pendingReadiness;
+    public async *resumeReadiness(signal: AbortSignal, alias: string = DEFAULT_ALIAS): AsyncGenerator<StageEvent> {
+        const pending = this.stateFor(alias).pendingReadiness;
         if (!pending) {
             const nothingToResume = l10n.t('There is nothing to resume.');
             yield stageEvent('error', 'error', nothingToResume, nothingToResume);
             return;
         }
-        if (this.stateFor(DEFAULT_ALIAS).provisioning || this.stateFor(DEFAULT_ALIAS).lifecycleBusy) {
+        if (this.stateFor(alias).provisioning || this.stateFor(alias).lifecycleBusy) {
             // A prior resume/provision may still be unwinding (its abort can take a few seconds to
             // observe). Carry the timed-out affordance so the webview keeps the Wait longer / Start
             // over view instead of flipping to the generic error (opus-4.8) — the container and
@@ -797,7 +894,7 @@ export class QuickStartServiceImpl {
             yield stageEvent('error', 'error', alreadyRunning, alreadyRunning, undefined, true);
             return;
         }
-        this.stateFor(DEFAULT_ALIAS).provisioning = true;
+        this.stateFor(alias).provisioning = true;
         const cts = new vscode.CancellationTokenSource();
         const onAbort = (): void => cts.cancel();
         signal.addEventListener('abort', onAbort, { once: true });
@@ -809,11 +906,11 @@ export class QuickStartServiceImpl {
         let terminalEvent: StageEvent | undefined;
         let resumeResult: 'success' | 'timeout' | 'cancelled' | 'error' = 'error';
         try {
-            this.setStatus(DEFAULT_ALIAS, InstanceState.Provisioning, undefined, undefined);
+            this.setStatus(alias, InstanceState.Provisioning, undefined, undefined);
             yield stageEvent('waiting', 'active', 'Waiting for DocumentDB to accept connections…');
             // Stream the container's logs during THIS wait so "View Docker output" shows the live
             // startup rather than only the stale first-attempt output (opus-4.8).
-            void this.runtime.followLogs(pending.containerId, [pending.password], cts.token);
+            void this.runtime.followLogs(pending.containerId, secretVariants(pending.password), cts.token);
             await this.waitForReadiness(pending.connectionString, signal);
             this.throwIfAborted(signal);
             await this.finalizeReadyInstance(pending, cts.token, signal);
@@ -823,7 +920,7 @@ export class QuickStartServiceImpl {
             terminalEvent = stageEvent(
                 'done',
                 'done',
-                `DocumentDB Local is running on localhost:${pending.boundPort}.`,
+                l10n.t('DocumentDB Local is running on localhost:{0}.', String(pending.boundPort)),
                 undefined,
                 pending.boundPort,
             );
@@ -838,16 +935,16 @@ export class QuickStartServiceImpl {
             const timedOut = !finalized && (isTimeout || aborted);
             resumeResult = aborted ? 'cancelled' : isTimeout ? 'timeout' : 'error';
             const message = aborted
-                ? 'Still initializing. Keep waiting, view the logs, or start over.'
+                ? l10n.t('Still initializing. Keep waiting, view the logs, or start over.')
                 : errMessage(error);
             if (!finalized) {
-                this.setStatus(DEFAULT_ALIAS, InstanceState.Error, undefined, aborted ? undefined : message);
+                this.setStatus(alias, InstanceState.Error, undefined, aborted ? undefined : message);
             }
             // A hard finalize error is NOT a timeout — drop the retained state so reopening the
             // panel shows the real error (via a fresh setup) rather than a misleading "Wait longer"
             // (gpt-5.5). Timeout/cancel keep pendingReadiness so the container stays resumable.
             if (!timedOut) {
-                this.stateFor(DEFAULT_ALIAS).pendingReadiness = undefined;
+                this.stateFor(alias).pendingReadiness = undefined;
             }
             terminalEvent = stageEvent('waiting', 'error', message, aborted ? undefined : message, undefined, timedOut);
         } finally {
@@ -855,7 +952,7 @@ export class QuickStartServiceImpl {
             // Stop the followLogs stream (started with cts.token) before disposing.
             cts.cancel();
             cts.dispose();
-            this.stateFor(DEFAULT_ALIAS).provisioning = false;
+            this.stateFor(alias).provisioning = false;
             // §14: resume outcome — booleans/enum + duration only, never names/ports/creds.
             void callWithTelemetryAndErrorHandling('documentDB.quickstart.resumeReadiness', (telemetryContext) => {
                 telemetryContext.errorHandling.suppressDisplay = true;
@@ -878,8 +975,8 @@ export class QuickStartServiceImpl {
      * discardable yet — e.g. a just-cancelled resume is still unwinding — so the webview can keep
      * the timed-out actions instead of dropping to review with the container still running.
      */
-    public async discardTimedOutInstance(): Promise<boolean> {
-        const entry = this.stateFor(DEFAULT_ALIAS);
+    public async discardTimedOutInstance(alias: string = DEFAULT_ALIAS): Promise<boolean> {
+        const entry = this.stateFor(alias);
         // Guard BEFORE mutating: if a provision/lifecycle op is running, leave the retained
         // state untouched (clearing it here would orphan the still-running container).
         if (entry.provisioning || entry.lifecycleBusy || !entry.pendingReadiness) {
@@ -894,7 +991,7 @@ export class QuickStartServiceImpl {
             if (!pending.reusing) {
                 await this.runtime.removeVolume(volumeName(pending.alias)).catch(() => undefined);
             }
-            this.setStatus(DEFAULT_ALIAS, InstanceState.NotInstalled, undefined, undefined);
+            this.setStatus(alias, InstanceState.NotInstalled, undefined, undefined);
             return true;
         } finally {
             entry.lifecycleBusy = false;
@@ -981,15 +1078,61 @@ export class QuickStartServiceImpl {
     }
 
     /**
-     * True when a provision would REUSE an existing instance rather than create a fresh one:
-     * i.e. usable stored credentials exist (so the data volume is kept and any custom
-     * credentials / image tag would be ignored). Mirrors the `reusing` decision in
-     * {@link provision} so the webview can hide the credential/image inputs and show the
-     * recreate summary whenever — and only when — the service will actually reuse, regardless
-     * of the in-memory `Missing` badge. Public so the `getDockerStatus` query can surface it.
+     * True when an existing instance's data can be REUSED rather than replaced: i.e. usable stored
+     * credentials exist, so a recreate can bind the existing data volume (and any custom
+     * credentials / image tag would be ignored). Backs the Configure step's "Use existing data" /
+     * "Start fresh" choice regardless of the in-memory `Missing` badge. Public so the
+     * `getDockerStatus` query can surface it.
      */
-    public async willReuseExistingInstance(): Promise<boolean> {
-        return (await this.getReusableCredentials()) !== undefined;
+    public async canReuseExistingData(alias: string = DEFAULT_ALIAS): Promise<boolean> {
+        return (await this.getReusableCredentials(alias)) !== undefined;
+    }
+
+    /**
+     * Host ports reserved by OTHER instances (running or stopped) — their containers bake them in.
+     *
+     * A multi-instance seam kept deliberately (see {@link instances}): with a single instance the
+     * returned set is always empty.
+     */
+    private async reservedPorts(alias: string): Promise<Set<number>> {
+        const reserved = new Set<number>();
+        for (const record of await listInstances()) {
+            if (record.alias !== alias && typeof record.port === 'number') {
+                reserved.add(record.port);
+            }
+        }
+        return reserved;
+    }
+
+    /**
+     * Suggest a host port for the Configure step (review L3): the instance's own recorded port when
+     * it is still usable, otherwise the first free port walking forward from {@link QUICK_START_PORT},
+     * skipping ports baked into sibling instances. The user sees — and can change — the port that
+     * will actually be bound; `provision` never relocates it afterwards.
+     *
+     * Returns {@link QUICK_START_PORT} when nothing in the scan window is free, so the field is never
+     * empty; the Configure-step validation then reports the conflict.
+     */
+    public async suggestPort(alias: string = DEFAULT_ALIAS): Promise<number> {
+        const reserved = await this.reservedPorts(alias);
+        const own = (await getInstance(alias))?.port;
+        if (typeof own === 'number' && !reserved.has(own) && (await this.runtime.isPortFree(own))) {
+            return own;
+        }
+        for (let port = QUICK_START_PORT; port < QUICK_START_PORT + QUICK_START_PORT_SCAN_LIMIT; port++) {
+            if (!reserved.has(port) && (await this.runtime.isPortFree(port))) {
+                return port;
+            }
+        }
+        return QUICK_START_PORT;
+    }
+
+    /** Validate a Configure-step port while the user can still react (review L3). */
+    public async checkPort(port: number, alias: string = DEFAULT_ALIAS): Promise<PortAvailability> {
+        if ((await this.reservedPorts(alias)).has(port)) {
+            return 'takenByAnotherInstance';
+        }
+        return (await this.runtime.isPortFree(port)) ? 'available' : 'inUse';
     }
 
     /**
@@ -998,18 +1141,13 @@ export class QuickStartServiceImpl {
      * stored connection string exists (caller then generates fresh credentials).
      */
     /**
-     * Read the default instance's stored connection string, falling back to the legacy flat key.
-     * Belt-and-suspenders: the activation migration (§6) normally copies the legacy value to the
-     * alias-keyed secret BEFORE any read, but if a destructive path ever ran pre-migration this
-     * prevents a spurious "no credentials → wipe" (R1).
+     * Read the instance's stored connection string — the credential source of truth.
+     *
+     * Public because `QuickStartClusterItem` resolves through this instead of
+     * `ConnectionStorageService`, which holds no record for the managed instance.
      */
-    private async readStoredConnectionString(alias: string = DEFAULT_ALIAS): Promise<string | undefined> {
-        const stored = await ext.secretStorage.get(secretKey(alias));
-        if (stored !== undefined) {
-            return stored;
-        }
-        // The legacy flat key only ever held the DEFAULT instance's pre-alias credentials.
-        return alias === DEFAULT_ALIAS ? await ext.secretStorage.get(LEGACY_SECRET_KEY) : undefined;
+    public async readStoredConnectionString(alias: string = DEFAULT_ALIAS): Promise<string | undefined> {
+        return readConnectionString(alias);
     }
 
     private async getReusableCredentials(alias: string = DEFAULT_ALIAS): Promise<GeneratedCredentials | undefined> {
@@ -1057,6 +1195,38 @@ export class QuickStartServiceImpl {
         return (await this.findManagedContainers(alias, options))[0];
     }
 
+    /**
+     * Write (or refresh) this run's `'provisioning'` reservation (H3). Renewed at each stage so a
+     * slow first image pull can never look like a crashed host: `reconcile()` shows a FRESH lease as
+     * "Provisioning…" and only scavenges a stale one. Best-effort — a registry hiccup must not fail
+     * a provision that is otherwise fine.
+     */
+    private async renewProvisioningLease(alias: string, operationId: string, port: number): Promise<void> {
+        await updateInstance(alias, (current) => {
+            // Never downgrade a record another run already promoted to `ready`.
+            if (current?.phase === 'ready') {
+                return undefined;
+            }
+            return {
+                alias,
+                displayName: alias === DEFAULT_ALIAS ? DEFAULT_INSTANCE_DISPLAY_NAME : alias,
+                port,
+                phase: 'provisioning',
+                operationId,
+                leaseAt: Date.now(),
+                imageRef: current?.imageRef,
+            };
+        }).catch(() => undefined);
+    }
+
+    /** Drop this run's reservation, but only if it is still ours and still un-promoted. */
+    private async releaseProvisioningLease(alias: string, operationId: string): Promise<void> {
+        await removeInstanceIf(
+            alias,
+            (record) => record.phase === 'provisioning' && record.operationId === operationId,
+        ).catch(() => undefined);
+    }
+
     private async findManagedContainers(
         alias: string = DEFAULT_ALIAS,
         options?: { propagateErrors?: boolean },
@@ -1073,9 +1243,9 @@ export class QuickStartServiceImpl {
     }
 
     /**
-     * A container belongs to `alias` when its `vscode.documentdb.alias` label equals `alias`. A
-     * pre-alias-label *legacy* container (no/empty alias label) belongs to the DEFAULT instance, so
-     * an existing single instance is still found/adopted with no rename (WI-2c, behavior-preserving).
+     * A container belongs to `alias` when its `vscode.documentdb.alias` label equals `alias`. An
+     * unlabelled container belongs to the DEFAULT instance, so one created before the label existed
+     * (a dev build) is still found and adopted rather than orphaned.
      */
     private aliasMatches(aliasLabelValue: string | undefined, alias: string): boolean {
         if (aliasLabelValue === alias) {
@@ -1338,24 +1508,9 @@ export class QuickStartServiceImpl {
                     ),
                 );
             }
-            try {
-                await ext.secretStorage.delete(secretKey(alias));
-                // Also purge the legacy flat keys (default instance only): if an activation migration
-                // failed and left them behind, an explicit Delete must still be a full clean slate (no
-                // stale legacy credentials/image survive to be silently reused by a provision — opus47-N1).
-                if (alias === DEFAULT_ALIAS) {
-                    await ext.secretStorage.delete(LEGACY_SECRET_KEY);
-                }
-            } catch {
-                // ignore — best-effort cleanup
-            }
-            await ext.context.globalState.update(imageRefKey(alias), undefined);
-            if (alias === DEFAULT_ALIAS) {
-                await ext.context.globalState.update(LEGACY_IMAGE_REF_KEY, undefined);
-            }
-            // Drop the registry record too — an explicit Delete is a full clean slate, so the
-            // instance no longer appears when the tree enumerates the registry (WI-2).
-            await removeInstanceRecord(ext.context.globalState, alias);
+            // Drop the instance's record AND its credentials in one write — an explicit Delete is a
+            // full clean slate, so it no longer appears when the tree enumerates instances.
+            await removeInstance(alias);
             await ClustersClient.deleteClient(clusterId(alias)).catch(() => undefined);
             CredentialCache.deleteCredentials(clusterId(alias));
             entry.metadata = undefined;
@@ -1366,6 +1521,45 @@ export class QuickStartServiceImpl {
         // busy (op skipped) or a later best-effort cleanup step threw and was settled to Error. In
         // both cases nothing was reported deleted, so the caller must not report success.
         return outcome ?? 'busy';
+    }
+
+    /** In-flight background probe started by {@link refreshLiveStateInBackground}, if any. */
+    private backgroundRefresh: Promise<void> | undefined;
+    /** `Date.now()` when the last background probe settled — drives the cooldown below. */
+    private lastBackgroundRefreshAt = 0;
+
+    /** True while a {@link refreshLiveStateInBackground} probe is in flight (drives the tree's "Refreshing…" hint). */
+    public get isRefreshingLiveState(): boolean {
+        return this.backgroundRefresh !== undefined;
+    }
+
+    /**
+     * Fire-and-forget {@link refreshLiveState} for callers that must not block on Docker — notably
+     * the tree's `getChildren()`, which the Connections view re-runs on many unrelated events
+     * (review M6). The row renders from the last known state and is updated by
+     * {@link onDidChangeStatus} when the probe lands.
+     *
+     * De-duplicated and rate-limited: concurrent calls share the in-flight probe, and a new one is
+     * only started once {@link BACKGROUND_REFRESH_COOLDOWN_MS} has passed. The cooldown is
+     * load-bearing — the probe fires the status event when it settles, which re-enters
+     * `getChildren()`; without it that would rebuild the H1 render loop in a new shape.
+     */
+    public refreshLiveStateInBackground(): void {
+        if (this.backgroundRefresh || Date.now() - this.lastBackgroundRefreshAt < BACKGROUND_REFRESH_COOLDOWN_MS) {
+            return;
+        }
+        this.backgroundRefresh = this.refreshLiveState()
+            .catch(() => {
+                // refreshLiveState() is already best-effort; nothing to surface here.
+            })
+            .finally(() => {
+                this.backgroundRefresh = undefined;
+                this.lastBackgroundRefreshAt = Date.now();
+                // Fire unconditionally (refreshLiveState() itself only fires on a real transition):
+                // the row is advertising "Refreshing…" and must drop that hint. Safe because the
+                // cooldown above blocks the re-render from starting another probe.
+                this.statusEmitter.fire();
+            });
     }
 
     /**
@@ -1399,9 +1593,14 @@ export class QuickStartServiceImpl {
                     continue;
                 }
                 if (!inspected) {
-                    // Container is gone — keep metadata so the user can recreate.
-                    entry.missing = true;
-                    this.statusEmitter.fire();
+                    // Container is gone — keep metadata so the user can recreate. Fire only on the
+                    // TRANSITION into `missing` (like every sibling branch below): the tree renders
+                    // this node expanded, so an unconditional fire would re-enter getChildren() →
+                    // refreshLiveState() → fire() and spin a `docker inspect` loop forever.
+                    if (!entry.missing) {
+                        entry.missing = true;
+                        this.statusEmitter.fire();
+                    }
                     continue;
                 }
                 const nextState = isRunning(inspected) ? InstanceState.Running : InstanceState.Stopped;
@@ -1433,7 +1632,7 @@ export class QuickStartServiceImpl {
     /**
      * Activation reconciliation (design §12 / risk-review): after a window reload the in-memory state
      * is lost while containers keep running. Enumerate every known instance — the union of the durable
-     * registry and the live labelled containers (grouped by the `vscode.documentdb.alias` label; an
+     * store and the live labelled containers (grouped by the `vscode.documentdb.alias` label; an
      * absent/empty label is the DEFAULT instance) — and rebuild each alias's state. A credential-less
      * labelled container is SURFACED, never removed (R2); a stale pre-create reservation (crashed host)
      * is scavenged; a ready record whose container vanished becomes Missing (recoverable via recreate).
@@ -1447,7 +1646,7 @@ export class QuickStartServiceImpl {
                 createdAt?: Date;
                 labels?: Record<string, string>;
             }>;
-            const registry = readRegistry(ext.context.globalState);
+            const instances = await listInstances();
             const now = Date.now();
 
             // Group live containers by alias (absent/empty alias label ⇒ DEFAULT).
@@ -1462,38 +1661,27 @@ export class QuickStartServiceImpl {
                 }
             }
 
-            // The DEFAULT always exists; also reconcile every registry record and every live alias.
+            // The DEFAULT always exists; also reconcile every known instance and every live alias.
             const aliases = new Set<string>([
                 DEFAULT_ALIAS,
-                ...registry.instances.map((record) => record.alias),
+                ...instances.map((record) => record.alias),
                 ...liveByAlias.keys(),
             ]);
             const scavenge = new Set<string>();
             for (const alias of aliases) {
-                const record = registry.instances.find((existing) => existing.alias === alias);
+                const record = instances.find((existing) => existing.alias === alias);
                 const outcome = await this.reconcileAlias(alias, record, liveByAlias.get(alias) ?? [], now);
                 if (outcome.scavenge) {
                     scavenge.add(alias);
                 }
             }
 
-            // Drop stale pre-create reservations in one locked write. Scavenge fires ONLY here
-            // (activation), never in the per-render refreshLiveState. (Adopted instances promote their
-            // own record to `ready` inside adoptContainer.) Re-validate staleness INSIDE the lock so a
-            // record that a concurrent finalize/adopt just promoted to `ready` (or refreshed the lease
-            // on) is never dropped — only remove one that is still a stale `provisioning` reservation.
+            // Drop stale pre-create reservations. Scavenge fires ONLY here (activation), never in the
+            // per-render refreshLiveState. (Adopted instances promote their own record to `ready`
+            // inside adoptContainer.) Staleness is re-validated inside the store's lock, so a record
+            // a concurrent finalize/adopt just promoted is never dropped.
             if (scavenge.size > 0) {
-                await updateRegistry(ext.context.globalState, (reg) => {
-                    const scavengeNow = Date.now();
-                    reg.instances = reg.instances.filter(
-                        (record) =>
-                            !(
-                                scavenge.has(record.alias) &&
-                                record.phase === 'provisioning' &&
-                                !isProvisioningLeaseFresh(record, scavengeNow)
-                            ),
-                    );
-                });
+                await scavengeStaleLeases(scavenge);
             }
         } catch {
             // Reconciliation is best-effort; never block activation.
@@ -1591,19 +1779,16 @@ export class QuickStartServiceImpl {
             this.populateCredentialCache(alias, stored, username, password);
         }
         const adoptedImageRef = inspected?.image?.originalName;
-        // Backfill the durable image record from the adopted container, so a recreate AFTER this
-        // container is later removed + the window reloads still reuses the original image — even for an
-        // instance we only adopted (never provisioned in-process). Never clear an existing value.
-        if (adoptedImageRef) {
-            await ext.context.globalState.update(imageRefKey(alias), adoptedImageRef);
-        }
-        // Make the registry authoritative + clear any stale provisioning lease: an adopted container
-        // whose credentials we hold IS ready (so a later container-loss becomes Missing, not scavenged).
-        await upsertInstanceRecord(ext.context.globalState, {
+        // Make the store authoritative + clear any stale provisioning lease: an adopted container whose
+        // credentials we hold IS ready (so a later container-loss becomes Missing, not scavenged). The
+        // image is backfilled from the adopted container so a recreate AFTER this container is removed
+        // + the window reloads still reuses the original image — never clearing an existing value.
+        await upsertInstance({
             alias,
             displayName: record?.displayName ?? (alias === DEFAULT_ALIAS ? DEFAULT_INSTANCE_DISPLAY_NAME : alias),
             port: running ? boundPort : (record?.port ?? boundPort),
             phase: 'ready',
+            imageRef: adoptedImageRef ?? record?.imageRef,
         });
         this.setStatus(alias, running ? InstanceState.Running : InstanceState.Stopped, {
             containerId,
@@ -1638,3 +1823,37 @@ export class QuickStartServiceImpl {
 
 /** Singleton Quick Start service. */
 export const QuickStartService = new QuickStartServiceImpl();
+
+/** A stale env file is one older than this; younger ones may belong to a live provision. */
+const ENV_FILE_STALE_AFTER_MS = 60 * 60 * 1000;
+
+/**
+ * Best-effort activation sweep of `documentdb-quickstart-*.env` files left in `os.tmpdir()`
+ * (L9). `provision()` deletes its env file in a `finally`, but an extension host killed between
+ * the write and that `finally` leaves a plaintext password on disk. Only files older than
+ * {@link ENV_FILE_STALE_AFTER_MS} are removed, so a provision running in another window — whose
+ * image pull can take a while — never has its env file deleted underneath it.
+ */
+export async function sweepStaleQuickStartEnvFiles(): Promise<void> {
+    try {
+        const dir = os.tmpdir();
+        const entries = await fs.readdir(dir);
+        const cutoff = Date.now() - ENV_FILE_STALE_AFTER_MS;
+        for (const entry of entries) {
+            if (!/^documentdb-quickstart-[0-9a-f]{16}\.env$/.test(entry)) {
+                continue;
+            }
+            const filePath = path.join(dir, entry);
+            try {
+                const stats = await fs.stat(filePath);
+                if (stats.mtimeMs < cutoff) {
+                    await fs.unlink(filePath);
+                }
+            } catch {
+                // Raced with another window's cleanup, or not ours to delete — skip it.
+            }
+        }
+    } catch {
+        // Never let a tmpdir hiccup affect activation.
+    }
+}
