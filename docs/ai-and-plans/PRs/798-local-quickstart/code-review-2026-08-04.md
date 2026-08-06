@@ -47,10 +47,10 @@ and folded in — see **M7** and the thread tracker in [§6](#6-external-review-
 > unblocked the credential-store consolidation. **WP-7b dissolved**: its tree-state half became the error-node
 > work, its multi-instance half is out of scope.
 >
-> **➡ The live worklist is now [§11.5 Iteration 3](#115-iteration-3--opened-2026-08-06).** Iterations 1 and 2
-> are closed — Iteration 2 shipped nine items and closed L2 by verification, leaving only the credential-store
-> consolidation (now **I3-1**, blocked on [I3-Q1][b-q1]) plus the standing deferred set. Use that chapter, not
-> this table, to decide what to pick up.
+> **➡ All three iterations are closed.** Every finding routed through §11 is resolved: Iteration 2 shipped nine
+> items and closed L2 by verification, Iteration 3 shipped the credential-store consolidation. What is left is
+> the deferred pool in [§11.5](#115-iteration-3--opened-2026-08-06-closed-2026-08-06) — none of it blocking, and
+> none of it release work. Start there, not from this table.
 
 | WP        | Title                                   | Findings | Status                                                |
 | --------- | --------------------------------------- | -------- | ----------------------------------------------------- |
@@ -2510,21 +2510,13 @@ already have" option first. Documentation-in-code only — no behaviour change.
 
 _Source: [H5][f-h5] · [§9.1][s-91] · [§10.1][s-101]._
 
-**⏸ NOT IMPLEMENTED — promoted to Iteration 3 ([§11.5](#115-iteration-3--opened-2026-08-06)).**
+**⏸ NOT IMPLEMENTED in Iteration 2 — carried to Iteration 3 as [I3-1][it3], where it shipped.**
 
-Approved by the operator, but deferred on the two gates the decision above already names, both of which were
-confirmed while scoping it:
-
-1. **`TDD:` contract tests.** `QuickStartProvisionDurability.test.ts` asserts the persistence contract against
-   the **raw keys** — `secretStorage.get(secretKey(DEFAULT_ALIAS))` written before the readiness probe and
-   cleared on a failed attempt, `readRegistry(globalState)` showing provisioning → ready → missing. This item
-   relocates exactly those keys, so the assertions must be rewritten. `.github/copilot-instructions.md` requires
-   a maintainer decision before touching a `TDD:` suite; the operator was asked and was not available.
-2. **Data safety.** The migration has to carry the secrets **and** the registry including the live lease fields
-   (`operationId`, `leaseAt`), and must complete before `reconcile()` — the same R1 ordering the existing
-   `migrateLegacyQuickStartKeys` is built around. A mistake there is a silent volume wipe.
-
-Nothing else in Iteration 2 depends on it (H5 was closed without it in I1-1), so deferring costs nothing.
+Deferred at the close of Iteration 2 on two gates. **The first turned out to be false** and is corrected in
+[§11.5][it3]: the scoping report claimed `QuickStartProvisionDurability.test.ts` contained a `TDD:`-prefixed
+suite, and it does not — there are no `TDD:` suites anywhere under `src/services/localQuickStart/`. The second
+gate was real: the migration had to carry the live lease fields ahead of `reconcile()`, where a mistake is a
+silent volume wipe. It was resolved by removing the need for a migration at all — see [I3-1][it3].
 
 **Problem.** The managed instance's data lives in **two ad-hoc places**: the connection string in raw
 `ext.secretStorage` under `documentdb.quickstart.<alias>.connectionString`, and the instance list in a
@@ -2805,20 +2797,57 @@ run, per the §7.0 cadence.
 - **I2-17 resets on every status event**, including the ones I2-5's probe fires. For this subtree that is
   cheap — `getChildren()` no longer does I/O — but it does mean the error cache is short-lived here by design.
 
-### 11.5 Iteration 3 — opened 2026-08-06
+### 11.5 Iteration 3 — opened 2026-08-06, **closed 2026-08-06**
 
-**➡ This is the live worklist.** Everything not finished in Iteration 2, plus the standing deferred set.
-Numbering carries a `(was …)` reference so the history stays traceable.
+**✅ Closed** — see the [closing note](#iteration-3-closing-note-2026-08-06) at the end. Its one scheduled item
+(I3-1) shipped; I3-2 … I3-7 stay deferred and are the pool a future iteration would draw from. Numbering carries
+a `(was …)` reference so the history stays traceable.
 
-#### ⛔ Blocked on a maintainer decision
+#### ✅ Cleared — code
 
-| #        | Item                                                                                                                                                                                                         | Source                                           | Blocks?                                                    |
-| -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------ | ---------------------------------------------------------- |
-| **I3-1** | **Credential store consolidation.** `StorageService.get('local-quickstart')`, workspace `instances`; retires the ad-hoc `documentdb.quickstart.*` secrets **and** the `documentdb.quickstart.registry` blob. | [I2-8 write-up][d-8] · [§9.1][s-91] _(was I2-8)_ | **Yes** — [I3-Q1][b-q1] must be answered before it starts. |
+| #        | Item                                                                                                                                                                                                         | Source                                           | Commit     |
+| -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------ | ---------- |
+| **I3-1** | **Credential store consolidation.** `StorageService.get('local-quickstart')`, workspace `instances`; retires the ad-hoc `documentdb.quickstart.*` secrets **and** the `documentdb.quickstart.registry` blob. | [I2-8 write-up][d-8] · [§9.1][s-91] _(was I2-8)_ | `b8e25fc3` |
 
-> **Why it is blocked and not merely deferred.** The design is settled (see the [I2-8 write-up][d-8] — it was
-> never the open question); what is not settled is permission to rewrite a `TDD:` contract suite. Read
-> [I3-Q1][b-q1] first.
+##### I3-1 — Credential store consolidation
+
+**➤ IMPLEMENTED 2026-08-06** — `b8e25fc3` _refactor(quickstart): move the durable instance state into
+StorageService (I3-1)_.
+
+Shipped as designed in the [I2-8 write-up][d-8]: `StorageService.get('local-quickstart')`, workspace
+`instances`, one item per alias — the record in `properties`, the connection string in `secrets`. A state change
+is a single `push()`, which retires the hand-rolled two-phase commit in `provision()`. New `quickStartStore.ts`
+is the whole storage surface; `quickStartRegistry.ts` is deleted.
+
+**Both gates that deferred it turned out not to apply.**
+
+1. **The `TDD:` gate was a false alarm.** The scoping report named a `TDD: Persistence — …` suite in
+   `QuickStartProvisionDurability.test.ts`. There is no such suite — `grep -rl "TDD:" src/` returns only the
+   query-language and playground files, none of them under `src/services/localQuickStart/`. The affected tests
+   are plain `it(...)` cases inside `describe('QuickStartService — WP-3 provisioning durability and port
+model')`. **Lesson: verify a blocker against the tree before recording it**, not against a summary of the
+   tree. [I3-Q1][b-q1] was answered anyway, so this cost nothing but a deferral.
+2. **The migration gate was removed rather than met.** The operator's call: _"we don't need to migrate existing
+   keys, this feature has not shipped, just keep it simple, assume this has never been out."_ So there is **no
+   migration and no legacy read fallbacks**. `migrateLegacyQuickStartKeys`, `secretKey()`, `imageRefKey()`, the
+   `LEGACY_*` constants and the whole pre-`reconcile()` migration step in `ClustersExtension` are gone. This is
+   what turned the largest, riskiest item into a **net deletion of ~500 lines**, and it removed the R1 ordering
+   hazard by construction — there is no migration to order.
+
+**A real bug surfaced while doing it.** `StorageService.push()` writes a secret when the item has one but
+**never clears one** when it does not: the secret key simply isn't touched. The H3 restore path depends on
+clearing — a discarded provision must not leave its credentials behind, or the next run decides `reusing` from
+credentials no volume was initialized with. `updateInstance` therefore deletes the item before re-pushing it
+when the credentials are being cleared (safe inside the lock; a crash between the two leaves no record, which
+is the harmless direction).
+
+The existing coverage could not have caught this: _"restores the previous credential state when the attempt
+fails"_ fails at `docker run`, i.e. **before** the early credential write, so the restore never ran. Two new
+cases cancel during the readiness wait — the path a user actually takes — and assert both that a fresh
+attempt's credentials are cleared and that a failed **recreate** puts the previous ones back.
+
+**Also dropped:** the registry's `nextSuffix` counter, which had no production reader (multi-instance is out of
+scope, [§9.2][s-92] Q3) and has no home in a per-item store.
 
 #### ⏸️ Deferred (tracked, not scheduled)
 
@@ -2835,11 +2864,28 @@ Carried over unchanged from Iteration 2 — none of these were re-examined, and 
 
 #### 🟡 Open questions
 
-| #         | Question                                                                                                                                                                                               | Affects | Blocks? | Status                      |
-| --------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------- | ------- | --------------------------- |
-| **I3-Q1** | **May I3-1 rewrite the `TDD:` persistence assertions** in `QuickStartProvisionDurability.test.ts` to target the new store, keeping every behavioural assertion and changing only where the data lives? | I3-1    | **Yes** | 🟡 [Asked 2026-08-06][b-q1] |
+**Empty as of 2026-08-06.** [I3-Q1][b-q1] was answered and is recorded below; nothing in Iteration 3 is blocked
+on a maintainer decision.
 
-##### Question — I3-Q1
+| #         | Question                                                                                                                                                                                               | Affects | Blocks? | Status                                |
+| --------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------- | ------- | ------------------------------------- |
+| **I3-Q1** | **May I3-1 rewrite the `TDD:` persistence assertions** in `QuickStartProvisionDurability.test.ts` to target the new store, keeping every behavioural assertion and changing only where the data lives? | I3-1    | **Yes** | ✅ [**ANSWERED — yes, scoped**][b-q1] |
+
+##### Answer — I3-Q1
+
+> _"yes, you can update the TDD tests for this, you've got the permission to update these TDD tests, but only
+> these, if other TDDs are violated, come back here with a question for a permission."_
+
+**Granted, narrowly.** The permission covers `QuickStartProvisionDurability.test.ts` only; any other `TDD:`
+suite that a later change breaks needs its own question.
+
+**In the event it was not needed.** The premise was wrong: there is no `TDD:`-prefixed suite in that file, or
+anywhere under `src/services/localQuickStart/`. The tests were rewritten under ordinary rules. The standing
+instruction — ask before touching any other `TDD:` suite — carries forward.
+
+The original question is kept below for the record.
+
+---
 
 Asked during Iteration 2 and left unanswered (the operator was unavailable).
 
@@ -2856,32 +2902,48 @@ phases — only the read path in the test changes.
 `.github/copilot-instructions.md` says a `TDD:` suite must not be auto-fixed: _"Stop and ask the user whether
 the behavior change is intentional."_ Hence this question rather than an assumption.
 
-| Option                                                                 | Consequence                                                                                                                            |
-| ---------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------- |
-| **A. Yes — rewrite the assertions against the new store** _(expected)_ | I3-1 proceeds. The contract is re-expressed, not weakened; each rewritten assertion should say in a comment which old key it replaced. |
-| **B. Keep the raw keys as a compatibility read path and assert both**  | Defeats the point of the item — the ad-hoc keys survive as a second source of truth.                                                   |
-| **C. Drop I3-1**                                                       | Acceptable: it is hygiene, not a fix. H5 was closed without it in I1-1, and nothing else depends on it.                                |
+| Option                                                                  | Consequence                                                                          |
+| ----------------------------------------------------------------------- | ------------------------------------------------------------------------------------ |
+| **A. Yes — rewrite the assertions against the new store** ✅ **chosen** | I3-1 proceeds. The contract is re-expressed, not weakened.                           |
+| **B. Keep the raw keys as a compatibility read path and assert both**   | Defeats the point of the item — the ad-hoc keys survive as a second source of truth. |
+| **C. Drop I3-1**                                                        | Acceptable: it is hygiene, not a fix. H5 was closed without it in I1-1.              |
 
-**Second thing to settle with it:** the migration must carry the **live lease fields** (`operationId`,
-`leaseAt`), not just the secrets and the port, and must complete **before** `reconcile()` — the same R1 ordering
-`migrateLegacyQuickStartKeys` already relies on. Confirm that a one-shot migration is acceptable, or whether the
-new store should keep a read-through fallback to the old keys for one release.
+**Second thing settled with it — the migration.** Asked whether a one-shot migration was acceptable or whether
+the store should keep a read-through fallback for one release. The operator chose **neither**: _"we don't need
+to migrate existing keys, this feature has not shipped."_ No migration, no fallbacks, no ordering constraint —
+which is what took the risk out of this item entirely.
 
 #### Suggested order within Iteration 3
 
 ```text
-I3-Q1                   (answer first — I3-1 cannot start without it)
-I3-1                    (the whole of the scheduled work; do it on its own branch-point,
-                         and land the migration + its tests in one commit so a bisect
-                         never lands between the two)
+I3-1                    ✅ done — b8e25fc3
 I3-2 … I3-7             (unscheduled; promote individually when they become relevant)
 ```
 
-**Iteration 3 closing note:** _(to be filled in when the iteration is closed.)_
+#### Iteration 3 closing note (2026-08-06)
+
+**Shipped — the whole of the scheduled work.** I3-1 was the only scheduled item and it landed in one commit
+(`b8e25fc3`). I3-2 … I3-7 remain deferred and untouched; none of them blocks anything, so the iteration closes
+with an empty schedule rather than a rollover.
+
+**Two corrections to the Iteration 2 record**, both written up under [I3-1](#i3-1--credential-store-consolidation):
+
+1. The `TDD:` blocker that deferred this item **did not exist** — it came from a scoping summary rather than the
+   tree. Verify a blocker against the code before recording it.
+2. Dropping the migration (the feature has not shipped) turned the largest and riskiest item into a net
+   deletion. The risk was in the migration, not in the destination.
+
+**One product bug fixed on the way:** `StorageService.push()` never clears a secret, which broke the H3 restore
+path. Worth knowing for any other feature built on this storage — see the I3-1 write-up.
+
+**Verification.** `npm run prettier-fix` → `npm run lint` (clean) → `npx jest --no-coverage` (**204 suites /
+3344 tests**, all passing) → `npm run build` (clean). The test count is 11 lower than at the close of Iteration
+2 (3355) because the deleted migration machinery took its suite with it, while the new store suite added cases
+of its own.
 
 <!-- prettier-ignore-start -->
-[it3]: #115-iteration-3--opened-2026-08-06
-[b-q1]: #question--i3-q1
+[it3]: #115-iteration-3--opened-2026-08-06-closed-2026-08-06
+[b-q1]: #answer--i3-q1
 <!-- prettier-ignore-end -->
 
 <!-- Detail anchors used by the iteration tables. Findings live in §3, design discussions in §9,
