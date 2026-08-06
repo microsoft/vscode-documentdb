@@ -3,12 +3,20 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { createContextValue } from '@microsoft/vscode-azext-utils';
+import {
+    callWithTelemetryAndErrorHandling,
+    createContextValue,
+    type IActionContext,
+} from '@microsoft/vscode-azext-utils';
 import * as l10n from '@vscode/l10n';
 import path from 'path';
 import * as vscode from 'vscode';
 import { type IconPath } from 'vscode';
 import { AuthMethodId } from '../../../documentdb/auth/AuthMethod';
+import { type ClustersClient } from '../../../documentdb/ClustersClient';
+import { CredentialCache } from '../../../documentdb/CredentialCache';
+import { DocumentDBConnectionString } from '../../../documentdb/utils/DocumentDBConnectionString';
+import { Views } from '../../../documentdb/Views';
 import { DocumentDBExperience } from '../../../DocumentDBExperiences';
 import { StorageZone } from '../../../services/connectionStorageService';
 import { QuickStartService } from '../../../services/localQuickStart/QuickStartService';
@@ -19,38 +27,93 @@ import {
 } from '../../../services/localQuickStart/quickStartTypes';
 import { getResourcesPath } from '../../../utils/icons';
 import { createGenericElementWithContext } from '../../api/createGenericElementWithContext';
+import { ClusterItemBase, type EphemeralClusterCredentials } from '../../documentdb/ClusterItemBase';
 import { type TreeCluster } from '../../models/BaseClusterModel';
 import { type TreeElement } from '../../TreeElement';
 import { type TreeElementWithContextValue } from '../../TreeElementWithContextValue';
-import { DocumentDBClusterItem } from '../DocumentDBClusterItem';
+import { buildClusterTreeItem } from '../clusterItemPresentation';
 import { type ConnectionClusterModel } from '../models/ConnectionClusterModel';
 
 /** Base context token for the managed-instance row; menus gate on this + a state token. */
 const INSTANCE_CONTEXT = 'treeItem_quickStartInstance';
 
 /**
- * Inline managed-instance cluster item (shown only when Running). Extends the
- * regular cluster item to (a) stamp a state-aware description and (b) carry a
- * Quick-Start-specific context value so the instance shows Quick Start lifecycle
- * actions instead of the generic cluster menus. Browsing reuses the base
- * `DocumentDBClusterItem` (connects via the pre-populated `CredentialCache`).
+ * Inline managed-instance cluster item (shown only when Running).
+ *
+ * Extends {@link ClusterItemBase} directly rather than `DocumentDBClusterItem`: the managed
+ * instance is not a stored connection, so every credential path in that class
+ * (`ConnectionStorageService.get(storageId, zone)`) misses for this node. Resolving credentials
+ * through {@link QuickStartService} instead keeps `CredentialCache` a cache rather than the
+ * source of truth. Row presentation is shared via `buildClusterTreeItem` so the node still looks
+ * like any other local connection.
  */
-class QuickStartClusterItem extends DocumentDBClusterItem {
-    constructor(model: TreeCluster<ConnectionClusterModel>, description: string, stateToken: string) {
+class QuickStartClusterItem extends ClusterItemBase<ConnectionClusterModel> {
+    constructor(
+        model: TreeCluster<ConnectionClusterModel>,
+        description: string,
+        stateToken: string,
+        private readonly alias: string,
+    ) {
         super(model);
         this.descriptionOverride = description;
         this.contextValue = createContextValue([INSTANCE_CONTEXT, stateToken]);
     }
 
     /**
-     * The base {@link DocumentDBClusterItem.getTreeItem} derives the row description
-     * from the TLS/SSL state and ignores `descriptionOverride` — which would replace
-     * the managed-instance state label (e.g. "Running · localhost:10260") with a
-     * "⚠ TLS/SSL Disabled" badge. Keep the base tree item (icon, security tooltip,
-     * context value) but force the state-aware description.
+     * Keep the shared cluster presentation (icon, security tooltip) but force the state-aware
+     * description — the TLS/SSL badge it would otherwise carry replaces the managed-instance
+     * state label (e.g. "Running · localhost:10260").
      */
     public override getTreeItem(): vscode.TreeItem {
-        return { ...super.getTreeItem(), description: this.descriptionOverride };
+        return {
+            ...buildClusterTreeItem({ id: this.id, contextValue: this.contextValue, cluster: this.cluster }),
+            description: this.descriptionOverride,
+        };
+    }
+
+    public async getCredentials(): Promise<EphemeralClusterCredentials | undefined> {
+        const connectionString = await QuickStartService.readStoredConnectionString(this.alias);
+        if (!connectionString) {
+            return undefined;
+        }
+
+        const parsed = new DocumentDBConnectionString(connectionString);
+        return {
+            connectionString,
+            availableAuthMethods: [AuthMethodId.NativeAuth],
+            selectedAuthMethod: AuthMethodId.NativeAuth,
+            nativeAuthConfig: { connectionUser: parsed.username, connectionPassword: parsed.password },
+        };
+    }
+
+    protected async authenticateAndConnect(): Promise<ClustersClient | null> {
+        const result = await callWithTelemetryAndErrorHandling('connect', async (context: IActionContext) => {
+            context.telemetry.properties.view = Views.ConnectionsView;
+            context.telemetry.properties.connectionInitiatedFrom = Views.ConnectionsView;
+            context.telemetry.properties.connectionType = 'localQuickStart';
+
+            const connectionString = await QuickStartService.readStoredConnectionString(this.alias);
+            if (!connectionString) {
+                return null;
+            }
+
+            const parsed = new DocumentDBConnectionString(connectionString);
+            if (parsed.password) {
+                context.valuesToMask.push(parsed.password);
+            }
+
+            CredentialCache.setAuthCredentials(
+                this.cluster.clusterId,
+                AuthMethodId.NativeAuth,
+                connectionString,
+                { connectionUser: parsed.username, connectionPassword: parsed.password },
+                this.cluster.emulatorConfiguration,
+            );
+
+            return this.getClientWithProgress(this.cluster.clusterId);
+        });
+
+        return result ?? null;
     }
 }
 
@@ -119,6 +182,7 @@ export class LocalQuickStartItem implements TreeElement, TreeElementWithContextV
                     model,
                     l10n.t('Running · localhost:{0}', metadata.boundPort),
                     'state_running',
+                    metadata.alias,
                 ),
             ];
         }

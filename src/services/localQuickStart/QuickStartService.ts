@@ -1133,8 +1133,11 @@ export class QuickStartServiceImpl {
      * Belt-and-suspenders: the activation migration (§6) normally copies the legacy value to the
      * alias-keyed secret BEFORE any read, but if a destructive path ever ran pre-migration this
      * prevents a spurious "no credentials → wipe" (R1).
+     *
+     * Public because it is the managed instance's credential source of truth: `QuickStartClusterItem`
+     * resolves through this instead of `ConnectionStorageService`, which holds no record for it.
      */
-    private async readStoredConnectionString(alias: string = DEFAULT_ALIAS): Promise<string | undefined> {
+    public async readStoredConnectionString(alias: string = DEFAULT_ALIAS): Promise<string | undefined> {
         const stored = await ext.secretStorage.get(secretKey(alias));
         if (stored !== undefined) {
             return stored;
