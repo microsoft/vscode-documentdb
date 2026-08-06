@@ -284,6 +284,10 @@ export class ClustersExtension implements vscode.Disposable {
                 ext.context.subscriptions.push({ dispose: disposeQuickStartLogFollow });
                 ext.context.subscriptions.push(
                     QuickStartService.onDidChangeStatus(() => {
+                        // Reset BEFORE refreshing (I2-17): a failure the user fixed in the Quick Start
+                        // webview would otherwise keep rendering its cached error node, because the
+                        // provider returns those children without re-fetching.
+                        ext.connectionsBranchDataProvider?.resetLocalQuickStartErrorState();
                         ext.connectionsBranchDataProvider?.refresh();
                     }),
                 );

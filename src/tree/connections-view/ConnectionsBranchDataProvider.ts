@@ -46,6 +46,24 @@ export class ConnectionsBranchDataProvider extends BaseExtendedTreeDataProvider<
         super();
     }
 
+    /**
+     * Drop the cached error children of the Local Quick Start subtree (review I2-17).
+     *
+     * `failedChildrenCache` freezes a node's children once it is classified as failed and returns
+     * them without re-fetching. When the user then fixes the problem OUTSIDE the tree — typically in
+     * the Quick Start webview — the row would keep rendering the stale error node until a manual
+     * collapse/expand. Callers invoke this before `refresh()`, mirroring
+     * `AtlasDiscoveryProvider.onDidChangeSession`, which resets before refreshing so a
+     * successfully authenticated user stops seeing the "Sign in" node.
+     */
+    public resetLocalQuickStartErrorState(): void {
+        for (const nodeId of [...this.failedChildrenCache.keys()]) {
+            if (nodeId.includes('/localQuickStart')) {
+                this.resetNodeErrorState(nodeId);
+            }
+        }
+    }
+
     async getChildren(element?: TreeElement): Promise<TreeElement[] | null | undefined> {
         return callWithTelemetryAndErrorHandling('getChildren', async (context: IActionContext) => {
             context.telemetry.properties.view = Views.ConnectionsView;
