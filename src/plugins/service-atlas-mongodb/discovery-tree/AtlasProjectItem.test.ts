@@ -27,7 +27,12 @@ jest.mock('vscode', () => ({
 }));
 
 jest.mock('./AtlasClusterItem', () => ({
-    AtlasClusterItem: class AtlasClusterItem {},
+    AtlasClusterItem: class AtlasClusterItem {
+        constructor(
+            _journeyCorrelationId: string,
+            public readonly cluster: { clusterId: string; treeId: string },
+        ) {}
+    },
 }));
 
 const mockListClusters = jest.fn();
@@ -139,6 +144,27 @@ describe('AtlasProjectItem getChildren failure handling (NEW-3)', () => {
         mockGetSession.mockReset();
         mockRefreshSession.mockReset();
         mockGetSession.mockResolvedValue({ type: 'apikey', publicKey: 'p', privateKey: 's' });
+    });
+
+    it('uses the stable unprefixed cluster suffix as the tree leaf', async () => {
+        mockListClusters.mockResolvedValue([
+            {
+                id: 'cluster-1',
+                name: 'Cluster0',
+                mongoDBVersion: '7.0',
+                stateName: 'IDLE',
+                clusterType: 'REPLICASET',
+            },
+        ]);
+        const project = buildProject({ id: 'p1' });
+        const item = new AtlasProjectItem('parent/org-1', project, makeService(), 'credential-1');
+
+        const children = (await item.getChildren()) as unknown as Array<{
+            cluster: { clusterId: string; treeId: string };
+        }>;
+
+        expect(children[0].cluster.clusterId).toBe('atlas-mongodb-discovery_p1_Cluster0');
+        expect(children[0].cluster.treeId).toBe('parent/org-1/p1/p1_Cluster0');
     });
 
     it('shows a modal once on a plain expansion failure and returns the retry node', async () => {

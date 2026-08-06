@@ -4,7 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { DocumentDBExperience } from '../../../DocumentDBExperiences';
-import { createAtlasClusterModel } from './AtlasClusterModel';
+import { createAtlasClusterModel, createAtlasClusterStableSuffix } from './AtlasClusterModel';
 import { type AtlasCluster } from './AtlasProjectModel';
 
 function baseCluster(overrides: Partial<AtlasCluster> = {}): AtlasCluster {
@@ -22,6 +22,13 @@ function baseCluster(overrides: Partial<AtlasCluster> = {}): AtlasCluster {
 }
 
 describe('createAtlasClusterModel (NEW-7 boundary guards)', () => {
+    it('uses the unprefixed stable suffix in the provider-prefixed cluster ID', () => {
+        const model = createAtlasClusterModel('p1', 'Project 0', baseCluster(), DocumentDBExperience);
+
+        expect(createAtlasClusterStableSuffix('p1', 'Cluster0')).toBe('p1_Cluster0');
+        expect(model.clusterId).toBe('atlas-mongodb-discovery_p1_Cluster0');
+    });
+
     it('does not throw when Atlas omits connectionStrings, leaving the connection string undefined', () => {
         const cluster = baseCluster({ connectionStrings: undefined });
 

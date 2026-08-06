@@ -171,6 +171,35 @@ async function findCollectionNodeInTree(
     }
 }
 
+async function reportCollectionNodeResolutionFailure(
+    operation: 'import' | 'export',
+    { clusterId, viewId, databaseName, collectionName }: RouterContext,
+): Promise<void> {
+    const showOutput = l10n.t('Show Output');
+    ext.outputChannel.error(
+        l10n.t(
+            'Collection View {0} failed because the collection tree node could not be resolved. View ID: {1}; Cluster ID: {2}; Database: {3}; Collection: {4}',
+            operation,
+            viewId,
+            clusterId,
+            databaseName,
+            collectionName,
+        ),
+    );
+
+    const choice = await vscode.window.showErrorMessage(
+        l10n.t('Failed to {0} documents.', operation),
+        {
+            modal: true,
+            detail: l10n.t('Select "Show Output" to see error details.'),
+        },
+        showOutput,
+    );
+    if (choice === showOutput) {
+        ext.outputChannel.show();
+    }
+}
+
 export const collectionsViewRouter = router({
     getInfo: publicProcedureWithTelemetry.query(({ ctx }) => {
         const myCtx = ctx as RouterContext;
@@ -388,7 +417,7 @@ export const collectionsViewRouter = router({
                     },
                 );
             } else {
-                throw new Error('Could not find the specified collection in the tree.');
+                await reportCollectionNodeResolutionFailure('export', myCtx);
             }
         }),
 
@@ -408,7 +437,7 @@ export const collectionsViewRouter = router({
                 source: 'webview;collectionView',
             });
         } else {
-            throw new Error('Could not find the specified collection in the tree.');
+            await reportCollectionNodeResolutionFailure('import', myCtx);
         }
     }),
 

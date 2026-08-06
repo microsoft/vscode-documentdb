@@ -19,7 +19,7 @@ import { escapeMarkdown } from '../../../webviews/utils/escapeMarkdown';
 import { AtlasApiClient } from '../api/AtlasApiClient';
 import { atlasTrace } from '../atlasTrace';
 import { type AtlasDiscoveryService, classifyAtlasError } from '../discovery/AtlasDiscoveryService';
-import { createAtlasClusterModel } from '../models/AtlasClusterModel';
+import { createAtlasClusterModel, createAtlasClusterStableSuffix } from '../models/AtlasClusterModel';
 import { type AtlasProject } from '../models/AtlasProjectModel';
 import { AtlasClusterItem } from './AtlasClusterItem';
 import { createEmptyPlaceholderNode } from './atlasTreeNodes';
@@ -98,7 +98,7 @@ export class AtlasProjectItem implements TreeElement, TreeElementWithContextValu
                     const model = createAtlasClusterModel(this.project.id, this.project.name, cluster, AtlasExperience);
                     const treeCluster = {
                         ...model,
-                        treeId: `${this.id}/${cluster.name.replaceAll('/', '_')}`,
+                        treeId: `${this.id}/${createAtlasClusterStableSuffix(this.project.id, cluster.name)}`,
                         viewId: Views.DiscoveryView,
                     };
                     return new AtlasClusterItem(this.journeyCorrelationId, treeCluster, undefined, {

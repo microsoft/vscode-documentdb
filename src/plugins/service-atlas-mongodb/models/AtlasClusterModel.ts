@@ -41,6 +41,15 @@ export interface AtlasClusterModel extends BaseClusterModel {
 }
 
 /**
+ * Builds the unprefixed stable suffix shared by Atlas cluster and tree identifiers.
+ */
+export function createAtlasClusterStableSuffix(projectId: string, clusterName: string): string {
+    const safeProjectId = projectId.replaceAll('/', '_');
+    const safeClusterName = clusterName.replaceAll('/', '_');
+    return `${safeProjectId}_${safeClusterName}`;
+}
+
+/**
  * Creates an AtlasClusterModel from Atlas API response data.
  */
 export function createAtlasClusterModel(
@@ -66,9 +75,7 @@ export function createAtlasClusterModel(
     dbExperience: Experience,
 ): AtlasClusterModel {
     // clusterId must not contain '/' — use provider prefix + project + cluster name
-    const safeProjectId = projectId.replaceAll('/', '_');
-    const safeClusterName = cluster.name.replaceAll('/', '_');
-    const clusterId = `atlas-mongodb-discovery_${safeProjectId}_${safeClusterName}`;
+    const clusterId = `atlas-mongodb-discovery_${createAtlasClusterStableSuffix(projectId, cluster.name)}`;
     // Resolve provider info from top-level providerSettings or replicationSpecs
     const provider =
         cluster.providerSettings ??
