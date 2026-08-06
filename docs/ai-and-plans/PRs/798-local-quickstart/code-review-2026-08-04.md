@@ -1346,6 +1346,41 @@ this reason — do not shorten it).
 **Watch out for:** strings removed by WP-3 (the port-fallback note, "Ports X–Y are all in use") — sequence WP-4
 after WP-3a, or accept a second `npm run l10n` pass.
 
+> **IMPLEMENTED (2026-08-06) — commit `fix(quickstart): localize the webview lookups and service messages`.**
+>
+> **M1/A — the 20 module-scope maps are now render-time lookups.** Each `const MAP = {…}` became a
+> `function mapName(): T { return {…}; }` (`stageLabels`, `planItems`, `dockerDaemonValues`,
+> `dockerFailureLabels`, `dockerProviderLabels`, `dockerOutcomeValues`, `dockerEndpointKindValues`,
+> `dockerEndpointSourceNotes`, `dockerProviderEvidenceNotes`, `dockerHostEnvironmentValues`,
+> `dockerPermissionDetailValues`, `dockerGuidance`, `dockerGuides`, `dockerStartLabels`,
+> `executionTargetValues`, `dockerRecoveryNotes`, `dockerDetailProviderLabels`, `dockerDetailOsLabels`,
+> `dockerDetailTargetLabels`, `dockerDetailFailureLabels`). The seven used inside the component are memoized with
+> `useMemo`; the rest are called from module-scope helpers (`formatDockerDetailSegment`,
+> `buildDockerReviewRows`), which run per render anyway.
+>
+> **One deliberate deviation from "memoize everything with `useMemo`" (confidence ≫ 80 %):** eight of the maps
+> are consumed by module-scope helper functions, not by the component, so `useMemo` cannot reach them without
+> threading ~8 extra parameters through the helper chain. Options weighed: (a) thread the maps as parameters —
+> rejected, large churn and a worse signature for zero behavioural gain; (b) cache the maps in module-level
+> `let`s on first call — rejected, that re-introduces exactly the evaluation-order dependency M1 is about (a
+> single pre-`l10n.config()` call would poison the cache permanently); (c) rebuild on call and memoize only where
+> the component can — chosen. The maps are a handful of small string literals built during render; the
+> allocation is immaterial next to the React tree around it.
+>
+> **M2/A — every UI-reachable service message is now localized.** Traced which `StageEvent` fields actually
+> render first (`onData` uses `message` only for the `done` stage and `error ?? message` for `status === 'error'`),
+> so the wrapping is scoped to exactly those: `Setup is already in progress.`, `There is nothing to resume.`,
+> `A setup operation is already in progress.`, both `DocumentDB Local is running on localhost:{0}.` success
+> subtitles (now `{0}` placeholders, not template literals, so they extract), the two `DockerNotReadyError`
+> messages, `Setup was cancelled.`, `Still initializing…`, and the two `exited shortly after` tree-row
+> descriptions. The in-flight stage messages (`Checking Docker…`, `Pulling official image…`, …) are deliberately
+> **not** wrapped: the webview renders its own `stageLabels()` for those rows and never displays the transport
+> string. Channel-only `appendLine` strings stay unwrapped, as decided. `npm run l10n` adds exactly these 10
+> keys.
+>
+> **N2** — a code comment now marks the "fully MongoDB-compatible database" string as approved verbatim copy
+> from documentdb.io, so a future terminology sweep leaves it alone.
+
 #### WP-5 — Command surface & small fixes (M3, L5, L6, L7, L8, L9)
 
 - **M3/A:** add `"when": "never"` `commandPalette` entries for the seven lifecycle commands

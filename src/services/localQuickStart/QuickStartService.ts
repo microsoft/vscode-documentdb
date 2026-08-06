@@ -390,7 +390,12 @@ export class QuickStartServiceImpl {
         alias: string = DEFAULT_ALIAS,
     ): AsyncGenerator<StageEvent> {
         if (this.stateFor(alias).provisioning || this.stateFor(alias).lifecycleBusy) {
-            yield stageEvent('error', 'error', 'Setup is already in progress.', 'Setup is already in progress.');
+            yield stageEvent(
+                'error',
+                'error',
+                l10n.t('Setup is already in progress.'),
+                l10n.t('Setup is already in progress.'),
+            );
             return;
         }
         this.stateFor(alias).provisioning = true;
@@ -479,8 +484,8 @@ export class QuickStartServiceImpl {
             if ((!readiness.cliInstalled || !readiness.daemonReachable) && !continueAfterIndeterminateReadiness) {
                 throw new DockerNotReadyError(
                     !readiness.cliInstalled
-                        ? 'Docker CLI was not found on your PATH. Install Docker and retry.'
-                        : 'Docker is installed but the daemon is not reachable. Start Docker and retry.',
+                        ? l10n.t('Docker CLI was not found on your PATH. Install Docker and retry.')
+                        : l10n.t('Docker is installed but the daemon is not reachable. Start Docker and retry.'),
                 );
             }
 
@@ -643,7 +648,7 @@ export class QuickStartServiceImpl {
             yield stageEvent(
                 'done',
                 'done',
-                `DocumentDB Local is running on localhost:${boundPort}.`,
+                l10n.t('DocumentDB Local is running on localhost:{0}.', String(boundPort)),
                 undefined,
                 boundPort,
             );
@@ -652,7 +657,7 @@ export class QuickStartServiceImpl {
             const dockerReadiness =
                 !aborted && activeDockerStage ? await this.getProvisioningDockerReadiness() : undefined;
             provisioningDockerFailureKind = dockerReadiness?.failureKind;
-            let message = aborted ? 'Setup was cancelled.' : errMessage(error);
+            let message = aborted ? l10n.t('Setup was cancelled.') : errMessage(error);
             if (!aborted && error instanceof DockerNotReadyError) {
                 this.stateFor(alias).pendingReadiness = undefined;
                 this.setStatus(alias, InstanceState.Error, undefined, message);
@@ -858,7 +863,12 @@ export class QuickStartServiceImpl {
     public async *resumeReadiness(signal: AbortSignal, alias: string = DEFAULT_ALIAS): AsyncGenerator<StageEvent> {
         const pending = this.stateFor(alias).pendingReadiness;
         if (!pending) {
-            yield stageEvent('error', 'error', 'There is nothing to resume.', 'There is nothing to resume.');
+            yield stageEvent(
+                'error',
+                'error',
+                l10n.t('There is nothing to resume.'),
+                l10n.t('There is nothing to resume.'),
+            );
             return;
         }
         if (this.stateFor(alias).provisioning || this.stateFor(alias).lifecycleBusy) {
@@ -869,7 +879,7 @@ export class QuickStartServiceImpl {
             yield stageEvent(
                 'error',
                 'error',
-                'A setup operation is already in progress.',
+                l10n.t('A setup operation is already in progress.'),
                 'in progress',
                 undefined,
                 true,
@@ -902,7 +912,7 @@ export class QuickStartServiceImpl {
             terminalEvent = stageEvent(
                 'done',
                 'done',
-                `DocumentDB Local is running on localhost:${pending.boundPort}.`,
+                l10n.t('DocumentDB Local is running on localhost:{0}.', String(pending.boundPort)),
                 undefined,
                 pending.boundPort,
             );
@@ -917,7 +927,7 @@ export class QuickStartServiceImpl {
             const timedOut = !finalized && (isTimeout || aborted);
             resumeResult = aborted ? 'cancelled' : isTimeout ? 'timeout' : 'error';
             const message = aborted
-                ? 'Still initializing. Keep waiting, view the logs, or start over.'
+                ? l10n.t('Still initializing. Keep waiting, view the logs, or start over.')
                 : errMessage(error);
             if (!finalized) {
                 this.setStatus(alias, InstanceState.Error, undefined, aborted ? undefined : message);
@@ -1351,7 +1361,7 @@ export class QuickStartServiceImpl {
                     alias,
                     InstanceState.Error,
                     undefined,
-                    'The container started but exited shortly after. Check the Quick Start logs.',
+                    l10n.t('The container started but exited shortly after. Check the Quick Start logs.'),
                 );
             }
         });
@@ -1388,7 +1398,7 @@ export class QuickStartServiceImpl {
                     alias,
                     InstanceState.Error,
                     undefined,
-                    'The container restarted but exited shortly after. Check the Quick Start logs.',
+                    l10n.t('The container restarted but exited shortly after. Check the Quick Start logs.'),
                 );
             }
         });
