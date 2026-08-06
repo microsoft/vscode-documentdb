@@ -273,7 +273,16 @@ function delay(ms: number, signal: AbortSignal): Promise<void> {
 }
 
 export class QuickStartServiceImpl {
-    /** Per-alias runtime state (WI-2). See {@link InstanceRuntimeState}. */
+    /**
+     * Per-alias runtime state (WI-2). See {@link InstanceRuntimeState}.
+     *
+     * SCOPE (review §9.2 Q3): exactly **one** instance is supported today. This map, the `alias`
+     * parameter threaded through every public method, {@link reservedPorts} and the `operationId`
+     * labels are deliberate seams kept so a second instance is a focused iteration rather than a
+     * rewrite — but no UI is built on them, and every caller passes {@link DEFAULT_ALIAS}. When
+     * multi-instance is picked up, creating a second instance should most likely start by offering
+     * the one that already exists.
+     */
     private readonly instances = new Map<string, InstanceRuntimeState>();
 
     /** Lazily get (creating a NotInstalled default for) an alias's runtime state. */
@@ -320,7 +329,12 @@ export class QuickStartServiceImpl {
         };
     }
 
-    /** Snapshot of every known instance for the tree (WI-3), ordered DEFAULT first then by alias. */
+    /**
+     * Snapshot of every known instance for the tree (WI-3), ordered DEFAULT first then by alias.
+     *
+     * Another multi-instance seam (see {@link instances}): the tree renders a single row today and
+     * reads {@link getStatus} instead.
+     */
     public listStatuses(): InstanceStatus[] {
         this.stateFor(DEFAULT_ALIAS); // ensure the default is always represented
         const entries = [...this.instances.values()].sort((a, b) => {
@@ -457,7 +471,8 @@ export class QuickStartServiceImpl {
         let portTaken = false;
         let readinessTimedOut = false;
         // Owner nonce for this run: stamped on the container (H4) and on the provisioning lease (H3),
-        // so both the cleanup sweep and the registry reservation are provably this run's own.
+        // so both the cleanup sweep and the registry reservation are provably this run's own. This is
+        // load-bearing today for concurrent windows, not only for the multi-instance seam.
         const operationId = crypto.randomBytes(8).toString('hex');
         let leaseHeld = false;
         // Set once the credentials are persisted BEFORE the readiness wait (H3), together with
@@ -1087,7 +1102,12 @@ export class QuickStartServiceImpl {
         return (await this.getReusableCredentials(alias)) !== undefined;
     }
 
-    /** Host ports reserved by OTHER instances (running or stopped) — their containers bake them in. */
+    /**
+     * Host ports reserved by OTHER instances (running or stopped) — their containers bake them in.
+     *
+     * A multi-instance seam kept deliberately (see {@link instances}): with a single instance the
+     * returned set is always empty.
+     */
     private reservedPorts(alias: string): Set<number> {
         const reserved = new Set<number>();
         for (const record of readRegistry(ext.context.globalState).instances) {
