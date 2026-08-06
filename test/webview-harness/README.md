@@ -18,9 +18,8 @@ npx playwright show-report testOutput/playwright-report
 `localQuickStart.spec.ts` pins the defects found in the `0.10.0-bug-bash-1` bug bash that have a
 webview surface, so a regression fails the build instead of waiting for the next bash to rediscover
 it: the per-platform Docker install link and restart guidance (#855, #856), the reworked success
-screen (#857), a Docker-assigned host port reaching the connection details (#854), and the localized
-port error (#852). The two defects with no webview surface are pinned in Jest instead — #851 in
-`src/commands/localQuickStart/contributions.test.ts`, #858 in
+screen (#857), and the localized port error (#852). The two defects with no webview surface are
+pinned in Jest instead — #851 in `src/commands/localQuickStart/contributions.test.ts`, #858 in
 `src/commands/newLocalConnection/localEndpoint.test.ts`.
 
 Each state is also captured to `testOutput/screenshots/` and attached to the Playwright report.
@@ -46,7 +45,7 @@ folder.
 
 | Parameter  | Values                                                                                                                                                                                           |
 | ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `scenario` | `introduction`, `configure`, `provisioning`, `success`, `success-relocated-port`, `failed-port-in-use`, `failed-timeout`, `docker-missing-windows`, `docker-missing-mac`, `docker-missing-linux` |
+| `scenario` | `introduction`, `configure`, `provisioning`, `success`, `failed-port-in-use`, `failed-timeout`, `docker-missing-windows`, `docker-missing-mac`, `docker-missing-linux` |
 | `theme`    | `dark` (default), `light`                                                                                                                                                                        |
 
 Example: `http://127.0.0.1:18099/quickstart-harness.html?scenario=docker-missing-windows&theme=light`

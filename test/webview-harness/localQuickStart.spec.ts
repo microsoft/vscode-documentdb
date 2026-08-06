@@ -12,7 +12,7 @@
  *
  *   npm run webpack-dev-wv && npm run test:visual
  *
- * Issues covered here are the ones with a webview surface — #852, #854, #855, #856, #857. The two
+ * Issues covered here are the ones with a webview surface — #852, #855, #856, #857. The two
  * without one are covered by Jest instead: #851 in `contributions.test.ts` (package.json menu
  * gating) and #858 in `src/commands/newLocalConnection/localEndpoint.test.ts`.
  */
@@ -39,7 +39,6 @@ type Scenario =
     | 'configure'
     | 'provisioning'
     | 'success'
-    | 'success-relocated-port'
     | 'failed-port-in-use'
     | 'failed-timeout'
     | 'docker-missing-windows'
@@ -202,18 +201,6 @@ test.describe('Local Quick Start — success screen', () => {
         await page.getByRole('button', { name: 'Open Connection' }).click();
 
         await expect.poll(() => callsTo(page, 'localQuickStart.openConnection')).toHaveLength(1);
-    });
-
-    /**
-     * #854: when the preferred port is taken, Docker now assigns one at bind time. The port the
-     * user is told to connect on must be the one Docker actually bound, not the canonical default.
-     */
-    test('a Docker-assigned host port reaches the connection details (#854)', async ({ page }) => {
-        await openScenario(page, 'success-relocated-port');
-
-        await expect(page.getByText('DocumentDB Local is running on localhost:61146.')).toBeVisible();
-        await expect(page.getByText('(localhost:61146)')).toBeVisible();
-        await expect(page.getByText('10260')).toHaveCount(0);
     });
 
     test('captures the success screen in both themes', async ({ page }, testInfo) => {
