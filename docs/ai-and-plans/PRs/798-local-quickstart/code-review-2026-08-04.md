@@ -1162,6 +1162,35 @@ exactly once.
 **Watch out for:** `ConnectionsBranchDataProvider` already opts into the wrapper — check the existing
 `errorRecoveryActions` gating before adding a new `detectErrorState`.
 
+> **IMPLEMENTED (2026-08-05) — commit `fix(quickstart): fire the Missing status change only on transition (H1)`.**
+>
+> **What was done**
+>
+> - `QuickStartService.refreshLiveState()`: the `!inspected` branch now fires `statusEmitter` only when
+>   `entry.missing` was previously `false`, matching the change-guard that every sibling branch already used.
+> - Added the regression test `refreshLiveState() fires the status change only on the TRANSITION into Missing (H1)`
+>   in `QuickStartService.test.ts` — adopt a running container, delete it externally, call `refreshLiveState()`
+>   three times, assert exactly **one** `onDidChangeStatus` event and `missing === true`.
+>
+> **Why** the unconditional fire closed a loop through `ClustersExtension → refresh() → getChildren() →
+> refreshLiveState() → fire()`, spawning a `docker inspect` per iteration for as long as the Connections view was
+> visible. The node renders `collapsibleState: Expanded`, so its children are always re-queried.
+>
+> **Step 2 — `ensureActionable()` audit: no change needed.** Its `missing` branch is reached only from a
+> user-initiated lifecycle command (`start`/`stop`/`restart`), each of which is one-shot and additionally shows an
+> information message; it cannot re-enter itself. The existing comment already explains why it sets the flag
+> directly instead of delegating to `refreshLiveState()`.
+>
+> **Step 3 — provider-level cached-error-node route: evaluated and NOT adopted.** Options considered:
+>
+> | Option                                                                       | Verdict                                                                                                                                                                                                                                              |
+> | ---------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+> | Classify `Missing`/`CredentialsMissing` as an error via `detectErrorState`   | **Rejected.** `failedChildrenCache` freezes the node's children until an explicit `resetNodeErrorState`, which would have to be wired to `onDidChangeStatus` — i.e. exactly the transition guard we just added, but with an extra cache to keep in sync. |
+> | Keep the transition guard only (chosen)                                      | The row is not an error: it is a valid, user-actionable state with its own affordances (click-to-recreate, Delete). The generic error-recovery "Retry" the wrapper adds would be the wrong action, and the frozen cache would also suppress a legitimate external recovery (container reappears). |
+>
+> Net: the transition guard alone is sufficient and strictly simpler.
+
+
 #### WP-2 — TLS exception policy correction (H2, L4)
 
 **Goal:** stop silently stripping a user's deliberate TLS-bypass params on public hosts, and classify IPv6
@@ -1180,6 +1209,46 @@ Start, so it must be revertible in isolation.
 
 **Watch out for:** the docblock on `resolveAllowInvalidCertificates` already describes the post-fix behaviour —
 it becomes true again after this change; do not "fix" the comment to match the old code.
+
+> **IMPLEMENTED (2026-08-05) — commit `fix(tls): keep a deliberate TLS bypass for public hosts (H2, L4)`.**
+>
+> **H2 — what was done**
+>
+> - `canonicalizeTlsException()` now decides `allHostsLocal` **first** and returns the input string **verbatim**
+>   for a public or mixed host. `stripTlsBypassParams()` runs only when the exception is actually adopted.
+> - `stripTlsBypassParams()` itself is unchanged — it is still exported and still used unconditionally by
+>   `vscodeUriHandler.ts`.
+> - Updated the docblocks in `tlsException.ts`, `updateConnectionString/ExecuteStep.ts` and
+>   `newConnection/PromptConnectionStringStep.ts`, which all claimed unconditional stripping.
+> - Rewrote the six public/mixed-host cases in `tlsException.test.ts` to assert `connectionString` is returned
+>   **byte-identical** (previously they asserted the param was stripped).
+>
+> **Deliberate scope decision: the deep-link path keeps stripping.** `vscodeUriHandler.ts` calls
+> `stripTlsBypassParams(parsedCS)` as a separate, explicit step, so it is unaffected by this change and a pasted /
+> deep-linked `vscode://` URL still cannot carry a TLS bypass for a public host. That is exactly the gate H2's
+> rejected option B would have removed — the asymmetry (trusted wizard input keeps the param, untrusted deep link
+> does not) is intentional and now the only place stripping is unconditional.
+>
+> **L4 — what was done**
+>
+> - Added `expandIpv6()`: full expansion of an IPv6 literal (compressed `::`, zone index `%eth0`, dotted-quad
+>   tail), returning 8 hextets or `undefined` for a malformed literal.
+> - `isLocalOrPrivateHost()` now classifies IPv6 on the **expanded** form, so every spelling of the same address
+>   agrees: `::1`, `0:0:0:0:0:0:0:1` and `0000:…:0001` are all loopback; `::ffff:127.0.0.1` and `::ffff:10.0.0.5`
+>   are classified by their embedded IPv4 (and `::ffff:8.8.8.8` correctly stays public).
+> - Extracted the IPv4 range checks into `isLocalOrPrivateIpv4(octets)` so the IPv4 and IPv4-mapped-IPv6 paths
+>   share one rule set instead of duplicating it.
+> - Extended `hostClassification.test.ts` with 15 new true-rows and 4 new false-rows, including the two malformed
+>   literals (`fe80:::1`, `::1::2`) that must not be mis-classified by the expansion.
+>
+> **One deliberate deviation (confidence ≫ 80 %):** the review's table lists `::` (unspecified) as a missed
+> loopback case. Expanding it yields all-zero hextets, which is the IPv4 `0.0.0.0` — so the classifier now treats
+> the unspecified address as local for **both** families (`::` and `0.0.0.0`). Options weighed: (a) special-case
+> `::` only — rejected, it would leave `0.0.0.0` public while its IPv6 synonym is local, i.e. exactly the
+> spelling-sensitivity L4 is about; (b) leave both public — rejected, the review explicitly lists `::` as a bug;
+> (c) treat the unspecified address as local in both families — chosen. Semantically `0.0.0.0`/`::` as a *connect*
+> target is the local machine, so offering the TLS-exception step there is correct.
+
 
 #### WP-3 — Provisioning durability & the port model (H3, H4, L3, M5, L1, N5, N6)
 
@@ -1251,6 +1320,27 @@ after WP-3a, or accept a second `npm run l10n` pass.
   writing to `tmpdir` — the daemon must be able to read the file.
 
 These are independent; they can land as one PR or be folded into whichever package already touches each file.
+
+> **IMPLEMENTED (2026-08-05) — commit `fix(quickstart): palette gating, log-follow disposal and masking hardening`.**
+>
+> | Item     | What was done                                                                                                                                                                                                                                                                                                                                                                                          |
+> | -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+> | **M3/A** | Added seven `"when": "never"` `commandPalette` entries (`start`, `stop`, `restart`, `delete`, `copyConnectionString`, `copyPassword`, `viewLogs`), placed with the other tree-only commands. `localQuickStart.open` stays visible. The palette-reachable **Delete Container…** — the sharp one — is now gone.                                                                                            |
+> | **L5/A** | `MaskingLineBuffer` now force-flushes at `MAX_BUFFERED_CHARS = 16 KiB` when no newline arrives, retaining a tail of at least the longest secret's length so a forced cut can never split a secret past the masker. Two tests added: the buffer stays bounded on a 64 KiB newline-less push and emits everything exactly once, and a password landing exactly on the boundary is still masked.            |
+> | **L6/A** | New `secretVariants(...secrets)` in `quickStartCredentials.ts` returns the raw **and** `encodeURIComponent`-ed forms, de-duplicated. Applied at all four call sites (`provision`'s `secrets`, `seedSampleData`, both `followLogs` — including the one in `viewQuickStartLogs`). `outputMasking.ts` stays dependency-free, as decided. A URL-safe generated password still yields a single-element array. |
+> | **L7/A** | `handleStartDocker` gained the missing `'stopped'` branch: "Docker started, but it is not usable yet — see the details below." Previously the spinner just vanished and the assertive `Announcer` said nothing.                                                                                                                                                                                         |
+> | **L8/A** | New exported `disposeQuickStartLogFollow()` in `localQuickStartCommands.ts`, registered in `ClustersExtension` right next to `disposeQuickStartOutputChannel` — so the last `docker logs -f` child process no longer outlives deactivation.                                                                                                                                                             |
+> | **L9/A** | New exported `sweepStaleQuickStartEnvFiles()` in `QuickStartService.ts`, called fire-and-forget after `reconcile()`. The file stays in `os.tmpdir()` (the daemon must read it), as decided.                                                                                                                                                                                                             |
+>
+> **One deliberate addition to L9 (confidence ≫ 80 %): an age threshold.** A bare "delete every
+> `documentdb-quickstart-*.env` at activation" would delete the env file of a provision running **in another
+> window** — the file lives for the whole `provision()` call, and a cold image pull can take minutes. The sweep
+> therefore only removes files whose `mtime` is older than 1 hour (comfortably above `PROVISIONING_LEASE_TTL_MS`
+> = 20 min), and matches the exact `documentdb-quickstart-<16 hex>.env` name so it never touches an unrelated
+> file. Alternatives weighed: no threshold (rejected — breaks concurrent windows); a lock file (rejected — more
+> state for a best-effort cleanup); sweeping on `deactivate` instead (rejected — a killed host is exactly the
+> case that has no `deactivate`).
+
 
 #### WP-6 — Credential source of truth (H5, M7) — 🛑 **ON HOLD**
 
