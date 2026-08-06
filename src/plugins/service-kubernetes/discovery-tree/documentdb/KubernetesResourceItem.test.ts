@@ -7,6 +7,7 @@ import { KUBERNETES_PORT_FORWARD_METADATA_PROPERTY } from '../../portForwardMeta
 import { KubernetesResourceItem } from './KubernetesResourceItem';
 
 const mockHasCredentials = jest.fn();
+const mockGetCachedCredentials = jest.fn();
 const mockGetClient = jest.fn();
 
 jest.mock('@vscode/l10n', () => ({
@@ -103,6 +104,7 @@ jest.mock('../../../../extensionVariables', () => ({
 jest.mock('../../../../documentdb/CredentialCache', () => ({
     CredentialCache: {
         hasCredentials: (...args: unknown[]) => mockHasCredentials(...args),
+        getCredentials: (...args: unknown[]) => mockGetCachedCredentials(...args),
         deleteCredentials: jest.fn(),
         setAuthCredentials: jest.fn(),
     },
@@ -158,6 +160,11 @@ jest.mock('../../sources/sourceStore', () => ({
     getSource: (...args: unknown[]) => mockGetSource(...(args as [string])),
 }));
 
+const mockEnsureKubernetesPortForward = jest.fn();
+jest.mock('../../ensureKubernetesPortForward', () => ({
+    ensureKubernetesPortForward: (...args: unknown[]) => mockEnsureKubernetesPortForward(...args),
+}));
+
 // Mock the icons util so the cluster icon path resolves without an extension context.
 jest.mock('../../../../utils/icons', () => ({
     getResourcesPath: () => '/resources',
@@ -176,9 +183,13 @@ describe('KubernetesResourceItem', () => {
     beforeEach(() => {
         jest.clearAllMocks();
         mockHasCredentials.mockReturnValue(true);
+        mockGetCachedCredentials.mockReturnValue({
+            connectionString: 'mongodb://127.0.0.1:10260/',
+        });
         mockGetClient.mockResolvedValue({
             listDatabases: jest.fn().mockResolvedValue([{ name: 'appdb' }]),
         });
+        mockEnsureKubernetesPortForward.mockResolvedValue({ outcome: 'started' });
     });
 
     it('expands to database nodes instead of metadata detail rows', async () => {
@@ -445,6 +456,43 @@ describe('KubernetesResourceItem', () => {
                 namespace: 'default',
                 serviceName: 'my-svc',
                 servicePort: 10260,
+                localPort: 10260,
+            });
+        });
+
+        it('should restore the ClusterIP tunnel before a cluster-level command uses cached credentials', async () => {
+            const item = new KubernetesResourceItem(
+                'corr-shell',
+                'default',
+                {
+                    name: 'my-ctx',
+                    cluster: 'my-cluster',
+                    user: 'my-user',
+                    server: 'https://api.example.com:6443',
+                },
+                {
+                    sourceKind: 'dko',
+                    name: 'my-svc',
+                    displayName: 'My Service',
+                    serviceName: 'my-svc',
+                    namespace: 'default',
+                    type: 'ClusterIP',
+                    port: 10260,
+                    clusterIP: '10.0.0.1',
+                },
+                'discoveryView/kubernetes-discovery/default',
+            );
+
+            await expect(item.ensureConnectionReady()).resolves.toBe(true);
+            expect(mockEnsureKubernetesPortForward).toHaveBeenCalledWith({
+                kind: 'kubernetesClusterIpPortForward',
+                sourceId: 'default',
+                sourceLabel: 'Label for default',
+                contextName: 'my-ctx',
+                namespace: 'default',
+                serviceName: 'my-svc',
+                servicePort: 10260,
+                servicePortName: undefined,
                 localPort: 10260,
             });
         });
