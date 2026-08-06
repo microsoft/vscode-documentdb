@@ -238,9 +238,7 @@ export function viewQuickStartLogs(_context: IActionContext): void {
         // The channel is now in front of the user, so state there why no container logs follow
         // rather than leaving them staring at unrelated output (#851). A notification would be
         // redundant on top of the surface we just revealed.
-        channel.appendLine(
-            l10n.t('There is no DocumentDB Local container to follow. Run Quick Start to create one.'),
-        );
+        channel.appendLine(l10n.t('There is no DocumentDB Local container to follow. Run Quick Start to create one.'));
         return;
     }
     // Cancel any prior follow before starting a new one (see activeLogFollow).

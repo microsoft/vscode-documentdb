@@ -2201,9 +2201,9 @@ export const LocalQuickStart = (): JSX.Element => {
                                 // Windows and macOS users were sent to a Linux-only install (#856).
                                 <Button
                                     appearance="secondary"
-                                    onClick={() => handleOpenGuide(DOCKER_GUIDES[shownDocker.presentation.guide].href)}
+                                    onClick={() => handleOpenGuide(dockerGuides()[shownDocker.presentation.guide].href)}
                                 >
-                                    {DOCKER_GUIDES[shownDocker.presentation.guide].label}
+                                    {dockerGuides()[shownDocker.presentation.guide].label}
                                 </Button>
                             )}
                             {startingDocker ? (

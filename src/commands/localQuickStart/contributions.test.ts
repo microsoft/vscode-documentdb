@@ -72,6 +72,19 @@ describe('Local Quick Start command contributions (#851)', () => {
     it('keeps the Quick Start entry point in the Command Palette', () => {
         expect(paletteEntries.has('vscode-documentdb.command.localQuickStart.open')).toBe(false);
     });
+
+    /**
+     * Presence alone is not enough: two branches adding the same gating block at different offsets
+     * merge into duplicates that every lookup here would still find, so only uniqueness catches it.
+     */
+    it('contributes each palette entry exactly once', () => {
+        const counts = new Map<string, number>();
+        for (const entry of manifest.contributes.menus.commandPalette) {
+            counts.set(entry.command, (counts.get(entry.command) ?? 0) + 1);
+        }
+        const duplicated = [...counts.entries()].filter(([, count]) => count > 1).map(([command]) => command);
+        expect(duplicated).toEqual([]);
+    });
 });
 
 describe('Local Quick Start localized strings (#852)', () => {
@@ -80,8 +93,7 @@ describe('Local Quick Start localized strings (#852)', () => {
     // The extractor only picks up strings wrapped in `l10n.t()`, so presence in the bundle is
     // proof the call goes through localization rather than a raw template literal.
     it.each([
-        'Port {0} is already in use. Choose a different port or free it, then retry.',
-        'Port {0} was busy, using {1} instead.',
+        'Port {0} is already in use. Go back to Configure to pick a different port, or free it, then try again.',
         'Docker CLI was not found on your PATH. Install Docker and retry.',
         'Docker is installed but the daemon is not reachable. Start Docker and retry.',
         'DocumentDB Local is running on localhost:{0}.',
@@ -92,11 +104,13 @@ describe('Local Quick Start localized strings (#852)', () => {
     });
 
     /**
-     * The old wording claimed the whole 100-port band had been checked when the search sampled at
-     * most eleven of it. Nothing should reintroduce that claim.
+     * The host port is always the one the user saw in Configure (review L3, "no magic after
+     * execute"). Setup never substitutes it, so no string may tell the user that it did.
      */
-    it('never claims a whole port range was checked', () => {
-        const offenders = Object.keys(bundle).filter((key) => /ports .*are all in use/i.test(key));
+    it('never announces a silently substituted port', () => {
+        const offenders = Object.keys(bundle).filter(
+            (key) => /\bports?\b/i.test(key) && /are all in use|was busy|using .* instead/i.test(key),
+        );
         expect(offenders).toEqual([]);
     });
 });

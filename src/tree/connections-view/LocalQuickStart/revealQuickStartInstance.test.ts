@@ -76,7 +76,7 @@ describe('Quick Start tree paths match the ids the tree builds', () => {
     });
 
     it('matches the managed-instance row id', async () => {
-        jest.spyOn(QuickStartService, 'refreshLiveState').mockResolvedValue(undefined);
+        jest.spyOn(QuickStartService, 'refreshLiveStateInBackground').mockReturnValue(undefined);
         jest.spyOn(QuickStartService, 'getStatus').mockReturnValue({
             state: InstanceState.Running,
             metadata: {
