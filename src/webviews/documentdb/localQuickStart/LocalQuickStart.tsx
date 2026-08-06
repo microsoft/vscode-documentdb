@@ -1993,19 +1993,19 @@ export const LocalQuickStart = (): JSX.Element => {
             <MessageBarBody className={styles.messageBody}>
                 {existingInstanceGuard === 'healthy' ? (
                     <>
-                        <MessageBarTitle>{l10n.t('DocumentDB Local is already running')}</MessageBarTitle>{' '}
+                        <MessageBarTitle>{l10n.t('DocumentDB Local is already running')}</MessageBarTitle>
                         {l10n.t('There is nothing to set up. Open the connection to start using it.')}
                     </>
                 ) : existingInstanceGuard === 'stopped' ? (
                     <>
-                        <MessageBarTitle>{l10n.t('DocumentDB Local is already set up')}</MessageBarTitle>{' '}
+                        <MessageBarTitle>{l10n.t('DocumentDB Local is already set up')}</MessageBarTitle>
                         {l10n.t('It is stopped. Start it to use it again, with all your data.')}
                     </>
                 ) : (
                     <>
                         <MessageBarTitle>
                             {l10n.t('Saved credentials for DocumentDB Local are missing')}
-                        </MessageBarTitle>{' '}
+                        </MessageBarTitle>
                         {l10n.t(
                             'Its data can no longer be opened, so setting up will delete the instance and its data, then create a new one.',
                         )}
@@ -2032,37 +2032,46 @@ export const LocalQuickStart = (): JSX.Element => {
         </MessageBar>
     );
 
-    /** Why setup is being offered for an instance the user already had (its container is gone). */
-    const missingInstanceNotice = instanceMissing && !forcedFresh && (
-        <MessageBar intent="info" layout="multiline">
-            <MessageBarBody className={styles.messageBody}>
-                <MessageBarTitle>{l10n.t('The DocumentDB Local container is gone')}</MessageBarTitle>{' '}
-                {l10n.t(
-                    'It was removed outside VS Code. Setting up creates it again. Choose what to do with the data it left behind.',
-                )}
-            </MessageBarBody>
-        </MessageBar>
-    );
-
     /**
      * The recreate-vs-fresh choice (review M4, I2-2). It sits above the settings table because it
      * decides what those settings mean: reusing keeps the instance's stored credentials and image,
-     * so the credential/image rows are hidden. Per I2-Q4 there is NO extra confirmation dialog —
+     * so the credential/image rows are hidden. Per I2-Q4 there is NO extra confirmation dialog:
      * the destructive option states the data loss in its own label and is never pre-selected.
+     *
+     * The explanation and the choice share one block so they cannot read as competing controls.
+     * `MessageBar` is `role="group"`, which is the right container for a set of related controls.
      *
      * Hidden whenever setup cannot run (a healthy or stopped instance): offering a choice next to a
      * disabled primary action reads as a third, broken control.
      */
     const dataChoiceBlock = canReuseExistingData && !forcedFresh && !startBlockedByGuard && (
-        <Field label={l10n.t('DocumentDB Local already has data on this machine. What should setup do with it?')}>
-            <RadioGroup
-                value={dataChoice}
-                onChange={(_event, data) => setDataChoice(data.value === 'fresh' ? 'fresh' : 'reuse')}
-            >
-                <Radio value="reuse" label={l10n.t('Keep it and reuse the existing data')} />
-                <Radio value="fresh" label={l10n.t('Erase it and set up an empty DocumentDB Local')} />
-            </RadioGroup>
-        </Field>
+        <MessageBar intent="info" layout="multiline">
+            <MessageBarBody className={styles.messageBody}>
+                {instanceMissing && (
+                    <div>
+                        {l10n.t(
+                            'The DocumentDB Local container was removed outside VS Code. Its data is still on this machine, and setting up creates the container again.',
+                        )}
+                    </div>
+                )}
+                <Field
+                    label={
+                        // Only restate where the data came from when the sentence above did not.
+                        instanceMissing
+                            ? l10n.t('What should setup do with the existing data?')
+                            : l10n.t('DocumentDB Local already has data on this machine. What should setup do with it?')
+                    }
+                >
+                    <RadioGroup
+                        value={dataChoice}
+                        onChange={(_event, data) => setDataChoice(data.value === 'fresh' ? 'fresh' : 'reuse')}
+                    >
+                        <Radio value="reuse" label={l10n.t('Keep the existing data')} />
+                        <Radio value="fresh" label={l10n.t('Erase the existing data and start empty')} />
+                    </RadioGroup>
+                </Field>
+            </MessageBarBody>
+        </MessageBar>
     );
 
     const configure = (
@@ -2076,7 +2085,6 @@ export const LocalQuickStart = (): JSX.Element => {
                 </Text>
             </div>
             {existingInstanceNotice}
-            {missingInstanceNotice}
             {dataChoiceBlock}
             <Table size="small" aria-label={l10n.t('Setup settings')}>
                 <colgroup>
@@ -2448,14 +2456,10 @@ export const LocalQuickStart = (): JSX.Element => {
             </Button>
         );
     } else if (phase === 'configure') {
-        // The label and the note follow the choice above: "Nothing else on your machine is changed"
-        // is true only for a genuinely fresh install and must not render for either recreate path
-        // (review M4 / §10.6).
-        primaryLabel = isRecreate
-            ? l10n.t('Recreate DocumentDB Local')
-            : startFresh
-              ? l10n.t('Erase and set up DocumentDB Local')
-              : l10n.t('Start DocumentDB Local');
+        // The label stays fixed; the note below it is what follows the choice. "Nothing else on your
+        // machine is changed" is true only for a genuinely fresh install and must not render for
+        // either recreate path (review M4 / §10.6).
+        primaryLabel = l10n.t('Start DocumentDB Local');
         primaryDisabled = advError !== undefined || startBlockedByGuard;
         primaryIcon = <RocketRegular />;
         onPrimary = handleStart;
