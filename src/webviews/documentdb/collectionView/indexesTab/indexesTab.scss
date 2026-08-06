@@ -3,9 +3,9 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-@use '../../index';
+@use '../../../index';
 
-.indexView {
+.indexesTab {
     @extend .selectionDisabled;
 
     display: flex;
@@ -405,7 +405,7 @@
 
 // Property-badge tooltip body (partial filter / collation / wildcard projection).
 // Fluent v9 portals tooltips to the document body, so this lives at the top
-// level rather than nested under `.indexView`.
+// level rather than nested under `.indexesTab`.
 .indexPropertiesTooltipCode {
     font-family: var(--fontFamilyMonospace);
     white-space: pre-wrap;

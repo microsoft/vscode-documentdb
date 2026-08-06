@@ -6,13 +6,13 @@
 import { ProgressBar } from '@fluentui/react-components';
 import * as l10n from '@vscode/l10n';
 import { useCallback, useEffect, useMemo, useRef, useState, type JSX } from 'react';
-import { useTrpcClient } from '../../_integration/useTrpcClient';
-import { Announcer } from '../../components/accessibility';
+import { useTrpcClient } from '../../../_integration/useTrpcClient';
+import { Announcer } from '../../../components/accessibility';
 import { CreateIndexDrawer } from './components/CreateIndexDrawer';
 import { IndexList } from './components/indexList';
 import { IndexManagementToolbar } from './components/IndexManagementToolbar';
 import { IndexMetricsRow } from './components/IndexMetricsRow';
-import './indexView.scss';
+import './indexesTab.scss';
 import {
     isVectorCreateIndexInput,
     type CreateIndexInput,
@@ -220,7 +220,7 @@ export const IndexesTab = (): JSX.Element => {
      */
     const showOperationSummary = useCallback(
         (message: string): void => {
-            void trpcClient.common.displayInformationMessage.mutate({ message, asOperationSummary: true });
+            void trpcClient.common.displayOperationSummary.mutate({ message });
         },
         [trpcClient],
     );

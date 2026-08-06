@@ -9,8 +9,8 @@ import { CollapseRelaxed } from '@fluentui/react-motion-components-preview';
 import * as l10n from '@vscode/l10n';
 import type * as React from 'react';
 import { useMemo } from 'react';
-import '../../../../../../../components/focusableBadge/focusableBadge.scss';
-import { type PerformanceDiagnostic } from '../../../../../../../documentdb/collectionView/types/queryInsights';
+import '../../../../../../components/focusableBadge/focusableBadge.scss';
+import { type PerformanceDiagnostic } from '../../../../../../documentdb/collectionView/types/queryInsights';
 import { CellBase } from '../CellBase';
 import './PerformanceRatingCell.scss';
 

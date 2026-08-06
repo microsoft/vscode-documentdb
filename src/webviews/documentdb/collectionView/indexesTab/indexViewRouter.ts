@@ -39,14 +39,14 @@
 
 import * as l10n from '@vscode/l10n';
 import { z } from 'zod';
-import { ClustersClient, type IndexItemModel } from '../../../documentdb/ClustersClient';
-import { PlaygroundCommandIds } from '../../../documentdb/playground/constants';
-import { SchemaStore } from '../../../documentdb/SchemaStore';
-import { ShellCommandIds } from '../../../documentdb/shell/constants';
-import { meterSilentCatch } from '../../../utils/accumulatingTelemetry';
-import { confirmIndexAction } from '../../../utils/dialogs/confirmIndexAction';
-import { type BaseRouterContext } from '../../_integration/appRouter';
-import { publicProcedureWithTelemetry, router, type WithTelemetry } from '../../_integration/trpc';
+import { ClustersClient, type IndexItemModel } from '../../../../documentdb/ClustersClient';
+import { PlaygroundCommandIds } from '../../../../documentdb/playground/constants';
+import { SchemaStore } from '../../../../documentdb/SchemaStore';
+import { ShellCommandIds } from '../../../../documentdb/shell/constants';
+import { meterSilentCatch } from '../../../../utils/accumulatingTelemetry';
+import { confirmIndexAction } from '../../../../utils/dialogs/confirmIndexAction';
+import { type BaseRouterContext } from '../../../_integration/appRouter';
+import { publicProcedureWithTelemetry, router, type WithTelemetry } from '../../../_integration/trpc';
 import { FIELD_SUGGESTION_LIMIT } from './constants';
 import { buildCreateIndexShellCommand, buildIndexSpec, CreateIndexInputSchema } from './indexCreation';
 import { isVectorCreateIndexInput, type IndexRow } from './types';

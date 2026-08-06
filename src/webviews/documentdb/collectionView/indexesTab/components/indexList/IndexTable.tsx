@@ -256,7 +256,7 @@ export const IndexTable = ({
                     /*
                      * Zebra parity comes from the data index, not the DOM position, so an
                      * inserted detail row never breaks the alternating pattern. The colors
-                     * (and the matching hover/pressed rules) live in indexView.scss.
+                     * (and the matching hover/pressed rules) live in indexesTab.scss.
                      */
                     const rowClass = rowIdx % 2 === 0 ? 'rowEven' : 'rowOdd';
                     // A delete / hide / unhide in flight shows a spinner in the
