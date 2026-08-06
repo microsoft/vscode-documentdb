@@ -31,6 +31,7 @@ import { getDockerRecoveryCommandById } from '../../../services/localQuickStart/
 import {
     type AdvancedQuickStartOptions,
     type DockerStatusResult,
+    type PortAvailability,
     type QuickStartStatus,
     type StageEvent,
 } from '../../../services/localQuickStart/quickStartTypes';
@@ -148,8 +149,17 @@ export const localQuickStartRouter = router({
                 status: toWebviewStatus(QuickStartService.getStatus()),
                 busy: QuickStartService.isBusy,
                 willReuse,
+                suggestedPort: await QuickStartService.suggestPort(),
             };
         }),
+
+    /**
+     * Validate a Configure-step port while the user can still react (review L3). The port is always
+     * sent explicitly afterwards, so setup binds exactly this one instead of silently relocating.
+     */
+    checkPort: publicProcedure
+        .input(z.object({ port: z.number().int().min(1024).max(65535) }))
+        .query(({ input }): Promise<PortAvailability> => QuickStartService.checkPort(input.port)),
 
     /** Lightweight status poll (no docker call). */
     getStatus: publicProcedure.query((): QuickStartStatus => toWebviewStatus(QuickStartService.getStatus())),

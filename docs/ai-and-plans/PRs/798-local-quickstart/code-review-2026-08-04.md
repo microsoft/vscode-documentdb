@@ -1173,7 +1173,7 @@ exactly once.
 >   three times, assert exactly **one** `onDidChangeStatus` event and `missing === true`.
 >
 > **Why** the unconditional fire closed a loop through `ClustersExtension → refresh() → getChildren() →
-> refreshLiveState() → fire()`, spawning a `docker inspect` per iteration for as long as the Connections view was
+refreshLiveState() → fire()`, spawning a `docker inspect` per iteration for as long as the Connections view was
 > visible. The node renders `collapsibleState: Expanded`, so its children are always re-queried.
 >
 > **Step 2 — `ensureActionable()` audit: no change needed.** Its `missing` branch is reached only from a
@@ -1183,13 +1183,12 @@ exactly once.
 >
 > **Step 3 — provider-level cached-error-node route: evaluated and NOT adopted.** Options considered:
 >
-> | Option                                                                       | Verdict                                                                                                                                                                                                                                              |
-> | ---------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-> | Classify `Missing`/`CredentialsMissing` as an error via `detectErrorState`   | **Rejected.** `failedChildrenCache` freezes the node's children until an explicit `resetNodeErrorState`, which would have to be wired to `onDidChangeStatus` — i.e. exactly the transition guard we just added, but with an extra cache to keep in sync. |
-> | Keep the transition guard only (chosen)                                      | The row is not an error: it is a valid, user-actionable state with its own affordances (click-to-recreate, Delete). The generic error-recovery "Retry" the wrapper adds would be the wrong action, and the frozen cache would also suppress a legitimate external recovery (container reappears). |
+> | Option                                                                     | Verdict                                                                                                                                                                                                                                                                                           |
+> | -------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+> | Classify `Missing`/`CredentialsMissing` as an error via `detectErrorState` | **Rejected.** `failedChildrenCache` freezes the node's children until an explicit `resetNodeErrorState`, which would have to be wired to `onDidChangeStatus` — i.e. exactly the transition guard we just added, but with an extra cache to keep in sync.                                          |
+> | Keep the transition guard only (chosen)                                    | The row is not an error: it is a valid, user-actionable state with its own affordances (click-to-recreate, Delete). The generic error-recovery "Retry" the wrapper adds would be the wrong action, and the frozen cache would also suppress a legitimate external recovery (container reappears). |
 >
 > Net: the transition guard alone is sufficient and strictly simpler.
-
 
 #### WP-2 — TLS exception policy correction (H2, L4)
 
@@ -1246,9 +1245,8 @@ it becomes true again after this change; do not "fix" the comment to match the o
 > the unspecified address as local for **both** families (`::` and `0.0.0.0`). Options weighed: (a) special-case
 > `::` only — rejected, it would leave `0.0.0.0` public while its IPv6 synonym is local, i.e. exactly the
 > spelling-sensitivity L4 is about; (b) leave both public — rejected, the review explicitly lists `::` as a bug;
-> (c) treat the unspecified address as local in both families — chosen. Semantically `0.0.0.0`/`::` as a *connect*
+> (c) treat the unspecified address as local in both families — chosen. Semantically `0.0.0.0`/`::` as a _connect_
 > target is the local machine, so offering the TLS-exception step there is correct.
-
 
 #### WP-3 — Provisioning durability & the port model (H3, H4, L3, M5, L1, N5, N6)
 
@@ -1290,6 +1288,49 @@ replace the hardcoded `localhost:10260` label.
 slow first image pull must not be mistaken for a crashed host (`PROVISIONING_LEASE_TTL_MS` is 20 min for exactly
 this reason — do not shorten it).
 
+> **IMPLEMENTED (2026-08-06) — commit `feat(quickstart): explicit port model and durable provisioning`.**
+>
+> | Step     | What was done                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
+> | -------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+> | **3a**   | `IContainerRuntime.findAvailablePort`, `QUICK_START_PORT_BAND_END`, `QUICK_START_PORT_FALLBACK_ATTEMPTS`, the `portFallback` telemetry property and the whole fallback branch (including its "Port X was busy, using Y" note) are gone. `provision()` now binds `options.port ?? QUICK_START_PORT` and a conflict is a hard error. New `QuickStartService.suggestPort()` / `checkPort()` back the wizard: `getDockerStatus` returns `suggestedPort`, a new `checkPort` query validates the field (debounced, 400 ms), and the webview now sends the port **unconditionally**. |
+> | **3b**   | New `isPortAllocationFailure()` classifies Docker's bind failure at the `creating` stage and rewrites it to the same `portInUseMessage()` copy as the pre-check, so the raw `Bind for 127.0.0.1:10260 failed: port is already allocated` never reaches the UI. No retry, as decided. Telemetry gains `portTaken`.                                                                                                                                                                                                                                                             |
+> | **3c**   | The connection string is stored right after the container is created and its bound port is known — **before** `waitForReadiness`. A discarded attempt restores the previous secret exactly (or deletes it when there was none), so a failed run can't leave credentials that a later `reusing` decision would trust.                                                                                                                                                                                                                                                          |
+> | **3d**   | New `renewProvisioningLease()` / `releaseProvisioningLease()`. The lease is taken before the pull and renewed at `creating` and at the readiness wait, then promoted to `'ready'` by `finalizeReadyInstance`. The scavenge pass and both `freshLease` branches in `reconcileAlias` are now live code.                                                                                                                                                                                                                                                                         |
+> | **3e**   | New `QUICK_START_OPERATION_LABEL_KEY`: a per-run 16-hex `operationId` is stamped on the container **before** `docker run` and the id-less cleanup sweep filters `listByLabel` by it, so a run can only ever remove its own container.                                                                                                                                                                                                                                                                                                                                         |
+> | **3f**   | `provision`, `resumeReadiness` and `discardTimedOutInstance` now take `alias` (defaulting to `DEFAULT_ALIAS`) and thread it through every `stateFor`/`setStatus` call — the `DEFAULT_ALIAS`/`alias` mixture inside those bodies is gone. `willReuseExistingInstance(alias)` likewise, and `isBusy` is now a thin shorthand for `isBusyFor(DEFAULT_ALIAS)`.                                                                                                                                                                                                                    |
+> | **3g**   | The tree's Provisioning row uses `status.port`; `QuickStartStatus` gained `port`, and `provision` records the chosen port on the entry before the first stage so the row is correct from the start.                                                                                                                                                                                                                                                                                                                                                                           |
+> | **N6**   | Moot — `findAvailablePort` is deleted.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
+> | **Docs** | `docs/user-manual/local-quick-start.md` gained a **Port** section describing the pre-filled-and-validated, never-relocated model; the Configure step's Port field hint says the same in one line.                                                                                                                                                                                                                                                                                                                                                                             |
+>
+> **Tests:** new `QuickStartProvisionDurability.test.ts` (15 cases). It mocks `mongodb` so a provision can be
+> driven end to end — the existing suites deliberately stop at pull/create, which is exactly why none of H3/H4
+> was caught. It covers: the secret exists at the first readiness probe; a failed attempt restores the previous
+> secret; the lease is an owned `provisioning` record mid-run and `ready` afterwards; a failed attempt releases
+> it; an existing `ready` record is never downgraded; the sweep and the container labels carry the `operationId`;
+> an explicit `10260` errors instead of relocating; a custom port is the one bound; and a Docker bind failure is
+> reported in the pre-check's words. Plus `suggestPort`/`checkPort` (forward walk, own-port preference, sibling
+> reservation, `inUse`).
+>
+> **Three deliberate deviations (confidence ≫ 80 %):**
+>
+> 1. **`QUICK_START_PORT_SCAN_LIMIT` replaces the deleted band constant.** A forward walk needs a bound. It is
+>    semantically different from the old fallback band — it only limits how far the _suggestion_ scans, and the
+>    port the user ends up with is still always explicit. Alternatives weighed: scan unbounded (rejected — a
+>    pathological host would spin on `net.listen`); hardcode the limit at the call site (rejected — the tree and
+>    the wizard would drift).
+> 2. **The lease is only taken for a genuinely fresh alias.** Writing a `provisioning` record over an existing
+>    `ready` one would mean a _failed recreate_ gets its record scavenged at the next activation, so an instance
+>    whose data volume is still on disk would vanish from the tree — strictly worse than the bug being fixed. A
+>    recreate keeps its `ready` record, and reconcile's Case 1 / Case 3 already handle it correctly. Covered by
+>    the "never downgrades an existing ready record" test.
+> 3. **`suggestPort` prefers the instance's own recorded port.** This is L2/A's intent, but it does **not**
+>    depend on the M4 recreate-vs-fresh decision (the same port is correct either way), and without it a recreate
+>    would be _moved off_ its own port by the sibling-reservation rule. Alternatives weighed: exclude every
+>    registry port including the alias's own (rejected — actively wrong); ignore registry ports entirely
+>    (rejected — a stopped sibling's port is baked into its container and `isPortFree` cannot see it). L2's UI
+>    half (seeding the field from the instance's port) still falls out of this for free, since the field is
+>    seeded from `suggestedPort`.
+
 #### WP-4 — Localization (M1, M2, N2)
 
 1. **M1/A:** convert every module-scope `l10n.t` map in `LocalQuickStart.tsx` (~20 maps, ~120 strings) into
@@ -1323,14 +1364,14 @@ These are independent; they can land as one PR or be folded into whichever packa
 
 > **IMPLEMENTED (2026-08-05) — commit `fix(quickstart): palette gating, log-follow disposal and masking hardening`.**
 >
-> | Item     | What was done                                                                                                                                                                                                                                                                                                                                                                                          |
-> | -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+> | Item     | What was done                                                                                                                                                                                                                                                                                                                                                                                            |
+> | -------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 > | **M3/A** | Added seven `"when": "never"` `commandPalette` entries (`start`, `stop`, `restart`, `delete`, `copyConnectionString`, `copyPassword`, `viewLogs`), placed with the other tree-only commands. `localQuickStart.open` stays visible. The palette-reachable **Delete Container…** — the sharp one — is now gone.                                                                                            |
 > | **L5/A** | `MaskingLineBuffer` now force-flushes at `MAX_BUFFERED_CHARS = 16 KiB` when no newline arrives, retaining a tail of at least the longest secret's length so a forced cut can never split a secret past the masker. Two tests added: the buffer stays bounded on a 64 KiB newline-less push and emits everything exactly once, and a password landing exactly on the boundary is still masked.            |
 > | **L6/A** | New `secretVariants(...secrets)` in `quickStartCredentials.ts` returns the raw **and** `encodeURIComponent`-ed forms, de-duplicated. Applied at all four call sites (`provision`'s `secrets`, `seedSampleData`, both `followLogs` — including the one in `viewQuickStartLogs`). `outputMasking.ts` stays dependency-free, as decided. A URL-safe generated password still yields a single-element array. |
-> | **L7/A** | `handleStartDocker` gained the missing `'stopped'` branch: "Docker started, but it is not usable yet — see the details below." Previously the spinner just vanished and the assertive `Announcer` said nothing.                                                                                                                                                                                         |
-> | **L8/A** | New exported `disposeQuickStartLogFollow()` in `localQuickStartCommands.ts`, registered in `ClustersExtension` right next to `disposeQuickStartOutputChannel` — so the last `docker logs -f` child process no longer outlives deactivation.                                                                                                                                                             |
-> | **L9/A** | New exported `sweepStaleQuickStartEnvFiles()` in `QuickStartService.ts`, called fire-and-forget after `reconcile()`. The file stays in `os.tmpdir()` (the daemon must read it), as decided.                                                                                                                                                                                                             |
+> | **L7/A** | `handleStartDocker` gained the missing `'stopped'` branch: "Docker started, but it is not usable yet — see the details below." Previously the spinner just vanished and the assertive `Announcer` said nothing.                                                                                                                                                                                          |
+> | **L8/A** | New exported `disposeQuickStartLogFollow()` in `localQuickStartCommands.ts`, registered in `ClustersExtension` right next to `disposeQuickStartOutputChannel` — so the last `docker logs -f` child process no longer outlives deactivation.                                                                                                                                                              |
+> | **L9/A** | New exported `sweepStaleQuickStartEnvFiles()` in `QuickStartService.ts`, called fire-and-forget after `reconcile()`. The file stays in `os.tmpdir()` (the daemon must read it), as decided.                                                                                                                                                                                                              |
 >
 > **One deliberate addition to L9 (confidence ≫ 80 %): an age threshold.** A bare "delete every
 > `documentdb-quickstart-*.env` at activation" would delete the env file of a provision running **in another
@@ -1340,7 +1381,6 @@ These are independent; they can land as one PR or be folded into whichever packa
 > file. Alternatives weighed: no threshold (rejected — breaks concurrent windows); a lock file (rejected — more
 > state for a best-effort cleanup); sweeping on `deactivate` instead (rejected — a killed host is exactly the
 > case that has no `deactivate`).
-
 
 #### WP-6 — Credential source of truth (H5, M7) — 🛑 **ON HOLD**
 

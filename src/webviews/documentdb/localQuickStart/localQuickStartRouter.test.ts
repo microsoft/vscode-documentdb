@@ -11,6 +11,7 @@ const mockIsDockerReady = jest.fn();
 const mockGetStatus = jest.fn();
 const mockRefreshLiveState = jest.fn();
 const mockWillReuseExistingInstance = jest.fn();
+const mockSuggestPort = jest.fn();
 
 jest.mock('vscode', () => ({
     commands: { executeCommand: jest.fn() },
@@ -31,6 +32,8 @@ jest.mock('../../../services/localQuickStart/QuickStartService', () => ({
         provision: jest.fn(),
         refreshLiveState: mockRefreshLiveState,
         willReuseExistingInstance: mockWillReuseExistingInstance,
+        suggestPort: mockSuggestPort,
+        checkPort: jest.fn(),
     },
 }));
 
@@ -70,6 +73,10 @@ function createContext(): RouterContext & {
 }
 
 describe('localQuickStartRouter', () => {
+    beforeEach(() => {
+        mockSuggestPort.mockResolvedValue(10260);
+    });
+
     it('suppresses telemetry for polled Docker readiness queries', async () => {
         mockIsDockerReady.mockResolvedValue({
             outcome: 'ready',

@@ -69,11 +69,11 @@ export const QUICK_START_VOLUME_NAME = 'vscode-documentdb-local-data';
 export const QUICK_START_DATA_PATH = '/data';
 
 /**
- * Port fallback band (design §8.3): if the canonical port is busy, try random
- * ports in `[QUICK_START_PORT, QUICK_START_PORT_BAND_END)` before giving up.
+ * How far the Configure step scans forward from {@link QUICK_START_PORT} when suggesting a free
+ * host port. This is a *suggestion* bound only: the port the user ends up with is always explicit,
+ * so setup never relocates it behind their back (review L3, "no magic after execute").
  */
-export const QUICK_START_PORT_BAND_END = 10360;
-export const QUICK_START_PORT_FALLBACK_ATTEMPTS = 10;
+export const QUICK_START_PORT_SCAN_LIMIT = 100;
 
 /**
  * Docker labels applied at creation. These are the ONLY way a container is
@@ -82,6 +82,12 @@ export const QUICK_START_PORT_FALLBACK_ATTEMPTS = 10;
  */
 export const QUICK_START_LABEL_KEY = 'vscode.documentdb.quickstart';
 export const QUICK_START_ALIAS_LABEL_KEY = 'vscode.documentdb.alias';
+/**
+ * Per-run nonce stamped on a container at creation, so a provision's cleanup sweep can only ever
+ * remove the container **it** created. Without it, two windows provisioning at once could have the
+ * loser's by-label sweep delete the winner's container (review H4).
+ */
+export const QUICK_START_OPERATION_LABEL_KEY = 'vscode.documentdb.operation';
 
 /**
  * Multi-instance identity (WI-1). Each managed instance is keyed by a stable `alias` — also its
@@ -342,6 +348,11 @@ export interface QuickStartStatus {
      */
     readonly missing?: boolean;
     /**
+     * The host port this instance is (or is about to be) bound to. Known even while provisioning,
+     * because the port is decided in the Configure step rather than picked mid-run (review L1/L3).
+     */
+    readonly port?: number;
+    /**
      * True while a container kept running after a readiness timeout is still resumable, so the
      * webview can rehydrate the "Wait longer / Start over" actions (§9.1) after it is reopened
      * rather than dropping to the fresh setup form.
@@ -378,4 +389,12 @@ export interface DockerStatusResult {
      * shows credential/image inputs the service would silently ignore.
      */
     readonly willReuse: boolean;
+    /**
+     * A host port that is free right now, for the Configure step to pre-fill. The port is then
+     * always sent explicitly, so setup binds exactly what the user saw (review L3).
+     */
+    readonly suggestedPort: number;
 }
+
+/** Why a host port cannot be used, or `'available'` when it can (Configure-step validation, L3). */
+export type PortAvailability = 'available' | 'inUse' | 'takenByAnotherInstance';

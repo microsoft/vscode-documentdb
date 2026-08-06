@@ -27,6 +27,12 @@ The extension host matters. In a local VS Code window, Docker and DocumentDB Loc
 
 The setup view shows pull, create, start, and connection-readiness progress. Docker command output is written to the **DocumentDB Local Quick Start** output channel.
 
+## Port
+
+The **Configure** step pre-fills the **Address** with a host port that is free at that moment, starting at `10260` and moving forward if that port is taken. You can change it, and the value is checked while you are still on the step.
+
+Setup then uses exactly that port. It never moves the instance to a different port after you select **Start DocumentDB Local**. If the port is taken by the time the container is created, setup stops with an explanation so you can go back and choose another one.
+
 ## Docker is not ready
 
 The readiness screen separates Docker CLI, daemon, and daemon-platform facts. Use **View Docker output** for command details. Use **Refresh** to discard cached and remembered provider facts and run every check again.

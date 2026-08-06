@@ -67,13 +67,15 @@ import {
     type InstanceStatus,
     LEGACY_IMAGE_REF_KEY,
     LEGACY_SECRET_KEY,
+    type PortAvailability,
     type ProvisionStage,
     QUICK_START_ALIAS_LABEL_KEY,
     QUICK_START_DATA_PATH,
     QUICK_START_IMAGE,
     QUICK_START_LABEL_KEY,
+    QUICK_START_OPERATION_LABEL_KEY,
     QUICK_START_PORT,
-    QUICK_START_PORT_BAND_END,
+    QUICK_START_PORT_SCAN_LIMIT,
     type QuickStartStatus,
     resolveQuickStartImage,
     secretKey,
@@ -92,6 +94,29 @@ export const QUICK_START_CLUSTER_ID = clusterId(DEFAULT_ALIAS);
 function credentialUnavailableMessage(): string {
     return l10n.t(
         'DocumentDB Local has data on disk but its saved credentials are missing, so it cannot be opened. Use "Delete Container" to remove it and start fresh (this erases the data).',
+    );
+}
+
+/** Shown when the chosen host port is taken — both by the pre-check and by the Docker bind failure. */
+function portInUseMessage(port: number): string {
+    return l10n.t(
+        'Port {0} is already in use. Go back to Configure to pick a different port, or free it, then try again.',
+        String(port),
+    );
+}
+
+/**
+ * Docker's "port is already allocated" bind failure, in the wordings the CLI emits. The port is
+ * pre-checked before the pull, but the pull can take minutes and something else may claim the port
+ * meanwhile (review M5). Matching here turns a raw daemon string into the same actionable copy as
+ * the pre-check instead of leaking `Bind for 127.0.0.1:10260 failed: port is already allocated`.
+ */
+function isPortAllocationFailure(error: unknown): boolean {
+    const message = errMessage(error).toLowerCase();
+    return (
+        message.includes('port is already allocated') ||
+        message.includes('address already in use') ||
+        (message.includes('bind') && message.includes('failed'))
     );
 }
 const READINESS_TIMEOUT_MS = 180_000;
@@ -279,6 +304,9 @@ export class QuickStartServiceImpl {
             metadata: entry.metadata,
             errorMessage: entry.errorMessage,
             missing: entry.missing,
+            // Known even while provisioning (the port is decided in the wizard, L1/L3), so the tree
+            // row can show the real address instead of assuming the canonical port.
+            port: entry.metadata?.boundPort ?? entry.port,
             // Only "resumable" once the provision/resume has settled (not mid-wait): pendingReadiness
             // is set BEFORE the probe, so gating on the busy flags keeps a reopened panel from
             // offering "Wait longer" while setup is still actively running (gpt-5.5).
@@ -317,9 +345,9 @@ export class QuickStartServiceImpl {
         };
     }
 
-    /** Legacy single-instance busy getter (kept for the router until WI-4). */
+    /** Default-instance shorthand for {@link isBusyFor} (kept for the router until WI-4). */
     public get isBusy(): boolean {
-        return this.stateFor(DEFAULT_ALIAS).provisioning;
+        return this.isBusyFor(DEFAULT_ALIAS);
     }
 
     /** Alias-scoped busy check (WI-3/4/5). */
@@ -356,18 +384,19 @@ export class QuickStartServiceImpl {
      * container by id (decision D12). All cleanup runs in `finally` so it also
      * fires when the consumer unsubscribes (iterator `return()`).
      */
-    public async *provision(signal: AbortSignal, options?: AdvancedQuickStartOptions): AsyncGenerator<StageEvent> {
-        if (this.stateFor(DEFAULT_ALIAS).provisioning || this.stateFor(DEFAULT_ALIAS).lifecycleBusy) {
+    public async *provision(
+        signal: AbortSignal,
+        options?: AdvancedQuickStartOptions,
+        alias: string = DEFAULT_ALIAS,
+    ): AsyncGenerator<StageEvent> {
+        if (this.stateFor(alias).provisioning || this.stateFor(alias).lifecycleBusy) {
             yield stageEvent('error', 'error', 'Setup is already in progress.', 'Setup is already in progress.');
             return;
         }
-        this.stateFor(DEFAULT_ALIAS).provisioning = true;
+        this.stateFor(alias).provisioning = true;
         // Starting a fresh run supersedes any container left running by a prior readiness
         // timeout — drop its retained "Wait longer" state (the run below removes the container).
-        this.stateFor(DEFAULT_ALIAS).pendingReadiness = undefined;
-        // The alias this provision targets. WI-2c derives the container/volume/keys from it (still
-        // DEFAULT, so behavior is unchanged); WI-2e allocates a fresh alias here for `+ New`.
-        const alias = DEFAULT_ALIAS;
+        this.stateFor(alias).pendingReadiness = undefined;
         const channel = getQuickStartOutputChannel();
         // Decide reuse from LIVE durable state, not the in-memory Missing flag: whenever we
         // still hold the instance's stored credentials (SecretStorage), a data volume bound to
@@ -391,13 +420,16 @@ export class QuickStartServiceImpl {
         // globalState record (survives a window reload), then the default if neither is known.
         const usedCustomCreds = !reusing && !!(options?.username?.trim() && options?.password?.trim());
         const imageRef = reusing
-            ? (this.stateFor(DEFAULT_ALIAS).metadata?.imageRef ??
+            ? (this.stateFor(alias).metadata?.imageRef ??
               ext.context.globalState.get<string>(imageRefKey(alias)) ??
               (alias === DEFAULT_ALIAS ? ext.context.globalState.get<string>(LEGACY_IMAGE_REF_KEY) : undefined) ??
               QUICK_START_IMAGE)
             : resolveQuickStartImage(options?.imageTag);
         const usedCustomImage = !reusing && imageRef !== QUICK_START_IMAGE;
         const explicitPort = typeof options?.port === 'number' ? options.port : undefined;
+        // Always explicit from here on (L3): the wizard suggests and validates the port, so
+        // `provision` binds exactly this one and never relocates it.
+        const chosenPort = explicitPort ?? QUICK_START_PORT;
         const sampleDataRequested = options?.loadSampleData !== false;
         const cts = new vscode.CancellationTokenSource();
         const onAbort = (): void => cts.cancel();
@@ -411,8 +443,16 @@ export class QuickStartServiceImpl {
         let createAttempted = false;
         let envFilePath: string | undefined;
         let success = false;
-        let portFallback = false;
+        let portTaken = false;
         let readinessTimedOut = false;
+        // Owner nonce for this run: stamped on the container (H4) and on the provisioning lease (H3),
+        // so both the cleanup sweep and the registry reservation are provably this run's own.
+        const operationId = crypto.randomBytes(8).toString('hex');
+        let leaseHeld = false;
+        // Set once the credentials are persisted BEFORE the readiness wait (H3), together with
+        // whatever was stored before, so a failed attempt can restore the previous state exactly.
+        let earlySecretStored = false;
+        let previousStoredConnectionString: string | undefined;
         let readinessEnvironment: DockerHostEnvironment | undefined;
         let activeDockerStage: Extract<ProvisionStage, 'pulling' | 'creating'> | undefined;
         let provisioningDockerFailureKind: string | undefined;
@@ -424,7 +464,10 @@ export class QuickStartServiceImpl {
         const provisionStartedAt = Date.now();
 
         try {
-            this.setStatus(DEFAULT_ALIAS, InstanceState.Provisioning, undefined, undefined);
+            this.setStatus(alias, InstanceState.Provisioning, undefined, undefined);
+            // Remember the port this attempt will bind so the tree's "Provisioning…" row shows the
+            // real address rather than assuming the canonical default (L1).
+            this.stateFor(alias).port = chosenPort;
 
             // --- checking ---
             yield stageEvent('checking', 'active', 'Checking Docker…');
@@ -446,6 +489,9 @@ export class QuickStartServiceImpl {
             // volume, so the new credentials initialize a clean cluster. When reusing, the volume is
             // intentionally KEPT so existing data survives the recreate.
             const existing = await this.findManagedContainer(alias);
+            const hasReadyRecord = readRegistry(ext.context.globalState).instances.some(
+                (record) => record.alias === alias && record.phase === 'ready',
+            );
             // RR4 / §5.2 volume-wipe gate: NEVER silently destroy an existing instance's data when we
             // can't recover its credentials. A credential-unavailable instance (a managed container
             // and/or a durable `ready` record, but no readable secret) must be explicitly Deleted —
@@ -454,9 +500,6 @@ export class QuickStartServiceImpl {
             // dead failed-attempt orphan has NO managed container (provision's `finally` removed it)
             // and no `ready` record, so retrying it still works.
             if (!reusing) {
-                const hasReadyRecord = readRegistry(ext.context.globalState).instances.some(
-                    (record) => record.alias === alias && record.phase === 'ready',
-                );
                 if (existing || hasReadyRecord) {
                     this.setStatus(alias, InstanceState.CredentialsMissing, undefined, credentialUnavailableMessage());
                     yield stageEvent(
@@ -476,41 +519,27 @@ export class QuickStartServiceImpl {
                 await this.runtime.removeVolume(volumeName(alias)).catch(() => undefined);
             }
 
-            // Pick a host port (design §8.3). An explicit Advanced port is honored exactly:
-            // a conflict ERRORS (never auto-relocated, P0-2). Otherwise prefer the canonical
-            // port and fall back to a random free port in the band, noting the substitution.
-            let chosenPort: number;
-            let portFallbackNote: string | undefined;
-            if (explicitPort !== undefined) {
-                if (!(await this.runtime.isPortFree(explicitPort))) {
-                    const message = `Port ${explicitPort} is already in use. Choose a different port or free it, then retry.`;
-                    this.setStatus(DEFAULT_ALIAS, InstanceState.Error, undefined, message);
-                    yield stageEvent('checking', 'error', message, message);
-                    return;
-                }
-                this.throwIfAborted(signal);
-                chosenPort = explicitPort;
-            } else {
-                const available = await this.runtime.findAvailablePort(QUICK_START_PORT);
-                this.throwIfAborted(signal);
-                if (available === undefined) {
-                    const message = `Ports ${QUICK_START_PORT}-${QUICK_START_PORT_BAND_END - 1} are all in use. Free one and retry.`;
-                    this.setStatus(DEFAULT_ALIAS, InstanceState.Error, undefined, message);
-                    yield stageEvent('checking', 'error', message, message);
-                    return;
-                }
-                chosenPort = available;
-                if (chosenPort !== QUICK_START_PORT) {
-                    portFallback = true;
-                    portFallbackNote = l10n.t(
-                        'Port {0} was busy, using {1} instead.',
-                        String(QUICK_START_PORT),
-                        String(chosenPort),
-                    );
-                    channel.appendLine(portFallbackNote);
-                }
+            // The host port is ALWAYS explicit (review L3, "no magic after execute"): the Configure
+            // step suggests a free port, validates it while the user can still react, and sends it.
+            // Setup never relocates it — a conflict here is a hard, explained error.
+            if (!(await this.runtime.isPortFree(chosenPort))) {
+                const message = portInUseMessage(chosenPort);
+                this.setStatus(alias, InstanceState.Error, undefined, message);
+                yield stageEvent('checking', 'error', message, message);
+                return;
             }
-            yield stageEvent('checking', 'done', portFallbackNote);
+            this.throwIfAborted(signal);
+            yield stageEvent('checking', 'done');
+
+            // Take the durable provisioning lease BEFORE the pull (H3): a host killed anywhere from
+            // here to `finalizeReadyInstance` then reconciles as "Provisioning…" (fresh lease) or is
+            // scavenged (stale lease) instead of dead-ending. Only for a genuinely fresh alias — for
+            // a recreate the existing `ready` record must survive, otherwise a failed recreate would
+            // scavenge the record of an instance whose data volume is still on disk.
+            if (!hasReadyRecord) {
+                leaseHeld = true;
+                await this.renewProvisioningLease(alias, operationId, chosenPort);
+            }
 
             // --- pulling ---
             yield stageEvent('pulling', 'active', 'Pulling the official image…');
@@ -522,6 +551,9 @@ export class QuickStartServiceImpl {
 
             // --- creating (docker run -d creates and starts) ---
             yield stageEvent('creating', 'active', 'Creating container…');
+            if (leaseHeld) {
+                await this.renewProvisioningLease(alias, operationId, chosenPort);
+            }
             createAttempted = true;
             // Write credentials to a temp env-file (deleted in finally) so they never
             // appear on the docker CLI / host process list (design §8.2). The image
@@ -532,7 +564,12 @@ export class QuickStartServiceImpl {
                 {
                     imageRef: imageRef,
                     name: containerName(alias),
-                    labels: { [QUICK_START_LABEL_KEY]: '1', [QUICK_START_ALIAS_LABEL_KEY]: alias },
+                    labels: {
+                        [QUICK_START_LABEL_KEY]: '1',
+                        [QUICK_START_ALIAS_LABEL_KEY]: alias,
+                        // Per-run nonce so this run's cleanup sweep can only remove ITS container (H4).
+                        [QUICK_START_OPERATION_LABEL_KEY]: operationId,
+                    },
                     hostPort: chosenPort,
                     containerPort: QUICK_START_PORT,
                     // Persist data across recreation (§8/§11).
@@ -584,7 +621,18 @@ export class QuickStartServiceImpl {
                 sampleDataRequested,
                 reusing,
             };
-            this.stateFor(DEFAULT_ALIAS).pendingReadiness = pending;
+            this.stateFor(alias).pendingReadiness = pending;
+            // Persist the credentials BEFORE the readiness wait (H3). The wait alone can run for
+            // three minutes, and it used to be the ONLY window in which a reload left a labelled
+            // container behind with no recoverable secret — a dead end whose only exit was deleting
+            // the volume. With the secret written here, a reload mid-wait reconciles into a normal
+            // adoption instead. A failed attempt restores the previous value in `finally`.
+            previousStoredConnectionString = await this.readStoredConnectionString(alias);
+            await ext.secretStorage.store(secretKey(alias), connectionString);
+            earlySecretStored = true;
+            if (leaseHeld) {
+                await this.renewProvisioningLease(alias, operationId, boundPort);
+            }
             await this.waitForReadiness(connectionString, signal);
             this.throwIfAborted(signal);
 
@@ -606,8 +654,8 @@ export class QuickStartServiceImpl {
             provisioningDockerFailureKind = dockerReadiness?.failureKind;
             let message = aborted ? 'Setup was cancelled.' : errMessage(error);
             if (!aborted && error instanceof DockerNotReadyError) {
-                this.stateFor(DEFAULT_ALIAS).pendingReadiness = undefined;
-                this.setStatus(DEFAULT_ALIAS, InstanceState.Error, undefined, message);
+                this.stateFor(alias).pendingReadiness = undefined;
+                this.setStatus(alias, InstanceState.Error, undefined, message);
                 terminalEvent = stageEvent('checking', 'error', message, message);
             } else if (!aborted && error instanceof ReadinessTimeoutError && containerCreated && containerId) {
                 // The container is running but the database did not accept connections within the
@@ -618,17 +666,23 @@ export class QuickStartServiceImpl {
                 readinessTimedOut = true;
                 channel.appendLine(`[readiness-timeout] ${message}`);
                 message = getReadinessTimeoutMessage(readinessEnvironment);
-                this.setStatus(DEFAULT_ALIAS, InstanceState.Error, undefined, message);
+                this.setStatus(alias, InstanceState.Error, undefined, message);
                 terminalEvent = stageEvent('waiting', 'error', message, message, undefined, /* timedOut */ true);
             } else {
                 // Any other failure (or cancel) discards the attempt — drop the retained state so a
                 // stale timeout can't offer "Wait longer" against a container we're about to remove.
-                this.stateFor(DEFAULT_ALIAS).pendingReadiness = undefined;
+                this.stateFor(alias).pendingReadiness = undefined;
                 if (!aborted) {
-                    if (dockerReadiness) {
+                    if (activeDockerStage === 'creating' && isPortAllocationFailure(error)) {
+                        // The port was free at the pre-check but taken while the image downloaded
+                        // (M5). Say so in the same words as the pre-check instead of leaking the
+                        // raw daemon string; the user re-picks the port in Configure.
+                        message = portInUseMessage(chosenPort);
+                        portTaken = true;
+                    } else if (dockerReadiness) {
                         message = l10n.t('Docker became unavailable during setup: {0}', message);
                     }
-                    this.setStatus(DEFAULT_ALIAS, InstanceState.Error, undefined, message);
+                    this.setStatus(alias, InstanceState.Error, undefined, message);
                 }
                 // Buffered and emitted after `finally` (like the timeout event) so a Retry click
                 // driven by this event can't race the still-set `provisioning` guard either
@@ -654,18 +708,46 @@ export class QuickStartServiceImpl {
                     await this.runtime.stopContainer(containerId).catch(() => undefined);
                     await this.runtime.removeContainer(containerId).catch(() => undefined);
                 } else if (createAttempted && !containerId) {
-                    // The CLI may have been killed after the daemon created the
-                    // container but before its id was captured — sweep by label.
-                    const orphan = await this.findManagedContainer();
-                    if (orphan) {
+                    // The CLI may have been killed after the daemon created the container but
+                    // before its id was captured — sweep by label. Scoped to THIS run's
+                    // `operationId` (H4): an unscoped by-alias sweep would happily remove the
+                    // container another window had just created, since the loser of a two-window
+                    // create race reaches exactly this branch (its `docker run` failed on the
+                    // duplicate name).
+                    const orphans = await this.runtime
+                        .listByLabel({
+                            [QUICK_START_LABEL_KEY]: '1',
+                            [QUICK_START_OPERATION_LABEL_KEY]: operationId,
+                        })
+                        .catch(() => []);
+                    for (const orphan of orphans) {
                         channel.appendLine(`Removing orphaned container ${orphan.id}…`);
                         await this.runtime.removeContainer(orphan.id).catch(() => undefined);
                     }
                 }
+                // Restore the credential state this attempt overwrote (H3): a discarded attempt
+                // must not leave its own secret behind, nor clobber the previous instance's.
+                if (earlySecretStored) {
+                    try {
+                        if (previousStoredConnectionString !== undefined) {
+                            await ext.secretStorage.store(secretKey(alias), previousStoredConnectionString);
+                        } else {
+                            await ext.secretStorage.delete(secretKey(alias));
+                        }
+                    } catch {
+                        // Best-effort restore; a stuck secret is surfaced by the next reconcile.
+                    }
+                }
+                // Drop this run's pre-create reservation so the tree doesn't keep a phantom
+                // "Provisioning…" row until the lease expires. `finalizeReadyInstance` already
+                // promoted the record to `ready` on the success path.
+                if (leaseHeld) {
+                    await this.releaseProvisioningLease(alias, operationId);
+                }
                 // Interrupted before settling (cancel / unsubscribe) → reset state.
                 // The error path already settled to `Error` in `catch`.
-                if (this.stateFor(DEFAULT_ALIAS).state === InstanceState.Provisioning) {
-                    this.setStatus(DEFAULT_ALIAS, InstanceState.NotInstalled, undefined, undefined);
+                if (this.stateFor(alias).state === InstanceState.Provisioning) {
+                    this.setStatus(alias, InstanceState.NotInstalled, undefined, undefined);
                 }
             }
             signal.removeEventListener('abort', onAbort);
@@ -688,7 +770,7 @@ export class QuickStartServiceImpl {
                 telemetryContext.errorHandling.suppressDisplay = true;
                 telemetryContext.telemetry.properties.provisionResult = provisionResult;
                 telemetryContext.telemetry.properties.reused = String(reusing);
-                telemetryContext.telemetry.properties.portFallback = String(portFallback);
+                telemetryContext.telemetry.properties.portTaken = String(portTaken);
                 telemetryContext.telemetry.properties.customPort = String(explicitPort !== undefined);
                 telemetryContext.telemetry.properties.customCreds = String(usedCustomCreds);
                 telemetryContext.telemetry.properties.customImage = String(usedCustomImage);
@@ -696,7 +778,7 @@ export class QuickStartServiceImpl {
                 telemetryContext.telemetry.properties.dockerFailureKind = provisioningDockerFailureKind ?? 'none';
                 telemetryContext.telemetry.measurements.provisionMs = Date.now() - provisionStartedAt;
             });
-            this.stateFor(DEFAULT_ALIAS).provisioning = false;
+            this.stateFor(alias).provisioning = false;
         }
         // Emitted only now — after `finally` cleared `provisioning` — so a "Wait longer" / "Start
         // over" / "Retry" click triggered by this event never races the still-running guard.
@@ -773,13 +855,13 @@ export class QuickStartServiceImpl {
      * On another timeout the container is kept and the on-timeout actions are surfaced again; on
      * a hard error the container is still kept so the user can retry or Start over.
      */
-    public async *resumeReadiness(signal: AbortSignal): AsyncGenerator<StageEvent> {
-        const pending = this.stateFor(DEFAULT_ALIAS).pendingReadiness;
+    public async *resumeReadiness(signal: AbortSignal, alias: string = DEFAULT_ALIAS): AsyncGenerator<StageEvent> {
+        const pending = this.stateFor(alias).pendingReadiness;
         if (!pending) {
             yield stageEvent('error', 'error', 'There is nothing to resume.', 'There is nothing to resume.');
             return;
         }
-        if (this.stateFor(DEFAULT_ALIAS).provisioning || this.stateFor(DEFAULT_ALIAS).lifecycleBusy) {
+        if (this.stateFor(alias).provisioning || this.stateFor(alias).lifecycleBusy) {
             // A prior resume/provision may still be unwinding (its abort can take a few seconds to
             // observe). Carry the timed-out affordance so the webview keeps the Wait longer / Start
             // over view instead of flipping to the generic error (opus-4.8) — the container and
@@ -794,7 +876,7 @@ export class QuickStartServiceImpl {
             );
             return;
         }
-        this.stateFor(DEFAULT_ALIAS).provisioning = true;
+        this.stateFor(alias).provisioning = true;
         const cts = new vscode.CancellationTokenSource();
         const onAbort = (): void => cts.cancel();
         signal.addEventListener('abort', onAbort, { once: true });
@@ -806,7 +888,7 @@ export class QuickStartServiceImpl {
         let terminalEvent: StageEvent | undefined;
         let resumeResult: 'success' | 'timeout' | 'cancelled' | 'error' = 'error';
         try {
-            this.setStatus(DEFAULT_ALIAS, InstanceState.Provisioning, undefined, undefined);
+            this.setStatus(alias, InstanceState.Provisioning, undefined, undefined);
             yield stageEvent('waiting', 'active', 'Waiting for DocumentDB to accept connections…');
             // Stream the container's logs during THIS wait so "View Docker output" shows the live
             // startup rather than only the stale first-attempt output (opus-4.8).
@@ -838,13 +920,13 @@ export class QuickStartServiceImpl {
                 ? 'Still initializing. Keep waiting, view the logs, or start over.'
                 : errMessage(error);
             if (!finalized) {
-                this.setStatus(DEFAULT_ALIAS, InstanceState.Error, undefined, aborted ? undefined : message);
+                this.setStatus(alias, InstanceState.Error, undefined, aborted ? undefined : message);
             }
             // A hard finalize error is NOT a timeout — drop the retained state so reopening the
             // panel shows the real error (via a fresh setup) rather than a misleading "Wait longer"
             // (gpt-5.5). Timeout/cancel keep pendingReadiness so the container stays resumable.
             if (!timedOut) {
-                this.stateFor(DEFAULT_ALIAS).pendingReadiness = undefined;
+                this.stateFor(alias).pendingReadiness = undefined;
             }
             terminalEvent = stageEvent('waiting', 'error', message, aborted ? undefined : message, undefined, timedOut);
         } finally {
@@ -852,7 +934,7 @@ export class QuickStartServiceImpl {
             // Stop the followLogs stream (started with cts.token) before disposing.
             cts.cancel();
             cts.dispose();
-            this.stateFor(DEFAULT_ALIAS).provisioning = false;
+            this.stateFor(alias).provisioning = false;
             // §14: resume outcome — booleans/enum + duration only, never names/ports/creds.
             void callWithTelemetryAndErrorHandling('documentDB.quickstart.resumeReadiness', (telemetryContext) => {
                 telemetryContext.errorHandling.suppressDisplay = true;
@@ -875,8 +957,8 @@ export class QuickStartServiceImpl {
      * discardable yet — e.g. a just-cancelled resume is still unwinding — so the webview can keep
      * the timed-out actions instead of dropping to review with the container still running.
      */
-    public async discardTimedOutInstance(): Promise<boolean> {
-        const entry = this.stateFor(DEFAULT_ALIAS);
+    public async discardTimedOutInstance(alias: string = DEFAULT_ALIAS): Promise<boolean> {
+        const entry = this.stateFor(alias);
         // Guard BEFORE mutating: if a provision/lifecycle op is running, leave the retained
         // state untouched (clearing it here would orphan the still-running container).
         if (entry.provisioning || entry.lifecycleBusy || !entry.pendingReadiness) {
@@ -891,7 +973,7 @@ export class QuickStartServiceImpl {
             if (!pending.reusing) {
                 await this.runtime.removeVolume(volumeName(pending.alias)).catch(() => undefined);
             }
-            this.setStatus(DEFAULT_ALIAS, InstanceState.NotInstalled, undefined, undefined);
+            this.setStatus(alias, InstanceState.NotInstalled, undefined, undefined);
             return true;
         } finally {
             entry.lifecycleBusy = false;
@@ -985,8 +1067,50 @@ export class QuickStartServiceImpl {
      * recreate summary whenever — and only when — the service will actually reuse, regardless
      * of the in-memory `Missing` badge. Public so the `getDockerStatus` query can surface it.
      */
-    public async willReuseExistingInstance(): Promise<boolean> {
-        return (await this.getReusableCredentials()) !== undefined;
+    public async willReuseExistingInstance(alias: string = DEFAULT_ALIAS): Promise<boolean> {
+        return (await this.getReusableCredentials(alias)) !== undefined;
+    }
+
+    /** Host ports reserved by OTHER instances (running or stopped) — their containers bake them in. */
+    private reservedPorts(alias: string): Set<number> {
+        const reserved = new Set<number>();
+        for (const record of readRegistry(ext.context.globalState).instances) {
+            if (record.alias !== alias && typeof record.port === 'number') {
+                reserved.add(record.port);
+            }
+        }
+        return reserved;
+    }
+
+    /**
+     * Suggest a host port for the Configure step (review L3): the instance's own recorded port when
+     * it is still usable, otherwise the first free port walking forward from {@link QUICK_START_PORT},
+     * skipping ports baked into sibling instances. The user sees — and can change — the port that
+     * will actually be bound; `provision` never relocates it afterwards.
+     *
+     * Returns {@link QUICK_START_PORT} when nothing in the scan window is free, so the field is never
+     * empty; the Configure-step validation then reports the conflict.
+     */
+    public async suggestPort(alias: string = DEFAULT_ALIAS): Promise<number> {
+        const reserved = this.reservedPorts(alias);
+        const own = readRegistry(ext.context.globalState).instances.find((record) => record.alias === alias)?.port;
+        if (typeof own === 'number' && !reserved.has(own) && (await this.runtime.isPortFree(own))) {
+            return own;
+        }
+        for (let port = QUICK_START_PORT; port < QUICK_START_PORT + QUICK_START_PORT_SCAN_LIMIT; port++) {
+            if (!reserved.has(port) && (await this.runtime.isPortFree(port))) {
+                return port;
+            }
+        }
+        return QUICK_START_PORT;
+    }
+
+    /** Validate a Configure-step port while the user can still react (review L3). */
+    public async checkPort(port: number, alias: string = DEFAULT_ALIAS): Promise<PortAvailability> {
+        if (this.reservedPorts(alias).has(port)) {
+            return 'takenByAnotherInstance';
+        }
+        return (await this.runtime.isPortFree(port)) ? 'available' : 'inUse';
     }
 
     /**
@@ -1052,6 +1176,42 @@ export class QuickStartServiceImpl {
         options?: { propagateErrors?: boolean },
     ): Promise<{ id: string } | undefined> {
         return (await this.findManagedContainers(alias, options))[0];
+    }
+
+    /**
+     * Write (or refresh) this run's `'provisioning'` reservation (H3). Renewed at each stage so a
+     * slow first image pull can never look like a crashed host: `reconcile()` shows a FRESH lease as
+     * "Provisioning…" and only scavenges a stale one. Best-effort — a registry hiccup must not fail
+     * a provision that is otherwise fine.
+     */
+    private async renewProvisioningLease(alias: string, operationId: string, port: number): Promise<void> {
+        await updateRegistry(ext.context.globalState, (registry) => {
+            const index = registry.instances.findIndex((record) => record.alias === alias);
+            const next: QuickStartInstanceRecord = {
+                alias,
+                displayName: alias === DEFAULT_ALIAS ? DEFAULT_INSTANCE_DISPLAY_NAME : alias,
+                port,
+                phase: 'provisioning',
+                operationId,
+                leaseAt: Date.now(),
+            };
+            // Never downgrade a record another run already promoted to `ready`.
+            if (index < 0) {
+                registry.instances.push(next);
+            } else if (registry.instances[index].phase !== 'ready') {
+                registry.instances[index] = next;
+            }
+        }).catch(() => undefined);
+    }
+
+    /** Drop this run's reservation, but only if it is still ours and still un-promoted. */
+    private async releaseProvisioningLease(alias: string, operationId: string): Promise<void> {
+        await updateRegistry(ext.context.globalState, (registry) => {
+            registry.instances = registry.instances.filter(
+                (record) =>
+                    !(record.alias === alias && record.phase === 'provisioning' && record.operationId === operationId),
+            );
+        }).catch(() => undefined);
     }
 
     private async findManagedContainers(

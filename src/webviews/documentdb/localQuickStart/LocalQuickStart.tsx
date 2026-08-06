@@ -61,6 +61,7 @@ import {
     type DockerReadinessOutcome,
     type DockerRecoveryCommand,
     type DockerStatusResult,
+    type PortAvailability,
     PROVISION_STAGES,
     type ProvisionStage,
     QUICK_START_CONTAINER_NAME,
@@ -880,8 +881,12 @@ export const LocalQuickStart = (): JSX.Element => {
     const [timedOut, setTimedOut] = useState(false);
 
     // Settings (P1-4). The port and tag fields carry the real defaults rather than placeholder
-    // text, so what the user sees in the box is what will be used.
+    // text, so what the user sees in the box is what will be used. The port is seeded from the
+    // host's suggestion (the first free port) as soon as the status query returns, and is then
+    // ALWAYS sent explicitly — setup binds exactly this port and never relocates it (review L3).
     const [advPort, setAdvPort] = useState(String(QUICK_START_PORT));
+    const [suggestedPort, setSuggestedPort] = useState(QUICK_START_PORT);
+    const [portStatus, setPortStatus] = useState<PortAvailability | 'checking' | undefined>(undefined);
     const [advUser, setAdvUser] = useState('');
     const [advPass, setAdvPass] = useState('');
     const [advTag, setAdvTag] = useState(QUICK_START_DEFAULT_TAG);
@@ -907,6 +912,9 @@ export const LocalQuickStart = (): JSX.Element => {
         { readonly problem: DockerReadiness; readonly presentation: DockerReadinessPresentation } | undefined
     >(undefined);
     const dockerWaitTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+    // True once the user edits the port, so a later status refresh never overwrites their choice
+    // with the host's suggestion.
+    const portTouchedRef = useRef(false);
     const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
     // Current settings, synced from the fields below so handleStart (and Retry) always read the
     // latest without re-binding the provisioning subscription.
@@ -933,6 +941,18 @@ export const LocalQuickStart = (): JSX.Element => {
         const port = advPort.trim();
         if (port && (!/^\d+$/.test(port) || Number(port) < 1024 || Number(port) > 65535)) {
             return { field: 'port', message: l10n.t('Port must be a whole number between 1024 and 65535.') };
+        }
+        if (portStatus === 'inUse') {
+            return {
+                field: 'port',
+                message: l10n.t('Port {0} is already in use. Pick a different one.', port),
+            };
+        }
+        if (portStatus === 'takenByAnotherInstance') {
+            return {
+                field: 'port',
+                message: l10n.t('Port {0} belongs to another DocumentDB Local instance. Pick a different one.', port),
+            };
         }
         if (!isRecreate) {
             const user = advUser.trim();
@@ -977,10 +997,11 @@ export const LocalQuickStart = (): JSX.Element => {
             return;
         }
         const opts: AdvancedQuickStartOptions = {};
-        // Only an actual change is sent. An explicit port is honored exactly (a conflict errors),
-        // while omitting it lets the service fall back to a free port in the band — so echoing the
-        // default back would silently remove that fallback.
-        if (advPort.trim() && advPort.trim() !== String(QUICK_START_PORT)) opts.port = Number(advPort.trim());
+        // The port is ALWAYS sent (review L3): the field already holds the port the user was shown
+        // and validated against, and the service binds exactly that one rather than relocating on
+        // a conflict. Comparing against the default here used to make an explicitly-typed 10260
+        // silently mean "pick something for me".
+        if (advPort.trim()) opts.port = Number(advPort.trim());
         // Credentials and image tag are ignored by the service when reusing an existing
         // instance, so don't send them (the fields are hidden in that case anyway). Send the
         // trimmed credentials so what we transmit is exactly what the service stores/encodes.
@@ -1096,6 +1117,12 @@ export const LocalQuickStart = (): JSX.Element => {
                 }
                 applyReadiness(result.readiness);
                 setWillReuse(result.willReuse);
+                setSuggestedPort(result.suggestedPort);
+                // Pre-fill the port with the host's suggestion until the user edits it, so the
+                // Configure summary shows the port that will actually be bound (review L1/L3).
+                if (!portTouchedRef.current) {
+                    setAdvPort(String(result.suggestedPort));
+                }
                 return result;
             } catch {
                 // Readiness never blocks the wizard: the authoritative check is the first setup
@@ -1374,6 +1401,34 @@ export const LocalQuickStart = (): JSX.Element => {
         return () => clearInterval(relativeTimeTimer);
     }, []);
 
+    // Validate the port's availability HERE, while the user can still react, rather than letting
+    // setup fail on a Docker bind error minutes later (review L3). Debounced so typing a port digit
+    // by digit doesn't issue a probe per keystroke.
+    useEffect(() => {
+        const port = advPort.trim();
+        if (!/^\d+$/.test(port) || Number(port) < 1024 || Number(port) > 65535) {
+            setPortStatus(undefined);
+            return;
+        }
+        setPortStatus('checking');
+        let cancelled = false;
+        const handle = setTimeout(() => {
+            void trpcClient.localQuickStart.checkPort
+                .query({ port: Number(port) })
+                .then((result) => {
+                    if (!cancelled) setPortStatus(result);
+                })
+                .catch(() => {
+                    // Never block the wizard on a probe failure; setup re-checks the port anyway.
+                    if (!cancelled) setPortStatus(undefined);
+                });
+        }, 400);
+        return () => {
+            cancelled = true;
+            clearTimeout(handle);
+        };
+    }, [advPort, trpcClient]);
+
     // "Wait longer" (§9.1): re-probe the container the service kept running after a readiness
     // timeout, keeping the already-completed stages visible. Optimistically flip the waiting row
     // back to active so it doesn't flash the error icon before the first server event arrives.
@@ -1547,7 +1602,7 @@ export const LocalQuickStart = (): JSX.Element => {
     const activeStage = PROVISION_STAGES.find((stage) => stageStatus[stage] === 'active');
     const provisioningStatusMessage = activeStage && !failedStage ? l10n.t('{0}…', STAGE_LABELS[activeStage]) : '';
 
-    const effectivePort = advPort.trim() && advValidation?.field !== 'port' ? advPort.trim() : String(QUICK_START_PORT);
+    const effectivePort = advPort.trim() && advValidation?.field !== 'port' ? advPort.trim() : String(suggestedPort);
     const effectiveImage =
         !isRecreate && advTag.trim() && advValidation?.field !== 'tag'
             ? `${QUICK_START_IMAGE_REPOSITORY}:${advTag.trim()}`
@@ -1672,18 +1727,26 @@ export const LocalQuickStart = (): JSX.Element => {
             editor: (
                 <Field
                     label={l10n.t('Port')}
-                    hint={l10n.t('The host is always localhost.')}
+                    hint={l10n.t(
+                        'The host is always localhost. This exact port is used — setup checks it here and never picks a different one later.',
+                    )}
                     validationState={advValidation?.field === 'port' ? 'error' : 'none'}
                     validationMessage={advValidation?.field === 'port' ? advValidation.message : undefined}
                 >
                     <Input
                         type="number"
                         value={advPort}
-                        onChange={(_event, data) => setAdvPort(data.value)}
+                        onChange={(_event, data) => {
+                            portTouchedRef.current = true;
+                            setAdvPort(data.value);
+                        }}
                         contentAfter={resetButton(
-                            l10n.t('Reset port to {0}', String(QUICK_START_PORT)),
-                            () => setAdvPort(String(QUICK_START_PORT)),
-                            advPort === String(QUICK_START_PORT),
+                            l10n.t('Reset port to {0}', String(suggestedPort)),
+                            () => {
+                                portTouchedRef.current = true;
+                                setAdvPort(String(suggestedPort));
+                            },
+                            advPort === String(suggestedPort),
                         )}
                     />
                 </Field>

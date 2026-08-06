@@ -67,6 +67,7 @@ function mockRuntime(overrides: Partial<IContainerRuntime>): IContainerRuntime {
         inspectContainer: jest.fn().mockResolvedValue(undefined),
         removeContainer: jest.fn().mockResolvedValue(undefined),
         removeVolume: jest.fn().mockResolvedValue(undefined),
+        isPortFree: jest.fn().mockResolvedValue(true),
         ...overrides,
     } as unknown as IContainerRuntime;
 }
@@ -890,7 +891,7 @@ describe('QuickStartService — WI-2e-1 provision RR4 volume-wipe gate', () => {
 
     function provisionRuntime(opts: {
         containers?: Array<{ id: string; alias?: string }>;
-        findAvailablePort?: number;
+        portFree?: boolean;
         removeContainer?: jest.Mock;
         removeVolume?: jest.Mock;
         readiness?: DockerReadiness;
@@ -913,7 +914,7 @@ describe('QuickStartService — WI-2e-1 provision RR4 volume-wipe gate', () => {
                     labels: container.alias === undefined ? {} : { [QUICK_START_ALIAS_LABEL_KEY]: container.alias },
                 })),
             ),
-            findAvailablePort: jest.fn().mockResolvedValue(opts.findAvailablePort),
+            isPortFree: jest.fn().mockResolvedValue(opts.portFree ?? true),
             removeContainer: opts.removeContainer ?? jest.fn().mockResolvedValue(undefined),
             removeVolume: opts.removeVolume ?? jest.fn().mockResolvedValue(undefined),
         } as unknown as Partial<IContainerRuntime>);
@@ -962,7 +963,7 @@ describe('QuickStartService — WI-2e-1 provision RR4 volume-wipe gate', () => {
                 isDockerReady,
                 listByLabel: jest.fn().mockResolvedValue([]),
                 removeVolume: jest.fn().mockResolvedValue(undefined),
-                findAvailablePort: jest.fn().mockResolvedValue(QUICK_START_PORT),
+                isPortFree: jest.fn().mockResolvedValue(true),
                 pullImage:
                     failingStage === 'pulling'
                         ? jest.fn().mockRejectedValue(new Error('daemon disappeared during pull'))
@@ -1043,7 +1044,7 @@ describe('QuickStartService — WI-2e-1 provision RR4 volume-wipe gate', () => {
             isDockerReady: jest.fn().mockResolvedValue(ready),
             listByLabel: jest.fn().mockResolvedValue([]),
             removeVolume: jest.fn().mockResolvedValue(undefined),
-            findAvailablePort: jest.fn().mockResolvedValue(QUICK_START_PORT),
+            isPortFree: jest.fn().mockResolvedValue(true),
             pullImage: jest.fn().mockRejectedValue(new Error('manifest unknown')),
         });
         const service = new QuickStartServiceImpl(runtime);
@@ -1089,7 +1090,7 @@ describe('QuickStartService — WI-2e-1 provision RR4 volume-wipe gate', () => {
             isDockerReady: jest.fn().mockResolvedValueOnce(ready).mockResolvedValueOnce(indeterminate),
             listByLabel: jest.fn().mockResolvedValue([]),
             removeVolume: jest.fn().mockResolvedValue(undefined),
-            findAvailablePort: jest.fn().mockResolvedValue(QUICK_START_PORT),
+            isPortFree: jest.fn().mockResolvedValue(true),
             pullImage: jest.fn().mockRejectedValue(new Error('manifest unknown')),
         });
         const service = new QuickStartServiceImpl(runtime);
@@ -1151,10 +1152,8 @@ describe('QuickStartService — WI-2e-1 provision RR4 volume-wipe gate', () => {
         ext.secretStorage = fakeSecretStorage({});
         ext.context = { globalState: fakeMemento() } as unknown as vscode.ExtensionContext;
         const removeVolume = jest.fn().mockResolvedValue(undefined);
-        // findAvailablePort → undefined so provision performs the (safe) wipe then aborts at port pick.
-        const service = new QuickStartServiceImpl(
-            provisionRuntime({ containers: [], findAvailablePort: undefined, removeVolume }),
-        );
+        // The port is busy, so provision performs the (safe) wipe then aborts at the port pre-check.
+        const service = new QuickStartServiceImpl(provisionRuntime({ containers: [], portFree: false, removeVolume }));
 
         await drain(service.provision(new AbortController().signal));
 
@@ -1168,7 +1167,7 @@ describe('QuickStartService — WI-2e-1 provision RR4 volume-wipe gate', () => {
         const service = new QuickStartServiceImpl(
             provisionRuntime({
                 containers: [],
-                findAvailablePort: undefined,
+                portFree: false,
                 removeVolume,
                 readiness: {
                     outcome: 'indeterminate',
@@ -1198,7 +1197,7 @@ describe('QuickStartService — WI-2e-1 provision RR4 volume-wipe gate', () => {
         const service = new QuickStartServiceImpl(
             provisionRuntime({
                 containers: [],
-                findAvailablePort: undefined,
+                portFree: false,
                 removeVolume,
                 readiness: {
                     outcome: 'diagnosed',

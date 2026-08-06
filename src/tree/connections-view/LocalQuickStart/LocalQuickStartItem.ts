@@ -12,7 +12,11 @@ import { AuthMethodId } from '../../../documentdb/auth/AuthMethod';
 import { DocumentDBExperience } from '../../../DocumentDBExperiences';
 import { StorageZone } from '../../../services/connectionStorageService';
 import { QuickStartService } from '../../../services/localQuickStart/QuickStartService';
-import { InstanceState, type QuickStartStatus } from '../../../services/localQuickStart/quickStartTypes';
+import {
+    InstanceState,
+    QUICK_START_PORT,
+    type QuickStartStatus,
+} from '../../../services/localQuickStart/quickStartTypes';
 import { getResourcesPath } from '../../../utils/icons';
 import { createGenericElementWithContext } from '../../api/createGenericElementWithContext';
 import { type TreeCluster } from '../../models/BaseClusterModel';
@@ -189,7 +193,7 @@ export class LocalQuickStartItem implements TreeElement, TreeElementWithContextV
                 createGenericElementWithContext({
                     id: `${this.id}/provisioning`,
                     contextValue: 'treeItem_quickStartProvisioning',
-                    label: l10n.t('Provisioning… · localhost:10260'),
+                    label: l10n.t('Provisioning… · localhost:{0}', String(status.port ?? QUICK_START_PORT)),
                     iconPath: new vscode.ThemeIcon('loading~spin'),
                 }),
             ];
