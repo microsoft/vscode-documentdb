@@ -40,6 +40,12 @@ Before finishing work on a PR, agents **must** run the following steps in order:
 
 > ⚠️ **An agent must not finish or terminate until all five steps above have been run and pass successfully.** Skipping these steps leads to CI failures.
 
+## Webview visual checks
+
+`npm run webpack-dev-wv && npm run test:visual`. To inspect a state by hand or with browser tools, run
+`node test/webview-harness/serve.js` and open the printed URL with `?scenario=…&theme=…`. See
+`test/webview-harness/README.md`. Host-side behaviour is **not** exercised.
+
 ## Git Safety
 
 - **Never use `git add -f`** to force-add files. If `git add` refuses a file, it is likely in `.gitignore` for a reason (e.g., `docs/plan/`, `docs/analysis/`, build outputs). Do NOT override this with `-f`.
