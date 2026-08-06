@@ -47,9 +47,10 @@ and folded in — see **M7** and the thread tracker in [§6](#6-external-review-
 > unblocked the credential-store consolidation. **WP-7b dissolved**: its tree-state half became the error-node
 > work, its multi-instance half is out of scope.
 >
-> **➡ The live worklist is now [§11.4 Iteration 2](#114-iteration-2--opened-2026-08-06).** Iteration 1 is closed
-> (only **I1-1 / H5** shipped; everything else rolled forward). Use that chapter, not this table, to decide what
-> to pick up.
+> **➡ The live worklist is now [§11.5 Iteration 3](#115-iteration-3--opened-2026-08-06).** Iterations 1 and 2
+> are closed — Iteration 2 shipped nine items and closed L2 by verification, leaving only the credential-store
+> consolidation (now **I3-1**, blocked on [I3-Q1][b-q1]) plus the standing deferred set. Use that chapter, not
+> this table, to decide what to pick up.
 
 | WP        | Title                                   | Findings | Status                                                |
 | --------- | --------------------------------------- | -------- | ----------------------------------------------------- |
@@ -2070,23 +2071,23 @@ Everything below is either **cleared for implementation** (decided, no further i
 
 #### ✅ Cleared — code
 
-| #        | Item                                                                                                                                                                                                                                                                                                  | Source       | Notes                                                                                                              |
-| -------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------ | ------------------------------------------------------------------------------------------------------------------ |
-| **I1-1** | **H5 fix — implemented as option D (override), not option A (cache priming).** `QuickStartClusterItem` extends `ClusterItemBase` directly and resolves credentials via `QuickStartService.readStoredConnectionString()`; presentation extracted to `clusterItemPresentation.ts`. **WP-6a cancelled.** | H5 / WP-6a   | ✅ **DONE** — no storage migration needed; closes the last **High**. Regression test still outstanding → **I2-1**. |
-| **I1-2** | **Recreate-vs-fresh choice.** Configure step asks **"Use existing data"** / **"Start fresh (erases data)"**; `provision()` takes an explicit flag instead of deriving `reusing`.                                                                                                                      | M4 / WP-7a   | Option **E**. Resolves **N1**. Footer copy follows the choice.                                                     |
-| **I1-3** | **Wizard guard when an instance already exists.** Introduction step shows a MessageBar and gates the primary action — info + disabled when healthy, warning + enabled (forced _Start fresh_) when the instance is in an unusable state.                                                               | §9.2 Q2      | Replaces `provision()`'s silent hard-refusal. See §9.2 Q2 for the two variants.                                    |
-| **I1-4** | **Error-node pattern for the Quick Start rows.** Replace the passive `state_error` row and delete the message-only `${this.id}/error` child; render actionable recovery nodes instead.                                                                                                                | §9.2 Q4 / N3 | Use `createRetryNode` (`/retry` + `contextValue: 'error'`) + companions (View Logs, Delete).                       |
-| **I1-5** | **Tree render cost.** `getChildren()` stops awaiting `refreshLiveState()`: render from cache with a `"Refreshing…"` description, update via `onDidChangeStatus`. Must reuse WP-1's transition guard.                                                                                                  | M6 / WP-8    | Option **B**. **A dropped.**                                                                                       |
-| **I1-6** | **M6-b.** Skip `suggestPort()` in `getDockerStatus` when `input.polled === true`.                                                                                                                                                                                                                     | §10.3        | One-line guard. Ship with I1-5.                                                                                    |
-| **I1-7** | **Single-instance intent notes.** Short code comments at the multi-instance seams (`alias` threading, `reservedPorts()`, `operationId` labels) recording that one instance is the deliberate scope today.                                                                                             | §9.2 Q3      | Documentation-in-code only; no behaviour change.                                                                   |
-| **I1-8** | **Credential store consolidation.** `StorageService.get('local-quickstart')`, workspace `instances`; `QuickStartClusterItem` overrides `getCredentials()`/`authenticateAndConnect()`.                                                                                                                 | H5 / WP-6b   | **Newly unblocked** — the record shape is settled now that Q3 is out of scope (see §11.2).                         |
+| #        | Item                                                                                                                                                                                                                                                                                                  | Source (→ details)          | Notes                                                                                                              |
+| -------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------- | ------------------------------------------------------------------------------------------------------------------ |
+| **I1-1** | **H5 fix — implemented as option D (override), not option A (cache priming).** `QuickStartClusterItem` extends `ClusterItemBase` directly and resolves credentials via `QuickStartService.readStoredConnectionString()`; presentation extracted to `clusterItemPresentation.ts`. **WP-6a cancelled.** | [H5][f-h5] · [§10.1][s-101] | ✅ **DONE** — no storage migration needed; closes the last **High**. Regression test still outstanding → **I2-1**. |
+| **I1-2** | **Recreate-vs-fresh choice.** Configure step asks **"Use existing data"** / **"Start fresh (erases data)"**; `provision()` takes an explicit flag instead of deriving `reusing`.                                                                                                                      | [M4][f-m4] · [§10.2][s-102] | Option **E**. Resolves **N1**. Footer copy follows the choice.                                                     |
+| **I1-3** | **Wizard guard when an instance already exists.** Introduction step shows a MessageBar and gates the primary action — info + disabled when healthy, warning + enabled (forced _Start fresh_) when the instance is in an unusable state.                                                               | [§9.2 Q2][s-92q2]           | Replaces `provision()`'s silent hard-refusal. See §9.2 Q2 for the two variants.                                    |
+| **I1-4** | **Error-node pattern for the Quick Start rows.** Replace the passive `state_error` row and delete the message-only `${this.id}/error` child; render actionable recovery nodes instead.                                                                                                                | [§9.2 Q4 / N3][s-92q4]      | Use `createRetryNode` (`/retry` + `contextValue: 'error'`) + companions (View Logs, Delete).                       |
+| **I1-5** | **Tree render cost.** `getChildren()` stops awaiting `refreshLiveState()`: render from cache with a `"Refreshing…"` description, update via `onDidChangeStatus`. Must reuse WP-1's transition guard.                                                                                                  | [M6][f-m6] · [§10.3][s-103] | Option **B**. **A dropped.**                                                                                       |
+| **I1-6** | **M6-b.** Skip `suggestPort()` in `getDockerStatus` when `input.polled === true`.                                                                                                                                                                                                                     | [§10.3][s-103]              | One-line guard. Ship with I1-5.                                                                                    |
+| **I1-7** | **Single-instance intent notes.** Short code comments at the multi-instance seams (`alias` threading, `reservedPorts()`, `operationId` labels) recording that one instance is the deliberate scope today.                                                                                             | [§9.2][s-92] (Q3)           | Documentation-in-code only; no behaviour change.                                                                   |
+| **I1-8** | **Credential store consolidation.** `StorageService.get('local-quickstart')`, workspace `instances`; `QuickStartClusterItem` overrides `getCredentials()`/`authenticateAndConnect()`.                                                                                                                 | [H5][f-h5] · [§9.1][s-91]   | **Newly unblocked** — the record shape is settled now that Q3 is out of scope (see §11.2).                         |
 
 #### ✅ Cleared — verification / no code
 
-| #         | Item                                                                                                                       | Source |
-| --------- | -------------------------------------------------------------------------------------------------------------------------- | ------ |
-| **I1-9**  | **Close L2.** Confirm the Configure "Address" row now shows the instance's real port (`suggestedPort` + `portTouchedRef`). | §10.2  |
-| **I1-10** | **Re-evaluate M7** once **I1-1** lands, then post the reply on [`#discussion_r3714252974`][m7thread].                      | §10.4  |
+| #         | Item                                                                                                                       | Source (→ details)          |
+| --------- | -------------------------------------------------------------------------------------------------------------------------- | --------------------------- |
+| **I1-9**  | **Close L2.** Confirm the Configure "Address" row now shows the instance's real port (`suggestedPort` + `portTouchedRef`). | [L2][f-l2] · [§10.2][s-102] |
+| **I1-10** | **Re-evaluate M7** once **I1-1** lands, then post the reply on [`#discussion_r3714252974`][m7thread].                      | [M7][f-m7] · [§10.4][s-104] |
 
 [m7thread]: https://github.com/microsoft/vscode-documentdb/pull/798#discussion_r3714252974
 
@@ -2213,56 +2214,539 @@ agent must follow it** — the file is handed to fresh contexts repeatedly, so a
   and an older section disagree, **§11 wins** and the older section should get a pointer to it.
 - Nothing is ever deleted from this file. Items move forward; sections get superseded with a note.
 
-### 11.4 Iteration 2 — opened 2026-08-06
+### 11.4 Iteration 2 — opened 2026-08-06, **closed 2026-08-06**
 
-**➡ This is the live worklist.** Promoted from Iteration 1; numbering carries a `(was …)` reference so the
-history stays traceable.
+**✅ Closed.** The live worklist has moved on to [§11.5 Iteration 3][it3] — see the
+[closing note](#iteration-2-closing-note-2026-08-06) at the end of this chapter. Kept in full because the item
+write-ups below are where the implemented behaviour is explained. Promoted from Iteration 1; numbering carries
+a `(was …)` reference so the
+history stays traceable. **The Source column links to the detailed write-up** for each item — read it before
+implementing.
 
 #### ✅ Cleared — code
 
-| #         | Item                                                                                                                                                                                                           | Source                | Notes                                                                                                                             |
-| --------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------- | --------------------------------------------------------------------------------------------------------------------------------- |
-| **I2-1**  | **H5 regression test.** Stop → clear `CredentialCache` → start → assert the node still lists databases. The contract changed: assert it resolves through `QuickStartService`, _not_ that the cache was primed. | H5 (was I1-1, tail)   | The only part of I1-1 left. Also worth covering the "no stored secret" → `undefined` path.                                        |
-| **I2-5**  | **Tree render cost.** `getChildren()` stops awaiting `refreshLiveState()`: render from cache with a `"Refreshing…"` description, update via `onDidChangeStatus`. Must reuse WP-1's transition guard.           | M6 / WP-8 (was I1-5)  | Option **B**. **A dropped.**                                                                                                      |
-| **I2-6**  | **M6-b.** Skip `suggestPort()` in `getDockerStatus` when `input.polled === true`.                                                                                                                              | §10.3 (was I1-6)      | One-line guard. Ship with I2-5.                                                                                                   |
-| **I2-7**  | **Single-instance intent notes.** Short code comments at the multi-instance seams (`alias` threading, `reservedPorts()`, `operationId` labels).                                                                | §9.2 Q3 (was I1-7)    | Documentation-in-code only; no behaviour change.                                                                                  |
-| **I2-8**  | **Credential store consolidation.** `StorageService.get('local-quickstart')`, workspace `instances`; retires the ad-hoc `documentdb.quickstart.*` secrets **and** the `documentdb.quickstart.registry` blob.   | H5 / WP-6b (was I1-8) | **Demoted to hygiene** — H5 no longer depends on it. Still needs a migration; still the largest item.                             |
-| **I2-10** | **M7.** Strip the password from `connectionString` on the tree model, then post the reply on [`#discussion_r3714252974`][m7thread].                                                                            | §10.4 (was I1-10)     | **Now unblocked and cheaper** — the item reads credentials itself, so the model's string is display-only (`getHosts`, TLS badge). |
+| #                 | Item                                                                                                                                                                                                                                                                                                                                                                 | Source (→ details)                           | Notes                                                                                                                                                         |
+| ----------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| [**I2-1**][d-1]   | **H5 regression test.** Stop → clear `CredentialCache` → start → assert the node still lists databases. The contract changed: assert it resolves through `QuickStartService`, _not_ that the cache was primed.                                                                                                                                                       | [H5][f-h5] · [§10.1][s-101] (was I1-1, tail) | The only part of I1-1 left. Also worth covering the "no stored secret" → `undefined` path.                                                                    |
+| [**I2-2**][d-2]   | **Recreate-vs-fresh choice** in the Configure step; `provision()` takes an explicit flag. _(was I1-2)_                                                                                                                                                                                                                                                               | [M4][f-m4] · [§10.2][s-102] · [§10.6][s-106] | **Unblocked 2026-08-06** by [I2-Q1][a-q1]. No extra confirmation dialog — [I2-Q4][a-q4].                                                                      |
+| [**I2-3**][d-3]   | **Wizard guard when an instance already exists** — MessageBar + gated primary action on the Introduction step. _(was I1-3)_                                                                                                                                                                                                                                          | [§9.2 Q2][s-92q2]                            | **Unblocked 2026-08-06.** **Three** variants now: Healthy, Stopped, Erroneous — see [I2-Q1][a-q1].                                                            |
+| [**I2-4**][d-4]   | **Error-node pattern for the Quick Start rows** — `createRetryNode` + companions; delete the message-only `${this.id}/error` child. _(was I1-4)_                                                                                                                                                                                                                     | [§9.2 Q4 / N3][s-92q4] · [Nits][f-nits]      | **Unblocked 2026-08-06** by [I2-Q2][a-q2] + [I2-Q3][a-q3]. Genuine failures only — not `Missing` / `CredentialsMissing` ([I2-Q5][a-q5]). Ship with **I2-17**. |
+| [**I2-5**][d-5]   | **Tree render cost.** `getChildren()` stops awaiting `refreshLiveState()`: render from cache with a `"Refreshing…"` description, update via `onDidChangeStatus`. Must reuse WP-1's transition guard.                                                                                                                                                                 | [M6][f-m6] · [§9.3][s-93] · [§10.3][s-103]   | Option **B**. **A dropped.** Sole cache for this row — no `failedChildrenCache` on top ([I2-Q5][a-q5]).                                                       |
+| [**I2-6**][d-6]   | **M6-b.** Skip `suggestPort()` in `getDockerStatus` when `input.polled === true`.                                                                                                                                                                                                                                                                                    | [§10.3][s-103]                               | One-line guard. Ship with I2-5.                                                                                                                               |
+| [**I2-7**][d-7]   | **Single-instance intent notes.** Short code comments at the multi-instance seams (`alias` threading, `reservedPorts()`, `operationId` labels).                                                                                                                                                                                                                      | [§9.2][s-92] (Q3)                            | Documentation-in-code only; no behaviour change.                                                                                                              |
+| [**I2-8**][d-8]   | **Credential store consolidation.** `StorageService.get('local-quickstart')`, workspace `instances`; retires the ad-hoc `documentdb.quickstart.*` secrets **and** the `documentdb.quickstart.registry` blob.                                                                                                                                                         | [H5][f-h5] · [§9.1][s-91] · [§10.1][s-101]   | **Demoted to hygiene** — H5 no longer depends on it. Still needs a migration; still the largest item.                                                         |
+| [**I2-10**][d-10] | **M7.** Strip the password from `connectionString` on the tree model, then post the reply on [`#discussion_r3714252974`][m7thread].                                                                                                                                                                                                                                  | [M7][f-m7] · [§10.4][s-104]                  | **Now unblocked and cheaper** — the item reads credentials itself, so the model's string is display-only (`getHosts`, TLS badge).                             |
+| [**I2-17**][d-17] | **Clear the cached tree error state when the failure is resolved elsewhere.** After the user fixes the underlying problem outside the tree (typically in the Quick Start webview), `failedChildrenCache` still holds the error children and the row keeps rendering the error node until a manual collapse/expand. Wire `resetNodeErrorState(nodeId)` + `refresh()`. | _New 2026-08-06_ — raised in [I2-Q3][a-q3]   | Precedent: `AtlasDiscoveryProvider.onDidChangeSession` does exactly this before `refresh()`. Ship with **I2-4**.                                              |
+
+#### ✅ Outcome — what landed, and where
+
+Updated 2026-08-06 when the iteration was closed. Each row links to the item's write-up, which carries the
+full "what was done and why" note; the commit is on `feature/local-quickstart`.
+
+| #                 | Commit     | Subject                                                                                | Outcome                                                       |
+| ----------------- | ---------- | -------------------------------------------------------------------------------------- | ------------------------------------------------------------- |
+| [**I2-1**][d-1]   | `ec0a77cb` | test(quickstart): pin the H5 credential-source contract                                | ✅ Done                                                       |
+| [**I2-2**][d-2]   | `f473b02c` | feat(quickstart): ask before recreating, and take the choice as an explicit flag       | ✅ Done — `willReuse` renamed to `canReuseExistingData`       |
+| [**I2-3**][d-3]   | `5e2c9314` | feat(quickstart): guard the wizard when an instance already exists                     | ✅ Done — **on the Configure step**, not Introduction         |
+| [**I2-4**][d-4]   | `a684ce95` | feat(quickstart): render actionable error nodes for failed Quick Start rows            | ✅ Done — closes **N3**                                       |
+| [**I2-5**][d-5]   | `1a0f3ab9` | perf(quickstart): render the tree row from cache instead of blocking on Docker         | ✅ Done — needed a 5 s cooldown as the loop breaker           |
+| [**I2-6**][d-6]   | `bef2128f` | perf(quickstart): skip suggestPort() on polled readiness calls                         | ✅ Done                                                       |
+| [**I2-7**][d-7]   | `7ae61fd8` | docs(quickstart): record the single-instance scope at the multi-instance seams         | ✅ Done                                                       |
+| [**I2-8**][d-8]   | —          | —                                                                                      | ⏸ **Deferred to [§11.5][it3]** — `TDD:` gate + migration risk |
+| [**I2-9**][d-9]   | —          | _(verification only)_                                                                  | ✅ Verified — **L2 closed**                                   |
+| [**I2-10**][d-10] | `81f062f8` | fix(quickstart): strip credentials from the Quick Start tree model                     | ✅ Done — GitHub thread answered                              |
+| [**I2-17**][d-17] | `bca46b67` | fix(quickstart): clear the cached tree error state when the failure is fixed elsewhere | ✅ Done                                                       |
 
 #### ⛔ Blocked on an unanswered question
 
-| #        | Item                                                                                                                                | Blocked by   |
-| -------- | ----------------------------------------------------------------------------------------------------------------------------------- | ------------ |
-| **I2-2** | **Recreate-vs-fresh choice** in the Configure step; `provision()` takes an explicit flag. _(was I1-2)_                              | I2-Q1        |
-| **I2-3** | **Wizard guard when an instance already exists** — MessageBar + gated primary action on the Introduction step. _(was I1-3)_         | I2-Q1        |
-| **I2-4** | **Error-node pattern for the Quick Start rows** — `createRetryNode` + companions; delete the `${this.id}/error` child. _(was I1-4)_ | I2-Q2, I2-Q3 |
+> **Empty as of 2026-08-06.** I2-2, I2-3 and I2-4 were unblocked by the answers below and moved into the
+> **Cleared — code** table above. Left in place so the iteration's history reads correctly.
 
 #### ✅ Cleared — verification / no code
 
-| #        | Item                                                                                                                       | Source           |
-| -------- | -------------------------------------------------------------------------------------------------------------------------- | ---------------- |
-| **I2-9** | **Close L2.** Confirm the Configure "Address" row now shows the instance's real port (`suggestedPort` + `portTouchedRef`). | §10.2 (was I1-9) |
+| #               | Item                                                                                                                       | Source                                 |
+| --------------- | -------------------------------------------------------------------------------------------------------------------------- | -------------------------------------- |
+| [**I2-9**][d-9] | **Close L2.** Confirm the Configure "Address" row now shows the instance's real port (`suggestedPort` + `portTouchedRef`). | [L2][f-l2] · [§10.2][s-102] (was I1-9) |
 
-#### 🟡 Open questions — carried over unanswered
+#### � Item detail
 
-Asked on 2026-08-06; the maintainer skipped them. **Do not guess — ask again before touching I2-2/3/4.**
+Self-contained write-ups so this chapter can be worked from without paging back through §3/§9/§10. Content is
+deliberately repeated from those sections; where they disagree, **this chapter wins**.
 
-| #         | Question                                                                                                                                                                                                                     | Affects    | Blocks? |
-| --------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------- | ------- |
-| **I2-Q1** | **Should the Introduction guard also catch a `Stopped` instance?** It is adoptable, so option **E** would offer "Use existing data" — which _recreates_ a container the user probably just wants to **Start**. _(was I1-Q1)_ | I2-2, I2-3 | **Yes** |
-| **I2-Q2** | **What does the retry node retry?** Reopen the wizard, or silently re-run the last provision? _(was I1-Q3)_                                                                                                                  | I2-4       | **Yes** |
-| **I2-Q3** | **Where does the modal fire?** Proposal: modals only for **lifecycle** failures; wizard failures stay in-wizard. _(was I1-Q4)_                                                                                               | I2-4       | **Yes** |
-| **I2-Q4** | **Does "Start fresh" need its own confirmation dialog?** _(was I1-Q2)_                                                                                                                                                       | I2-2, I2-3 | No      |
-| **I2-Q5** | **Should `Missing` and `CredentialsMissing` become cached error states** via `detectErrorState`? If yes, `resetNodeErrorState(nodeId)` must be wired to `onDidChangeStatus`. _(was I1-Q5)_                                   | I2-4, I2-5 | No      |
+##### I2-1 — H5 regression test
+
+**➤ IMPLEMENTED 2026-08-06** — `ec0a77cb` _test(quickstart): pin the H5 credential-source contract (I2-1)_.
+
+New `LocalQuickStartItem.credentials.test.ts` pins option **(c)**, the contract that actually closed H5.
+Three cases: (1) with an EMPTY `CredentialCache` — the post-reload state that made H5 reproducible — the
+node still lists databases, `readStoredConnectionString(alias)` is what supplies them, and the cache ends up
+populated as a _side effect_ rather than a precondition; (2) `getCredentials()` returns the parsed
+`nativeAuthConfig`; (3) no stored secret → `getCredentials()` resolves `undefined`, no client is requested, and
+`getChildren()` degrades to error-recovery children instead of throwing out of the tree.
+
+**Problem.** H5 is fixed, but nothing in the suite pins the new contract. The whole reason a fully green suite
+coexisted with H5 is that `IContainerRuntime`, `ext.secretStorage` and the tree provider are mocked — so a future
+refactor could quietly reintroduce the `ConnectionStorageService` dependency and the suite would stay green.
+
+**Options.** (a) no test; (b) assert the `CredentialCache` was primed; (c) assert the node resolves credentials
+through `QuickStartService`.
+
+**Decision — (c).** (b) is wrong now: it was option **A**'s contract, and option A was cancelled. Cover both
+directions:
+
+- stop → clear `CredentialCache` → start → expand → the node lists databases;
+- no stored secret → `getCredentials()` returns `undefined` and `authenticateAndConnect()` returns `null`
+  (error-recovery children), rather than throwing out of `getChildren()`.
+
+##### I2-2 — Recreate-vs-fresh choice
+
+_Source: [M4][f-m4] · [§10.2][s-102] · [§10.6][s-106]._
+
+**➤ IMPLEMENTED 2026-08-06** — `f473b02c` _feat(quickstart): ask before recreating, and take the choice as an
+explicit flag (M4, I2-2)_.
+
+Option **E** shipped as decided. `AdvancedQuickStartOptions.startFresh` is the explicit flag; `provision()` no
+longer derives `reusing` from `getReusableCredentials()` when the user asked for a fresh start
+(`const reusable = startFresh ? undefined : await this.getReusableCredentials(alias)`). The RR4 / §5.2 gate
+became `if (!reusing && !startFresh)`, which is what turns the old hard refusal into an explicit, warned path
+and keeps "an explicit user choice" the only way a volume is ever dropped. Four service tests cover the gate in
+both directions.
+
+The Configure step renders the radio pair **above** the settings table (operator's placement call) because it
+decides what those settings _mean_; the primary label and the footer note both follow the selection, so
+_"Nothing else on your machine is changed"_ can no longer render over a recreate. No modal — [I2-Q4][a-q4].
+
+**Rename:** `DockerStatusResult.willReuse` → `canReuseExistingData`, `QuickStartService.willReuseExistingInstance()`
+→ `canReuseExistingData()` (operator's request). The old name described an _outcome_ the service no longer
+decides; the new one describes the _capability_ that makes the choice available.
+
+**Problem.** When stored credentials exist (`willReuse === true`) the Configure step relabels the _settings_, but
+the primary button still reads **"Start DocumentDB Local"** and the footer still says _"Nothing else on your
+machine is changed."_ There is no confirmation, and `provision()` unconditionally removes the existing container
+first (`removeContainer(existing.id)`, `force: true`). A user who opens Quick Start out of curiosity while the
+instance is happily running force-stops and destroys it. The volume survives, so documents are safe — but
+connections drop, container-local state outside `/data` is lost, and the footer note actively told them nothing
+would change.
+
+**Options considered.** **A** honest copy ("Recreate DocumentDB Local" + accurate footer) · **B** A + a
+confirmation when `Running` · **C** offer "Open Connection" instead of recreating · **D** leave as-is ·
+**E** an explicit choice in Configure.
+
+**Decision — E, with A's copy as the baseline.** Configure asks; nothing is inferred from `willReuse`:
+
+- **Use existing data** — recreate the container onto the existing volume, reusing its stored credentials and
+  image (today's implicit `reusing === true` path).
+- **Start fresh (erases data)** — remove the container **and** its data volume, then provision new credentials.
+
+`provision()` takes the choice as an **explicit flag** instead of deriving `reusing` from
+`getReusableCredentials()`. The RR4 / §5.2 gate is unchanged — "Start fresh" is the **only** path allowed to drop
+a volume. **No modal** ([I2-Q4][a-q4]): the radio option itself states that data will be erased, it is not
+pre-selected, and the footer copy follows the selection. Resolves **N1** by construction — there is no inferred
+value left to go stale.
+
+##### I2-3 — Wizard guard when an instance already exists
+
+_Source: [§9.2 Q2][s-92q2]._
+
+**➤ IMPLEMENTED 2026-08-06** — `5e2c9314` _feat(quickstart): guard the wizard when an instance already exists
+(I2-3)_.
+
+**Placement changed from the decision above:** the guard lives on the **Configure step**, not the Introduction
+step (operator's call). Rationale that follows from it — Configure is the screen where the destructive decision
+is actually made and where the guard sits next to the "Start fresh" radio it forces; a guard on Introduction
+would be a speed bump the user clicks past before reaching the choice it is guarding.
+
+All three variants shipped as tabled: Healthy → `intent="info"`, primary disabled, offers **Open Connection** /
+**Close**; Stopped → `intent="info"`, primary disabled, offers **Start** / **Close**; CredentialsMissing →
+`intent="warning"`, primary enabled and forced onto Start fresh (`forcedFresh` suppresses the radio pair, since
+there is no reusable data left to choose). `Missing` is deliberately NOT guarded — recreating is exactly what
+that state asks for. A new `startInstance` router mutation backs the Stopped variant.
+
+**Problem.** Reaching the wizard while an instance exists should not normally be possible — the tree's entry point
+does not offer it — but the command palette, a stale panel and cross-window races all still get there. Today
+`provision()` deals with the credential-unavailable case by **hard-refusing**: it sets `CredentialsMissing` and
+returns, leaving the user to hunt for a separate **Delete Container**. And a healthy running instance can be
+walked straight into a destructive recreate.
+
+**Decision.** Guard on the **Introduction step** with a MessageBar plus a gated primary action. The guard must
+verify the instance is genuinely usable _from the Connections view_ — "a container is running" is not the same as
+"the user has a working connection". **Three** variants ([I2-Q1][a-q1] added the middle one):
+
+| Variant                              | MessageBar         | Primary action                                   |
+| ------------------------------------ | ------------------ | ------------------------------------------------ |
+| **Healthy** (`Running` + metadata)   | `intent="info"`    | **Disabled** — offer "Open Connection" / "Close" |
+| **Stopped**                          | `intent="info"`    | **Disabled** — offer **Start**                   |
+| **Erroneous** (`CredentialsMissing`) | `intent="warning"` | **Enabled**, forced onto **Start fresh**         |
+
+The hard-refusal becomes an explicit, warned Start-fresh path _inside_ the wizard. The RR4 / §5.2 invariant is
+preserved — a volume is still only dropped by an explicit choice — but the choice is offered where the user
+already is.
+
+##### I2-4 — Error-node pattern for the Quick Start rows
+
+_Source: [§9.2 Q4 / N3][s-92q4] · [Nits][f-nits]._
+
+**➤ IMPLEMENTED 2026-08-06** — `a684ce95` _feat(quickstart): render actionable error nodes for failed Quick
+Start rows (I2-4, N3)_.
+
+Both dead ends are gone. The `Error` branch now returns the state row **plus** `createRetryNode` (pointed at
+`…localQuickStart.open`, so the retry re-runs the operation that failed — the wizard — per [I2-Q2][a-q2]), a
+**View setup log** companion, and, once a container exists, **Delete Container**. The message-only
+`${this.id}/error` child is deleted outright, closing **N3**.
+
+`LocalQuickStartItem` now implements `TreeElementWithRetryChildren` (`hasRetryNode` → `containsRetryNode`). That
+is what makes the provider cache the failed children, which is the mechanism behind [I2-Q2][a-q2]'s
+passive-vs-real retry distinction — without it `failedChildrenCache` was never populated for this node and every
+passive refresh re-ran the fetch. Per [I2-Q5][a-q5] no `detectErrorState` hook was added, so `Missing` and
+`CredentialsMissing` keep their own rows. Two tests pin the exact child id lists in both shapes.
+
+**Problem.** Two things are wrong today:
+
+1. `LocalQuickStartItem` renders the `state_error` row with `status.errorMessage` as its description and **no
+   command** — a passive dead end.
+2. The `NotInstalled` branch pushes a second, message-only `${this.id}/error` child, the one carrying the
+   `FOLLOW-UP` comment (**N3**).
+
+**Decision.** The tree does not render error _messages_; it renders **actionable error nodes**, the same pattern
+the rest of the codebase uses: `createRetryNode` (`/retry` id suffix + `contextValue: 'error'`) plus companions
+for **View Logs** and **Delete Container**. Delete the message-only child outright — that closes **N3**.
+
+Three answers shape it:
+
+- **[I2-Q2][a-q2]** — the retry node performs a **real** retry (`resetNodeErrorState` → `refresh`), which for a
+  provisioning failure means reopening the wizard. A _passive_ refresh must not re-run anything; it reuses the
+  cached error children.
+- **[I2-Q3][a-q3]** — modals fire wherever the failure surfaces, including from `getChildren()`. The
+  webview-triggered double-report is accepted for now.
+- **[I2-Q5][a-q5]** — this applies to **genuine failures only**. `Missing` and `CredentialsMissing` keep their
+  own rows and are _not_ classified as cached error states.
+
+Ship with **I2-17**.
+
+##### I2-5 — Tree render cost
+
+_Source: [M6][f-m6] · [§9.3][s-93] · [§10.3][s-103]._
+
+**➤ IMPLEMENTED 2026-08-06** — `1a0f3ab9` _perf(quickstart): render the tree row from cache instead of blocking
+on Docker (M6, I2-5)_.
+
+Option **B** shipped. `getChildren()` calls the new `QuickStartService.refreshLiveStateInBackground()` and does
+not await it; the row renders from the last known state and `onDidChangeStatus` redraws it. Rows a probe can
+actually change (Running / Stopped / Missing) carry a `"… · Refreshing…"` hint while one is in flight.
+
+**One constraint had to be added beyond the plan.** The plan said to reuse WP-1's transition guard, and
+`refreshLiveState()` does still fire only on a real transition — but the `"Refreshing…"` hint has to be cleared
+even when _nothing_ changed, so the background probe fires the status event unconditionally when it settles.
+That event re-enters `getChildren()`. A **5 s cooldown** (`BACKGROUND_REFRESH_COOLDOWN_MS`) is therefore
+load-bearing, not an optimisation: it is what stops the completion event from arming the next probe and
+rebuilding **H1** in a new shape. Concurrent callers share the in-flight promise. A regression test asserts one
+`docker inspect` for a burst of four calls.
+
+Note this is a _bounded_ borrowing of option **A**'s memoisation, which the decision dropped as a standalone
+fix; it is used here only as the loop breaker that **B** requires.
+
+**Problem.** `LocalQuickStartItem.getChildren()` starts with `await QuickStartService.refreshLiveState()`, which
+spawns a `docker inspect` per known alias and blocks the node's children on it. The Connections view refreshes on
+many unrelated events (connection add/remove/rename, folder ops, discovery refresh, `ext.state` transitions), and
+the node is `Expanded` by default — so every one of those pays a process spawn plus a Docker round-trip, for
+_every_ user who has ever provisioned an instance, including those who never open the feature again.
+
+**Options considered.** **A** memoize `refreshLiveState()` for a short TTL · **B** render from cached state and
+refresh in the background · **C** poll on a timer only while the view is visible · **D** leave as-is.
+
+**Decision — B; A is dropped.** A's main justification was capping H1's loop, and WP-1 removed that loop outright.
+`getChildren()` stops awaiting: render immediately from the last known state with a `"Refreshing…"` description,
+kick the probe off in the background, and let `onDidChangeStatus` update the row. Two constraints:
+
+1. **Reuse WP-1's transition guard** — the background update must fire the emitter only on an actual state
+   change, or it rebuilds **H1** in a new shape.
+2. This stays the **sole cache for the row** — no `failedChildrenCache` layered on top ([I2-Q5][a-q5]).
+
+Ship **I2-6** with it.
+
+##### I2-6 — M6-b: skip `suggestPort()` on polled status calls
+
+_Source: [§10.3][s-103]._
+
+**➤ IMPLEMENTED 2026-08-06** — `bef2128f` _perf(quickstart): skip suggestPort() on polled readiness calls
+(M6-b, I2-6)_.
+
+`DockerStatusResult.suggestedPort` became optional and is omitted when `input.polled` is set; the webview keeps
+its previous suggestion in that case (`if (result.suggestedPort !== undefined)`), so the Configure field is
+never blanked by a poll. Slightly more than the one-line guard the plan predicted, because the field was
+required and unconditionally applied on the client.
+
+**Problem.** `getDockerStatus` calls `QuickStartService.suggestPort()` on **every** call, including polled ones.
+`suggestPort()` binds a probe socket per candidate port, walking up to `QUICK_START_PORT_SCAN_LIMIT` (100).
+Usually it returns after one probe — but `pollDockerReadiness` re-runs it on a 1–5 s backoff for up to 90 s, and
+on a machine with a busy 10260 band each poll re-walks the range.
+
+**Decision.** Guard it with `input.polled === true`. The polled readiness loop only consumes `readiness`; the port
+suggestion is read only when the Configure step renders. One-line change, no behaviour difference.
+
+##### I2-7 — Single-instance intent notes
+
+_Source: [§9.2][s-92] Q3._
+
+**➤ IMPLEMENTED 2026-08-06** — `7ae61fd8` _docs(quickstart): record the single-instance scope at the
+multi-instance seams (I2-7)_.
+
+Notes added at four seams: the `instances` map (the anchor note — single instance is the deliberate scope, a
+second one is a focused iteration, and creation should most likely start by offering the instance that already
+exists), `reservedPorts()` (empty set with one instance), `listStatuses()` (the tree reads `getStatus()`
+instead), and the `operationId` nonce — flagged as **load-bearing today** for concurrent windows (H3/H4), not
+merely aspirational, which was precisely the distinction a reader could not make.
+
+**Problem.** The service layer is already multi-instance-shaped — `reservedPorts()` allocates around siblings,
+`operationId` labels scope destructive sweeps, and N5 threaded `alias` consistently — while the tree and webview
+assume exactly one instance. A reader cannot tell whether those seams are load-bearing or aspirational.
+
+**Decision.** Multi-instance is **explicitly out of scope**. Keep the seams, build no UI on them, and add short
+code comments at each recording the intent: one instance is the deliberate scope today, a second needs a focused
+iteration, and at creation time the existing instance would most likely be offered as a "look at the one you
+already have" option first. Documentation-in-code only — no behaviour change.
+
+##### I2-8 — Credential store consolidation
+
+_Source: [H5][f-h5] · [§9.1][s-91] · [§10.1][s-101]._
+
+**⏸ NOT IMPLEMENTED — promoted to Iteration 3 ([§11.5](#115-iteration-3--opened-2026-08-06)).**
+
+Approved by the operator, but deferred on the two gates the decision above already names, both of which were
+confirmed while scoping it:
+
+1. **`TDD:` contract tests.** `QuickStartProvisionDurability.test.ts` asserts the persistence contract against
+   the **raw keys** — `secretStorage.get(secretKey(DEFAULT_ALIAS))` written before the readiness probe and
+   cleared on a failed attempt, `readRegistry(globalState)` showing provisioning → ready → missing. This item
+   relocates exactly those keys, so the assertions must be rewritten. `.github/copilot-instructions.md` requires
+   a maintainer decision before touching a `TDD:` suite; the operator was asked and was not available.
+2. **Data safety.** The migration has to carry the secrets **and** the registry including the live lease fields
+   (`operationId`, `leaseAt`), and must complete before `reconcile()` — the same R1 ordering the existing
+   `migrateLegacyQuickStartKeys` is built around. A mistake there is a silent volume wipe.
+
+Nothing else in Iteration 2 depends on it (H5 was closed without it in I1-1), so deferring costs nothing.
+
+**Problem.** The managed instance's data lives in **two ad-hoc places**: the connection string in raw
+`ext.secretStorage` under `documentdb.quickstart.<alias>.connectionString`, and the instance list in a
+`globalState` blob (`documentdb.quickstart.registry`) with a hand-rolled `mutationChain` write lock. Since WP-3
+the registry is load-bearing (leases, port allocation), and `provision()` hand-rolls a two-phase commit across
+both stores — writing the secret early, remembering `previousStoredConnectionString`, and restoring it in
+`finally` if the attempt fails.
+
+**Options considered.** Keep both stores · add a `Managed` **zone** to `ConnectionStorageService` (**rejected**:
+zones are workspaces of the single `Connections` storage and are exactly what the Connections view enumerates;
+they also drag in folders, `parentId`, orphan cleanup and user mutability) · a **dedicated named storage**.
+
+**Decision.** `StorageService.get('local-quickstart')`, workspace `instances`, one `StorageItem` per alias:
+
+```text
+properties: { alias, displayName, port, phase, imageRef, operationId, leaseAt }   → globalState
+secrets:    [ connectionString ]                                                   → SecretStorage
+```
+
+Mirrors the `service-kubernetes` `sourceStore` and `service-atlas-mongodb` credential-store precedents. One
+`push()` per state change replaces the manual two-phase commit.
+
+**Now hygiene, not a fix.** H5 was closed without it (I1-1), so this no longer blocks anything. It is still the
+largest item: it needs a migration for the secrets **and** the registry including the live lease fields, and that
+migration must complete **before** `reconcile()` runs. Do it last.
+
+##### I2-9 — Close L2
+
+_Source: [L2][f-l2] · [§10.2][s-102]._
+
+**➤ VERIFIED 2026-08-06 — L2 is closed.** No commit; verification only.
+
+Two halves, both confirmed:
+
+- **Service.** `suggestPort()` returns the instance's own recorded port when it is still free, before walking
+  forward from `QUICK_START_PORT`. Already covered by _"prefers the instance own recorded port so a recreate
+  keeps its address"_ in `QuickStartProvisionDurability.test.ts` (asserts `10333`, not `10260`).
+- **Webview.** The Address row renders
+  `advPort.trim() && advValidation?.field !== 'port' ? advPort.trim() : String(suggestedPort)`, and `advPort` is
+  seeded from `suggestedPort` only while `portTouchedRef.current` is false — so a typed value is never clobbered
+  and an untouched field always shows the port that will be bound.
+
+**One interaction to keep in mind:** I2-6 made `suggestedPort` optional on polled responses. The webview keeps
+its last value in that case, and the seeding call is not polled, so the Address row is unaffected.
+
+**Problem.** `effectivePort` derived only from `advPort`, initialised to `String(QUICK_START_PORT)`, so a
+recreate of an instance actually living on e.g. 10312 confidently displayed `localhost:10260`.
+
+**Decision.** Believed **resolved by WP-3**: the Address row now renders `suggestedPort` from
+`QuickStartService.suggestPort()`, which returns the instance's own recorded port when it is still free, and
+`portTouchedRef` stops a host suggestion from clobbering a typed value. **Verification only** — confirm on a
+recreate that has moved ports, then close.
+
+##### I2-10 — M7: strip the password from the tree model
+
+_Source: [M7][f-m7] · [§10.4][s-104]._
+
+**➤ IMPLEMENTED 2026-08-06** — `81f062f8` _fix(quickstart): strip credentials from the Quick Start tree model
+(M7, I2-10)_.
+
+Option **A** shipped: the tree model's `connectionString` is built by parsing `metadata.connectionString` and
+clearing `username`/`password`, the same pattern used in `copyConnectionString`, `updateCredentials`,
+`ruClusterHelpers` and a dozen other call sites. `connectionUser: metadata.username` is kept for display.
+`InstanceMetadata.connectionString` is deliberately left password-bearing — it is the credential source of truth
+that `copyQuickStartPassword()` parses.
+
+**GitHub thread [`#discussion_r3714252974`][m7thread] answered** with the revised wording the decision called
+for: resolved by design, the tree model no longer carries credentials at all, rather than the drafted "we'll
+strip it and keep the cache".
+
+**Problem.** `LocalQuickStartItem` assigns `connectionString: metadata.connectionString`, a credential-bearing
+URI (userinfo carries the generated username/password). Every consumer was traced for this review — `getHosts()`,
+`isTlsDisabled()` and `resolveAllowInvalidCertificates()` read hosts/params only, and the generic
+copy/rename/move/remove commands are gated off this node by its `contextValue` — so there is **no live leak**.
+The cost is defense-in-depth and consistency: the repo's pattern is a password-free base `connectionString` with
+the secret carried separately.
+
+**Options considered.** **A** strip userinfo, keep `connectionUser` · **B** strip only the password ·
+**C** reuse `buildQuickStartCopyCredentials()` · **D** document the invariant and do nothing.
+
+**Decision — A.** It was previously blocked on H5 (stripping made the cache the sole source of truth). That
+dependency is gone: the item now resolves credentials from `QuickStartService` itself, so the model's string is
+display-only. **Do not strip the service-side value** — `InstanceMetadata.connectionString` must keep the
+password, since `copyQuickStartPassword()` parses it back out. Then post the reply on
+[`#discussion_r3714252974`][m7thread]; the wording changes from the drafted "we'll strip it and keep the cache"
+to **"resolved by design — the tree model no longer carries credentials at all"**.
+
+##### I2-17 — Clear the cached tree error state when the failure is resolved elsewhere
+
+**➤ IMPLEMENTED 2026-08-06** — `bca46b67` _fix(quickstart): clear the cached tree error state when the failure
+is fixed elsewhere (I2-17)_.
+
+`ConnectionsBranchDataProvider.resetLocalQuickStartErrorState()` drops every `failedChildrenCache` entry under
+the Quick Start subtree, and `QuickStartService.onDidChangeStatus` calls it **before** `refresh()` — the ordering
+the `AtlasDiscoveryProvider.onDidChangeSession` precedent depends on. The id filter is a substring match on
+`/localQuickStart`, so it covers both the root node and the managed-instance cluster row beneath it (the latter
+is the one that actually raises connect modals).
+
+**Problem.** `failedChildrenCache` freezes a node's children once it is classified as failed, and returns them
+without re-fetching. If the user then fixes the underlying problem **outside the tree** — typically in the Quick
+Start webview — the tree keeps rendering the stale error node until a manual collapse/expand. Raised inside the
+[I2-Q3][a-q3] answer as the direct consequence of accepting modals from `getChildren()`.
+
+**Decision.** Wire `resetNodeErrorState(nodeId)` followed by `refresh()` on the transitions that mean "the
+problem is gone". Precedent to copy: `AtlasDiscoveryProvider.onDidChangeSession` does exactly this — reset first,
+then refresh, otherwise a successfully authenticated user still sees the "Sign in" node. Ship with **I2-4**.
+
+#### �🟡 Open questions
+
+Asked on 2026-08-06. **All five were answered the same day** — the answers are written out below the table.
+Nothing in Iteration 2 is blocked on a maintainer decision any more.
+
+| #         | Question                                                                                                                                                                                                                     | Affects    | Blocks? | Status                                      |
+| --------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------- | ------- | ------------------------------------------- |
+| **I2-Q1** | **Should the Introduction guard also catch a `Stopped` instance?** It is adoptable, so option **E** would offer "Use existing data" — which _recreates_ a container the user probably just wants to **Start**. _(was I1-Q1)_ | I2-2, I2-3 | **Yes** | ✅ [**ANSWERED — yes**][a-q1]               |
+| **I2-Q2** | **What does the retry node retry?** Reopen the wizard, or silently re-run the last provision? _(was I1-Q3)_                                                                                                                  | I2-4       | **Yes** | ✅ [**ANSWERED**][a-q2]                     |
+| **I2-Q3** | **Where does the modal fire?** Proposal: modals only for **lifecycle** failures; wizard failures stay in-wizard. _(was I1-Q4)_                                                                                               | I2-4       | **Yes** | ✅ [**ANSWERED — proposal rejected**][a-q3] |
+| **I2-Q4** | **Does "Start fresh" need its own confirmation dialog?** _(was I1-Q2)_                                                                                                                                                       | I2-2, I2-3 | No      | ✅ [**ANSWERED — no**][a-q4]                |
+| **I2-Q5** | **Should `Missing` and `CredentialsMissing` become cached error states** via `detectErrorState`? If yes, `resetNodeErrorState(nodeId)` must be wired to `onDidChangeStatus`. _(was I1-Q5)_                                   | I2-4, I2-5 | No      | ✅ [**ANSWERED — option A**][a-q5]          |
+
+##### Answer — I2-Q1
+
+> _"Yes, it's unlikely the wizard starts as it won't be linked, but let's guard."_
+
+The Introduction step gets a **third** variant. Reaching the wizard while an instance exists should not normally
+be possible (the tree does not link to it in that state), but the command palette, a stale panel and cross-window
+races all remain — and a `Stopped` instance must never be silently recreated when the user meant **Start**.
+
+| Variant                              | MessageBar         | Primary action                                   |
+| ------------------------------------ | ------------------ | ------------------------------------------------ |
+| **Healthy** (`Running` + metadata)   | `intent="info"`    | **Disabled** — offer "Open Connection" / "Close" |
+| **Stopped** _(new)_                  | `intent="info"`    | **Disabled** — offer **Start**                   |
+| **Erroneous** (`CredentialsMissing`) | `intent="warning"` | **Enabled**, forced onto **Start fresh**         |
+
+Supersedes the two-variant table in [§9.2 Q2][s-92q2].
+
+##### Answer — I2-Q2
+
+> _"Retry on the node? It just refreshes fully, and this will cause another modal dialog to show. Now, refresh on
+> the parent / on the view will just reuse the error node from cache — as this is already implemented — but a real
+> retry will retry."_
+
+The answer is the **distinction between two paths**, not a choice between them:
+
+| Path                                                                             | Behaviour                                                                                                                                                             | Status                                                               |
+| -------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------- |
+| **Passive refresh** — parent refresh, whole-view refresh, `ext.state` transition | Must **not** re-run the failing operation. `failedChildrenCache` returns the cached error children and `childrenFetchFunc()` is never called, so **no** second modal. | **Already implemented** in `BaseExtendedTreeDataProvider` — no work  |
+| **Clicking the retry node**                                                      | `resetNodeErrorState(nodeId)` → `refresh(node)` → the operation genuinely re-runs. A second failure legitimately raises another modal.                                | Precedent: `src/commands/retryAuthentication/retryAuthentication.ts` |
+
+For a **provisioning** failure the operation being retried is the wizard, so the retry node reopens it —
+unchanged from [§9.2 Q4][s-92q4]'s stated intent.
+
+##### Answer — I2-Q3
+
+> _"The idea is that modals fire on user action: a user expands the tree view, `getChildren` is called, then we
+> have a modal error. Now the scenario when the user creates something in the webview, and the tree view calls
+> `getChildren`, and an error happens there — well, harder to guard, so let's have a modal for now; we can still
+> address it in the future."_
+
+- The proposal to restrict modals to **lifecycle** failures is **rejected**. Expanding a tree node _is_ a user
+  action, so a modal raised from `getChildren()` is correct.
+- The webview-triggered `getChildren()` case (no direct user action on the tree) will double-report, but guarding
+  it is disproportionate right now. **Accept the modal**; revisit if it proves noisy in practice.
+- `failedChildrenCache` is what stops this becoming modal spam — see [I2-Q2][a-q2].
+- **Consequence raised in the same answer:** it must be possible to clear that cache when the problem is fixed
+  elsewhere (e.g. in the webview), or the tree keeps showing a stale error node. Tracked as the newly added
+  **I2-17**.
+
+##### Answer — I2-Q4
+
+> _"Yes, no modal — just a Start fresh option as a radio, and it will tell that data will be erased. No modal
+> here."_
+
+**No separate confirmation dialog for "Start fresh".** The explicit radio choice in Configure, plus the footer
+copy that follows it, _is_ the confirmation — a modal on top would prompt twice for a decision the user has just
+made deliberately, and the second prompt would train them to click through it.
+
+The RR4 / §5.2 invariant is unaffected: a volume is still only ever dropped by an **explicit user choice**. What
+changes is where that choice lives — a radio button in the wizard rather than a dialog. `Delete Container` keeps
+its `getConfirmationAsInSettings()` prompt, because there the destructive intent is _not_ otherwise stated on
+screen; "Start fresh (erases data)" states it in the label itself.
+
+Two things this decision does require of the implementation:
+
+1. The destructive option must be **unambiguously labelled at the point of choice** — the data loss is stated on
+   the radio option itself, not only in the footer — and it must **not** be the pre-selected option, except in
+   the Erroneous variant of [I2-Q1][a-q1], where it is the only possible outcome and is preceded by a warning
+   MessageBar.
+2. The footer note must follow the selection. _"Nothing else on your machine is changed"_ is true only for a
+   genuinely fresh install and must not render for either recreate path ([§10.6][s-106]).
+
+##### Answer — I2-Q5
+
+**Option A — do not classify `Missing` / `CredentialsMissing` as cached error states.** No `detectErrorState`
+hook is added for them.
+
+They are **service states with dedicated rows and actions**, not fetch failures. `Missing` already renders an
+actionable row ("Missing · click to recreate") and self-heals the moment the container reappears; freezing it
+behind `failedChildrenCache` would make a self-healing state require an explicit invalidation to recover.
+
+The decisive argument is the collision with **I2-5**: that item makes the row render from the _service's_ cached
+status and update on `onDidChangeStatus`. Adding `failedChildrenCache` would put a **second, independent cache
+over the same row**, each with its own invalidation rule — so the row could show a frozen error node while the
+service already reports `Running`. One cache per row.
+
+Consequences:
+
+- **I2-4** applies the error-node pattern to _genuine failures only_ (provision error, connect error), not to
+  these two states.
+- **I2-5** is unaffected and needs no design change; the expand-time `docker inspect` cost is addressed there,
+  not by a second cache.
+- **I2-17** is still required — it clears the cache for the failures that _are_ classified.
+- This confirms the earlier rejection recorded under §3 M6 / WP-1 step 3 ("an extra cache to keep in sync").
 
 #### ⏸️ Deferred (tracked, not scheduled)
 
 | #         | Item                                                                              | Reason                                                             |
 | --------- | --------------------------------------------------------------------------------- | ------------------------------------------------------------------ |
-| **I2-11** | **B1** — footer experiment switch + `PREVIEW` badge _(was I1-11)_                 | User-test still running                                            |
-| **I2-12** | **N4** — un-awaited unsubscribe handshake in `runStream` _(was I1-12)_            | Papered over by terminal-event buffering; revisit if it resurfaces |
-| **I2-13** | **N7** — consolidate the three Quick Start doc folders _(was I1-13)_              | Separate work item                                                 |
-| **I2-14** | **Multi-instance support** _(was I1-14)_                                          | Explicitly out of scope (§9.2 Q3)                                  |
+| **I2-11** | [**B1**][f-b1] — footer experiment switch + `PREVIEW` badge _(was I1-11)_         | User-test still running                                            |
+| **I2-12** | [**N4**][f-nits] — un-awaited unsubscribe handshake in `runStream` _(was I1-12)_  | Papered over by terminal-event buffering; revisit if it resurfaces |
+| **I2-13** | [**N7**][f-nits] — consolidate the three Quick Start doc folders _(was I1-13)_    | Separate work item                                                 |
+| **I2-14** | **Multi-instance support** _(was I1-14)_                                          | Explicitly out of scope — [§9.2][s-92] Q3                          |
 | **I2-15** | Repo issues [#864][i864] and [#865][i865] _(was I1-15)_                           | Filed; not part of this PR                                         |
 | **I2-16** | Extract the remaining `DocumentDBClusterItem` connect flow behind a shared helper | _New._ Only if a third cluster item needs it; not release work     |
 
@@ -2272,10 +2756,167 @@ Asked on 2026-08-06; the maintainer skipped them. **Do not guess — ask again b
 I2-10                   (M7 — now a small change; unblocks the GitHub thread reply)
 I2-5 + I2-6             (independent; one commit)
 I2-1                    (regression test for the H5 contract)
-I2-2 + I2-3 + I2-4      (one coherent "wizard + tree states" change — ASK I2-Q1/Q2/Q3 FIRST)
+I2-2 + I2-3 + I2-4 + I2-17
+                        (one coherent "wizard + tree states" change — all four share
+                         the copy, the recreate flag and the error-node cache lifecycle)
 I2-7                    (fold into whichever commit touches those files)
 I2-8                    (largest; needs a migration — do it last)
 I2-9                    (verification only)
 ```
 
-**Iteration 2 closing note:** _(to be filled in when the iteration is closed.)_
+#### Iteration 2 closing note (2026-08-06)
+
+**Shipped — 9 items, 9 dedicated commits.** I2-1, I2-2, I2-3, I2-4, I2-5, I2-6, I2-7, I2-10, I2-17 (see the
+[Outcome table](#-outcome--what-landed-and-where)); I2-9 closed by verification with no code. Every remaining
+review finding routed through this iteration is now resolved except **I2-8**.
+
+**Where the implementation departed from the plan.** Three places, all recorded in the item write-ups:
+
+1. **I2-3 moved to the Configure step.** The decision tabled the guard on the Introduction step; the operator
+   placed it on Configure, next to the "Start fresh" radio it forces. Supersedes the placement in
+   [§9.2 Q2][s-92q2] and in the [I2-Q1][a-q1] answer — the three variants themselves are unchanged.
+2. **I2-5 needed a cooldown.** Option B alone cannot clear its own `"Refreshing…"` hint without firing the
+   status event unconditionally, and that event re-enters `getChildren()`. A 5 s
+   `BACKGROUND_REFRESH_COOLDOWN_MS` is the loop breaker — a deliberately bounded borrowing of option **A**,
+   which the decision had dropped as a standalone fix.
+3. **`willReuse` renamed to `canReuseExistingData`** (I2-2, operator's request). The flag now names a
+   _capability_, not an outcome the service decides — which is the whole point of making the choice explicit.
+
+**Not shipped.** **I2-8** only. It was approved, then deferred on two gates confirmed while scoping it: it
+rewrites the `TDD:` persistence assertions in `QuickStartProvisionDurability.test.ts` (which
+`.github/copilot-instructions.md` forbids without a maintainer decision — the operator was asked and was
+unavailable), and its migration must carry live lease fields ahead of `reconcile()`, where a mistake is a silent
+volume wipe. Nothing depends on it. Promoted to [§11.5][it3] as Iteration 3's first item.
+
+**Questions.** None outstanding — all five were answered before implementation started, and none needed
+revisiting during it.
+
+**Verification.** Full checklist run at close: `npm run l10n` → `npm run prettier-fix` → `npm run lint` (clean;
+only the pre-existing `eslint-env` warning from `webpack.config.views.js`) → `npx jest --no-coverage`
+(**204 suites / 3355 tests / 4 snapshots**, all passing — up from the 203 / 3346 baseline in §10, i.e. **+1
+suite and +9 tests**, all added by this iteration) → `npm run build` (clean). Per item, only `npm run lint` was
+run, per the §7.0 cadence.
+
+**Review points for the operator.**
+
+- **I2-5's unconditional status fire.** `onDidChangeStatus` triggers a whole-view
+  `connectionsBranchDataProvider.refresh()`, so a background probe costs one extra full refresh per 5 s window
+  in which the node is rendered. Bounded, but worth a look if the view feels busy.
+- **I2-17 resets on every status event**, including the ones I2-5's probe fires. For this subtree that is
+  cheap — `getChildren()` no longer does I/O — but it does mean the error cache is short-lived here by design.
+
+### 11.5 Iteration 3 — opened 2026-08-06
+
+**➡ This is the live worklist.** Everything not finished in Iteration 2, plus the standing deferred set.
+Numbering carries a `(was …)` reference so the history stays traceable.
+
+#### ⛔ Blocked on a maintainer decision
+
+| #        | Item                                                                                                                                                                                                         | Source                                           | Blocks?                                                    |
+| -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------ | ---------------------------------------------------------- |
+| **I3-1** | **Credential store consolidation.** `StorageService.get('local-quickstart')`, workspace `instances`; retires the ad-hoc `documentdb.quickstart.*` secrets **and** the `documentdb.quickstart.registry` blob. | [I2-8 write-up][d-8] · [§9.1][s-91] _(was I2-8)_ | **Yes** — [I3-Q1][b-q1] must be answered before it starts. |
+
+> **Why it is blocked and not merely deferred.** The design is settled (see the [I2-8 write-up][d-8] — it was
+> never the open question); what is not settled is permission to rewrite a `TDD:` contract suite. Read
+> [I3-Q1][b-q1] first.
+
+#### ⏸️ Deferred (tracked, not scheduled)
+
+Carried over unchanged from Iteration 2 — none of these were re-examined, and none block anything.
+
+| #        | Item                                                                                            | Reason                                                                         |
+| -------- | ----------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------ |
+| **I3-2** | [**B1**][f-b1] — footer experiment switch + `PREVIEW` badge _(was I2-11)_                       | User-test still running                                                        |
+| **I3-3** | [**N4**][f-nits] — un-awaited unsubscribe handshake in `runStream` _(was I2-12)_                | Papered over by terminal-event buffering; revisit if it resurfaces             |
+| **I3-4** | [**N7**][f-nits] — consolidate the three Quick Start doc folders _(was I2-13)_                  | Separate work item                                                             |
+| **I3-5** | **Multi-instance support** _(was I2-14)_                                                        | Explicitly out of scope — [§9.2][s-92] Q3; intent now recorded in code by I2-7 |
+| **I3-6** | Repo issues [#864][i864] and [#865][i865] _(was I2-15)_                                         | Filed; not part of this PR                                                     |
+| **I3-7** | Extract the remaining `DocumentDBClusterItem` connect flow behind a shared helper _(was I2-16)_ | Only if a third cluster item needs it; not release work                        |
+
+#### 🟡 Open questions
+
+| #         | Question                                                                                                                                                                                               | Affects | Blocks? | Status                      |
+| --------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------- | ------- | --------------------------- |
+| **I3-Q1** | **May I3-1 rewrite the `TDD:` persistence assertions** in `QuickStartProvisionDurability.test.ts` to target the new store, keeping every behavioural assertion and changing only where the data lives? | I3-1    | **Yes** | 🟡 [Asked 2026-08-06][b-q1] |
+
+##### Question — I3-Q1
+
+Asked during Iteration 2 and left unanswered (the operator was unavailable).
+
+`QuickStartProvisionDurability.test.ts` pins the persistence contract against the **raw storage keys**:
+
+- `secretStorage.get(secretKey(DEFAULT_ALIAS))` is written **before** the readiness probe;
+- the same key is cleared when the attempt fails;
+- `readRegistry(globalState)` shows `provisioning` → `ready` → `missing`.
+
+I3-1 relocates all three into `StorageService`, so those assertions cannot survive it verbatim. The
+**behaviour** they encode would be preserved exactly — write early, restore/clear on failure, same lifecycle
+phases — only the read path in the test changes.
+
+`.github/copilot-instructions.md` says a `TDD:` suite must not be auto-fixed: _"Stop and ask the user whether
+the behavior change is intentional."_ Hence this question rather than an assumption.
+
+| Option                                                                 | Consequence                                                                                                                            |
+| ---------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------- |
+| **A. Yes — rewrite the assertions against the new store** _(expected)_ | I3-1 proceeds. The contract is re-expressed, not weakened; each rewritten assertion should say in a comment which old key it replaced. |
+| **B. Keep the raw keys as a compatibility read path and assert both**  | Defeats the point of the item — the ad-hoc keys survive as a second source of truth.                                                   |
+| **C. Drop I3-1**                                                       | Acceptable: it is hygiene, not a fix. H5 was closed without it in I1-1, and nothing else depends on it.                                |
+
+**Second thing to settle with it:** the migration must carry the **live lease fields** (`operationId`,
+`leaseAt`), not just the secrets and the port, and must complete **before** `reconcile()` — the same R1 ordering
+`migrateLegacyQuickStartKeys` already relies on. Confirm that a one-shot migration is acceptable, or whether the
+new store should keep a read-through fallback to the old keys for one release.
+
+#### Suggested order within Iteration 3
+
+```text
+I3-Q1                   (answer first — I3-1 cannot start without it)
+I3-1                    (the whole of the scheduled work; do it on its own branch-point,
+                         and land the migration + its tests in one commit so a bisect
+                         never lands between the two)
+I3-2 … I3-7             (unscheduled; promote individually when they become relevant)
+```
+
+**Iteration 3 closing note:** _(to be filled in when the iteration is closed.)_
+
+<!-- prettier-ignore-start -->
+[it3]: #115-iteration-3--opened-2026-08-06
+[b-q1]: #question--i3-q1
+<!-- prettier-ignore-end -->
+
+<!-- Detail anchors used by the iteration tables. Findings live in §3, design discussions in §9,
+     the post-implementation re-assessment in §10, and the answers to this iteration's questions above. -->
+
+[f-b1]: #b1--prototype-footer-experiment-switch--preview-badge-is-shipped-in-the-ui
+[f-h5]: #h5--after-a-reload-starting-a-stopped-instance-leaves-it-unbrowsable-credential-cache-never-repopulated
+[f-m4]: #m4--start-documentdb-local-destroys-and-recreates-a-running-container-and-the-footer-note-says-the-opposite
+[f-m6]: #m6--refreshlivestate-runs-a-docker-inspect-on-every-connections-view-render
+[f-m7]: #m7--credential-bearing-connection-string-is-stored-on-the-tree-model-github-copilot-reviewer
+[f-l2]: #l2--the-configure-address-row-shows-10260-for-a-recreate-on-a-fallback-port
+[f-nits]: #nits
+[s-91]: #91-h5--where-should-the-managed-instances-credentials-live
+[s-92]: #92-m4--recreate-vs-fresh-and-the-instance-state-model
+[s-92q2]: #q2--the-wizard-is-opened-while-an-instance-already-exists
+[s-92q4]: #q4--n3--error-states-in-the-tree
+[s-93]: #93-m6--when-does-refreshlivestate-actually-run
+[s-101]: #101-h5--wp-6--credential-source-of-truth
+[s-102]: #102-m4--wp-7--recreate-vs-fresh
+[s-103]: #103-m6--wp-8--tree-render-cost
+[s-104]: #104-m7--password-on-the-tree-model
+[s-106]: #106-decisions-taken-2026-08-06-second-pass
+[a-q1]: #answer--i2-q1
+[a-q2]: #answer--i2-q2
+[a-q3]: #answer--i2-q3
+[a-q4]: #answer--i2-q4
+[a-q5]: #answer--i2-q5
+[d-1]: #i2-1--h5-regression-test
+[d-2]: #i2-2--recreate-vs-fresh-choice
+[d-3]: #i2-3--wizard-guard-when-an-instance-already-exists
+[d-4]: #i2-4--error-node-pattern-for-the-quick-start-rows
+[d-5]: #i2-5--tree-render-cost
+[d-6]: #i2-6--m6-b-skip-suggestport-on-polled-status-calls
+[d-7]: #i2-7--single-instance-intent-notes
+[d-8]: #i2-8--credential-store-consolidation
+[d-9]: #i2-9--close-l2
+[d-10]: #i2-10--m7-strip-the-password-from-the-tree-model
+[d-17]: #i2-17--clear-the-cached-tree-error-state-when-the-failure-is-resolved-elsewhere
