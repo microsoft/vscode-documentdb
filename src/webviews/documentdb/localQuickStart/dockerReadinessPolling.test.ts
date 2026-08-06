@@ -18,7 +18,7 @@ function status(readiness: DockerReadiness): DockerStatusResult {
         readiness,
         status: { state: InstanceState.NotInstalled },
         busy: false,
-        willReuse: false,
+        canReuseExistingData: false,
         suggestedPort: QUICK_START_PORT,
     };
 }

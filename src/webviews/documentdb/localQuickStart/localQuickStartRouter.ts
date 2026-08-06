@@ -79,6 +79,10 @@ const advancedOptionsSchema = z
             .regex(/^[\w][\w.-]*$/, 'Invalid image tag')
             .optional(),
         loadSampleData: z.boolean().optional(),
+        // The user's explicit "Start fresh (erases data)" choice (review M4). The service applies
+        // the RR4 volume-wipe gate: this flag is the only way a provision may drop an existing
+        // instance's data volume.
+        startFresh: z.boolean().optional(),
         continueAnyway: z.boolean().optional(),
     })
     // Mirror the webview's both-or-neither rule server-side: a username without a password
@@ -98,7 +102,7 @@ export type RouterContext = BaseRouterContext & {
 /**
  * Strip the credential-bearing {@link QuickStartStatus.metadata} before returning status to the
  * webview: its `connectionString`/`username` are secrets the renderer never reads (it only uses
- * `canResumeReadiness`, plus `readiness`/`willReuse` from the wrapper). Keeping them out of the
+ * `canResumeReadiness`, plus `readiness`/`canReuseExistingData` from the wrapper). Keeping them out of the
  * renderer process is defense-in-depth — the password never crosses into the webview's JS heap, so a
  * future webview vulnerability can't exfiltrate it. All non-sensitive fields are preserved.
  */
@@ -143,12 +147,12 @@ export const localQuickStartRouter = router({
             // Design §14 quickstart.docker_readiness never includes names, ports, or credentials.
             Object.assign(tctx.actionContext.telemetry.properties, getDockerReadinessTelemetryProperties(readiness));
             tctx.actionContext.telemetry.properties.platformSupported = String(readiness.platformSupported !== false);
-            const willReuse = await QuickStartService.willReuseExistingInstance();
+            const canReuseExistingData = await QuickStartService.canReuseExistingData();
             return {
                 readiness,
                 status: toWebviewStatus(QuickStartService.getStatus()),
                 busy: QuickStartService.isBusy,
-                willReuse,
+                canReuseExistingData,
                 // M6-b: the polled readiness loop reads only `readiness`, and suggestPort() probes a
                 // range of host sockets on every call - skip it while polling.
                 suggestedPort: input?.polled ? undefined : await QuickStartService.suggestPort(),

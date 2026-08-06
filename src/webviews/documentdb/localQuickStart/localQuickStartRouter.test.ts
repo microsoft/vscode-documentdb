@@ -10,7 +10,7 @@ const mockStartDockerProvider = jest.fn();
 const mockIsDockerReady = jest.fn();
 const mockGetStatus = jest.fn();
 const mockRefreshLiveState = jest.fn();
-const mockWillReuseExistingInstance = jest.fn();
+const mockCanReuseExistingData = jest.fn();
 const mockSuggestPort = jest.fn();
 
 jest.mock('vscode', () => ({
@@ -31,7 +31,7 @@ jest.mock('../../../services/localQuickStart/QuickStartService', () => ({
         isBusy: false,
         provision: jest.fn(),
         refreshLiveState: mockRefreshLiveState,
-        willReuseExistingInstance: mockWillReuseExistingInstance,
+        canReuseExistingData: mockCanReuseExistingData,
         suggestPort: mockSuggestPort,
         checkPort: jest.fn(),
     },
@@ -91,7 +91,7 @@ describe('localQuickStartRouter', () => {
             daemonReachable: true,
         });
         mockGetStatus.mockReturnValue({ state: 'Stopped' });
-        mockWillReuseExistingInstance.mockResolvedValue(false);
+        mockCanReuseExistingData.mockResolvedValue(false);
         const context = createContext();
         const caller = createCallerFactory(localQuickStartRouter)(context);
 
@@ -114,7 +114,7 @@ describe('localQuickStartRouter', () => {
             daemonReachable: true,
         });
         mockGetStatus.mockReturnValue({ state: 'Stopped' });
-        mockWillReuseExistingInstance.mockResolvedValue(false);
+        mockCanReuseExistingData.mockResolvedValue(false);
         const caller = createCallerFactory(localQuickStartRouter)(createContext());
 
         await caller.getDockerStatus({ forceRefresh: true, resetProviderMemory: true });

@@ -21,6 +21,8 @@ import {
     MessageBarActions,
     MessageBarBody,
     MessageBarTitle,
+    Radio,
+    RadioGroup,
     Spinner,
     Switch,
     Table,
@@ -908,7 +910,12 @@ export const LocalQuickStart = (): JSX.Element => {
     const [checkReadiness, setCheckReadiness] = useState<DockerReadiness | undefined>(undefined);
     /** A Docker problem reported by a later stage (pull / run), backing that stage's remediation. */
     const [stageDockerFailure, setStageDockerFailure] = useState<DockerReadiness | undefined>(undefined);
-    const [willReuse, setWillReuse] = useState(false);
+    const [canReuseExistingData, setCanReuseExistingData] = useState(false);
+    /**
+     * The user's explicit recreate-vs-fresh choice (review M4). Nothing is inferred from
+     * {@link canReuseExistingData} any more, which is what resolves N1 (a stale inferred value).
+     */
+    const [dataChoice, setDataChoice] = useState<'reuse' | 'fresh'>('reuse');
     const [stageStatus, setStageStatus] = useState<Record<ProvisionStage, StageStatus>>(emptyStageStatus);
     const [errorMessage, setErrorMessage] = useState<string | undefined>(undefined);
     const [successMessage, setSuccessMessage] = useState<string | undefined>(undefined);
@@ -940,11 +947,11 @@ export const LocalQuickStart = (): JSX.Element => {
     const [editingImage, setEditingImage] = useState(false);
     const [customCredentials, setCustomCredentials] = useState(false);
 
-    // The service reuses an existing instance (keeping its data volume) whenever stored
-    // credentials exist, ignoring any custom credentials / image tag. `willReuse` reflects
-    // that exact decision (the same predicate the service uses), so we hide those fields and
-    // relabel the settings whenever — and only when — the service will actually reuse.
-    const isRecreate = willReuse;
+    // The Configure step ASKS whether to keep the existing data (review M4): the service reuses an
+    // instance's stored credentials and data volume only when told to. `canReuseExistingData` says
+    // the choice is available (the same predicate the service uses); `dataChoice` is the answer.
+    const startFresh = canReuseExistingData && dataChoice === 'fresh';
+    const isRecreate = canReuseExistingData && !startFresh;
     const useCustomCredentials = customCredentials && !isRecreate;
 
     const subscriptionRef = useRef<{ unsubscribe: () => void } | null>(null);
@@ -1056,8 +1063,12 @@ export const LocalQuickStart = (): JSX.Element => {
             if (advTag.trim() && advTag.trim() !== QUICK_START_DEFAULT_TAG) opts.imageTag = advTag.trim();
         }
         if (!advLoadSampleData) opts.loadSampleData = false;
+        // The recreate-vs-fresh decision is sent EXPLICITLY (review M4): the service no longer
+        // infers it from the presence of stored credentials, so nothing can go stale between the
+        // choice the user was shown and the volume the provision drops.
+        if (startFresh) opts.startFresh = true;
         advancedRef.current = Object.keys(opts).length > 0 ? opts : undefined;
-    }, [advPort, advUser, advPass, advTag, advLoadSampleData, advError, isRecreate, useCustomCredentials]);
+    }, [advPort, advUser, advPass, advTag, advLoadSampleData, advError, isRecreate, useCustomCredentials, startFresh]);
 
     // Built during render, after `l10n.config()` has run, so these ARE translated. Memoized because
     // the maps are rebuilt on every call by design (see the note on the lookup functions above).
@@ -1171,7 +1182,7 @@ export const LocalQuickStart = (): JSX.Element => {
                     return undefined;
                 }
                 applyReadiness(result.readiness);
-                setWillReuse(result.willReuse);
+                setCanReuseExistingData(result.canReuseExistingData);
                 // Absent on polled calls (M6-b); keep the last suggestion in that case.
                 if (result.suggestedPort !== undefined) {
                     setSuggestedPort(result.suggestedPort);
@@ -1390,7 +1401,7 @@ export const LocalQuickStart = (): JSX.Element => {
                     onResult: (result) => {
                         latestResult = result;
                         applyReadiness(result.readiness);
-                        setWillReuse(result.willReuse);
+                        setCanReuseExistingData(result.canReuseExistingData);
                     },
                 });
                 if (abortController.signal.aborted) return;
@@ -1908,6 +1919,23 @@ export const LocalQuickStart = (): JSX.Element => {
         },
     ];
 
+    /**
+     * The recreate-vs-fresh choice (review M4, I2-2). It sits above the settings table because it
+     * decides what those settings mean: reusing keeps the instance's stored credentials and image,
+     * so the credential/image rows are hidden. Per I2-Q4 there is NO extra confirmation dialog —
+     * the destructive option states the data loss in its own label and is never pre-selected.
+     */
+    const dataChoiceBlock = canReuseExistingData && (
+        <RadioGroup
+            value={dataChoice}
+            aria-label={l10n.t('Existing data')}
+            onChange={(_event, data) => setDataChoice(data.value === 'fresh' ? 'fresh' : 'reuse')}
+        >
+            <Radio value="reuse" label={l10n.t('Use existing data — recreate the container and keep your documents')} />
+            <Radio value="fresh" label={l10n.t('Start fresh — erases all data in DocumentDB Local')} />
+        </RadioGroup>
+    );
+
     const configure = (
         <section className={styles.section} aria-labelledby="quickstart-configure-heading">
             <div className={styles.sectionHeader}>
@@ -1918,6 +1946,7 @@ export const LocalQuickStart = (): JSX.Element => {
                     {l10n.t('These defaults work for most people. Change them only if you need to.')}
                 </Text>
             </div>
+            {dataChoiceBlock}
             <Table size="small" aria-label={l10n.t('Setup settings')}>
                 <colgroup>
                     <col className={styles.settingsColLabel} />
@@ -2288,14 +2317,31 @@ export const LocalQuickStart = (): JSX.Element => {
             </Button>
         );
     } else if (phase === 'configure') {
-        primaryLabel = l10n.t('Start DocumentDB Local');
+        // The label and the note follow the choice above: "Nothing else on your machine is changed"
+        // is true only for a genuinely fresh install and must not render for either recreate path
+        // (review M4 / §10.6).
+        primaryLabel = isRecreate
+            ? l10n.t('Recreate DocumentDB Local')
+            : startFresh
+              ? l10n.t('Erase and set up DocumentDB Local')
+              : l10n.t('Start DocumentDB Local');
         primaryDisabled = advError !== undefined;
         primaryIcon = <RocketRegular />;
         onPrimary = handleStart;
-        footerNote = l10n.t(
-            'Starting downloads the official image if needed, then creates and starts one container named {0}. Nothing else on your machine is changed.',
-            QUICK_START_CONTAINER_NAME,
-        );
+        footerNote = isRecreate
+            ? l10n.t(
+                  'Recreating replaces the container named {0} and keeps its data volume, so your documents, credentials and image version are preserved.',
+                  QUICK_START_CONTAINER_NAME,
+              )
+            : startFresh
+              ? l10n.t(
+                    'This deletes the container named {0} and its data volume, then creates a new one. Everything stored in DocumentDB Local is erased.',
+                    QUICK_START_CONTAINER_NAME,
+                )
+              : l10n.t(
+                    'Starting downloads the official image if needed, then creates and starts one container named {0}. Nothing else on your machine is changed.',
+                    QUICK_START_CONTAINER_NAME,
+                );
         secondaryActions = (
             <Button appearance="secondary" icon={<ArrowLeftRegular />} onClick={() => setPhase('introduction')}>
                 {l10n.t('Back')}

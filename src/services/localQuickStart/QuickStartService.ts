@@ -423,16 +423,16 @@ export class QuickStartServiceImpl {
         // timeout — drop its retained "Wait longer" state (the run below removes the container).
         this.stateFor(alias).pendingReadiness = undefined;
         const channel = getQuickStartOutputChannel();
-        // Decide reuse from LIVE durable state, not the in-memory Missing flag: whenever we
-        // still hold the instance's stored credentials (SecretStorage), a data volume bound to
-        // them may exist on disk — even after the container was removed externally or across a
-        // window reload that cleared in-memory state (§6.1, §12). Adopt those credentials and
-        // KEEP the volume rather than wiping it; the stored credentials are what opens the
-        // volume's cluster, so freshly generated ones would fail against existing data. Only
-        // when NO credentials are recoverable is a clean wipe safe (the volume could not be
-        // opened anyway). This makes a true fresh provision the explicit Delete-then-recreate
-        // path, so running setup again can never silently destroy an existing data volume.
-        const reusable = await this.getReusableCredentials(alias);
+        // The user's explicit Configure-step choice (review M4). "Start fresh" is the ONLY way to
+        // reach the volume wipe below when an instance already exists; without it, reuse is decided
+        // from LIVE durable state, not the in-memory Missing flag: whenever we still hold the
+        // instance's stored credentials (SecretStorage), a data volume bound to them may exist on
+        // disk — even after the container was removed externally or across a window reload that
+        // cleared in-memory state (§6.1, §12). Adopt those credentials and KEEP the volume rather
+        // than wiping it; the stored credentials are what opens the volume's cluster, so freshly
+        // generated ones would fail against existing data.
+        const startFresh = options?.startFresh === true;
+        const reusable = startFresh ? undefined : await this.getReusableCredentials(alias);
         const reusing = reusable !== undefined;
         const credentials = reusable ?? resolveProvisionCredentials(options);
         const secrets: string[] = secretVariants(credentials.password);
@@ -518,14 +518,14 @@ export class QuickStartServiceImpl {
             const hasReadyRecord = readRegistry(ext.context.globalState).instances.some(
                 (record) => record.alias === alias && record.phase === 'ready',
             );
-            // RR4 / §5.2 volume-wipe gate: NEVER silently destroy an existing instance's data when we
-            // can't recover its credentials. A credential-unavailable instance (a managed container
-            // and/or a durable `ready` record, but no readable secret) must be explicitly Deleted —
-            // not wiped by a Set-up/recreate click. Only a truly-fresh alias (no managed container AND
-            // no `ready` record) may reach the wipe below (where it is a safe no-op / clean slate). A
-            // dead failed-attempt orphan has NO managed container (provision's `finally` removed it)
-            // and no `ready` record, so retrying it still works.
-            if (!reusing) {
+            // RR4 / §5.2 volume-wipe gate: NEVER silently destroy an existing instance's data. A
+            // credential-unavailable instance (a managed container and/or a durable `ready` record,
+            // but no readable secret) must not be wiped by a plain Set-up/recreate click. The wipe
+            // below is reachable only for a truly-fresh alias (no managed container AND no `ready`
+            // record, where it is a safe no-op) or when the user explicitly chose "Start fresh" in
+            // the Configure step. A dead failed-attempt orphan has NO managed container (provision's
+            // `finally` removed it) and no `ready` record, so retrying it still works.
+            if (!reusing && !startFresh) {
                 if (existing || hasReadyRecord) {
                     this.setStatus(alias, InstanceState.CredentialsMissing, undefined, credentialUnavailableMessage());
                     yield stageEvent(
@@ -1091,14 +1091,13 @@ export class QuickStartServiceImpl {
     }
 
     /**
-     * True when a provision would REUSE an existing instance rather than create a fresh one:
-     * i.e. usable stored credentials exist (so the data volume is kept and any custom
-     * credentials / image tag would be ignored). Mirrors the `reusing` decision in
-     * {@link provision} so the webview can hide the credential/image inputs and show the
-     * recreate summary whenever — and only when — the service will actually reuse, regardless
-     * of the in-memory `Missing` badge. Public so the `getDockerStatus` query can surface it.
+     * True when an existing instance's data can be REUSED rather than replaced: i.e. usable stored
+     * credentials exist, so a recreate can bind the existing data volume (and any custom
+     * credentials / image tag would be ignored). Backs the Configure step's "Use existing data" /
+     * "Start fresh" choice regardless of the in-memory `Missing` badge. Public so the
+     * `getDockerStatus` query can surface it.
      */
-    public async willReuseExistingInstance(alias: string = DEFAULT_ALIAS): Promise<boolean> {
+    public async canReuseExistingData(alias: string = DEFAULT_ALIAS): Promise<boolean> {
         return (await this.getReusableCredentials(alias)) !== undefined;
     }
 

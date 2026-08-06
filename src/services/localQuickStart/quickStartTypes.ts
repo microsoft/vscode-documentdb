@@ -47,6 +47,13 @@ export interface AdvancedQuickStartOptions {
     imageTag?: string;
     /** Seed the image's built-in sample data (default `true`). */
     loadSampleData?: boolean;
+    /**
+     * The user explicitly chose "Start fresh" in the Configure step (review M4): drop the existing
+     * container **and its data volume**, then provision new credentials. This is the only way to
+     * reach the volume wipe when an instance already exists — without it, `provision` reuses the
+     * stored credentials and keeps the volume (or refuses, when the credentials are unreadable).
+     */
+    startFresh?: boolean;
     /** Bypass only an indeterminate readiness diagnosis; the service revalidates this condition. */
     continueAnyway?: boolean;
 }
@@ -382,13 +389,13 @@ export interface DockerStatusResult {
     readonly status: QuickStartStatus;
     readonly busy: boolean;
     /**
-     * True when a provision would REUSE an existing instance (stored credentials are
-     * present, so the data volume is kept and custom credentials / image tag are ignored)
-     * rather than create a fresh one. Drives the webview's recreate UI independently of the
-     * in-memory `Missing` badge, so an already-provisioned or post-reload instance never
-     * shows credential/image inputs the service would silently ignore.
+     * True when an existing instance's data can be reused: usable stored credentials are present,
+     * so a provision can recreate the container onto the existing data volume. Drives the Configure
+     * step's "Use existing data" / "Start fresh" choice, independently of the in-memory `Missing`
+     * badge, so an already-provisioned or post-reload instance never shows credential/image inputs
+     * the service would silently ignore.
      */
-    readonly willReuse: boolean;
+    readonly canReuseExistingData: boolean;
     /**
      * A host port that is free right now, for the Configure step to pre-fill. The port is then
      * always sent explicitly, so setup binds exactly what the user saw (review L3).

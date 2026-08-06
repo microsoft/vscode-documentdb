@@ -136,13 +136,13 @@ describe('QuickStartService — R1 legacy-fallback safety (WI-1)', () => {
         expect(service.getStatus().state).toBe(InstanceState.Stopped);
     });
 
-    it('willReuseExistingInstance() is true when only the legacy secret exists (protects the volume-wipe gate)', async () => {
+    it('canReuseExistingData() is true when only the legacy secret exists (protects the volume-wipe gate)', async () => {
         ext.secretStorage = fakeSecretStorage({ [LEGACY_SECRET_KEY]: LEGACY_CONN });
         ext.context = { globalState: fakeMemento() } as unknown as vscode.ExtensionContext;
 
         const service = new QuickStartServiceImpl(mockRuntime({}));
 
-        expect(await service.willReuseExistingInstance()).toBe(true);
+        expect(await service.canReuseExistingData()).toBe(true);
     });
 
     it('reconcile() with NO stored secret surfaces the orphan as credential-unavailable (never removes it or its volume)', async () => {
@@ -1193,6 +1193,50 @@ describe('QuickStartService — WI-2e-1 provision RR4 volume-wipe gate', () => {
         await drain(service.provision(new AbortController().signal));
 
         expect(removeVolume).toHaveBeenCalledTimes(1);
+    });
+
+    // Review M4 / I2-2: the recreate-vs-fresh decision is the user's explicit Configure-step choice,
+    // not something inferred from whether credentials happen to be readable.
+    it('keeps the data volume when stored credentials exist and "Start fresh" was NOT chosen', async () => {
+        ext.secretStorage = fakeSecretStorage({ [secretKey(DEFAULT_ALIAS)]: LEGACY_CONN });
+        ext.context = { globalState: fakeMemento() } as unknown as vscode.ExtensionContext;
+        const removeVolume = jest.fn().mockResolvedValue(undefined);
+        const service = new QuickStartServiceImpl(
+            provisionRuntime({ containers: [{ id: 'c1', alias: DEFAULT_ALIAS }], portFree: false, removeVolume }),
+        );
+
+        await drain(service.provision(new AbortController().signal));
+
+        expect(removeVolume).not.toHaveBeenCalled();
+    });
+
+    it('wipes the data volume when "Start fresh" was chosen, even though credentials are readable', async () => {
+        ext.secretStorage = fakeSecretStorage({ [secretKey(DEFAULT_ALIAS)]: LEGACY_CONN });
+        ext.context = { globalState: fakeMemento() } as unknown as vscode.ExtensionContext;
+        const removeVolume = jest.fn().mockResolvedValue(undefined);
+        const service = new QuickStartServiceImpl(
+            provisionRuntime({ containers: [{ id: 'c1', alias: DEFAULT_ALIAS }], portFree: false, removeVolume }),
+        );
+
+        await drain(service.provision(new AbortController().signal, { startFresh: true }));
+
+        expect(removeVolume).toHaveBeenCalledTimes(1);
+    });
+
+    it('lets an explicit "Start fresh" recover a credential-unavailable instance instead of refusing', async () => {
+        ext.secretStorage = fakeSecretStorage({});
+        ext.context = { globalState: fakeMemento() } as unknown as vscode.ExtensionContext;
+        const removeVolume = jest.fn().mockResolvedValue(undefined);
+        const service = new QuickStartServiceImpl(
+            provisionRuntime({ containers: [{ id: 'c1', alias: DEFAULT_ALIAS }], portFree: false, removeVolume }),
+        );
+
+        await drain(service.provision(new AbortController().signal, { startFresh: true }));
+
+        // Previously this was a hard refusal (CredentialsMissing) that sent the user hunting for a
+        // separate Delete Container command; the warned Start-fresh path now lives in the wizard.
+        expect(removeVolume).toHaveBeenCalledTimes(1);
+        expect(service.getStatus().state).not.toBe(InstanceState.CredentialsMissing);
     });
 
     it('continues past an indeterminate readiness result only when explicitly requested', async () => {
