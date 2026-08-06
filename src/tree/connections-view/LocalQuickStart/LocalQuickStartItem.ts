@@ -27,10 +27,12 @@ import {
 } from '../../../services/localQuickStart/quickStartTypes';
 import { getResourcesPath } from '../../../utils/icons';
 import { createGenericElementWithContext } from '../../api/createGenericElementWithContext';
+import { containsRetryNode, createRetryNode } from '../../api/retryNode';
 import { ClusterItemBase, type EphemeralClusterCredentials } from '../../documentdb/ClusterItemBase';
 import { type TreeCluster } from '../../models/BaseClusterModel';
 import { type TreeElement } from '../../TreeElement';
 import { type TreeElementWithContextValue } from '../../TreeElementWithContextValue';
+import { type TreeElementWithRetryChildren } from '../../TreeElementWithRetryChildren';
 import { buildClusterTreeItem } from '../clusterItemPresentation';
 import { type ConnectionClusterModel } from '../models/ConnectionClusterModel';
 
@@ -126,12 +128,57 @@ class QuickStartClusterItem extends ClusterItemBase<ConnectionClusterModel> {
  * - A managed instance → the inline cluster (Running, expand to browse) or a
  *   state row (Stopped/Starting/Stopping/Missing/Error) carrying lifecycle menus.
  */
-export class LocalQuickStartItem implements TreeElement, TreeElementWithContextValue {
+export class LocalQuickStartItem implements TreeElement, TreeElementWithContextValue, TreeElementWithRetryChildren {
     public readonly id: string;
     public contextValue: string = 'treeItem_localQuickStart';
 
     constructor(public readonly parentId: string) {
         this.id = `${parentId}/localQuickStart`;
+    }
+
+    /**
+     * Lets `BaseExtendedTreeDataProvider` cache the failed children (review §9.2 Q4 / I2-Q2): a
+     * PASSIVE refresh — a parent/whole-view refresh or an `ext.state` transition — then reuses them
+     * instead of re-running the failing operation, while clicking the retry node resets the cache
+     * (`resetNodeErrorState`) and genuinely retries.
+     */
+    public hasRetryNode(children: TreeElement[] | null | undefined): boolean {
+        return containsRetryNode(children);
+    }
+
+    /**
+     * Actionable recovery for a GENUINE failure (review §9.2 Q4 / N3). The tree renders recovery
+     * ACTIONS, not error text: a retry node that reopens the wizard (the operation that failed —
+     * see I2-Q2), the setup log, and — once a container exists — Delete Container.
+     *
+     * `Missing` and `CredentialsMissing` deliberately do NOT come here: they are service states
+     * with their own actionable rows, not fetch failures (I2-Q5).
+     */
+    private createErrorRecoveryChildren(includeDelete: boolean): TreeElement[] {
+        const children: TreeElement[] = [
+            createRetryNode(this.id, this, { commandId: 'vscode-documentdb.command.localQuickStart.open' }),
+            createGenericElementWithContext({
+                id: `${this.id}/viewLogs`,
+                contextValue: 'error',
+                label: l10n.t('Click here to view the setup log'),
+                iconPath: new vscode.ThemeIcon('output'),
+                commandId: 'vscode-documentdb.command.localQuickStart.viewLogs',
+            }),
+        ];
+
+        if (includeDelete) {
+            children.push(
+                createGenericElementWithContext({
+                    id: `${this.id}/delete`,
+                    contextValue: 'error',
+                    label: l10n.t('Click here to delete the container and start over'),
+                    iconPath: new vscode.ThemeIcon('trash'),
+                    commandId: 'vscode-documentdb.command.localQuickStart.delete',
+                }),
+            );
+        }
+
+        return children;
     }
 
     async getChildren(): Promise<TreeElement[]> {
@@ -232,6 +279,7 @@ export class LocalQuickStartItem implements TreeElement, TreeElementWithContextV
                             status.errorMessage ?? l10n.t('Error · click for details'),
                             new vscode.ThemeIcon('warning', new vscode.ThemeColor('list.errorForeground')),
                         ),
+                        ...this.createErrorRecoveryChildren(true),
                     ];
                 default:
                     break;
@@ -285,17 +333,11 @@ export class LocalQuickStartItem implements TreeElement, TreeElementWithContextV
             }),
         ];
 
-        // FOLLOW-UP: this row reports a wizard failure in the tree, which is surprising when the
-        // user never opened the wizard from here. Decide whether it belongs at all.
-        if (status.state === InstanceState.Error && status.errorMessage) {
-            children.push(
-                createGenericElementWithContext({
-                    id: `${this.id}/error`,
-                    contextValue: 'treeItem_quickStartError',
-                    label: status.errorMessage,
-                    iconPath: new vscode.ThemeIcon('warning'),
-                }),
-            );
+        // A wizard failure that never got as far as creating anything (no metadata) is still
+        // reported here, but as ACTIONABLE recovery nodes rather than the message-only row this
+        // used to push (review N3). There is no container yet, so Delete is not offered.
+        if (status.state === InstanceState.Error) {
+            children.push(...this.createErrorRecoveryChildren(false));
         }
 
         return children;
