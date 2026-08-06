@@ -98,10 +98,7 @@ export const QUICK_START_OPERATION_LABEL_KEY = 'vscode.documentdb.operation';
 
 /**
  * Multi-instance identity (WI-1). Each managed instance is keyed by a stable `alias` — also its
- * Docker container name and `vscode.documentdb.alias` label value. The **default** (first) instance
- * keeps the legacy names so an existing single instance is adopted with **NO rename**:
- * `containerName(DEFAULT_ALIAS) === QUICK_START_CONTAINER_NAME` and
- * `volumeName(DEFAULT_ALIAS) === QUICK_START_VOLUME_NAME`.
+ * Docker container name and `vscode.documentdb.alias` label value.
  */
 export const DEFAULT_ALIAS = QUICK_START_ALIAS;
 
@@ -119,24 +116,6 @@ export function volumeName(alias: string): string {
 export function clusterId(alias: string): string {
     return `quickstart-${alias}`;
 }
-
-/** SecretStorage key holding an instance's connection string (with credentials). */
-export function secretKey(alias: string): string {
-    return `documentdb.quickstart.${alias}.connectionString`;
-}
-
-/** globalState key holding the image reference an instance's data volume was created with. */
-export function imageRefKey(alias: string): string {
-    return `documentdb.quickstart.${alias}.imageRef`;
-}
-
-/**
- * Legacy (pre-multi-instance) flat storage keys. Migrated once to the `DEFAULT_ALIAS`-keyed values
- * at activation (see `quickStartRegistry.migrateLegacyQuickStartKeys`), then deleted. Kept as read
- * fallbacks on destructive paths (belt-and-suspenders against data loss).
- */
-export const LEGACY_SECRET_KEY = 'documentdb.quickstart.connectionString';
-export const LEGACY_IMAGE_REF_KEY = 'documentdb.quickstart.imageRef';
 
 /** Reduced lifecycle state set for the POC (design §6, decision D8). */
 export enum InstanceState {

@@ -31,7 +31,6 @@ import { AuthMethodId } from '../../documentdb/auth/AuthMethod';
 import { ClustersClient } from '../../documentdb/ClustersClient';
 import { CredentialCache } from '../../documentdb/CredentialCache';
 import { DocumentDBConnectionString } from '../../documentdb/utils/DocumentDBConnectionString';
-import { ext } from '../../extensionVariables';
 import {
     ContainerRuntime,
     getBoundHostPort,
@@ -47,13 +46,18 @@ import {
 } from './quickStartCredentials';
 import {
     DEFAULT_INSTANCE_DISPLAY_NAME,
+    getInstance,
     isProvisioningLeaseFresh,
+    listInstances,
     type QuickStartInstanceRecord,
-    readRegistry,
-    removeInstanceRecord,
-    updateRegistry,
-    upsertInstanceRecord,
-} from './quickStartRegistry';
+    readConnectionString,
+    removeInstance,
+    removeInstanceIf,
+    scavengeStaleLeases,
+    updateInstance,
+    upsertInstance,
+    writeConnectionString,
+} from './quickStartStore';
 import {
     type AdvancedQuickStartOptions,
     clusterId,
@@ -61,12 +65,9 @@ import {
     DEFAULT_ALIAS,
     type DockerHostEnvironment,
     type DockerReadiness,
-    imageRefKey,
     type InstanceMetadata,
     InstanceState,
     type InstanceStatus,
-    LEGACY_IMAGE_REF_KEY,
-    LEGACY_SECRET_KEY,
     type PortAvailability,
     type ProvisionStage,
     QUICK_START_ALIAS_LABEL_KEY,
@@ -78,7 +79,6 @@ import {
     QUICK_START_PORT_SCAN_LIMIT,
     type QuickStartStatus,
     resolveQuickStartImage,
-    secretKey,
     type StageEvent,
     volumeName,
 } from './quickStartTypes';
@@ -441,14 +441,11 @@ export class QuickStartServiceImpl {
         // so custom credentials AND a custom image tag are intentionally IGNORED: the stored
         // credentials are required to open the volume's cluster, and recreating onto it with a
         // different (especially older) image version could leave the on-disk cluster unusable.
-        // The original image is reused — from in-memory metadata, falling back to the durable
-        // globalState record (survives a window reload), then the default if neither is known.
+        // The original image is reused — from in-memory metadata, falling back to the stored record
+        // (survives a window reload), then the default if neither is known.
         const usedCustomCreds = !reusing && !!(options?.username?.trim() && options?.password?.trim());
         const imageRef = reusing
-            ? (this.stateFor(alias).metadata?.imageRef ??
-              ext.context.globalState.get<string>(imageRefKey(alias)) ??
-              (alias === DEFAULT_ALIAS ? ext.context.globalState.get<string>(LEGACY_IMAGE_REF_KEY) : undefined) ??
-              QUICK_START_IMAGE)
+            ? (this.stateFor(alias).metadata?.imageRef ?? (await getInstance(alias))?.imageRef ?? QUICK_START_IMAGE)
             : resolveQuickStartImage(options?.imageTag);
         const usedCustomImage = !reusing && imageRef !== QUICK_START_IMAGE;
         const explicitPort = typeof options?.port === 'number' ? options.port : undefined;
@@ -515,9 +512,7 @@ export class QuickStartServiceImpl {
             // volume, so the new credentials initialize a clean cluster. When reusing, the volume is
             // intentionally KEPT so existing data survives the recreate.
             const existing = await this.findManagedContainer(alias);
-            const hasReadyRecord = readRegistry(ext.context.globalState).instances.some(
-                (record) => record.alias === alias && record.phase === 'ready',
-            );
+            const hasReadyRecord = (await getInstance(alias))?.phase === 'ready';
             // RR4 / §5.2 volume-wipe gate: NEVER silently destroy an existing instance's data. A
             // credential-unavailable instance (a managed container and/or a durable `ready` record,
             // but no readable secret) must not be wiped by a plain Set-up/recreate click. The wipe
@@ -654,7 +649,10 @@ export class QuickStartServiceImpl {
             // the volume. With the secret written here, a reload mid-wait reconciles into a normal
             // adoption instead. A failed attempt restores the previous value in `finally`.
             previousStoredConnectionString = await this.readStoredConnectionString(alias);
-            await ext.secretStorage.store(secretKey(alias), connectionString);
+            await writeConnectionString(alias, connectionString, {
+                displayName: alias === DEFAULT_ALIAS ? DEFAULT_INSTANCE_DISPLAY_NAME : alias,
+                port: boundPort,
+            });
             earlySecretStored = true;
             if (leaseHeld) {
                 await this.renewProvisioningLease(alias, operationId, boundPort);
@@ -755,11 +753,10 @@ export class QuickStartServiceImpl {
                 // must not leave its own secret behind, nor clobber the previous instance's.
                 if (earlySecretStored) {
                     try {
-                        if (previousStoredConnectionString !== undefined) {
-                            await ext.secretStorage.store(secretKey(alias), previousStoredConnectionString);
-                        } else {
-                            await ext.secretStorage.delete(secretKey(alias));
-                        }
+                        await writeConnectionString(alias, previousStoredConnectionString ?? null, {
+                            displayName: alias === DEFAULT_ALIAS ? DEFAULT_INSTANCE_DISPLAY_NAME : alias,
+                            port: chosenPort,
+                        });
                     } catch {
                         // Best-effort restore; a stuck secret is surfaced by the next reconcile.
                     }
@@ -842,17 +839,18 @@ export class QuickStartServiceImpl {
             await this.seedSampleData(pending.containerId, secretVariants(pending.password), token);
         }
         this.throwIfAborted(signal);
-        await ext.secretStorage.store(secretKey(pending.alias), pending.connectionString);
-        // Durably remember the image this instance's volume was created with, so a recreate
-        // after a window reload (in-memory metadata gone) keeps the same image.
-        await ext.context.globalState.update(imageRefKey(pending.alias), pending.imageRef);
-        // Make the registry authoritative: this instance is now ready on its bound port.
-        // (WI-2 reads the registry to enumerate instances.)
-        await upsertInstanceRecord(ext.context.globalState, {
+        // One write covers the credentials, the image the volume was created with (so a recreate
+        // after a window reload keeps it) and the ready phase the tree and reconcile enumerate.
+        await upsertInstance({
             alias: pending.alias,
             displayName: pending.displayName,
             port: pending.boundPort,
             phase: 'ready',
+            imageRef: pending.imageRef,
+        });
+        await writeConnectionString(pending.alias, pending.connectionString, {
+            displayName: pending.displayName,
+            port: pending.boundPort,
         });
         // Drop any stale client cached under this id (e.g. from a prior run with different
         // credentials) so the next browse uses the fresh credentials.
@@ -1107,9 +1105,9 @@ export class QuickStartServiceImpl {
      * A multi-instance seam kept deliberately (see {@link instances}): with a single instance the
      * returned set is always empty.
      */
-    private reservedPorts(alias: string): Set<number> {
+    private async reservedPorts(alias: string): Promise<Set<number>> {
         const reserved = new Set<number>();
-        for (const record of readRegistry(ext.context.globalState).instances) {
+        for (const record of await listInstances()) {
             if (record.alias !== alias && typeof record.port === 'number') {
                 reserved.add(record.port);
             }
@@ -1127,8 +1125,8 @@ export class QuickStartServiceImpl {
      * empty; the Configure-step validation then reports the conflict.
      */
     public async suggestPort(alias: string = DEFAULT_ALIAS): Promise<number> {
-        const reserved = this.reservedPorts(alias);
-        const own = readRegistry(ext.context.globalState).instances.find((record) => record.alias === alias)?.port;
+        const reserved = await this.reservedPorts(alias);
+        const own = (await getInstance(alias))?.port;
         if (typeof own === 'number' && !reserved.has(own) && (await this.runtime.isPortFree(own))) {
             return own;
         }
@@ -1142,7 +1140,7 @@ export class QuickStartServiceImpl {
 
     /** Validate a Configure-step port while the user can still react (review L3). */
     public async checkPort(port: number, alias: string = DEFAULT_ALIAS): Promise<PortAvailability> {
-        if (this.reservedPorts(alias).has(port)) {
+        if ((await this.reservedPorts(alias)).has(port)) {
             return 'takenByAnotherInstance';
         }
         return (await this.runtime.isPortFree(port)) ? 'available' : 'inUse';
@@ -1154,21 +1152,13 @@ export class QuickStartServiceImpl {
      * stored connection string exists (caller then generates fresh credentials).
      */
     /**
-     * Read the default instance's stored connection string, falling back to the legacy flat key.
-     * Belt-and-suspenders: the activation migration (§6) normally copies the legacy value to the
-     * alias-keyed secret BEFORE any read, but if a destructive path ever ran pre-migration this
-     * prevents a spurious "no credentials → wipe" (R1).
+     * Read the instance's stored connection string — the credential source of truth.
      *
-     * Public because it is the managed instance's credential source of truth: `QuickStartClusterItem`
-     * resolves through this instead of `ConnectionStorageService`, which holds no record for it.
+     * Public because `QuickStartClusterItem` resolves through this instead of
+     * `ConnectionStorageService`, which holds no record for the managed instance.
      */
     public async readStoredConnectionString(alias: string = DEFAULT_ALIAS): Promise<string | undefined> {
-        const stored = await ext.secretStorage.get(secretKey(alias));
-        if (stored !== undefined) {
-            return stored;
-        }
-        // The legacy flat key only ever held the DEFAULT instance's pre-alias credentials.
-        return alias === DEFAULT_ALIAS ? await ext.secretStorage.get(LEGACY_SECRET_KEY) : undefined;
+        return readConnectionString(alias);
     }
 
     private async getReusableCredentials(alias: string = DEFAULT_ALIAS): Promise<GeneratedCredentials | undefined> {
@@ -1223,33 +1213,29 @@ export class QuickStartServiceImpl {
      * a provision that is otherwise fine.
      */
     private async renewProvisioningLease(alias: string, operationId: string, port: number): Promise<void> {
-        await updateRegistry(ext.context.globalState, (registry) => {
-            const index = registry.instances.findIndex((record) => record.alias === alias);
-            const next: QuickStartInstanceRecord = {
+        await updateInstance(alias, (current) => {
+            // Never downgrade a record another run already promoted to `ready`.
+            if (current?.phase === 'ready') {
+                return undefined;
+            }
+            return {
                 alias,
                 displayName: alias === DEFAULT_ALIAS ? DEFAULT_INSTANCE_DISPLAY_NAME : alias,
                 port,
                 phase: 'provisioning',
                 operationId,
                 leaseAt: Date.now(),
+                imageRef: current?.imageRef,
             };
-            // Never downgrade a record another run already promoted to `ready`.
-            if (index < 0) {
-                registry.instances.push(next);
-            } else if (registry.instances[index].phase !== 'ready') {
-                registry.instances[index] = next;
-            }
         }).catch(() => undefined);
     }
 
     /** Drop this run's reservation, but only if it is still ours and still un-promoted. */
     private async releaseProvisioningLease(alias: string, operationId: string): Promise<void> {
-        await updateRegistry(ext.context.globalState, (registry) => {
-            registry.instances = registry.instances.filter(
-                (record) =>
-                    !(record.alias === alias && record.phase === 'provisioning' && record.operationId === operationId),
-            );
-        }).catch(() => undefined);
+        await removeInstanceIf(
+            alias,
+            (record) => record.phase === 'provisioning' && record.operationId === operationId,
+        ).catch(() => undefined);
     }
 
     private async findManagedContainers(
@@ -1268,9 +1254,9 @@ export class QuickStartServiceImpl {
     }
 
     /**
-     * A container belongs to `alias` when its `vscode.documentdb.alias` label equals `alias`. A
-     * pre-alias-label *legacy* container (no/empty alias label) belongs to the DEFAULT instance, so
-     * an existing single instance is still found/adopted with no rename (WI-2c, behavior-preserving).
+     * A container belongs to `alias` when its `vscode.documentdb.alias` label equals `alias`. An
+     * unlabelled container belongs to the DEFAULT instance, so one created before the label existed
+     * (a dev build) is still found and adopted rather than orphaned.
      */
     private aliasMatches(aliasLabelValue: string | undefined, alias: string): boolean {
         if (aliasLabelValue === alias) {
@@ -1533,24 +1519,9 @@ export class QuickStartServiceImpl {
                     ),
                 );
             }
-            try {
-                await ext.secretStorage.delete(secretKey(alias));
-                // Also purge the legacy flat keys (default instance only): if an activation migration
-                // failed and left them behind, an explicit Delete must still be a full clean slate (no
-                // stale legacy credentials/image survive to be silently reused by a provision — opus47-N1).
-                if (alias === DEFAULT_ALIAS) {
-                    await ext.secretStorage.delete(LEGACY_SECRET_KEY);
-                }
-            } catch {
-                // ignore — best-effort cleanup
-            }
-            await ext.context.globalState.update(imageRefKey(alias), undefined);
-            if (alias === DEFAULT_ALIAS) {
-                await ext.context.globalState.update(LEGACY_IMAGE_REF_KEY, undefined);
-            }
-            // Drop the registry record too — an explicit Delete is a full clean slate, so the
-            // instance no longer appears when the tree enumerates the registry (WI-2).
-            await removeInstanceRecord(ext.context.globalState, alias);
+            // Drop the instance's record AND its credentials in one write — an explicit Delete is a
+            // full clean slate, so it no longer appears when the tree enumerates instances.
+            await removeInstance(alias);
             await ClustersClient.deleteClient(clusterId(alias)).catch(() => undefined);
             CredentialCache.deleteCredentials(clusterId(alias));
             entry.metadata = undefined;
@@ -1672,7 +1643,7 @@ export class QuickStartServiceImpl {
     /**
      * Activation reconciliation (design §12 / risk-review): after a window reload the in-memory state
      * is lost while containers keep running. Enumerate every known instance — the union of the durable
-     * registry and the live labelled containers (grouped by the `vscode.documentdb.alias` label; an
+     * store and the live labelled containers (grouped by the `vscode.documentdb.alias` label; an
      * absent/empty label is the DEFAULT instance) — and rebuild each alias's state. A credential-less
      * labelled container is SURFACED, never removed (R2); a stale pre-create reservation (crashed host)
      * is scavenged; a ready record whose container vanished becomes Missing (recoverable via recreate).
@@ -1686,7 +1657,7 @@ export class QuickStartServiceImpl {
                 createdAt?: Date;
                 labels?: Record<string, string>;
             }>;
-            const registry = readRegistry(ext.context.globalState);
+            const instances = await listInstances();
             const now = Date.now();
 
             // Group live containers by alias (absent/empty alias label ⇒ DEFAULT).
@@ -1701,38 +1672,27 @@ export class QuickStartServiceImpl {
                 }
             }
 
-            // The DEFAULT always exists; also reconcile every registry record and every live alias.
+            // The DEFAULT always exists; also reconcile every known instance and every live alias.
             const aliases = new Set<string>([
                 DEFAULT_ALIAS,
-                ...registry.instances.map((record) => record.alias),
+                ...instances.map((record) => record.alias),
                 ...liveByAlias.keys(),
             ]);
             const scavenge = new Set<string>();
             for (const alias of aliases) {
-                const record = registry.instances.find((existing) => existing.alias === alias);
+                const record = instances.find((existing) => existing.alias === alias);
                 const outcome = await this.reconcileAlias(alias, record, liveByAlias.get(alias) ?? [], now);
                 if (outcome.scavenge) {
                     scavenge.add(alias);
                 }
             }
 
-            // Drop stale pre-create reservations in one locked write. Scavenge fires ONLY here
-            // (activation), never in the per-render refreshLiveState. (Adopted instances promote their
-            // own record to `ready` inside adoptContainer.) Re-validate staleness INSIDE the lock so a
-            // record that a concurrent finalize/adopt just promoted to `ready` (or refreshed the lease
-            // on) is never dropped — only remove one that is still a stale `provisioning` reservation.
+            // Drop stale pre-create reservations. Scavenge fires ONLY here (activation), never in the
+            // per-render refreshLiveState. (Adopted instances promote their own record to `ready`
+            // inside adoptContainer.) Staleness is re-validated inside the store's lock, so a record
+            // a concurrent finalize/adopt just promoted is never dropped.
             if (scavenge.size > 0) {
-                await updateRegistry(ext.context.globalState, (reg) => {
-                    const scavengeNow = Date.now();
-                    reg.instances = reg.instances.filter(
-                        (record) =>
-                            !(
-                                scavenge.has(record.alias) &&
-                                record.phase === 'provisioning' &&
-                                !isProvisioningLeaseFresh(record, scavengeNow)
-                            ),
-                    );
-                });
+                await scavengeStaleLeases(scavenge);
             }
         } catch {
             // Reconciliation is best-effort; never block activation.
@@ -1830,19 +1790,16 @@ export class QuickStartServiceImpl {
             this.populateCredentialCache(alias, stored, username, password);
         }
         const adoptedImageRef = inspected?.image?.originalName;
-        // Backfill the durable image record from the adopted container, so a recreate AFTER this
-        // container is later removed + the window reloads still reuses the original image — even for an
-        // instance we only adopted (never provisioned in-process). Never clear an existing value.
-        if (adoptedImageRef) {
-            await ext.context.globalState.update(imageRefKey(alias), adoptedImageRef);
-        }
-        // Make the registry authoritative + clear any stale provisioning lease: an adopted container
-        // whose credentials we hold IS ready (so a later container-loss becomes Missing, not scavenged).
-        await upsertInstanceRecord(ext.context.globalState, {
+        // Make the store authoritative + clear any stale provisioning lease: an adopted container whose
+        // credentials we hold IS ready (so a later container-loss becomes Missing, not scavenged). The
+        // image is backfilled from the adopted container so a recreate AFTER this container is removed
+        // + the window reloads still reuses the original image — never clearing an existing value.
+        await upsertInstance({
             alias,
             displayName: record?.displayName ?? (alias === DEFAULT_ALIAS ? DEFAULT_INSTANCE_DISPLAY_NAME : alias),
             port: running ? boundPort : (record?.port ?? boundPort),
             phase: 'ready',
+            imageRef: adoptedImageRef ?? record?.imageRef,
         });
         this.setStatus(alias, running ? InstanceState.Running : InstanceState.Stopped, {
             containerId,

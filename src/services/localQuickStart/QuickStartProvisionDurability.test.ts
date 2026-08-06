@@ -12,9 +12,16 @@
 
 import * as vscode from 'vscode';
 import { ext } from '../../extensionVariables';
+import { StorageService } from '../storageService';
 import { disposeQuickStartOutputChannel, type IContainerRuntime } from './ContainerRuntime';
-import { readRegistry, upsertInstanceRecord } from './quickStartRegistry';
 import { QuickStartServiceImpl } from './QuickStartService';
+import {
+    getInstance,
+    listInstances,
+    readConnectionString,
+    upsertInstance,
+    writeConnectionString,
+} from './quickStartStore';
 import {
     DEFAULT_ALIAS,
     InstanceState,
@@ -22,18 +29,18 @@ import {
     QUICK_START_LABEL_KEY,
     QUICK_START_OPERATION_LABEL_KEY,
     QUICK_START_PORT,
-    secretKey,
     type StageEvent,
 } from './quickStartTypes';
 
 /** Called on every readiness/sample-data probe, so a test can observe the world mid-provision. */
-let onProbe: () => void = () => undefined;
+let onProbe: () => void | Promise<void> = () => undefined;
 
 jest.mock('mongodb', () => ({
     MongoClient: class {
-        public connect(): Promise<unknown> {
-            onProbe();
-            return Promise.resolve(this);
+        public async connect(): Promise<unknown> {
+            // Awaited so a hook can read the durable store, which is async since I3-1.
+            await onProbe();
+            return this;
         }
         public db(): unknown {
             return {
@@ -134,6 +141,21 @@ async function collect(generator: AsyncGenerator<StageEvent>): Promise<StageEven
     return events;
 }
 
+/**
+ * An ExtensionContext complete enough for {@link StorageService}, which the Quick Start store runs
+ * on: it needs `extension.id` to namespace its keys and `subscriptions` for the SecretStorage
+ * change listener. Installing a fresh backing store also drops the cached `StorageImpl` singletons,
+ * whose short-lived `getItems` cache would otherwise leak a previous test's snapshot into this one.
+ */
+function fakeContext(globalState: vscode.Memento): vscode.ExtensionContext {
+    StorageService._resetForTests();
+    return {
+        globalState,
+        subscriptions: [],
+        extension: { id: 'ms-azuretools.vscode-documentdb' },
+    } as unknown as vscode.ExtensionContext;
+}
+
 describe('QuickStartService — WP-3 provisioning durability and port model', () => {
     let originalSecretStorage: vscode.SecretStorage;
     let originalContext: vscode.ExtensionContext;
@@ -165,7 +187,7 @@ describe('QuickStartService — WP-3 provisioning durability and port model', ()
         secretStorage = fakeSecretStorage();
         globalState = fakeMemento();
         ext.secretStorage = secretStorage;
-        ext.context = { globalState } as unknown as vscode.ExtensionContext;
+        ext.context = fakeContext(globalState);
         onProbe = () => undefined;
     });
 
@@ -178,10 +200,11 @@ describe('QuickStartService — WP-3 provisioning durability and port model', ()
     // H3: the credentials used to be written only AFTER readiness succeeded, so a window reload
     // inside that (up to 3-minute) window left a labelled container with no recoverable secret —
     // a dead end whose only exit was deleting the data volume.
+    //
     it('persists the connection string BEFORE the readiness wait (H3)', async () => {
         let secretAtFirstProbe: string | undefined;
-        onProbe = () => {
-            secretAtFirstProbe ??= secretStorage.snapshot()[secretKey(DEFAULT_ALIAS)];
+        onProbe = async () => {
+            secretAtFirstProbe ??= await readConnectionString(DEFAULT_ALIAS);
         };
         const service = new QuickStartServiceImpl(runtimeFor());
 
@@ -201,15 +224,51 @@ describe('QuickStartService — WP-3 provisioning durability and port model', ()
 
         await collect(service.provision(new AbortController().signal));
 
-        expect(secretStorage.snapshot()[secretKey(DEFAULT_ALIAS)]).toBeUndefined();
+        expect(await readConnectionString(DEFAULT_ALIAS)).toBeUndefined();
+    });
+
+    // The case above fails at `docker run`, i.e. BEFORE the early write — so it never exercised the
+    // restore itself. Cancel during the readiness wait instead, once the credentials are on disk.
+    it('clears the credentials it wrote early when the attempt is discarded after the write (H3)', async () => {
+        const controller = new AbortController();
+        onProbe = () => controller.abort();
+        const service = new QuickStartServiceImpl(runtimeFor());
+
+        await collect(service.provision(controller.signal));
+
+        expect(await readConnectionString(DEFAULT_ALIAS)).toBeUndefined();
+        expect(service.getStatus().state).not.toBe(InstanceState.Running);
+    });
+
+    it('restores the PREVIOUS credentials when a recreate is discarded after the write (H3)', async () => {
+        const previous = `mongodb://old:old@localhost:${QUICK_START_PORT}/?tls=true&tlsAllowInvalidCertificates=true`;
+        await upsertInstance({
+            alias: DEFAULT_ALIAS,
+            displayName: 'DocumentDB Local',
+            port: QUICK_START_PORT,
+            phase: 'ready',
+        });
+        await writeConnectionString(DEFAULT_ALIAS, previous, {
+            displayName: 'DocumentDB Local',
+            port: QUICK_START_PORT,
+        });
+        const controller = new AbortController();
+        onProbe = () => controller.abort();
+        const service = new QuickStartServiceImpl(runtimeFor());
+
+        await collect(service.provision(controller.signal));
+
+        // The existing volume is still openable with the credentials it was initialized with — a
+        // discarded recreate must not leave the attempt's unusable ones in their place.
+        expect(await readConnectionString(DEFAULT_ALIAS)).toBe(previous);
     });
 
     // H3/3d: the lease machinery existed but nothing in production ever wrote a 'provisioning'
     // record, so every reconcile branch that depends on it was unreachable.
     it('takes a provisioning lease before the pull and promotes it to ready (H3)', async () => {
         const phases: string[] = [];
-        onProbe = () => {
-            const record = readRegistry(globalState).instances.find((entry) => entry.alias === DEFAULT_ALIAS);
+        onProbe = async () => {
+            const record = await getInstance(DEFAULT_ALIAS);
             phases.push(`${record?.phase}:${record?.operationId ? 'owned' : 'unowned'}`);
         };
         const service = new QuickStartServiceImpl(runtimeFor());
@@ -219,8 +278,7 @@ describe('QuickStartService — WP-3 provisioning durability and port model', ()
         // Mid-provision the record is an owned 'provisioning' reservation…
         expect(phases[0]).toBe('provisioning:owned');
         // …and once readiness succeeds it is promoted to the durable ready record.
-        const record = readRegistry(globalState).instances.find((entry) => entry.alias === DEFAULT_ALIAS);
-        expect(record?.phase).toBe('ready');
+        expect((await getInstance(DEFAULT_ALIAS))?.phase).toBe('ready');
     });
 
     it('releases its provisioning lease when the attempt fails (H3)', async () => {
@@ -230,20 +288,21 @@ describe('QuickStartService — WP-3 provisioning durability and port model', ()
 
         await collect(service.provision(new AbortController().signal));
 
-        expect(readRegistry(globalState).instances).toHaveLength(0);
+        expect(await listInstances()).toHaveLength(0);
     });
 
     // A failed RECREATE must not scavenge the ready record of an instance whose volume still exists.
     it('never downgrades an existing ready record to a provisioning lease (H3)', async () => {
-        await upsertInstanceRecord(globalState, {
+        await upsertInstance({
             alias: DEFAULT_ALIAS,
             displayName: 'DocumentDB Local',
             port: QUICK_START_PORT,
             phase: 'ready',
         });
-        await secretStorage.store(
-            secretKey(DEFAULT_ALIAS),
+        await writeConnectionString(
+            DEFAULT_ALIAS,
             `mongodb://u1:p1@localhost:${QUICK_START_PORT}/?tls=true&tlsAllowInvalidCertificates=true`,
+            { displayName: 'DocumentDB Local', port: QUICK_START_PORT },
         );
         const service = new QuickStartServiceImpl(
             runtimeFor({ createAndRunContainer: jest.fn().mockRejectedValue(new Error('create blew up')) }),
@@ -251,8 +310,7 @@ describe('QuickStartService — WP-3 provisioning durability and port model', ()
 
         await collect(service.provision(new AbortController().signal));
 
-        const record = readRegistry(globalState).instances.find((entry) => entry.alias === DEFAULT_ALIAS);
-        expect(record?.phase).toBe('ready');
+        expect((await getInstance(DEFAULT_ALIAS))?.phase).toBe('ready');
     });
 
     // H4: the loser of a two-window create race reaches the id-less cleanup branch, where an
@@ -347,7 +405,7 @@ describe('QuickStartService — WP-3 provisioning durability and port model', ()
         });
 
         it('prefers the instance own recorded port so a recreate keeps its address', async () => {
-            await upsertInstanceRecord(globalState, {
+            await upsertInstance({
                 alias: DEFAULT_ALIAS,
                 displayName: 'DocumentDB Local',
                 port: 10333,
@@ -359,7 +417,7 @@ describe('QuickStartService — WP-3 provisioning durability and port model', ()
         });
 
         it('skips a port baked into a sibling instance', async () => {
-            await upsertInstanceRecord(globalState, {
+            await upsertInstance({
                 alias: 'documentdb-local-2',
                 displayName: 'Second',
                 port: QUICK_START_PORT,
