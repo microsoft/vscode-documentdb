@@ -135,12 +135,17 @@ export class LocalQuickStartItem implements TreeElement, TreeElementWithContextV
     }
 
     async getChildren(): Promise<TreeElement[]> {
-        // Cheap freshness: reconcile against live Docker state (external changes,
-        // other windows) and set the Missing badge if the container vanished.
-        await QuickStartService.refreshLiveState();
+        // Never block the row on Docker (review M6): the Connections view re-runs getChildren() on
+        // many unrelated events, so the freshness probe is kicked off in the background (rate-limited
+        // and de-duplicated by the service) and the row is redrawn by onDidChangeStatus when it lands.
+        QuickStartService.refreshLiveStateInBackground();
 
         const status: QuickStartStatus = QuickStartService.getStatus();
         const metadata = status.metadata;
+
+        /** Append the in-flight-probe hint so a row rendered from cache says so. */
+        const withRefreshHint = (description: string): string =>
+            QuickStartService.isRefreshingLiveState ? l10n.t('{0} · Refreshing…', description) : description;
 
         // Missing badge (design §6.1): metadata exists but Docker has no container.
         if (metadata && status.missing) {
@@ -149,7 +154,7 @@ export class LocalQuickStartItem implements TreeElement, TreeElementWithContextV
                     id: `${this.id}/instance`,
                     contextValue: createContextValue([INSTANCE_CONTEXT, 'state_missing']),
                     label: l10n.t('DocumentDB Local'),
-                    description: l10n.t('Missing · click to recreate'),
+                    description: withRefreshHint(l10n.t('Missing · click to recreate')),
                     tooltip: l10n.t(
                         'The container was removed outside VS Code. Click to recreate it (your data is preserved), or use Delete Container to remove it and its data.',
                     ),
@@ -186,7 +191,7 @@ export class LocalQuickStartItem implements TreeElement, TreeElementWithContextV
             return [
                 new QuickStartClusterItem(
                     model,
-                    l10n.t('Running · localhost:{0}', metadata.boundPort),
+                    withRefreshHint(l10n.t('Running · localhost:{0}', metadata.boundPort)),
                     'state_running',
                     metadata.alias,
                 ),
@@ -216,7 +221,7 @@ export class LocalQuickStartItem implements TreeElement, TreeElementWithContextV
                     return [
                         row(
                             'state_stopped',
-                            l10n.t('Stopped · localhost:{0}', port),
+                            withRefreshHint(l10n.t('Stopped · localhost:{0}', port)),
                             new vscode.ThemeIcon('circle-outline'),
                         ),
                     ];

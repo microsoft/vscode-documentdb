@@ -144,6 +144,12 @@ const SAMPLE_DATA_DB = 'sampledb';
 const START_CONFIRM_ATTEMPTS = 3;
 const START_CONFIRM_INTERVAL_MS = 1_500;
 
+/**
+ * Minimum gap between two background live-state probes (review M6). The Connections view refreshes
+ * on many unrelated events; without a cooldown the tree would spawn a `docker inspect` per render.
+ */
+const BACKGROUND_REFRESH_COOLDOWN_MS = 5_000;
+
 function errMessage(error: unknown): string {
     return error instanceof Error ? error.message : String(error);
 }
@@ -1536,6 +1542,45 @@ export class QuickStartServiceImpl {
         // busy (op skipped) or a later best-effort cleanup step threw and was settled to Error. In
         // both cases nothing was reported deleted, so the caller must not report success.
         return outcome ?? 'busy';
+    }
+
+    /** In-flight background probe started by {@link refreshLiveStateInBackground}, if any. */
+    private backgroundRefresh: Promise<void> | undefined;
+    /** `Date.now()` when the last background probe settled — drives the cooldown below. */
+    private lastBackgroundRefreshAt = 0;
+
+    /** True while a {@link refreshLiveStateInBackground} probe is in flight (drives the tree's "Refreshing…" hint). */
+    public get isRefreshingLiveState(): boolean {
+        return this.backgroundRefresh !== undefined;
+    }
+
+    /**
+     * Fire-and-forget {@link refreshLiveState} for callers that must not block on Docker — notably
+     * the tree's `getChildren()`, which the Connections view re-runs on many unrelated events
+     * (review M6). The row renders from the last known state and is updated by
+     * {@link onDidChangeStatus} when the probe lands.
+     *
+     * De-duplicated and rate-limited: concurrent calls share the in-flight probe, and a new one is
+     * only started once {@link BACKGROUND_REFRESH_COOLDOWN_MS} has passed. The cooldown is
+     * load-bearing — the probe fires the status event when it settles, which re-enters
+     * `getChildren()`; without it that would rebuild the H1 render loop in a new shape.
+     */
+    public refreshLiveStateInBackground(): void {
+        if (this.backgroundRefresh || Date.now() - this.lastBackgroundRefreshAt < BACKGROUND_REFRESH_COOLDOWN_MS) {
+            return;
+        }
+        this.backgroundRefresh = this.refreshLiveState()
+            .catch(() => {
+                // refreshLiveState() is already best-effort; nothing to surface here.
+            })
+            .finally(() => {
+                this.backgroundRefresh = undefined;
+                this.lastBackgroundRefreshAt = Date.now();
+                // Fire unconditionally (refreshLiveState() itself only fires on a real transition):
+                // the row is advertising "Refreshing…" and must drop that hint. Safe because the
+                // cooldown above blocks the re-render from starting another probe.
+                this.statusEmitter.fire();
+            });
     }
 
     /**

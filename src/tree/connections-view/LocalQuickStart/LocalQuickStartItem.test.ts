@@ -20,7 +20,7 @@ describe('LocalQuickStartItem — CredentialsMissing row (UX review #1)', () => 
     afterEach(() => jest.restoreAllMocks());
 
     it('renders a single actionable, Delete-only instance row', async () => {
-        jest.spyOn(QuickStartService, 'refreshLiveState').mockResolvedValue(undefined);
+        jest.spyOn(QuickStartService, 'refreshLiveStateInBackground').mockReturnValue(undefined);
         jest.spyOn(QuickStartService, 'getStatus').mockReturnValue({
             state: InstanceState.CredentialsMissing,
             metadata: undefined,

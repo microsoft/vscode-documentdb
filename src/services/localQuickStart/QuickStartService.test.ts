@@ -416,6 +416,41 @@ describe('QuickStartService — WI-2d registry-driven reconcile (multi-instance)
         expect(service.getStatus().missing).toBe(true);
     });
 
+    it('refreshLiveStateInBackground() de-duplicates and rate-limits the docker probe (M6)', async () => {
+        ext.secretStorage = fakeSecretStorage({ [secretKey(DEFAULT_ALIAS)]: CONN_1 });
+        ext.context = { globalState: fakeMemento() } as unknown as vscode.ExtensionContext;
+
+        const inspect: Record<string, unknown> = {
+            c1: inspectItem('c1', { running: true, port: 10260, image: 'img:1' }),
+        };
+        const inspectContainer = jest.fn((id: string) => Promise.resolve(inspect[id]));
+        const service = new QuickStartServiceImpl(
+            mockRuntime({
+                listByLabel: jest
+                    .fn()
+                    .mockResolvedValue([{ id: 'c1', labels: { [QUICK_START_ALIAS_LABEL_KEY]: DEFAULT_ALIAS } }]),
+                inspectContainer: inspectContainer as unknown as IContainerRuntime['inspectContainer'],
+            }),
+        );
+
+        await service.reconcile();
+        inspectContainer.mockClear();
+
+        // The Connections view re-renders many times in a burst (connection add/remove, folder ops,
+        // discovery refresh); getChildren() calls this on every one of them.
+        service.refreshLiveStateInBackground();
+        service.refreshLiveStateInBackground();
+        service.refreshLiveStateInBackground();
+        expect(service.isRefreshingLiveState).toBe(true);
+        await Promise.resolve();
+        await Promise.resolve();
+        await Promise.resolve();
+
+        // One probe for the burst, and the cooldown blocks the re-render the completion event causes.
+        service.refreshLiveStateInBackground();
+        expect(inspectContainer).toHaveBeenCalledTimes(1);
+    });
+
     it('deleteContainer() refuses to remove a container that is not ours, even when surfaced as Missing (#9)', async () => {
         ext.secretStorage = fakeSecretStorage({ [secretKey(DEFAULT_ALIAS)]: CONN_1 });
         ext.context = { globalState: fakeMemento() } as unknown as vscode.ExtensionContext;
