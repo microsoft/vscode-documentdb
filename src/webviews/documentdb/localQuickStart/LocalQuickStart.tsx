@@ -950,7 +950,6 @@ export const LocalQuickStart = (): JSX.Element => {
     const [stageStatus, setStageStatus] = useState<Record<ProvisionStage, StageStatus>>(emptyStageStatus);
     const [errorMessage, setErrorMessage] = useState<string | undefined>(undefined);
     const [successMessage, setSuccessMessage] = useState<string | undefined>(undefined);
-    const [boundPort, setBoundPort] = useState<number | undefined>(undefined);
     const [elapsedMs, setElapsedMs] = useState(0);
     const [startingDocker, setStartingDocker] = useState(false);
     const [checkingDockerAgain, setCheckingDockerAgain] = useState(false);
@@ -1318,7 +1317,6 @@ export const LocalQuickStart = (): JSX.Element => {
                         stopTimer();
                         setStageStatus((prev) => ({ ...prev, [event.stage]: event.status }));
                         setSuccessMessage(event.message);
-                        setBoundPort(event.boundPort);
                         setPhase('success');
                     } else if (event.status === 'error') {
                         settled = true;
@@ -1658,10 +1656,6 @@ export const LocalQuickStart = (): JSX.Element => {
         // Reveal the connection in the Connections view but KEEP this panel open —
         // only the explicit Close button dismisses the page (user feedback).
         void trpcClient.localQuickStart.openConnection.mutate().catch(() => undefined);
-    }, [trpcClient]);
-
-    const handleCopyConnString = useCallback((): void => {
-        void trpcClient.localQuickStart.copyConnectionString.mutate().catch(() => undefined);
     }, [trpcClient]);
 
     /**
@@ -2434,24 +2428,6 @@ export const LocalQuickStart = (): JSX.Element => {
                         '• Open Connection: browse your databases in the Connections view, under “DocumentDB Local”.',
                     )}
                 </Text>
-                {/*
-                 * Offering "Copy Connection String" beside "Open Connection" read as the next
-                 * REQUIRED step, and a bug-bash user duplicated the connection by hand because of
-                 * it (#857). It is optional and only for clients outside VS Code, so it is stated
-                 * that way here and no longer competes with the primary action in the footer.
-                 */}
-                <Text size={200}>
-                    {checkReadiness === undefined || checkReadiness.executionTarget === 'local'
-                        ? l10n.t(
-                              '• Optional: to reach this instance from a tool outside VS Code, such as mongosh or your own app, copy its connection string (localhost:{0}).',
-                              String(boundPort ?? QUICK_START_PORT),
-                          )
-                        : l10n.t(
-                              '• Optional: to reach this instance from a tool outside VS Code, copy its connection string. localhost:{0} resolves from the extension host.',
-                              String(boundPort ?? QUICK_START_PORT),
-                          )}{' '}
-                    <Link onClick={handleCopyConnString}>{l10n.t('Copy connection string')}</Link>
-                </Text>
                 <Text size={200}>
                     {l10n.t(
                         '• The container keeps running after VS Code closes. Manage it with Stop / Restart / Delete in the Connections view.',
@@ -2548,9 +2524,6 @@ export const LocalQuickStart = (): JSX.Element => {
         footerNote = l10n.t(
             'The connection already exists in the Connections view. Opening it selects and expands it there.',
         );
-        // No Copy Connection String here: in the footer it read as a second required setup step
-        // (#857). The optional copy lives inline in Next steps, labelled as being for clients
-        // outside VS Code.
         secondaryActions = (
             <Button appearance="secondary" onClick={handleClose}>
                 {l10n.t('Close')}

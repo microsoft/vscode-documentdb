@@ -220,15 +220,6 @@ export const localQuickStartRouter = router({
      */
     startInstance: publicProcedure.mutation(() => QuickStartService.start()),
 
-    /** Success hand-off (§5.5): copy the managed instance's connection string. */
-    copyConnectionString: publicProcedure.mutation(async () => {
-        // Delegate to the shared copy command so the webview button gets the same with/without-password
-        // QuickPick as everywhere else, instead of silently copying the password-bearing string (UX
-        // review #7). The command reads the managed instance from QuickStartService and strips the
-        // password from the base before offering the choice.
-        await vscode.commands.executeCommand('vscode-documentdb.command.localQuickStart.copyConnectionString');
-    }),
-
     /**
      * "Start over" from a readiness timeout (§9.1): remove the container retained by the
      * timeout (and wipe a fresh attempt's half-initialized volume) so the user can run setup
