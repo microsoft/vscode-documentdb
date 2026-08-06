@@ -3,8 +3,9 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { AzureWizardExecuteStep } from '@microsoft/vscode-azext-utils';
+import { AzureWizardExecuteStep, UserCancelledError } from '@microsoft/vscode-azext-utils';
 import * as l10n from '@vscode/l10n';
+import * as vscode from 'vscode';
 import { redactCredentialsFromConnectionString } from '../../documentdb/utils/connectionStringHelpers';
 import { DocumentDBConnectionString } from '../../documentdb/utils/DocumentDBConnectionString';
 import { API } from '../../DocumentDBExperiences';
@@ -15,17 +16,20 @@ import {
     ConnectionType,
     ItemType,
 } from '../../services/connectionStorageService';
+import { QuickStartService } from '../../services/localQuickStart/QuickStartService';
 import {
     buildFullTreePath,
     focusAndRevealInConnectionsView,
     refreshParentInConnectionsView,
     withConnectionsViewProgress,
 } from '../../tree/connections-view/connectionsViewHelpers';
+import { revealQuickStartInstance } from '../../tree/connections-view/LocalQuickStart/revealQuickStartInstance';
 import { UserFacingError } from '../../utils/commandErrorHandling';
 import { showConfirmationAsInSettings } from '../../utils/dialogs/showConfirmation';
 import { type EmulatorConfiguration } from '../../utils/emulatorConfiguration';
 import { nonNullValue } from '../../utils/nonNull';
 import { generateDocumentDBStorageId } from '../../utils/storageUtils';
+import { findQuickStartInstanceForHosts, normalizeEndpointList } from './localEndpoint';
 import { NewEmulatorConnectionMode, type NewLocalConnectionWizardContext } from './NewLocalConnectionWizardContext';
 
 export class ExecuteStep extends AzureWizardExecuteStep<NewLocalConnectionWizardContext> {
@@ -62,6 +66,51 @@ export class ExecuteStep extends AzureWizardExecuteStep<NewLocalConnectionWizard
         });
 
         const joinedHosts = [...newConnectionStringParsed.hosts].sort().join(',');
+        // Compared instead of `joinedHosts` for duplicate detection: `localhost`, `127.0.0.1`, and
+        // `[::1]` are the same endpoint, and the raw strings are not (#858).
+        const normalizedHosts = normalizeEndpointList(newConnectionStringParsed.hosts);
+
+        // Sanity Check 0/2: does the Quick Start managed instance already serve this endpoint?
+        // It is service-owned and in-memory rather than a stored connection, so the stored-connection
+        // scan below cannot see it — which is how a bug-bash user ended up adding a second entry for
+        // an instance Quick Start had already put in the Connections view (#858).
+        const quickStartInstance = findQuickStartInstanceForHosts(
+            newConnectionStringParsed.hosts,
+            QuickStartService.listStatuses(),
+        );
+        if (quickStartInstance) {
+            context.telemetry.properties.quickStartEndpointCollision = 'true';
+            const openExisting = l10n.t('Open Existing');
+            const addAnyway = l10n.t('Add Anyway');
+            const choice = await vscode.window.showWarningMessage(
+                l10n.t(
+                    '“{0}” already uses localhost:{1}.',
+                    quickStartInstance.displayName,
+                    // `findQuickStartInstanceForHosts` only matches instances that HAVE a port.
+                    String(quickStartInstance.port),
+                ),
+                {
+                    modal: true,
+                    detail: l10n.t(
+                        'Quick Start added this instance to the Connections view, so there is no need to add it by hand. You can still create a separate connection if you want a different configuration for the same endpoint.',
+                    ),
+                },
+                openExisting,
+                addAnyway,
+            );
+            context.telemetry.properties.quickStartCollisionChoice =
+                choice === addAnyway ? 'addAnyway' : choice === openExisting ? 'openExisting' : 'cancel';
+            if (choice !== addAnyway) {
+                if (choice === openExisting) {
+                    // Same navigation the success screen's "Open Connection" performs, so both
+                    // routes to the instance land the user in the same place.
+                    await revealQuickStartInstance(context);
+                }
+                // Dismissing the dialog cancels the wizard rather than creating the duplicate it
+                // just warned about.
+                throw new UserCancelledError();
+            }
+        }
 
         //  Sanity Check 1/2: is there a connection with the same username + host in there?
         const existingConnections = await ConnectionStorageService.getAll(ConnectionType.Emulators);
@@ -79,7 +128,7 @@ export class ExecuteStep extends AzureWizardExecuteStep<NewLocalConnectionWizard
                 const itemCS = new DocumentDBConnectionString(secret);
                 return (
                     itemCS.username === newConnectionStringParsed.username &&
-                    [...itemCS.hosts].sort().join(',') === joinedHosts
+                    normalizeEndpointList(itemCS.hosts) === normalizedHosts
                 );
             } catch (error) {
                 const rawMessage = error instanceof Error ? error.message : String(error);

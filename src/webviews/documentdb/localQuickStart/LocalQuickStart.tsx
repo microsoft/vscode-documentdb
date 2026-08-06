@@ -495,6 +495,12 @@ function dockerPermissionDetailValues(): Readonly<Record<DockerPermissionDetail,
 function dockerGuidance(): Readonly<Record<DockerGuidanceKey, string>> {
     return {
         installDocker: l10n.t('Install Docker Engine or Docker Desktop, then reopen Quick Start.'),
+        installDockerWindows: l10n.t(
+            'Install Docker Desktop, then restart VS Code. A VS Code that was already running does not pick up the PATH the installer adds, so Docker stays undetected until it is restarted. Reloading the window is not enough. Start Docker Desktop and wait until it is ready, then check again.',
+        ),
+        installDockerMac: l10n.t(
+            'Install Docker Desktop, then restart VS Code. A VS Code that was already running does not pick up the PATH the installer adds, so Docker stays undetected until it is restarted. Start Docker Desktop and wait until it is ready, then check again.',
+        ),
         accessDeniedLinux: l10n.t(
             'Your user cannot access the Docker socket. Run this command, then sign out and sign back in.',
         ),
@@ -539,6 +545,14 @@ function dockerGuidance(): Readonly<Record<DockerGuidanceKey, string>> {
 function dockerGuides(): Readonly<Record<DockerGuideKey, { readonly label: string; readonly href: string }>> {
     return {
         install: { label: l10n.t('Open Docker install guide'), href: 'https://docs.docker.com/engine/install/' },
+        installWindowsDesktop: {
+            label: l10n.t('Get Docker Desktop for Windows'),
+            href: 'https://docs.docker.com/desktop/setup/install/windows-install/',
+        },
+        installMacDesktop: {
+            label: l10n.t('Get Docker Desktop for Mac'),
+            href: 'https://docs.docker.com/desktop/setup/install/mac-install/',
+        },
         linuxPostInstall: {
             label: l10n.t('Open Linux setup guide'),
             href: 'https://docs.docker.com/engine/install/linux-postinstall/',
@@ -1623,10 +1637,6 @@ export const LocalQuickStart = (): JSX.Element => {
         void trpcClient.localQuickStart.showOutput.mutate().catch(() => undefined);
     }, [trpcClient]);
 
-    const handleInstallDocker = useCallback((): void => {
-        void trpcClient.common.openUrl.mutate({ url: dockerGuides().install.href }).catch(() => undefined);
-    }, [trpcClient]);
-
     const handleOpenGuide = useCallback(
         (url: string): void => {
             void trpcClient.common.openUrl.mutate({ url }).catch(() => undefined);
@@ -2186,8 +2196,14 @@ export const LocalQuickStart = (): JSX.Element => {
                         </MessageBarBody>
                         <MessageBarActions>
                             {shownDocker.presentation.showInstall && (
-                                <Button appearance="secondary" onClick={handleInstallDocker}>
-                                    {l10n.t('Install Docker')}
+                                // Route the install CTA through the guide the host resolved for
+                                // THIS platform. It used to hardcode the Docker Engine page, so
+                                // Windows and macOS users were sent to a Linux-only install (#856).
+                                <Button
+                                    appearance="secondary"
+                                    onClick={() => handleOpenGuide(dockerGuides()[shownDocker.presentation.guide].href)}
+                                >
+                                    {dockerGuides()[shownDocker.presentation.guide].label}
                                 </Button>
                             )}
                             {startingDocker ? (
@@ -2399,9 +2415,13 @@ export const LocalQuickStart = (): JSX.Element => {
             <MessageBar intent="success">
                 <MessageBarBody>
                     <MessageBarTitle>{l10n.t('All set')}</MessageBarTitle>{' '}
+                    {/*
+                     * Say plainly that the connection already exists. Without this, the copy
+                     * action next to it read as "now go and create the connection", and a
+                     * bug-bash user did exactly that, ending up with a duplicate (#857).
+                     */}
                     {l10n.t(
-                        'The connection is saved and ready to use at localhost:{0}.',
-                        String(boundPort ?? QUICK_START_PORT),
+                        'This instance is already in the Connections view as “DocumentDB Local”. You do not need to create a connection for it.',
                     )}
                 </MessageBarBody>
             </MessageBar>
@@ -2414,16 +2434,23 @@ export const LocalQuickStart = (): JSX.Element => {
                         '• Open Connection: browse your databases in the Connections view, under “DocumentDB Local”.',
                     )}
                 </Text>
+                {/*
+                 * Offering "Copy Connection String" beside "Open Connection" read as the next
+                 * REQUIRED step, and a bug-bash user duplicated the connection by hand because of
+                 * it (#857). It is optional and only for clients outside VS Code, so it is stated
+                 * that way here and no longer competes with the primary action in the footer.
+                 */}
                 <Text size={200}>
                     {checkReadiness === undefined || checkReadiness.executionTarget === 'local'
                         ? l10n.t(
-                              '• Copy Connection String: use it from a Query Playground, your app, or mongosh (localhost:{0}).',
+                              '• Optional: to reach this instance from a tool outside VS Code, such as mongosh or your own app, copy its connection string (localhost:{0}).',
                               String(boundPort ?? QUICK_START_PORT),
                           )
                         : l10n.t(
-                              '• Copy Connection String: localhost:{0} is reachable from tools running on the extension host.',
+                              '• Optional: to reach this instance from a tool outside VS Code, copy its connection string. localhost:{0} resolves from the extension host.',
                               String(boundPort ?? QUICK_START_PORT),
-                          )}
+                          )}{' '}
+                    <Link onClick={handleCopyConnString}>{l10n.t('Copy connection string')}</Link>
                 </Text>
                 <Text size={200}>
                     {l10n.t(
@@ -2518,15 +2545,16 @@ export const LocalQuickStart = (): JSX.Element => {
     } else {
         primaryLabel = l10n.t('Open Connection');
         onPrimary = handleOpenConnection;
+        footerNote = l10n.t(
+            'The connection already exists in the Connections view. Opening it selects and expands it there.',
+        );
+        // No Copy Connection String here: in the footer it read as a second required setup step
+        // (#857). The optional copy lives inline in Next steps, labelled as being for clients
+        // outside VS Code.
         secondaryActions = (
-            <>
-                <Button appearance="secondary" onClick={handleCopyConnString}>
-                    {l10n.t('Copy Connection String')}
-                </Button>
-                <Button appearance="secondary" onClick={handleClose}>
-                    {l10n.t('Close')}
-                </Button>
-            </>
+            <Button appearance="secondary" onClick={handleClose}>
+                {l10n.t('Close')}
+            </Button>
         );
     }
 

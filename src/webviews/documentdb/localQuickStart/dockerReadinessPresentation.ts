@@ -29,6 +29,8 @@ export type DockerReadinessPresentationState =
 
 export type DockerGuidanceKey =
     | 'installDocker'
+    | 'installDockerWindows'
+    | 'installDockerMac'
     | 'accessDeniedLinux'
     | 'accessDeniedWsl'
     | 'accessDeniedRemote'
@@ -52,6 +54,8 @@ export type DockerRecoveryNoteKey = 'groupMembershipNewSession' | 'restartWslDis
 
 export type DockerGuideKey =
     | 'install'
+    | 'installWindowsDesktop'
+    | 'installMacDesktop'
     | 'linuxPostInstall'
     | 'dockerTroubleshooting'
     | 'dockerContexts'
@@ -215,11 +219,48 @@ function getPermissionGuidance(readiness: DockerReadiness): DockerGuidanceKey {
     }
 }
 
+/**
+ * Where to send someone who has no Docker CLI (#856). Docker Desktop is the supported Docker on
+ * Windows and macOS, so a generic Docker Engine link — which documents a Linux-only install —
+ * is the wrong destination there and adds setup friction before anything can start.
+ *
+ * WSL and the remote targets keep the Engine guide: the CLI has to exist in the environment the
+ * extension actually runs in, which is a Linux one, whatever the user's desktop OS is.
+ */
+function getInstallGuide(readiness: DockerReadiness): DockerGuideKey {
+    switch (readiness.environment) {
+        case 'windows':
+            return 'installWindowsDesktop';
+        case 'macos':
+            return 'installMacDesktop';
+        default:
+            return 'install';
+    }
+}
+
+/**
+ * On Windows and macOS the Docker Desktop installer puts the CLI on the PATH, but a VS Code that
+ * was already running keeps the environment it was launched with — so Docker stays undetected
+ * after a successful install and the setup looks broken (#855). Reloading the window does not help
+ * either: the extension host is respawned from the same main process, inheriting the same stale
+ * environment. Only a full restart of VS Code picks the change up, so say so explicitly.
+ */
+function getInstallGuidance(readiness: DockerReadiness): DockerGuidanceKey {
+    switch (readiness.environment) {
+        case 'windows':
+            return 'installDockerWindows';
+        case 'macos':
+            return 'installDockerMac';
+        default:
+            return 'installDocker';
+    }
+}
+
 function getGuidance(readiness: DockerReadiness): DockerGuidanceKey {
     const failureKind = readiness.failureKind;
     switch (failureKind) {
         case 'cliMissing':
-            return 'installDocker';
+            return getInstallGuidance(readiness);
         case 'permissionDenied':
             return getPermissionGuidance(readiness);
         case 'daemonUnavailable':
@@ -257,7 +298,7 @@ function getGuide(readiness: DockerReadiness): DockerGuideKey {
     const failureKind = readiness.failureKind;
     switch (failureKind) {
         case 'cliMissing':
-            return 'install';
+            return getInstallGuide(readiness);
         case 'permissionDenied':
             return 'linuxPostInstall';
         case 'contextUnavailable':

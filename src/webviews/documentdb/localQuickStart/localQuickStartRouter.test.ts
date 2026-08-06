@@ -45,6 +45,15 @@ jest.mock('../../../services/localQuickStart/QuickStartService', () => ({
     },
 }));
 
+// The reveal helper pulls in the tree + azext-utils, whose module-level `vscode.l10n.t` call fails
+// against this file's minimal `vscode` stub. What it does is covered by its own test
+// (`src/tree/connections-view/LocalQuickStart/revealQuickStartInstance.test.ts`); here we only care
+// that the router calls it.
+const mockRevealQuickStartInstance = jest.fn();
+jest.mock('../../../tree/connections-view/LocalQuickStart/revealQuickStartInstance', () => ({
+    revealQuickStartInstance: (...args: unknown[]) => mockRevealQuickStartInstance(...args) as unknown,
+}));
+
 jest.mock('../../_integration/trpc', () => {
     const { initWebviewTrpc } = jest.requireActual<{ initWebviewTrpc: typeof InitWebviewTrpc }>(
         '@microsoft/vscode-ext-webview',
@@ -83,6 +92,22 @@ function createContext(): RouterContext & {
 describe('localQuickStartRouter', () => {
     beforeEach(() => {
         mockSuggestPort.mockResolvedValue(10260);
+    });
+
+    /**
+     * The success screen's primary action. It used to be wired to `connectionsView.focus` alone,
+     * which does nothing visible when that view is already active — the normal case, since Quick
+     * Start is opened FROM it — so the button appeared dead. It must reach the navigation that
+     * actually opens the instance.
+     */
+    it('opens the managed instance rather than only focusing the view', async () => {
+        mockRevealQuickStartInstance.mockResolvedValue(undefined);
+        const context = createContext();
+        const caller = createCallerFactory(localQuickStartRouter)(context);
+
+        await caller.openConnection();
+
+        expect(mockRevealQuickStartInstance).toHaveBeenCalledWith(context.actionContext);
     });
 
     it('suppresses telemetry for polled Docker readiness queries', async () => {

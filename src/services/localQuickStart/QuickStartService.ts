@@ -410,12 +410,8 @@ export class QuickStartServiceImpl {
         alias: string = DEFAULT_ALIAS,
     ): AsyncGenerator<StageEvent> {
         if (this.stateFor(alias).provisioning || this.stateFor(alias).lifecycleBusy) {
-            yield stageEvent(
-                'error',
-                'error',
-                l10n.t('Setup is already in progress.'),
-                l10n.t('Setup is already in progress.'),
-            );
+            const message = l10n.t('Setup is already in progress.');
+            yield stageEvent('error', 'error', message, message);
             return;
         }
         this.stateFor(alias).provisioning = true;
@@ -882,12 +878,8 @@ export class QuickStartServiceImpl {
     public async *resumeReadiness(signal: AbortSignal, alias: string = DEFAULT_ALIAS): AsyncGenerator<StageEvent> {
         const pending = this.stateFor(alias).pendingReadiness;
         if (!pending) {
-            yield stageEvent(
-                'error',
-                'error',
-                l10n.t('There is nothing to resume.'),
-                l10n.t('There is nothing to resume.'),
-            );
+            const nothingToResume = l10n.t('There is nothing to resume.');
+            yield stageEvent('error', 'error', nothingToResume, nothingToResume);
             return;
         }
         if (this.stateFor(alias).provisioning || this.stateFor(alias).lifecycleBusy) {
@@ -895,14 +887,11 @@ export class QuickStartServiceImpl {
             // observe). Carry the timed-out affordance so the webview keeps the Wait longer / Start
             // over view instead of flipping to the generic error (opus-4.8) — the container and
             // `pendingReadiness` are still retained.
-            yield stageEvent(
-                'error',
-                'error',
-                l10n.t('A setup operation is already in progress.'),
-                'in progress',
-                undefined,
-                true,
-            );
+            // `error` is what the webview renders (it takes precedence over `message`), so it must
+            // carry the same localized sentence — a bare "in progress" marker reached the message
+            // bar verbatim and untranslated (#852).
+            const alreadyRunning = l10n.t('A setup operation is already in progress.');
+            yield stageEvent('error', 'error', alreadyRunning, alreadyRunning, undefined, true);
             return;
         }
         this.stateFor(alias).provisioning = true;

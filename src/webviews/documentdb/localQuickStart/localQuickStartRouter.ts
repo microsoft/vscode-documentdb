@@ -26,8 +26,8 @@ import {
     getQuickStartOutputChannel,
     startDockerProvider,
 } from '../../../services/localQuickStart/ContainerRuntime';
-import { QuickStartService } from '../../../services/localQuickStart/QuickStartService';
 import { getDockerRecoveryCommandById } from '../../../services/localQuickStart/dockerRecoveryCommands';
+import { QuickStartService } from '../../../services/localQuickStart/QuickStartService';
 import {
     type AdvancedQuickStartOptions,
     type DockerStatusResult,
@@ -36,6 +36,7 @@ import {
     type QuickStartStatus,
     type StageEvent,
 } from '../../../services/localQuickStart/quickStartTypes';
+import { revealQuickStartInstance } from '../../../tree/connections-view/LocalQuickStart/revealQuickStartInstance';
 import { type BaseRouterContext } from '../../_integration/appRouter';
 import { publicProcedure, publicProcedureWithTelemetry, router, type WithTelemetry } from '../../_integration/trpc';
 import { getDockerReadinessTelemetryProperties } from './dockerReadinessTelemetry';
@@ -199,9 +200,17 @@ export const localQuickStartRouter = router({
         return result;
     }),
 
-    /** Success hand-off (§5.5): focus the Connections view where the instance now lives. */
-    openConnection: publicProcedure.mutation(async () => {
-        await vscode.commands.executeCommand('connectionsView.focus');
+    /**
+     * Success hand-off (§5.5): open the managed instance in the Connections view.
+     *
+     * This used to run `connectionsView.focus` and nothing else, which is invisible when that view
+     * is already the active one in the sidebar — the normal case, since Quick Start is opened FROM
+     * it. The success screen's primary action appeared to do nothing at all. It now reveals,
+     * selects, and expands the instance row, so the databases load.
+     */
+    openConnection: publicProcedureWithTelemetry.mutation(async ({ ctx }) => {
+        const tctx = ctx as WithTelemetry<RouterContext>;
+        await revealQuickStartInstance(tctx.actionContext);
     }),
 
     /**
