@@ -63,6 +63,7 @@ import {
     type DockerReadinessOutcome,
     type DockerRecoveryCommand,
     type DockerStatusResult,
+    InstanceState,
     type PortAvailability,
     PROVISION_STAGES,
     type ProvisionStage,
@@ -912,6 +913,13 @@ export const LocalQuickStart = (): JSX.Element => {
     const [stageDockerFailure, setStageDockerFailure] = useState<DockerReadiness | undefined>(undefined);
     const [canReuseExistingData, setCanReuseExistingData] = useState(false);
     /**
+     * Live state of the managed instance, backing the Configure step's guard (review §9.2 Q2).
+     * Reaching the wizard while an instance exists should not normally be possible — the tree does
+     * not link to it in that state — but the command palette, a stale panel and cross-window races
+     * all still get here.
+     */
+    const [instanceState, setInstanceState] = useState<InstanceState | undefined>(undefined);
+    /**
      * The user's explicit recreate-vs-fresh choice (review M4). Nothing is inferred from
      * {@link canReuseExistingData} any more, which is what resolves N1 (a stale inferred value).
      */
@@ -950,9 +958,28 @@ export const LocalQuickStart = (): JSX.Element => {
     // The Configure step ASKS whether to keep the existing data (review M4): the service reuses an
     // instance's stored credentials and data volume only when told to. `canReuseExistingData` says
     // the choice is available (the same predicate the service uses); `dataChoice` is the answer.
-    const startFresh = canReuseExistingData && dataChoice === 'fresh';
+    //
+    // A CredentialsMissing instance has no readable secret, so its data can never be opened again:
+    // the choice collapses to "Start fresh", stated by a warning MessageBar rather than a radio.
+    const forcedFresh = instanceState === InstanceState.CredentialsMissing;
+    const startFresh = forcedFresh || (canReuseExistingData && dataChoice === 'fresh');
     const isRecreate = canReuseExistingData && !startFresh;
     const useCustomCredentials = customCredentials && !isRecreate;
+
+    /**
+     * Which existing-instance guard the Configure step shows, if any. `Missing` is deliberately not
+     * guarded: recreating is exactly what that state asks for.
+     */
+    const existingInstanceGuard: 'healthy' | 'stopped' | 'credentialsMissing' | undefined = forcedFresh
+        ? 'credentialsMissing'
+        : instanceState === InstanceState.Running
+          ? 'healthy'
+          : instanceState === InstanceState.Stopped
+            ? 'stopped'
+            : undefined;
+    // A usable instance is never walked into a destructive recreate: the user is offered the action
+    // they almost certainly meant (open it / start it) instead.
+    const startBlockedByGuard = existingInstanceGuard === 'healthy' || existingInstanceGuard === 'stopped';
 
     const subscriptionRef = useRef<{ unsubscribe: () => void } | null>(null);
     const readinessAbortRef = useRef<AbortController | null>(null);
@@ -1183,6 +1210,7 @@ export const LocalQuickStart = (): JSX.Element => {
                 }
                 applyReadiness(result.readiness);
                 setCanReuseExistingData(result.canReuseExistingData);
+                setInstanceState(result.status.state);
                 // Absent on polled calls (M6-b); keep the last suggestion in that case.
                 if (result.suggestedPort !== undefined) {
                     setSuggestedPort(result.suggestedPort);
@@ -1402,6 +1430,7 @@ export const LocalQuickStart = (): JSX.Element => {
                         latestResult = result;
                         applyReadiness(result.readiness);
                         setCanReuseExistingData(result.canReuseExistingData);
+                        setInstanceState(result.status.state);
                     },
                 });
                 if (abortController.signal.aborted) return;
@@ -1602,6 +1631,17 @@ export const LocalQuickStart = (): JSX.Element => {
     const handleCopyConnString = useCallback((): void => {
         void trpcClient.localQuickStart.copyConnectionString.mutate().catch(() => undefined);
     }, [trpcClient]);
+
+    /**
+     * Configure-step guard action for a stopped instance: start what is already there instead of
+     * recreating it. The status refresh flips the guard to "healthy" once it comes up.
+     */
+    const handleStartExisting = useCallback((): void => {
+        void trpcClient.localQuickStart.startInstance
+            .mutate()
+            .then(() => syncDockerStatus({ forceRefresh: true }))
+            .catch(() => undefined);
+    }, [syncDockerStatus, trpcClient]);
 
     const goToStep = useCallback((id: string): void => {
         if (id === 'introduction') {
@@ -1920,12 +1960,51 @@ export const LocalQuickStart = (): JSX.Element => {
     ];
 
     /**
+     * Existing-instance guard (review §9.2 Q2, I2-3). It lives on the Configure step — the one
+     * screen where the decision is actually made — rather than on the Introduction step. A healthy
+     * or stopped instance is never walked into a destructive recreate; a credential-unavailable one
+     * used to be hard-refused by the service (leaving the user to hunt for Delete Container) and is
+     * now an explicit, warned "Start fresh" path right here.
+     */
+    const existingInstanceNotice = existingInstanceGuard && (
+        <MessageBar intent={existingInstanceGuard === 'credentialsMissing' ? 'warning' : 'info'} layout="multiline">
+            <MessageBarBody className={styles.messageBody}>
+                <MessageBarTitle>{l10n.t('DocumentDB Local already exists')}</MessageBarTitle>{' '}
+                {existingInstanceGuard === 'healthy'
+                    ? l10n.t('It is running and ready to use, so there is nothing to set up.')
+                    : existingInstanceGuard === 'stopped'
+                      ? l10n.t('It is stopped. Start it to use it again — setting up would replace it.')
+                      : l10n.t(
+                            'Its saved credentials are missing, so its data can no longer be opened. Setting up will delete the instance and its data, then create a new one.',
+                        )}
+            </MessageBarBody>
+            <MessageBarActions>
+                {existingInstanceGuard === 'healthy' && (
+                    <Button appearance="secondary" onClick={handleOpenConnection}>
+                        {l10n.t('Open Connection')}
+                    </Button>
+                )}
+                {existingInstanceGuard === 'stopped' && (
+                    <Button appearance="secondary" onClick={handleStartExisting}>
+                        {l10n.t('Start')}
+                    </Button>
+                )}
+                {startBlockedByGuard && (
+                    <Button appearance="secondary" onClick={handleClose}>
+                        {l10n.t('Close')}
+                    </Button>
+                )}
+            </MessageBarActions>
+        </MessageBar>
+    );
+
+    /**
      * The recreate-vs-fresh choice (review M4, I2-2). It sits above the settings table because it
      * decides what those settings mean: reusing keeps the instance's stored credentials and image,
      * so the credential/image rows are hidden. Per I2-Q4 there is NO extra confirmation dialog —
      * the destructive option states the data loss in its own label and is never pre-selected.
      */
-    const dataChoiceBlock = canReuseExistingData && (
+    const dataChoiceBlock = canReuseExistingData && !forcedFresh && (
         <RadioGroup
             value={dataChoice}
             aria-label={l10n.t('Existing data')}
@@ -1946,6 +2025,7 @@ export const LocalQuickStart = (): JSX.Element => {
                     {l10n.t('These defaults work for most people. Change them only if you need to.')}
                 </Text>
             </div>
+            {existingInstanceNotice}
             {dataChoiceBlock}
             <Table size="small" aria-label={l10n.t('Setup settings')}>
                 <colgroup>
@@ -2325,7 +2405,7 @@ export const LocalQuickStart = (): JSX.Element => {
             : startFresh
               ? l10n.t('Erase and set up DocumentDB Local')
               : l10n.t('Start DocumentDB Local');
-        primaryDisabled = advError !== undefined;
+        primaryDisabled = advError !== undefined || startBlockedByGuard;
         primaryIcon = <RocketRegular />;
         onPrimary = handleStart;
         footerNote = isRecreate

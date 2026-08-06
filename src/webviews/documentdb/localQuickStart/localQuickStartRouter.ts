@@ -203,6 +203,13 @@ export const localQuickStartRouter = router({
         await vscode.commands.executeCommand('connectionsView.focus');
     }),
 
+    /**
+     * Start the existing (stopped) instance from the Configure step's guard (review §9.2 Q2): a
+     * stopped instance the user reached the wizard for must never be silently recreated when all
+     * they wanted was to start it.
+     */
+    startInstance: publicProcedure.mutation(() => QuickStartService.start()),
+
     /** Success hand-off (§5.5): copy the managed instance's connection string. */
     copyConnectionString: publicProcedure.mutation(async () => {
         // Delegate to the shared copy command so the webview button gets the same with/without-password
