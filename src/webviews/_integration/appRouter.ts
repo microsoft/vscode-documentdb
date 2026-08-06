@@ -171,25 +171,31 @@ const commonRouter = router({
             );
             return { action };
         }),
+    /**
+     * Unconditional information toast. Use for messages the user must always
+     * see; completion notices belong in `displayOperationSummary` instead.
+     */
     displayInformationMessage: publicProcedure
         .input(
             z.object({
                 message: z.string(),
-                /**
-                 * When true, the toast is gated by the
-                 * `documentDB.userInterface.ShowOperationSummaries` setting (via
-                 * `showConfirmationAsInSettings`), so webview completion toasts
-                 * honour the same user preference as the tree-view commands.
-                 */
-                asOperationSummary: z.boolean().optional(),
             }),
         )
         .mutation(({ input }) => {
-            if (input.asOperationSummary) {
-                showConfirmationAsInSettings(input.message);
-            } else {
-                void vscode.window.showInformationMessage(input.message);
-            }
+            void vscode.window.showInformationMessage(input.message);
+        }),
+    /**
+     * Completion toast gated by the `documentDB.userInterface.ShowOperationSummaries`
+     * setting, so webviews honour the same user preference as the tree-view commands.
+     */
+    displayOperationSummary: publicProcedure
+        .input(
+            z.object({
+                message: z.string(),
+            }),
+        )
+        .mutation(({ input }) => {
+            showConfirmationAsInSettings(input.message);
         }),
     surveyPing: publicProcedure
         .input(

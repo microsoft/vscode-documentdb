@@ -220,7 +220,7 @@ export const IndexesTab = (): JSX.Element => {
      */
     const showOperationSummary = useCallback(
         (message: string): void => {
-            void trpcClient.common.displayInformationMessage.mutate({ message, asOperationSummary: true });
+            void trpcClient.common.displayOperationSummary.mutate({ message });
         },
         [trpcClient],
     );
