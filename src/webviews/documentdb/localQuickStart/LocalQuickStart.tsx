@@ -1172,11 +1172,14 @@ export const LocalQuickStart = (): JSX.Element => {
                 }
                 applyReadiness(result.readiness);
                 setWillReuse(result.willReuse);
-                setSuggestedPort(result.suggestedPort);
-                // Pre-fill the port with the host's suggestion until the user edits it, so the
-                // Configure summary shows the port that will actually be bound (review L1/L3).
-                if (!portTouchedRef.current) {
-                    setAdvPort(String(result.suggestedPort));
+                // Absent on polled calls (M6-b); keep the last suggestion in that case.
+                if (result.suggestedPort !== undefined) {
+                    setSuggestedPort(result.suggestedPort);
+                    // Pre-fill the port with the host's suggestion until the user edits it, so the
+                    // Configure summary shows the port that will actually be bound (review L1/L3).
+                    if (!portTouchedRef.current) {
+                        setAdvPort(String(result.suggestedPort));
+                    }
                 }
                 return result;
             } catch {

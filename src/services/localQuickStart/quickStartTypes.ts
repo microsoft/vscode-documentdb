@@ -392,8 +392,12 @@ export interface DockerStatusResult {
     /**
      * A host port that is free right now, for the Configure step to pre-fill. The port is then
      * always sent explicitly, so setup binds exactly what the user saw (review L3).
+     *
+     * Omitted on polled calls (review M6-b): the readiness loop only consumes `readiness`, and
+     * suggesting a port binds a probe socket per candidate over a range of up to
+     * {@link QUICK_START_PORT_SCAN_LIMIT} ports on every poll.
      */
-    readonly suggestedPort: number;
+    readonly suggestedPort?: number;
 }
 
 /** Why a host port cannot be used, or `'available'` when it can (Configure-step validation, L3). */

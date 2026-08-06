@@ -149,7 +149,9 @@ export const localQuickStartRouter = router({
                 status: toWebviewStatus(QuickStartService.getStatus()),
                 busy: QuickStartService.isBusy,
                 willReuse,
-                suggestedPort: await QuickStartService.suggestPort(),
+                // M6-b: the polled readiness loop reads only `readiness`, and suggestPort() probes a
+                // range of host sockets on every call - skip it while polling.
+                suggestedPort: input?.polled ? undefined : await QuickStartService.suggestPort(),
             };
         }),
 
