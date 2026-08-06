@@ -6,7 +6,7 @@
 import { Badge, Card, Text, Tooltip } from '@fluentui/react-components';
 import { WarningRegular } from '@fluentui/react-icons';
 import type * as React from 'react';
-import '../../../../../../components/focusableBadge/focusableBadge.scss';
+import '../../../../../components/focusableBadge/focusableBadge.scss';
 import './StageDetailCard.scss';
 
 export type StageType = 'IXSCAN' | 'FETCH' | 'PROJECTION' | 'SORT' | 'COLLSCAN';

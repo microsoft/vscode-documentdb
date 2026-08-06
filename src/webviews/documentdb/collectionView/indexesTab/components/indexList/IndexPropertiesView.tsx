@@ -6,7 +6,7 @@
 import { Badge, Tooltip } from '@fluentui/react-components';
 import * as l10n from '@vscode/l10n';
 import { type JSX } from 'react';
-import '../../../../components/focusableBadge/focusableBadge.scss';
+import '../../../../../components/focusableBadge/focusableBadge.scss';
 import { type IndexRow } from '../../types';
 import { formatShellJson } from '../../utils/format';
 import { formatVectorAlgorithm } from '../../utils/vectorIndex';
