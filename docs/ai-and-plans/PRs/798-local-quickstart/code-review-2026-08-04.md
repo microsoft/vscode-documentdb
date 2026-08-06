@@ -47,10 +47,12 @@ and folded in — see **M7** and the thread tracker in [§6](#6-external-review-
 > unblocked the credential-store consolidation. **WP-7b dissolved**: its tree-state half became the error-node
 > work, its multi-instance half is out of scope.
 >
-> **➡ All three iterations are closed.** Every finding routed through §11 is resolved: Iteration 2 shipped nine
-> items and closed L2 by verification, Iteration 3 shipped the credential-store consolidation. What is left is
-> the deferred pool in [§11.5](#115-iteration-3--opened-2026-08-06-closed-2026-08-06) — none of it blocking, and
-> none of it release work. Start there, not from this table.
+> **➡ All three iterations are closed**, and every finding routed through §11 is resolved. Iteration 2 shipped
+> nine items and closed L2 by verification; Iteration 3 shipped the credential-store consolidation;
+> [§11.6][it-post] records three fixes found afterwards by actually running the extension, including one
+> shipped bug and one finding (**N1**) that had been recorded as resolved when it was not. What is left is the
+> deferred pool in [§11.5][it3] — none of it blocking, none of it release work. Start there, not from this
+> table.
 
 | WP        | Title                                   | Findings | Status                                                |
 | --------- | --------------------------------------- | -------- | ----------------------------------------------------- |
@@ -1068,15 +1070,15 @@ extension host is killed between the write and the `finally`, the file survives 
 
 ### Nits
 
-| #      | Item                                                                                                                                                                                                                                                                     | Suggestion                                                                                                 |
-| ------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------- |
-| **N1** | `willReuse` is fetched once per panel open and never refreshed. Deleting the instance from the tree while the panel is open leaves the wizard showing the recreate copy.                                                                                                 | Re-query `getDockerStatus` when the panel regains focus, or subscribe to status changes.                   |
-| **N2** | Terminology: _"an open-source, fully MongoDB-compatible database"_ in the introduction copy. The repo rule is to avoid "MongoDB" as a bare product name; here it reads as a compatibility descriptor, which is borderline acceptable.                                    | Consider "fully compatible with the MongoDB API" to match the documented convention exactly.               |
-| **N3** | `LocalQuickStartItem` has a self-acknowledged `FOLLOW-UP` comment about reporting wizard failures in the tree when the user never opened the wizard from there.                                                                                                          | Either resolve it or file it — a `FOLLOW-UP` with no tracking item tends to become permanent.              |
-| **N4** | `runStream`'s `FOLLOW-UP (retry stability)` comment documents an un-awaited unsubscribe race that the service now papers over by buffering terminal events.                                                                                                              | Worth an explicit handshake (`await` the previous stream's completion) rather than relying on the buffer.  |
-| **N5** | `resumeReadiness`, `discardTimedOutInstance`, `willReuseExistingInstance` and `isBusy` all hardcode `DEFAULT_ALIAS` while `provision` threads an `alias` variable that is also `DEFAULT_ALIAS`. The mixture makes it hard to see what is and isn't multi-instance ready. | Either take `alias` consistently or drop the parameter until WI-2e — the half-state is the confusing part. |
-| **N6** | `findAvailablePort` consumes an attempt on a duplicate random candidate.                                                                                                                                                                                                 | `i--` on the `continue`, or draw from a shuffled range.                                                    |
-| **N7** | The `docs/ai-and-plans/PRs/local-quickstart-poc/` and `653-local-quickstart-design/` folders both carry plan docs for this feature, now joined by `docs/ai-and-plans/local-quickstart/`.                                                                                 | Consolidate under one PR folder before merge so the next reader has one entry point.                       |
+| #      | Item                                                                                                                                                                                                                                                                               | Suggestion                                                                                                                     |
+| ------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
+| **N1** | `willReuse` is fetched once per panel open and never refreshed. Deleting the instance from the tree while the panel is open leaves the wizard showing the recreate copy. **⚠ This was recorded as "resolved by construction" by M4/I2-2, which was wrong — see [§11.6][it-post].** | Re-query `getDockerStatus` when the panel regains focus, or subscribe to status changes. ✅ Done in `4a618d0b` (subscription). |
+| **N2** | Terminology: _"an open-source, fully MongoDB-compatible database"_ in the introduction copy. The repo rule is to avoid "MongoDB" as a bare product name; here it reads as a compatibility descriptor, which is borderline acceptable.                                              | Consider "fully compatible with the MongoDB API" to match the documented convention exactly.                                   |
+| **N3** | `LocalQuickStartItem` has a self-acknowledged `FOLLOW-UP` comment about reporting wizard failures in the tree when the user never opened the wizard from there.                                                                                                                    | Either resolve it or file it — a `FOLLOW-UP` with no tracking item tends to become permanent.                                  |
+| **N4** | `runStream`'s `FOLLOW-UP (retry stability)` comment documents an un-awaited unsubscribe race that the service now papers over by buffering terminal events.                                                                                                                        | Worth an explicit handshake (`await` the previous stream's completion) rather than relying on the buffer.                      |
+| **N5** | `resumeReadiness`, `discardTimedOutInstance`, `willReuseExistingInstance` and `isBusy` all hardcode `DEFAULT_ALIAS` while `provision` threads an `alias` variable that is also `DEFAULT_ALIAS`. The mixture makes it hard to see what is and isn't multi-instance ready.           | Either take `alias` consistently or drop the parameter until WI-2e — the half-state is the confusing part.                     |
+| **N6** | `findAvailablePort` consumes an attempt on a duplicate random candidate.                                                                                                                                                                                                           | `i--` on the `continue`, or draw from a shuffled range.                                                                        |
+| **N7** | The `docs/ai-and-plans/PRs/local-quickstart-poc/` and `653-local-quickstart-design/` folders both carry plan docs for this feature, now joined by `docs/ai-and-plans/local-quickstart/`.                                                                                           | Consolidate under one PR folder before merge so the next reader has one entry point.                                           |
 
 **Decisions on the nits (2026-08-05):**
 
@@ -2941,8 +2943,61 @@ path. Worth knowing for any other feature built on this storage — see the I3-1
 2 (3355) because the deleted migration machinery took its suite with it, while the new store suite added cases
 of its own.
 
+### 11.6 Post-iteration fixes from manual testing (2026-08-06)
+
+Found by running the extension after Iteration 3 closed, not by re-reading the review. Recorded here
+because the iterations above all report "closed", and a reader would otherwise conclude the feature
+had been exercised as well as reviewed.
+
+| #       | Item                                                                                    | Commit     |
+| ------- | --------------------------------------------------------------------------------------- | ---------- |
+| **P-1** | The Configure guard offered **Start** for a container removed outside VS Code           | `4a618d0b` |
+| **P-2** | **N1 was never actually fixed.** The panel still read the instance status once per open | `4a618d0b` |
+| **P-3** | The guard notice and the data choice read as two competing questions                    | `2334758b` |
+
+#### P-1 — "Start" was offered for a container that no longer exists
+
+`Missing` is not an {@link InstanceState}: the service reports a container removed outside VS Code as
+`state: Stopped` **with `missing: true`**. The Configure guard read only the state, classified it as
+"stopped", and offered a **Start** button that could not do anything. Reported from a real session:
+_"I deleted the container outside of VS Code … I pressed 'start' in that message bar but of course it
+does not produce a thing."_
+
+Fixed by checking `missing` **before** the state, and by not guarding a missing instance at all —
+recreating it is exactly what the user opened the wizard for. The decision was extracted to
+`existingInstanceGuard.ts` with tests, because "Missing is Stopped plus a flag" is a distinction that
+is easy to get wrong twice.
+
+#### P-2 — N1 was recorded as resolved when it was not
+
+[§9.2 Q5][s-92q2], [§10.6][s-106] and the I2-2 write-up all state that the explicit recreate-vs-fresh
+choice "resolves **N1** by construction". **It does not.** N1 is about the panel reading the
+instance's status **once per open and never refreshing it**; making the choice explicit removed the
+_inference_, but the underlying `canReuseExistingData` / status snapshot was still fetched on mount
+and never updated. Deleting the instance from the tree with the panel open still left the wizard
+describing an instance that was gone — which is precisely how **P-1** was reachable in practice.
+
+Fixed with the review's own suggested remedy: a new `onInstanceChanged` tRPC subscription pushes
+status changes to the panel. It deliberately makes no Docker calls and skips events that change
+nothing user-visible, so the tree's background probe cannot turn into a Docker call per open panel.
+
+**Process note.** This mis-recording survived a full audit because the audit read the document's
+claim and repeated it instead of checking the claim against the code. That is the same failure that
+produced the phantom `TDD:` blocker in [§11.5][it3] — a summary was trusted over the tree. When a
+document says "resolved by construction", the construction is the thing to verify.
+
+#### P-3 — one decision, one block
+
+The step showed an info MessageBar and a separate radio group, so the same question was effectively
+asked twice and the pair read as competing controls next to a disabled primary button. They are now a
+single `MessageBar` (`role="group"`, which is the correct container for a set of related controls):
+explanation on top, choice beneath. The radio group is hidden whenever the guard blocks setup, the
+alarming _"container is gone"_ title is gone, and the primary button is a fixed **Start DocumentDB
+Local** again, with the footer note carrying the consequence of the selection.
+
 <!-- prettier-ignore-start -->
 [it3]: #115-iteration-3--opened-2026-08-06-closed-2026-08-06
+[it-post]: #116-post-iteration-fixes-from-manual-testing-2026-08-06
 [b-q1]: #answer--i3-q1
 <!-- prettier-ignore-end -->
 
