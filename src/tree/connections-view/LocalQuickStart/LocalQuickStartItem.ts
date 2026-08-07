@@ -18,6 +18,7 @@ import { CredentialCache } from '../../../documentdb/CredentialCache';
 import { DocumentDBConnectionString } from '../../../documentdb/utils/DocumentDBConnectionString';
 import { Views } from '../../../documentdb/Views';
 import { DocumentDBExperience } from '../../../DocumentDBExperiences';
+import { ext } from '../../../extensionVariables';
 import { StorageZone } from '../../../services/connectionStorageService';
 import { QuickStartService } from '../../../services/localQuickStart/QuickStartService';
 import {
@@ -183,10 +184,15 @@ export class LocalQuickStartItem implements TreeElement, TreeElementWithContextV
     }
 
     async getChildren(): Promise<TreeElement[]> {
+        const wasHydrated = QuickStartService.isHydrated;
+        await QuickStartService.ensureHydrated();
+
         // Never block the row on Docker (review M6): the Connections view re-runs getChildren() on
         // many unrelated events, so the freshness probe is kicked off in the background (rate-limited
         // and de-duplicated by the service) and the row is redrawn by onDidChangeStatus when it lands.
-        QuickStartService.refreshLiveStateInBackground();
+        if (wasHydrated) {
+            QuickStartService.refreshLiveStateInBackground();
+        }
 
         const status: QuickStartStatus = QuickStartService.getStatus();
         const metadata = status.metadata;
@@ -338,6 +344,12 @@ export class LocalQuickStartItem implements TreeElement, TreeElementWithContextV
         return children;
     }
 
+    /** Explicit node refresh performs a full durable-store and Docker reconciliation. */
+    public async refresh(_context: IActionContext): Promise<void> {
+        await QuickStartService.refreshHydratedState();
+        ext.connectionsBranchDataProvider.refresh(this);
+    }
+
     private iconPath: IconPath = {
         light: vscode.Uri.file(path.join(getResourcesPath(), 'icons', 'vscode-documentdb-icon-light-themes.svg')),
         dark: vscode.Uri.file(path.join(getResourcesPath(), 'icons', 'vscode-documentdb-icon-dark-themes.svg')),
@@ -349,7 +361,7 @@ export class LocalQuickStartItem implements TreeElement, TreeElementWithContextV
             contextValue: this.contextValue,
             label: l10n.t('DocumentDB Local - Quick Start'),
             iconPath: this.iconPath,
-            collapsibleState: vscode.TreeItemCollapsibleState.Expanded,
+            collapsibleState: vscode.TreeItemCollapsibleState.Collapsed,
         };
     }
 }

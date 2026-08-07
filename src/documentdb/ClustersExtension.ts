@@ -272,8 +272,8 @@ export class ClustersExtension implements vscode.Disposable {
                 const playgroundService = PlaygroundService.getInstance();
                 ext.context.subscriptions.push(playgroundService);
 
-                // Initialize Local Quick Start (managed local DocumentDB container).
-                // Reconcile detects a still-running container after a window reload.
+                // Initialize Local Quick Start (managed local DocumentDB container). Durable state
+                // and Docker are reconciled lazily when the collapsed node or webview is opened.
                 ext.context.subscriptions.push(QuickStartService);
                 ext.context.subscriptions.push({ dispose: disposeQuickStartOutputChannel });
                 ext.context.subscriptions.push({ dispose: disposeQuickStartLogFollow });
@@ -286,7 +286,6 @@ export class ClustersExtension implements vscode.Disposable {
                         ext.connectionsBranchDataProvider?.refresh();
                     }),
                 );
-                void QuickStartService.reconcile();
                 // Self-heal after a crash that skipped provision()'s env-file cleanup (L9).
                 void sweepStaleQuickStartEnvFiles();
 

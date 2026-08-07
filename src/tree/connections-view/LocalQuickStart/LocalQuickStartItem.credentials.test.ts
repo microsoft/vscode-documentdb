@@ -90,6 +90,8 @@ describe('QuickStartClusterItem — credential source of truth (H5)', () => {
     beforeEach(() => {
         jest.clearAllMocks();
         CredentialCache.deleteCredentials(CLUSTER_ID);
+        jest.spyOn(QuickStartService, 'ensureHydrated').mockResolvedValue(undefined);
+        jest.spyOn(QuickStartService, 'isHydrated', 'get').mockReturnValue(true);
         jest.spyOn(QuickStartService, 'refreshLiveStateInBackground').mockReturnValue(undefined);
         jest.spyOn(QuickStartService, 'getStatus').mockReturnValue(runningStatus());
     });
