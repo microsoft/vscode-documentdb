@@ -36,6 +36,7 @@ import { atlasCredentialsRouter } from '../documentdb/atlasCredentials/atlasCred
 import { collectionsViewRouter as collectionViewRouter } from '../documentdb/collectionView/collectionViewRouter';
 import { indexViewRouter } from '../documentdb/collectionView/indexesTab/indexViewRouter';
 import { documentsViewRouter as documentViewRouter } from '../documentdb/documentView/documentsViewRouter';
+import { localQuickStartRouter } from '../documentdb/localQuickStart/localQuickStartRouter';
 import { WEBVIEW_CONFIG } from './configuration';
 import { publicProcedure, publicProcedureWithTelemetry, router } from './trpc';
 
@@ -250,6 +251,7 @@ export const appRouter = router({
         collectionView: collectionViewRouter,
         indexView: indexViewRouter,
     },
+    localQuickStart: localQuickStartRouter,
 });
 
 // Export type router type signature, this is used by the client.

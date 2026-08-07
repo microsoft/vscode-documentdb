@@ -21,6 +21,17 @@ jest.mock('vscode', () => ({
         constructor(public readonly id: string) {}
     },
     MarkdownString: MarkdownStringMock,
+    EventEmitter: class EventEmitter {
+        public fire(): void {
+            // no-op
+        }
+        public get event(): jest.Mock {
+            return jest.fn();
+        }
+        public dispose(): void {
+            // no-op
+        }
+    },
     window: { showErrorMessage: jest.fn(), showWarningMessage: jest.fn() },
     l10n: {
         t: jest.fn((template: string, ...args: unknown[]) =>

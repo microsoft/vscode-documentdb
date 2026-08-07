@@ -11,10 +11,6 @@ import {
     // USER-TEST PROTOTYPE: Remove with the footer experiment preview badge.
     Badge,
     Body1,
-    Breadcrumb,
-    BreadcrumbButton,
-    BreadcrumbDivider,
-    BreadcrumbItem,
     Button,
     Card,
     CardHeader,
@@ -22,31 +18,20 @@ import {
     Input,
     Link,
     makeStyles,
-    Menu,
-    MenuItem,
-    MenuList,
-    MenuPopover,
-    MenuTrigger,
     mergeClasses,
     MessageBar,
     MessageBarActions,
     MessageBarBody,
     MessageBarTitle,
-    Overflow,
-    OverflowDivider,
-    OverflowItem,
     Radio,
     Spinner,
     // USER-TEST PROTOTYPE: Remove with the footer experiment comparison switch.
     Switch,
     Text,
     tokens,
-    useIsOverflowItemVisible,
-    useOverflowMenu,
 } from '@fluentui/react-components';
 import {
     ArrowLeftRegular,
-    bundleIcon,
     CheckmarkCircleFilled,
     CircleHintFilled,
     CloudRegular,
@@ -54,8 +39,6 @@ import {
     EyeOffRegular,
     EyeRegular,
     KeyRegular,
-    MoreHorizontalFilled,
-    MoreHorizontalRegular,
     PersonAccountsRegular,
     WarningRegular,
 } from '@fluentui/react-icons';
@@ -65,13 +48,12 @@ import { Fragment, type JSX, useCallback, useEffect, useMemo, useRef, useState }
 import { type AtlasAuthMethod } from '../../../plugins/service-atlas-mongodb/auth/AtlasSession';
 import { useTrpcClient } from '../../_integration/useTrpcClient';
 import { Announcer } from '../../components/accessibility/Announcer';
+import { WizardBreadcrumb, type WizardStepMeta } from '../../components/wizard/WizardBreadcrumb';
 import './atlasCredentials.scss';
 import { type AtlasCredentialsWebviewConfig } from './atlasCredentialsController';
 import { type CredentialSubmitError } from './atlasCredentialsRouter';
 
 const ATLAS_CONSOLE_URL = 'https://cloud.mongodb.com/';
-
-const MoreHorizontal = bundleIcon(MoreHorizontalFilled, MoreHorizontalRegular);
 
 type Phase = 'choose' | 'form' | 'checking' | 'success';
 type StageStatus = 'pending' | 'active' | 'done' | 'error' | 'warning';
@@ -132,13 +114,6 @@ const useStyles = makeStyles({
     muted: { color: tokens.colorNeutralForeground2 },
     section: { display: 'flex', flexDirection: 'column', gap: '12px' },
     sectionHeader: { display: 'flex', flexDirection: 'column', gap: '4px' },
-    breadcrumbDone: { color: tokens.colorPaletteGreenForeground1, fontSize: '16px' },
-    // Inherit the breadcrumb button's own text colour, so the hint dot matches whatever state the
-    // step is in (the active/current item gets its colour for free).
-    breadcrumbPending: { color: 'inherit', fontSize: '16px' },
-    // Keep completed steps bold. Fluent only bolds the `current` item, so a step dropped back to
-    // regular weight when it stopped being current, and the width change shifted the whole row.
-    breadcrumbButtonDone: { fontWeight: tokens.fontWeightSemibold },
     cardGrid: {
         display: 'grid',
         gridTemplateColumns: 'repeat(2, minmax(0, 1fr))',
@@ -251,67 +226,7 @@ const StageRow = ({ label, status }: StageRowProps): JSX.Element => {
 };
 
 // A step's derived breadcrumb state, shared by the inline items and the overflow menu.
-interface StepMeta {
-    readonly id: Phase;
-    readonly label: string;
-    readonly isCurrent: boolean;
-    readonly isCompleted: boolean;
-    readonly canNavigate: boolean;
-}
-
-// Renders a hidden (overflowed) step as a menu item; visible steps render nothing here.
-const StepOverflowMenuItem = ({
-    step,
-    onNavigate,
-}: {
-    readonly step: StepMeta;
-    readonly onNavigate: (id: Phase) => void;
-}): JSX.Element | null => {
-    const isVisible = useIsOverflowItemVisible(step.id);
-    if (isVisible) {
-        return null;
-    }
-    return (
-        <MenuItem disabled={!step.canNavigate} onClick={step.canNavigate ? () => onNavigate(step.id) : undefined}>
-            {step.label}
-        </MenuItem>
-    );
-};
-
-// The "…" breadcrumb entry that collects steps hidden by overflow. Renders nothing until overflow.
-const StepOverflowMenu = ({
-    steps,
-    onNavigate,
-}: {
-    readonly steps: readonly StepMeta[];
-    readonly onNavigate: (id: Phase) => void;
-}): JSX.Element | null => {
-    const { ref, isOverflowing, overflowCount } = useOverflowMenu<HTMLButtonElement>();
-    if (!isOverflowing) {
-        return null;
-    }
-    return (
-        <BreadcrumbItem>
-            <Menu>
-                <MenuTrigger disableButtonEnhancement>
-                    <Button
-                        appearance="subtle"
-                        ref={ref}
-                        icon={<MoreHorizontal />}
-                        aria-label={l10n.t('{0} more steps', String(overflowCount))}
-                    />
-                </MenuTrigger>
-                <MenuPopover>
-                    <MenuList>
-                        {steps.map((step) => (
-                            <StepOverflowMenuItem key={step.id} step={step} onNavigate={onNavigate} />
-                        ))}
-                    </MenuList>
-                </MenuPopover>
-            </Menu>
-        </BreadcrumbItem>
-    );
-};
+type StepMeta = WizardStepMeta & { readonly id: Phase };
 
 export const AtlasCredentialsView = (): JSX.Element => {
     const configuration = useConfiguration<AtlasCredentialsWebviewConfig>();
@@ -483,7 +398,7 @@ export const AtlasCredentialsView = (): JSX.Element => {
     // Breadcrumb back-navigation. Only the pre-verify steps are reachable; once checking starts a
     // credential may already be saved, so the earlier steps lock.
     const goToStep = useCallback(
-        (id: Phase): void => {
+        (id: string): void => {
             if (id === 'choose') {
                 handleBack();
             } else if (id === 'form') {
@@ -582,44 +497,7 @@ export const AtlasCredentialsView = (): JSX.Element => {
     // Responsive breadcrumb: when it doesn't fit, steps collapse into a "…" menu. The current step is
     // given the highest priority so it is the last item overflow ever removes - it never hides.
     const progress = (
-        <Overflow minimumVisible={1}>
-            <Breadcrumb aria-label={l10n.t('Credential setup progress')}>
-                {stepItems.map((step, index) => (
-                    <Fragment key={step.id}>
-                        <OverflowItem
-                            id={step.id}
-                            groupId={step.id}
-                            priority={step.isCurrent ? stepItems.length + 1 : 0}
-                        >
-                            <BreadcrumbItem>
-                                <BreadcrumbButton
-                                    current={step.isCurrent}
-                                    aria-current={step.isCurrent ? 'step' : undefined}
-                                    disabledFocusable={!step.isCurrent && !step.canNavigate}
-                                    className={step.isCompleted ? styles.breadcrumbButtonDone : undefined}
-                                    icon={
-                                        step.isCompleted ? (
-                                            <CheckmarkCircleFilled aria-hidden className={styles.breadcrumbDone} />
-                                        ) : (
-                                            <CircleHintFilled aria-hidden className={styles.breadcrumbPending} />
-                                        )
-                                    }
-                                    onClick={step.canNavigate ? () => goToStep(step.id) : undefined}
-                                >
-                                    {step.label}
-                                </BreadcrumbButton>
-                            </BreadcrumbItem>
-                        </OverflowItem>
-                        {index < stepItems.length - 1 && (
-                            <OverflowDivider groupId={step.id}>
-                                <BreadcrumbDivider />
-                            </OverflowDivider>
-                        )}
-                    </Fragment>
-                ))}
-                <StepOverflowMenu steps={stepItems} onNavigate={goToStep} />
-            </Breadcrumb>
-        </Overflow>
+        <WizardBreadcrumb steps={stepItems} ariaLabel={l10n.t('Credential setup progress')} onNavigate={goToStep} />
     );
 
     const methodCard = (
