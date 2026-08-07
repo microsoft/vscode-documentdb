@@ -243,15 +243,21 @@ describe('QuickStartService — WI-2d registry-driven reconcile (multi-instance)
 
     let originalSecretStorage: vscode.SecretStorage;
     let originalContext: vscode.ExtensionContext;
+    let originalOutputChannel: typeof ext.outputChannel;
+    let trace: jest.Mock;
 
     beforeEach(() => {
         originalSecretStorage = ext.secretStorage;
         originalContext = ext.context;
+        originalOutputChannel = ext.outputChannel;
+        trace = jest.fn();
+        ext.outputChannel = { trace } as unknown as typeof ext.outputChannel;
     });
 
     afterEach(() => {
         ext.secretStorage = originalSecretStorage;
         ext.context = originalContext;
+        ext.outputChannel = originalOutputChannel;
     });
 
     function inspectItem(id: string, opts: { running: boolean; port?: number; image?: string }): unknown {
@@ -266,6 +272,7 @@ describe('QuickStartService — WI-2d registry-driven reconcile (multi-instance)
     function reconcileRuntime(opts: {
         containers: Array<{ id: string; alias?: string; createdAt?: Date }>;
         inspect?: Record<string, unknown>;
+        isDockerReady?: jest.Mock;
         removeContainer?: jest.Mock;
         removeVolume?: jest.Mock;
     }): IContainerRuntime {
@@ -281,6 +288,7 @@ describe('QuickStartService — WI-2d registry-driven reconcile (multi-instance)
             inspectContainer: jest.fn((id: string) =>
                 Promise.resolve(inspect[id]),
             ) as unknown as IContainerRuntime['inspectContainer'],
+            isDockerReady: opts.isDockerReady,
             removeContainer: opts.removeContainer ?? jest.fn().mockResolvedValue(undefined),
             removeVolume: opts.removeVolume ?? jest.fn().mockResolvedValue(undefined),
         });
@@ -311,6 +319,33 @@ describe('QuickStartService — WI-2d registry-driven reconcile (multi-instance)
         // listStatuses is ordered DEFAULT-first; both instances are durable + ready.
         expect(service.listStatuses().map((status) => status.alias)).toEqual([DEFAULT_ALIAS, ALIAS_2]);
         expect((await listInstances()).map((record) => record.alias).sort()).toEqual([ALIAS_2, DEFAULT_ALIAS].sort());
+    });
+
+    it('retains Docker host facts collected during reconciliation', async () => {
+        ext.secretStorage = fakeSecretStorage({});
+        ext.context = fakeContext(fakeMemento());
+        const readiness: DockerReadiness = {
+            outcome: 'ready',
+            environment: 'wsl',
+            endpointKind: 'unixSocket',
+            provider: 'dockerEngine',
+            providerEvidence: 'liveDaemon',
+            executionTarget: 'wsl',
+            canContinueAnyway: false,
+            checkedAtMs: 1,
+            cliInstalled: true,
+            cliVersion: 'Docker version 28.1.1',
+            daemonReachable: true,
+            osType: 'linux',
+            daemonArchitecture: 'amd64',
+        };
+        const isDockerReady = jest.fn().mockResolvedValue(readiness);
+        const service = new QuickStartServiceImpl(reconcileRuntime({ containers: [], isDockerReady }));
+
+        await service.reconcile();
+
+        expect(isDockerReady).toHaveBeenCalledWith({ suppressCommandEcho: true });
+        expect(service.getDockerReadinessSnapshot()).toBe(readiness);
     });
 
     it('surfaces a credential-unavailable instance as CredentialsMissing without removing it or its volume (R2)', async () => {
@@ -422,6 +457,89 @@ describe('QuickStartService — WI-2d registry-driven reconcile (multi-instance)
         // → a self-sustaining `docker inspect` loop for as long as the view was visible.
         expect(fired).toBe(1);
         expect(service.getStatus().missing).toBe(true);
+    });
+
+    it('ensureHydrated() lazily reconciles once and shares concurrent work', async () => {
+        ext.secretStorage = fakeSecretStorage({});
+        ext.context = fakeContext(fakeMemento());
+
+        let finishListing: ((containers: []) => void) | undefined;
+        const listByLabel = jest.fn(
+            () =>
+                new Promise<[]>((resolve) => {
+                    finishListing = resolve;
+                }),
+        );
+        const service = new QuickStartServiceImpl(mockRuntime({ listByLabel }));
+
+        expect(listByLabel).not.toHaveBeenCalled();
+        const first = service.ensureHydrated();
+        const second = service.ensureHydrated();
+        expect(listByLabel).toHaveBeenCalledTimes(1);
+
+        finishListing?.([]);
+        await Promise.all([first, second]);
+        await service.ensureHydrated();
+
+        expect(listByLabel).toHaveBeenCalledTimes(1);
+        expect(trace).toHaveBeenCalledWith(expect.stringContaining('Lazy hydration requested'));
+        expect(trace).toHaveBeenCalledWith(
+            expect.stringContaining('Discovery returned 0 managed container(s) and 0 durable record(s)'),
+        );
+        expect(trace).toHaveBeenCalledWith(expect.stringContaining('Lazy hydration completed'));
+    });
+
+    it('ensureHydrated() remains retryable when Docker discovery fails', async () => {
+        ext.secretStorage = fakeSecretStorage({});
+        ext.context = fakeContext(fakeMemento());
+
+        const listByLabel = jest.fn().mockRejectedValueOnce(new Error('Docker unavailable')).mockResolvedValue([]);
+        const service = new QuickStartServiceImpl(mockRuntime({ listByLabel }));
+
+        await expect(service.ensureHydrated()).rejects.toThrow('Docker unavailable');
+        expect(service.isHydrated).toBe(false);
+        expect(trace).toHaveBeenCalledWith(expect.stringContaining('Docker state remains unknown'));
+        expect(trace).toHaveBeenCalledWith(expect.stringContaining('the next Quick Start entry will retry'));
+
+        await service.ensureHydrated();
+        expect(service.isHydrated).toBe(true);
+        expect(listByLabel).toHaveBeenCalledTimes(2);
+    });
+
+    it('shares deep reconciliation between hydration and explicit refresh', async () => {
+        ext.secretStorage = fakeSecretStorage({});
+        ext.context = fakeContext(fakeMemento());
+
+        let finishListing: ((containers: []) => void) | undefined;
+        const listByLabel = jest.fn(
+            () =>
+                new Promise<[]>((resolve) => {
+                    finishListing = resolve;
+                }),
+        );
+        const service = new QuickStartServiceImpl(mockRuntime({ listByLabel }));
+
+        const hydration = service.ensureHydrated();
+        const refresh = service.refreshHydratedState();
+        expect(listByLabel).toHaveBeenCalledTimes(1);
+
+        finishListing?.([]);
+        await Promise.all([hydration, refresh]);
+
+        expect(service.isHydrated).toBe(true);
+        expect(listByLabel).toHaveBeenCalledTimes(1);
+    });
+
+    it('does not start a background live-state probe immediately after explicit refresh', async () => {
+        ext.secretStorage = fakeSecretStorage({});
+        ext.context = fakeContext(fakeMemento());
+
+        const service = new QuickStartServiceImpl(mockRuntime({}));
+
+        await service.refreshHydratedState();
+        service.refreshLiveStateInBackground();
+
+        expect(service.isRefreshingLiveState).toBe(false);
     });
 
     it('refreshLiveStateInBackground() de-duplicates and rate-limits the docker probe (M6)', async () => {

@@ -31,6 +31,7 @@ import { AuthMethodId } from '../../documentdb/auth/AuthMethod';
 import { ClustersClient } from '../../documentdb/ClustersClient';
 import { CredentialCache } from '../../documentdb/CredentialCache';
 import { DocumentDBConnectionString } from '../../documentdb/utils/DocumentDBConnectionString';
+import { ext } from '../../extensionVariables';
 import {
     ContainerRuntime,
     getBoundHostPort,
@@ -85,6 +86,10 @@ import {
 
 /** Stable cache key for CredentialCache / ClustersClient (the default instance). Ephemeral. */
 export const QUICK_START_CLUSTER_ID = clusterId(DEFAULT_ALIAS);
+
+function traceQuickStart(message: string): void {
+    ext.outputChannel?.trace(`[LocalQuickStart] ${message}`);
+}
 
 /**
  * Surfaced (design §12) when a labelled container + on-disk volume exist but the stored credentials
@@ -285,6 +290,12 @@ export class QuickStartServiceImpl {
      */
     private readonly instances = new Map<string, InstanceRuntimeState>();
 
+    /** First authoritative durable-store/Docker reconciliation, shared by all Quick Start entry points. */
+    private hydration: Promise<void> | undefined;
+    private reconciliation: Promise<void> | undefined;
+    private hydrated = false;
+    private dockerReadiness: DockerReadiness | undefined;
+
     /** Lazily get (creating a NotInstalled default for) an alias's runtime state. */
     private stateFor(alias: string): InstanceRuntimeState {
         let entry = this.instances.get(alias);
@@ -311,6 +322,20 @@ export class QuickStartServiceImpl {
      * singleton; tests inject a mock so the state machine runs with no real daemon.
      */
     constructor(private readonly runtime: IContainerRuntime = ContainerRuntime) {}
+
+    /** Latest Docker host facts collected by setup or deep reconciliation. */
+    public getDockerReadinessSnapshot(): DockerReadiness | undefined {
+        return this.dockerReadiness;
+    }
+
+    /** Check Docker and retain the result for tree presentation. */
+    public async checkDockerReadiness(
+        request?: Parameters<IContainerRuntime['isDockerReady']>[0],
+    ): Promise<DockerReadiness> {
+        const readiness = await this.runtime.isDockerReady(request);
+        this.dockerReadiness = readiness;
+        return readiness;
+    }
 
     public getStatus(alias: string = DEFAULT_ALIAS): QuickStartStatus {
         const entry = this.stateFor(alias);
@@ -377,6 +402,55 @@ export class QuickStartServiceImpl {
 
     public dispose(): void {
         this.statusEmitter.dispose();
+    }
+
+    /**
+     * Lazily rebuild runtime state from durable storage and Docker. Concurrent callers share the
+     * same work, and later callers use the hydrated in-memory state until an explicit reconcile.
+     */
+    public async ensureHydrated(): Promise<void> {
+        if (this.hydrated) {
+            return;
+        }
+
+        if (!this.hydration) {
+            traceQuickStart('Lazy hydration requested; starting deep reconciliation.');
+            this.hydration = this.reconcile()
+                .then(() => {
+                    this.hydrated = true;
+                    traceQuickStart('Lazy hydration completed.');
+                })
+                .catch((error: unknown) => {
+                    traceQuickStart('Lazy hydration failed; the next Quick Start entry will retry.');
+                    throw error;
+                })
+                .finally(() => {
+                    this.hydration = undefined;
+                });
+        } else {
+            traceQuickStart('Lazy hydration joined the in-flight request.');
+        }
+
+        await this.hydration;
+    }
+
+    /** Whether the initial durable-store/Docker reconciliation has completed. */
+    public get isHydrated(): boolean {
+        return this.hydrated;
+    }
+
+    /** Force an authoritative refresh for an explicit Quick Start refresh action. */
+    public async refreshHydratedState(): Promise<void> {
+        traceQuickStart('Explicit node refresh requested; starting deep reconciliation.');
+        try {
+            await this.reconcile();
+            this.hydrated = true;
+            this.lastBackgroundRefreshAt = Date.now();
+            traceQuickStart('Explicit node refresh completed.');
+        } catch (error) {
+            traceQuickStart('Explicit node refresh failed; the next explicit refresh will retry.');
+            throw error;
+        }
     }
 
     private setStatus(alias: string, state: InstanceState, metadata?: InstanceMetadata, errorMessage?: string): void {
@@ -490,7 +564,7 @@ export class QuickStartServiceImpl {
 
             // --- checking ---
             yield stageEvent('checking', 'active', 'Checking Docker…');
-            const readiness = await this.runtime.isDockerReady();
+            const readiness = await this.checkDockerReadiness();
             readinessEnvironment = readiness.environment;
             this.throwIfAborted(signal);
             const continueAfterIndeterminateReadiness =
@@ -808,7 +882,7 @@ export class QuickStartServiceImpl {
 
     private async getProvisioningDockerReadiness(): Promise<DockerReadiness | undefined> {
         try {
-            const readiness = await this.runtime.isDockerReady({ forceRefresh: true });
+            const readiness = await this.checkDockerReadiness({ forceRefresh: true });
             return readiness.outcome === 'diagnosed' ? readiness : undefined;
         } catch {
             return undefined;
@@ -1630,62 +1704,96 @@ export class QuickStartServiceImpl {
     }
 
     /**
-     * Activation reconciliation (design §12 / risk-review): after a window reload the in-memory state
-     * is lost while containers keep running. Enumerate every known instance — the union of the durable
-     * store and the live labelled containers (grouped by the `vscode.documentdb.alias` label; an
-     * absent/empty label is the DEFAULT instance) — and rebuild each alias's state. A credential-less
-     * labelled container is SURFACED, never removed (R2); a stale pre-create reservation (crashed host)
-     * is scavenged; a ready record whose container vanished becomes Missing (recoverable via recreate).
+     * Demand-driven reconciliation (design §12 / risk-review): after a window reload the in-memory
+     * state is lost while containers keep running. Enumerate every known instance — the union of the
+     * durable store and the live labelled containers (grouped by the `vscode.documentdb.alias` label;
+     * an absent/empty label is the DEFAULT instance) — and rebuild each alias's state. A
+     * credential-less labelled container is SURFACED, never removed (R2); a stale pre-create
+     * reservation (crashed host) is scavenged; a ready record whose container vanished becomes
+     * Missing (recoverable via recreate).
      */
     public async reconcile(): Promise<void> {
-        try {
-            const containers = (await this.runtime
-                .listByLabel({ [QUICK_START_LABEL_KEY]: '1' })
-                .catch(() => [])) as Array<{
+        if (!this.reconciliation) {
+            traceQuickStart('Deep reconciliation started.');
+            this.reconciliation = this.performReconciliation()
+                .then(() => {
+                    traceQuickStart('Deep reconciliation completed.');
+                })
+                .catch((error: unknown) => {
+                    traceQuickStart('Deep reconciliation failed; Docker state remains unknown.');
+                    throw error;
+                })
+                .finally(() => {
+                    this.reconciliation = undefined;
+                });
+        } else {
+            traceQuickStart('Deep reconciliation joined the in-flight request.');
+        }
+
+        await this.reconciliation;
+    }
+
+    private async performReconciliation(): Promise<void> {
+        const readiness = this.checkDockerReadiness({ suppressCommandEcho: true }).catch(() => undefined);
+        const containersPromise = this.runtime.listByLabel({ [QUICK_START_LABEL_KEY]: '1' }) as Promise<
+            Array<{
                 id: string;
                 createdAt?: Date;
                 labels?: Record<string, string>;
-            }>;
-            const instances = await listInstances();
-            const now = Date.now();
+            }>
+        >;
+        const [containers, instances] = await Promise.all([containersPromise, listInstances(), readiness]);
+        const now = Date.now();
 
-            // Group live containers by alias (absent/empty alias label ⇒ DEFAULT).
-            const liveByAlias = new Map<string, Array<{ id: string; createdAt?: Date }>>();
-            for (const container of containers) {
-                const alias = container.labels?.[QUICK_START_ALIAS_LABEL_KEY] || DEFAULT_ALIAS;
-                const bucket = liveByAlias.get(alias);
-                if (bucket) {
-                    bucket.push(container);
-                } else {
-                    liveByAlias.set(alias, [container]);
-                }
-            }
+        traceQuickStart(
+            `Discovery returned ${containers.length} managed container(s) and ${instances.length} durable record(s).`,
+        );
 
-            // The DEFAULT always exists; also reconcile every known instance and every live alias.
-            const aliases = new Set<string>([
-                DEFAULT_ALIAS,
-                ...instances.map((record) => record.alias),
-                ...liveByAlias.keys(),
-            ]);
-            const scavenge = new Set<string>();
-            for (const alias of aliases) {
-                const record = instances.find((existing) => existing.alias === alias);
-                const outcome = await this.reconcileAlias(alias, record, liveByAlias.get(alias) ?? [], now);
-                if (outcome.scavenge) {
-                    scavenge.add(alias);
-                }
+        // Group live containers by alias (absent/empty alias label ⇒ DEFAULT).
+        const liveByAlias = new Map<string, Array<{ id: string; createdAt?: Date }>>();
+        for (const container of containers) {
+            const alias = container.labels?.[QUICK_START_ALIAS_LABEL_KEY] || DEFAULT_ALIAS;
+            const bucket = liveByAlias.get(alias);
+            if (bucket) {
+                bucket.push(container);
+            } else {
+                liveByAlias.set(alias, [container]);
             }
-
-            // Drop stale pre-create reservations. Scavenge fires ONLY here (activation), never in the
-            // per-render refreshLiveState. (Adopted instances promote their own record to `ready`
-            // inside adoptContainer.) Staleness is re-validated inside the store's lock, so a record
-            // a concurrent finalize/adopt just promoted is never dropped.
-            if (scavenge.size > 0) {
-                await scavengeStaleLeases(scavenge);
-            }
-        } catch {
-            // Reconciliation is best-effort; never block activation.
         }
+
+        // The DEFAULT always exists; also reconcile every known instance and every live alias.
+        const aliases = new Set<string>([
+            DEFAULT_ALIAS,
+            ...instances.map((record) => record.alias),
+            ...liveByAlias.keys(),
+        ]);
+        const scavenge = new Set<string>();
+        for (const alias of aliases) {
+            const record = instances.find((existing) => existing.alias === alias);
+            const outcome = await this.reconcileAlias(alias, record, liveByAlias.get(alias) ?? [], now);
+            if (outcome.scavenge) {
+                scavenge.add(alias);
+            }
+        }
+
+        // Drop stale pre-create reservations. Scavenge fires ONLY here (deep reconciliation), never
+        // in the per-render refreshLiveState. (Adopted instances promote their own record to `ready`
+        // inside adoptContainer.) Staleness is re-validated inside the store's lock, so a record a
+        // concurrent finalize/adopt just promoted is never dropped.
+        if (scavenge.size > 0) {
+            await scavengeStaleLeases(scavenge);
+        }
+
+        const stateCounts = new Map<InstanceState, number>();
+        for (const alias of aliases) {
+            const state = this.stateFor(alias).state;
+            stateCounts.set(state, (stateCounts.get(state) ?? 0) + 1);
+        }
+        const stateSummary = [...stateCounts.entries()]
+            .map(([state, count]) => `${state}=${count}`)
+            .sort()
+            .join(', ');
+        traceQuickStart(`Reconciled ${aliases.size} instance(s): ${stateSummary}.`);
     }
 
     /**

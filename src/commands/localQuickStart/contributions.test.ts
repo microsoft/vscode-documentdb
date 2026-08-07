@@ -24,7 +24,10 @@ function readJson<T>(relativePath: string): T {
 interface PackageManifest {
     contributes: {
         commands: Array<{ command: string }>;
-        menus: { commandPalette: Array<{ command: string; when?: string }> };
+        menus: {
+            commandPalette: Array<{ command: string; when?: string }>;
+            'view/item/context': Array<{ command: string; when?: string; group?: string }>;
+        };
     };
 }
 
@@ -84,6 +87,22 @@ describe('Local Quick Start command contributions (#851)', () => {
         }
         const duplicated = [...counts.entries()].filter(([, count]) => count > 1).map(([command]) => command);
         expect(duplicated).toEqual([]);
+    });
+
+    it('shows deep Refresh exactly once on the Quick Start root node', () => {
+        const entries = manifest.contributes.menus['view/item/context'].filter(
+            (entry) =>
+                entry.command === 'vscode-documentdb.command.refresh' &&
+                entry.when?.includes('treeItem_localQuickStart'),
+        );
+
+        expect(entries).toEqual([
+            expect.objectContaining({
+                when: expect.stringContaining('view == connectionsView'),
+                group: 'zheLastGroup@1',
+            }),
+        ]);
+        expect(entries[0].when).toContain('!listMultiSelection');
     });
 });
 

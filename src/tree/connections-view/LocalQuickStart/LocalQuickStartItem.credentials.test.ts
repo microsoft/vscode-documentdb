@@ -8,6 +8,7 @@ import { CredentialCache } from '../../../documentdb/CredentialCache';
 import { QuickStartService } from '../../../services/localQuickStart/QuickStartService';
 import {
     InstanceState,
+    type DockerReadiness,
     type InstanceMetadata,
     type QuickStartStatus,
 } from '../../../services/localQuickStart/quickStartTypes';
@@ -59,12 +60,13 @@ function runningStatus(): QuickStartStatus {
         missing: false,
         canResumeReadiness: false,
         metadata: {
-            containerId: 'c1',
+            containerId: 'deaaf74c692312345678901234567890123456789012345678901234567890',
             alias: ALIAS,
             boundPort: 10260,
             clusterId: CLUSTER_ID,
             connectionString: CONNECTION_STRING,
             username: 'qs_user',
+            imageRef: 'ghcr.io/documentdb/documentdb-local:latest',
         } as InstanceMetadata,
     } as QuickStartStatus;
 }
@@ -90,6 +92,8 @@ describe('QuickStartClusterItem — credential source of truth (H5)', () => {
     beforeEach(() => {
         jest.clearAllMocks();
         CredentialCache.deleteCredentials(CLUSTER_ID);
+        jest.spyOn(QuickStartService, 'ensureHydrated').mockResolvedValue(undefined);
+        jest.spyOn(QuickStartService, 'isHydrated', 'get').mockReturnValue(true);
         jest.spyOn(QuickStartService, 'refreshLiveStateInBackground').mockReturnValue(undefined);
         jest.spyOn(QuickStartService, 'getStatus').mockReturnValue(runningStatus());
     });
@@ -129,6 +133,36 @@ describe('QuickStartClusterItem — credential source of truth (H5)', () => {
 
         expect(credentials?.connectionString).toBe(CONNECTION_STRING);
         expect(credentials?.nativeAuthConfig).toEqual({ connectionUser: 'qs_user', connectionPassword: 's3cr3t' });
+    });
+
+    it('shows retained Docker host and container details in the tooltip', async () => {
+        jest.spyOn(QuickStartService, 'getDockerReadinessSnapshot').mockReturnValue({
+            outcome: 'ready',
+            environment: 'wsl',
+            endpointKind: 'unixSocket',
+            provider: 'dockerEngine',
+            providerEvidence: 'liveDaemon',
+            executionTarget: 'wsl',
+            canContinueAnyway: false,
+            checkedAtMs: 1,
+            cliInstalled: true,
+            cliVersion: 'Docker version 28.1.1',
+            daemonReachable: true,
+            osType: 'linux',
+            daemonArchitecture: 'amd64',
+        } as DockerReadiness);
+
+        const tooltip = (await getClusterItem()).getTreeItem().tooltip as vscode.MarkdownString;
+
+        expect(tooltip.value).toContain('ghcr\\.io/documentdb/documentdb\\-local:latest');
+        expect(tooltip.value).toContain('**Container ID:** deaaf74c6923');
+        expect(tooltip.value).not.toContain('`deaaf74c6923`');
+        expect(tooltip.value).not.toContain('deaaf74c692312345678901234567890');
+        expect(tooltip.value).toContain('Docker Engine');
+        expect(tooltip.value).toContain('Docker version 28\\.1\\.1');
+        expect(tooltip.value).toContain('amd64');
+        expect(tooltip.value).toContain('WSL');
+        expect(tooltip.value).toContain('unixSocket');
     });
 
     it('returns no credentials and no client when the secret is gone', async () => {

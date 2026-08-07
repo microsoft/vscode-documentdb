@@ -870,6 +870,12 @@
           "group": "3_quickstart@1"
         },
         {
+          "//": "[Local Quick Start] Deep refresh the managed-instance state",
+          "command": "vscode-documentdb.command.refresh",
+          "when": "view == connectionsView && viewItem =~ /\\btreeItem_localQuickStart\\b/i && !listMultiSelection",
+          "group": "zheLastGroup@1"
+        },
+        {
           "command": "vscode-documentdb.command.connectionsView.updateConnectionString",
           "when": "view == connectionsView && viewItem =~ /\\btreeitem_documentdbcluster\\b/i && !listMultiSelection",
           "group": "3@1"
