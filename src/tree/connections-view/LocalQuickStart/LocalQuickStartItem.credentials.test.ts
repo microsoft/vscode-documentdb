@@ -161,6 +161,11 @@ describe('QuickStartClusterItem — credential source of truth (H5)', () => {
         await Promise.resolve();
 
         expect(prompt).toHaveBeenCalledTimes(1);
+        expect(prompt).toHaveBeenCalledWith(
+            'DocumentDB Local is stopped. Start it before connecting.',
+            { modal: true },
+            'Start',
+        );
         resolvePrompt?.('Start');
         await expect(Promise.all([firstExpansion, secondExpansion])).resolves.toEqual([[], []]);
         expect(executeCommand).toHaveBeenCalledWith('vscode-documentdb.command.localQuickStart.start');
