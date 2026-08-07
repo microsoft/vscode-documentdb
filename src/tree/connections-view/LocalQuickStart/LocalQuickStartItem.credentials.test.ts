@@ -162,7 +162,7 @@ describe('QuickStartClusterItem — credential source of truth (H5)', () => {
 
         expect(prompt).toHaveBeenCalledTimes(1);
         expect(prompt).toHaveBeenCalledWith(
-            'DocumentDB Local is stopped. Start it before connecting.',
+            'DocumentDB Local is stopped. Would you like to start it now to connect and browse your databases?',
             { modal: true },
             'Start',
         );

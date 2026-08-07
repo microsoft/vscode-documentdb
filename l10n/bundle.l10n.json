@@ -711,7 +711,7 @@
   "DocumentDB Local is ready": "DocumentDB Local is ready",
   "DocumentDB Local is ready. Next steps are shown below.": "DocumentDB Local is ready. Next steps are shown below.",
   "DocumentDB Local is running on localhost:{0}.": "DocumentDB Local is running on localhost:{0}.",
-  "DocumentDB Local is stopped. Start it before connecting.": "DocumentDB Local is stopped. Start it before connecting.",
+  "DocumentDB Local is stopped. Would you like to start it now to connect and browse your databases?": "DocumentDB Local is stopped. Would you like to start it now to connect and browse your databases?",
   "DocumentDB Local needs attention": "DocumentDB Local needs attention",
   "DocumentDB Shell: {0}": "DocumentDB Shell: {0}",
   "DocumentDB TS Plugin": "DocumentDB TS Plugin",

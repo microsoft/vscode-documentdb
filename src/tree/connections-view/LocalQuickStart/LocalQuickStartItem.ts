@@ -51,7 +51,9 @@ async function offerToStartStoppedInstance(): Promise<void> {
         const startAction = l10n.t('Start');
         stoppedInstancePrompt = Promise.resolve(
             vscode.window.showInformationMessage(
-                l10n.t('DocumentDB Local is stopped. Start it before connecting.'),
+                l10n.t(
+                    'DocumentDB Local is stopped. Would you like to start it now to connect and browse your databases?',
+                ),
                 { modal: true },
                 startAction,
             ),
