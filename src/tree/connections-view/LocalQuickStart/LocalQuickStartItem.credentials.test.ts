@@ -96,6 +96,7 @@ describe('QuickStartClusterItem — credential source of truth (H5)', () => {
         jest.spyOn(QuickStartService, 'isHydrated', 'get').mockReturnValue(true);
         jest.spyOn(QuickStartService, 'refreshLiveStateInBackground').mockReturnValue(undefined);
         jest.spyOn(QuickStartService, 'getStatus').mockReturnValue(runningStatus());
+        jest.spyOn(QuickStartService, 'prepareForConnection').mockResolvedValue('ready');
     });
 
     afterEach(() => {
@@ -133,6 +134,37 @@ describe('QuickStartClusterItem — credential source of truth (H5)', () => {
 
         expect(credentials?.connectionString).toBe(CONNECTION_STRING);
         expect(credentials?.nativeAuthConfig).toEqual({ connectionUser: 'qs_user', connectionPassword: 's3cr3t' });
+    });
+
+    it('does not connect when the authoritative container preflight rejects the stale running row', async () => {
+        jest.spyOn(QuickStartService, 'prepareForConnection').mockResolvedValue('unavailable');
+
+        const children = await (await getClusterItem()).getChildren();
+
+        expect(children).toEqual([]);
+        expect(mockGetClient).not.toHaveBeenCalled();
+    });
+
+    it('offers one Start action for concurrent expansions that discover a stopped container', async () => {
+        jest.spyOn(QuickStartService, 'prepareForConnection').mockResolvedValue('stopped');
+        let resolvePrompt: ((choice: string) => void) | undefined;
+        const prompt = jest.spyOn(vscode.window, 'showInformationMessage').mockReturnValue(
+            new Promise<string>((resolve) => {
+                resolvePrompt = resolve;
+            }) as never,
+        );
+        const executeCommand = jest.spyOn(vscode.commands, 'executeCommand').mockResolvedValue(undefined);
+        const item = await getClusterItem();
+
+        const firstExpansion = item.getChildren();
+        const secondExpansion = item.getChildren();
+        await Promise.resolve();
+
+        expect(prompt).toHaveBeenCalledTimes(1);
+        resolvePrompt?.('Start');
+        await expect(Promise.all([firstExpansion, secondExpansion])).resolves.toEqual([[], []]);
+        expect(executeCommand).toHaveBeenCalledWith('vscode-documentdb.command.localQuickStart.start');
+        expect(mockGetClient).not.toHaveBeenCalled();
     });
 
     it('shows retained Docker host and container details in the tooltip', async () => {

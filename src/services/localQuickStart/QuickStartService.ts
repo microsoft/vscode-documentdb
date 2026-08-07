@@ -222,6 +222,8 @@ interface InstanceRuntimeState {
     errorMessage?: string;
 }
 
+export type QuickStartConnectionPreflightResult = 'ready' | 'stopped' | 'missing' | 'foreign' | 'busy' | 'unavailable';
+
 /**
  * Resolve the credentials for a fresh provision: honor custom Advanced credentials
  * when BOTH a username and password are supplied (whitespace-only is treated as not
@@ -1408,18 +1410,55 @@ export class QuickStartServiceImpl {
         }
         const live: 'running' | 'stopped' = isRunning(item) ? 'running' : 'stopped';
         if (!allowed.includes(live)) {
-            // Multi-window drift: another window already started/stopped it. Correct the state
-            // immediately (setStatus clears missing + fires) and tell the user.
+            // Multi-window / external drift: the requested outcome is already satisfied. Correct
+            // the state immediately and return quietly rather than distracting the user with a
+            // notification for a successful no-op.
             this.setStatus(alias, live === 'running' ? InstanceState.Running : InstanceState.Stopped);
-            void vscode.window.showInformationMessage(
-                l10n.t(
-                    'The DocumentDB Local instance changed in another window (now {0}). The view has been refreshed.',
-                    live === 'running' ? l10n.t('running') : l10n.t('stopped'),
-                ),
-            );
             return false;
         }
         return true;
+    }
+
+    /**
+     * Authoritatively validate a managed instance immediately before a tree expansion connects.
+     * Unlike the root row's background freshness probe, this check blocks only explicit connection
+     * intent so stale `Running` state can never reach the database client.
+     */
+    public async prepareForConnection(alias: string = DEFAULT_ALIAS): Promise<QuickStartConnectionPreflightResult> {
+        const entry = this.stateFor(alias);
+        const containerId = entry.metadata?.containerId;
+        if (entry.provisioning || entry.lifecycleBusy) {
+            return 'busy';
+        }
+        if (!containerId || entry.state === InstanceState.CredentialsMissing) {
+            return 'unavailable';
+        }
+
+        const inspected = await this.runtime.inspectContainer(containerId);
+        if (entry.metadata?.containerId !== containerId) {
+            return 'busy';
+        }
+        if (!inspected) {
+            if (!entry.missing) {
+                entry.missing = true;
+                this.statusEmitter.fire();
+            }
+            return 'missing';
+        }
+        if (!this.isOwnedContainer(inspected, alias)) {
+            void vscode.window.showWarningMessage(
+                l10n.t(
+                    'The DocumentDB Local container can no longer be opened because it was created outside the extension. Remove it with Docker if you no longer need it.',
+                ),
+            );
+            return 'foreign';
+        }
+
+        const nextState = isRunning(inspected) ? InstanceState.Running : InstanceState.Stopped;
+        if (entry.missing || entry.state !== nextState) {
+            this.setStatus(alias, nextState);
+        }
+        return nextState === InstanceState.Running ? 'ready' : 'stopped';
     }
 
     /** Start a stopped instance (design §11). */
@@ -1930,7 +1969,7 @@ export class QuickStartServiceImpl {
 }
 
 /** Singleton Quick Start service. */
-export const QuickStartService = new QuickStartServiceImpl();
+export const QuickStartService: QuickStartServiceImpl = new QuickStartServiceImpl();
 
 /** A stale env file is one older than this; younger ones may belong to a live provision. */
 const ENV_FILE_STALE_AFTER_MS = 60 * 60 * 1000;

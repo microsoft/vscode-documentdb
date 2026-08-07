@@ -20,11 +20,14 @@ import { Views } from '../../../documentdb/Views';
 import { DocumentDBExperience } from '../../../DocumentDBExperiences';
 import { ext } from '../../../extensionVariables';
 import { StorageZone } from '../../../services/connectionStorageService';
-import { QuickStartService } from '../../../services/localQuickStart/QuickStartService';
 import {
-    type DockerReadiness,
+    QuickStartService,
+    type QuickStartConnectionPreflightResult,
+} from '../../../services/localQuickStart/QuickStartService';
+import {
     InstanceState,
     QUICK_START_PORT,
+    type DockerReadiness,
     type QuickStartStatus,
 } from '../../../services/localQuickStart/quickStartTypes';
 import { getResourcesPath } from '../../../utils/icons';
@@ -41,6 +44,28 @@ import { buildQuickStartInstanceTreeId, buildQuickStartTreeId } from './quickSta
 
 /** Base context token for the managed-instance row; menus gate on this + a state token. */
 const INSTANCE_CONTEXT = 'treeItem_quickStartInstance';
+let stoppedInstancePrompt: Promise<void> | undefined;
+
+async function offerToStartStoppedInstance(): Promise<void> {
+    if (!stoppedInstancePrompt) {
+        const startAction = l10n.t('Start');
+        stoppedInstancePrompt = Promise.resolve(
+            vscode.window.showInformationMessage(
+                l10n.t('DocumentDB Local is stopped. Start it before connecting.'),
+                startAction,
+            ),
+        )
+            .then((choice) => {
+                if (choice === startAction) {
+                    void vscode.commands.executeCommand('vscode-documentdb.command.localQuickStart.start');
+                }
+            })
+            .finally(() => {
+                stoppedInstancePrompt = undefined;
+            });
+    }
+    await stoppedInstancePrompt;
+}
 
 function escapeMarkdown(value: string): string {
     return value.replace(/[\\`*_{}[\]()#+\-.!|~]/g, '\\$&');
@@ -159,6 +184,17 @@ class QuickStartClusterItem extends ClusterItemBase<ConnectionClusterModel> {
                 treeItem.tooltip instanceof vscode.MarkdownString ? treeItem.tooltip : undefined,
             ),
         };
+    }
+
+    public override async getChildren(): Promise<TreeElement[]> {
+        const preflight: QuickStartConnectionPreflightResult = await QuickStartService.prepareForConnection(this.alias);
+        if (preflight === 'stopped') {
+            await offerToStartStoppedInstance();
+        }
+        if (preflight !== 'ready') {
+            return [];
+        }
+        return super.getChildren();
     }
 
     public async getCredentials(): Promise<EphemeralClusterCredentials | undefined> {
@@ -369,7 +405,7 @@ export class LocalQuickStartItem implements TreeElement, TreeElementWithContextV
                         row(
                             'state_stopped',
                             withRefreshHint(l10n.t('Stopped · localhost:{0}', port)),
-                            new vscode.ThemeIcon('primitive-square'),
+                            new vscode.ThemeIcon('circle-outline'),
                         ),
                     ];
                 case InstanceState.Error:
