@@ -981,8 +981,8 @@ export const LocalQuickStart = (): JSX.Element => {
     // instance's stored credentials and data volume only when told to. `canReuseExistingData` says
     // the choice is available (the same predicate the service uses); `dataChoice` is the answer.
     //
-    // A CredentialsMissing instance has no readable secret, so its data can never be opened again:
-    // the choice collapses to "Start fresh", stated by a warning MessageBar rather than a radio.
+    // A CredentialsMissing instance has no readable secret, so the choice collapses to the guarded
+    // "Start fresh" path explained by the Configure warning rather than a radio.
     const forcedFresh = instanceState === InstanceState.CredentialsMissing;
     const startFresh = forcedFresh || (canReuseExistingData && dataChoice === 'fresh');
     const isRecreate = canReuseExistingData && !startFresh;
@@ -1988,9 +1988,8 @@ export const LocalQuickStart = (): JSX.Element => {
     /**
      * Existing-instance guard (review §9.2 Q2, I2-3). It lives on the Configure step — the one
      * screen where the decision is actually made — rather than on the Introduction step. A healthy
-     * or stopped instance is never walked into a destructive recreate; a credential-unavailable one
-     * used to be hard-refused by the service (leaving the user to hunt for Delete Container) and is
-     * now an explicit, warned "Start fresh" path right here.
+     * or stopped instance is never walked into a destructive recreate. A credential-unavailable one
+     * is explained here before the user can choose the explicit "Start fresh" action.
      */
     const existingInstanceNotice = existingInstanceGuard && (
         <MessageBar intent={existingInstanceGuard === 'credentialsMissing' ? 'warning' : 'info'} layout="multiline">
@@ -2007,11 +2006,9 @@ export const LocalQuickStart = (): JSX.Element => {
                     </>
                 ) : (
                     <>
-                        <MessageBarTitle>
-                            {l10n.t('Saved credentials for DocumentDB Local are missing')}
-                        </MessageBarTitle>
+                        <MessageBarTitle>{l10n.t('DocumentDB Local needs attention')}</MessageBarTitle>
                         {l10n.t(
-                            'Its data can no longer be opened, so setting up will delete the instance and its data, then create a new one.',
+                            'We found an existing DocumentDB Local instance, but its saved credentials are unavailable. Without them, we cannot reopen or reuse the existing data, so you need to start fresh. Nothing has been changed yet. Starting fresh deletes the existing container and its data, then creates a new instance.',
                         )}
                     </>
                 )}
@@ -2462,7 +2459,7 @@ export const LocalQuickStart = (): JSX.Element => {
         // The label stays fixed; the note below it is what follows the choice. "Nothing else on your
         // machine is changed" is true only for a genuinely fresh install and must not render for
         // either recreate path (review M4 / §10.6).
-        primaryLabel = l10n.t('Start DocumentDB Local');
+        primaryLabel = forcedFresh ? l10n.t('Start fresh') : l10n.t('Start DocumentDB Local');
         primaryDisabled = advError !== undefined || startBlockedByGuard;
         primaryIcon = <RocketRegular />;
         onPrimary = handleStart;
