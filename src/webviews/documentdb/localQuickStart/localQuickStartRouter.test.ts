@@ -31,6 +31,7 @@ jest.mock('../../../services/localQuickStart/ContainerRuntime', () => ({
 jest.mock('../../../services/localQuickStart/QuickStartService', () => ({
     QuickStartService: {
         discardTimedOutInstance: jest.fn(),
+        checkDockerReadiness: mockIsDockerReady,
         getStatus: mockGetStatus,
         isBusy: false,
         provision: jest.fn(),

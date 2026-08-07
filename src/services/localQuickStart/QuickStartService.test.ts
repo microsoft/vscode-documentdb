@@ -272,6 +272,7 @@ describe('QuickStartService — WI-2d registry-driven reconcile (multi-instance)
     function reconcileRuntime(opts: {
         containers: Array<{ id: string; alias?: string; createdAt?: Date }>;
         inspect?: Record<string, unknown>;
+        isDockerReady?: jest.Mock;
         removeContainer?: jest.Mock;
         removeVolume?: jest.Mock;
     }): IContainerRuntime {
@@ -287,6 +288,7 @@ describe('QuickStartService — WI-2d registry-driven reconcile (multi-instance)
             inspectContainer: jest.fn((id: string) =>
                 Promise.resolve(inspect[id]),
             ) as unknown as IContainerRuntime['inspectContainer'],
+            isDockerReady: opts.isDockerReady,
             removeContainer: opts.removeContainer ?? jest.fn().mockResolvedValue(undefined),
             removeVolume: opts.removeVolume ?? jest.fn().mockResolvedValue(undefined),
         });
@@ -317,6 +319,33 @@ describe('QuickStartService — WI-2d registry-driven reconcile (multi-instance)
         // listStatuses is ordered DEFAULT-first; both instances are durable + ready.
         expect(service.listStatuses().map((status) => status.alias)).toEqual([DEFAULT_ALIAS, ALIAS_2]);
         expect((await listInstances()).map((record) => record.alias).sort()).toEqual([ALIAS_2, DEFAULT_ALIAS].sort());
+    });
+
+    it('retains Docker host facts collected during reconciliation', async () => {
+        ext.secretStorage = fakeSecretStorage({});
+        ext.context = fakeContext(fakeMemento());
+        const readiness: DockerReadiness = {
+            outcome: 'ready',
+            environment: 'wsl',
+            endpointKind: 'unixSocket',
+            provider: 'dockerEngine',
+            providerEvidence: 'liveDaemon',
+            executionTarget: 'wsl',
+            canContinueAnyway: false,
+            checkedAtMs: 1,
+            cliInstalled: true,
+            cliVersion: 'Docker version 28.1.1',
+            daemonReachable: true,
+            osType: 'linux',
+            daemonArchitecture: 'amd64',
+        };
+        const isDockerReady = jest.fn().mockResolvedValue(readiness);
+        const service = new QuickStartServiceImpl(reconcileRuntime({ containers: [], isDockerReady }));
+
+        await service.reconcile();
+
+        expect(isDockerReady).toHaveBeenCalledWith({ suppressCommandEcho: true });
+        expect(service.getDockerReadinessSnapshot()).toBe(readiness);
     });
 
     it('surfaces a credential-unavailable instance as CredentialsMissing without removing it or its volume (R2)', async () => {

@@ -21,11 +21,7 @@
 import { CancellationTokenLike } from '@microsoft/vscode-processutils';
 import * as vscode from 'vscode';
 import { z } from 'zod';
-import {
-    ContainerRuntime,
-    getQuickStartOutputChannel,
-    startDockerProvider,
-} from '../../../services/localQuickStart/ContainerRuntime';
+import { getQuickStartOutputChannel, startDockerProvider } from '../../../services/localQuickStart/ContainerRuntime';
 import { getDockerRecoveryCommandById } from '../../../services/localQuickStart/dockerRecoveryCommands';
 import { QuickStartService } from '../../../services/localQuickStart/QuickStartService';
 import {
@@ -136,7 +132,7 @@ export const localQuickStartRouter = router({
                 tctx.actionContext.telemetry.suppressAll = true;
             }
             const cancellationToken = ctx.signal ? CancellationTokenLike.fromAbortSignal(ctx.signal) : undefined;
-            const readiness = await ContainerRuntime.isDockerReady({
+            const readiness = await QuickStartService.checkDockerReadiness({
                 forceRefresh: input?.forceRefresh,
                 resetProviderMemory: input?.resetProviderMemory,
                 suppressCommandEcho: input?.suppressCommandEcho,

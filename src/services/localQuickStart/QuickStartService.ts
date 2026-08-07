@@ -294,6 +294,7 @@ export class QuickStartServiceImpl {
     private hydration: Promise<void> | undefined;
     private reconciliation: Promise<void> | undefined;
     private hydrated = false;
+    private dockerReadiness: DockerReadiness | undefined;
 
     /** Lazily get (creating a NotInstalled default for) an alias's runtime state. */
     private stateFor(alias: string): InstanceRuntimeState {
@@ -321,6 +322,20 @@ export class QuickStartServiceImpl {
      * singleton; tests inject a mock so the state machine runs with no real daemon.
      */
     constructor(private readonly runtime: IContainerRuntime = ContainerRuntime) {}
+
+    /** Latest Docker host facts collected by setup or deep reconciliation. */
+    public getDockerReadinessSnapshot(): DockerReadiness | undefined {
+        return this.dockerReadiness;
+    }
+
+    /** Check Docker and retain the result for tree presentation. */
+    public async checkDockerReadiness(
+        request?: Parameters<IContainerRuntime['isDockerReady']>[0],
+    ): Promise<DockerReadiness> {
+        const readiness = await this.runtime.isDockerReady(request);
+        this.dockerReadiness = readiness;
+        return readiness;
+    }
 
     public getStatus(alias: string = DEFAULT_ALIAS): QuickStartStatus {
         const entry = this.stateFor(alias);
@@ -549,7 +564,7 @@ export class QuickStartServiceImpl {
 
             // --- checking ---
             yield stageEvent('checking', 'active', 'Checking Docker…');
-            const readiness = await this.runtime.isDockerReady();
+            const readiness = await this.checkDockerReadiness();
             readinessEnvironment = readiness.environment;
             this.throwIfAborted(signal);
             const continueAfterIndeterminateReadiness =
@@ -867,7 +882,7 @@ export class QuickStartServiceImpl {
 
     private async getProvisioningDockerReadiness(): Promise<DockerReadiness | undefined> {
         try {
-            const readiness = await this.runtime.isDockerReady({ forceRefresh: true });
+            const readiness = await this.checkDockerReadiness({ forceRefresh: true });
             return readiness.outcome === 'diagnosed' ? readiness : undefined;
         } catch {
             return undefined;
@@ -1719,12 +1734,15 @@ export class QuickStartServiceImpl {
     }
 
     private async performReconciliation(): Promise<void> {
-        const containers = (await this.runtime.listByLabel({ [QUICK_START_LABEL_KEY]: '1' })) as Array<{
-            id: string;
-            createdAt?: Date;
-            labels?: Record<string, string>;
-        }>;
-        const instances = await listInstances();
+        const readiness = this.checkDockerReadiness({ suppressCommandEcho: true }).catch(() => undefined);
+        const containersPromise = this.runtime.listByLabel({ [QUICK_START_LABEL_KEY]: '1' }) as Promise<
+            Array<{
+                id: string;
+                createdAt?: Date;
+                labels?: Record<string, string>;
+            }>
+        >;
+        const [containers, instances] = await Promise.all([containersPromise, listInstances(), readiness]);
         const now = Date.now();
 
         traceQuickStart(

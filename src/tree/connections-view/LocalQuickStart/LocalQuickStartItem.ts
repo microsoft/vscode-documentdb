@@ -22,6 +22,7 @@ import { ext } from '../../../extensionVariables';
 import { StorageZone } from '../../../services/connectionStorageService';
 import { QuickStartService } from '../../../services/localQuickStart/QuickStartService';
 import {
+    type DockerReadiness,
     InstanceState,
     QUICK_START_PORT,
     type QuickStartStatus,
@@ -40,6 +41,86 @@ import { buildQuickStartInstanceTreeId, buildQuickStartTreeId } from './quickSta
 
 /** Base context token for the managed-instance row; menus gate on this + a state token. */
 const INSTANCE_CONTEXT = 'treeItem_quickStartInstance';
+
+function escapeMarkdown(value: string): string {
+    return value.replace(/[\\`*_{}[\]()#+\-.!|~]/g, '\\$&');
+}
+
+function shortenContainerId(containerId: string): string {
+    return /^[0-9a-f]{12,64}$/i.test(containerId) ? containerId.slice(0, 12) : containerId;
+}
+
+function dockerProviderLabel(readiness: DockerReadiness): string {
+    switch (readiness.provider) {
+        case 'dockerDesktop':
+            return 'Docker Desktop';
+        case 'dockerEngine':
+            return 'Docker Engine';
+        default:
+            return l10n.t('Unknown');
+    }
+}
+
+function executionTargetLabel(readiness: DockerReadiness): string {
+    switch (readiness.executionTarget) {
+        case 'wsl':
+            return 'WSL';
+        case 'ssh':
+            return 'SSH';
+        case 'devContainer':
+            return l10n.t('Dev Container');
+        case 'codespaces':
+            return 'GitHub Codespaces';
+        case 'otherRemote':
+            return l10n.t('Remote');
+        default:
+            return l10n.t('Local');
+    }
+}
+
+function buildInstanceTooltip(status: QuickStartStatus, baseTooltip?: vscode.MarkdownString): vscode.MarkdownString {
+    const metadata = status.metadata;
+    const readiness = QuickStartService.getDockerReadinessSnapshot();
+    const tooltip = new vscode.MarkdownString(baseTooltip?.value ?? `### ${l10n.t('DocumentDB Local')}\n\n`);
+    tooltip.isTrusted = false;
+
+    if (!baseTooltip) {
+        tooltip.appendMarkdown(`**${l10n.t('State')}:** ${escapeMarkdown(status.state)}\n\n`);
+        if (metadata) {
+            tooltip.appendMarkdown(`**${l10n.t('Host')}:** localhost:${String(metadata.boundPort)}\n\n`);
+        }
+    }
+
+    if (metadata) {
+        tooltip.appendMarkdown('---\n\n');
+        tooltip.appendMarkdown(
+            `**${l10n.t('Container image')}:** ${escapeMarkdown(metadata.imageRef ?? l10n.t('Unknown'))}\n\n`,
+        );
+        tooltip.appendMarkdown(
+            `**${l10n.t('Container ID')}:** ${escapeMarkdown(shortenContainerId(metadata.containerId))}\n\n`,
+        );
+    }
+
+    if (readiness) {
+        tooltip.appendMarkdown('---\n\n');
+        tooltip.appendMarkdown(`**${l10n.t('Docker provider')}:** ${dockerProviderLabel(readiness)}\n\n`);
+        if (readiness.cliVersion) {
+            tooltip.appendMarkdown(`**${l10n.t('Docker version')}:** ${escapeMarkdown(readiness.cliVersion)}\n\n`);
+        }
+        if (readiness.daemonArchitecture) {
+            tooltip.appendMarkdown(
+                `**${l10n.t('Daemon architecture')}:** ${escapeMarkdown(readiness.daemonArchitecture)}\n\n`,
+            );
+        }
+        if (readiness.osType) {
+            tooltip.appendMarkdown(`**${l10n.t('Container OS')}:** ${escapeMarkdown(readiness.osType)}\n\n`);
+        }
+        tooltip.appendMarkdown(`**${l10n.t('Execution target')}:** ${executionTargetLabel(readiness)}\n\n`);
+        tooltip.appendMarkdown(`**${l10n.t('Docker endpoint')}:** ${escapeMarkdown(readiness.endpointKind)}\n\n`);
+    }
+
+    return tooltip;
+}
 
 /**
  * Inline managed-instance cluster item (shown only when Running).
@@ -69,9 +150,14 @@ class QuickStartClusterItem extends ClusterItemBase<ConnectionClusterModel> {
      * state label (e.g. "Running · localhost:10260").
      */
     public override getTreeItem(): vscode.TreeItem {
+        const treeItem = buildClusterTreeItem({ id: this.id, contextValue: this.contextValue, cluster: this.cluster });
         return {
-            ...buildClusterTreeItem({ id: this.id, contextValue: this.contextValue, cluster: this.cluster }),
+            ...treeItem,
             description: this.descriptionOverride,
+            tooltip: buildInstanceTooltip(
+                QuickStartService.getStatus(this.alias),
+                treeItem.tooltip instanceof vscode.MarkdownString ? treeItem.tooltip : undefined,
+            ),
         };
     }
 
@@ -256,14 +342,21 @@ export class LocalQuickStartItem implements TreeElement, TreeElementWithContextV
         // lifecycle menus (a stopped container can't be connected to / browsed).
         if (metadata) {
             const port = metadata.boundPort;
-            const row = (stateToken: string, description: string, icon: vscode.ThemeIcon): TreeElement =>
-                createGenericElementWithContext({
-                    id: `${this.id}/instance`,
-                    contextValue: createContextValue([INSTANCE_CONTEXT, stateToken]),
-                    label: l10n.t('DocumentDB Local'),
-                    description,
-                    iconPath: icon,
-                });
+            const row = (stateToken: string, description: string, icon: vscode.ThemeIcon): TreeElement => {
+                const id = `${this.id}/instance`;
+                const contextValue = createContextValue([INSTANCE_CONTEXT, stateToken]);
+                return {
+                    id,
+                    getTreeItem: (): vscode.TreeItem => ({
+                        id,
+                        contextValue,
+                        label: l10n.t('DocumentDB Local'),
+                        description,
+                        tooltip: buildInstanceTooltip(status),
+                        iconPath: icon,
+                    }),
+                };
+            };
 
             const spin = new vscode.ThemeIcon('loading~spin');
             switch (status.state) {
@@ -276,7 +369,7 @@ export class LocalQuickStartItem implements TreeElement, TreeElementWithContextV
                         row(
                             'state_stopped',
                             withRefreshHint(l10n.t('Stopped · localhost:{0}', port)),
-                            new vscode.ThemeIcon('circle-outline'),
+                            new vscode.ThemeIcon('primitive-square'),
                         ),
                     ];
                 case InstanceState.Error:
