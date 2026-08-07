@@ -35,6 +35,7 @@ import { type TreeElementWithContextValue } from '../../TreeElementWithContextVa
 import { type TreeElementWithRetryChildren } from '../../TreeElementWithRetryChildren';
 import { buildClusterTreeItem } from '../clusterItemPresentation';
 import { type ConnectionClusterModel } from '../models/ConnectionClusterModel';
+import { buildQuickStartInstanceTreeId, buildQuickStartTreeId } from './quickStartTreeIdentity';
 
 /** Base context token for the managed-instance row; menus gate on this + a state token. */
 const INSTANCE_CONTEXT = 'treeItem_quickStartInstance';
@@ -133,7 +134,7 @@ export class LocalQuickStartItem implements TreeElement, TreeElementWithContextV
     public contextValue: string = 'treeItem_localQuickStart';
 
     constructor(public readonly parentId: string) {
-        this.id = `${parentId}/localQuickStart`;
+        this.id = buildQuickStartTreeId(parentId);
     }
 
     /**
@@ -219,7 +220,7 @@ export class LocalQuickStartItem implements TreeElement, TreeElementWithContextV
             displayConnectionString.password = '';
 
             const model: TreeCluster<ConnectionClusterModel> = {
-                treeId: `${this.id}/instance`,
+                treeId: buildQuickStartInstanceTreeId(this.parentId),
                 viewId: this.parentId,
                 clusterId: metadata.clusterId,
                 storageId: metadata.clusterId,
@@ -286,27 +287,21 @@ export class LocalQuickStartItem implements TreeElement, TreeElementWithContextV
             }
         }
 
-        // Credential-unavailable (UX review #1): a labelled container / ready record exists but its
-        // saved credentials are gone, so it can't be opened. Render an ACTIONABLE instance row (not a
-        // passive rocket + warning dead end) that carries the Delete menu (its when-clause matches
-        // treeItem_quickStartInstance + state_credentialsMissing), so the user can remove it and start
-        // over. Delete-only (no browse/start): a single click launches Delete, which shows the standard
-        // confirmation dialog, so recovery is discoverable without hunting for the context menu.
+        // Credential-unavailable: keep the tree calm and route the user to Quick Start, where the
+        // situation and destructive recovery are explained in context. Deletion is deliberately not
+        // exposed from this row; the Configure step owns that decision.
         if (status.state === InstanceState.CredentialsMissing) {
             return [
                 createGenericElementWithContext({
                     id: `${this.id}/instance`,
-                    contextValue: createContextValue([INSTANCE_CONTEXT, 'state_credentialsMissing']),
+                    contextValue: createContextValue([INSTANCE_CONTEXT, 'state_needsAttention']),
                     label: l10n.t('DocumentDB Local'),
-                    description: l10n.t('Credentials missing · click to delete and start over'),
+                    description: l10n.t('Needs attention · review setup'),
                     tooltip: l10n.t(
-                        'Saved credentials for this instance are missing, so it cannot be opened. Click to delete it and start fresh (this erases the data).',
+                        'VS Code cannot access the saved credentials for this instance. Review the setup options; your container and data have not been changed.',
                     ),
-                    iconPath: new vscode.ThemeIcon('warning', new vscode.ThemeColor('list.errorForeground')),
-                    // A single click launches Delete (which shows the standard confirmation dialog),
-                    // so the recovery is discoverable without hunting for the context menu (GPT-5.6
-                    // review). The confirmation still guards against an accidental click.
-                    commandId: 'vscode-documentdb.command.localQuickStart.delete',
+                    iconPath: new vscode.ThemeIcon('warning', new vscode.ThemeColor('list.warningForeground')),
+                    commandId: 'vscode-documentdb.command.localQuickStart.open',
                 }),
             ];
         }

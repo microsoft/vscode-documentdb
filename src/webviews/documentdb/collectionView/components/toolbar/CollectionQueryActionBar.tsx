@@ -241,27 +241,37 @@ const QuerySecondaryActions = ({ variant }: CollectionQueryActionBarProps): JSX.
     };
 
     const handleImportFromJson = (): void => {
-        void trpcClient.mongoClusters.collectionView.importDocuments.query();
+        void trpcClient.mongoClusters.collectionView.importDocuments.query().catch(() => {
+            // The extension host already displayed the failure and recorded telemetry.
+        });
     };
 
     const handleExportEntireCollection = (): void => {
-        void trpcClient.mongoClusters.collectionView.exportDocuments.query({
-            filter: '{}',
-            project: undefined,
-            sort: undefined,
-            skip: undefined,
-            limit: undefined,
-        });
+        void trpcClient.mongoClusters.collectionView.exportDocuments
+            .query({
+                filter: '{}',
+                project: undefined,
+                sort: undefined,
+                skip: undefined,
+                limit: undefined,
+            })
+            .catch(() => {
+                // The extension host already displayed the failure and recorded telemetry.
+            });
     };
 
     const handleExportQueryResults = (): void => {
-        void trpcClient.mongoClusters.collectionView.exportDocuments.query({
-            filter: currentContext.activeQuery.filter,
-            project: currentContext.activeQuery.project,
-            sort: currentContext.activeQuery.sort,
-            skip: currentContext.activeQuery.skip,
-            limit: currentContext.activeQuery.limit,
-        });
+        void trpcClient.mongoClusters.collectionView.exportDocuments
+            .query({
+                filter: currentContext.activeQuery.filter,
+                project: currentContext.activeQuery.project,
+                sort: currentContext.activeQuery.sort,
+                skip: currentContext.activeQuery.skip,
+                limit: currentContext.activeQuery.limit,
+            })
+            .catch(() => {
+                // The extension host already displayed the failure and recorded telemetry.
+            });
     };
 
     const handleCopyQuery = (): void => {

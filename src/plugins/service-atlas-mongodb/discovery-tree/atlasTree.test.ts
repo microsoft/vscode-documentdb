@@ -380,9 +380,14 @@ describe('AtlasServiceRootItem in List mode', () => {
 
         expect(service.listAll).toHaveBeenCalledWith({ includeClusters: true });
         expect(children).toHaveLength(1);
-        const row = children[0] as unknown as { contextDescription?: string };
+        const row = children[0] as unknown as {
+            cluster: { clusterId: string; treeId: string };
+            contextDescription?: string;
+        };
         expect(children[0]).toBeInstanceOf(AtlasClusterItem);
         expect(row.contextDescription).toBe('Acme Corp · Payments');
+        expect(row.cluster.clusterId).toBe('atlas-mongodb-discovery_p1_payments-prod');
+        expect(row.cluster.treeId).toBe('discoveryView/atlas-mongodb-discovery/p1/p1_payments-prod');
     });
 
     it('keeps the same recovery row in List mode without switching views', async () => {

@@ -11,15 +11,10 @@ import { LocalQuickStartItem } from './LocalQuickStartItem';
 // item constructs without a real extension host.
 jest.mock('../../../utils/icons', () => ({ getResourcesPath: () => '/resources' }));
 
-// UX review #1: the credential-unavailable state must render an ACTIONABLE, Delete-only instance row
-// (not the passive rocket + command-less warning dead end). This locks in the tree contract: the row
-// carries treeItem_quickStartInstance + state_credentialsMissing (so the Delete when-clause matches)
-// and a single click launches the Delete command (which shows the confirmation dialog) so the
-// recovery is discoverable (GPT-5.6 review follow-up).
-describe('LocalQuickStartItem — CredentialsMissing row (UX review #1)', () => {
+describe('LocalQuickStartItem — CredentialsMissing row', () => {
     afterEach(() => jest.restoreAllMocks());
 
-    it('renders a single actionable, Delete-only instance row', async () => {
+    it('opens Quick Start to review setup without offering deletion in the tree', async () => {
         jest.spyOn(QuickStartService, 'refreshLiveStateInBackground').mockReturnValue(undefined);
         jest.spyOn(QuickStartService, 'getStatus').mockReturnValue({
             state: InstanceState.CredentialsMissing,
@@ -34,11 +29,11 @@ describe('LocalQuickStartItem — CredentialsMissing row (UX review #1)', () => 
         expect(children).toHaveLength(1);
         const treeItem = await children[0].getTreeItem();
         const contextValue = String(treeItem.contextValue ?? '');
-        // Both tokens present so the Delete command's when-clause matches (package.json).
         expect(contextValue).toContain('treeItem_quickStartInstance');
-        expect(contextValue).toContain('state_credentialsMissing');
-        // A single click launches Delete (with its confirmation) — discoverable one-click recovery.
-        expect(treeItem.command?.command).toBe('vscode-documentdb.command.localQuickStart.delete');
+        expect(contextValue).toContain('state_needsAttention');
+        expect(contextValue).not.toContain('state_credentialsMissing');
+        expect(treeItem.description).toBe('Needs attention · review setup');
+        expect(treeItem.command?.command).toBe('vscode-documentdb.command.localQuickStart.open');
     });
 });
 

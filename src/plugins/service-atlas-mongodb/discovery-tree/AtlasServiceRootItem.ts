@@ -26,7 +26,7 @@ import {
     type AtlasDiscoveryService,
     type AtlasDiscoverySnapshot,
 } from '../discovery/AtlasDiscoveryService';
-import { createAtlasClusterModel } from '../models/AtlasClusterModel';
+import { createAtlasClusterModel, createAtlasClusterStableSuffix } from '../models/AtlasClusterModel';
 import { AtlasClusterItem } from './AtlasClusterItem';
 import { AtlasOrganizationItem } from './AtlasOrganizationItem';
 import { createEmptyPlaceholderNode, createRecoveryNode } from './atlasTreeNodes';
@@ -149,7 +149,7 @@ export class AtlasServiceRootItem implements TreeElement, TreeElementWithContext
             const model = createAtlasClusterModel(entry.projectId, entry.projectName, entry.cluster, AtlasExperience);
             const treeCluster = {
                 ...model,
-                treeId: `${this.id}/${entry.projectId}/${entry.cluster.name.replaceAll('/', '_')}`,
+                treeId: `${this.id}/${entry.projectId}/${createAtlasClusterStableSuffix(entry.projectId, entry.cluster.name)}`,
                 viewId: Views.DiscoveryView,
             };
             const orgName = orgNames.get(entry.orgId);
