@@ -192,6 +192,7 @@ For Discovery View, both `treeId` and `clusterId` are sanitized (all `/` replace
 
 See `src/tree/models/BaseClusterModel.ts` and `docs/analysis/08-cluster-model-simplification-plan.md` for details.
 
+- [skills/tree-cluster-architecture/SKILL.md](skills/tree-cluster-architecture/SKILL.md) - Required patterns for cluster tree items, dual identity, provider lookup, and regression tests
 - [skills/telemetry-instrumentation/SKILL.md](skills/telemetry-instrumentation/SKILL.md) - Telemetry instrumentation patterns
 
 ## Terminology
@@ -226,4 +227,5 @@ For detailed patterns, see:
 
 - [instructions/typescript.instructions.md](instructions/typescript.instructions.md) - TypeScript patterns and anti-patterns
 - [instructions/wizard.instructions.md](instructions/wizard.instructions.md) - AzureWizard implementation details
+- [skills/tree-cluster-architecture/SKILL.md](skills/tree-cluster-architecture/SKILL.md) - Cluster tree items, identity, lookup, and test contracts
 - [skills/telemetry-instrumentation/SKILL.md](skills/telemetry-instrumentation/SKILL.md) - Telemetry instrumentation patterns
