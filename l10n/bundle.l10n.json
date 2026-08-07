@@ -1722,7 +1722,7 @@
   "Security": "Security",
   "See output for more details.": "See output for more details.",
   "See the details below.": "See the details below.",
-  "Select \"Show Output\" to see error details.": "Select \"Show Output\" to see error details.",
+  "Select \"{0}\" to see error details.": "Select \"{0}\" to see error details.",
   "Select {0}": "Select {0}",
   "Select a cluster": "Select a cluster",
   "Select a database to connect this playground to": "Select a database to connect this playground to",

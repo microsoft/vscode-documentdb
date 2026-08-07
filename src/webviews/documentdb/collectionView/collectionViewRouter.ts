@@ -191,7 +191,7 @@ async function reportCollectionNodeResolutionFailure(
         l10n.t('Failed to {0} documents.', operation),
         {
             modal: true,
-            detail: l10n.t('Select "Show Output" to see error details.'),
+            detail: l10n.t('Select "{0}" to see error details.', showOutput),
         },
         showOutput,
     );
