@@ -74,7 +74,7 @@ Connect to any database that speaks the MongoDB API wire protocol.
 - **Azure Service Discovery**: Browse and connect to Azure DocumentDB, Azure Cosmos DB for MongoDB (RU), and DocumentDB on Azure VMs directly from the sidebar
 - **MongoDB Atlas**: Connect using your Atlas connection string
 - **Entra ID authentication**: Multi-account, multi-tenant support for Azure-hosted databases
-- **Local instances and emulators**: Connect to DocumentDB Local, Azure Cosmos DB Emulator, or any local MongoDB API instance
+- **Local instances and emulators**: [Create and manage DocumentDB Local with Docker Quick Start](docs/user-manual/local-quick-start.md), or connect to Azure Cosmos DB Emulator and other local MongoDB API instances
 - **Folder organization**: Group your connections into folders and subfolders
 
 ## Browse and Manage Data

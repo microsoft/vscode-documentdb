@@ -171,6 +171,35 @@ async function findCollectionNodeInTree(
     }
 }
 
+async function reportCollectionNodeResolutionFailure(
+    operation: 'import' | 'export',
+    { clusterId, viewId, databaseName, collectionName }: RouterContext,
+): Promise<void> {
+    const showOutput = l10n.t('Show Output');
+    ext.outputChannel.error(
+        l10n.t(
+            'Collection View {0} failed because the collection tree node could not be resolved. View ID: {1}; Cluster ID: {2}; Database: {3}; Collection: {4}',
+            operation,
+            viewId,
+            clusterId,
+            databaseName,
+            collectionName,
+        ),
+    );
+
+    const choice = await vscode.window.showErrorMessage(
+        l10n.t('Failed to {0} documents.', operation),
+        {
+            modal: true,
+            detail: l10n.t('Select "{0}" to see error details.', showOutput),
+        },
+        showOutput,
+    );
+    if (choice === showOutput) {
+        ext.outputChannel.show();
+    }
+}
+
 export const collectionsViewRouter = router({
     getInfo: publicProcedureWithTelemetry.query(({ ctx }) => {
         const myCtx = ctx as RouterContext;
@@ -362,7 +391,7 @@ export const collectionsViewRouter = router({
         )
         //procedure type
         .query(async ({ input, ctx }) => {
-            const myCtx = ctx as RouterContext;
+            const myCtx = ctx as WithTelemetry<RouterContext>;
 
             // TODO: remove the dependency on the tree node, in the end it was here only to show progress on the 'tree item'
             const collectionTreeNode = await findCollectionNodeInTree(
@@ -388,12 +417,14 @@ export const collectionsViewRouter = router({
                     },
                 );
             } else {
-                throw new Error('Could not find the specified collection in the tree.');
+                myCtx.actionContext.telemetry.properties.failureReason = 'collectionNodeNotFound';
+                await reportCollectionNodeResolutionFailure('export', myCtx);
+                throw new Error('Collection tree node could not be resolved.');
             }
         }),
 
     importDocuments: publicProcedureWithTelemetry.query(async ({ ctx }) => {
-        const myCtx = ctx as RouterContext;
+        const myCtx = ctx as WithTelemetry<RouterContext>;
 
         // TODO: remove the dependency on the tree node, in the end it was here only to show progress on the 'tree item'
         const collectionTreeNode = await findCollectionNodeInTree(
@@ -408,7 +439,9 @@ export const collectionsViewRouter = router({
                 source: 'webview;collectionView',
             });
         } else {
-            throw new Error('Could not find the specified collection in the tree.');
+            myCtx.actionContext.telemetry.properties.failureReason = 'collectionNodeNotFound';
+            await reportCollectionNodeResolutionFailure('import', myCtx);
+            throw new Error('Collection tree node could not be resolved.');
         }
     }),
 

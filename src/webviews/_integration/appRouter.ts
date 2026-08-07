@@ -27,11 +27,16 @@ import { type BaseRouterContext as FrameworkBaseRouterContext } from '@microsoft
 import * as vscode from 'vscode';
 import { z } from 'zod';
 import { type API } from '../../DocumentDBExperiences';
-import { openUrl } from '../../utils/openUrl';
+import { ext } from '../../extensionVariables';
+import { showConfirmationAsInSettings } from '../../utils/dialogs/showConfirmation';
+import { formatUrlForLogging, isSupportedExternalUrl, openUrl } from '../../utils/openUrl';
 import { openSurvey, promptAfterActionEventually } from '../../utils/survey';
 import { UsageImpact } from '../../utils/surveyTypes';
+import { atlasCredentialsRouter } from '../documentdb/atlasCredentials/atlasCredentialsRouter';
 import { collectionsViewRouter as collectionViewRouter } from '../documentdb/collectionView/collectionViewRouter';
+import { indexViewRouter } from '../documentdb/collectionView/indexesTab/indexViewRouter';
 import { documentsViewRouter as documentViewRouter } from '../documentdb/documentView/documentsViewRouter';
+import { localQuickStartRouter } from '../documentdb/localQuickStart/localQuickStartRouter';
 import { WEBVIEW_CONFIG } from './configuration';
 import { publicProcedure, publicProcedureWithTelemetry, router } from './trpc';
 
@@ -142,18 +147,56 @@ const commonRouter = router({
                 message: z.string(),
                 modal: z.boolean(),
                 cause: z.string(),
+                /**
+                 * Optional action button labels shown on the message. The label
+                 * the user picks is returned as `{ action }` (or `undefined` if
+                 * the message was dismissed) so the caller can react — e.g. an
+                 * "Edit and retry" button that re-opens a form.
+                 */
+                actions: z.array(z.string()).optional(),
             }),
         )
-        .mutation(({ input }) => {
+        .mutation(async ({ input }) => {
             let message = input.message;
             if (input.cause && !input.modal) {
                 message += ` (${input.cause})`;
             }
 
-            void vscode.window.showErrorMessage(message, {
-                modal: input.modal,
-                detail: input.modal ? input.cause : undefined, // The content of the 'detail' field is only shown when modal is true
-            });
+            const action = await vscode.window.showErrorMessage(
+                message,
+                {
+                    modal: input.modal,
+                    detail: input.modal ? input.cause : undefined, // The content of the 'detail' field is only shown when modal is true
+                },
+                ...(input.actions ?? []),
+            );
+            return { action };
+        }),
+    /**
+     * Unconditional information toast. Use for messages the user must always
+     * see; completion notices belong in `displayOperationSummary` instead.
+     */
+    displayInformationMessage: publicProcedure
+        .input(
+            z.object({
+                message: z.string(),
+            }),
+        )
+        .mutation(({ input }) => {
+            void vscode.window.showInformationMessage(input.message);
+        }),
+    /**
+     * Completion toast gated by the `documentDB.userInterface.ShowOperationSummaries`
+     * setting, so webviews honour the same user preference as the tree-view commands.
+     */
+    displayOperationSummary: publicProcedure
+        .input(
+            z.object({
+                message: z.string(),
+            }),
+        )
+        .mutation(({ input }) => {
+            showConfirmationAsInSettings(input.message);
         }),
     surveyPing: publicProcedure
         .input(
@@ -176,20 +219,39 @@ const commonRouter = router({
     openUrl: publicProcedure
         .input(
             z.object({
-                url: z.string(), // URL string to open in default browser
+                url: z.string().refine(isSupportedExternalUrl, {
+                    message: vscode.l10n.t('Only HTTP(S) URLs are supported.'),
+                }),
             }),
         )
         .mutation(async ({ input }) => {
-            await openUrl(input.url);
+            // The trace call constructs `new URL(input.url)` unguarded, so it must stay after the
+            // zod `isSupportedExternalUrl` refine has validated the input.
+            ext.outputChannel.trace(`[openUrl] Opening external URL: ${formatUrlForLogging(input.url)}`);
+            try {
+                const opened = await openUrl(input.url);
+                if (!opened) {
+                    void vscode.window.showErrorMessage(vscode.l10n.t("We couldn't open this link."));
+                }
+                return opened;
+            } catch (error) {
+                const message = error instanceof Error ? error.message : String(error);
+                ext.outputChannel.error(`[openUrl] Failed to open ${formatUrlForLogging(input.url)}: ${message}`);
+                void vscode.window.showErrorMessage(vscode.l10n.t("We couldn't open this link."));
+                return false;
+            }
         }),
 });
 
 export const appRouter = router({
     common: commonRouter,
+    atlasCredentials: atlasCredentialsRouter,
     mongoClusters: {
         documentView: documentViewRouter,
         collectionView: collectionViewRouter,
+        indexView: indexViewRouter,
     },
+    localQuickStart: localQuickStartRouter,
 });
 
 // Export type router type signature, this is used by the client.
