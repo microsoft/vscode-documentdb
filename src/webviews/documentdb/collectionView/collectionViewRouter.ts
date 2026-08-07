@@ -391,7 +391,7 @@ export const collectionsViewRouter = router({
         )
         //procedure type
         .query(async ({ input, ctx }) => {
-            const myCtx = ctx as RouterContext;
+            const myCtx = ctx as WithTelemetry<RouterContext>;
 
             // TODO: remove the dependency on the tree node, in the end it was here only to show progress on the 'tree item'
             const collectionTreeNode = await findCollectionNodeInTree(
@@ -417,12 +417,14 @@ export const collectionsViewRouter = router({
                     },
                 );
             } else {
+                myCtx.actionContext.telemetry.properties.failureReason = 'collectionNodeNotFound';
                 await reportCollectionNodeResolutionFailure('export', myCtx);
+                throw new Error('Collection tree node could not be resolved.');
             }
         }),
 
     importDocuments: publicProcedureWithTelemetry.query(async ({ ctx }) => {
-        const myCtx = ctx as RouterContext;
+        const myCtx = ctx as WithTelemetry<RouterContext>;
 
         // TODO: remove the dependency on the tree node, in the end it was here only to show progress on the 'tree item'
         const collectionTreeNode = await findCollectionNodeInTree(
@@ -437,7 +439,9 @@ export const collectionsViewRouter = router({
                 source: 'webview;collectionView',
             });
         } else {
+            myCtx.actionContext.telemetry.properties.failureReason = 'collectionNodeNotFound';
             await reportCollectionNodeResolutionFailure('import', myCtx);
+            throw new Error('Collection tree node could not be resolved.');
         }
     }),
 
