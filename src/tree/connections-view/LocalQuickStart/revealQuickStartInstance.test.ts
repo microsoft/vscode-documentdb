@@ -9,11 +9,8 @@ import { InstanceState, type QuickStartStatus } from '../../../services/localQui
 import { revealConnectionsViewElement } from '../../api/revealConnectionsViewElement';
 import { focusAndRevealInConnectionsView } from '../connectionsViewHelpers';
 import { LocalQuickStartItem } from './LocalQuickStartItem';
-import {
-    QUICK_START_INSTANCE_TREE_PATH,
-    QUICK_START_TREE_PATH,
-    revealQuickStartInstance,
-} from './revealQuickStartInstance';
+import { buildQuickStartInstanceTreeId, buildQuickStartTreeId } from './quickStartTreeIdentity';
+import { revealQuickStartInstance } from './revealQuickStartInstance';
 
 jest.mock('../connectionsViewHelpers', () => ({
     focusAndRevealInConnectionsView: jest.fn().mockResolvedValue(undefined),
@@ -45,7 +42,7 @@ describe('revealQuickStartInstance', () => {
         // Expanding IS the "open": it connects and lists the databases.
         expect(reveal).toHaveBeenCalledWith(
             context,
-            QUICK_START_INSTANCE_TREE_PATH,
+            buildQuickStartInstanceTreeId(),
             expect.objectContaining({ select: true, focus: true, expand: true }),
         );
     });
@@ -55,7 +52,7 @@ describe('revealQuickStartInstance', () => {
 
         expect(focusAndReveal).toHaveBeenCalledWith(
             context,
-            QUICK_START_TREE_PATH,
+            buildQuickStartTreeId(),
             expect.objectContaining({ expand: true }),
         );
         // Parent before child, or the child is not in the tree yet to be found.
@@ -72,7 +69,7 @@ describe('Quick Start tree paths match the ids the tree builds', () => {
     afterEach(() => jest.restoreAllMocks());
 
     it('matches the root node id', () => {
-        expect(new LocalQuickStartItem('connectionsView').id).toBe(QUICK_START_TREE_PATH);
+        expect(new LocalQuickStartItem('connectionsView').id).toBe(buildQuickStartTreeId());
     });
 
     it('matches the managed-instance row id', async () => {
@@ -94,6 +91,6 @@ describe('Quick Start tree paths match the ids the tree builds', () => {
         const children = await new LocalQuickStartItem('connectionsView').getChildren();
 
         expect(children).toHaveLength(1);
-        expect(children[0].id).toBe(QUICK_START_INSTANCE_TREE_PATH);
+        expect(children[0].id).toBe(buildQuickStartInstanceTreeId());
     });
 });

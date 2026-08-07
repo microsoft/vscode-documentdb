@@ -21,6 +21,7 @@ import { LocalEmulatorsItem } from './LocalEmulators/LocalEmulatorsItem';
 import { LocalQuickStartItem } from './LocalQuickStart/LocalQuickStartItem';
 import { type ConnectionClusterModel } from './models/ConnectionClusterModel';
 import { NewConnectionItemCV } from './NewConnectionItemCV';
+import { resolveConnectionsClusterTreeId } from './resolveConnectionsClusterTreeId';
 
 /**
  * Tree data provider for the Connections view.
@@ -243,10 +244,10 @@ export class ConnectionsBranchDataProvider extends BaseExtendedTreeDataProvider<
     /**
      * Finds a collection node by its cluster's stable identifier (storageId).
      *
-     * For Connections View, the clusterId is the storageId (UUID like 'storageId-xxx').
-     * This method resolves the current tree path from storage, handling folder moves.
+     * Stored connections resolve their current folder path from storage. Feature-owned synthetic
+     * clusters, such as the Quick Start managed instance, resolve through their owning feature.
      *
-     * @param clusterId The stable cluster identifier (storageId)
+     * @param clusterId The stable cluster identifier
      * @param databaseName The database name
      * @param collectionName The collection name
      * @returns A Promise that resolves to the found CollectionItem or undefined if not found
@@ -256,9 +257,10 @@ export class ConnectionsBranchDataProvider extends BaseExtendedTreeDataProvider<
         databaseName: string,
         collectionName: string,
     ): Promise<TreeElement | undefined> {
-        // Resolve the current tree path from storage - this handles folder moves
-        const { buildFullTreePath } = await import('./connectionsViewHelpers');
-        const treeId = await buildFullTreePath(clusterId, ConnectionType.Clusters);
+        const treeId = await resolveConnectionsClusterTreeId(clusterId);
+        if (!treeId) {
+            return undefined;
+        }
 
         // Build the full node ID for the collection
         const nodeId = `${treeId}/${databaseName}/${collectionName}`;
@@ -270,16 +272,17 @@ export class ConnectionsBranchDataProvider extends BaseExtendedTreeDataProvider<
     /**
      * Finds a cluster node by its stable cluster identifier (storageId).
      *
-     * For Connections View, the clusterId is the storageId (UUID).
-     * This method resolves the current tree path from storage, handling folder moves.
+     * Uses the same ownership-aware resolution as collection lookup so synthetic and persisted
+     * clusters remain consistent.
      *
-     * @param clusterId The stable cluster identifier (storageId)
+     * @param clusterId The stable cluster identifier
      * @returns A Promise that resolves to the found cluster tree element or undefined
      */
     async findClusterNodeByClusterId(clusterId: string): Promise<TreeElement | undefined> {
-        // Resolve the current tree path from storage - this handles folder moves
-        const { buildFullTreePath } = await import('./connectionsViewHelpers');
-        const treeId = await buildFullTreePath(clusterId, ConnectionType.Clusters);
+        const treeId = await resolveConnectionsClusterTreeId(clusterId);
+        if (!treeId) {
+            return undefined;
+        }
 
         // Use the standard findNodeById with recursive search enabled
         return this.findNodeById(treeId, true);

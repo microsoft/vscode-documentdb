@@ -35,6 +35,7 @@ import { type TreeElementWithContextValue } from '../../TreeElementWithContextVa
 import { type TreeElementWithRetryChildren } from '../../TreeElementWithRetryChildren';
 import { buildClusterTreeItem } from '../clusterItemPresentation';
 import { type ConnectionClusterModel } from '../models/ConnectionClusterModel';
+import { buildQuickStartInstanceTreeId, buildQuickStartTreeId } from './quickStartTreeIdentity';
 
 /** Base context token for the managed-instance row; menus gate on this + a state token. */
 const INSTANCE_CONTEXT = 'treeItem_quickStartInstance';
@@ -133,7 +134,7 @@ export class LocalQuickStartItem implements TreeElement, TreeElementWithContextV
     public contextValue: string = 'treeItem_localQuickStart';
 
     constructor(public readonly parentId: string) {
-        this.id = `${parentId}/localQuickStart`;
+        this.id = buildQuickStartTreeId(parentId);
     }
 
     /**
@@ -219,7 +220,7 @@ export class LocalQuickStartItem implements TreeElement, TreeElementWithContextV
             displayConnectionString.password = '';
 
             const model: TreeCluster<ConnectionClusterModel> = {
-                treeId: `${this.id}/instance`,
+                treeId: buildQuickStartInstanceTreeId(this.parentId),
                 viewId: this.parentId,
                 clusterId: metadata.clusterId,
                 storageId: metadata.clusterId,

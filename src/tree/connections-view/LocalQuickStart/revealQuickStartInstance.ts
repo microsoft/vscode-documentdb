@@ -3,24 +3,12 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-/**
- * Tree paths of the Quick Start nodes, and the shared "take me to the instance" navigation.
- *
- * Kept in one place because two callers need it — the success screen's "Open Connection" and the
- * duplicate-endpoint prompt in the New Local Connection wizard — and because the paths must track
- * the ids {@link LocalQuickStartItem} builds. `LocalQuickStartItem.test.ts` asserts they agree.
- */
+/** Shared "take me to the managed instance" navigation. */
 
 import { type IActionContext } from '@microsoft/vscode-azext-utils';
-import { Views } from '../../../documentdb/Views';
 import { revealConnectionsViewElement } from '../../api/revealConnectionsViewElement';
 import { focusAndRevealInConnectionsView } from '../connectionsViewHelpers';
-
-/** Tree path of the "DocumentDB Local - Quick Start" root node. */
-export const QUICK_START_TREE_PATH = `${Views.ConnectionsView}/localQuickStart`;
-
-/** Tree path of the managed-instance row beneath it (single instance, POC). */
-export const QUICK_START_INSTANCE_TREE_PATH = `${QUICK_START_TREE_PATH}/instance`;
+import { buildQuickStartInstanceTreeId, buildQuickStartTreeId } from './quickStartTreeIdentity';
 
 /**
  * Focus the Connections view and open the managed instance in it.
@@ -36,12 +24,12 @@ export const QUICK_START_INSTANCE_TREE_PATH = `${QUICK_START_TREE_PATH}/instance
  * throwing at the caller.
  */
 export async function revealQuickStartInstance(context: IActionContext): Promise<void> {
-    await focusAndRevealInConnectionsView(context, QUICK_START_TREE_PATH, {
+    await focusAndRevealInConnectionsView(context, buildQuickStartTreeId(), {
         select: false,
         focus: false,
         expand: true,
     });
-    await revealConnectionsViewElement(context, QUICK_START_INSTANCE_TREE_PATH, {
+    await revealConnectionsViewElement(context, buildQuickStartInstanceTreeId(), {
         select: true,
         focus: true,
         // Expanding is the point: it connects and lists the databases.
