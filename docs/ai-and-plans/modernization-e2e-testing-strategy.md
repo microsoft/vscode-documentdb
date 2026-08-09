@@ -59,7 +59,7 @@ the Vite migration, then grew a _feature-level_ suite on top of the same scaffol
 the investment; the specs are cheap afterwards.
 
 Note also their README's own provenance: the scaffold was **borrowed from a sibling
-`vs-code-postgresql` project's `test/e2e/`**, keeping the patterns that paid off and skipping the
+`[Ref1]` project's `test/e2e/`**, keeping the patterns that paid off and skipping the
 rest. There is a third internal reference implementation worth knowing about.
 
 ### 1.2 Architecture
@@ -232,7 +232,130 @@ theme variables, screenshots**.
 
 ---
 
-## 5. Recommendation: three layers, clear boundaries
+## 5. Ref1 — the older, larger sibling
+
+> **Ref1** is another internal VS Code database extension with a mature Playwright E2E system.
+> Its architecture report was shared for this analysis. The project name, repository URLs and
+> internal PR numbers are deliberately redacted here; where a quotation would reveal the name it is
+> replaced with `[Ref1]`.
+
+### 5.1 Cosmos DB is a documented subset of Ref1, not an independent design
+
+This is settled by Cosmos DB's own public E2E README:
+
+> "The scaffold borrows heavily from the sibling `[Ref1]` project's `test/e2e/` setup. We kept the
+> patterns that pay off immediately and **skipped the ones we don't yet need (multi-editor adapter,
+> reusable auth profile, @tag-based grep filtering, JUnit reporter)**."
+
+So the question is not "which approach is better". It is **"how much of Ref1 do you need yet?"**
+Cosmos DB answered that question once already, in writing, and later partially reversed one of the
+four omissions (JUnit output was added for one of their workflows).
+
+**Maturity gap:**
+
+|              | Ref1                                                               | Cosmos DB     |
+| ------------ | ------------------------------------------------------------------ | ------------- |
+| E2E started  | Feb 2026                                                           | Jun 2026      |
+| Initial size | 78 tests                                                           | 2 specs       |
+| Current size | ~294 runnable, ~58 smoke                                           | 21 spec files |
+| Editors      | VS Code **and** Cursor                                             | VS Code       |
+| Parallelism  | Per-worker cloned databases; 4 shards × 2 editors nightly          | 1 worker      |
+| Backend      | 6 services (5 Postgres variants + SSH jumphost), SSL/SSH artifacts | 1 emulator    |
+
+Ref1 is roughly four months and an order of magnitude ahead. That is context, not criticism of
+either: Cosmos DB deliberately took an MVP slice.
+
+### 5.2 What Ref1 has that Cosmos DB does not
+
+| Capability                                                                                                                                                               | Why it matters to us                                                                                                                                                                                                |
+| ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Installed-VSIX lane** (`*_E2E_INSTALLED_VSIX`) — installs a packaged VSIX into a test-scoped extensions dir and tests **that** instead of `--extensionDevelopmentPath` | **The single most relevant item in the whole report.** It automates exactly the dev-vs-packaged gap that let Cosmos DB's blank-webview bug survive 18 days, and that our Phase 0 checklist currently covers by hand |
+| **Component-screenshots project** — isolated React scenarios captured without the full backend; scenario ownership in `dev/`, test code is only a capture adapter        | Independent convergence on PR #867's idea, with a cleaner ownership split. See §5.5                                                                                                                                 |
+| **Convention scanner** (`check-e2e-conventions.mjs`)                                                                                                                     | Machine-enforces the E2E rules. High value when tests are written by agents                                                                                                                                         |
+| **Capability tags** (`@smoke`, `@requires-db`, `@requires-ssl`, `@release-core`, …) driving CI lane selection                                                            | Lets one suite serve PR smoke, nightly full, and release validation                                                                                                                                                 |
+| **Seeded workspace fixture** with a real `restartVsCode()`                                                                                                               | Tests settings-scope precedence and restart persistence — directly relevant to our connection storage and settings scopes                                                                                           |
+| **Editor adapter** (VS Code + Cursor)                                                                                                                                    | Not needed today, but the right shape if we ever target another editor                                                                                                                                              |
+| **Seed sentinel** — poll a `_e2e_seed_complete` marker rather than DB health                                                                                             | Avoids racing the tail of seeding (grants, policies, ANALYZE)                                                                                                                                                       |
+| **Compose project as teardown source of truth**                                                                                                                          | Cleans only this run's resources; never sweeps a developer's containers                                                                                                                                             |
+| **Fail-loud CI** — use the CI system's own step outcome, not a shell-written exit code                                                                                   | They shipped a bug where a timed-out E2E step reported success                                                                                                                                                      |
+| **Nightly issue lifecycle** — open on failure, auto-close on recovery, and failing to notify is itself a failure                                                         | Prevents silent rot                                                                                                                                                                                                 |
+| **Rich helper diagnostics** — rejected candidates, CSS state, overflow contents                                                                                          | "Locator not found" is useless in virtualized editor UI                                                                                                                                                             |
+
+### 5.3 What Cosmos DB has that Ref1's report does not mention
+
+Absence from a report is not absence from a repository, so treat these as "not evidenced" rather
+than "missing":
+
+- **`consoleHealth`** — failing a test on any `console.error` originating from the webview origin.
+- **E2E coverage collection** and aggregation.
+- **Build staleness detection with a production-build marker.**
+- **A single env knob for screenshot/trace capture modes.**
+
+### 5.4 Where they converged independently — the strongest signal
+
+Both projects landed on the same answers, and the naming similarity confirms the lineage
+(`<ext>.e2eTestMode` / `<EXT>_E2E_TEST=1` vs `cosmosDB.e2eTestMode` / `COSMOSDB_E2E_TEST=1`):
+
+- Playwright driving a **real Electron editor**, not mocked Chromium
+- **Worker-scoped** editor fixtures, with per-test state reset
+- **Run-scoped isolation** of user-data, extensions, workspace, results and reports
+- **Test-only commands gated by an env var _and_ a context key**
+- An **activation handshake** before any spec runs
+- An **isolated Docker project** for the backend
+- **Native dialog interception** at the Electron layer
+- **Observable readiness over sleeps**
+- **`afterEach` cleanup** of tabs and connections
+
+When the mature original and the pragmatic subset independently agree, treat the pattern as settled
+practice rather than a preference.
+
+### 5.5 Ref1 validates PR #867 — and offers a better home for it
+
+Ref1 runs **three** distinct Playwright uses, not one:
+
+| Project                   | Purpose                                                                |
+| ------------------------- | ---------------------------------------------------------------------- |
+| Main E2E                  | Behavioural regression against real editor + real database             |
+| Docs screenshots          | Deterministic documentation PNGs; own config; excluded from regression |
+| **Component screenshots** | **Isolated React scenarios captured without the full backend**         |
+
+That third project is PR #867's concept, arrived at independently — which is strong evidence the
+idea is sound rather than a workaround. Two details are worth copying outright:
+
+1. **Scenario ownership lives in `dev/`, not in the test folder.** Test code is "only a capture
+   adapter". This directly addresses #867's worst flaw — fixtures drifting into fiction — because
+   the scenarios sit next to the components they describe rather than in an HTML file.
+2. **Their own warning:** these "should not become a substitute for full E2E tests". Same conclusion
+   this document reached in Part 3.
+
+### 5.6 Costs and cautions, from Ref1's own risk list
+
+Ref1 is candid about what its approach costs — worth reading before copying it wholesale:
+
+- **Test-mode UI divergence.** Their test-only inline buttons change the tree UI while E2E mode is
+  on, and ordinary row clicks or drag coordinates can accidentally hit them. The seam has a blast
+  radius.
+- **Production code carries E2E-gated behaviour.** Test-only commands, skipped confirmations,
+  injected tokens, a mock auth provider. Defensible and double-gated, but a real trade-off some
+  teams would reject outright.
+- **Retry masking.** CI retries plus nightly retries can hide genuine regressions when assertions
+  are weak.
+- **Scale cost.** ~294 tests × 2 editors × 4 shards needs long timeouts, image caching and
+  build-once distribution.
+- **Native menus remain unsolved.** After trying `Menu.prototype.popup` interception, native
+  `MenuItem.click()`, keyboard navigation and IPC bridging, they concluded native context menus are
+  not a reliable command path at all.
+- **Documentation drift.** Their README still says "only setup to run locally" despite extensive CI.
+
+### 5.7 What we should take, and what we should not
+
+| Take now                                                                                                                                                                            | Take later                                                                                             | Skip                                                                                                                                                        |
+| ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Installed-VSIX lane; capability tags + smoke/nightly split; convention scanner; fail-loud CI; compose-project teardown; seed sentinel (we already use Docker for Local Quick Start) | Seeded workspace fixture + restart boundary; component-screenshots home for #867; per-worker isolation | Multi-editor adapter (we do not target Cursor); per-worker DB cloning and sharding (premature at our size); Entra/Azure provisioning lanes (not applicable) |
+
+---
+
+## 6. Recommendation: three layers, clear boundaries
 
 | Layer                                                     | Runtime                     | Answers                                                                            | Cost            | Status                                          |
 | --------------------------------------------------------- | --------------------------- | ---------------------------------------------------------------------------------- | --------------- | ----------------------------------------------- |
@@ -287,6 +410,22 @@ The real lesson from those 18 days is narrower and cheaper to act on: **PR #3037
 - Self-managed screenshot/trace capture with env-var modes
 - Separate Docker compose project and ports for any test backend
 
+### Add from Ref1 (§5)
+
+- **Installed-VSIX lane** — the highest-value single item. It automates the packaged-vs-dev check
+  that Phase 0 otherwise does by hand, and it is the mechanism that catches the exact bug class the
+  migration is most likely to introduce
+- **Capability tags** driving a smoke/nightly split, so one suite serves PR gating, nightly
+  regression and release validation
+- **A convention scanner script** — machine-enforced E2E rules, which matters disproportionately
+  when specs are written by agents
+- **Fail-loud CI**: use the CI system's own step outcome rather than a shell-written exit code;
+  missing reports must fail aggregation
+- **Compose project as the teardown source of truth**, so cleanup never depends on a transient flag
+  and never touches unrelated developer containers
+- **Seed sentinel** if we seed a database for Layer C
+- For Layer B, **put scenario ownership in `dev/`** and keep the test code as a capture adapter
+
 ### Fix in #867 before unparking
 
 | Debt                                     | Fix                                                                                       |
@@ -312,7 +451,7 @@ The real lesson from those 18 days is narrower and cheaper to act on: **PR #3037
 
 ---
 
-## 6. Bottom line
+## 7. Bottom line
 
 - Cosmos DB's E2E **does not** already include #867's capability. It reaches states by building
   them for real; #867 reaches them by describing them. Both are legitimate, and neither substitutes
@@ -329,7 +468,7 @@ The real lesson from those 18 days is narrower and cheaper to act on: **PR #3037
 
 ---
 
-## Appendix — Source trail
+## Appendix A — Source trail
 
 **Cosmos DB** (`main` @ `4b1bb6c`): `test/e2e/README.md`, `test/e2e/specs/*` (21 files),
 `fixtures/{vscode,webviewHelpers,webviews,consoleHealth,coverage,queryEditor,documentPanel,migration,controlFile}.ts`,
@@ -343,3 +482,134 @@ Related PRs: #3136 (introduced), #3164 (production-build guard), #3169 (Monaco w
 **This repo:** [PR #867](https://github.com/microsoft/vscode-documentdb/pull/867) description and
 commit list; extracted from #866; label `on-hold`; references
 `docs/ai-and-plans/live-preview-playwright-future-work.md` (on `feature/local-quickstart`).
+
+---
+
+## Appendix B — Follow-up research prompt for Ref1
+
+The architecture report for Ref1 answered _what_ and _why_. To act on §5.7 we need _how_: actual
+source, operational costs, and honest hindsight. The prompt below is written to be run by an agent
+with read access to that repository. Paste it as-is.
+
+```text
+# Research request: E2E implementation details, costs, and retrospective
+
+## Context
+
+I maintain a different VS Code database extension. It has four React webviews (Fluent UI,
+Monaco, SlickGrid), a tRPC-style webview<->extension-host bridge, and currently **no** E2E or
+integration tests (`npm test` is a no-op stub). We are about to migrate the build from webpack
+to Vite/ESM, and we will build an E2E layer afterwards.
+
+I have already read the architecture report for this repository's E2E system, so **do not
+re-summarise the architecture**. I need implementation detail, real operating costs, and honest
+retrospective judgement.
+
+## Output format
+
+Produce **one single Markdown file**. Use fenced code blocks with language tags for all source.
+Where a file is long, include the complete file anyway if it is under ~400 lines; otherwise
+include the parts I asked for plus enough surrounding context to be usable. Clearly label every
+snippet with its repository path. If something does not exist, say so explicitly rather than
+inventing it.
+
+## Part 1 — Verbatim source I want to copy or adapt
+
+Include the full current source of:
+
+1. `test/e2e/helpers/e2eIsolation.ts` (run/worker isolation)
+2. `scripts/check-e2e-conventions.mjs` (convention scanner) — complete file
+3. `playwright.config.ts` — complete file, including the worker resolution helper
+4. The default extension fixture under `test/e2e/fixtures/` (the worker-scoped editor fixture) —
+   at minimum: the worker-scoped fixture definition,
+   the installed-VSIX branch, the native-dialog interception, the deterministic settings block,
+   and the per-test cleanup
+5. `test/e2e/fixtures/seededWorkspaceFixture.ts` — especially `restartVsCode()`
+6. `test/e2e/editors/editorAdapter.ts` — the interface/type definition and one implementation
+7. The workbench-readiness helper (whatever waits for activation and the extension surfaces)
+8. The `package.json` fragment that declares the test-only inline tree actions, including the
+   `when` clauses and the context-key gating
+9. The extension-side code that sets the E2E context key from the environment variable
+
+## Part 2 — The installed-VSIX lane (highest priority)
+
+This is the capability I most want to reproduce.
+
+1. How is the VSIX built, located and installed for a test run? Full code path.
+2. How do launch arguments differ between source mode and installed mode?
+3. Which tests run in this lane, and how are they selected (`@release-core`?)
+4. What has this lane actually caught that source-mode E2E did not? Concrete examples if any.
+5. Is it run per-PR, nightly, or only at release time? What does it cost in wall-clock time?
+6. Any gotchas: extension dependency installation, marketplace lookups, signing, caching.
+
+## Part 3 — Webview testing specifically
+
+My pain is webviews, and the report is thin here.
+
+1. How do specs locate and enter webview iframes? Include the helper source.
+2. Are there webview-specific readiness waits beyond generic workbench readiness?
+3. Do you assert on console errors originating from webviews? If so, how, and do you allow-list?
+4. How are Monaco-based or grid/virtualised webview controls driven reliably?
+5. How do you handle webview CSP, `acquireVsCodeApi`, and the `vscode-webview://` origin in tests?
+6. Do webview tests run against a production bundle or a dev build? Does it matter?
+
+## Part 4 — Component screenshots project
+
+1. Full architecture: how `dev/componentScreenshotScenarios.tsx`, the scenario metadata, and
+   `test/e2e/component-screenshots/` fit together. Include the Playwright config and one
+   complete scenario end to end.
+2. How are scenarios typed? Is there anything preventing a scenario from drifting away from the
+   real component's props/state?
+3. How is the host/RPC boundary stubbed, if at all?
+4. Are these captures asserted against baselines, or are they artifacts only? Why?
+5. Do they run in CI? If yes, how is cross-machine rendering instability handled?
+6. In hindsight, has this project earned its keep?
+
+## Part 5 — Capability tags and CI lane wiring
+
+1. The complete tag list and the exact grep/selector expressions each CI lane uses.
+2. How tags are validated (the scanner rule).
+3. How you decide what earns `@smoke`.
+4. The build-once-and-distribute mechanism: what is archived, how it is consumed by matrix jobs.
+5. The fail-loud pieces: the step-outcome handling, report-existence checks, and the nightly
+   issue open/close lifecycle. Include the workflow YAML fragments.
+
+## Part 6 — Real operating costs (numbers, please)
+
+1. Wall-clock: smoke suite, full suite per shard, full nightly matrix end to end.
+2. Flake rate: what percentage of nightly runs fail for non-product reasons? Which areas flake most?
+3. How much maintenance does the suite take — roughly how often is E2E infrastructure repaired,
+   and what triggers it most (VS Code updates? Cursor updates? Fluent UI upgrades?)
+4. How long did the initial 78-test framework take to build, and by how many people?
+5. CI cost/runner-minutes if you track it.
+6. How many product bugs has the suite actually caught before release? Any notable examples?
+
+## Part 7 — Honest retrospective
+
+Be candid; this is the most valuable section for me.
+
+1. What would you do differently if starting today from zero?
+2. Which patterns did **not** pay off, or cost more than they returned?
+3. The test-only production seams (inline actions, skipped confirmations, mock auth provider):
+   knowing what you know now, would you adopt that approach again? What is the true cost —
+   including the reported problem of ordinary clicks hitting E2E-only buttons?
+4. Which parts are over-engineering for a smaller extension with ~4 webviews, one backend, and
+   no identity/provisioning story?
+5. What is the minimum viable version of this system — if you had to rebuild only the 20% that
+   delivers 80% of the value, what exactly would you keep?
+6. Did the multi-editor (Cursor) adapter earn its cost?
+7. Is per-worker database cloning + sharding worth it, or would fewer, better tests be preferable?
+8. Anything you consider a mistake that is now hard to reverse?
+
+## Part 8 — Build system (brief)
+
+1. What bundles the extension and the webviews today — webpack, esbuild, Vite, or something else?
+2. Have you migrated bundlers recently? If so, what broke, and did E2E catch it?
+3. Is the extension ESM or CommonJS? Any packaging lessons worth passing on?
+
+## Part 9 — If you were advising me
+
+Given my situation — four React webviews, no tests today, a webpack→Vite/ESM migration in
+progress, work outsourced to coding agents, aiming to build this once and keep it for years —
+what would you tell me to build first, second, and third? What would you tell me to skip?
+```
