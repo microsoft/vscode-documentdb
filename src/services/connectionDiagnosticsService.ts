@@ -102,8 +102,9 @@ export interface ConnectionDiagnosis {
 }
 
 /**
- * A slow provider must never hold up an error the user is already waiting for. On expiry we fall
- * back to the original error, which is always a valid outcome.
+ * Budget for one {@link ConnectionDiagnosticsServiceImpl.explain} call, not per provider: the user
+ * is already waiting for an error, so the wait must not grow with the number of registered sources.
+ * On expiry we fall back to the original error, which is always a valid outcome.
  */
 const EXPLAIN_DEADLINE_MS = 5_000;
 
@@ -149,11 +150,15 @@ class ConnectionDiagnosticsServiceImpl {
             return undefined;
         }
 
+        return withDeadline(this.askProviders(request));
+    }
+
+    private async askProviders(request: ConnectionDiagnosticsRequest): Promise<ConnectionDiagnosis | undefined> {
         for (const provider of this.providers) {
             let message: string | undefined;
 
             try {
-                message = await withDeadline(provider.explain(request));
+                message = await provider.explain(request);
             } catch (error) {
                 const detail = error instanceof Error ? error.message : String(error);
                 ext.outputChannel?.debug(`[ConnectionDiagnostics] Provider "${provider.id}" failed: ${detail}`);
@@ -179,7 +184,7 @@ class ConnectionDiagnosticsServiceImpl {
     }
 }
 
-async function withDeadline(work: Promise<string | undefined>): Promise<string | undefined> {
+async function withDeadline<T>(work: Promise<T>): Promise<T | undefined> {
     let timer: NodeJS.Timeout | undefined;
     try {
         return await Promise.race([

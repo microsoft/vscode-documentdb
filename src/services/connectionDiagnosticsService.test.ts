@@ -62,6 +62,19 @@ describe('ConnectionDiagnosticsService', () => {
         await expect(pending).resolves.toBeUndefined();
     });
 
+    it('spends one deadline in total, not one per provider', async () => {
+        jest.useFakeTimers();
+        const stall = (): Promise<string> => new Promise<string>(() => {});
+        ConnectionDiagnosticsService.registerProvider(provider('a', stall));
+        ConnectionDiagnosticsService.registerProvider(provider('b', stall));
+        ConnectionDiagnosticsService.registerProvider(provider('c', stall));
+
+        const pending = ConnectionDiagnosticsService.explain({ clusterId: 'c1', error: new Error('boom') });
+        await jest.advanceTimersByTimeAsync(5_000);
+
+        await expect(pending).resolves.toBeUndefined();
+    });
+
     it('replaces a provider registered twice under the same id', async () => {
         ConnectionDiagnosticsService.registerProvider(provider('a', () => Promise.resolve('first')));
         ConnectionDiagnosticsService.registerProvider(provider('a', () => Promise.resolve('second')));
