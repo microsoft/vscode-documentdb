@@ -878,6 +878,10 @@ is not where it was assumed to be. If a third premise matters to a decision, ver
 
 ## 6. Recommendation: three layers, clear boundaries
 
+> This chapter sets the layer boundaries and the sequencing. **[Part 7](#7-recommendations--scored-and-not-limited-to-copying)
+> is the decision artifact** — every candidate scored on value, complexity and carrying cost, plus an
+> architecture neither reference project chose. Read 6 for the shape, 7 for what to approve.
+
 | Layer                                                     | Runtime                     | Answers                                                                            | Cost            | Status                                          |
 | --------------------------------------------------------- | --------------------------- | ---------------------------------------------------------------------------------- | --------------- | ----------------------------------------------- |
 | **A. Component tests** (Vitest + jsdom + Testing Library) | Node + jsdom                | "Does this component behave?"                                                      | ms              | New — comes free with Vitest                    |
@@ -1009,7 +1013,212 @@ checklist it runs on every PR that touches build configuration.
 
 ---
 
-## 7. Bottom line
+## 7. Recommendations — scored, and not limited to copying
+
+> **Premise of this chapter.** Neither reference project is a template. Ref1's architecture is a
+> correct solution to _Ref1's_ constraints, and we share almost none of them. What follows scores
+> each candidate on its merits for **our** repository, names the places where the more mature
+> project is the worse guide, and puts forward an option that neither project took.
+
+### 7.0 How to read the scores
+
+Three axes, because the central finding of this research is that **build cost and carrying cost are
+different numbers**, and only one of them is bounded.
+
+| Axis           | Scale                                                                                                                                                                                                                                      |
+| -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| **Value**      | **High** — prevents a defect class that would otherwise reach users, or unblocks everything downstream · **Medium** — materially reduces cost or catches real bugs · **Low** — quality-of-life · **Negative** — costs more than it returns |
+| **Complexity** | **S** — one file or one config; no product code, no CI change · **M** — several files, or touches product code or CI, but self-contained · **L** — cross-cutting: product + tests + CI, or a new subsystem                                 |
+| **Carry**      | **None** — write once · **Low** — occasional repair · **Ongoing** — grows with the product, the editor, or the test count                                                                                                                  |
+
+Scores are relative to **this** repository: four webviews, a typed tRPC-style bridge that we own and
+publish, no tests today, one generic VSIX, no identity story, one editor target, and implementation
+work executed by coding agents. Change any of those and the scores move.
+
+### 7.1 Where maturity is the wrong guide
+
+Ref1 is four months and an order of magnitude ahead of Cosmos DB. On four questions it is **behind**,
+and following it would make us worse.
+
+| Question                 | Ref1 (mature)                                             | Cosmos DB (younger)              | What we should do                | Why maturity lost                                                                                                    |
+| ------------------------ | --------------------------------------------------------- | -------------------------------- | -------------------------------- | -------------------------------------------------------------------------------------------------------------------- |
+| Console-error assertions | **None. Zero listeners.**                                 | `consoleHealth`, empty allowlist | Adopt from test #1               | The suite predates the practice and now carries too much accumulated noise to retrofit cheaply. Age is the liability |
+| Readiness contract       | **None** → 115-line heuristic, ~17 predicates             | Predicate-based, no marker       | `data-webview-id` + `data-ready` | They could not retrofit a product change across ~25 entry points. We have four, and none written yet                 |
+| Test seams               | 23 inline buttons across 8 production files               | Test-only commands only          | **One** command, no UI seam      | The seam was cheap when added and compounded for nine months. Being early is precisely what made it expensive        |
+| In-job parallelism       | Built worker isolation + DB cloning, then **disabled it** | Never built it                   | Never build it                   | The mature project's shipped default _is_ the junior project's default. The investment was the mistake               |
+
+**The general rule.** Maturity is evidence about what a system converges to **under its own
+constraints** — not about what is right. Roughly 60% of Ref1 exists for identity, provisioning,
+multi-platform packaging and a second editor. We have none of those. Copying its architecture
+imports solutions to problems we do not own, and the carrying cost is the part that never amortises.
+
+### 7.2 The option neither project took — invert the pyramid
+
+Both projects made **Playwright driving a real Electron editor** the primary vehicle, and everything
+else a supporting act. That is the assumption worth attacking, and the evidence for attacking it
+comes from their own repositories.
+
+1. **Ref1's flake taxonomy is 100% editor launch and teardown** — not one signature is a selector, an
+   assertion or the database. The cost driver is process lifecycle, and it scales linearly with the
+   number of Electron tests.
+2. **~130 lines carried per runnable test**, and the expensive ones are the Electron ones.
+3. **The bug that survived 18 days in Cosmos DB was a packaging / first-render bug.** A larger
+   feature-spec suite would not have caught it sooner; one packaged smoke test would have.
+4. **Neither project has a typed RPC layer.** Both hand-roll postMessage envelopes, so the only place
+   they _can_ assert behaviour is the DOM. **We own `@microsoft/vscode-ext-webview`** — we can assert
+   at the bridge, in Node, in milliseconds. That option is genuinely unavailable to them, which is
+   why neither report considers it.
+
+**The shape that follows from those four facts:**
+
+| Layer                         | Vehicle                                                  | Covers                                                                                                 | Count   | Cost       |
+| ----------------------------- | -------------------------------------------------------- | ------------------------------------------------------------------------------------------------------ | ------- | ---------- |
+| 1. Bridge contract tests      | Vitest; router invoked directly against a fake transport | Every procedure: happy path, error propagation host→webview, cancellation/`AbortSignal`, concurrency   | most    | ms         |
+| 2. Host integration tests     | VS Code's own runner (`@vscode/test-cli`), no Playwright | Commands, tree, storage, settings scopes, connection lifecycle, activation                             | tens    | seconds    |
+| 3. Webview UI                 | #867 harness on `vite serve`, typed fixtures             | Rendering, layout, Fluent styling, themes, **failure and empty states**                                | tens    | sub-second |
+| 4. Packaged-artifact tripwire | Playwright + Electron, **installed VSIX only**           | Activation, each webview reaches `data-ready`, zero console errors, real CSP / workers / assets / l10n | **1–5** | minutes    |
+
+**Layer 4 is where the two reference projects put ~294 and 21 tests respectively. We would put about
+five.**
+
+**What it buys:**
+
+- The flake source is bounded **by construction** — five Electron launches, not 294. No sharding, no
+  two-phase retry, no wiped-user-data second pass, no tolerance classifier, no per-worker DB cloning.
+  All of that machinery exists in Ref1 to survive a problem we would decline to create.
+- Failure and edge states become cheap (Layer 3) — the class both real-backend suites structurally
+  cannot reach.
+- Most assertions run in the same process as the code, so a failure points at a function rather than
+  at a frame.
+
+**What it risks, and how each risk is covered:**
+
+| Risk                                                                                                                              | Cover                                                                                                                                                                                  |
+| --------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| "Real VS Code" behaviour (CSP, `acquireVsCodeApi`, `l10n_bundle`, worker origin, asset URLs) is exercised only a handful of times | These are **activation and first-render properties**, not per-feature ones. Checking them once per webview per build is sufficient; checking them 294 times is not 294× the confidence |
+| Interaction bugs that appear only in the real host (focus, keybindings, native dialogs)                                           | **Genuinely uncovered.** Accept it, and promote a scenario into Layer 4 when a real bug escapes there — the same regression-driven rule as everything else                             |
+| Layer 3 fixtures drift into fiction                                                                                               | The flaw #867 documents against itself. Fixed by typing scenarios against the router's inferred output types, so drift is a **compile error**, not a review discipline                 |
+| We must build two things neither project has                                                                                      | True, and it is the honest cost: the readiness contract and the fake transport. Both **M**, both one-time, Carry None/Low                                                              |
+
+**Score: Value High · Complexity M · Carry Low.** The two new pieces are smaller than the single
+thing we are declining to build.
+
+> **This is the recommendation, and §7.4–§7.7 assume it.** If you prefer the conventional shape,
+> nothing in the waves below is wasted — only the Layer 4 count changes, from ~5 to ~40, and with it
+> come sharding, retries, and a standing argument about which failures are real.
+
+### 7.3 The shortlist — if you approve only six things
+
+| #   | Item                                                    | Source              | Value | Complexity | Carry | What it prevents                                                         |
+| --- | ------------------------------------------------------- | ------------------- | ----- | ---------- | ----- | ------------------------------------------------------------------------ |
+| 1   | Packaged-VSIX activation tripwire + launch-arg rewriter | Ref1                | High  | M          | Low   | Shipping a broken bundle; a green build that secretly tested source      |
+| 2   | Console-error + `pageerror` assertions, empty allowlist | Cosmos DB           | High  | S          | Low   | Module-resolution and circular-import breakage that DOM assertions pass  |
+| 3   | Readiness contract in the product                       | **New** (their gap) | High  | M          | None  | Several hundred lines of frame heuristics, permanently                   |
+| 4   | Bridge contract tests via a fake transport              | **New** (ours)      | High  | M          | Low   | Most of our real logic going untested at any price we would pay          |
+| 5   | Ban `const enum`; audit ESM hazards before migrating    | Ref1                | High  | S          | None  | Four documented bundler breakage classes                                 |
+| 6   | Convention scanner, `--strict`, in PR CI                | Ref1                | High  | M          | Low   | Agent-authored specs quietly diverging from every rule we wrote in prose |
+
+### 7.4 Wave 0 — before the migration
+
+| Item                                                                          | Source      | Value  | Complexity | Carry | Note                                                             |
+| ----------------------------------------------------------------------------- | ----------- | ------ | ---------- | ----- | ---------------------------------------------------------------- |
+| Packaged-VSIX activation tripwire                                             | Ref1        | High   | M          | Low   | Bundler-agnostic; the migration cannot invalidate it             |
+| Launch-arg rewriter with all three guards                                     | Ref1        | High   | S          | None  | Pure function, unit-testable; guard 3 is the one that matters    |
+| Console-error + `pageerror` assertions                                        | Cosmos DB   | High   | S          | Low   | Allowlist starts empty and stays honest only if started now      |
+| Ban `const enum` (`isolatedModules`)                                          | Ref1        | High   | S          | None  | Otherwise we write their stub plugin                             |
+| Audit `__dirname` / `require.resolve` / guarded requires / `constructor.name` | Ref1        | High   | S          | None  | Four greps; each maps to a documented breakage                   |
+| Written manual VSIX checklist                                                 | Ours        | Medium | S          | Low   | Covers what one activation test cannot: styling, workers, chunks |
+| Unzip the VSIX and diff against the previous version                          | Azure Tools | Medium | S          | None  | Cheap packaging-surprise detector                                |
+
+### 7.5 Wave 1 — instrumentation, then the first tests
+
+Instrumentation first. This is the hour Ref1 did not spend, and every heuristic in their suite is
+the interest payment.
+
+| Item                                                        | Source      | Value  | Complexity | Carry | Note                                                             |
+| ----------------------------------------------------------- | ----------- | ------ | ---------- | ----- | ---------------------------------------------------------------- |
+| `data-webview-id` + `data-ready` on all four roots          | **New**     | High   | M          | None  | `ready` = React mounted **and** first bridge round-trip resolved |
+| One test-only command returning structured state            | Both        | High   | S          | Low   | Env var **and** context key. One seam, at the data boundary      |
+| Fake transport for the bridge + typed scenario fixtures     | **New**     | High   | M          | Low   | Enables Layers 1 and 3; strictly better than their banner stub   |
+| Bridge contract tests                                       | **New**     | High   | M          | Low   | Where our actual complexity lives                                |
+| Run-scoped isolation module (incl. the `u`/`w` names)       | Ref1        | High   | S          | None  | Copy near-verbatim; the macOS socket-path limit is real          |
+| Worker-scoped fixture + `closeAllEditorTabs` in `afterEach` | Cosmos DB   | High   | M          | Low   | Only needed once Layer 4 exists                                  |
+| Activation handshake before any spec                        | Cosmos DB   | High   | S          | None  | Removes a whole class of flake                                   |
+| Native-dialog interception                                  | Ref1        | Medium | S          | None  | Six lines; prevents teardown hangs                               |
+| `dumpWorkbenchDiagnostics` + tabs/frame-URL failure detail  | Ref1        | Medium | S          | None  | Turns a CI-only launch failure into a one-look diagnosis         |
+| Host integration tests (`@vscode/test-cli`)                 | Azure Tools | High   | M          | Low   | Restores a real `npm test`; target the public API surface        |
+
+### 7.6 Wave 2 — CI that cannot lie
+
+| Item                                                  | Source | Value  | Complexity | Carry   | Note                                                               |
+| ----------------------------------------------------- | ------ | ------ | ---------- | ------- | ------------------------------------------------------------------ |
+| Fail-loud gating on `steps.<id>.outcome`              | Ref1   | High   | S          | None    | Also catches `timeout-minutes`, which an exit-code check misses    |
+| Report-existence checks                               | Ref1   | High   | S          | None    | No report is a failure, not an absence of evidence                 |
+| Build-once-distribute + **post-archive** verification | Ref1   | High   | M          | Low     | The step everyone skips and the one that saves you                 |
+| Convention scanner, `--strict`                        | Ref1   | High   | M          | Low     | Disproportionate value because agents write the specs              |
+| Three tags + two grep lanes                           | Ref1   | Medium | S          | Low     | `@smoke` means "do not ship", not a per-area quota                 |
+| PR smoke + nightly lanes                              | Both   | High   | M          | Ongoing | The only Ongoing item in Waves 0–2; price it deliberately          |
+| Playwright/Docker image caching                       | Ref1   | Low    | S          | Low     | Do it when a lane is actually slow                                 |
+| Failure-issue open/close lifecycle + the two guards   | Ref1   | Medium | M          | Low     | Value becomes High the moment nightly exists and nobody watches it |
+
+### 7.7 Wave 3 — depth, driven by real bugs
+
+| Item                                                                         | Source    | Value  | Complexity | Carry  | Note                                                        |
+| ---------------------------------------------------------------------------- | --------- | ------ | ---------- | ------ | ----------------------------------------------------------- |
+| Unpark #867 on `vite serve` with typed fixtures                              | Ours      | High   | M          | Low    | Its unique value is deterministic failure states            |
+| Scenario ownership in `dev/`; `as const satisfies`; registry-drift assertion | Ref1      | Medium | S          | Low    | Three idioms; adopt all three                               |
+| SlickGrid / Monaco interaction patterns                                      | Ref1      | Medium | S          | Low    | Mostly knowledge transfer, not code                         |
+| Regression-only growth policy + explicit cap                                 | Ref1      | High   | S          | None   | A written rule is the cheapest High-value item on this page |
+| Seeded workspace fixture + `restartVsCode()`                                 | Ref1      | Medium | M          | Medium | Only if settings-scope or persistence bugs appear           |
+| Coverage collection from E2E                                                 | Cosmos DB | Low    | M          | Low    | Interesting, not load-bearing                               |
+| Docs-screenshot project                                                      | Ref1      | Low    | M          | Low    | Only when the user manual demands it                        |
+
+### 7.8 Deliberately not doing — and what it would have cost
+
+Recording the rejects with scores matters as much as the adoptions: it is what stops each one being
+re-proposed every quarter.
+
+| Item                                  | Value        | Complexity | Carry   | Why not                                                                                           |
+| ------------------------------------- | ------------ | ---------- | ------- | ------------------------------------------------------------------------------------------------- |
+| Second editor adapter                 | Low          | L          | Ongoing | Their clearest negative verdict: ~800 lines, half of nightly CI, failures CI was taught to ignore |
+| Multi-platform VSIX matrix            | Low          | L          | Ongoing | We ship one generic VSIX                                                                          |
+| Identity / auth test seams            | None for us  | L          | Ongoing | ~40% of their complexity; we have no identity story                                               |
+| Test-only inline tree buttons         | **Negative** | M          | Ongoing | Corrupts hit-testing for unrelated tests; ships in the VSIX                                       |
+| In-job parallelism                    | Low          | M          | Low     | Their own shipped default is `workers: 1`                                                         |
+| Per-worker DB cloning + sharding      | Low          | M          | Low     | Premature at 5–40 tests; irrelevant under §7.2                                                    |
+| 13-tag taxonomy                       | Low          | S          | Low     | Two taxonomies in one namespace; start with three                                                 |
+| Tolerated-failure classifier          | **Negative** | M          | Ongoing | A machine deciding red is not red, from log-text regex                                            |
+| Pixel-diff baselines for webviews     | Low          | M          | Ongoing | Fluent UI + cross-platform font rendering is a known tar pit; both projects chose artifacts       |
+| `waitForTimeout` as accepted practice | **Negative** | S          | Ongoing | They ended up counting them because there were too many to remove                                 |
+| Native context-menu automation        | Low          | L          | Ongoing | Ref1 tried four approaches and concluded it is not a reliable command path                        |
+
+### 7.9 Roll-up
+
+**Every High-value item in this chapter is S or M.** The only L-complexity work on the critical path
+is unifying the build so that tests run the code we ship — and the Vite migration performs that
+anyway. The single genuinely large thing either reference project built, the Electron test suite, is
+the thing we are declining.
+
+| Wave                              | High-value items | Any L? | Carry introduced      |
+| --------------------------------- | ---------------- | ------ | --------------------- |
+| 0 — before the migration          | 5                | no     | one manual checklist  |
+| 1 — instrumentation + first tests | 8                | no     | none material         |
+| 2 — CI                            | 5                | no     | **the nightly lane**  |
+| 3 — depth                         | 2                | no     | grows with test count |
+
+**What would invalidate this plan**, and therefore what to watch for:
+
+- We take on a **second editor target** — the adapter abstraction becomes worth building.
+- The webview count grows past roughly eight — manual checklists and a five-test Layer 4 stop
+  scaling, and capability tags start earning their keep.
+- We acquire an **identity story** — a double-gated auth seam becomes necessary, and Ref1's is the
+  reference implementation to copy.
+- The bridge stops being typed, or moves out of our control — Layers 1 and 3 lose their foundation
+  and the conventional Electron-heavy shape becomes the right answer after all.
+
+---
+
+## 8. Bottom line
 
 - Cosmos DB's E2E **does not** already include #867's capability. It reaches states by building
   them for real; #867 reaches them by describing them. Both are legitimate, and neither substitutes
@@ -1028,6 +1237,11 @@ checklist it runs on every PR that touches build configuration.
   source-mode tests.
 - **Cap it.** Ref1 carries ~130 lines of E2E code per runnable test and is still adding commits nine
   months in. Thirty to fifty tests is a safety net; three hundred is a workstream.
+- **And do not assume either of them is the shape to copy.** Both made a real Electron editor the
+  primary vehicle because neither had a typed bridge to assert against. We do. Inverting the pyramid
+  — most assertions at the bridge and in a browser harness, and about five Electron tests against a
+  packaged VSIX — targets the one cost driver their own evidence identifies, and declines the only
+  genuinely large thing either of them built ([§7.2](#72-the-option-neither-project-took--invert-the-pyramid)).
 
 ---
 
