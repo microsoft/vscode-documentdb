@@ -36,6 +36,21 @@ jest.mock('@microsoft/vscode-azext-utils', () => {
     };
 });
 
+// Connection failures are logged so they survive in a shared output channel; the extension's
+// output channel is not initialized in unit tests.
+jest.mock('../../extensionVariables', () => ({
+    ext: {
+        outputChannel: {
+            error: jest.fn(),
+            warn: jest.fn(),
+            info: jest.fn(),
+            debug: jest.fn(),
+            trace: jest.fn(),
+            appendLine: jest.fn(),
+        },
+    },
+}));
+
 // Mock ShellSessionManager
 const mockInitialize = jest.fn().mockResolvedValue({
     host: 'test-host.documents.azure.com:10255',
@@ -164,12 +179,15 @@ describe('DocumentDBShellPty', () => {
             expect(written).toContain('SCRAM');
         });
 
-        it('should show error and close on connection failure', async () => {
+        it('should show error and stay open on connection failure', async () => {
             mockInitialize.mockRejectedValue(new Error('Connection refused'));
             pty.open(undefined);
             await new Promise((resolve) => setTimeout(resolve, 10));
             expect(written).toContain('Failed to connect: Connection refused');
-            expect(closeCode).toBe(1);
+            // Closing would dispose the terminal and take the message with it; the prompt lets the
+            // user retry, since evaluate() re-initializes an uninitialized session.
+            expect(closeCode).toBeUndefined();
+            expect(written).toContain('testdb> ');
         });
     });
 

@@ -7,6 +7,7 @@ import { callWithTelemetryAndErrorHandling, UserCancelledError } from '@microsof
 import * as l10n from '@vscode/l10n';
 import { randomUUID } from 'crypto';
 import * as vscode from 'vscode';
+import { ext } from '../../extensionVariables';
 import { ConnectionDiagnosticsService } from '../../services/connectionDiagnosticsService';
 import { type CompletionCategory } from '../../telemetry/completionCategories';
 import { accumulateTelemetry } from '../../utils/accumulatingTelemetry';
@@ -553,13 +554,37 @@ export class DocumentDBShellPty implements vscode.Pseudoterminal {
                 this.writeLine(this._outputFormatter.formatError(diagnosis.message));
             }
 
+            // Logged so the failure survives in an output channel a user can share with us.
+            ext.outputChannel.error(
+                `[Shell] Failed to connect to "${this._connectionInfo.clusterDisplayName}": ${rawMessage}` +
+                    (diagnosis ? ` (${diagnosis.providerId}: ${diagnosis.message})` : ''),
+            );
+
             // Show a hint line and clickable settings link for errors that reference a VS Code setting
             if (error instanceof SettingsHintError) {
                 this.writeSettingsHintLine(error);
             }
 
+            // A notification as well: the terminal may be in the background, or closed by the user
+            // before they read it.
+            void vscode.window.showErrorMessage(
+                diagnosis?.message ??
+                    l10n.t('Failed to connect to "{cluster}": {error}', {
+                        cluster: this._connectionInfo.clusterDisplayName,
+                        error: errorMessage,
+                    }),
+            );
+
+            // Deliberately no _closeEmitter.fire(): disposing the terminal would take the message
+            // with it. The session is still uninitialized, so ShellSessionManager.evaluate() re-runs
+            // initialize() and the next command the user types becomes the retry.
+            this.writeLine(
+                this._outputFormatter.formatSystemMessage(
+                    l10n.t('Run a command to try connecting again, or close this terminal.'),
+                ),
+            );
             this._inputHandler.setEnabled(true);
-            this._closeEmitter.fire(1);
+            this.showPrompt();
         }
     }
 
