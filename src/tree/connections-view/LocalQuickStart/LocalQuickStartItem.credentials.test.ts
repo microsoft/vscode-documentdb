@@ -141,34 +141,36 @@ describe('QuickStartClusterItem — credential source of truth (H5)', () => {
 
         const children = await (await getClusterItem()).getChildren();
 
-        expect(children).toEqual([]);
+        expect(await Promise.all(children.map((child) => child.getTreeItem()))).toEqual([
+            expect.objectContaining({ label: 'DocumentDB Local cannot be opened. Click here to review its setup' }),
+        ]);
         expect(mockGetClient).not.toHaveBeenCalled();
     });
 
-    it('offers one Start action for concurrent expansions that discover a stopped container', async () => {
+    it('offers a Start row instead of a modal when the container is stopped', async () => {
         jest.spyOn(QuickStartService, 'prepareForConnection').mockResolvedValue('stopped');
-        let resolvePrompt: ((choice: string) => void) | undefined;
-        const prompt = jest.spyOn(vscode.window, 'showInformationMessage').mockReturnValue(
-            new Promise<string>((resolve) => {
-                resolvePrompt = resolve;
-            }) as never,
-        );
-        const executeCommand = jest.spyOn(vscode.commands, 'executeCommand').mockResolvedValue(undefined);
-        const item = await getClusterItem();
+        const prompt = jest.spyOn(vscode.window, 'showInformationMessage');
 
-        const firstExpansion = item.getChildren();
-        const secondExpansion = item.getChildren();
-        await Promise.resolve();
+        const children = await (await getClusterItem()).getChildren();
 
-        expect(prompt).toHaveBeenCalledTimes(1);
-        expect(prompt).toHaveBeenCalledWith(
-            'DocumentDB Local is stopped. Would you like to start it now to connect and browse your databases?',
-            { modal: true },
-            'Start',
-        );
-        resolvePrompt?.('Start');
-        await expect(Promise.all([firstExpansion, secondExpansion])).resolves.toEqual([[], []]);
-        expect(executeCommand).toHaveBeenCalledWith('vscode-documentdb.command.localQuickStart.start');
+        expect(await Promise.all(children.map((child) => child.getTreeItem()))).toEqual([
+            expect.objectContaining({
+                label: 'Click here to start DocumentDB Local',
+                command: expect.objectContaining({ command: 'vscode-documentdb.command.localQuickStart.start' }),
+            }),
+        ]);
+        expect(prompt).not.toHaveBeenCalled();
+        expect(mockGetClient).not.toHaveBeenCalled();
+    });
+
+    it('explains a Docker daemon that is not answering', async () => {
+        jest.spyOn(QuickStartService, 'prepareForConnection').mockResolvedValue('dockerUnreachable');
+
+        const children = await (await getClusterItem()).getChildren();
+
+        expect(await Promise.all(children.map((child) => child.getTreeItem()))).toEqual([
+            expect.objectContaining({ label: 'Docker does not appear to be running. Click here for details' }),
+        ]);
         expect(mockGetClient).not.toHaveBeenCalled();
     });
 

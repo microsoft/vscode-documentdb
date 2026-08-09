@@ -44,30 +44,67 @@ import { buildQuickStartInstanceTreeId, buildQuickStartTreeId } from './quickSta
 
 /** Base context token for the managed-instance row; menus gate on this + a state token. */
 const INSTANCE_CONTEXT = 'treeItem_quickStartInstance';
-let stoppedInstancePrompt: Promise<void> | undefined;
 
-async function offerToStartStoppedInstance(): Promise<void> {
-    if (!stoppedInstancePrompt) {
-        const startAction = l10n.t('Start');
-        stoppedInstancePrompt = Promise.resolve(
-            vscode.window.showInformationMessage(
-                l10n.t(
-                    'DocumentDB Local is stopped. Would you like to start it now to connect and browse your databases?',
-                ),
-                { modal: true },
-                startAction,
-            ),
-        )
-            .then((choice) => {
-                if (choice === startAction) {
-                    void vscode.commands.executeCommand('vscode-documentdb.command.localQuickStart.start');
-                }
-            })
-            .finally(() => {
-                stoppedInstancePrompt = undefined;
-            });
+/**
+ * What the tree shows instead of databases when the container preflight says the instance cannot be
+ * opened. Rendered as rows rather than a dialog: expanding a node is a browse gesture, and a modal
+ * would block the expansion until it is answered and then leave the node empty anyway.
+ */
+function buildPreflightChildren(parentId: string, verdict: QuickStartConnectionPreflightResult): TreeElement[] {
+    const id = `${parentId}/preflight`;
+    const open = 'vscode-documentdb.command.localQuickStart.open';
+
+    switch (verdict) {
+        case 'stopped':
+            return [
+                createGenericElementWithContext({
+                    id,
+                    contextValue: 'error',
+                    label: l10n.t('Click here to start DocumentDB Local'),
+                    iconPath: new vscode.ThemeIcon('play'),
+                    commandId: 'vscode-documentdb.command.localQuickStart.start',
+                }),
+            ];
+        case 'missing':
+            return [
+                createGenericElementWithContext({
+                    id,
+                    contextValue: 'error',
+                    label: l10n.t('The container is gone. Click here to recreate it'),
+                    iconPath: new vscode.ThemeIcon('warning', new vscode.ThemeColor('list.warningForeground')),
+                    commandId: open,
+                }),
+            ];
+        case 'dockerUnreachable':
+            return [
+                createGenericElementWithContext({
+                    id,
+                    contextValue: 'error',
+                    label: l10n.t('Docker does not appear to be running. Click here for details'),
+                    iconPath: new vscode.ThemeIcon('warning', new vscode.ThemeColor('list.warningForeground')),
+                    commandId: open,
+                }),
+            ];
+        case 'busy':
+            return [
+                createGenericElementWithContext({
+                    id,
+                    contextValue: 'treeItem_quickStartProvisioning',
+                    label: l10n.t('DocumentDB Local is busy…'),
+                    iconPath: new vscode.ThemeIcon('loading~spin'),
+                }),
+            ];
+        default:
+            return [
+                createGenericElementWithContext({
+                    id,
+                    contextValue: 'error',
+                    label: l10n.t('DocumentDB Local cannot be opened. Click here to review its setup'),
+                    iconPath: new vscode.ThemeIcon('warning', new vscode.ThemeColor('list.warningForeground')),
+                    commandId: open,
+                }),
+            ];
     }
-    await stoppedInstancePrompt;
 }
 
 function escapeMarkdown(value: string): string {
@@ -191,11 +228,8 @@ class QuickStartClusterItem extends ClusterItemBase<ConnectionClusterModel> {
 
     public override async getChildren(): Promise<TreeElement[]> {
         const preflight: QuickStartConnectionPreflightResult = await QuickStartService.prepareForConnection(this.alias);
-        if (preflight === 'stopped') {
-            await offerToStartStoppedInstance();
-        }
         if (preflight !== 'ready') {
-            return [];
+            return buildPreflightChildren(this.id, preflight);
         }
         return super.getChildren();
     }
