@@ -870,6 +870,24 @@
           "group": "3_quickstart@1"
         },
         {
+          "//": "[Local Quick Start] Cluster commands are opted IN one by one: the managed instance is not a stored connection, so rename/move/remove/update-credentials/update-connection-string must never reach it. Only valid while Running, where the row is a real cluster item.",
+          "command": "vscode-documentdb.command.createDatabase",
+          "when": "view == connectionsView && viewItem =~ /\\btreeItem_quickStartInstance\\b/i && viewItem =~ /\\bstate_running\\b/i && !listMultiSelection",
+          "group": "1@1"
+        },
+        {
+          "//": "[Local Quick Start] Open Interactive Shell",
+          "command": "vscode-documentdb.command.shell.open",
+          "when": "view == connectionsView && viewItem =~ /\\btreeItem_quickStartInstance\\b/i && viewItem =~ /\\bstate_running\\b/i && !listMultiSelection",
+          "group": "5@1"
+        },
+        {
+          "//": "[Local Quick Start] Refresh the running instance's databases",
+          "command": "vscode-documentdb.command.refresh",
+          "when": "view == connectionsView && viewItem =~ /\\btreeItem_quickStartInstance\\b/i && viewItem =~ /\\bstate_running\\b/i && !listMultiSelection",
+          "group": "zheLastGroup@1"
+        },
+        {
           "//": "[Local Quick Start] Deep refresh the managed-instance state",
           "command": "vscode-documentdb.command.refresh",
           "when": "view == connectionsView && viewItem =~ /\\btreeItem_localQuickStart\\b/i && !listMultiSelection",

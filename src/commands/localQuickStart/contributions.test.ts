@@ -106,6 +106,54 @@ describe('Local Quick Start command contributions (#851)', () => {
     });
 });
 
+/**
+ * The managed instance is NOT a stored connection, so it must not inherit the standard cluster
+ * context value: rename, move, remove and the credential/connection-string editors would all act on
+ * a storage record that does not exist. Cluster commands are therefore opted in one at a time, and
+ * this suite is the gate — a new cluster command reaching the row requires an explicit decision here.
+ */
+describe('Local Quick Start cluster-command opt-in (UX review item 20)', () => {
+    const manifest = readJson<PackageManifest>('package.json');
+    const instanceEntries = manifest.contributes.menus['view/item/context'].filter((entry) =>
+        entry.when?.includes('treeItem_quickStartInstance'),
+    );
+    const commandsOnInstance = new Set(instanceEntries.map((entry) => entry.command));
+
+    it.each([
+        'vscode-documentdb.command.createDatabase',
+        'vscode-documentdb.command.shell.open',
+        'vscode-documentdb.command.refresh',
+    ])('offers %s on the running instance', (command) => {
+        const entries = instanceEntries.filter((entry) => entry.command === command);
+        expect(entries).toHaveLength(1);
+        // Only the Running row is a real cluster item; every other state renders a plain row whose
+        // `cluster` these commands would dereference.
+        expect(entries[0].when).toContain('state_running');
+    });
+
+    // Each of these resolves the node through connection storage, which has no record for a
+    // service-owned instance.
+    it.each([
+        'vscode-documentdb.command.connectionsView.renameConnection',
+        'vscode-documentdb.command.connectionsView.moveItems',
+        'vscode-documentdb.command.connectionsView.removeConnection',
+        'vscode-documentdb.command.connectionsView.updateCredentials',
+        'vscode-documentdb.command.connectionsView.updateConnectionString',
+        'vscode-documentdb.command.accessDataMigrationServices',
+    ])('keeps %s away from the instance row', (command) => {
+        expect(commandsOnInstance.has(command)).toBe(false);
+    });
+
+    /** The opt-in only holds while the row does not carry the cluster tag itself. */
+    it('never grants the instance row the standard cluster context value', () => {
+        const item = fs.readFileSync(
+            path.join(REPO_ROOT, 'src/tree/connections-view/LocalQuickStart/LocalQuickStartItem.ts'),
+            'utf8',
+        );
+        expect(item).not.toContain('CLUSTER_ITEM_CONTEXT_VALUE');
+    });
+});
+
 describe('Local Quick Start localized strings (#852)', () => {
     const bundle = readJson<Record<string, unknown>>('l10n/bundle.l10n.json');
 
