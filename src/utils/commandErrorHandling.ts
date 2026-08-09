@@ -122,9 +122,10 @@ export function registerCommandWithTreeNodeUnwrappingAndModalErrors<T>(
     registerCommand(
         commandId,
         async (context: IActionContext, ...args: unknown[]) => {
-            // Unwrap tree node arguments before passing to the callback
-            const unwrappedArgs = unwrapArgs<T>(args);
+            let unwrappedArgs: Parameters<TreeNodeCommandCallback<T>>[1][] = [];
             try {
+                // Unwrap tree node arguments before passing to the callback
+                unwrappedArgs = unwrapArgs<T>(args);
                 return await callback(context, ...unwrappedArgs);
             } catch (error) {
                 // Only handle UserFacingError specially
