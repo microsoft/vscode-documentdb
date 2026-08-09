@@ -71,10 +71,9 @@ describe('BaseExtendedTreeDataProvider error translation', () => {
             failure,
         );
 
-        expect(showErrorMessage).toHaveBeenCalledWith('DocumentDB Local does not appear to be running.', {
-            modal: false,
-            detail: 'connect ECONNREFUSED 127.0.0.1:10260',
-        });
+        expect(showErrorMessage).toHaveBeenCalledWith(
+            'DocumentDB Local does not appear to be running. (connect ECONNREFUSED 127.0.0.1:10260)',
+        );
         expect(context.errorHandling.suppressDisplay).toBe(true);
         expect(context.telemetry.properties.diagnosisProviderId).toBe('test');
     });

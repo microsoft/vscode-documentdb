@@ -608,10 +608,9 @@ export abstract class BaseExtendedTreeDataProvider<T extends TreeElement>
             if (diagnosis) {
                 context.telemetry.properties.diagnosisProviderId = diagnosis.providerId;
                 context.errorHandling.suppressDisplay = true;
-                void vscode.window.showErrorMessage(diagnosis.message, {
-                    modal: false,
-                    detail: error instanceof Error ? error.message : String(error),
-                });
+                // `detail` is only rendered for modal messages, so the raw text is appended instead.
+                const cause = error instanceof Error ? error.message : String(error);
+                void vscode.window.showErrorMessage(`${diagnosis.message} (${cause})`);
             }
 
             throw error;
