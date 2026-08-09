@@ -62,6 +62,8 @@ function mockRuntime(overrides: Partial<IContainerRuntime>): IContainerRuntime {
     return {
         listByLabel: jest.fn().mockResolvedValue([]),
         inspectContainer: jest.fn().mockResolvedValue(undefined),
+        // Docker answering normally is the default, so an empty inspect means the container is gone.
+        isDockerReady: jest.fn().mockResolvedValue({ outcome: 'ready', daemonReachable: true }),
         removeContainer: jest.fn().mockResolvedValue(undefined),
         removeVolume: jest.fn().mockResolvedValue(undefined),
         isPortFree: jest.fn().mockResolvedValue(true),
@@ -288,7 +290,7 @@ describe('QuickStartService — WI-2d registry-driven reconcile (multi-instance)
             inspectContainer: jest.fn((id: string) =>
                 Promise.resolve(inspect[id]),
             ) as unknown as IContainerRuntime['inspectContainer'],
-            isDockerReady: opts.isDockerReady,
+            ...(opts.isDockerReady ? { isDockerReady: opts.isDockerReady } : {}),
             removeContainer: opts.removeContainer ?? jest.fn().mockResolvedValue(undefined),
             removeVolume: opts.removeVolume ?? jest.fn().mockResolvedValue(undefined),
         });
@@ -814,6 +816,52 @@ describe('QuickStartService — WI-2d registry-driven reconcile (multi-instance)
 
         await expect(service.prepareForConnection()).resolves.toBe('missing');
         expect(service.getStatus().missing).toBe(true);
+    });
+
+    it('prepareForConnection() does not claim the container was removed when the Docker daemon is down', async () => {
+        ext.secretStorage = fakeSecretStorage({});
+        ext.context = fakeContext(fakeMemento());
+        await seedInstance(DEFAULT_ALIAS, CONN_1);
+
+        let daemonUp = true;
+        const service = new QuickStartServiceImpl(
+            mockRuntime({
+                listByLabel: jest
+                    .fn()
+                    .mockResolvedValue([{ id: 'c1', labels: { [QUICK_START_ALIAS_LABEL_KEY]: DEFAULT_ALIAS } }]),
+                inspectContainer: jest.fn((id: string) =>
+                    Promise.resolve(
+                        daemonUp
+                            ? {
+                                  id,
+                                  status: 'running',
+                                  ports: [{ containerPort: QUICK_START_PORT, hostPort: 10260 }],
+                                  image: { originalName: 'img:1' },
+                                  labels: {
+                                      [QUICK_START_LABEL_KEY]: '1',
+                                      [QUICK_START_ALIAS_LABEL_KEY]: DEFAULT_ALIAS,
+                                  },
+                              }
+                            : undefined,
+                    ),
+                ) as unknown as IContainerRuntime['inspectContainer'],
+                isDockerReady: jest
+                    .fn()
+                    .mockImplementation(() =>
+                        Promise.resolve(
+                            daemonUp
+                                ? { outcome: 'ready', daemonReachable: true }
+                                : { outcome: 'diagnosed', daemonReachable: false },
+                        ),
+                    ) as unknown as IContainerRuntime['isDockerReady'],
+            }),
+        );
+
+        await service.reconcile();
+        daemonUp = false;
+
+        await expect(service.prepareForConnection()).resolves.toBe('dockerUnreachable');
+        expect(service.getStatus().missing).toBe(false);
     });
 
     it('prepareForConnection() rejects a foreign container that reused the managed id', async () => {

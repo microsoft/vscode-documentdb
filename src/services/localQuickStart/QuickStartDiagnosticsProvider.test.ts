@@ -41,6 +41,7 @@ describe('QuickStartDiagnosticsProvider', () => {
         ['missing', 'cannot find the DocumentDB Local container'],
         ['foreign', 'not created by this extension'],
         ['unavailable', 'cannot reach DocumentDB Local'],
+        ['dockerUnreachable', 'Docker does not appear to be running'],
     ] as const)('explains a %s container', async (verdict, expected) => {
         jest.spyOn(QuickStartService, 'listStatuses').mockReturnValue([status('quickstart-cluster')]);
         jest.spyOn(QuickStartService, 'prepareForConnection').mockResolvedValue(verdict);

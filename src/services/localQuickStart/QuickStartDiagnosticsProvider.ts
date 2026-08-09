@@ -47,6 +47,10 @@ export class QuickStartDiagnosticsProvider implements ConnectionDiagnosticsProvi
                 return l10n.t(
                     'We found a container using the DocumentDB Local name, but it very likely was not created by this extension, so we cannot open it.',
                 );
+            case 'dockerUnreachable':
+                return l10n.t(
+                    'Docker does not appear to be running, so DocumentDB Local cannot be reached. Start Docker, then try again.',
+                );
             case 'unavailable':
                 return l10n.t(
                     'We cannot reach DocumentDB Local at the moment. Review its setup in the Connections view.',

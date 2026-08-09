@@ -222,7 +222,14 @@ interface InstanceRuntimeState {
     errorMessage?: string;
 }
 
-export type QuickStartConnectionPreflightResult = 'ready' | 'stopped' | 'missing' | 'foreign' | 'busy' | 'unavailable';
+export type QuickStartConnectionPreflightResult =
+    | 'ready'
+    | 'stopped'
+    | 'missing'
+    | 'foreign'
+    | 'busy'
+    | 'unavailable'
+    | 'dockerUnreachable';
 
 /**
  * Resolve the credentials for a fresh provision: honor custom Advanced credentials
@@ -1445,6 +1452,12 @@ export class QuickStartServiceImpl {
             return 'busy';
         }
         if (!inspected) {
+            // `inspectContainer` reports "could not ask" and "not there" the same way, so a stopped
+            // daemon would otherwise be announced as a container someone deleted.
+            const dockerVerdict = await this.classifyUninspectableContainer();
+            if (dockerVerdict) {
+                return dockerVerdict;
+            }
             if (!entry.missing) {
                 entry.missing = true;
                 this.statusEmitter.fire();
@@ -1467,6 +1480,26 @@ export class QuickStartServiceImpl {
             this.setStatus(alias, nextState);
         }
         return nextState === InstanceState.Running ? 'ready' : 'stopped';
+    }
+
+    /**
+     * Why an inspect came back empty, when the answer is not "the container is gone": `undefined`
+     * means Docker answered normally, so the container really has been removed.
+     */
+    private async classifyUninspectableContainer(): Promise<'dockerUnreachable' | 'unavailable' | undefined> {
+        let readiness: DockerReadiness;
+        try {
+            readiness = await this.checkDockerReadiness({ forceRefresh: true, suppressCommandEcho: true });
+        } catch {
+            return 'unavailable';
+        }
+
+        if (readiness.daemonReachable) {
+            return undefined;
+        }
+        // An indeterminate probe (a timeout) is not evidence that Docker is down, so it only earns
+        // the neutral wording.
+        return readiness.outcome === 'diagnosed' ? 'dockerUnreachable' : 'unavailable';
     }
 
     /** Start a stopped instance (design §11). */
