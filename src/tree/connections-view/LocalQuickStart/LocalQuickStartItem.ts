@@ -560,7 +560,10 @@ export class LocalQuickStartItem implements TreeElement, TreeElementWithContextV
 
     /** Explicit node refresh performs a full durable-store and Docker reconciliation. */
     public async refresh(_context: IActionContext): Promise<void> {
-        await QuickStartService.refreshHydratedState();
+        // Reconciliation shells out to Docker, so the view carries the wait.
+        await vscode.window.withProgress({ location: { viewId: Views.ConnectionsView } }, () =>
+            QuickStartService.refreshHydratedState(),
+        );
         ext.connectionsBranchDataProvider.refresh(this);
     }
 
