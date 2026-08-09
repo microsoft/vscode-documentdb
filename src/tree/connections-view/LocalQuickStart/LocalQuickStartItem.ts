@@ -310,7 +310,13 @@ export class LocalQuickStartItem implements TreeElement, TreeElementWithContextV
 
     async getChildren(): Promise<TreeElement[]> {
         const wasHydrated = QuickStartService.isHydrated;
-        await QuickStartService.ensureHydrated();
+        try {
+            await QuickStartService.ensureHydrated();
+        } catch {
+            // Docker may not be installed or running yet, which is precisely the case Quick Start
+            // exists to fix. Render the durable-state row anyway; the service stays un-hydrated, so
+            // the next expansion retries.
+        }
 
         // Never block the row on Docker (review M6): the Connections view re-runs getChildren() on
         // many unrelated events, so the freshness probe is kicked off in the background (rate-limited

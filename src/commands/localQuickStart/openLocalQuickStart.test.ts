@@ -38,4 +38,18 @@ describe('openLocalQuickStart', () => {
         expect(openLocalQuickStartWebview).toHaveBeenCalledWith({ id: 'localQuickStart' });
         expect(revealToForeground).toHaveBeenCalledTimes(1);
     });
+
+    it('still opens the webview when hydration fails because Docker is unavailable', async () => {
+        jest.spyOn(QuickStartService, 'ensureHydrated').mockRejectedValue(new Error('Docker unavailable'));
+        const revealToForeground = jest.fn();
+        jest.mocked(openLocalQuickStartWebview).mockReturnValue({
+            panel: { viewColumn: undefined },
+            revealToForeground,
+        } as never);
+
+        await expect(openLocalQuickStart({} as IActionContext)).resolves.toBeUndefined();
+
+        expect(openLocalQuickStartWebview).toHaveBeenCalledWith({ id: 'localQuickStart' });
+        expect(revealToForeground).toHaveBeenCalledTimes(1);
+    });
 });

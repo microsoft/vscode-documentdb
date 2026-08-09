@@ -60,6 +60,22 @@ describe('LocalQuickStartItem — lazy hydration', () => {
 
         expect(backgroundRefresh).toHaveBeenCalledTimes(1);
     });
+
+    it('still renders the set-up row when hydration fails because Docker is unavailable', async () => {
+        jest.spyOn(QuickStartService, 'isHydrated', 'get').mockReturnValue(false);
+        jest.spyOn(QuickStartService, 'ensureHydrated').mockRejectedValue(new Error('Docker unavailable'));
+        jest.spyOn(QuickStartService, 'refreshLiveStateInBackground').mockReturnValue(undefined);
+        jest.spyOn(QuickStartService, 'getStatus').mockReturnValue({
+            state: InstanceState.NotInstalled,
+            metadata: undefined,
+            missing: false,
+            canResumeReadiness: false,
+        });
+
+        const children = await new LocalQuickStartItem('connectionsView/root').getChildren();
+
+        expect(children.map((child) => child.id)).toEqual(['connectionsView/root/localQuickStart/start']);
+    });
 });
 
 describe('LocalQuickStartItem — CredentialsMissing row', () => {
