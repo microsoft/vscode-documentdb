@@ -427,6 +427,10 @@ export class QuickStartServiceImpl {
             this.hydration = this.reconcile()
                 .then(() => {
                     this.hydrated = true;
+                    // Arms the background-probe cooldown: reconcile just produced an authoritative
+                    // answer, and the status events it fired re-enter getChildren() once hydration
+                    // is done, where an unarmed cooldown would re-inspect the same container.
+                    this.lastBackgroundRefreshAt = Date.now();
                     traceQuickStart('Lazy hydration completed.');
                 })
                 .catch((error: unknown) => {

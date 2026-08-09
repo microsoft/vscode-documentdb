@@ -544,6 +544,40 @@ describe('QuickStartService — WI-2d registry-driven reconcile (multi-instance)
         expect(service.isRefreshingLiveState).toBe(false);
     });
 
+    it('does not start a background live-state probe immediately after lazy hydration', async () => {
+        ext.secretStorage = fakeSecretStorage({});
+        ext.context = fakeContext(fakeMemento());
+        await seedInstance(DEFAULT_ALIAS, CONN_1);
+
+        const inspectContainer = jest.fn((id: string) =>
+            Promise.resolve({
+                id,
+                status: 'running',
+                ports: [{ containerPort: QUICK_START_PORT, hostPort: 10260 }],
+                image: { originalName: 'img:1' },
+                labels: { [QUICK_START_LABEL_KEY]: '1', [QUICK_START_ALIAS_LABEL_KEY]: DEFAULT_ALIAS },
+            }),
+        ) as unknown as IContainerRuntime['inspectContainer'];
+        const service = new QuickStartServiceImpl(
+            mockRuntime({
+                listByLabel: jest
+                    .fn()
+                    .mockResolvedValue([{ id: 'c1', labels: { [QUICK_START_ALIAS_LABEL_KEY]: DEFAULT_ALIAS } }]),
+                inspectContainer,
+            }),
+        );
+
+        await service.ensureHydrated();
+        const inspectsDuringHydration = jest.mocked(inspectContainer).mock.calls.length;
+
+        // The status events fired during reconciliation re-enter getChildren() once hydration is
+        // done, so the row would otherwise re-inspect the container it just adopted.
+        service.refreshLiveStateInBackground();
+
+        expect(service.isRefreshingLiveState).toBe(false);
+        expect(inspectContainer).toHaveBeenCalledTimes(inspectsDuringHydration);
+    });
+
     it('refreshLiveStateInBackground() de-duplicates and rate-limits the docker probe (M6)', async () => {
         ext.secretStorage = fakeSecretStorage({});
         ext.context = fakeContext(fakeMemento());
