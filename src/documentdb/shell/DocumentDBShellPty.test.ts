@@ -4,6 +4,9 @@
  *--------------------------------------------------------------------------------------------*/
 
 import * as vscode from 'vscode';
+import { ext } from '../../extensionVariables';
+import { AuthMethodId } from '../auth/AuthMethod';
+import { CredentialCache } from '../CredentialCache';
 import { DocumentDBShellPty, type DocumentDBShellPtyOptions } from './DocumentDBShellPty';
 import { ShellSpinner } from './ShellSpinner';
 
@@ -188,6 +191,27 @@ describe('DocumentDBShellPty', () => {
             // user retry, since evaluate() re-initializes an uninitialized session.
             expect(closeCode).toBeUndefined();
             expect(written).toContain('testdb> ');
+        });
+
+        it('redacts cached credentials before logging the failure to the output channel', async () => {
+            CredentialCache.setAuthCredentials(
+                'test-cluster-id',
+                AuthMethodId.NativeAuth,
+                'mongodb://localhost:10260/',
+                { connectionUser: 'qs_user', connectionPassword: 'sup3r-s3cret' },
+            );
+            mockInitialize.mockRejectedValue(
+                new Error('Invalid connection string: mongodb://qs_user:sup3r-s3cret@localhost:10260/'),
+            );
+
+            pty.open(undefined);
+            await new Promise((resolve) => setTimeout(resolve, 10));
+
+            const logged = jest.mocked(ext.outputChannel.error).mock.calls.map(String).join('\n');
+            expect(logged).toContain('[Shell] Failed to connect');
+            expect(logged).not.toContain('sup3r-s3cret');
+
+            CredentialCache.deleteCredentials('test-cluster-id');
         });
     });
 

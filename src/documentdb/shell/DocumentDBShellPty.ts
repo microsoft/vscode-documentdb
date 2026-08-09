@@ -9,6 +9,7 @@ import { randomUUID } from 'crypto';
 import * as vscode from 'vscode';
 import { ext } from '../../extensionVariables';
 import { ConnectionDiagnosticsService } from '../../services/connectionDiagnosticsService';
+import { maskSecrets } from '../../services/localQuickStart/outputMasking';
 import { type CompletionCategory } from '../../telemetry/completionCategories';
 import { accumulateTelemetry } from '../../utils/accumulatingTelemetry';
 import { classifyCommand, extractRunCommandName } from '../../utils/classifyCommand';
@@ -554,10 +555,14 @@ export class DocumentDBShellPty implements vscode.Pseudoterminal {
                 this.writeLine(this._outputFormatter.formatError(diagnosis.message));
             }
 
-            // Logged so the failure survives in an output channel a user can share with us.
+            // Logged so the failure survives in an output channel a user can share with us. Driver
+            // errors can quote the connection string, so the cached secrets are redacted first.
             ext.outputChannel.error(
-                `[Shell] Failed to connect to "${this._connectionInfo.clusterDisplayName}": ${rawMessage}` +
-                    (diagnosis ? ` (${diagnosis.providerId}: ${diagnosis.message})` : ''),
+                maskSecrets(
+                    `[Shell] Failed to connect to "${this._connectionInfo.clusterDisplayName}": ${rawMessage}` +
+                        (diagnosis ? ` (${diagnosis.providerId}: ${diagnosis.message})` : ''),
+                    this.credentialSecrets(),
+                ),
             );
 
             // Show a hint line and clickable settings link for errors that reference a VS Code setting
@@ -1258,6 +1263,14 @@ export class DocumentDBShellPty implements vscode.Pseudoterminal {
     }
 
     // ─── Private: Telemetry helpers ──────────────────────────────────────────
+
+    /** Cached secrets for this cluster, so they can be redacted before anything is logged. */
+    private credentialSecrets(): string[] {
+        const credentials = CredentialCache.getCredentials(this._connectionInfo.clusterId);
+        return [credentials?.nativeAuthConfig?.connectionPassword, credentials?.connectionString].filter(
+            (secret): secret is string => !!secret,
+        );
+    }
 
     /**
      * Collect domain info from cached credentials for telemetry.
