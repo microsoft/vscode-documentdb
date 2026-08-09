@@ -25,11 +25,41 @@ were genuine defects.
 | L4 | Fixed | `fix(commands): keep argument unwrapping inside the guarded block` |
 | L5 | Fixed | `docs(diagnostics): note that the error is a bare string on the webview path` |
 | L7 | Fixed | `fix(quickstart): show progress during an explicit deep refresh` |
+| M9 | Fixed | `fix(quickstart): stop re-inspecting the container hydration just adopted` |
 | L1 | Open, by choice | Collapsing the root is what makes hydration lazy. Left as a UX decision to confirm, not a defect. |
 | L6 | Open, by choice | Deliberate: the provider's premise is that the error shape does not matter. One `docker inspect` per foreground failure is the accepted cost. |
 | L9 | Verified | The removed `running` / `stopped` strings have no remaining callers. |
 
 The test gaps listed at the end are covered by the commits above, except the ones tied to L1 and L6.
+
+### M9 — the first expansion re-inspects the container it just adopted
+
+Found while walking the first-run render sequence, after the original review.
+
+`setStatus()` fires the status emitter unconditionally, and the subscriber in
+[ClustersExtension.ts](src/documentdb/ClustersExtension.ts) refreshes the whole Connections tree. So
+`adoptContainer()` during hydration queues a tree refresh, which re-enters `getChildren()` *after*
+`hydrated` has flipped to `true`. That call therefore captures `wasHydrated === true` and starts
+`refreshLiveStateInBackground()`. Since `lastBackgroundRefreshAt` was still `0`, the 5 s cooldown
+did not block it.
+
+Visible effect: on the first expansion the row flashes
+`Running · localhost:10260 · Refreshing…` for the duration of one `docker inspect`, and the probe's
+`finally` then fires the emitter unconditionally for a second full-tree refresh.
+
+The `wasHydrated` guard was meant to prevent this, but it only covers the `getChildren()` call that
+*triggered* hydration, not the status-event-driven re-render that follows it.
+`refreshHydratedState()` already armed the cooldown for exactly this reason (pinned by
+`does not start a background live-state probe immediately after explicit refresh`);
+`ensureHydrated()` now does the same.
+
+First expansion of a running instance, before and after:
+
+| | Before | After |
+| --- | --- | --- |
+| Docker calls to render the row | 4 | 3 |
+| Full-tree refreshes | 2 | 1 |
+| `· Refreshing…` flash | yes | no |
 
 ## Summary
 
