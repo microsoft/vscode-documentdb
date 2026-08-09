@@ -121,10 +121,13 @@ Existing call sites:
 | Cluster connect and list databases | [ClusterItemBase.ts](../../../src/tree/documentdb/ClusterItemBase.ts) |
 | Shell connect banner | [DocumentDBShellPty.ts](../../../src/documentdb/shell/DocumentDBShellPty.ts) |
 | Query playground | [executePlaygroundCode.ts](../../../src/commands/playground/executePlaygroundCode.ts) |
+| Tree-node commands (create, drop, …) | [commandErrorHandling.ts](../../../src/utils/commandErrorHandling.ts) |
 | Any webview, via `common.explainOperationFailure` | [appRouter.ts](../../../src/webviews/_integration/appRouter.ts) |
 
 Tree views need no per-view wiring: `wrapGetChildrenWithErrorAndStateHandling` translates on the way
-out, so any provider built on the base class is covered.
+out, so any provider built on the base class is covered. Commands registered with
+`registerCommandWithTreeNodeUnwrappingAndModalErrors` are covered the same way, via the tree node
+they receive.
 
 ### Do not call it from background paths
 

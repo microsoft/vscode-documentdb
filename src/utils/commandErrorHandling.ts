@@ -11,6 +11,7 @@ import {
 } from '@microsoft/vscode-azext-utils';
 import { unwrapArgs } from '@microsoft/vscode-azureresources-api';
 import * as vscode from 'vscode';
+import { ConnectionDiagnosticsService } from '../services/connectionDiagnosticsService';
 
 /**
  * UserFacingError represents an error that should be prominently displayed to the user
@@ -121,9 +122,10 @@ export function registerCommandWithTreeNodeUnwrappingAndModalErrors<T>(
     registerCommand(
         commandId,
         async (context: IActionContext, ...args: unknown[]) => {
+            // Unwrap tree node arguments before passing to the callback
+            const unwrappedArgs = unwrapArgs<T>(args);
             try {
-                // Unwrap tree node arguments before passing to the callback
-                return await callback(context, ...unwrapArgs<T>(args));
+                return await callback(context, ...unwrappedArgs);
             } catch (error) {
                 // Only handle UserFacingError specially
                 if (error instanceof UserFacingError) {
@@ -142,7 +144,24 @@ export function registerCommandWithTreeNodeUnwrappingAndModalErrors<T>(
                     throw error;
                 }
 
-                // For all other error types, just re-throw to use default handling
+                // The command's tree node carries the cluster, so a failure caused by its
+                // infrastructure can be explained instead of showing the raw driver error.
+                const clusterId = (unwrappedArgs[0] as unknown as { cluster?: { clusterId?: string } } | undefined)
+                    ?.cluster?.clusterId;
+                const diagnosis = clusterId
+                    ? await ConnectionDiagnosticsService.explain({ clusterId, error })
+                    : undefined;
+
+                if (diagnosis) {
+                    context.telemetry.properties.diagnosisProviderId = diagnosis.providerId;
+                    context.errorHandling.suppressDisplay = true;
+                    await vscode.window.showErrorMessage(diagnosis.message, {
+                        modal: true,
+                        detail: error instanceof Error ? error.message : String(error),
+                    });
+                }
+
+                // The error itself is never modified, so telemetry and identity checks still work.
                 throw error;
             }
         },
