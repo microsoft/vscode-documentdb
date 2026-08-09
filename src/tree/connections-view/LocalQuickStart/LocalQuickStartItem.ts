@@ -442,7 +442,7 @@ export class LocalQuickStartItem implements TreeElement, TreeElementWithContextV
             return [
                 new QuickStartClusterItem(
                     model,
-                    l10n.t('Running · localhost:{0}', metadata.boundPort),
+                    `${instanceStateLabel(status.state)} · localhost:${String(metadata.boundPort)}`,
                     'state_running',
                     metadata.alias,
                 ),
@@ -479,7 +479,9 @@ export class LocalQuickStartItem implements TreeElement, TreeElementWithContextV
                 case InstanceState.Stopping:
                     return [row('state_stopping', l10n.t('Stopping…'), idle)];
                 case InstanceState.Stopped:
-                    return [row('state_stopped', l10n.t('Stopped · localhost:{0}', port), idle)];
+                    return [
+                        row('state_stopped', `${instanceStateLabel(status.state)} · localhost:${String(port)}`, idle),
+                    ];
                 case InstanceState.Error:
                     return [
                         row(
