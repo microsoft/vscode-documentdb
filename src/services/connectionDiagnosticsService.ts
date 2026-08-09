@@ -71,7 +71,13 @@ export interface ConnectionDiagnosticsRequest {
      */
     readonly clusterId: string;
 
-    /** The error the database operation failed with. */
+    /**
+     * The error the database operation failed with.
+     *
+     * Usually an `Error`, but a webview can only send the MESSAGE across the tRPC boundary, so this
+     * is a plain `string` on that path. A provider that needs an error's class or `code` therefore
+     * cannot be served from a webview.
+     */
     readonly error: unknown;
 }
 
