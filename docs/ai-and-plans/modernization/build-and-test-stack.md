@@ -1147,6 +1147,11 @@ Every "steal this" item found across all three reference projects, in one place.
 new — it is an index into the detail, so this section can be worked through without re-reading the
 document.
 
+> **For value / complexity / carrying-cost scores on these items**, and for the option neither
+> reference project chose, see the companion document's
+> [Part 7](./e2e-testing-strategy.md#7-recommendations--scored-and-not-limited-to-copying). This
+> section is the index; Part 7 is the decision artifact.
+
 ### K.1 From Cosmos DB — build & bundling
 
 | #   | Pattern                                                                                                                   | Why                                                                                  | Detail      |
