@@ -89,6 +89,7 @@ import { updateCredentials } from '../commands/updateCredentials/updateCredentia
 import { doubleClickDebounceDelay } from '../constants';
 import { isVCoreAndRURolloutEnabled } from '../extension';
 import { ext } from '../extensionVariables';
+import { AtlasDiagnosticsProvider } from '../plugins/service-atlas-mongodb/AtlasDiagnosticsProvider';
 import { AtlasDiscoveryProvider } from '../plugins/service-atlas-mongodb/AtlasDiscoveryProvider';
 import {
     OPEN_ATLAS_CLUSTER_COMMAND_ID,
@@ -98,12 +99,15 @@ import { ADD_ATLAS_CREDENTIAL_COMMAND_ID } from '../plugins/service-atlas-mongod
 import { AzureMongoRUDiscoveryProvider } from '../plugins/service-azure-mongo-ru/AzureMongoRUDiscoveryProvider';
 import { AzureDiscoveryProvider } from '../plugins/service-azure-mongo-vcore/AzureDiscoveryProvider';
 import { AzureVMDiscoveryProvider } from '../plugins/service-azure-vm/AzureVMDiscoveryProvider';
+import { KubernetesDiagnosticsProvider } from '../plugins/service-kubernetes/KubernetesDiagnosticsProvider';
 import { KubernetesDiscoveryProvider } from '../plugins/service-kubernetes/KubernetesDiscoveryProvider';
 import { KubernetesReachabilityProvider } from '../plugins/service-kubernetes/KubernetesReachabilityProvider';
+import { ConnectionDiagnosticsService } from '../services/connectionDiagnosticsService';
 import { ConnectionReachabilityService } from '../services/connectionReachabilityService';
 import { DiscoveryService } from '../services/discoveryServices';
 import { migrateLegacyEmulatorConnections } from '../services/legacyEmulatorMigration';
 import { disposeQuickStartOutputChannel } from '../services/localQuickStart/ContainerRuntime';
+import { QuickStartDiagnosticsProvider } from '../services/localQuickStart/QuickStartDiagnosticsProvider';
 import { QuickStartService, sweepStaleQuickStartEnvFiles } from '../services/localQuickStart/QuickStartService';
 import { maybeShowReleaseNotesNotification } from '../services/releaseNotesNotification';
 import { DemoTask } from '../services/taskService/tasks/DemoTask';
@@ -166,6 +170,13 @@ export class ClustersExtension implements vscode.Disposable {
         // The generic Connections-view cluster node delegates to these via ConnectionReachabilityService.
         // See docs/ai-and-plans/PRs/621-kubernetes-discovery/connection-reachability-providers.md
         ConnectionReachabilityService.registerProvider(new KubernetesReachabilityProvider());
+
+        // Error-translation providers: they turn an infrastructure-caused database failure into an
+        // explanation the user can act on. They must never show UI or attempt recovery.
+        // See .github/skills/error-translation/SKILL.md
+        ConnectionDiagnosticsService.registerProvider(new QuickStartDiagnosticsProvider());
+        ConnectionDiagnosticsService.registerProvider(new KubernetesDiagnosticsProvider());
+        ConnectionDiagnosticsService.registerProvider(new AtlasDiagnosticsProvider());
     }
 
     registerConnectionsTree(_activateContext: IActionContext): void {

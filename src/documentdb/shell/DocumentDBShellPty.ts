@@ -7,6 +7,7 @@ import { callWithTelemetryAndErrorHandling, UserCancelledError } from '@microsof
 import * as l10n from '@vscode/l10n';
 import { randomUUID } from 'crypto';
 import * as vscode from 'vscode';
+import { ConnectionDiagnosticsService } from '../../services/connectionDiagnosticsService';
 import { type CompletionCategory } from '../../telemetry/completionCategories';
 import { accumulateTelemetry } from '../../utils/accumulatingTelemetry';
 import { classifyCommand, extractRunCommandName } from '../../utils/classifyCommand';
@@ -541,6 +542,16 @@ export class DocumentDBShellPty implements vscode.Pseudoterminal {
             // the extracted code is preserved for future telemetry.
             const { message: errorMessage } = extractErrorCode(rawMessage);
             this.writeLine(this._outputFormatter.formatError(l10n.t('Failed to connect: {0}', errorMessage)));
+
+            // Written as a separate line rather than merged into the message above, so the raw text
+            // stays intact for extractErrorCode and the SettingsHintError check below.
+            const diagnosis = await ConnectionDiagnosticsService.explain({
+                clusterId: this._connectionInfo.clusterId,
+                error,
+            });
+            if (diagnosis) {
+                this.writeLine(this._outputFormatter.formatError(diagnosis.message));
+            }
 
             // Show a hint line and clickable settings link for errors that reference a VS Code setting
             if (error instanceof SettingsHintError) {

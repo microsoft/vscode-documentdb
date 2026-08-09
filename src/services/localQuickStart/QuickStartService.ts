@@ -1423,8 +1423,14 @@ export class QuickStartServiceImpl {
      * Authoritatively validate a managed instance immediately before a tree expansion connects.
      * Unlike the root row's background freshness probe, this check blocks only explicit connection
      * intent so stale `Running` state can never reach the database client.
+     *
+     * @param options.silent Suppresses the `foreign`-container warning. Set by callers that report
+     * the outcome themselves, notably the error-translation provider, which must not show UI.
      */
-    public async prepareForConnection(alias: string = DEFAULT_ALIAS): Promise<QuickStartConnectionPreflightResult> {
+    public async prepareForConnection(
+        alias: string = DEFAULT_ALIAS,
+        options?: { readonly silent?: boolean },
+    ): Promise<QuickStartConnectionPreflightResult> {
         const entry = this.stateFor(alias);
         const containerId = entry.metadata?.containerId;
         if (entry.provisioning || entry.lifecycleBusy) {
@@ -1446,11 +1452,13 @@ export class QuickStartServiceImpl {
             return 'missing';
         }
         if (!this.isOwnedContainer(inspected, alias)) {
-            void vscode.window.showWarningMessage(
-                l10n.t(
-                    'The DocumentDB Local container can no longer be opened because it was created outside the extension. Remove it with Docker if you no longer need it.',
-                ),
-            );
+            if (!options?.silent) {
+                void vscode.window.showWarningMessage(
+                    l10n.t(
+                        'The DocumentDB Local container can no longer be opened because it was created outside the extension. Remove it with Docker if you no longer need it.',
+                    ),
+                );
+            }
             return 'foreign';
         }
 

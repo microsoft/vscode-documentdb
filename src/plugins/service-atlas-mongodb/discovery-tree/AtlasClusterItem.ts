@@ -32,7 +32,7 @@ import {
     isAtlasClusterConnectable,
     isAtlasClusterPaused,
 } from '../atlasClusterAvailability';
-import { isAtlasTlsHandshakeRejection } from '../atlasConnectionErrors';
+import { describeAtlasTlsHandshakeRejection, isAtlasTlsHandshakeRejection } from '../atlasConnectionErrors';
 import { buildAtlasClusterUrl, buildAtlasNetworkAccessUrl } from '../atlasDeepLinks';
 import { atlasTrace, monotonicNow } from '../atlasTrace';
 import { DISCOVERY_PROVIDER_ID } from '../config';
@@ -297,17 +297,7 @@ export class AtlasClusterItem extends ClusterItemBase<AtlasClusterModel> {
             {
                 modal: true,
                 detail:
-                    l10n.t(
-                        'MongoDB Atlas closed the TLS connection with an internal error. This is a transport-level failure rather than an authentication response, so it is not what an incorrect username or password looks like: those report "bad auth : Authentication failed".',
-                    ) +
-                    '\n\n' +
-                    l10n.t('Worth checking in MongoDB Atlas:') +
-                    '\n' +
-                    l10n.t('- Is this machine\u2019s IP address on the project\u2019s IP access list?') +
-                    '\n' +
-                    l10n.t('- Is the cluster paused, or still being provisioned?') +
-                    '\n\n' +
-                    l10n.t('Error: {error}', { error: errorMessage }),
+                    describeAtlasTlsHandshakeRejection() + '\n\n' + l10n.t('Error: {error}', { error: errorMessage }),
             },
             openNetworkAccess,
         );
