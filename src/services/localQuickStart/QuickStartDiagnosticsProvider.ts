@@ -34,7 +34,7 @@ export class QuickStartDiagnosticsProvider implements ConnectionDiagnosticsProvi
         //
         // The error shape does not matter here: if the container is not running, that accounts for
         // any failure against it. If it is running, we stay quiet and the original error stands.
-        switch (await QuickStartService.prepareForConnection(alias, { silent: true })) {
+        switch (await QuickStartService.inspectManagedInstance(alias)) {
             case 'stopped':
                 return l10n.t(
                     'DocumentDB Local does not appear to be running. Start it from the Connections view, then try again.',

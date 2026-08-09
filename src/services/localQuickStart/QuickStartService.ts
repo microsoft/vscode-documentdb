@@ -1427,17 +1427,11 @@ export class QuickStartServiceImpl {
     }
 
     /**
-     * Authoritatively validate a managed instance immediately before a tree expansion connects.
-     * Unlike the root row's background freshness probe, this check blocks only explicit connection
-     * intent so stale `Running` state can never reach the database client.
-     *
-     * @param options.silent Suppresses the `foreign`-container warning. Set by callers that report
-     * the outcome themselves, notably the error-translation provider, which must not show UI.
+     * Read-only verdict on a managed instance: no state correction, no events, no UI. Split out of
+     * {@link prepareForConnection} so the error-translation provider, which must not do any of
+     * those things, has something safe to call.
      */
-    public async prepareForConnection(
-        alias: string = DEFAULT_ALIAS,
-        options?: { readonly silent?: boolean },
-    ): Promise<QuickStartConnectionPreflightResult> {
+    public async inspectManagedInstance(alias: string = DEFAULT_ALIAS): Promise<QuickStartConnectionPreflightResult> {
         const entry = this.stateFor(alias);
         const containerId = entry.metadata?.containerId;
         if (entry.provisioning || entry.lifecycleBusy) {
@@ -1454,32 +1448,53 @@ export class QuickStartServiceImpl {
         if (!inspected) {
             // `inspectContainer` reports "could not ask" and "not there" the same way, so a stopped
             // daemon would otherwise be announced as a container someone deleted.
-            const dockerVerdict = await this.classifyUninspectableContainer();
-            if (dockerVerdict) {
-                return dockerVerdict;
-            }
-            if (!entry.missing) {
-                entry.missing = true;
-                this.statusEmitter.fire();
-            }
-            return 'missing';
+            return (await this.classifyUninspectableContainer()) ?? 'missing';
         }
         if (!this.isOwnedContainer(inspected, alias)) {
-            if (!options?.silent) {
+            return 'foreign';
+        }
+        return isRunning(inspected) ? 'ready' : 'stopped';
+    }
+
+    /**
+     * Authoritatively validate a managed instance immediately before a tree expansion connects.
+     * Unlike the root row's background freshness probe, this check blocks only explicit connection
+     * intent so stale `Running` state can never reach the database client.
+     *
+     * Unlike {@link inspectManagedInstance} this corrects the in-memory state and warns about a
+     * foreign container, so it belongs on paths where the user is waiting for the outcome.
+     */
+    public async prepareForConnection(alias: string = DEFAULT_ALIAS): Promise<QuickStartConnectionPreflightResult> {
+        const verdict = await this.inspectManagedInstance(alias);
+        const entry = this.stateFor(alias);
+
+        switch (verdict) {
+            case 'missing':
+                if (!entry.missing) {
+                    entry.missing = true;
+                    this.statusEmitter.fire();
+                }
+                break;
+            case 'foreign':
                 void vscode.window.showWarningMessage(
                     l10n.t(
                         'The DocumentDB Local container can no longer be opened because it was created outside the extension. Remove it with Docker if you no longer need it.',
                     ),
                 );
+                break;
+            case 'ready':
+            case 'stopped': {
+                const nextState = verdict === 'ready' ? InstanceState.Running : InstanceState.Stopped;
+                if (entry.missing || entry.state !== nextState) {
+                    this.setStatus(alias, nextState);
+                }
+                break;
             }
-            return 'foreign';
+            default:
+                break;
         }
 
-        const nextState = isRunning(inspected) ? InstanceState.Running : InstanceState.Stopped;
-        if (entry.missing || entry.state !== nextState) {
-            this.setStatus(alias, nextState);
-        }
-        return nextState === InstanceState.Running ? 'ready' : 'stopped';
+        return verdict;
     }
 
     /**

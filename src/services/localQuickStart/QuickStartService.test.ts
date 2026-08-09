@@ -818,6 +818,46 @@ describe('QuickStartService — WI-2d registry-driven reconcile (multi-instance)
         expect(service.getStatus().missing).toBe(true);
     });
 
+    it('inspectManagedInstance() reports the same verdict without correcting state or firing events', async () => {
+        ext.secretStorage = fakeSecretStorage({});
+        ext.context = fakeContext(fakeMemento());
+        await seedInstance(DEFAULT_ALIAS, CONN_1);
+
+        let present = true;
+        const service = new QuickStartServiceImpl(
+            mockRuntime({
+                listByLabel: jest
+                    .fn()
+                    .mockResolvedValue([{ id: 'c1', labels: { [QUICK_START_ALIAS_LABEL_KEY]: DEFAULT_ALIAS } }]),
+                inspectContainer: jest.fn((id: string) =>
+                    Promise.resolve(
+                        present
+                            ? {
+                                  id,
+                                  status: 'running',
+                                  ports: [{ containerPort: QUICK_START_PORT, hostPort: 10260 }],
+                                  image: { originalName: 'img:1' },
+                                  labels: {
+                                      [QUICK_START_LABEL_KEY]: '1',
+                                      [QUICK_START_ALIAS_LABEL_KEY]: DEFAULT_ALIAS,
+                                  },
+                              }
+                            : undefined,
+                    ),
+                ) as unknown as IContainerRuntime['inspectContainer'],
+            }),
+        );
+
+        await service.reconcile();
+        present = false;
+        const statusChanged = jest.fn();
+        service.onDidChangeStatus(statusChanged);
+
+        await expect(service.inspectManagedInstance()).resolves.toBe('missing');
+        expect(service.getStatus().missing).toBe(false);
+        expect(statusChanged).not.toHaveBeenCalled();
+    });
+
     it('prepareForConnection() does not claim the container was removed when the Docker daemon is down', async () => {
         ext.secretStorage = fakeSecretStorage({});
         ext.context = fakeContext(fakeMemento());
