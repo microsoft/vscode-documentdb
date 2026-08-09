@@ -121,6 +121,7 @@ Existing call sites:
 | Cluster connect and list databases | [ClusterItemBase.ts](../../../src/tree/documentdb/ClusterItemBase.ts) |
 | Shell connect banner | [DocumentDBShellPty.ts](../../../src/documentdb/shell/DocumentDBShellPty.ts) |
 | Query playground | [executePlaygroundCode.ts](../../../src/commands/playground/executePlaygroundCode.ts) |
+| Any webview, via `common.explainOperationFailure` | [appRouter.ts](../../../src/webviews/_integration/appRouter.ts) |
 
 Tree views need no per-view wiring: `wrapGetChildrenWithErrorAndStateHandling` translates on the way
 out, so any provider built on the base class is covered.
@@ -133,9 +134,23 @@ the Query Insights stage 1 prefetch. They already swallow their errors on purpos
 
 ### Webviews
 
-An explanation cannot ride along on an error across the tRPC boundary. If a webview surface needs
-one, return it as a field on the procedure's **result**, or render it from the extension host. Do
-not wrap the error to smuggle text through.
+An explanation cannot ride along on an error across the tRPC boundary, so a webview asks for one:
+
+```tsx
+.catch(async (error) => {
+    const cause = error instanceof Error ? error.message : String(error);
+    const explained = await trpcClient.common.explainOperationFailure.query({ message: cause });
+    void trpcClient.common.displayErrorMessage.mutate({
+        message: explained ?? l10n.t('Error while running the query'),
+        modal: true,
+        cause,
+    });
+});
+```
+
+`explainOperationFailure` reads the `clusterId` from the webview's tRPC context and returns `null`
+when nothing applies. Only the error MESSAGE crosses the boundary, so a provider that needs an
+error's class or `code` cannot be served this way. Never wrap an error to smuggle text through.
 
 ## Writing the message
 
