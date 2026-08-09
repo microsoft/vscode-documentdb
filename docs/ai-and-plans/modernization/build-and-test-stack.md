@@ -4,7 +4,7 @@
 **This repo:** `microsoft/vscode-documentdb`, branch `dev/tnaum/modernization`
 **Reference repo:** `microsoft/vscode-cosmosdb`, `main` at `4b1bb6c598230a5e22fd4f09934211bdf0572290`
 
-**Companion document:** [`modernization-e2e-testing-strategy.md`](./modernization-e2e-testing-strategy.md) — deep dive on their
+**Companion document:** [`e2e-testing-strategy.md`](./e2e-testing-strategy.md) — deep dive on their
 Playwright E2E suite and how it relates to our parked PR #867.
 
 ---
@@ -68,37 +68,55 @@ dev mode worked fine the whole time. **F5 development testing would not have cau
 
 ### Sequence
 
-| Phase                         | Work                                                                                | Why here                                                                                                                                |
-| ----------------------------- | ----------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
-| **0. Verification checklist** | A written manual checklist run against a **packaged VSIX**, not F5 (see below)      | An hour of work; targets the exact failure classes they hit. E2E is a big project and would partly be built against the outgoing stack. |
-| **1. Prerequisites**          | ESM-first build for `@microsoft/vscode-ext-webview`; engine-floor decision          | We already hit CJS friction with it on the Cosmos DB side.                                                                              |
-| **2. Migration**              | ESM + Vite (ext + views) + Vitest + per-view lazy loading + `manualChunks`          | Coupled; run as one program.                                                                                                            |
-| **3. Lock in**                | CI gates on bundle size and activation time                                         | Prevents silent regression.                                                                                                             |
-| **4. Test layers**            | Extension Host integration tests, then Playwright E2E, then unpark the #867 harness | Built **on** the new stack, so none of it is throwaway. Mirrors what they did.                                                          |
+| Phase                          | Work                                                                                                                                                             | Why here                                                                                                       |
+| ------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------- |
+| **0a. VSIX activation check**  | **One automated test**: package → install into a temp extensions dir → launch with **no** `--extensionDevelopmentPath` → assert activation + zero console errors | ~150 lines, bundler-agnostic; nothing in it is invalidated by the migration. Companion document §5.4 and §5.14 |
+| **0b. Verification checklist** | A written manual checklist run against a **packaged VSIX**, not F5 (see below)                                                                                   | An hour of work; covers rendering, styling, workers and lazy chunks, which one activation test cannot          |
+| **1. Prerequisites**           | ESM-first build for `@microsoft/vscode-ext-webview`; engine-floor decision                                                                                       | We already hit CJS friction with it on the Cosmos DB side.                                                     |
+| **2. Migration**               | ESM + Vite (ext + views) + Vitest + per-view lazy loading + `manualChunks`                                                                                       | Coupled; run as one program.                                                                                   |
+| **3. Lock in**                 | CI gates on bundle size and activation time                                                                                                                      | Prevents silent regression.                                                                                    |
+| **4. Test layers**             | Extension Host integration tests, then Playwright E2E, then unpark the #867 harness                                                                              | Built **on** the new stack, so none of it is throwaway. Mirrors what they did.                                 |
 
 **Do not** do the Webpack code-splitting fix first. If Vite is the destination, that work is
-throwaway — `manualChunks` is the mechanism that survives. The same logic is why E2E belongs in
-Phase 4: its `globalSetup` build invocation and the #867 harness are both stack-coupled.
+throwaway — `manualChunks` is the mechanism that survives. The same logic is why the E2E _suite_
+belongs in Phase 4: its `globalSetup` build invocation and the #867 harness are both stack-coupled.
+**Phase 0a is the deliberate exception** — it asserts on a VSIX rather than on a build config, so it
+is the one piece of test infrastructure the migration cannot invalidate.
 
 ### Phase 0: the checklist that replaces "build E2E first"
 
 Manual testing is a reasonable call while the surface is four webviews — provided it is written
 down and aimed at the right build. Run this **against an installed VSIX** after each migration
-step, not against F5:
+step, not against F5. Check 0 is automated (Phase 0a); the rest are manual.
 
-| #   | Check                                                                | Failure class it catches                               |
-| --- | -------------------------------------------------------------------- | ------------------------------------------------------ |
-| 1   | Install the packaged VSIX; extension activates                       | Packaging / entry-point / ESM resolution               |
-| 2   | Open all four webviews; each renders non-blank                       | Their #3037 — lost entry export in app-mode build      |
-| 3   | Styling is correct (grid, editor, splitters, icons, fonts)           | Their #3037 — emitted CSS not linked into webview HTML |
-| 4   | Monaco loads and edits; check DevTools for worker errors             | Their #3169 — worker origin under `vscode-webview://`  |
-| 5   | DevTools console clean on every panel                                | CSP violations, failed asset URLs, lazy-chunk 404s     |
-| 6   | Exercise a lazily-loaded path (Kubernetes plugin, playground worker) | Dynamic-import chunk resolution                        |
-| 7   | Confirm dev-watch output cannot be mistaken for production           | Their #3164 — build-mode confusion                     |
-| 8   | Record `dist` sizes + activation time                                | Baseline for the Phase 3 CI gates                      |
+| #   | Check                                                                                                                                        | Failure class it catches                                                      |
+| --- | -------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------- |
+| 0   | **Automated:** install the VSIX, launch without `--extensionDevelopmentPath`, assert activation + a registered command + zero console errors | Everything below that is fatal rather than cosmetic — and it runs on every PR |
+| 1   | Install the packaged VSIX; extension activates                                                                                               | Packaging / entry-point / ESM resolution                                      |
+| 2   | Open all four webviews; each renders non-blank                                                                                               | Their #3037 — lost entry export in app-mode build                             |
+| 3   | Styling is correct (grid, editor, splitters, icons, fonts)                                                                                   | Their #3037 — emitted CSS not linked into webview HTML                        |
+| 4   | Monaco loads and edits; check DevTools for worker errors                                                                                     | Their #3169 — worker origin under `vscode-webview://`                         |
+| 5   | DevTools console clean on every panel                                                                                                        | CSP violations, failed asset URLs, lazy-chunk 404s                            |
+| 6   | Exercise a lazily-loaded path (Kubernetes plugin, playground worker)                                                                         | Dynamic-import chunk resolution                                               |
+| 7   | Confirm dev-watch output cannot be mistaken for production                                                                                   | Their #3164 — build-mode confusion                                            |
+| 8   | Record `dist` sizes + activation time                                                                                                        | Baseline for the Phase 3 CI gates                                             |
 
 Checks 2–5 are exactly the bugs the reference project shipped post-migration, and all four are
 visible within seconds of opening a panel in a production build.
+
+**Four more failure classes to add to the pre-migration audit**, from Ref1's own bundler-migration
+post-mortem (companion document §5.14) — all four are invisible in source mode and fatal in the
+packaged artifact:
+
+1. **`const enum`** — `tsc` inlines the values; esbuild/Rollup cannot inline them across a `.d.ts`
+   boundary and will fail to resolve the import. Ban them with `isolatedModules` **before** starting.
+2. **`__dirname` / `__filename` / `require.resolve`** in our code or our dependencies — these break
+   moving _to_ ESM, exactly as `import.meta.url` broke for them moving to CJS. Grep
+   `node_modules` before starting; it is a five-minute check.
+3. **Optional guarded requires** (`try { require('x') } catch {}`) — each needs an explicit
+   `external` entry, or the bundle fails to resolve it.
+4. **`constructor.name` / `fn.name` comparisons** — minification renames them, so the failure
+   appears **only in production builds**. `keepNames` is the fix.
 
 ### The one decision only you can make
 
@@ -118,16 +136,17 @@ likely blocker.
 
 ### Decision log
 
-The recommendation changed three times during this research. Each revision was driven by new
+The recommendation changed several times during this research. Each revision was driven by new
 information, and all are recorded here so a later reader can tell current guidance from
 superseded guidance.
 
-| Rev             | Recommendation                                                                                                                                       | Why it changed                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
-| --------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **1**           | Defer stack changes; capture the cheap wins first (`@swc/jest`, Webpack code-splitting, bundle analyzer). Tiered by effort.                          | Original framing assumed migration labour was the binding constraint. Preserved in Section 0 and Part F.                                                                                                                                                                                                                                                                                                                                                                              |
-| **2**           | Do the full migration (ESM + Vite + Vitest), but **build E2E first** as a safety net.                                                                | The constraint changed: conversion effort can be outsourced to coding agents, and the goal is to transform once. With effort no longer binding, deferral arguments lose their force.                                                                                                                                                                                                                                                                                                  |
-| **3 — current** | Full migration, but **E2E comes after it**. Phase 0 is a written manual checklist run against a **packaged VSIX**.                                   | The reference project's own timeline disproved "E2E first": they migrated (2026-04-30), ran broken for 18 days, released only after fixing (2026-05-19), and built E2E six weeks later (2026-06-10). Nothing broken shipped. Building E2E first would also mean building part of it against the outgoing stack — the same "don't build on the layer you're deleting" argument already used to reject doing Webpack code-splitting first. Rev 2 applied that reasoning inconsistently. |
-| **4 — current** | Unchanged on substance: **Vite for both targets**. esbuild evaluated and rejected as the _primary_ stack, retained as a host-only fallback (Part J). | Reviewed `vscode-azuretools/eng/MIGRATION.md`. Their esbuild standardisation is silent on webviews — our actual pain — and ships as an **alpha** eng package that also imposes Mocha. Two of our assumptions improved though: the ESM engine floor is likely a non-issue (Node 22 → VS Code 1.101.0), and `@microsoft/vscode-azext-utils` already ships dual ESM/CJS.                                                                                                                 |
+| Rev             | Recommendation                                                                                                                                                                            | Why it changed                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
+| --------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **1**           | Defer stack changes; capture the cheap wins first (`@swc/jest`, Webpack code-splitting, bundle analyzer). Tiered by effort.                                                               | Original framing assumed migration labour was the binding constraint. Preserved in Section 0 and Part F.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
+| **2**           | Do the full migration (ESM + Vite + Vitest), but **build E2E first** as a safety net.                                                                                                     | The constraint changed: conversion effort can be outsourced to coding agents, and the goal is to transform once. With effort no longer binding, deferral arguments lose their force.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
+| **3 — current** | Full migration, but **E2E comes after it**. Phase 0 is a written manual checklist run against a **packaged VSIX**.                                                                        | The reference project's own timeline disproved "E2E first": they migrated (2026-04-30), ran broken for 18 days, released only after fixing (2026-05-19), and built E2E six weeks later (2026-06-10). Nothing broken shipped. Building E2E first would also mean building part of it against the outgoing stack — the same "don't build on the layer you're deleting" argument already used to reject doing Webpack code-splitting first. Rev 2 applied that reasoning inconsistently.                                                                                                                                                                                                                    |
+| **4 — current** | Unchanged on substance: **Vite for both targets**. esbuild evaluated and rejected as the _primary_ stack, retained as a host-only fallback (Part J).                                      | Reviewed `vscode-azuretools/eng/MIGRATION.md`. Their esbuild standardisation is silent on webviews — our actual pain — and ships as an **alpha** eng package that also imposes Mocha. Two of our assumptions improved though: the ESM engine floor is likely a non-issue (Node 22 → VS Code 1.101.0), and `@microsoft/vscode-azext-utils` already ships dual ESM/CJS.                                                                                                                                                                                                                                                                                                                                    |
+| **5 — current** | Unchanged on the stack. **Sequencing amended:** Phase 0 splits into **0a**, one automated installed-VSIX activation check built _before_ the migration, and **0b**, the manual checklist. | A detailed architecture report on **Ref1** (an internal, more mature sibling suite) landed. Its hardest-defended claim is that a bundler migration must be validated against a **packaged artifact continuously**, because packaging-time breakage is invisible to both F5 and source-mode tests. Ref1 has the lane that catches this but runs it on `workflow_dispatch` only, so its own bundler migration was never covered by it. Rev 3's "do not build on the layer you are deleting" logic still holds for the E2E _suite_; it does not apply to 0a, which asserts on a VSIX rather than a build config. Ref1 also supplied four concrete bundler-breakage classes now folded into Phase 0 and K.5. |
 
 **What survived every revision:** the measurements in Parts A, C and I, and the four failure
 classes in the Phase 0 checklist. Those are evidence, not preference.
@@ -1124,8 +1143,8 @@ The guide contains hard-won gotchas that apply to us whichever path we take:
 
 ## 12. Part K — Consolidated adoption checklist
 
-Every "steal this" item found across both reference projects, in one place. Nothing here is new —
-it is an index into the detail, so this section can be worked through without re-reading the
+Every "steal this" item found across all three reference projects, in one place. Nothing here is
+new — it is an index into the detail, so this section can be worked through without re-reading the
 document.
 
 ### K.1 From Cosmos DB — build & bundling
@@ -1166,16 +1185,42 @@ document.
 | 22  | **Tests import a _copy_ of `src`** — shared state like `extensionVariables` will not work | Design Phase 4 integration tests around the public API from day one      | J.7    |
 | 23  | **Type-check as a separate `--noEmit` step** alongside bundling                           | Neither esbuild nor Vite type-checks; `tsc` must stay in the pipeline    | J.4    |
 
-### K.4 Ours to fix (found during this research)
+### K.4 From Ref1 — bundler-migration failure classes and test infrastructure
+
+Ref1 is an internal, more mature sibling extension; its architecture report is distilled in the
+companion document §5. It migrated the extension host from unbundled `tsc` output to a bundled
+artifact, and its build files document what broke. Names and paths are redacted; the mechanics are
+not.
+
+| #   | Pattern                                                                                    | Why                                                                                                         | Detail              |
+| --- | ------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------- | ------------------- |
+| 24  | **Ban `const enum` (`isolatedModules: true`) before migrating**                            | `tsc` inlines the values; esbuild/Rollup cannot inline across a `.d.ts` boundary and fails to resolve       | E2E doc §5.14       |
+| 25  | **Audit our code and `node_modules` for `__dirname` / `__filename` / `require.resolve`**   | These break moving _to_ ESM, mirroring how `import.meta.url` broke for them moving to CJS. Five-minute grep | E2E doc §5.14       |
+| 26  | **Every optional guarded `require` needs an explicit `external`**                          | `try { require('x') } catch {}` for uninstalled packages otherwise fails the bundle                         | E2E doc §5.14       |
+| 27  | **`keepNames` in production** if anything compares `constructor.name` / `fn.name`          | Minification renames them; the failure appears **only** in production builds                                | E2E doc §5.14       |
+| 28  | **Never mark a type-only ambient module `external`**                                       | Converts a compile-time no-op into an unguarded runtime `require` that crashes activation                   | E2E doc §5.14       |
+| 29  | **Unify the build: one pipeline for dev, tests and packaging**                             | Their two-mode setup means the tests do not run the code that ships — the root cause of all of the above    | E2E doc §5.14       |
+| 30  | **`metafile` / bundle stats on from day one**                                              | "Why did the bundle grow 400 KB?" answerable without archaeology                                            | E2E doc §5.14       |
+| 31  | **Hand-maintained entry-point list, not globbing**                                         | Lets you deliberately exclude an entry and document why                                                     | E2E doc §5.14       |
+| 32  | **Installed-VSIX activation check on every PR touching build config**                      | Their equivalent lane is dispatch-only, so their bundler migration was never continuously validated         | E2E doc §5.4        |
+| 33  | **Launch-arg rewriter that _throws_ if `--extensionDevelopmentPath` survives**             | Makes "green build that silently tested source" structurally unrepresentable                                | E2E doc §5.4        |
+| 34  | **Console-error + `pageerror` assertions with an empty allowlist**                         | Ref1 has none and calls it its own biggest gap; it is the best detector of module-resolution breakage       | E2E doc §5.5, §5.6  |
+| 35  | **A readiness contract in the product** (`data-webview-id` + `data-ready`)                 | ~60 lines of product code that deletes several hundred lines of test heuristics, permanently                | E2E doc §5.7        |
+| 36  | **Convention scanner in `--strict` mode, in PR CI, from day one**                          | Agent-written specs follow visible patterns and ignore prose rules                                          | E2E doc §5.8, §5.12 |
+| 37  | **Build-once-distribute with _post-archive_ verification**                                 | Catches the `nullglob` failure mode where a glob expands to nothing and the archive ships incomplete        | E2E doc §5.8        |
+| 38  | **Fail the build when the notification path itself fails** (`!= 'false'`, not `== 'true'`) | Otherwise broken alerting is discovered after a month of silent red                                         | E2E doc §5.8        |
+| 39  | **Never put a test seam at the layout boundary**                                           | Their 23 test-only buttons distorted hit-testing for every other test                                       | E2E doc §5.6        |
+
+### K.5 Ours to fix (found during this research)
 
 | #   | Item                                                                              | Detail    |
 | --- | --------------------------------------------------------------------------------- | --------- |
-| 24  | Remove `LimitChunkCountPlugin({ maxChunks: 1 })` and lazy-load views              | A1, F(R2) |
-| 25  | Replace `ts-jest` with a fast transform; expect `jest.mock()` hoisting fixes      | A2, I.4   |
-| 26  | Ship a dual/ESM build of `@microsoft/vscode-ext-webview` (helps tree-shaking now) | H.5       |
-| 27  | Re-enable the bundle analyzer (installed, currently commented out)                | F (R1)    |
-| 28  | Audit what gets copied into `dist` — ~half the VSIX is non-JS assets              | I.3       |
-| 29  | Restore a real `npm test`                                                         | F (R6)    |
+| 40  | Remove `LimitChunkCountPlugin({ maxChunks: 1 })` and lazy-load views              | A1, F(R2) |
+| 41  | Replace `ts-jest` with a fast transform; expect `jest.mock()` hoisting fixes      | A2, I.4   |
+| 42  | Ship a dual/ESM build of `@microsoft/vscode-ext-webview` (helps tree-shaking now) | H.5       |
+| 43  | Re-enable the bundle analyzer (installed, currently commented out)                | F (R1)    |
+| 44  | Audit what gets copied into `dist` — ~half the VSIX is non-JS assets              | I.3       |
+| 45  | Restore a real `npm test`                                                         | F (R6)    |
 
 ---
 
@@ -1249,6 +1294,10 @@ git -C /tmp/cosmosdb worktree remove --force /tmp/cosmos-bench/at-2999
 - Branch `dev/tnuam/use-npm-webview-api` (**not merged to `main`**) — commits `f8d11a9` (remove
   local `@cosmosdb/webview-rpc`) and `620206e` (pre-bundle `@microsoft/vscode-ext-webview`
   subpaths in dev, with the CJS rationale quoted in H.5); 2026-07-29
+
+**Ref1 (internal, redacted):** a ten-chapter architecture report on an internal sibling extension's
+E2E system and build pipeline, produced for this research. Not committed — it cannot be sufficiently
+anonymised. Distilled in the companion document §5; build-relevant findings in §5.14 and K.4.
 
 **Vitest docs (vendor):** `vitest.dev/guide/why`, `vitest.dev/guide/comparisons`
 
