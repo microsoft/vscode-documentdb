@@ -3,10 +3,12 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+import { UserCancelledError } from '@microsoft/vscode-azext-utils';
 import { ConnectionDiagnosticsService, type ConnectionDiagnosticsProvider } from './connectionDiagnosticsService';
 
 jest.mock('@microsoft/vscode-azext-utils', () => ({
     callWithTelemetryAndErrorHandling: jest.fn(),
+    UserCancelledError: class UserCancelledError extends Error {},
 }));
 
 function provider(id: string, explain: ConnectionDiagnosticsProvider['explain']): ConnectionDiagnosticsProvider {
@@ -84,5 +86,15 @@ describe('ConnectionDiagnosticsService', () => {
         expect(error).toBeInstanceOf(CustomError);
         expect(error.code).toBe('ECONNREFUSED');
         expect(error.cause).toBeUndefined();
+    });
+
+    it('stays silent for a cancellation, without consulting any provider', async () => {
+        const explain = jest.fn().mockResolvedValue('should not be used');
+        ConnectionDiagnosticsService.registerProvider(provider('a', explain));
+
+        await expect(
+            ConnectionDiagnosticsService.explain({ clusterId: 'c1', error: new UserCancelledError() }),
+        ).resolves.toBeUndefined();
+        expect(explain).not.toHaveBeenCalled();
     });
 });

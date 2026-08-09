@@ -60,7 +60,7 @@
  * @see .github/skills/error-translation/SKILL.md
  */
 
-import { callWithTelemetryAndErrorHandling } from '@microsoft/vscode-azext-utils';
+import { callWithTelemetryAndErrorHandling, UserCancelledError } from '@microsoft/vscode-azext-utils';
 import { ext } from '../extensionVariables';
 
 export interface ConnectionDiagnosticsRequest {
@@ -142,6 +142,13 @@ class ConnectionDiagnosticsServiceImpl {
      * would cost I/O for no user-visible benefit.
      */
     public async explain(request: ConnectionDiagnosticsRequest): Promise<ConnectionDiagnosis | undefined> {
+        // Guarded centrally rather than per provider: a provider is allowed to answer without
+        // inspecting the error at all, so without this a cancelled wizard on a stopped container
+        // would be reported as an infrastructure failure.
+        if (request.error instanceof UserCancelledError) {
+            return undefined;
+        }
+
         for (const provider of this.providers) {
             let message: string | undefined;
 

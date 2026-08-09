@@ -52,6 +52,10 @@ export class MyDiagnosticsProvider implements ConnectionDiagnosticsProvider {
 
 `undefined` is always the safe answer: it means "show the original error".
 
+A provider may answer without inspecting the error at all. Cancellations are therefore filtered
+centrally: `explain()` returns `undefined` for a `UserCancelledError` before any provider is asked,
+so a wizard the user escaped is never reported as an infrastructure failure.
+
 ### Answer the cheap question first
 
 `explain()` runs on every foreground failure across the whole extension, so the common case must
