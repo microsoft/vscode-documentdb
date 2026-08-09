@@ -178,8 +178,11 @@ timing is precisely what is now being resolved.
 
 ## 3. Head-to-head
 
+> Two-way on purpose: this table contrasts the two _mechanisms_ (real editor vs. stubbed browser).
+> For a three-way comparison including Ref1, see [§5.15](#515-consolidated-side-by-side).
+
 | Dimension                                     | Cosmos DB E2E                                               | PR #867 harness                                         |
-| --------------------------------------------- | ----------------------------------------------------------- | ------------------------------------------------------- | -------------------------- |
+| --------------------------------------------- | ----------------------------------------------------------- | ------------------------------------------------------- |
 | **Runtime**                                   | Real VS Code (Electron), real webview host                  | Plain browser (Chromium via Playwright)                 |
 | **What it proves**                            | The product works end to end                                | The React UI renders and behaves correctly given inputs |
 | **CSP / `acquireVsCodeApi` / `l10n_bundle`**  | Real                                                        | Absent / single stub                                    |
@@ -187,7 +190,7 @@ timing is precisely what is now being resolved.
 | **Backend**                                   | Real Cosmos DB emulator in Docker                           | Canned fixtures                                         |
 | **Startup cost**                              | VS Code launch + Docker (~5s/worker after warm; xvfb on CI) | Page load (sub-second)                                  |
 | **Reaching an error/edge state**              | Must be produced for real, or via a test-only command       | `?scenario=...` — instant, arbitrary                    |
-| **Theme matrix**                              | Whatever VS Code is running                                 | `?theme=dark                                            | light`, switchable per URL |
+| **Theme matrix**                              | Whatever VS Code is running                                 | `?theme=dark \| light`, switchable per URL              |
 | **Screenshots**                               | Self-managed, gated by env; failure artifacts               | Artifacts, explicitly not baselines                     |
 | **Agent-drivable**                            | Awkward (Electron window, needs Docker)                     | Excellent — the stated purpose                          |
 | **Catches "blank webview in packaged build"** | **Yes**                                                     | **No**                                                  |
@@ -285,6 +288,9 @@ four omissions (JUnit output was added for one of their workflows).
 
 Ref1 is roughly four months and an order of magnitude ahead. That is context, not criticism of
 either: Cosmos DB deliberately took an MVP slice.
+
+> The rest of Part 5 compares the two thematically. For a single dimension-by-dimension matrix
+> including where **we** should land, jump to [§5.15](#515-consolidated-side-by-side).
 
 ### 5.2 The numbers that should set our budget
 
@@ -767,6 +773,106 @@ points from dependencies (Vite does this by default); an explicit, hand-maintain
 rather than globbing, because it lets you deliberately exclude an entry and document why; and
 `metafile: true` from day one, so "why did the bundle grow 400 KB?" is answerable without
 archaeology. These are folded into the companion document's Part K.
+
+### 5.15 Consolidated side-by-side
+
+Everything above, in one matrix, plus where our recommendation lands. **"—" means not evidenced**,
+not "absent": absence from a source does not prove absence from a repository, and the distinction
+matters when reviewing.
+
+**Scale and cost**
+
+| Dimension         | Ref1                                                | Cosmos DB                    | Our target                                     |
+| ----------------- | --------------------------------------------------- | ---------------------------- | ---------------------------------------------- |
+| E2E started       | Feb 2026                                            | Jun 2026, 6 weeks post-Vite  | Phase 0a pre-migration; suite in Phase 4       |
+| Initial landing   | Infra + **154 tests** + CI, ~1 month, ~1 engineer   | 2 specs                      | 1 VSIX activation test + 5 smoke tests         |
+| Current size      | 113 spec files, **~294 runnable** (~58 smoke)       | 21 spec files                | **Capped at 30–50**                            |
+| Lines of E2E code | **38,877** (~130 per runnable test)                 | not measured                 | ~5,000 at the same density                     |
+| Commit velocity   | 81 commits / 8 authors / 6 months, **still rising** | —                            | budget for it; it is the real cost             |
+| Backend           | 6 containerised services + SSL/SSH artifacts        | 1 emulator, isolated compose | open question (§6) — possibly none for spec #1 |
+
+**Runtime, isolation, and flake handling**
+
+| Dimension           | Ref1                                                                                   | Cosmos DB                      | Our target                                      |
+| ------------------- | -------------------------------------------------------------------------------------- | ------------------------------ | ----------------------------------------------- |
+| Editors             | VS Code **+ a second editor** (a VS Code fork)                                         | VS Code only                   | VS Code only                                    |
+| Launch              | Playwright `_electron.launch` on a real editor                                         | Same                           | Same                                            |
+| Fixture scope       | Worker-scoped                                                                          | Worker-scoped                  | Worker-scoped                                   |
+| Run isolation       | `runId` + temp/results/reports + compose project                                       | `runId` + temp/results/reports | Copy Ref1's module near-verbatim                |
+| Parallelism default | **`workers: 1`, `fullyParallel: false`** despite building for it                       | 1 worker                       | 1 worker; shard across CI _jobs_ if ever needed |
+| Retries             | `--retries=2`, then a **second process** with a wiped user-data dir — up to 6 attempts | —                              | 1 retry; fix or delete, never tolerate          |
+| Flake location      | **100% editor launch/teardown** (7-signature regex)                                    | —                              | expect the same; it is inherent to Electron     |
+| Tolerated failures  | 6-condition classifier downgrading second-editor failures                              | none                           | **none — never teach CI to ignore red**         |
+
+**Product seams**
+
+| Dimension            | Ref1                                                        | Cosmos DB                                    | Our target                                           |
+| -------------------- | ----------------------------------------------------------- | -------------------------------------------- | ---------------------------------------------------- |
+| Test-only commands   | Yes, env var + context key                                  | Yes, `cosmosDB.e2e.*`, env var + context key | **One**, returning structured state                  |
+| Test-only UI         | **23 inline tree buttons**, 8 production files              | none evidenced                               | **none**                                             |
+| Seam blast radius    | Corrupts hit-testing; drift; ships in the VSIX              | contained                                    | data/service boundary only, scanner-enforced         |
+| Readiness contract   | **None** → 115-line frame heuristic, ~17 bespoke predicates | predicate-based, no product marker           | **`data-webview-id` + `data-ready`** — ours to build |
+| Activation handshake | Implicit / text-scraped, timeouts swallowed                 | Explicit, before any spec                    | Explicit                                             |
+
+**Webview handling**
+
+| Dimension                    | Ref1                                                  | Cosmos DB                            | Our target                           |
+| ---------------------------- | ----------------------------------------------------- | ------------------------------------ | ------------------------------------ |
+| Frame selection              | `page.frames()` + 4-signal cascade, no `frameLocator` | predicate over frames                | one helper keyed on the ready marker |
+| **Console-error assertions** | **None. Zero listeners.**                             | **`consoleHealth`, empty allowlist** | **From test #1**, empty allowlist    |
+| Monaco                       | Real keystrokes; IntelliSense-eats-Enter workaround   | —                                    | `keyboard.insertText` as default     |
+| Virtualised grid             | `toPass` + synthetic `scroll` event; "at least N"     | —                                    | copy the patterns verbatim           |
+| Failure diagnostics          | Open tabs + frame URLs in the error message           | —                                    | copy                                 |
+
+**Selection, CI, and reporting**
+
+| Dimension               | Ref1                                                     | Cosmos DB                                     | Our target                                     |
+| ----------------------- | -------------------------------------------------------- | --------------------------------------------- | ---------------------------------------------- |
+| Tags                    | **13**, two taxonomies in one namespace                  | **none** — explicitly skipped                 | **3**: `@smoke`, `@requires-db`, `@local-only` |
+| `@smoke` policy         | Quota: 2–3 per feature area (~20%)                       | n/a                                           | **"failure means do not ship"**                |
+| CI lanes                | PR smoke, nightly ×4 shards ×2 editors, release ×16      | one workflow, Linux + xvfb                    | PR smoke + nightly + VSIX check                |
+| **Installed-VSIX lane** | **Yes — but `workflow_dispatch` only**                   | **No**                                        | **Yes, per PR on build-config changes**        |
+| Convention scanner      | Yes, ~120 lines, **warning-only by default**             | No                                            | **Yes, `--strict`, from day one**              |
+| Build-once-distribute   | Yes, with **post-archive verification**                  | —                                             | Copy, including the post-archive check         |
+| Fail-loud gating        | `steps.<id>.outcome` + report-existence checks           | —                                             | Copy                                           |
+| Notification lifecycle  | Open/close issues; **failing to notify fails the build** | per-workflow PR comment                       | Later                                          |
+| Coverage from E2E       | —                                                        | Yes, collected and aggregated                 | Later                                          |
+| Screenshots             | Component + docs projects, **artifacts, not in CI**      | Self-managed capture modes, failure artifacts | Layer B, artifacts, scenarios owned in `dev/`  |
+
+**Build system**
+
+| Dimension                      | Ref1                                                              | Cosmos DB                                    | Our target                      |
+| ------------------------------ | ----------------------------------------------------------------- | -------------------------------------------- | ------------------------------- |
+| Extension host                 | esbuild → CJS                                                     | Vite → ESM                                   | Vite → ESM                      |
+| Webviews                       | esbuild → ESM, code-splitting on                                  | Vite → ESM, `manualChunks`                   | Vite → ESM, `manualChunks`      |
+| Module format                  | No `"type": "module"`                                             | `"type": "module"`, `main.mjs`               | ESM                             |
+| **Do tests run shipped code?** | **No** — `tsc` → `out/` for tests, bundle → `dist/` for packaging | Yes                                          | **Yes — the point of unifying** |
+| Migration outcome              | 4 documented breakage classes, one fix reaching users             | 4 post-migration fixes, 18-day broken window | Phase 0a is the tripwire        |
+
+**How to read the disagreements.** Where Ref1 and Cosmos DB differ, the mature one is not
+automatically right. Three rows invert the seniority — console-error assertions, test-only UI
+seams, and the readiness contract — and in all three we should follow Cosmos DB or go further.
+Three rows favour Ref1 unambiguously: the installed-VSIX lane, the convention scanner, and the
+fail-loud CI machinery. The rest are scale artifacts we should simply not buy.
+
+### 5.16 What this report does not tell us
+
+Worth knowing before review, so the gaps are not mistaken for findings.
+
+| Not available                               | Why, and where the answer lives                                                                                |
+| ------------------------------------------- | -------------------------------------------------------------------------------------------------------------- |
+| Flake **rate**                              | Needs CI run history + auto-filed failure issues over a date range                                             |
+| Real wall-clock for any lane                | The ~8 / ~20 min figures are README claims; timeouts are ceilings, not durations                               |
+| CI runner-minutes or cost                   | Nothing in-repo tracks it; needs the Actions billing API                                                       |
+| Product bugs caught before release          | Needs closed-issue and PR archaeology; deliberately not estimated                                              |
+| Which bundler breakages E2E actually caught | Three of the four are activation-time, so _any_ installed-VSIX test would have — but attribution is unverified |
+| Maintenance repair vs. feature split        | Needs classifying 81 commits by intent from PR bodies                                                          |
+| Whether their scanner runs `--strict` in CI | Not verified in the report                                                                                     |
+| Cosmos DB's tag/retry/flake posture         | Not researched to the same depth; the "—" cells above are honest                                               |
+
+Two premises in the original research request also did not survive contact with the repository and
+are corrected in §5.1: the initial framework was **154 tests, not 78**, and `resolveE2eWorkers()`
+is not where it was assumed to be. If a third premise matters to a decision, verify it the same way.
 
 ---
 
