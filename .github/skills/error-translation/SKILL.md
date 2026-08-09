@@ -117,10 +117,13 @@ Existing call sites:
 
 | Surface | File |
 | --- | --- |
-| Connections tree, below a cluster | [ConnectionsBranchDataProvider.ts](../../../src/tree/connections-view/ConnectionsBranchDataProvider.ts) |
+| Every tree view, below a cluster | [BaseExtendedTreeDataProvider.ts](../../../src/tree/BaseExtendedTreeDataProvider.ts) |
 | Cluster connect and list databases | [ClusterItemBase.ts](../../../src/tree/documentdb/ClusterItemBase.ts) |
 | Shell connect banner | [DocumentDBShellPty.ts](../../../src/documentdb/shell/DocumentDBShellPty.ts) |
 | Query playground | [executePlaygroundCode.ts](../../../src/commands/playground/executePlaygroundCode.ts) |
+
+Tree views need no per-view wiring: `wrapGetChildrenWithErrorAndStateHandling` translates on the way
+out, so any provider built on the base class is covered.
 
 ### Do not call it from background paths
 

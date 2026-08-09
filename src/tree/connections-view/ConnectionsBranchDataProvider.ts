@@ -8,7 +8,6 @@ import * as vscode from 'vscode';
 import { Views } from '../../documentdb/Views';
 import { DocumentDBExperience } from '../../DocumentDBExperiences';
 import { ext } from '../../extensionVariables';
-import { ConnectionDiagnosticsService } from '../../services/connectionDiagnosticsService';
 import { ConnectionStorageService, ConnectionType, isConnection } from '../../services/connectionStorageService';
 import { isLegacyEmulatorMigrationComplete } from '../../services/legacyEmulatorMigration';
 import { createGenericElementWithContext } from '../api/createGenericElementWithContext';
@@ -107,29 +106,7 @@ export class ConnectionsBranchDataProvider extends BaseExtendedTreeDataProvider<
             context.telemetry.properties.parentNodeContext = (await element.getTreeItem()).contextValue;
 
             // Use the enhanced method with the contextValue parameter
-            const children = await this.getChildrenWithDiagnostics(element, context);
-
-            // Return the processed children directly - no additional processing needed
-            return children;
-        });
-    }
-
-    /**
-     * Single point where a failed expansion below a cluster is translated into something the user
-     * can act on (a stopped DocumentDB Local container, a port-forward tunnel that is no longer up,
-     * an Atlas TLS rejection). Placed here rather than in each tree item so databases, collections,
-     * indexes and anything added later are covered without repeating the same catch.
-     *
-     * The error itself is never modified: we only choose what to display, then rethrow it unchanged
-     * so telemetry and every downstream identity check keep working. Cluster nodes handle their own
-     * failures in `ClusterItemBase`, so they never reach this catch.
-     */
-    private async getChildrenWithDiagnostics(
-        element: TreeElement,
-        context: IActionContext,
-    ): Promise<TreeElement[] | null | undefined> {
-        try {
-            return await this.wrapGetChildrenWithErrorAndStateHandling(
+            const children = await this.wrapGetChildrenWithErrorAndStateHandling(
                 element,
                 context,
                 async () => element.getChildren?.(),
@@ -162,23 +139,10 @@ export class ConnectionsBranchDataProvider extends BaseExtendedTreeDataProvider<
                     ],
                 },
             );
-        } catch (error) {
-            // Cluster nodes and everything below them carry the same `cluster` model but share no
-            // interface, so this is structural rather than an `instanceof`.
-            const clusterId = (element as { cluster?: { clusterId?: string } }).cluster?.clusterId;
-            const diagnosis = clusterId ? await ConnectionDiagnosticsService.explain({ clusterId, error }) : undefined;
 
-            if (diagnosis) {
-                context.telemetry.properties.diagnosisProviderId = diagnosis.providerId;
-                context.errorHandling.suppressDisplay = true;
-                void vscode.window.showErrorMessage(diagnosis.message, {
-                    modal: false,
-                    detail: error instanceof Error ? error.message : String(error),
-                });
-            }
-
-            throw error;
-        }
+            // Return the processed children directly - no additional processing needed
+            return children;
+        });
     }
 
     /**
