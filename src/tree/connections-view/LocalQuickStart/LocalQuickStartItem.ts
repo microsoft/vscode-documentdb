@@ -108,7 +108,49 @@ function buildPreflightChildren(parentId: string, verdict: QuickStartConnectionP
 }
 
 function escapeMarkdown(value: string): string {
-    return value.replace(/[\\`*_{}[\]()#+\-.!|~]/g, '\\$&');
+    // Only the characters that would actually change how the tooltip renders; the tooltip is not
+    // trusted, so HTML is inert.
+    return value.replace(/[\\`*_~[\]<>]/g, '\\$&');
+}
+
+function instanceStateLabel(state: InstanceState): string {
+    switch (state) {
+        case InstanceState.NotInstalled:
+            return l10n.t('Not set up');
+        case InstanceState.Provisioning:
+            return l10n.t('Provisioning');
+        case InstanceState.Starting:
+            return l10n.t('Starting');
+        case InstanceState.Running:
+            return l10n.t('Running');
+        case InstanceState.Stopping:
+            return l10n.t('Stopping');
+        case InstanceState.Stopped:
+            return l10n.t('Stopped');
+        case InstanceState.CredentialsMissing:
+            return l10n.t('Credentials missing');
+        default:
+            return l10n.t('Error');
+    }
+}
+
+function dockerEndpointLabel(readiness: DockerReadiness): string {
+    switch (readiness.endpointKind) {
+        case 'unixSocket':
+            return l10n.t('Unix socket');
+        case 'namedPipe':
+            return l10n.t('Named pipe');
+        case 'tcp':
+            return 'TCP';
+        case 'ssh':
+            return 'SSH';
+        default:
+            return l10n.t('Unknown');
+    }
+}
+
+function containerOsLabel(osType: 'linux' | 'windows'): string {
+    return osType === 'windows' ? 'Windows' : 'Linux';
 }
 
 function shortenContainerId(containerId: string): string {
@@ -150,7 +192,7 @@ function buildInstanceTooltip(status: QuickStartStatus, baseTooltip?: vscode.Mar
     tooltip.isTrusted = false;
 
     if (!baseTooltip) {
-        tooltip.appendMarkdown(`**${l10n.t('State')}:** ${escapeMarkdown(status.state)}\n\n`);
+        tooltip.appendMarkdown(`**${l10n.t('State')}:** ${instanceStateLabel(status.state)}\n\n`);
         if (metadata) {
             tooltip.appendMarkdown(`**${l10n.t('Host')}:** localhost:${String(metadata.boundPort)}\n\n`);
         }
@@ -178,10 +220,10 @@ function buildInstanceTooltip(status: QuickStartStatus, baseTooltip?: vscode.Mar
             );
         }
         if (readiness.osType) {
-            tooltip.appendMarkdown(`**${l10n.t('Container OS')}:** ${escapeMarkdown(readiness.osType)}\n\n`);
+            tooltip.appendMarkdown(`**${l10n.t('Container OS')}:** ${containerOsLabel(readiness.osType)}\n\n`);
         }
         tooltip.appendMarkdown(`**${l10n.t('Execution target')}:** ${executionTargetLabel(readiness)}\n\n`);
-        tooltip.appendMarkdown(`**${l10n.t('Docker endpoint')}:** ${escapeMarkdown(readiness.endpointKind)}\n\n`);
+        tooltip.appendMarkdown(`**${l10n.t('Docker endpoint')}:** ${dockerEndpointLabel(readiness)}\n\n`);
     }
 
     return tooltip;

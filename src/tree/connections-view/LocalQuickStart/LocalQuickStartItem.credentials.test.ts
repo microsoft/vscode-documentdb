@@ -193,15 +193,16 @@ describe('QuickStartClusterItem — credential source of truth (H5)', () => {
 
         const tooltip = (await getClusterItem()).getTreeItem().tooltip as vscode.MarkdownString;
 
-        expect(tooltip.value).toContain('ghcr\\.io/documentdb/documentdb\\-local:latest');
+        expect(tooltip.value).toContain('ghcr.io/documentdb/documentdb-local:latest');
         expect(tooltip.value).toContain('**Container ID:** deaaf74c6923');
         expect(tooltip.value).not.toContain('`deaaf74c6923`');
         expect(tooltip.value).not.toContain('deaaf74c692312345678901234567890');
         expect(tooltip.value).toContain('Docker Engine');
-        expect(tooltip.value).toContain('Docker version 28\\.1\\.1');
+        expect(tooltip.value).toContain('Docker version 28.1.1');
         expect(tooltip.value).toContain('amd64');
         expect(tooltip.value).toContain('WSL');
-        expect(tooltip.value).toContain('unixSocket');
+        expect(tooltip.value).toContain('Unix socket');
+        expect(tooltip.value).toContain('Linux');
     });
 
     it('returns no credentials and no client when the secret is gone', async () => {
