@@ -28,6 +28,8 @@ describe('AtlasDiagnosticsProvider', () => {
 
         expect(result).toContain('MongoDB Atlas closed the TLS connection');
         expect(result).toContain('IP access list');
+        // The diagnosis becomes a modal heading, so it must stay a single paragraph.
+        expect(result).not.toContain('\n');
     });
 
     it('stays silent for the same failure on a non-Atlas host', async () => {

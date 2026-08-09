@@ -18,7 +18,7 @@ import {
     type ConnectionDiagnosticsProvider,
     type ConnectionDiagnosticsRequest,
 } from '../../services/connectionDiagnosticsService';
-import { describeAtlasTlsHandshakeRejection, isAtlasTlsHandshakeRejection } from './atlasConnectionErrors';
+import { isAtlasTlsHandshakeRejection, summarizeAtlasTlsHandshakeRejection } from './atlasConnectionErrors';
 
 /** Atlas clusters are addressed under this suffix, which makes them identifiable without any registration. */
 const ATLAS_HOST_SUFFIX = 'mongodb.net';
@@ -41,6 +41,6 @@ export class AtlasDiagnosticsProvider implements ConnectionDiagnosticsProvider {
             return undefined;
         }
 
-        return describeAtlasTlsHandshakeRejection();
+        return summarizeAtlasTlsHandshakeRejection();
     }
 }

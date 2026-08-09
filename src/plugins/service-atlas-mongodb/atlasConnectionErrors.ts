@@ -54,3 +54,14 @@ export function describeAtlasTlsHandshakeRejection(): string {
         l10n.t('- Is the cluster paused, or still being provisioned?')
     );
 }
+
+/**
+ * Single-paragraph form of {@link describeAtlasTlsHandshakeRejection}, for the error-translation
+ * provider: a diagnosis becomes the heading of a modal, where a bulleted block renders as several
+ * lines of bold text.
+ */
+export function summarizeAtlasTlsHandshakeRejection(): string {
+    return l10n.t(
+        'MongoDB Atlas closed the TLS connection with an internal error. That is a transport-level rejection rather than a failed sign-in, so it is worth checking whether this machine\u2019s IP address is on the project\u2019s IP access list, and whether the cluster is paused.',
+    );
+}

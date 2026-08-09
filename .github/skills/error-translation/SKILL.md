@@ -164,6 +164,10 @@ error's class or `code` cannot be served this way. Never wrap an error to smuggl
 - Do not assert what happened. Say "we cannot find", "very likely", "does not appear to be".
 - "We" is fine and is the established voice.
 - Say what the user can do next, and where.
+- Keep it to one paragraph. The message becomes the heading of a modal, where a bulleted block
+  renders as several lines of bold text; the raw driver error already occupies the detail area.
+  `AtlasDiagnosticsProvider` returns `summarizeAtlasTlsHandshakeRejection()` for this reason, while
+  the Discovery-view modal keeps the longer `describeAtlasTlsHandshakeRejection()` as its detail.
 - No em dashes or en dashes.
 - Wrap every string in `l10n.t()` and run `npm run l10n`.
 
