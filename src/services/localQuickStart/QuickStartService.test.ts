@@ -8,7 +8,8 @@ import { ext } from '../../extensionVariables';
 import { StorageService } from '../storageService';
 import { disposeQuickStartOutputChannel, type IContainerRuntime } from './ContainerRuntime';
 
-import { getReadinessTimeoutMessage, QuickStartServiceImpl } from './QuickStartService';
+import { formatQuickStartMessage } from './quickStartMessages';
+import { QuickStartServiceImpl } from './QuickStartService';
 import { listInstances, PROVISIONING_LEASE_TTL_MS, upsertInstance, writeConnectionString } from './quickStartStore';
 import {
     DEFAULT_ALIAS,
@@ -1488,9 +1489,10 @@ describe('QuickStartService — WI-2e-1 provision RR4 volume-wipe gate', () => {
             expect(events.at(-1)).toMatchObject({
                 stage: 'error',
                 status: 'error',
-                message: `Docker became unavailable during setup: daemon disappeared during ${
-                    failingStage === 'pulling' ? 'pull' : 'run'
-                }`,
+                message: {
+                    key: 'dockerUnavailableDuringSetup',
+                    detail: `daemon disappeared during ${failingStage === 'pulling' ? 'pull' : 'run'}`,
+                },
                 dockerReadiness: unavailable,
             });
             expect(isDockerReady).toHaveBeenLastCalledWith({ forceRefresh: true });
@@ -1530,7 +1532,7 @@ describe('QuickStartService — WI-2e-1 provision RR4 volume-wipe gate', () => {
         }
 
         expect(retryEvents[0]).toMatchObject({ stage: 'checking', status: 'active' });
-        expect(retryEvents.map((event) => event.message)).not.toContain('Setup is already in progress.');
+        expect(retryEvents.map((event) => event.message?.key)).not.toContain('setupAlreadyInProgress');
     });
 
     it('keeps an image failure on the provisioning path when Docker remains ready', async () => {
@@ -1562,7 +1564,10 @@ describe('QuickStartService — WI-2e-1 provision RR4 volume-wipe gate', () => {
             events.push(event);
         }
 
-        expect(events.at(-1)).toMatchObject({ stage: 'error', error: 'manifest unknown' });
+        expect(events.at(-1)).toMatchObject({
+            stage: 'error',
+            message: { key: 'unexpectedFailure', detail: 'manifest unknown' },
+        });
         expect(events.at(-1)?.dockerReadiness).toBeUndefined();
     });
 
@@ -1608,15 +1613,18 @@ describe('QuickStartService — WI-2e-1 provision RR4 volume-wipe gate', () => {
             events.push(event);
         }
 
-        expect(events.at(-1)).toMatchObject({ stage: 'error', error: 'manifest unknown' });
+        expect(events.at(-1)).toMatchObject({
+            stage: 'error',
+            message: { key: 'unexpectedFailure', detail: 'manifest unknown' },
+        });
         expect(events.at(-1)?.dockerReadiness).toBeUndefined();
     });
 
     it('adds the published-port explanation only for dev-container readiness timeouts', () => {
-        expect(getReadinessTimeoutMessage('devContainer')).toContain(
+        expect(formatQuickStartMessage({ key: 'readinessTimeout', environment: 'devContainer' })).toContain(
             'published localhost port might not be reachable from inside the dev container',
         );
-        expect(getReadinessTimeoutMessage('linux')).toBe(
+        expect(formatQuickStartMessage({ key: 'readinessTimeout', environment: 'linux' })).toBe(
             'DocumentDB did not accept connections in time. It may still be initializing.',
         );
     });

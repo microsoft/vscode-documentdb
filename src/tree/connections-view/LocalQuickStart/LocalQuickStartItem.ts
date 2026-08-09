@@ -20,6 +20,7 @@ import { Views } from '../../../documentdb/Views';
 import { DocumentDBExperience } from '../../../DocumentDBExperiences';
 import { ext } from '../../../extensionVariables';
 import { StorageZone } from '../../../services/connectionStorageService';
+import { formatQuickStartMessage } from '../../../services/localQuickStart/quickStartMessages';
 import {
     QuickStartService,
     type QuickStartConnectionPreflightResult,
@@ -486,7 +487,7 @@ export class LocalQuickStartItem implements TreeElement, TreeElementWithContextV
                     return [
                         row(
                             'state_error',
-                            status.errorMessage ?? l10n.t('Error · click for details'),
+                            status.error ? formatQuickStartMessage(status.error) : l10n.t('Error · click for details'),
                             new vscode.ThemeIcon('warning', new vscode.ThemeColor('list.errorForeground')),
                         ),
                         ...this.createErrorRecoveryChildren(true),
