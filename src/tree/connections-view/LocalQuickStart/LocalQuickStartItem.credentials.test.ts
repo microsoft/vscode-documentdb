@@ -141,7 +141,7 @@ describe('QuickStartClusterItem — credential source of truth (H5)', () => {
 
         const children = await (await getClusterItem()).getChildren();
 
-        expect(await Promise.all(children.map((child) => child.getTreeItem()))).toEqual([
+        expect(children.map((child) => child.getTreeItem())).toEqual([
             expect.objectContaining({ label: 'DocumentDB Local cannot be opened. Click here to review its setup' }),
         ]);
         expect(mockGetClient).not.toHaveBeenCalled();
@@ -153,7 +153,7 @@ describe('QuickStartClusterItem — credential source of truth (H5)', () => {
 
         const children = await (await getClusterItem()).getChildren();
 
-        expect(await Promise.all(children.map((child) => child.getTreeItem()))).toEqual([
+        expect(children.map((child) => child.getTreeItem())).toEqual([
             expect.objectContaining({
                 label: 'Click here to start DocumentDB Local',
                 command: expect.objectContaining({ command: 'vscode-documentdb.command.localQuickStart.start' }),
@@ -168,7 +168,7 @@ describe('QuickStartClusterItem — credential source of truth (H5)', () => {
 
         const children = await (await getClusterItem()).getChildren();
 
-        expect(await Promise.all(children.map((child) => child.getTreeItem()))).toEqual([
+        expect(children.map((child) => child.getTreeItem())).toEqual([
             expect.objectContaining({ label: 'Docker does not appear to be running. Click here for details' }),
         ]);
         expect(mockGetClient).not.toHaveBeenCalled();
