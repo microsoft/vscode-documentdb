@@ -469,14 +469,15 @@ export class LocalQuickStartItem implements TreeElement, TreeElementWithContextV
                 };
             };
 
-            // Transitional states keep their own contextValue (menus gate on it), but never their own
-            // spinner: the progress indicator is applied to this row by quickStartProgressBridge.
+            // Transitional states keep their own contextValue (menus gate on it), but neither the
+            // spinner nor the text: quickStartProgressBridge overlays both. The wording is kept
+            // identical to the overlay so a registration change can't surface a different string.
             const idle = new vscode.ThemeIcon('circle-outline');
             switch (status.state) {
                 case InstanceState.Starting:
-                    return [row('state_starting', l10n.t('Starting… · localhost:{0}', port), idle)];
+                    return [row('state_starting', l10n.t('Starting…'), idle)];
                 case InstanceState.Stopping:
-                    return [row('state_stopping', l10n.t('Stopping… · localhost:{0}', port), idle)];
+                    return [row('state_stopping', l10n.t('Stopping…'), idle)];
                 case InstanceState.Stopped:
                     return [row('state_stopped', l10n.t('Stopped · localhost:{0}', port), idle)];
                 case InstanceState.Error:
@@ -519,7 +520,7 @@ export class LocalQuickStartItem implements TreeElement, TreeElementWithContextV
                 createGenericElementWithContext({
                     id: `${this.id}/provisioning`,
                     contextValue: 'treeItem_quickStartProvisioning',
-                    label: l10n.t('Provisioning… · localhost:{0}', String(status.port ?? QUICK_START_PORT)),
+                    label: `${l10n.t('Provisioning…')} · localhost:${String(status.port ?? QUICK_START_PORT)}`,
                     iconPath: new vscode.ThemeIcon('loading~spin'),
                 }),
             ];
