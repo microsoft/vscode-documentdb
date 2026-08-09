@@ -220,6 +220,25 @@ interface InstanceRuntimeState {
     missing: boolean;
     pendingReadiness?: PendingReadiness;
     errorMessage?: string;
+    inFlight?: QuickStartOperation;
+}
+
+/** Long-running work the tree renders progress for. */
+export type QuickStartOperationKind =
+    | 'provisioning'
+    | 'starting'
+    | 'stopping'
+    | 'restarting'
+    | 'deleting'
+    | 'refreshing';
+
+/**
+ * An awaitable handle on in-flight work. The tree hands it to the framework's node-progress state
+ * (`ext.state.runWithTemporaryDescription`) instead of rendering its own spinner rows.
+ */
+export interface QuickStartOperation {
+    readonly kind: QuickStartOperationKind;
+    readonly promise: Promise<void>;
 }
 
 export type QuickStartConnectionPreflightResult =
@@ -326,6 +345,43 @@ export class QuickStartServiceImpl {
     /** Fires whenever the managed-instance status changes (drives the tree). */
     public readonly onDidChangeStatus = this.statusEmitter.event;
 
+    private readonly operationEmitter = new vscode.EventEmitter<void>();
+    /**
+     * Fires when long-running work starts or finishes. Deliberately separate from
+     * {@link onDidChangeStatus}, whose listeners rebuild the whole Connections view.
+     */
+    public readonly onDidChangeOperation = this.operationEmitter.event;
+
+    /**
+     * Publish an awaitable handle for work that is about to start; the returned callback settles it.
+     * Callers keep their own `provisioning` / `lifecycleBusy` guards — this only exposes the wait.
+     */
+    private beginOperation(alias: string, kind: QuickStartOperationKind): () => void {
+        const entry = this.stateFor(alias);
+        let settle!: () => void;
+        const promise = new Promise<void>((resolve) => {
+            settle = resolve;
+        });
+        entry.inFlight = { kind, promise };
+        this.operationEmitter.fire();
+        return () => {
+            if (entry.inFlight?.promise === promise) {
+                entry.inFlight = undefined;
+            }
+            settle();
+            this.operationEmitter.fire();
+        };
+    }
+
+    /** The long-running work currently in flight for `alias`, if any. */
+    public getInFlightOperation(alias: string = DEFAULT_ALIAS): QuickStartOperation | undefined {
+        const entry = this.stateFor(alias);
+        if (entry.inFlight) {
+            return entry.inFlight;
+        }
+        return this.backgroundRefresh ? { kind: 'refreshing', promise: this.backgroundRefresh } : undefined;
+    }
+
     /**
      * @param runtime Docker IO surface (WI-0). Defaults to the shared {@link ContainerRuntime}
      * singleton; tests inject a mock so the state machine runs with no real daemon.
@@ -411,6 +467,7 @@ export class QuickStartServiceImpl {
 
     public dispose(): void {
         this.statusEmitter.dispose();
+        this.operationEmitter.dispose();
     }
 
     /**
@@ -502,6 +559,7 @@ export class QuickStartServiceImpl {
             return;
         }
         this.stateFor(alias).provisioning = true;
+        const endOperation = this.beginOperation(alias, 'provisioning');
         // Starting a fresh run supersedes any container left running by a prior readiness
         // timeout — drop its retained "Wait longer" state (the run below removes the container).
         this.stateFor(alias).pendingReadiness = undefined;
@@ -885,6 +943,7 @@ export class QuickStartServiceImpl {
                 telemetryContext.telemetry.measurements.provisionMs = Date.now() - provisionStartedAt;
             });
             this.stateFor(alias).provisioning = false;
+            endOperation();
         }
         // Emitted only now — after `finally` cleared `provisioning` — so a "Wait longer" / "Start
         // over" / "Retry" click triggered by this event never races the still-running guard.
@@ -982,6 +1041,7 @@ export class QuickStartServiceImpl {
             return;
         }
         this.stateFor(alias).provisioning = true;
+        const endOperation = this.beginOperation(alias, 'provisioning');
         const cts = new vscode.CancellationTokenSource();
         const onAbort = (): void => cts.cancel();
         signal.addEventListener('abort', onAbort, { once: true });
@@ -1040,6 +1100,7 @@ export class QuickStartServiceImpl {
             cts.cancel();
             cts.dispose();
             this.stateFor(alias).provisioning = false;
+            endOperation();
             // §14: resume outcome — booleans/enum + duration only, never names/ports/creds.
             void callWithTelemetryAndErrorHandling('documentDB.quickstart.resumeReadiness', (telemetryContext) => {
                 telemetryContext.errorHandling.suppressDisplay = true;
@@ -1523,7 +1584,7 @@ export class QuickStartServiceImpl {
 
     /** Start a stopped instance (design §11). */
     public async start(alias: string = DEFAULT_ALIAS): Promise<void> {
-        await this.runLifecycle(alias, async () => {
+        await this.runLifecycle(alias, 'starting', async () => {
             const id = this.stateFor(alias).metadata?.containerId;
             if (!id || !(await this.ensureActionable(id, alias, ['stopped']))) {
                 return;
@@ -1545,7 +1606,7 @@ export class QuickStartServiceImpl {
 
     /** Stop a running instance (design §11). */
     public async stop(alias: string = DEFAULT_ALIAS): Promise<void> {
-        await this.runLifecycle(alias, async () => {
+        await this.runLifecycle(alias, 'stopping', async () => {
             const id = this.stateFor(alias).metadata?.containerId;
             if (!id || !(await this.ensureActionable(id, alias, ['running']))) {
                 return;
@@ -1558,7 +1619,7 @@ export class QuickStartServiceImpl {
 
     /** Restart (stop + start) a running instance (design §11). */
     public async restart(alias: string = DEFAULT_ALIAS): Promise<void> {
-        await this.runLifecycle(alias, async () => {
+        await this.runLifecycle(alias, 'restarting', async () => {
             const id = this.stateFor(alias).metadata?.containerId;
             if (!id || !(await this.ensureActionable(id, alias, ['running', 'stopped']))) {
                 return;
@@ -1616,80 +1677,84 @@ export class QuickStartServiceImpl {
      * volume). Returns to NotInstalled.
      */
     public async deleteContainer(alias: string = DEFAULT_ALIAS): Promise<'deleted' | 'refused' | 'busy' | 'error'> {
-        const outcome = await this.runLifecycle(alias, async (): Promise<'deleted' | 'refused' | 'error'> => {
-            const entry = this.stateFor(alias);
-            // #9 guard: if we hold a specific container id/name, re-inspect it first. inspectContainer
-            // swallows Docker errors and returns undefined, so an undefined result is inconclusive
-            // here — but a RESOLVED foreign container (a name our old container no longer owns) must
-            // NEVER be removed: refuse, leave OUR records intact, and let the command surface the
-            // refusal instead of a false "deleted".
-            const knownId = entry.metadata?.containerId;
-            if (knownId) {
-                const inspected = await this.runtime.inspectContainer(knownId);
-                if (inspected && !this.isOwnedContainer(inspected, alias)) {
-                    void vscode.window.showWarningMessage(
-                        l10n.t(
-                            'The DocumentDB Local container was not removed because it was created outside the extension. Remove it with Docker if you no longer need it.',
-                        ),
-                    );
-                    return 'refused';
+        const outcome = await this.runLifecycle(
+            alias,
+            'deleting',
+            async (): Promise<'deleted' | 'refused' | 'error'> => {
+                const entry = this.stateFor(alias);
+                // #9 guard: if we hold a specific container id/name, re-inspect it first. inspectContainer
+                // swallows Docker errors and returns undefined, so an undefined result is inconclusive
+                // here — but a RESOLVED foreign container (a name our old container no longer owns) must
+                // NEVER be removed: refuse, leave OUR records intact, and let the command surface the
+                // refusal instead of a false "deleted".
+                const knownId = entry.metadata?.containerId;
+                if (knownId) {
+                    const inspected = await this.runtime.inspectContainer(knownId);
+                    if (inspected && !this.isOwnedContainer(inspected, alias)) {
+                        void vscode.window.showWarningMessage(
+                            l10n.t(
+                                'The DocumentDB Local container was not removed because it was created outside the extension. Remove it with Docker if you no longer need it.',
+                            ),
+                        );
+                        return 'refused';
+                    }
                 }
-            }
-            // Authoritatively resolve OUR containers by label + alias. Unlike inspectContainer,
-            // listByLabel does NOT swallow errors: a Docker FAILURE throws (so "cannot verify" is never
-            // mistaken for "already gone", which would wipe records for a still-live container and
-            // resurface it as a credential-missing ghost — GPT-5.6 review), an empty result means our
-            // container is confirmed gone, and any hit is a container we created. This also covers a
-            // stale metadata id whose container was externally replaced by a new labelled same-alias
-            // one: we remove the LIVE container, not the stale id.
-            let owned: Array<{ id: string }>;
-            try {
-                owned = await this.findManagedContainers(alias, { propagateErrors: true });
-            } catch (error) {
-                return this.reportDeleteFailure(error);
-            }
-            // Delete is a full clean slate: remove EVERY label-matched container, not just one. A
-            // cross-window double-create can leave more than one managed container for the alias
-            // (reconcile adopts the newest and LEAVES the rest — see pickManagedContainer); removing
-            // only the first would strand a survivor that resurfaces as a credential-missing ghost.
-            for (const container of owned) {
-                // Do NOT swallow a real removal failure on OUR container: if Docker refuses to remove
-                // it (daemon error, permissions, etc.), the container may remain, so we must not claim
-                // success or wipe our records. Surface the error and keep the instance so the user can
-                // retry Delete (GPT-5.6 review: the toast must reflect the ACTUAL outcome).
+                // Authoritatively resolve OUR containers by label + alias. Unlike inspectContainer,
+                // listByLabel does NOT swallow errors: a Docker FAILURE throws (so "cannot verify" is never
+                // mistaken for "already gone", which would wipe records for a still-live container and
+                // resurface it as a credential-missing ghost — GPT-5.6 review), an empty result means our
+                // container is confirmed gone, and any hit is a container we created. This also covers a
+                // stale metadata id whose container was externally replaced by a new labelled same-alias
+                // one: we remove the LIVE container, not the stale id.
+                let owned: Array<{ id: string }>;
                 try {
-                    await this.runtime.removeContainer(container.id);
+                    owned = await this.findManagedContainers(alias, { propagateErrors: true });
                 } catch (error) {
                     return this.reportDeleteFailure(error);
                 }
-            }
-            // owned is empty ⇒ our container is confirmed gone; fall through to clear OUR data volume +
-            // records (the clean-slate Delete of a Missing / already-removed instance).
-            // Explicit Delete is a full clean slate: drop the data volume too (alias-derived ⇒ ours by
-            // construction). The container — the only resurrection vector — is now gone, so a volume
-            // removal failure cannot bring the instance back; it only orphans data that the next
-            // same-alias provision reclaims. Surface it as a non-blocking warning (not a silent
-            // swallow) and still complete the delete rather than stranding a container-less instance.
-            const volumeRemoved = await this.runtime
-                .removeVolume(volumeName(alias))
-                .then(() => true)
-                .catch(() => false);
-            if (!volumeRemoved) {
-                void vscode.window.showWarningMessage(
-                    l10n.t(
-                        'The DocumentDB Local container was deleted, but its data volume could not be removed. You can remove it with Docker.',
-                    ),
-                );
-            }
-            // Drop the instance's record AND its credentials in one write — an explicit Delete is a
-            // full clean slate, so it no longer appears when the tree enumerates instances.
-            await removeInstance(alias);
-            await ClustersClient.deleteClient(clusterId(alias)).catch(() => undefined);
-            CredentialCache.deleteCredentials(clusterId(alias));
-            entry.metadata = undefined;
-            this.setStatus(alias, InstanceState.NotInstalled);
-            return 'deleted';
-        });
+                // Delete is a full clean slate: remove EVERY label-matched container, not just one. A
+                // cross-window double-create can leave more than one managed container for the alias
+                // (reconcile adopts the newest and LEAVES the rest — see pickManagedContainer); removing
+                // only the first would strand a survivor that resurfaces as a credential-missing ghost.
+                for (const container of owned) {
+                    // Do NOT swallow a real removal failure on OUR container: if Docker refuses to remove
+                    // it (daemon error, permissions, etc.), the container may remain, so we must not claim
+                    // success or wipe our records. Surface the error and keep the instance so the user can
+                    // retry Delete (GPT-5.6 review: the toast must reflect the ACTUAL outcome).
+                    try {
+                        await this.runtime.removeContainer(container.id);
+                    } catch (error) {
+                        return this.reportDeleteFailure(error);
+                    }
+                }
+                // owned is empty ⇒ our container is confirmed gone; fall through to clear OUR data volume +
+                // records (the clean-slate Delete of a Missing / already-removed instance).
+                // Explicit Delete is a full clean slate: drop the data volume too (alias-derived ⇒ ours by
+                // construction). The container — the only resurrection vector — is now gone, so a volume
+                // removal failure cannot bring the instance back; it only orphans data that the next
+                // same-alias provision reclaims. Surface it as a non-blocking warning (not a silent
+                // swallow) and still complete the delete rather than stranding a container-less instance.
+                const volumeRemoved = await this.runtime
+                    .removeVolume(volumeName(alias))
+                    .then(() => true)
+                    .catch(() => false);
+                if (!volumeRemoved) {
+                    void vscode.window.showWarningMessage(
+                        l10n.t(
+                            'The DocumentDB Local container was deleted, but its data volume could not be removed. You can remove it with Docker.',
+                        ),
+                    );
+                }
+                // Drop the instance's record AND its credentials in one write — an explicit Delete is a
+                // full clean slate, so it no longer appears when the tree enumerates instances.
+                await removeInstance(alias);
+                await ClustersClient.deleteClient(clusterId(alias)).catch(() => undefined);
+                CredentialCache.deleteCredentials(clusterId(alias));
+                entry.metadata = undefined;
+                this.setStatus(alias, InstanceState.NotInstalled);
+                return 'deleted';
+            },
+        );
         // The op returns an explicit outcome; runLifecycle only yields undefined when the alias was
         // busy (op skipped) or a later best-effort cleanup step threw and was settled to Error. In
         // both cases nothing was reported deleted, so the caller must not report success.
@@ -1701,7 +1766,7 @@ export class QuickStartServiceImpl {
     /** `Date.now()` when the last background probe settled — drives the cooldown below. */
     private lastBackgroundRefreshAt = 0;
 
-    /** True while a {@link refreshLiveStateInBackground} probe is in flight (drives the tree's "Refreshing…" hint). */
+    /** True while a {@link refreshLiveStateInBackground} probe is in flight. */
     public get isRefreshingLiveState(): boolean {
         return this.backgroundRefresh !== undefined;
     }
@@ -1729,10 +1794,12 @@ export class QuickStartServiceImpl {
                 this.backgroundRefresh = undefined;
                 this.lastBackgroundRefreshAt = Date.now();
                 // Fire unconditionally (refreshLiveState() itself only fires on a real transition):
-                // the row is advertising "Refreshing…" and must drop that hint. Safe because the
-                // cooldown above blocks the re-render from starting another probe.
+                // the row must drop the progress indicator. Safe because the cooldown above blocks
+                // the re-render from starting another probe.
                 this.statusEmitter.fire();
+                this.operationEmitter.fire();
             });
+        this.operationEmitter.fire();
     }
 
     /**
@@ -1786,12 +1853,17 @@ export class QuickStartServiceImpl {
         }
     }
 
-    private async runLifecycle<T>(alias: string, op: () => Promise<T>): Promise<T | undefined> {
+    private async runLifecycle<T>(
+        alias: string,
+        kind: QuickStartOperationKind,
+        op: () => Promise<T>,
+    ): Promise<T | undefined> {
         const entry = this.stateFor(alias);
         if (entry.provisioning || entry.lifecycleBusy) {
             return undefined;
         }
         entry.lifecycleBusy = true;
+        const endOperation = this.beginOperation(alias, kind);
         try {
             return await op();
         } catch (error) {
@@ -1799,6 +1871,7 @@ export class QuickStartServiceImpl {
             return undefined;
         } finally {
             entry.lifecycleBusy = false;
+            endOperation();
         }
     }
 

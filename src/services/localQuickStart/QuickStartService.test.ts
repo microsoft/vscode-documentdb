@@ -614,6 +614,58 @@ describe('QuickStartService — WI-2d registry-driven reconcile (multi-instance)
         expect(inspectContainer).toHaveBeenCalledTimes(1);
     });
 
+    it('publishes an awaitable handle for in-flight lifecycle work', async () => {
+        ext.secretStorage = fakeSecretStorage({});
+        ext.context = fakeContext(fakeMemento());
+        await seedInstance(DEFAULT_ALIAS, CONN_1);
+
+        let finishStop!: () => void;
+        const stopContainer = jest.fn(
+            () =>
+                new Promise<void>((resolve) => {
+                    finishStop = resolve;
+                }),
+        );
+        const service = new QuickStartServiceImpl(
+            mockRuntime({
+                listByLabel: jest
+                    .fn()
+                    .mockResolvedValue([{ id: 'c1', labels: { [QUICK_START_ALIAS_LABEL_KEY]: DEFAULT_ALIAS } }]),
+                inspectContainer: jest.fn((id: string) =>
+                    Promise.resolve({
+                        id,
+                        status: 'running',
+                        ports: [{ containerPort: QUICK_START_PORT, hostPort: 10260 }],
+                        image: { originalName: 'img:1' },
+                        labels: { [QUICK_START_LABEL_KEY]: '1', [QUICK_START_ALIAS_LABEL_KEY]: DEFAULT_ALIAS },
+                    }),
+                ) as unknown as IContainerRuntime['inspectContainer'],
+                stopContainer,
+            }),
+        );
+
+        await service.reconcile();
+        expect(service.getStatus().state).toBe(InstanceState.Running);
+
+        let operationEvents = 0;
+        service.onDidChangeOperation(() => operationEvents++);
+
+        // The tree cannot own the spinner for work it did not start (the webview and the lifecycle
+        // commands both reach here), so the wait itself has to be observable.
+        const stopping = service.stop();
+        const operation = service.getInFlightOperation();
+        expect(operation?.kind).toBe('stopping');
+        expect(operationEvents).toBe(1);
+
+        await new Promise((resolve) => setTimeout(resolve, 0));
+        finishStop();
+        await stopping;
+
+        await expect(operation?.promise).resolves.toBeUndefined();
+        expect(service.getInFlightOperation()).toBeUndefined();
+        expect(operationEvents).toBe(2);
+    });
+
     it('deleteContainer() refuses to remove a container that is not ours, even when surfaced as Missing (#9)', async () => {
         ext.secretStorage = fakeSecretStorage({});
         ext.context = fakeContext(fakeMemento());

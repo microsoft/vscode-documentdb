@@ -123,6 +123,7 @@ import { RUBranchDataProvider } from '../tree/azure-resources-view/mongo-ru/RUBr
 import { ClustersWorkspaceBranchDataProvider } from '../tree/azure-workspace-view/ClustersWorkbenchBranchDataProvider';
 import { DocumentDbWorkspaceResourceProvider } from '../tree/azure-workspace-view/DocumentDbWorkspaceResourceProvider';
 import { ConnectionsBranchDataProvider } from '../tree/connections-view/ConnectionsBranchDataProvider';
+import { createQuickStartProgressBridge } from '../tree/connections-view/LocalQuickStart/quickStartProgressBridge';
 import { DiscoveryBranchDataProvider } from '../tree/discovery-view/DiscoveryBranchDataProvider';
 import { DiscoveryViewDragAndDropController } from '../tree/discovery-view/DiscoveryViewDragAndDropController';
 import { type ClusterItemBase } from '../tree/documentdb/ClusterItemBase';
@@ -288,6 +289,7 @@ export class ClustersExtension implements vscode.Disposable {
                 ext.context.subscriptions.push(QuickStartService);
                 ext.context.subscriptions.push({ dispose: disposeQuickStartOutputChannel });
                 ext.context.subscriptions.push({ dispose: disposeQuickStartLogFollow });
+                ext.context.subscriptions.push(createQuickStartProgressBridge());
                 ext.context.subscriptions.push(
                     QuickStartService.onDidChangeStatus(() => {
                         // Reset BEFORE refreshing (I2-17): a failure the user fixed in the Quick Start

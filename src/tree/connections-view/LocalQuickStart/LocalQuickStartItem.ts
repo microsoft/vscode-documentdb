@@ -86,14 +86,8 @@ function buildPreflightChildren(parentId: string, verdict: QuickStartConnectionP
                 }),
             ];
         case 'busy':
-            return [
-                createGenericElementWithContext({
-                    id,
-                    contextValue: 'treeItem_quickStartProvisioning',
-                    label: l10n.t('DocumentDB Local is busy…'),
-                    iconPath: new vscode.ThemeIcon('loading~spin'),
-                }),
-            ];
+            // Progress belongs on the node itself (see quickStartProgressBridge), not on a child row.
+            return [];
         default:
             return [
                 createGenericElementWithContext({
@@ -404,10 +398,6 @@ export class LocalQuickStartItem implements TreeElement, TreeElementWithContextV
         const status: QuickStartStatus = QuickStartService.getStatus();
         const metadata = status.metadata;
 
-        /** Append the in-flight-probe hint so a row rendered from cache says so. */
-        const withRefreshHint = (description: string): string =>
-            QuickStartService.isRefreshingLiveState ? l10n.t('{0} · Refreshing…', description) : description;
-
         // Missing badge (design §6.1): metadata exists but Docker has no container.
         if (metadata && status.missing) {
             return [
@@ -415,7 +405,7 @@ export class LocalQuickStartItem implements TreeElement, TreeElementWithContextV
                     id: `${this.id}/instance`,
                     contextValue: createContextValue([INSTANCE_CONTEXT, 'state_missing']),
                     label: l10n.t('DocumentDB Local'),
-                    description: withRefreshHint(l10n.t('Missing · click to recreate')),
+                    description: l10n.t('Missing · click to recreate'),
                     tooltip: l10n.t(
                         'The container was removed outside VS Code. Click to recreate it (your data is preserved), or use Delete Container to remove it and its data.',
                     ),
@@ -452,7 +442,7 @@ export class LocalQuickStartItem implements TreeElement, TreeElementWithContextV
             return [
                 new QuickStartClusterItem(
                     model,
-                    withRefreshHint(l10n.t('Running · localhost:{0}', metadata.boundPort)),
+                    l10n.t('Running · localhost:{0}', metadata.boundPort),
                     'state_running',
                     metadata.alias,
                 ),
@@ -479,20 +469,16 @@ export class LocalQuickStartItem implements TreeElement, TreeElementWithContextV
                 };
             };
 
-            const spin = new vscode.ThemeIcon('loading~spin');
+            // Transitional states keep their own contextValue (menus gate on it), but never their own
+            // spinner: the progress indicator is applied to this row by quickStartProgressBridge.
+            const idle = new vscode.ThemeIcon('circle-outline');
             switch (status.state) {
                 case InstanceState.Starting:
-                    return [row('state_starting', l10n.t('Starting… · localhost:{0}', port), spin)];
+                    return [row('state_starting', l10n.t('Starting… · localhost:{0}', port), idle)];
                 case InstanceState.Stopping:
-                    return [row('state_stopping', l10n.t('Stopping… · localhost:{0}', port), spin)];
+                    return [row('state_stopping', l10n.t('Stopping… · localhost:{0}', port), idle)];
                 case InstanceState.Stopped:
-                    return [
-                        row(
-                            'state_stopped',
-                            withRefreshHint(l10n.t('Stopped · localhost:{0}', port)),
-                            new vscode.ThemeIcon('circle-outline'),
-                        ),
-                    ];
+                    return [row('state_stopped', l10n.t('Stopped · localhost:{0}', port), idle)];
                 case InstanceState.Error:
                     return [
                         row(
@@ -527,6 +513,8 @@ export class LocalQuickStartItem implements TreeElement, TreeElementWithContextV
         }
 
         if (status.state === InstanceState.Provisioning) {
+            // The one row that still owns its spinner: there is no instance row to attach node
+            // progress to yet, and this mirrors what `ext.state.showCreatingChild` renders.
             return [
                 createGenericElementWithContext({
                     id: `${this.id}/provisioning`,
@@ -560,8 +548,8 @@ export class LocalQuickStartItem implements TreeElement, TreeElementWithContextV
 
     /** Explicit node refresh performs a full durable-store and Docker reconciliation. */
     public async refresh(_context: IActionContext): Promise<void> {
-        // Reconciliation shells out to Docker, so the view carries the wait.
-        await vscode.window.withProgress({ location: { viewId: Views.ConnectionsView } }, () =>
+        // Reconciliation shells out to Docker, so the node carries the wait.
+        await ext.state.runWithTemporaryDescription(this.id, l10n.t('Refreshing…'), () =>
             QuickStartService.refreshHydratedState(),
         );
         ext.connectionsBranchDataProvider.refresh(this);
