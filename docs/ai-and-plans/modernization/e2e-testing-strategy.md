@@ -215,25 +215,121 @@ Neither generalises to the other:
 
 ---
 
-## 4. The migration improves #867 rather than obsoleting it
+## 4. PR #867 — the goal, the implementation, and what the research changes
 
-Three of the harness's documented problems are _fixed by the very changes that parked it_:
+### 4.1 The goal, stated independently of the implementation
 
-**1. The `writeToDisk` hack disappears.** The PR's "number one time waster" was stale
-`dist/views.js`, because `watch:views` is `webpack serve` and builds in memory — requiring
-`devServer.devMiddleware.writeToDisk`. Vite's dev server serves modules over HTTP natively; the
-harness page can be served by `vite serve` directly, with HMR, and the whole failure mode is gone.
+The PR describes a technical solution. The goal underneath it is more durable than the solution, and
+worth separating, because the research points at a different vehicle for the same goal.
 
-**2. Typed fixtures become possible — this kills the drift risk.** Once the tRPC plumbing lives in
-`@microsoft/vscode-ext-webview`, the harness can stop hand-rolling `{id, op:{type, path, input}}`
-and instead type its scenarios against the router's actual inferred output types. A router change
-then breaks the fixture **at compile time** instead of silently degrading into fiction. This is the
-single most important fix, because it converts the harness's worst property into a checked one.
+> **Reach any UI state deterministically, in well under a second, with no extension host, no
+> backend, no Docker and no human — and let three different consumers act on it.**
 
-**3. Vitest + jsdom absorbs part of the job.** Cosmos DB's PR #3172 added React component tests with
-Testing Library under Vitest. Pure component logic tested there is cheaper than a browser harness.
-The harness should then focus on what jsdom cannot do: **real layout, real Fluent styling, real
-theme variables, screenshots**.
+| Consumer     | What they do with it                                                                      | What it replaces                                                                                                                |
+| ------------ | ----------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------- |
+| **Reviewer** | Sees every state of a panel without building and running the extension                    | "trust me, it looks right" — or a bug-bash                                                                                      |
+| **Agent**    | Drives the state with browser tools; reads `window.__harnessCalls` to assert side effects | A state that "otherwise needs a human, Docker, and several minutes" — the PR's own words, and it calls this "most of the value" |
+| **CI**       | Asserts the state                                                                         | Nothing. `npm test` is a no-op stub today                                                                                       |
+
+Three properties make it work, and all three belong to the goal rather than the implementation:
+
+1. **State is described, not produced.** `?scenario=...` — no orchestration, no seeding, no waiting.
+2. **Everything below one stub is shipped code.** Real React tree, real Fluent styling, real DOM,
+   real localization lookup path. Exactly one global is faked.
+3. **Escaping actions are recorded, not performed.** `window.__harnessCalls` is how _"the Windows
+   install button opens the Docker Desktop page"_ gets asserted without leaving the page.
+
+**Property 3 is the sharpest idea in the PR and the most transferable.** It asserts at the boundary
+the UI is trying to cross. Neither reference project does this: Ref1's component-screenshot harness
+makes `postMessage` a silent no-op, so it can assert what _rendered_ but never what the UI _tried to
+do_. Cosmos DB asserts the consequence in a real editor, expensively.
+
+And the benefit neither real-backend suite can buy at any price: **deterministic failure and edge
+states.** "Docker daemon not running", "image pull failed", "port already bound", "network timeout"
+are one-line fixtures here and genuine orchestration problems against a live backend.
+
+### 4.2 What the research solves outright
+
+Every documented problem and open decision in the PR, against what this research turned up.
+
+| #867 problem or open decision                                                                            | Answer                                                                                                                                                                                                                                           | Source                   |
+| -------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------ |
+| Stale `dist/views.js` — "the number one time waster", patched with `devServer.devMiddleware.writeToDisk` | Vite's dev server serves modules over HTTP natively. **The failure mode ceases to exist** — delete the patch rather than porting it                                                                                                              | The migration            |
+| "the suite does **NOT** build for you"                                                                   | `globalSetup` auto-runs the production build when output is older than source — **and encodes build _mode_, not just mtime**, because a dev watch build looked newer by timestamp and silently broke rendering                                   | Cosmos DB #3164          |
+| Untyped fixtures drifting into fiction                                                                   | Type scenarios against the router's inferred output types, so drift is a **compile error**. Add `as const satisfies` on the scenario list, `satisfies Record<ScenarioId, …>` on expectations, and a load-time registry-drift assertion           | The package + Ref1       |
+| Scenarios are untyped JS object literals **inside the HTML**                                             | Move ownership to `dev/`, beside the components they describe. Test code becomes "only a capture adapter"                                                                                                                                        | Ref1 §5.9                |
+| Hand-rolled tRPC envelope `{id, op:{type, path, input}}`                                                 | Use the real transport, and back scenarios with a **fake transport** resolving procedure calls from a fixture map — which also reaches components that fetch on mount, something prop injection cannot                                           | The package + §7.2       |
+| `goto(waitUntil:'load')` hangs on an unsettled call; the harness sets `window.__harnessReady` at a phase | **Promote it into the product** as `data-webview-id` + `data-ready`. One contract then serves the harness _and_ the packaged-VSIX tripwire. The PR already invented the mechanism — it is in the wrong place                                     | §5.7, and #867's own fix |
+| No console-error policy anywhere                                                                         | Add `consoleHealth` **here first**. The harness is the cheapest place in the entire plan to run it: real bundle, real browser, no Electron, sub-second — and module-resolution or circular-import breakage is precisely what the migration risks | Cosmos DB                |
+| "Two runners, neither sees the other"                                                                    | One runner, if the harness moves to Vitest browser mode (§4.3). Otherwise: one documented entry point, and write down what each command does and does not cover                                                                                  | §4.3                     |
+| `@playwright/test` is a caret-ranged alpha from an ADO mirror with sha1 integrity hashes                 | Pin to latest stable from the public registry. Ref1 pins its editor version and treats bumps as explicit work; its unpinned second editor is its largest recurring tax. Same discipline, applied to the runner                                   | Ref1 §5.6                |
+| "Screenshots are artifacts, not baselines, and deliberately so"                                          | **Settled — do not revisit.** Both reference projects independently reached the same conclusion for the same reason (OS-rendered text). Baselines only become defensible once runs are standardised on one container image                       | Both                     |
+| "CI or explicitly manual?"                                                                               | **The question conflates two artifacts.** See §4.4                                                                                                                                                                                               | §4.4                     |
+| HMR lies after a hook change; `box-sizing: content-box`                                                  | Unaffected by any of this. Keep the notes                                                                                                                                                                                                        | —                        |
+
+### 4.3 The vehicle question — three ways to build the same goal
+
+The PR builds `serve.js` + a static HTML page + a separate Playwright project. **That was the right
+call on webpack.** On Vite it is no longer the only option, and probably not the best one.
+
+| Option                                      | Shape                                                                                                                                | Value    | Complexity | Carry   | Verdict                                                                                                                                                                                      |
+| ------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------ | -------- | ---------- | ------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **A.** Port it as-is                        | `vite serve` replaces `serve.js`; keep the HTML page and the separate Playwright project                                             | Medium   | S          | Medium  | Cheapest move, but keeps two runners and a bespoke page forever                                                                                                                              |
+| **B.** Vite entry + **Vitest browser mode** | Scenarios become a real Vite entry; assertions run in Vitest's browser mode against real Chromium, sharing the product's Vite config | **High** | M          | **Low** | **Recommended.** One config, one runner, no `serve.js`, no hand-written HTML, no staleness problem. Playwright then exists only for the packaged-VSIX tripwire                               |
+| **C.** Adopt Storybook                      | Replace the harness with Storybook plus a test runner                                                                                | Low      | L          | Ongoing | Ref1's report is blunt: they "effectively built a minimal, bespoke Storybook", and bespoke is cheaper at ~12 scenarios though not at ~50. We are at ~12. A second toolchain to carry forever |
+
+**Option B dissolves three of the PR's four open decisions at once** — the runner question, the
+staleness question, and "is this the new `npm test`?" (no: `npm test` becomes the host integration
+layer; this becomes part of the unit/component run). Cosmos DB already added React component tests
+with Testing Library under Vitest (#3172); option B puts our harness in that same runner rather than
+beside it.
+
+Keep a `?scenario=` route served by `vite dev` regardless of the option chosen. That is the human and
+agent entry point, and it is strictly better than a hand-written HTML page — Ref1's report says so
+about its own equivalent.
+
+### 4.4 The CI decision, split
+
+The PR asks "CI or explicitly manual?" and correctly notes that unwired, a visual suite rots into
+fake coverage. Both reference projects answered by **not** wiring their component-screenshot work
+into CI — and Ref1's report then concedes that nothing stops it silently breaking.
+
+The question conflates two artifacts with different economics:
+
+| Artifact                                                                      | Deterministic?                                 | Wire into CI?                                                     |
+| ----------------------------------------------------------------------------- | ---------------------------------------------- | ----------------------------------------------------------------- |
+| The **assertions** — DOM state, `window.__harnessCalls`, console-error checks | **Yes** — no Electron, no Docker, no network   | **Yes.** They are as cheap as unit tests, and they rot without it |
+| The **screenshots**                                                           | **No** — OS text rendering differs per machine | **No baselines.** Artifacts only, published for PR review         |
+
+Neither reference project drew this line explicitly. Both let the screenshot half decide for the
+assertion half, and lost the assertions. That is the specific mistake to avoid.
+
+### 4.5 The one thing #867 does that neither reference project does
+
+> `git revert --no-commit bc08cfd1` — undo the webview fixes — then run the suite and expect
+> **exactly** those assertions to fail, everything else green.
+
+That is a **mutation test on the test suite itself**. The PR calls it "the only falsifiable claim
+about this suite" and notes it currently exists only as a sentence in a commit message.
+
+Neither reference project has anything equivalent. Ref1 has a commit titled _"stabilize flaky
+Playwright helpers and **false-green coverage**"_ — an admission that some of its tests were passing
+without testing anything, discovered the hard way. A mutation check is the cheapest possible defence
+against exactly that, and it is the one practice in this entire document we would be **exporting**
+rather than importing.
+
+**Make it a script rather than a sentence**, and run it whenever the suite changes materially.
+Value High · Complexity S · Carry None.
+
+### 4.6 What to keep untouched
+
+- **Artifacts, not baselines.** Independently confirmed twice; the reasoning is sound.
+- **`window.__harnessCalls`.** Better than either reference project's host stub (§4.1).
+- **The honest non-scope section.** It is why the harness was never over-claimed, and it is what
+  lets this document place it precisely as Layer 3 in §7.2.
+- **Deleting the `success-relocated-port` scenario** because the product no longer behaves that way.
+  A fixture describing behaviour the product does not have is exactly how a harness drifts into
+  fiction — the same failure the typed-fixture fix prevents structurally.
 
 ---
 
@@ -990,6 +1086,8 @@ checklist it runs on every PR that touches build configuration.
 
 ### Fix in #867 before unparking
 
+> Expanded, with sources and scores, in [§4.2–§4.5](#42-what-the-research-solves-outright).
+
 | Debt                                     | Fix                                                                                       |
 | ---------------------------------------- | ----------------------------------------------------------------------------------------- |
 | Untyped, drifting fixtures               | Derive scenario types from the router's inferred output types; make drift a compile error |
@@ -1163,15 +1261,17 @@ the interest payment.
 
 ### 7.7 Wave 3 — depth, driven by real bugs
 
-| Item                                                                         | Source    | Value  | Complexity | Carry  | Note                                                        |
-| ---------------------------------------------------------------------------- | --------- | ------ | ---------- | ------ | ----------------------------------------------------------- |
-| Unpark #867 on `vite serve` with typed fixtures                              | Ours      | High   | M          | Low    | Its unique value is deterministic failure states            |
-| Scenario ownership in `dev/`; `as const satisfies`; registry-drift assertion | Ref1      | Medium | S          | Low    | Three idioms; adopt all three                               |
-| SlickGrid / Monaco interaction patterns                                      | Ref1      | Medium | S          | Low    | Mostly knowledge transfer, not code                         |
-| Regression-only growth policy + explicit cap                                 | Ref1      | High   | S          | None   | A written rule is the cheapest High-value item on this page |
-| Seeded workspace fixture + `restartVsCode()`                                 | Ref1      | Medium | M          | Medium | Only if settings-scope or persistence bugs appear           |
-| Coverage collection from E2E                                                 | Cosmos DB | Low    | M          | Low    | Interesting, not load-bearing                               |
-| Docs-screenshot project                                                      | Ref1      | Low    | M          | Low    | Only when the user manual demands it                        |
+| Item                                                                         | Source    | Value  | Complexity | Carry  | Note                                                               |
+| ---------------------------------------------------------------------------- | --------- | ------ | ---------- | ------ | ------------------------------------------------------------------ |
+| Unpark #867 as a **Vite entry + Vitest browser mode** (§4.3 option B)        | Ours      | High   | M          | Low    | One runner, one config; its unique value is failure states         |
+| Wire the harness **assertions** into CI; screenshots stay artifacts          | §4.4      | High   | S          | Low    | Neither reference project split this, and both lost the assertions |
+| **Mutation test on the suite itself**, as a script not a sentence            | **#867**  | High   | S          | None   | The one practice we would export rather than import (§4.5)         |
+| Scenario ownership in `dev/`; `as const satisfies`; registry-drift assertion | Ref1      | Medium | S          | Low    | Three idioms; adopt all three                                      |
+| SlickGrid / Monaco interaction patterns                                      | Ref1      | Medium | S          | Low    | Mostly knowledge transfer, not code                                |
+| Regression-only growth policy + explicit cap                                 | Ref1      | High   | S          | None   | A written rule is the cheapest High-value item on this page        |
+| Seeded workspace fixture + `restartVsCode()`                                 | Ref1      | Medium | M          | Medium | Only if settings-scope or persistence bugs appear                  |
+| Coverage collection from E2E                                                 | Cosmos DB | Low    | M          | Low    | Interesting, not load-bearing                                      |
+| Docs-screenshot project                                                      | Ref1      | Low    | M          | Low    | Only when the user manual demands it                               |
 
 ### 7.8 Deliberately not doing — and what it would have cost
 
