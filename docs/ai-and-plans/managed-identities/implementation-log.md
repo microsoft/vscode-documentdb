@@ -50,9 +50,9 @@ value without the handler is dead code, and the handler without the factory case
 six-commit sequence would have produced five commits that do not build a working feature and one
 that does.
 
-**Commit:** `1e2a42a8` — _Add managed identity authentication method and handler_
+**Commit:** `1e2a42a8`, _Add managed identity authentication method and handler_
 
-### WI1 — `AuthMethodId.ManagedIdentity` ✅
+### WI1: `AuthMethodId.ManagedIdentity` ✅
 
 **What.** Added `ManagedIdentity` to the `AuthMethodId` enum and a `ManagedIdentityAuthMethod`
 `AuthMethodInfo` record, registered in `authMethodsArray` between the interactive Entra ID entry and
@@ -74,7 +74,7 @@ No existing behaviour changes from the array insertion:
 annotates unsupported ones with "Cluster support unknown", exactly as it does for interactive Entra
 ID. Verified by the existing `AuthMethod` tests, which still pass unmodified.
 
-### WI2 — Shared Entra token resource and scope constants ✅
+### WI2: Shared Entra token resource and scope constants ✅
 
 **What.** New [src/documentdb/auth/entraScopes.ts](src/documentdb/auth/entraScopes.ts) exporting
 `DOCUMENTDB_TOKEN_RESOURCE` (`https://ossrdbms-aad.database.windows.net`) and `DOCUMENTDB_ENTRA_SCOPE`
@@ -94,7 +94,7 @@ Per [D6.1](./decisions.md#d61-token-expiry-and-caching-out-of-scope-dedicated-is
 handler's `expiresInSeconds: 0` was **not** touched. The only change to that file is the constant
 substitution.
 
-### WI3 — `ManagedIdentityAuthConfig` ✅
+### WI3: `ManagedIdentityAuthConfig` ✅
 
 **What.** Added the interface to [src/documentdb/auth/AuthConfig.ts](src/documentdb/auth/AuthConfig.ts)
 and extended the `AuthConfig` union.
@@ -106,7 +106,7 @@ meaningful and selects the system-assigned identity, so persisting `undefined` i
 make the method un-inferable after a reload. That rule is enforced downstream in WI12 and WI13, but
 it is stated at the type so the constraint travels with it.
 
-### WI4 — `ManagedIdentityAuthHandler` ✅
+### WI4: `ManagedIdentityAuthHandler` ✅
 
 **What.** New [src/documentdb/auth/ManagedIdentityAuthHandler.ts](src/documentdb/auth/ManagedIdentityAuthHandler.ts),
 structurally parallel to the interactive Entra ID handler, plus the `expiresInSecondsFromTimestamp`
@@ -132,7 +132,7 @@ helper. Unit tests in `ManagedIdentityAuthHandler.test.ts`.
 - **Divergence (signature):** the helper takes an optional `now` parameter so the tests are not
   time-dependent. Defaulted, so callers are unaffected.
 
-### WI5 — Factory registration ✅
+### WI5: Factory registration ✅
 
 **What.** Added the `AuthMethodId.ManagedIdentity` case to the switch in
 `ClustersClient.initClient()`.
@@ -140,7 +140,7 @@ helper. Unit tests in `ManagedIdentityAuthHandler.test.ts`.
 **Why.** Plan §3. Without it the method resolves to the `default` branch and throws "Unsupported
 authentication method".
 
-### WI6 — Error translation ✅
+### WI6: Error translation ✅
 
 **What.** New [src/documentdb/auth/managedIdentityErrors.ts](src/documentdb/auth/managedIdentityErrors.ts)
 exporting `describeManagedIdentityError()` and `classifyManagedIdentityError()`. Unit tests in
@@ -181,16 +181,16 @@ The seventh positional parameter is knowingly past the point of readability; the
 
 ## Phase 2: connection creation and persistence
 
-### WI7, WI8, WI9 — Connection string round-trip ✅
+### WI7, WI8, WI9: Connection string round-trip ✅
 
-**Commit:** `e4c6c36b` — _Read and write the driver-native managed identity connection string_
+**Commit:** `e4c6c36b`, _Read and write the driver-native managed identity connection string_
 
 Grouped into one commit on purpose. [D1a](./decisions.md#d1a-copy-connection-string-for-a-managed-identity-connection)
 and the [D1](./decisions.md#d1-token-acquisition-mechanism) normalisation rule are a symmetric pair,
 and plan risk #9 is precisely that they drift apart. Landing them together with a single round-trip
 test makes that drift a test failure rather than a support ticket.
 
-#### WI7 — `detectManagedIdentityHint()` and normalisation
+#### WI7: `detectManagedIdentityHint()` and normalisation
 
 **What.** New [src/documentdb/auth/managedIdentityConnectionString.ts](src/documentdb/auth/managedIdentityConnectionString.ts)
 with `detectManagedIdentityHint()`, `stripManagedIdentityMarkers()`, `managedIdentityConfigFromHint()`,
@@ -226,7 +226,7 @@ and the `MANAGED_IDENTITY_AUTH_MECHANISM_PROPERTIES` constant. Wired into
 - The client ID is pushed to `context.valuesToMask`, and only the hint **confidence** goes to
   telemetry, per the plan's conventions item 3.
 
-#### WI8 — `Copy Connection String`
+#### WI8: `Copy Connection String`
 
 **What.** `buildParsedConnectionString()` in
 [copyConnectionString.ts](src/commands/copyConnectionString/copyConnectionString.ts) now has a
@@ -247,7 +247,7 @@ reads as native auth.
   T-16) that feed the clipboard content straight back through `detectManagedIdentityHint()`. T-16
   specifically pins the `{}` versus `undefined` distinction for the system-assigned case.
 
-#### WI9 — Availability for vCore hosts
+#### WI9: Availability for vCore hosts
 
 **What.** `PromptConnectionStringStep` now pushes `AuthMethodId.ManagedIdentity` alongside
 `MicrosoftEntraID` when the host has the vCore domain suffix.
@@ -255,7 +255,7 @@ reads as native auth.
 **Why.** Plan §6. On the wire the two methods are the same mechanism and differ only in token
 source, so anywhere one is offered the other should be too.
 
-#### WI11 (partial) — Context and ephemeral credential plumbing
+#### WI11 (partial): Context and ephemeral credential plumbing
 
 `managedIdentityAuthConfig` was added to `NewConnectionWizardContext`, `AuthenticateWizardContext`,
 `UpdateCredentialsWizardContext`, and `EphemeralClusterCredentials`. Each declaration repeats the
@@ -264,15 +264,15 @@ writing `?? undefined`.
 
 Still open in WI11: `ConnectionSecrets` in the storage service.
 
-### WI10, WI11, WI12, WI13 — Identity selection and persistence ✅
+### WI10, WI11, WI12, WI13: Identity selection and persistence ✅
 
-**Commit:** `dc991856` — _Select, persist and restore the managed identity of a connection_
+**Commit:** `dc991856`, _Select, persist and restore the managed identity of a connection_
 
 Grouped because they form one testable behaviour: a connection is not usable until the identity can
 be chosen, saved, and read back. WI12 in particular cannot be verified without WI13, since the bug it
 fixes only appears on the reload path.
 
-#### WI10 — `SelectManagedIdentityStep` and the recently-used store
+#### WI10: `SelectManagedIdentityStep` and the recently-used store
 
 **What.** New [SelectManagedIdentityStep.ts](src/documentdb/wizards/authenticate/SelectManagedIdentityStep.ts)
 and [recentManagedIdentities.ts](src/documentdb/auth/recentManagedIdentities.ts), with tests.
@@ -314,7 +314,7 @@ assigned to this VM remain phase 2, and the second still depends on
   for non-empty groups, the list is never empty, plus `shouldPrompt` for explicit versus weak hints
   and the GUID validation.
 
-#### WI11 (completed) — Storage secrets
+#### WI11 (completed): Storage secrets
 
 **What.** `managedIdentityAuthConfig` added to `ConnectionSecrets` and `StoredItem.secrets`, with
 read and write paths in [connectionStorageService.ts](src/services/connectionStorageService.ts).
@@ -334,7 +334,7 @@ read and write paths in [connectionStorageService.ts](src/services/connectionSto
   rejected as more storage for no additional information. Confidence: high; contract tests pin all
   three cases.
 
-#### WI12 — Inference ladder
+#### WI12: Inference ladder
 
 **What.** `CredentialCache.setFromConnectionItem()` now honours a persisted `selectedAuthMethod` for
 **every** known method rather than only `NoAuth`, falling through to inference only when the field is
@@ -351,7 +351,7 @@ with a dedicated regression block asserting that stored Native, Entra ID and NoA
 resolve identically, that records with no persisted method still fall back to inference, and that an
 **unrecognized** method string falls through to inference rather than being trusted.
 
-#### WI13 — Persistence
+#### WI13: Persistence
 
 **What.** [newConnection/ExecuteStep.ts](src/commands/newConnection/ExecuteStep.ts) persists
 `managedIdentityAuthConfig` behind a `usesManagedIdentity` gate that mirrors the existing native and
@@ -378,10 +378,10 @@ commit. The round-trip test (plan risk #9) landed with WI7 and WI8 in `e4c6c36b`
 tests landed with phase 1 in `1e2a42a8`; the credential-cache regression block landed with WI12 in
 `dc991856`._
 
-### WI14 — Fake identity-endpoint harness ✅
+### WI14: Fake identity-endpoint harness ✅
 
-**Commits:** `bd1c6f4d` — _Add a fake identity-endpoint harness and correct the error mapping_,
-`95b0d197` — lint fixup.
+**Commits:** `bd1c6f4d`, _Add a fake identity-endpoint harness and correct the error mapping_,
+`95b0d197`, lint fixup.
 
 **What.** New [managedIdentityEndpoint.harness.test.ts](src/documentdb/auth/managedIdentityEndpoint.harness.test.ts),
 which points `IDENTITY_ENDPOINT` and `IDENTITY_HEADER` at a local `http.Server` and drives the real
@@ -431,11 +431,11 @@ The observed messages are recorded verbatim as constants in `managedIdentityErro
 
 ## Phase 4: Azure Resources and Discovery views
 
-### WI16, WI17 — Availability and plumbing outside the Connections view ✅
+### WI16, WI17: Availability and plumbing outside the Connections view ✅
 
-**Commit:** `6f287d9a` — _Offer managed identity in the Azure Resources and Discovery views_
+**Commit:** `6f287d9a`, _Offer managed identity in the Azure Resources and Discovery views_
 
-#### WI16 — Synthesizing the method from ARM metadata
+#### WI16: Synthesizing the method from ARM metadata
 
 **What.** `extractCredentialsFromCluster()` in
 [clusterHelpers.ts](src/plugins/service-azure-mongo-vcore/utils/clusterHelpers.ts) now pushes
@@ -451,7 +451,7 @@ reporting the **raw** `allowedModes`. That is now a test rather than a comment: 
 asserts the counts and strings are unchanged by the synthesized entry, so someone moving the push a
 few lines earlier breaks a test instead of quietly skewing service-side numbers.
 
-#### WI17 — Threading the config through the connect paths
+#### WI17: Threading the config through the connect paths
 
 **What.** `managedIdentityAuthConfig` is now carried through:
 
@@ -481,9 +481,9 @@ few lines earlier breaks a test instead of quietly skewing service-side numbers.
 
 ## Phase 5: Playground and Shell
 
-### WI18, WI19, WI20 — Managed identity in the worker-backed surfaces ✅
+### WI18, WI19, WI20: Managed identity in the worker-backed surfaces ✅
 
-**Commit:** `6db91ea7` — _Support managed identity in the Playground and the Interactive Shell_
+**Commit:** `6db91ea7`, _Support managed identity in the Playground and the Interactive Shell_
 
 **What.**
 

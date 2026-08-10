@@ -15,10 +15,10 @@ Two symptoms triggered this work:
    actually being migrated to disk on each load; the trace was mislabeling a
    read-time, in-memory transform.
 2. **Connection loading felt slow, especially on Remote-WSL.** The storage layer
-   keeps connection *metadata* in `globalState` but connection *secrets* in
+   keeps connection _metadata_ in `globalState` but connection _secrets_ in
    `SecretStorage`. Every `SecretStorage.get()` is an RPC to the main process,
    and under Remote-WSL that RPC additionally crosses the WSL2 ↔ Windows
-   boundary. So the load cost is dominated by the *number* of secret reads, not
+   boundary. So the load cost is dominated by the _number_ of secret reads, not
    by CPU work.
 
 Diagnosing the second point revealed three compounding costs during startup:
@@ -36,7 +36,7 @@ Diagnosing the second point revealed three compounding costs during startup:
 
 The fixes are split into one commit per concern so each can be reviewed,
 reasoned about, and reverted independently. The reasoning behind each decision
-is captured below because the *why* is the point — the diffs are small.
+is captured below because the _why_ is the point — the diffs are small.
 
 ---
 
@@ -49,7 +49,7 @@ rewrote the trace/doc text to say explicitly that wrapping an older stored item
 into the current `StoredItem` shape is a **pure in-memory operation, recomputed
 on every read and never persisted**.
 
-**Reasoning.** This is deliberately *not* a behavior change — it is a naming and
+**Reasoning.** This is deliberately _not_ a behavior change — it is a naming and
 observability fix. The on-read wrapping is correct and intentionally kept: it
 lets old on-disk records (v1/v2) be consumed by current code without rewriting
 storage. The problem was purely that calling it "migration" in a per-read trace
@@ -85,8 +85,8 @@ telemetry.
 **Reasoning.** The cleanup exists to repair historical corruption and finish
 one-time format upgrades. Once an install has run it successfully, re-scanning
 both zones every session is pure waste. The version marker doubles as a
-contract: *"any install carrying 0.8.1 has completed every one-time cleanup up
-to that release."* The constant is only bumped when a genuinely new one-time
+contract: _"any install carrying 0.8.1 has completed every one-time cleanup up
+to that release."_ The constant is only bumped when a genuinely new one-time
 step is introduced, at which point existing installs re-run the pass exactly
 once. Critically, the marker is written **only after a successful run**, so an
 interrupted run leaves the marker unset and the pass safely retries next launch
@@ -117,7 +117,7 @@ the gating call in `getStorageService`, and the now-unused imports (`apiUtils`,
 **Reasoning.** This path imported MongoDB cluster connections from the Azure
 Databases (`ms-azuretools.vscode-cosmosdb`) extension on first storage access.
 It shipped several releases ago and is self-limiting — it only does work when
-that extension is installed *and* still holds un-imported connections — yet it
+that extension is installed _and_ still holds un-imported connections — yet it
 paid a fixed startup cost on every load (extension lookup + cross-extension API
 version negotiation) behind an `attempts < 20` counter. The remaining
 un-migrated population is effectively flat, so the ongoing per-load cost no
@@ -125,7 +125,7 @@ longer earns its keep.
 
 The key judgment call: this is **different from the on-disk format readers**
 (`wrapV1AsV2` etc.), which are kept. Dropping a format reader would silently
-*lose existing local data* for anyone who hadn't upgraded — unacceptable.
+_lose existing local data_ for anyone who hadn't upgraded — unacceptable.
 Dropping this cross-extension import only affects a narrow set of users who
 installed Azure Databases, created connections there, installed this extension,
 and never opened it to trigger the import — and even they have a clear,
@@ -154,7 +154,7 @@ retries rather than replaying the failure. Added a dedicated
 copies, invalidation on write, and failure eviction.
 
 **Reasoning.** Commits 2–4 made each individual read cheaper, but launch traces
-still showed the *same* zone being fully re-read several times: tree providers,
+still showed the _same_ zone being fully re-read several times: tree providers,
 the post-migration cleanup, and the URI handler each call `getItems()`
 independently during activation, and those calls don't overlap perfectly, so
 per-call concurrency (Commit 4) couldn't collapse them. A read-through cache

@@ -467,15 +467,13 @@ interface QueryEditorCtx extends BaseRouterContext {
   db: Db;
 }
 const t = initTRPC.context<QueryEditorCtx>().create();
-const procedure = t.procedure
-  .use(t.middleware(loggingMiddlewareBody(theirOutputChannelLogger)))
-  .use(
-    t.middleware(
-      telemetryMiddlewareBody(theirAppInsightsRunner, {
-        buildEventId: ({ type, path }) => `cosmosDB.rpc.${type}.${path}`,
-      }),
-    ),
-  );
+const procedure = t.procedure.use(t.middleware(loggingMiddlewareBody(theirOutputChannelLogger))).use(
+  t.middleware(
+    telemetryMiddlewareBody(theirAppInsightsRunner, {
+      buildEventId: ({ type, path }) => `cosmosDB.rpc.${type}.${path}`,
+    }),
+  ),
+);
 
 export const queryEditorRouter = t.router({
   /* …procedures… */

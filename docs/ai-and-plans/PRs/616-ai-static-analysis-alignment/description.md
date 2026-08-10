@@ -49,6 +49,7 @@ The AI-powered query analysis (Stage 3) had no knowledge of what the user was al
 ### 1. Instruction Positioning Matters for LLM Compliance
 
 The CRITICAL rules for low-cardinality and high-return-ratio were initially placed at positions 21-22 out of 22 instructions. GPT-4o completely ignored them because:
+
 - LLMs weight early instructions much more heavily than late ones
 - The strong COLLSCAN→create-index prior from training data overrides late rules
 - The role framing as "Index Advisor" biased the model toward always recommending something
@@ -58,6 +59,7 @@ The CRITICAL rules for low-cardinality and high-return-ratio were initially plac
 ### 2. Metadata Echo Was Pure Token Waste
 
 The prompt required the LLM to echo back `collectionStats`, `indexStats`, and `executionStats` in a `metadata` field. Investigation showed:
+
 - The `parseAIResponse()` method never extracted the `metadata` field
 - The `AIOptimizationResponse` TypeScript type doesn't include `metadata`
 - This was consuming ~40% of response tokens for data we already had
@@ -77,6 +79,7 @@ Prompt bodies were extracted to `resources/prompts/` for easier editing, but inl
 ### 5. Static Analysis Summary Design
 
 The summary is deliberately compact (~1400 chars for a typical query) to avoid doubling prompt size. It includes:
+
 - Performance rating with explicit scale (`GOOD (scale: Excellent > Good > Fair > Poor)`)
 - Collection context (total docs, returned, examined, exec time)
 - All 4 summary indicators (selectivity, index used, fetch overhead, in-memory sort)
@@ -93,16 +96,16 @@ The summary is deliberately compact (~1400 chars for a typical query) to avoid d
 
 ## Files Changed
 
-| Area | Files | Purpose |
-|------|-------|---------|
-| Core | `staticAnalysisSummary.ts` | Builds compact text summary of Stage 2 |
-| Core | `collectionViewRouter.ts` | Caches Stage 2, builds summary for Stage 3 |
-| Core | `ClusterSession.ts` | Stage 2 response cache |
-| Core | `indexAdvisorCommands.ts` | Passes summary through prompt pipeline |
-| Core | `QueryInsightsAIService.ts` | Accepts summary parameter |
-| Prompts | `resources/prompts/*.prompt.md` | Extracted template bodies |
-| Prompts | `promptTemplates.ts` | Resource loading, inline fallbacks, prompt source tracking |
-| Prompts | `promptTemplateService.ts` | Resource file loading via `buildIndexAdvisorPrompt()` |
-| Config | `.prettierignore` | Excludes prompt files |
-| Tests | `promptTemplates.test.ts` | 66 tests for prompt integrity |
-| Tests | `staticAnalysisSummary.test.ts` | 16 tests for summary builder |
+| Area    | Files                           | Purpose                                                    |
+| ------- | ------------------------------- | ---------------------------------------------------------- |
+| Core    | `staticAnalysisSummary.ts`      | Builds compact text summary of Stage 2                     |
+| Core    | `collectionViewRouter.ts`       | Caches Stage 2, builds summary for Stage 3                 |
+| Core    | `ClusterSession.ts`             | Stage 2 response cache                                     |
+| Core    | `indexAdvisorCommands.ts`       | Passes summary through prompt pipeline                     |
+| Core    | `QueryInsightsAIService.ts`     | Accepts summary parameter                                  |
+| Prompts | `resources/prompts/*.prompt.md` | Extracted template bodies                                  |
+| Prompts | `promptTemplates.ts`            | Resource loading, inline fallbacks, prompt source tracking |
+| Prompts | `promptTemplateService.ts`      | Resource file loading via `buildIndexAdvisorPrompt()`      |
+| Config  | `.prettierignore`               | Excludes prompt files                                      |
+| Tests   | `promptTemplates.test.ts`       | 66 tests for prompt integrity                              |
+| Tests   | `staticAnalysisSummary.test.ts` | 16 tests for summary builder                               |

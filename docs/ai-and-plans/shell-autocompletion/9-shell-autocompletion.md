@@ -70,13 +70,13 @@ Both dot notation (`db.collection`) and bracket notation (`db['collection']`) ar
 
 ### Data Sources
 
-| Source                       | Provides                                                     | Access                                            |
-| ---------------------------- | ------------------------------------------------------------ | ------------------------------------------------- |
-| Static lists                 | Top-level commands, show subcommands                         | Hardcoded                                         |
-| `ClustersClient`             | Database names, collection names                             | Synchronous cache read; background fetch if empty |
-| `SchemaStore`                | Collection names (from queries), field names + types         | Synchronous singleton                             |
-| `operator-registry`       | Query operators, BSON constructors, update operators, stages | `getFilteredCompletions()`                        |
-| `shell-api-types` | Shell API methods by target (database, collection, cursor)   | `getMethodsByTarget()`                            |
+| Source              | Provides                                                     | Access                                            |
+| ------------------- | ------------------------------------------------------------ | ------------------------------------------------- |
+| Static lists        | Top-level commands, show subcommands                         | Hardcoded                                         |
+| `ClustersClient`    | Database names, collection names                             | Synchronous cache read; background fetch if empty |
+| `SchemaStore`       | Collection names (from queries), field names + types         | Synchronous singleton                             |
+| `operator-registry` | Query operators, BSON constructors, update operators, stages | `getFilteredCompletions()`                        |
+| `shell-api-types`   | Shell API methods by target (database, collection, cursor)   | `getMethodsByTarget()`                            |
 
 All reads are **synchronous from caches** — Tab never blocks on network I/O. If a cache is empty, a background fetch is triggered so subsequent Tab presses have data.
 

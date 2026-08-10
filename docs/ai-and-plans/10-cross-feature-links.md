@@ -551,18 +551,18 @@ lenses.push(
 
 ## 5. Files to Modify
 
-| File                                                        | Changes                                                   |
-| ----------------------------------------------------------- | --------------------------------------------------------- |
-| `src/webviews/.../toolbar/ToolbarMainView.tsx`              | Add "Playground" and "Shell" buttons                      |
-| `src/webviews/.../collectionViewRouter.ts`                  | Add `openQueryInPlayground` and `openQueryInShell` mutations        |
-| `src/commands/playground/newPlayground.ts`                  | Add `newPlaygroundWithContent` function                   |
-| `src/documentdb/ClustersExtension.ts`                       | Register new commands                                     |
-| `src/documentdb/shell/DocumentDBShellPty.ts`                | Add `initialInput` support, update `maybeWriteActionLine` |
-| `src/documentdb/shell/ShellTerminalLinkProvider.ts`         | Add `PLAYGROUND_ACTION_PREFIX`, playground link type      |
-| `src/commands/openInteractiveShell/openInteractiveShell.ts` | Pass `initialInput` through                               |
-| `src/documentdb/playground/PlaygroundCodeLensProvider.ts`   | Add "Collection View" and "Shell" CodeLens                |
-| New: `src/commands/playground/openQueryInCollectionView.ts`      | Extract collection name → open CV                         |
-| New: `src/commands/playground/openQueryInShell.ts`               | Get code block → open shell with initial input            |
+| File                                                        | Changes                                                      |
+| ----------------------------------------------------------- | ------------------------------------------------------------ |
+| `src/webviews/.../toolbar/ToolbarMainView.tsx`              | Add "Playground" and "Shell" buttons                         |
+| `src/webviews/.../collectionViewRouter.ts`                  | Add `openQueryInPlayground` and `openQueryInShell` mutations |
+| `src/commands/playground/newPlayground.ts`                  | Add `newPlaygroundWithContent` function                      |
+| `src/documentdb/ClustersExtension.ts`                       | Register new commands                                        |
+| `src/documentdb/shell/DocumentDBShellPty.ts`                | Add `initialInput` support, update `maybeWriteActionLine`    |
+| `src/documentdb/shell/ShellTerminalLinkProvider.ts`         | Add `PLAYGROUND_ACTION_PREFIX`, playground link type         |
+| `src/commands/openInteractiveShell/openInteractiveShell.ts` | Pass `initialInput` through                                  |
+| `src/documentdb/playground/PlaygroundCodeLensProvider.ts`   | Add "Collection View" and "Shell" CodeLens                   |
+| New: `src/commands/playground/openQueryInCollectionView.ts` | Extract collection name → open CV                            |
+| New: `src/commands/playground/openQueryInShell.ts`          | Get code block → open shell with initial input               |
 
 ---
 

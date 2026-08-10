@@ -517,7 +517,6 @@ defined it), **Decision / Code today** (verified), and any **Flag**.
     now consistent with each other **and** with the Connections view: modal error + output channel, retry
     node only.
 
-
 **#25 — "What does Retry do here?"** ✅ rename / ⚠️ two review asks NOT shipped
 
 - **Verdict — Deviation.** What was done differently: only part of the ask shipped. The **Retry → Reload**

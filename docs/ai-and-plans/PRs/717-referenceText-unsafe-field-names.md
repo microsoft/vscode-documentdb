@@ -15,11 +15,11 @@ aggregation field reference (e.g. `$age`) that a future aggregation completion
 provider will offer. The original implementation always emitted `"$" + path`,
 which is **invalid MQL** for field names that are not valid `$`-prefix references:
 
-| Field name      | Old `referenceText` | Valid? |
-| --------------- | ------------------- | ------ |
-| `order-items`   | `$order-items`      | ❌     |
-| `my field`      | `$my field`         | ❌     |
-| `say"hi"`       | `$say"hi"`          | ❌     |
+| Field name    | Old `referenceText` | Valid? |
+| ------------- | ------------------- | ------ |
+| `order-items` | `$order-items`      | ❌     |
+| `my field`    | `$my field`         | ❌     |
+| `say"hi"`     | `$say"hi"`          | ❌     |
 
 This was documented as future work in
 [`future-work.md`](../../../src/utils/json/data-api/autocomplete/future-work.md)
@@ -29,7 +29,7 @@ An initial pass added a single-segment `$getField` fallback, but it had three
 correctness gaps that this PR closes:
 
 1. **Nested paths were broken.** `a.order-items` produced
-   `{ $getField: "a.order-items" }`, which references a *top-level* field
+   `{ $getField: "a.order-items" }`, which references a _top-level_ field
    literally named `a.order-items` — the wrong document — instead of the nested
    `order-items` field inside `a`.
 2. **`$`-containing names were misclassified as safe.** The identifier check
@@ -187,18 +187,18 @@ literally named `a.order-items`.
 All in
 [`toFieldCompletionItems.test.ts`](../../../src/utils/json/data-api/autocomplete/toFieldCompletionItems.test.ts):
 
-| Case                                  | Input            | `referenceText`                                                                  |
-| ------------------------------------- | ---------------- | -------------------------------------------------------------------------------- |
-| Safe scalar / nested (regression)     | `age`, `address.city` | `$age`, `$address.city`                                                     |
-| Unsafe top-level                      | `order-items`    | `{ $getField: "order-items" }`                                                    |
-| Embedded quotes (top-level)           | `say"hi"`        | `{ $getField: "say\"hi\"" }`                                                      |
-| **Unsafe leaf in nested path**        | `a.order-items`  | `{ $getField: { field: "order-items", input: "$a" } }`                           |
-| **Safe multi-segment prefix collapse**| `a.b.c-d`        | `{ $getField: { field: "c-d", input: "$a.b" } }`                                  |
-| **Unsafe segment then safe segment**  | `order-items.city` | `{ $getField: { field: "city", input: { $getField: "order-items" } } }`        |
-| **Embedded quotes (nested)**          | `a.say"hi"`      | `{ $getField: { field: "say\"hi\"", input: "$a" } }`                             |
-| **Case 3 — `$` in name**              | `$price`, `a$b`, `a.$inner` | `{ $getField: "$price" }`, `{ $getField: "a$b" }`, `{ $getField: { field: "$inner", input: "$a" } }` |
-| **Case 4 — literal-dot ambiguity**    | `a.b`            | `$a.b` (treated as nested — documented limitation)                               |
-| **Case 5 — empty / degenerate**       | `""`, `a..b`     | `{ $getField: "" }`, nested `$getField` chain (defensive; never emitted by `getKnownFields`) |
+| Case                                   | Input                       | `referenceText`                                                                                      |
+| -------------------------------------- | --------------------------- | ---------------------------------------------------------------------------------------------------- |
+| Safe scalar / nested (regression)      | `age`, `address.city`       | `$age`, `$address.city`                                                                              |
+| Unsafe top-level                       | `order-items`               | `{ $getField: "order-items" }`                                                                       |
+| Embedded quotes (top-level)            | `say"hi"`                   | `{ $getField: "say\"hi\"" }`                                                                         |
+| **Unsafe leaf in nested path**         | `a.order-items`             | `{ $getField: { field: "order-items", input: "$a" } }`                                               |
+| **Safe multi-segment prefix collapse** | `a.b.c-d`                   | `{ $getField: { field: "c-d", input: "$a.b" } }`                                                     |
+| **Unsafe segment then safe segment**   | `order-items.city`          | `{ $getField: { field: "city", input: { $getField: "order-items" } } }`                              |
+| **Embedded quotes (nested)**           | `a.say"hi"`                 | `{ $getField: { field: "say\"hi\"", input: "$a" } }`                                                 |
+| **Case 3 — `$` in name**               | `$price`, `a$b`, `a.$inner` | `{ $getField: "$price" }`, `{ $getField: "a$b" }`, `{ $getField: { field: "$inner", input: "$a" } }` |
+| **Case 4 — literal-dot ambiguity**     | `a.b`                       | `$a.b` (treated as nested — documented limitation)                                                   |
+| **Case 5 — empty / degenerate**        | `""`, `a..b`                | `{ $getField: "" }`, nested `$getField` chain (defensive; never emitted by `getKnownFields`)         |
 
 ### Known limitation (out of scope)
 

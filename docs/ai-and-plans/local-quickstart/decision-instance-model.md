@@ -20,14 +20,14 @@ For **v1**, Quick Start manages **exactly one** instance and only ever touches
 containers **it created**, recognized by the Docker label `vscode.documentdb.quickstart=1`
 (§10.1). Concretely:
 
-| Topic | v1 decision | Deferred to |
-| ----- | ----------- | ----------- |
-| Multiple **managed** instances | **No.** One managed instance; the rocket entry hides after setup. | v1.2 (§15) |
-| Multiple **image versions** side by side | **No.** | v1.2 (§15) |
-| Listing the user's **own** (unlabelled) containers inside Quick Start | **No.** They connect via the **regular new-connection wizard** at `localhost:<port>` — "Attach stays first-class" (§13.10). Quick Start does not own them. | — |
-| **Adopt-existing-container** flow | **No** as a general feature. The *only* adoption v1 performs is re-recognizing **its own labelled** container after a reload (reconcile). | v1.2 (§15) |
-| **Auto-discovery** of unmanaged DocumentDB containers | **No** — and when built, it belongs to the **generic connections** experience, not Quick Start. | v1.2 (§15) |
-| **Name / port collision safety** | **Yes — required in v1.** See "What v1 must do" below (sharpens §10.2). | — |
+| Topic                                                                 | v1 decision                                                                                                                                                | Deferred to |
+| --------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------- |
+| Multiple **managed** instances                                        | **No.** One managed instance; the rocket entry hides after setup.                                                                                          | v1.2 (§15)  |
+| Multiple **image versions** side by side                              | **No.**                                                                                                                                                    | v1.2 (§15)  |
+| Listing the user's **own** (unlabelled) containers inside Quick Start | **No.** They connect via the **regular new-connection wizard** at `localhost:<port>` — "Attach stays first-class" (§13.10). Quick Start does not own them. | —           |
+| **Adopt-existing-container** flow                                     | **No** as a general feature. The _only_ adoption v1 performs is re-recognizing **its own labelled** container after a reload (reconcile).                  | v1.2 (§15)  |
+| **Auto-discovery** of unmanaged DocumentDB containers                 | **No** — and when built, it belongs to the **generic connections** experience, not Quick Start.                                                            | v1.2 (§15)  |
+| **Name / port collision safety**                                      | **Yes — required in v1.** See "What v1 must do" below (sharpens §10.2).                                                                                    | —           |
 
 This ratifies the design doc's existing position (§15: "Single managed instance";
 decision log: "Single instance in v1; labels keep the model forward-compatible;
@@ -37,15 +37,15 @@ multi-instance + multi-version are v1.2") and records the reasoning below.
 
 Revisited during hands-on manual testing, framed by user personas, and **held**:
 
-- **Newbie / trial** and **typical app dev** want *one* decision-free instance; a second
+- **Newbie / trial** and **typical app dev** want _one_ decision-free instance; a second
   instance only re-introduces the "which one / alias / port" choices Quick Start removes.
 - The **advanced "validate before deploying to k8s / on-prem"** persona is the strongest case
-  *for* multi-version — but their genuine need is met more cheaply and correctly by
+  _for_ multi-version — but their genuine need is met more cheaply and correctly by
   **(a) image-tag / version selection on the single managed instance (the Advanced panel, P1-4)**
   and **(b) attaching their own side-by-side `docker run` containers via the regular wizard** —
   not by Quick Start managing N containers.
 - Known papercut accepted for v1: switching versions today = **Delete (loses data) → re-provision**.
-  P1-4 (pick image tag → recreate) smooths this *without* going multi-instance.
+  P1-4 (pick image tag → recreate) smooths this _without_ going multi-instance.
 
 Net: single-instance stays the v1 model; multi-instance / multi-version remain the additive
 v1.2 features the label model already makes free to add.
@@ -59,8 +59,8 @@ v1.2 features the label model already makes free to add.
    coordination by N. Users who genuinely need N custom containers are already well served
    by their own `docker run` + the regular wizard.
 
-2. **Ownership boundary = trust + safety.** The clean, defensible mental model is *Quick
-   Start only manages containers it created (label-gated).* The moment it lists or acts on
+2. **Ownership boundary = trust + safety.** The clean, defensible mental model is _Quick
+   Start only manages containers it created (label-gated)._ The moment it lists or acts on
    containers it did not create, a stray Stop/Delete can destroy something the user cares
    about, and it must guess "is this even DocumentDB? what port? what TLS?" That ambiguity
    is a support and trust liability. Recognition is therefore **label-based, never**
@@ -84,7 +84,7 @@ Even with a single instance, v1 must handle a pre-existing container that holds 
 name **or** the planned port, without clobbering it (§10.2):
 
 - **Labelled as ours** (`vscode.documentdb.quickstart=1`) → re-adopt / reconcile it (the
-  managed instance reappears in the tree). This is *not* general adoption — only our own
+  managed instance reappears in the tree). This is _not_ general adoption — only our own
   container.
 - **Unlabelled** (someone else's container holds the name, or the port is taken) → **never
   recreate over it.** Validate **both** identifiers up front (the connection/cluster name in

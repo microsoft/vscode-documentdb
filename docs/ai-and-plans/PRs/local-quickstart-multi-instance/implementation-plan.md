@@ -27,7 +27,7 @@
    integration — all must agree before commit (owner workflow).
 5. **PR checklist before declaring a WI done:** `npm run l10n` (if user-facing strings changed) →
    `npm run prettier-fix` → `npm run lint` → `npx jest --no-coverage` → `npm run build`. (`npm run
-   build`, never `compile`.)
+build`, never `compile`.)
 6. **Terminology:** "DocumentDB" for the service; "MongoDB API"/"DocumentDB API" for the wire
    protocol. Never "MongoDB" alone. All user-facing strings via `vscode.l10n.t()`.
 7. **No `any`.** `unknown` + type guards. Explicit return types. `instanceof Error` in catch.
@@ -39,11 +39,13 @@
 ## 1. Goal, UX narrative, and non-goals
 
 ### Goal
+
 From the **DocumentDB Local - Quick Start** node the user can create, browse, and manage **several**
 independent local DocumentDB instances side by side — the concrete use cases German raised
 (compare image vX vs vY; isolate project A from project B) without leaving the one-click flow.
 
 ### UX narrative
+
 - **First instance stays one click.** Empty state → rocket → provisioning panel → Start → Running
   row. No naming step required (a sensible default name is pre-filled).
 - **Add another:** a persistent **“＋ New instance”** row under the Quick Start node opens a fresh
@@ -53,6 +55,7 @@ independent local DocumentDB instances side by side — the concrete use cases G
   **that** instance only.
 
 ### Non-goals (unchanged from the design)
+
 - **Adopting unlabelled / hand-run containers** — still out. Recognition stays **label-only**
   (`vscode.documentdb.quickstart=1`); those connect via the regular wizard (design §13.10).
 - **Auto-discovery** of non-managed DocumentDB containers — belongs to the generic connections
@@ -74,16 +77,16 @@ beyond re-keying two flat storage keys (§6).
 
 ## 3. UX design decisions (proposed — reviewers/owner confirm)
 
-| # | Decision | Proposal | Rationale |
-| - | -------- | -------- | --------- |
-| U1 | **Identity** | Each instance has an immutable **alias** (slug; also the Docker container name + `vscode.documentdb.alias` label) and an editable **display name**. | Alias is the stable key for names/creds/cache; display name is the human label. |
-| U2 | **First instance = zero decisions** | The provisioning panel pre-fills a default name; the user can just click **Start**. No mandatory naming prompt. | Preserves the “one click” value prop; naming is opt-in. |
-| U3 | **Default alias** | First instance keeps alias/container `vscode-documentdb-local` and volume `vscode-documentdb-local-data` (today’s names). | **Backward compatible** — the existing instance is adopted unchanged. |
-| U4 | **New-instance aliases** | Auto-generated, **monotonic** suffix from `registry.nextSuffix` (`vscode-documentdb-local-2`, `-3`, … — never reused after delete, since suffixes leak into container names/logs). Allocation also avoids names held by unlabelled containers (§7 preflight). | Predictable, DNS/label-safe, no user typing; monotonic avoids confusing reuse. |
-| U5 | **Creation entry points** | (a) rocket empty-state (instance #1); (b) a persistent **“＋ New instance”** action row when ≥1 instance exists. Both open a provisioning panel bound to a new alias. | Matches the design’s “rocket hides after setup” but replaces it with an explicit add affordance. |
-| U6 | **Managing an instance** | Lifecycle via the existing tree context menus (per-row). Reopening the webview for an existing instance (resume on-timeout, next-steps) targets that alias. | Reuses shipped lifecycle UI; only adds alias-scoping. |
-| U7 | **Cap** | No hard cap; add a **soft warning** in the panel when many (~5+) are running (owner decision: in scope). | Docker/OS already bounds this; a cap adds a decision. |
-| U8 | **Persistence model** | Each instance stays **ephemeral/CredentialCache-based** (not saved into a storage zone), exactly like today’s single instance. | Keeps the ownership boundary; no zone/tree-shape churn. |
+| #   | Decision                            | Proposal                                                                                                                                                                                                                                                      | Rationale                                                                                        |
+| --- | ----------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------ |
+| U1  | **Identity**                        | Each instance has an immutable **alias** (slug; also the Docker container name + `vscode.documentdb.alias` label) and an editable **display name**.                                                                                                           | Alias is the stable key for names/creds/cache; display name is the human label.                  |
+| U2  | **First instance = zero decisions** | The provisioning panel pre-fills a default name; the user can just click **Start**. No mandatory naming prompt.                                                                                                                                               | Preserves the “one click” value prop; naming is opt-in.                                          |
+| U3  | **Default alias**                   | First instance keeps alias/container `vscode-documentdb-local` and volume `vscode-documentdb-local-data` (today’s names).                                                                                                                                     | **Backward compatible** — the existing instance is adopted unchanged.                            |
+| U4  | **New-instance aliases**            | Auto-generated, **monotonic** suffix from `registry.nextSuffix` (`vscode-documentdb-local-2`, `-3`, … — never reused after delete, since suffixes leak into container names/logs). Allocation also avoids names held by unlabelled containers (§7 preflight). | Predictable, DNS/label-safe, no user typing; monotonic avoids confusing reuse.                   |
+| U5  | **Creation entry points**           | (a) rocket empty-state (instance #1); (b) a persistent **“＋ New instance”** action row when ≥1 instance exists. Both open a provisioning panel bound to a new alias.                                                                                         | Matches the design’s “rocket hides after setup” but replaces it with an explicit add affordance. |
+| U6  | **Managing an instance**            | Lifecycle via the existing tree context menus (per-row). Reopening the webview for an existing instance (resume on-timeout, next-steps) targets that alias.                                                                                                   | Reuses shipped lifecycle UI; only adds alias-scoping.                                            |
+| U7  | **Cap**                             | No hard cap; add a **soft warning** in the panel when many (~5+) are running (owner decision: in scope).                                                                                                                                                      | Docker/OS already bounds this; a cap adds a decision.                                            |
+| U8  | **Persistence model**               | Each instance stays **ephemeral/CredentialCache-based** (not saved into a storage zone), exactly like today’s single instance.                                                                                                                                | Keeps the ownership boundary; no zone/tree-shape churn.                                          |
 
 **Plan default (per review R15):** U2 **auto-fills** the display name (no prompt, no schema change) so
 the first instance stays one click and later ones don't derail into a naming step. Renaming an
@@ -95,18 +98,19 @@ instance is deferred (v-next). **OPEN for owner:** if you prefer an explicit **n
 ## 4. Architecture: from singleton to per-alias
 
 ### 4.1 Identity + keying (the core change)
+
 Introduce pure derivation helpers keyed on `alias` (in `quickStartTypes.ts`), replacing the flat
 constants. `DEFAULT_ALIAS = 'vscode-documentdb-local'`.
 
-| Concept | Today (flat) | Per-alias derivation |
-| ------- | ------------ | -------------------- |
-| Container name | `vscode-documentdb-local` | `containerName(alias) = alias` |
-| Volume name | `vscode-documentdb-local-data` | `volumeName(alias) = alias + '-data'` |
-| Cache key (clusterId) | `quickstart-local-documentdb` | `clusterId(alias) = 'quickstart-' + alias` *(ephemeral — no migration)* |
-| SecretStorage key | `documentdb.quickstart.connectionString` | `secretKey(alias) = 'documentdb.quickstart.' + alias + '.connectionString'` |
-| imageRef globalState key | `documentdb.quickstart.imageRef` | `imageRefKey(alias) = 'documentdb.quickstart.' + alias + '.imageRef'` |
-| Label(s) | `quickstart=1` (+ `alias` already stamped) | unchanged; the `alias` label is the reconcile join key |
-| Port | `10260` default | per-instance, auto-allocated from `[10260,10360)` (existing `findAvailablePort`) |
+| Concept                  | Today (flat)                               | Per-alias derivation                                                             |
+| ------------------------ | ------------------------------------------ | -------------------------------------------------------------------------------- |
+| Container name           | `vscode-documentdb-local`                  | `containerName(alias) = alias`                                                   |
+| Volume name              | `vscode-documentdb-local-data`             | `volumeName(alias) = alias + '-data'`                                            |
+| Cache key (clusterId)    | `quickstart-local-documentdb`              | `clusterId(alias) = 'quickstart-' + alias` _(ephemeral — no migration)_          |
+| SecretStorage key        | `documentdb.quickstart.connectionString`   | `secretKey(alias) = 'documentdb.quickstart.' + alias + '.connectionString'`      |
+| imageRef globalState key | `documentdb.quickstart.imageRef`           | `imageRefKey(alias) = 'documentdb.quickstart.' + alias + '.imageRef'`            |
+| Label(s)                 | `quickstart=1` (+ `alias` already stamped) | unchanged; the `alias` label is the reconcile join key                           |
+| Port                     | `10260` default                            | per-instance, auto-allocated from `[10260,10360)` (existing `findAvailablePort`) |
 
 With `containerName(DEFAULT_ALIAS)==='vscode-documentdb-local'` and
 `volumeName(DEFAULT_ALIAS)==='vscode-documentdb-local-data'`, the existing container/volume need
@@ -114,6 +118,7 @@ With `containerName(DEFAULT_ALIAS)==='vscode-documentdb-local'` and
 (§6).
 
 ### 4.2 Instance registry (new, persisted) + reservation & cross-window model
+
 A `globalState` object records known instances + the monotonic suffix + a provisioning lease:
 
 ```
@@ -132,7 +137,7 @@ documentdb.quickstart.registry = {
 **Allocation happens at provision START, inside ONE locked critical section (Minor-1):** pick the next
 `nextSuffix`; `findAvailablePort` **excluding every registry `port` (running OR stopped) + in-flight
 reservations**; then write `{alias, port, phase:'provisioning', operationId, leaseAt:now}` — the whole
-*pick-port → reserve → write* sequence under a single lock acquisition. **“＋ New instance” opens a
+_pick-port → reserve → write_ sequence under a single lock acquisition. **“＋ New instance” opens a
 draft panel** (draft id, no alias yet); `startQuickStart` performs the allocation — this fixes the
 allocate-at-open contradiction (a closed/abandoned draft panel reserves nothing). Fresh registry:
 `nextSuffix = 2` (DEFAULT_ALIAS carries no suffix).
@@ -140,6 +145,7 @@ allocate-at-open contradiction (a closed/abandoned draft panel reserves nothing)
 **Cross-window safety is best-effort + self-healing, NOT lock-based (Major-1).** A per-process async
 lock cannot serialize two VS Code windows over `globalState` (separate hosts; last-writer-wins, no
 cross-process CAS). So the model is:
+
 - **Races degrade safely.** Docker **container-name + host-port uniqueness** make a genuine
   double-allocate fail at `docker run` — the loser errors cleanly. Established instances are **never
   lost** because their **persisted per-alias secret ⇒ `reusing=true` ⇒ volume kept**.
@@ -153,11 +159,12 @@ cross-process CAS). So the model is:
   lease as **Provisioning** (not Missing, not touched); a **stale** lease (> readiness timeout ⇒ crashed
   host) is a recoverable **Missing** and its pre-create reservation is **scavenged** at reconcile
   (closes the crash-orphan hole, §7.8).
-- The tree **re-reads the registry on every `refreshLiveState()`**. Multi-window *state sync* stays
-  **best-effort** (consistent with the shipped single-instance model, design §12) — but *allocation* and
-  *destructive pre-clean* are race-safe. Do **not** claim the lock prevents cross-window clobber.
+- The tree **re-reads the registry on every `refreshLiveState()`**. Multi-window _state sync_ stays
+  **best-effort** (consistent with the shipped single-instance model, design §12) — but _allocation_ and
+  _destructive pre-clean_ are race-safe. Do **not** claim the lock prevents cross-window clobber.
 
 ### 4.3 Service state: `Map<alias, InstanceRuntimeState>`
+
 `QuickStartServiceImpl` today holds single fields (`metadata`, `pendingReadiness`, `provisioning`,
 `lifecycleBusy`, `missing`, `state`, `errorMessage`). Replace with a per-alias map:
 
@@ -174,6 +181,7 @@ interface InstanceRuntimeState {
 Every public method gains an `alias` parameter (or returns a keyed collection). **WI-2 keeps
 default-alias wrapper overloads** (old signatures delegate to `alias = DEFAULT_ALIAS`) so each WI
 stays committable until callers migrate (R13):
+
 - `provision(alias, opts)` / `resumeReadiness(alias)` / `discardTimedOut(alias)`
 - `start/stop/restart/deleteContainer/viewLogs(alias)`
 - `getStatus(alias)` **and** `listStatuses(): QuickStartStatus[]` (tree uses the list)
@@ -187,6 +195,7 @@ stays committable until callers migrate (R13):
   stopped instances (populated once via `inspect` at adoption/migration while discoverable).
 
 **Singleton destructive call sites that MUST become per-alias (R7 — exact sites):**
+
 - `findManagedContainer()` returns `listByLabel(...)[0]` (`QuickStartService.ts:825-828`) → **must be
   `findManagedContainer(alias)`** filtering on the `alias` label. Used in provision pre-clean
   (`:310-314`) and the post-failure orphan sweep (`:469`) — otherwise provisioning/failing **B**
@@ -198,6 +207,7 @@ stays committable until callers migrate (R13):
 
 **`reconcile()` rules (R2, R14 + round-2):** enumerate `listByLabel({quickstart:1})`, then per container
 `const alias = labels[ALIAS_LABEL] || DEFAULT_ALIAS`:
+
 - Adopt into that alias's `InstanceRuntimeState`; populate `registry.port` from `inspect` bindings if
   absent. A container whose alias isn't in the registry is added (adopted) — **never merged**.
 - **Heal `nextSuffix = max(existing suffixes) + 1`** so a cross-window-clobbered counter self-corrects.
@@ -213,15 +223,18 @@ stays committable until callers migrate (R13):
   (> readiness timeout) or `phase:'ready'` → **Missing** (and scavenge a stale pre-create reservation).
 
 ### 4.4 Tree
+
 `LocalQuickStartItem.getChildren()` becomes: `refreshLiveState()` → `listStatuses()` → render **one
 row per instance** (per-alias `id = ${this.id}/instance/${alias}`; Running → `QuickStartClusterItem`
 expandable, else a state row) → append the persistent **“＋ New instance”** action row. Zero
 instances → today’s rocket empty-state (creates instance #1). Row labels use the **display name**
-+ `· localhost:<port>`. The per-state switch gains a **per-instance Provisioning** case (R9) with
-**no hardcoded port** — today `LocalQuickStartItem.ts:159-168` renders a single global
-`Provisioning… · localhost:10260` row that can't represent #2 provisioning while #1 runs.
+
+- `· localhost:<port>`. The per-state switch gains a **per-instance Provisioning** case (R9) with
+  **no hardcoded port** — today `LocalQuickStartItem.ts:159-168` renders a single global
+  `Provisioning… · localhost:10260` row that can't represent #2 provisioning while #1 runs.
 
 ### 4.5 Webview + router + commands
+
 - The provisioning panel carries a **target alias** (a controller/panel param). Its tRPC
   subscription/mutations (`startQuickStart`, `waitLonger`, `discardTimedOut`, `getDockerStatus`,
   `openConnection`, …) all take/thread the alias.
@@ -243,20 +256,20 @@ instances → today’s rocket empty-state (creates instance #1). Row labels use
 ## 5. Work items (sequenced, each committable + reviewable)
 
 - [x] **WI-0 — Testability seam (R12).** Extract a `ContainerRuntime` **interface** and inject it into
-  the service (today it's a module singleton called at **~38 sites**, with **no** service test). The
-  **pure inspectors `isRunning(item)` / `getBoundHostPort(item)` become standalone exported functions**
-  (no IO → keep the interface = IO surface only). Enables Docker-free tests for every later WI. No
-  behavior change. **Unanimously green in round-2 — safe to start immediately, decoupled from WI-1/2.**
+      the service (today it's a module singleton called at **~38 sites**, with **no** service test). The
+      **pure inspectors `isRunning(item)` / `getBoundHostPort(item)` become standalone exported functions**
+      (no IO → keep the interface = IO surface only). Enables Docker-free tests for every later WI. No
+      behavior change. **Unanimously green in round-2 — safe to start immediately, decoupled from WI-1/2.**
   - _Done:_ `IContainerRuntime` (13 IO methods) extracted; `ContainerRuntimeImpl implements
-    IContainerRuntime`; `isRunning`/`getBoundHostPort` now standalone exports; `QuickStartServiceImpl`
+IContainerRuntime`; `isRunning`/`getBoundHostPort` now standalone exports; `QuickStartServiceImpl`
     gains `constructor(runtime: IContainerRuntime = ContainerRuntime)` + `this.runtime.*` (31 sites) and
     is `export`ed for test injection. Behavior-preserving. Gates: build · lint · jest **2768/2768**.
 - [x] **WI-1 — Identity & keying foundation.** Add `DEFAULT_ALIAS` + derivation helpers
-  (`containerName/volumeName/clusterId/secretKey/imageRefKey`), the registry (§4.2) + locked
-  `globalState` accessors, and the **legacy-key migration** (§6). **Also repoint the still-singleton
-  service to the alias-keyed (`DEFAULT_ALIAS`) keys** so WI-1 is independently safe (R1/gpt55): the
-  service must not read a flat key the migration just deleted. Pure + storage; fully unit-testable.
-  *(5-agent review.)*
+      (`containerName/volumeName/clusterId/secretKey/imageRefKey`), the registry (§4.2) + locked
+      `globalState` accessors, and the **legacy-key migration** (§6). **Also repoint the still-singleton
+      service to the alias-keyed (`DEFAULT_ALIAS`) keys** so WI-1 is independently safe (R1/gpt55): the
+      service must not read a flat key the migration just deleted. Pure + storage; fully unit-testable.
+      _(5-agent review.)_
   - _Done:_ `DEFAULT_ALIAS` + `containerName/volumeName/clusterId/secretKey/imageRefKey` helpers
     (backward-compat: default maps to the legacy container/volume names) + `LEGACY_*` keys;
     `quickStartRegistry.ts` (registry schema with lease/`operationId`, per-process-locked
@@ -270,36 +283,36 @@ instances → today’s rocket empty-state (creates instance #1). Row labels use
     remove/upsert the alias's registry record (currently write-only, so inert). Gates: build · lint ·
     jest **2787** (+21 tests).
 - [ ] **WI-2 — Service → multi-instance state machine.** `Map<alias, InstanceRuntimeState>` (incl.
-  `missing`); alias-parameterize provision/lifecycle/reconcile/getStatus/listStatuses/
-  refreshLiveState(**one `listByLabel`**, R15)/liveStateGuard/`isBusy(alias)`/
-  `willReuseExistingInstance(alias)`; **keep default-alias wrapper overloads** so the build stays
-  green (R13). Convert the **exact** destructive call sites in §4.3 (`findManagedContainer(alias)`,
-  `volumeName/containerName(alias)`, `isManaged(id, alias)`). **Port allocation reserves every
-  registry port (running + stopped) + in-flight reservations** (R3), and a **collision preflight**
-  rejects an unlabelled container holding `containerName(alias)` before pull/create (R6). Remove the
-  reconcile no-secret-remove branch (R2). Preserve §7 invariants; add the §8 tests. **The big one.**
-  *(5-agent review.)*
+      `missing`); alias-parameterize provision/lifecycle/reconcile/getStatus/listStatuses/
+      refreshLiveState(**one `listByLabel`**, R15)/liveStateGuard/`isBusy(alias)`/
+      `willReuseExistingInstance(alias)`; **keep default-alias wrapper overloads** so the build stays
+      green (R13). Convert the **exact** destructive call sites in §4.3 (`findManagedContainer(alias)`,
+      `volumeName/containerName(alias)`, `isManaged(id, alias)`). **Port allocation reserves every
+      registry port (running + stopped) + in-flight reservations** (R3), and a **collision preflight**
+      rejects an unlabelled container holding `containerName(alias)` before pull/create (R6). Remove the
+      reconcile no-secret-remove branch (R2). Preserve §7 invariants; add the §8 tests. **The big one.**
+      _(5-agent review.)_
   - _In progress — **part 1 done** (commit `0cf022cd`): the registry is now authoritative
     (`upsertInstanceRecord`/`removeInstanceRecord`; `finalizeReadyInstance` upserts the default record
     as `'ready'`; `deleteContainer` removes it). **RESUME HERE →** the core `Map<alias,
-    InstanceRuntimeState>` field migration, the alias-parameterized methods, the cross-window
+InstanceRuntimeState>` field migration, the alias-parameterized methods, the cross-window
     concurrency model (§4.2 lease/`operationId`/`nextSuffix`-heal, §4.3), the port reservation +
     collision preflight, removing the reconcile no-secret branch (R2), and the 5-agent review all
     remain. The service is `QuickStartService.ts` (~1,120 lines); state fields at `:171-182`; provision
     generator `:250-536`; finalize `:546`; resume `:588`; discard `:690`; reconcile `:1066`._
 - [ ] **WI-3 — Tree: N instances + “＋ New instance.”** `listStatuses()`-driven rows, per-alias ids,
-  per-instance **Provisioning** row (no hardcoded port), add-instance action + its **command id +
-  `package.json` `view/item/context` contribution** (R15); display-name labels.
+      per-instance **Provisioning** row (no hardcoded port), add-instance action + its **command id +
+      `package.json` `view/item/context` contribution** (R15); display-name labels.
 - [ ] **WI-4 — Webview + router alias-scoping.** Target-alias panel param; alias on every procedure;
-  controller **`Map<alias, controller>` create-or-reveal** (R10); `.open` alias selection
-  (rocket → `DEFAULT_ALIAS`, ＋New → next-free); resume/next-steps target the right instance.
+      controller **`Map<alias, controller>` create-or-reveal** (R10); `.open` alias selection
+      (rocket → `DEFAULT_ALIAS`, ＋New → next-free); resume/next-steps target the right instance.
 - [ ] **WI-5 — Commands alias resolution.** Lifecycle/copy/logs commands extract alias from **both**
-  tree-node kinds (R11); `viewQuickStartLogs` → `Map<alias, CTS>` + **per-alias output channel** (R15).
+      tree-node kinds (R11); `viewQuickStartLogs` → `Map<alias, CTS>` + **per-alias output channel** (R15).
 - [ ] **WI-6 — Migration hardening + docs.** Verify upgrade path (incl. absent-alias-label container →
-  `DEFAULT_ALIAS`); update `decision-instance-model.md` (reversal), `v1-readiness-gaps.md`, release notes.
+      `DEFAULT_ALIAS`); update `decision-instance-model.md` (reversal), `v1-readiness-gaps.md`, release notes.
 - [ ] **WI-7 — Live Docker E2E.** Two instances; independent stop/start/delete; **delete-isolation**;
-  reconcile after reload with 2 containers; **stopped-sibling port reservation**; upgrade-migration
-  from a pre-existing single instance (legacy keys + adopt with no rename).
+      reconcile after reload with 2 containers; **stopped-sibling port reservation**; upgrade-migration
+      from a pre-existing single instance (legacy keys + adopt with no rename).
 
 ---
 
@@ -335,12 +348,12 @@ until reinstall (one-way migration; standard practice).
 2. **Volume-wipe stays per-alias + fresh-only:** the `!reusing ⇒ removeVolume(volumeName(alias))`
    guard; a reusing/recreate path never wipes.
 3. **Port allocation reserves EVERY known instance's port (running OR stopped) + in-flight
-   reservations** (R3), plus non-managed processes via loopback `isPortFree`. The *pick-port → reserve
-   → write* sequence runs inside **one lock acquisition** (Minor-1); `registry.port` is
+   reservations** (R3), plus non-managed processes via loopback `isPortFree`. The _pick-port → reserve
+   → write_ sequence runs inside **one lock acquisition** (Minor-1); `registry.port` is
    **authoritative for stopped** instances and `refreshLiveState` **never clears** it (Major-2).
    Explicit Advanced ports also reject sibling-reserved ports.
 4. **Reconcile never cross-adopts and never auto-removes (R2/R14):** `alias = labels[ALIAS_LABEL] ||
-   DEFAULT_ALIAS`; unknown alias → its own instance; a labelled container with **no recoverable
+DEFAULT_ALIAS`; unknown alias → its own instance; a labelled container with **no recoverable
    secret is surfaced, never removed**, volume never touched; same-alias duplicates → deterministic
    winner + log + leave the other.
 5. **Ownership preflight (R6):** before pull/create, if `containerName(alias)` exists and is **not**
@@ -366,6 +379,7 @@ until reinstall (one-way migration; standard practice).
 
 WI-0 makes `ContainerRuntime` injectable; mock `secretStorage`/`globalState` (jest-mock-vscode is
 wired). New `QuickStartService.multiInstance.test.ts`:
+
 - Provision two instances → two containers/volumes/ports/secret keys; no overlap.
 - **Provision(B) leaves A’s container AND volume intact** (not just “both exist at the end”).
 - **Delete A leaves B** intact (container/volume/creds/registry) — headline isolation test.

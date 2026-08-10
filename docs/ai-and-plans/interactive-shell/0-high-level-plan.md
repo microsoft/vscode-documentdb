@@ -25,7 +25,7 @@ The work was delivered as a series of incremental steps, each producing a review
 | ----- | ----------------------------------------- | --------------------------------------------------------------- | ----------- |
 | 1     | Schema Tool Decision                      | —                                                               | ✅ Complete |
 | 2     | SchemaAnalyzer Refactoring                | [#506](https://github.com/microsoft/vscode-documentdb/pull/506) | ✅ Complete |
-| 3     | `operator-registry` Package            | [#513](https://github.com/microsoft/vscode-documentdb/pull/513) | ✅ Complete |
+| 3     | `operator-registry` Package               | [#513](https://github.com/microsoft/vscode-documentdb/pull/513) | ✅ Complete |
 | 3.5   | Monaco Language Architecture              | —                                                               | ✅ Complete |
 | 4     | Filter `CompletionItemProvider`           | [#518](https://github.com/microsoft/vscode-documentdb/pull/518) | ✅ Complete |
 | 4.5   | Context-Sensitive Completions             | [#530](https://github.com/microsoft/vscode-documentdb/pull/530) | ✅ Complete |
@@ -51,8 +51,8 @@ These decisions were made early and informed all subsequent implementation steps
 | --- | --------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | 1   | **Language strategy for query editors** | `documentdb-query` custom language with JavaScript Monarch tokenizer, no TypeScript worker (~400–600 KB saved)                                                         |
 | 2   | **Completion providers**                | Single `CompletionItemProvider` + URI routing (`documentdb://{editorType}/{sessionId}`) for webview editors; separate extension-host provider for the Query Playground |
-| 3   | **Operator metadata**                   | `operator-registry` package — 308 operator entries bundled at build time; field data pushed via tRPC subscription                                                   |
-| 4   | **Validation**                          | `acorn.parseExpressionAt()` for syntax errors; `acorn-walk` + `operator-registry` for identifier validation                                                         |
+| 3   | **Operator metadata**                   | `operator-registry` package — 308 operator entries bundled at build time; field data pushed via tRPC subscription                                                      |
+| 4   | **Validation**                          | `acorn.parseExpressionAt()` for syntax errors; `acorn-walk` + `operator-registry` for identifier validation                                                            |
 | 5   | **Document editors**                    | Stay on `language="json"` with existing JSON Schema validation                                                                                                         |
 | 6   | **Query Playground language**           | `documentdb-playground` with built-in JS grammar; in-process eval using `@mongosh` packages and existing `MongoClient`                                                 |
 | 7   | **Eval isolation**                      | Persistent worker thread per session (Option F) — lazy spawn on first Run, own `MongoClient`, infinite-loop protection via thread termination                          |
@@ -65,12 +65,12 @@ These decisions were made early and informed all subsequent implementation steps
 
 The implementation introduced three new workspace packages and a shell API type definitions module:
 
-| Package                                      | Location                              | Purpose                                                                                                   |
-| -------------------------------------------- | ------------------------------------- | --------------------------------------------------------------------------------------------------------- |
-| `@documentdb-js/schema-analyzer`         | `packages/documentdb-js-schema-analyzer/`           | Incremental schema analysis with 24 BSON types, JSON Schema output                                        |
-| `@documentdb-js/operator-registry`    | `packages/documentdb-js-operator-registry/`      | 308 operator entries: query, update, stage, accumulator, BSON, system variables                           |
-| `@documentdb-js/shell-runtime` | `packages/documentdb-js-shell-runtime/`  | Shell eval runtime: `DocumentDBShellRuntime`, `CommandInterceptor`, `ResultTransformer`, `HelpProvider`   |
-| Shell API `.d.ts`                            | `src/documentdb/scratchpad/typeDefs/` | TypeScript type definitions for `db.*`, cursor methods, BSON constructors — injected via TS server plugin |
+| Package                            | Location                                    | Purpose                                                                                                   |
+| ---------------------------------- | ------------------------------------------- | --------------------------------------------------------------------------------------------------------- |
+| `@documentdb-js/schema-analyzer`   | `packages/documentdb-js-schema-analyzer/`   | Incremental schema analysis with 24 BSON types, JSON Schema output                                        |
+| `@documentdb-js/operator-registry` | `packages/documentdb-js-operator-registry/` | 308 operator entries: query, update, stage, accumulator, BSON, system variables                           |
+| `@documentdb-js/shell-runtime`     | `packages/documentdb-js-shell-runtime/`     | Shell eval runtime: `DocumentDBShellRuntime`, `CommandInterceptor`, `ResultTransformer`, `HelpProvider`   |
+| Shell API `.d.ts`                  | `src/documentdb/scratchpad/typeDefs/`       | TypeScript type definitions for `db.*`, cursor methods, BSON constructors — injected via TS server plugin |
 
 ---
 

@@ -99,6 +99,7 @@ This document describes the data flow for the MongoDB query generation feature, 
 ### Schema Inference Example
 
 #### Customer's Actual Document (Never Sent):
+
 ```json
 {
   "_id": "507f1f77bcf86cd799439011",
@@ -110,13 +111,12 @@ This document describes the data flow for the MongoDB query generation feature, 
     "state": "WA",
     "zipCode": "98101"
   },
-  "orders": [
-    {"orderId": "ORD-001", "total": 99.99}
-  ]
+  "orders": [{ "orderId": "ORD-001", "total": 99.99 }]
 }
 ```
 
 #### Schema Definition Sent to LLM:
+
 ```json
 {
   "collectionName": "users",
@@ -147,12 +147,9 @@ This document describes the data flow for the MongoDB query generation feature, 
 The schema inference is implemented in `src/utils/schemaInference.ts`:
 
 ```typescript
-export function generateSchemaDefinition(
-    documents: Array<Document>,
-    collectionName?: string,
-): SchemaDefinition {
-    // Processes documents to extract ONLY field names and types
-    // Returns structure without any actual data values
+export function generateSchemaDefinition(documents: Array<Document>, collectionName?: string): SchemaDefinition {
+  // Processes documents to extract ONLY field names and types
+  // Returns structure without any actual data values
 }
 ```
 
@@ -160,11 +157,7 @@ The query generation call in `src/commands/llmEnhancedCommands/queryGenerationCo
 
 ```typescript
 // Sample documents are fetched
-const sampleDocs = await client.getSampleDocuments(
-    queryContext.databaseName,
-    queryContext.collectionName,
-    10
-);
+const sampleDocs = await client.getSampleDocuments(queryContext.databaseName, queryContext.collectionName, 10);
 
 // Schema is extracted (structure only)
 const schema = generateSchemaDefinition(sampleDocs, queryContext.collectionName);
@@ -210,9 +203,9 @@ To enable query modification features, we are considering allowing users to prov
      ```javascript
      // User's query may contain:
      db.users.find({
-       "email": "specific@customer.com",  // ⚠ Customer email
-       "accountId": "ACCT-12345"          // ⚠ Customer account ID
-     })
+       email: 'specific@customer.com', // ⚠ Customer email
+       accountId: 'ACCT-12345', // ⚠ Customer account ID
+     });
      ```
 
 2. **Embedded Literals**:
@@ -222,10 +215,10 @@ To enable query modification features, we are considering allowing users to prov
 
 #### Privacy Risk Assessment:
 
-| Data Type | Current (v1.0) | Proposed (v2.0) | Risk Level |
-|-----------|----------------|-----------------|------------|
-| Sample document values | ✗ Never sent | ✗ Never sent | None |
-| Schema structure | ✓ Sent | ✓ Sent | Low (metadata only) |
-| Database/collection names | ✓ Sent | ✓ Sent | Low (metadata) |
-| User's natural language input | ✓ Sent | ✓ Sent | Low-Medium (user provided) |
-| Query literals/filters | ✗ Not applicable | ⚠ **Would be sent** | **Medium-High** |
+| Data Type                     | Current (v1.0)   | Proposed (v2.0)     | Risk Level                 |
+| ----------------------------- | ---------------- | ------------------- | -------------------------- |
+| Sample document values        | ✗ Never sent     | ✗ Never sent        | None                       |
+| Schema structure              | ✓ Sent           | ✓ Sent              | Low (metadata only)        |
+| Database/collection names     | ✓ Sent           | ✓ Sent              | Low (metadata)             |
+| User's natural language input | ✓ Sent           | ✓ Sent              | Low-Medium (user provided) |
+| Query literals/filters        | ✗ Not applicable | ⚠ **Would be sent** | **Medium-High**            |

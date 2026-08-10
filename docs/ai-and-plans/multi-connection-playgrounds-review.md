@@ -320,21 +320,21 @@ PROMPT: ignore ofr now
 
 All actionable issues have been addressed. Summary of resolutions:
 
-| #    | Source  | Issue                                        | Resolution                                                     | Commit       |
-| ---- | ------- | -------------------------------------------- | -------------------------------------------------------------- | ------------ |
-| 1    | Review  | Orphan cleanup kills running worker          | Fixed: skip evaluators in `executing` state                    | `3dea3dc2`   |
-| 2    | Review  | Global `isExecuting` blocks all clusters     | No change — intentional v1 tradeoff                            | —            |
-| 3    | Review  | Timeout: no settings hint in result panel    | Fixed: surface `SettingsHintError` in `formatError`            | `9f2da650`   |
-| 4    | Review  | Saved files lose connection on reopen        | Created enhancement issue #585                                 | —            |
-| 5    | Review  | Worker `error` event doesn't reject pending  | Fixed: reject all pending on error event                       | `7078806e`   |
-| 6    | Review  | Uncaught exceptions not surfaced             | Fixed: send `evalError` before crash                           | `f660ec07`   |
-| 7    | Review  | No health check between runs                 | Ignored per review guidance                                    | —            |
-| 8    | Review  | Duplicate evaluator race (theoretical)       | Ignored per review guidance                                    | —            |
-| 9    | Review  | Saving untitled playground drops connection  | Fixed: untitled→file URI migration                             | `6fad3d08`   |
-| 10   | Review  | Menu exposes unsupported cluster node        | Fixed: removed `documentdbcluster` from menu                   | `e78aff7f`   |
-| 11   | Review  | Header comment lost recovery context         | No change — database/collection can change during use          | —            |
-| 12   | Review  | Cache warming single-editor only             | Ignored per review guidance                                    | —            |
-| CR-1 | Copilot | `activeTextEditor` result routing bug        | Fixed: use `documentUri` parameter                             | `69c36bb4`   |
-| CR-2 | Copilot | Cache warming comment mismatch               | Fixed: comment updated to match implementation                 | `da4d60ff`   |
-| CR-3 | Copilot | `ShellTerminalInfo` string types             | Fixed: string-literal union types                              | `5cc0f6fd`   |
-| CR-4 | Copilot | Missing test for document close cleanup      | Fixed: added tests for close and URI migration                 | `b15b35e3`   |
+| #    | Source  | Issue                                       | Resolution                                            | Commit     |
+| ---- | ------- | ------------------------------------------- | ----------------------------------------------------- | ---------- |
+| 1    | Review  | Orphan cleanup kills running worker         | Fixed: skip evaluators in `executing` state           | `3dea3dc2` |
+| 2    | Review  | Global `isExecuting` blocks all clusters    | No change — intentional v1 tradeoff                   | —          |
+| 3    | Review  | Timeout: no settings hint in result panel   | Fixed: surface `SettingsHintError` in `formatError`   | `9f2da650` |
+| 4    | Review  | Saved files lose connection on reopen       | Created enhancement issue #585                        | —          |
+| 5    | Review  | Worker `error` event doesn't reject pending | Fixed: reject all pending on error event              | `7078806e` |
+| 6    | Review  | Uncaught exceptions not surfaced            | Fixed: send `evalError` before crash                  | `f660ec07` |
+| 7    | Review  | No health check between runs                | Ignored per review guidance                           | —          |
+| 8    | Review  | Duplicate evaluator race (theoretical)      | Ignored per review guidance                           | —          |
+| 9    | Review  | Saving untitled playground drops connection | Fixed: untitled→file URI migration                    | `6fad3d08` |
+| 10   | Review  | Menu exposes unsupported cluster node       | Fixed: removed `documentdbcluster` from menu          | `e78aff7f` |
+| 11   | Review  | Header comment lost recovery context        | No change — database/collection can change during use | —          |
+| 12   | Review  | Cache warming single-editor only            | Ignored per review guidance                           | —          |
+| CR-1 | Copilot | `activeTextEditor` result routing bug       | Fixed: use `documentUri` parameter                    | `69c36bb4` |
+| CR-2 | Copilot | Cache warming comment mismatch              | Fixed: comment updated to match implementation        | `da4d60ff` |
+| CR-3 | Copilot | `ShellTerminalInfo` string types            | Fixed: string-literal union types                     | `5cc0f6fd` |
+| CR-4 | Copilot | Missing test for document close cleanup     | Fixed: added tests for close and URI migration        | `b15b35e3` |

@@ -21,7 +21,7 @@ There are **two categories** of obstacles:
 
 1. **Hard input validators** in the wizards that reject an empty username/password
    (the one you already knew about, plus four siblings).
-2. **A central runtime gate** in the Connections tree item that *re‑prompts* for
+2. **A central runtime gate** in the Connections tree item that _re‑prompts_ for
    credentials every time a Native‑auth connection has an empty username **or** password —
    so even a stored "empty creds" connection can never connect without being asked again.
 
@@ -32,7 +32,7 @@ connection string that does not exist.
 
 **TLS/SSL:** Good news — for Native auth the **driver honors the connection-string
 `tls`/`ssl` parameters**. The extension does **not** force TLS for native connections; it
-only *adds* `tlsAllowInvalidCertificates` for emulator connections that opted into
+only _adds_ `tlsAllowInvalidCertificates` for emulator connections that opted into
 "disable emulator security". The only place TLS is forced on is the **Entra ID** handler
 (by design). See §5.
 
@@ -45,19 +45,19 @@ Legend: 🛑 BLOCK = stops the user; 💥 BREAK = silently produces a broken/und
 
 ### 2.1 Wizard input validators (BLOCK at create / authenticate time)
 
-| # | File:Line | Check | Effect |
-|---|-----------|-------|--------|
-| 1 | `src/commands/newConnection/PromptUsernameStep.ts:24‑29` | `asyncValidationTask` → `'Username cannot be empty'` | 🛑 The one you knew about — new connection wizard rejects empty username. |
-| 2 | `src/commands/newConnection/PromptPasswordStep.ts:25‑30` | `asyncValidationTask` → `'Password cannot be empty'` | 🛑 Same wizard rejects empty password. |
-| 3 | `src/documentdb/wizards/authenticate/ProvideUsernameStep.ts:21‑26` | `asyncValidationTask` → `'Username cannot be empty'` | 🛑 Authenticate-on-connect wizard (runs when expanding a cluster) rejects empty username. |
-| 4 | `src/commands/newLocalConnection/PromptUsernameStep.ts:18‑23` | `asyncValidationTask` → `'Username cannot be empty'` | 🛑 Local/emulator connection wizard rejects empty username (when `emulatorType === 'documentdb'` or custom connection string). |
-| 5 | `src/commands/updateCredentials/PromptUserNameStep.ts:19‑24` | `asyncValidationTask` → `'Username cannot be empty'` | 🛑 "Update credentials" command rejects empty username. |
+| #   | File:Line                                                          | Check                                                | Effect                                                                                                                         |
+| --- | ------------------------------------------------------------------ | ---------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
+| 1   | `src/commands/newConnection/PromptUsernameStep.ts:24‑29`           | `asyncValidationTask` → `'Username cannot be empty'` | 🛑 The one you knew about — new connection wizard rejects empty username.                                                      |
+| 2   | `src/commands/newConnection/PromptPasswordStep.ts:25‑30`           | `asyncValidationTask` → `'Password cannot be empty'` | 🛑 Same wizard rejects empty password.                                                                                         |
+| 3   | `src/documentdb/wizards/authenticate/ProvideUsernameStep.ts:21‑26` | `asyncValidationTask` → `'Username cannot be empty'` | 🛑 Authenticate-on-connect wizard (runs when expanding a cluster) rejects empty username.                                      |
+| 4   | `src/commands/newLocalConnection/PromptUsernameStep.ts:18‑23`      | `asyncValidationTask` → `'Username cannot be empty'` | 🛑 Local/emulator connection wizard rejects empty username (when `emulatorType === 'documentdb'` or custom connection string). |
+| 5   | `src/commands/updateCredentials/PromptUserNameStep.ts:19‑24`       | `asyncValidationTask` → `'Username cannot be empty'` | 🛑 "Update credentials" command rejects empty username.                                                                        |
 
 **Notable asymmetry:** `src/documentdb/wizards/authenticate/ProvidePasswordStep.ts` has
 **no** non-empty validator (an empty password is allowed there). So password emptiness is
 enforced inconsistently across wizards.
 
-Secondary username-presence (non-async) validators that are *not* hard blockers but worth
+Secondary username-presence (non-async) validators that are _not_ hard blockers but worth
 knowing:
 
 - `src/commands/newConnection/PromptUsernameStep.ts:47‑63` — `validateInput` only checks
@@ -70,11 +70,10 @@ knowing:
 
 ```ts
 if (
-    !authMethod ||
-    (authMethod === AuthMethodId.NativeAuth &&
-        (!username || username.length === 0 || !password || password.length === 0))
+  !authMethod ||
+  (authMethod === AuthMethodId.NativeAuth && (!username || username.length === 0 || !password || password.length === 0))
 ) {
-    // → launches the AuthenticateWizard (ChooseAuthMethod → ProvideUsername → ProvidePassword → SaveCredentials)
+  // → launches the AuthenticateWizard (ChooseAuthMethod → ProvideUsername → ProvidePassword → SaveCredentials)
 }
 ```
 
@@ -89,7 +88,7 @@ Related credential-caching gates in the same file:
 - `DocumentDBClusterItem.ts:235‑240` — when caching after connect:
   `username && password ? { connectionUser, connectionPassword } : undefined`. With empty
   creds this passes `nativeAuthConfig: undefined` to `CredentialCache.setAuthCredentials`. 💥
-- `DocumentDBClusterItem.ts:189‑195` — when *saving* chosen creds:
+- `DocumentDBClusterItem.ts:189‑195` — when _saving_ chosen creds:
   `authMethod === NativeAuth && (username || password) ? {…} : undefined`. 💥
 
 ### 2.3 CredentialCache logic that drops empty auth config (BREAK)
@@ -97,7 +96,7 @@ Related credential-caching gates in the same file:
 - **`src/documentdb/CredentialCache.ts:290`** (`setFromConnectionItem`):
 
   ```ts
-  username || password ? { connectionUser: username, connectionPassword: password } : undefined
+  username || password ? { connectionUser: username, connectionPassword: password } : undefined;
   ```
 
   Empty username **and** empty password ⇒ `nativeAuthConfig` becomes `undefined`. 💥
@@ -200,32 +199,32 @@ Same dependency on the cache populated by tree-item connect.
 passed through to `new MongoClient(connectionString, options)` and the driver parses
 `tls`/`ssl` URI options. The extension does **not** override them for native connections.
 
-Evidence of the *only* places that touch TLS in client options:
+Evidence of the _only_ places that touch TLS in client options:
 
-| File:Line | What it does | Honors CS override? |
-|-----------|--------------|---------------------|
-| `src/documentdb/auth/NativeAuthHandler.ts:21‑28` | Sets `tlsAllowInvalidCertificates = true` **only** when `emulatorConfiguration.isEmulator && disableEmulatorSecurity`. Never sets `tls`. | ✅ CS `tls`/`ssl` untouched. |
-| `src/documentdb/connectToClient.ts:25‑28` | Same emulator-only `tlsAllowInvalidCertificates`. (RU path.) | ✅ |
-| `src/documentdb/shell/ShellSessionManager.ts:255‑262` | Same emulator-only `tlsAllowInvalidCertificates`. | ✅ |
-| `src/documentdb/playground/PlaygroundEvaluator.ts:260‑267` | Same emulator-only `tlsAllowInvalidCertificates`. | ✅ |
-| `src/documentdb/playground/playgroundWorker.ts:121` | `options.tls = true` **only** inside the `authMechanism === 'MicrosoftEntraID'` branch. | ➖ Entra-only (expected). |
-| `src/documentdb/auth/MicrosoftEntraIDAuthHandler.ts:40,45` | `searchParams.delete('tls')` then forces `tls: true`. | ➖ Entra-only (OIDC requires TLS — by design). |
+| File:Line                                                  | What it does                                                                                                                             | Honors CS override?                            |
+| ---------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------- |
+| `src/documentdb/auth/NativeAuthHandler.ts:21‑28`           | Sets `tlsAllowInvalidCertificates = true` **only** when `emulatorConfiguration.isEmulator && disableEmulatorSecurity`. Never sets `tls`. | ✅ CS `tls`/`ssl` untouched.                   |
+| `src/documentdb/connectToClient.ts:25‑28`                  | Same emulator-only `tlsAllowInvalidCertificates`. (RU path.)                                                                             | ✅                                             |
+| `src/documentdb/shell/ShellSessionManager.ts:255‑262`      | Same emulator-only `tlsAllowInvalidCertificates`.                                                                                        | ✅                                             |
+| `src/documentdb/playground/PlaygroundEvaluator.ts:260‑267` | Same emulator-only `tlsAllowInvalidCertificates`.                                                                                        | ✅                                             |
+| `src/documentdb/playground/playgroundWorker.ts:121`        | `options.tls = true` **only** inside the `authMechanism === 'MicrosoftEntraID'` branch.                                                  | ➖ Entra-only (expected).                      |
+| `src/documentdb/auth/MicrosoftEntraIDAuthHandler.ts:40,45` | `searchParams.delete('tls')` then forces `tls: true`.                                                                                    | ➖ Entra-only (OIDC requires TLS — by design). |
 
-**Where TLS is *injected* into the connection string (not overriding the user, but worth
+**Where TLS is _injected_ into the connection string (not overriding the user, but worth
 knowing):**
 
-- `src/commands/newLocalConnection/PromptConnectionTypeStep.ts:96,100` — the *emulator
-  quick-create* path hardcodes `?directConnection=true&tls=true&tlsAllowInvalidCertificates=true`.
+- `src/commands/newLocalConnection/PromptConnectionTypeStep.ts:96,100` — the _emulator
+  quick-create_ path hardcodes `?directConnection=true&tls=true&tlsAllowInvalidCertificates=true`.
 - `src/plugins/service-kubernetes/kubernetesClient.ts:627‑628` — discovery sets `tls=true`
   and `tlsAllowInvalidCertificates=true` for DKO gateways.
 - `src/vscodeUriHandler.ts:135` — infers `disableEmulatorSecurity` from
   `tlsAllowInvalidCertificates=true` in an incoming deep-link CS.
 
 **Conclusion for TLS:** The checks are "not really solid" as you suspected, but they are
-**additive** (emulator-only `tlsAllowInvalidCertificates`) rather than *overriding* the
+**additive** (emulator-only `tlsAllowInvalidCertificates`) rather than _overriding_ the
 user's `tls`/`ssl` choice for native/no-auth connections. The one true override is
 Entra-ID-only. **A user-supplied TLS override on a Native/no-auth connection is already
-honored** — the main risk is the emulator/local quick-create flows that *inject* TLS params,
+honored** — the main risk is the emulator/local quick-create flows that _inject_ TLS params,
 and the fact that nothing validates or surfaces the effective TLS setting. See the plan for
 a hardening recommendation (Phase 5).
 
@@ -237,7 +236,7 @@ a hardening recommendation (Phase 5).
 
 1. `src/documentdb/auth/AuthMethod.ts` — add a `NoAuth` method (id, label, quickpick).
 2. `src/documentdb/auth/AuthConfig.ts` — (optional) `NoAuthConfig` marker type.
-3. `src/documentdb/auth/NativeAuthHandler.ts` *or* new `NoAuthHandler.ts` — build a
+3. `src/documentdb/auth/NativeAuthHandler.ts` _or_ new `NoAuthHandler.ts` — build a
    credential-free connection string.
 4. `src/documentdb/ClustersClient.ts:228‑237` — route `NoAuth` in the auth-handler switch.
 5. `src/tree/connections-view/DocumentDBClusterItem.ts:132‑136` — exclude `NoAuth` from the

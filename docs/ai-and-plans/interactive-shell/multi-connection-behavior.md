@@ -24,11 +24,11 @@
 
 ## Why the Difference?
 
-| Aspect              | Interactive Shell        | Query Playground           |
-| ------------------- | ------------------------ | -------------------------- |
-| Worker granularity   | Per terminal             | Per cluster                |
-| Isolation            | Full                     | Per cluster (shared queue) |
-| Resource cost        | Higher (one thread each) | Lower (shared per server)  |
+| Aspect             | Interactive Shell        | Query Playground           |
+| ------------------ | ------------------------ | -------------------------- |
+| Worker granularity | Per terminal             | Per cluster                |
+| Isolation          | Full                     | Per cluster (shared queue) |
+| Resource cost      | Higher (one thread each) | Lower (shared per server)  |
 
 The shell uses per-terminal workers because each session can have independent
 state (`use <db>`, variables, cursor position). Playgrounds are stateless

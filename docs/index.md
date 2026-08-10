@@ -48,6 +48,7 @@ The User Manual provides guidance on using DocumentDB for VS Code. It contains d
 ### Connecting to Databases
 
 - [Connecting with a URL](./user-manual/how-to-construct-url)
+- [Connect with a Managed Identity](./user-manual/connect-with-managed-identity)
 - [Service Discovery](./user-manual/service-discovery)
   - [Azure DocumentDB](./user-manual/service-discovery-azure-cosmosdb-for-mongodb-vcore)
   - [Azure Cosmos DB for MongoDB (RU)](./user-manual/service-discovery-azure-cosmosdb-for-mongodb-ru)

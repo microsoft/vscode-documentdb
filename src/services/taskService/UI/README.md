@@ -35,40 +35,40 @@ import { ext } from '../../extensionVariables';
 import { isTerminalState, type Task } from '../../services/taskService/taskService';
 
 export class ExecuteStep extends AzureWizardExecuteStep<PasteCollectionWizardContext> {
-    // ...
+  // ...
 
-    public async execute(context: PasteCollectionWizardContext): Promise<void> {
-        // ... task setup ...
-        const task = new CopyPasteCollectionTask(config, reader, writer);
-        TaskService.registerTask(task);
+  public async execute(context: PasteCollectionWizardContext): Promise<void> {
+    // ... task setup ...
+    const task = new CopyPasteCollectionTask(config, reader, writer);
+    TaskService.registerTask(task);
 
-        // Set up tree annotations to show progress on source and target nodes
-        // Annotations are automatically cleared when the task reaches a terminal state
-        if (ext.copiedCollectionNode?.id) {
-            void this.annotateNodeDuringTask(ext.copiedCollectionNode.id, vscode.l10n.t('Copying…'), task);
-        }
-        void this.annotateNodeDuringTask(context.targetNode.id, vscode.l10n.t('Pasting…'), task);
-
-        void task.start();
+    // Set up tree annotations to show progress on source and target nodes
+    // Annotations are automatically cleared when the task reaches a terminal state
+    if (ext.copiedCollectionNode?.id) {
+      void this.annotateNodeDuringTask(ext.copiedCollectionNode.id, vscode.l10n.t('Copying…'), task);
     }
+    void this.annotateNodeDuringTask(context.targetNode.id, vscode.l10n.t('Pasting…'), task);
 
-    /**
-     * Annotates a tree node with a temporary description while the task is running.
-     * The annotation is automatically cleared when the task reaches a terminal state.
-     */
-    private annotateNodeDuringTask(nodeId: string, label: string, task: Task): void {
-        void ext.state.runWithTemporaryDescription(nodeId, label, () => {
-            return new Promise<void>((resolve) => {
-                const subscription = task.onDidChangeState((event) => {
-                    if (isTerminalState(event.newState)) {
-                        subscription.dispose();
-                        resolve();
-                    }
-                });
-            });
+    void task.start();
+  }
+
+  /**
+   * Annotates a tree node with a temporary description while the task is running.
+   * The annotation is automatically cleared when the task reaches a terminal state.
+   */
+  private annotateNodeDuringTask(nodeId: string, label: string, task: Task): void {
+    void ext.state.runWithTemporaryDescription(nodeId, label, () => {
+      return new Promise<void>((resolve) => {
+        const subscription = task.onDidChangeState((event) => {
+          if (isTerminalState(event.newState)) {
+            subscription.dispose();
+            resolve();
+          }
         });
-    }
+      });
+    });
+  }
 
-    // ...
+  // ...
 }
 ```

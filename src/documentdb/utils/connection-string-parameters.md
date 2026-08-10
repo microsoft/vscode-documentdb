@@ -12,11 +12,11 @@ According to the [MongoDB Connection String Specification](https://github.com/mo
 
 - **Purpose**: Specifies ordered tag sets for read preference to select replica set members
 - **Behavior**: Each occurrence adds another element to the tag set list; order matters
-- **Example**: 
+- **Example**:
   ```
   ?readPreference=secondary&readPreferenceTags=dc:ny,rack:1&readPreferenceTags=dc:ny&readPreferenceTags=
   ```
-- **Source**: 
+- **Source**:
   - [MongoDB Connection String Specification - Lists](https://github.com/mongodb/specifications/blob/master/source/connection-string/connection-string-spec.md#values)
   - [MongoDB Java Driver Documentation](https://mongodb.github.io/mongo-java-driver/3.12/javadoc/com/mongodb/ConnectionString.html)
   - [libmongoc Documentation](https://mongoc.org/libmongoc/1.23.0/mongoc_read_prefs_t.html)
@@ -54,7 +54,8 @@ The following are common parameters that **cannot** be duplicated meaningfully:
 - `readPreference` - Read preference mode (note: different from `readPreferenceTags`)
 - `compressors` - Comma-separated list of compressor names (single value, but contains comma-separated items)
 
-**Source**: 
+**Source**:
+
 - [MongoDB Connection String Specification - Repeated Keys](https://github.com/mongodb/specifications/blob/master/source/connection-string/connection-string-spec.md#repeated-keys)
 - [MongoDB Connection String Options](https://www.mongodb.com/docs/manual/reference/connection-string-options/)
 
@@ -71,6 +72,18 @@ While `compressors` accepts multiple compressor types (e.g., `compressors=snappy
 Accepts comma-separated key:value pairs as a single parameter value, not as duplicate keys.
 
 **Example**: `?authMechanismProperties=TOKEN_RESOURCE:mongodb://foo,SOME_KEY:value`
+
+#### `ENVIRONMENT` and `TOKEN_RESOURCE` (managed identity)
+
+Azure DocumentDB documents a machine authentication form that carries two properties:
+
+```text
+?authMechanism=MONGODB-OIDC&authMechanismProperties=ENVIRONMENT:azure,TOKEN_RESOURCE:https://ossrdbms-aad.database.windows.net
+```
+
+The extension **produces** this form (see `copyConnectionString`) and **reads** it on paste (see `detectManagedIdentityHint`), but it does not hand it to the driver. On paste, the properties are interpreted, the connection is configured as a managed identity connection, and both `authMechanism` and `authMechanismProperties` are then stripped from the stored string.
+
+That removal is deliberate. `MongoClientOptions.authMechanismProperties` is where the extension supplies its own OIDC callback, and a competing value left in the URL risks the driver preferring the URL form and taking its own instance metadata code path, which reports failures as an opaque HTTP status code.
 
 ## Implications for Deduplication Logic
 
