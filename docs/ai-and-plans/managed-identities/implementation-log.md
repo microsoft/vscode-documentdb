@@ -27,14 +27,14 @@ commit) say so and name the commit that carries them.
 
 ## Status overview
 
-| Phase | Work items   | Status        |
-| ----- | ------------ | ------------- |
-| 1     | WI1 to WI6   | ✅ Done       |
-| 2     | WI7 to WI13  | ✅ Done       |
-| 3     | WI14, WI15   | ✅ Done       |
-| 4     | WI16, WI17   | ☐ Not started |
-| 5     | WI18 to WI20 | ☐ Not started |
-| 6     | WI22 to WI25 | ☐ Not started |
+| Phase | Work items   | Status         |
+| ----- | ------------ | -------------- |
+| 1     | WI1 to WI6   | ✅ Done        |
+| 2     | WI7 to WI13  | ✅ Done        |
+| 3     | WI14, WI15   | ✅ Done        |
+| 4     | WI16, WI17   | ✅ Done        |
+| 5     | WI18 to WI20 | ⏳ In progress |
+| 6     | WI22 to WI25 | ☐ Not started  |
 
 Legend: ☐ not started, ⏳ in progress, ✅ done, ⛔ on hold, ➖ folded into another item.
 
@@ -429,23 +429,73 @@ The observed messages are recorded verbatim as constants in `managedIdentityErro
 
 ---
 
+## Phase 4: Azure Resources and Discovery views
+
+### WI16, WI17 — Availability and plumbing outside the Connections view ✅
+
+**Commit:** `6f287d9a` — _Offer managed identity in the Azure Resources and Discovery views_
+
+#### WI16 — Synthesizing the method from ARM metadata
+
+**What.** `extractCredentialsFromCluster()` in
+[clusterHelpers.ts](src/plugins/service-azure-mongo-vcore/utils/clusterHelpers.ts) now pushes
+`AuthMethodId.ManagedIdentity` whenever the cluster's `allowedModes` include `MicrosoftEntraID`. New
+test file `clusterHelpers.test.ts`.
+
+**Why.** Plan §6. Managed identity is Entra ID on the wire and has no ARM `allowedModes` value of its
+own, so it can only ever arrive by an explicit rule. The naming caveat in plan §1 exists precisely to
+stop a future reader from assuming it comes through `allowedModes.filter(isSupportedAuthMethod)`.
+
+**Notes.** The plan asks that the `receivedAuthMethods` and `unknownAuthMethods` telemetry keep
+reporting the **raw** `allowedModes`. That is now a test rather than a comment: the third case
+asserts the counts and strings are unchanged by the synthesized entry, so someone moving the push a
+few lines earlier breaks a test instead of quietly skewing service-side numbers.
+
+#### WI17 — Threading the config through the connect paths
+
+**What.** `managedIdentityAuthConfig` is now carried through:
+
+- [VCoreResourceItem.ts](src/tree/azure-resources-view/documentdb/VCoreResourceItem.ts) and
+  [DocumentDBResourceItem.ts](src/plugins/service-azure-mongo-vcore/discovery-tree/documentdb/DocumentDBResourceItem.ts)
+  `authenticateAndConnect()`, including the seventh argument to `setAuthCredentials()` and a
+  managed-identity line in the output channel;
+- both of their `promptForCredentials()` wizards, which gained `SelectManagedIdentityStep`;
+- [AzureExecuteStep.ts](src/plugins/service-azure-mongo-vcore/discovery-wizard/AzureExecuteStep.ts)
+  and [addConnectionFromRegistry.ts](src/commands/addConnectionFromRegistry/addConnectionFromRegistry.ts),
+  so a connection saved from Discovery keeps its identity.
+
+**Why.** Plan §6 and §7: the method must work from all three entry points.
+
+**Notes and divergences.**
+
+- **Divergence (scope):** the plan lists only the two resource items. `AzureExecuteStep` and
+  `addConnectionFromRegistry` were added because they are the path by which a discovered cluster
+  becomes a **saved** connection. Without them the identity would be chosen, used once, and then
+  silently dropped on save, which is the same class of bug WI13 fixes elsewhere. Confidence: high.
+- As in the Connections view, the config defaults to `{}` rather than `undefined` when the selected
+  method is managed identity, so the system-assigned case survives.
+- `KubernetesResourceItem` was deliberately left alone: managed identity is only offered for Azure
+  vCore hosts, so it can never appear in that item's `availableAuthMethods`.
+
+---
+
 ## Deviations from the plan
 
 Recorded here in one place as well as in the individual entries, so a reviewer can see the whole
 set at a glance.
 
 | Where               | Divergence                                                                                                  | Rationale                                                                                                                             |
-| ------------------- | ----------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------- | --- | ---- | ------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
+| ------------------- | ----------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------- | --- | ---- | ------------------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------- |
 | WI4                 | `expiresInSecondsFromTimestamp` subtracts a 300 second safety margin instead of returning the raw remainder | Avoids handing the driver a token that expires in flight. Floor-at-zero preserved. Reversible by changing one constant.               |
 | WI4                 | Helper takes an optional `now` argument                                                                     | Makes the unit tests deterministic. Defaulted, so callers are unaffected.                                                             |
 | WI6                 | Second export `classifyManagedIdentityError()` alongside `describeManagedIdentityError()`                   | §12 telemetry needs the reason code; deriving it from a localized message string would break under translation.                       |
 | WI1 to WI6 (commit) | All of phase 1 in one commit rather than six                                                                | The intermediate states do not build a working feature; five of the six commits would be dead code.                                   |
 | WI7                 | A `weak` hint does **not** preselect the auth method; only an `explicit` hint does                          | The plan's own `weak` row requires the user to be able to switch to interactive Entra ID, which is impossible once the method is set. |
 | WI7                 | The hint object is carried on the wizard context as `managedIdentityHint`, not just the config              | WI10 needs to know explicit versus weak in order to decide whether to skip the identity step.                                         |
-| WI7                 | A GUID username under a managed identity hint is never stored as `nativeAuthConfig`                         | It is an identity selector, not a database user; storing it as one produces a connection that reads as native auth.                   |     | WI10 | One generic step with a predicate, instead of two near-identical step classes               | The contexts differ only in the name of the selected-method field. Serves three wizards rather than two.                         |
+| WI7                 | A GUID username under a managed identity hint is never stored as `nativeAuthConfig`                         | It is an identity selector, not a database user; storing it as one produces a connection that reads as native auth.                   |     | WI10 | One generic step with a predicate, instead of two near-identical step classes                          | The contexts differ only in the name of the selected-method field. Serves three wizards rather than two.                         |
 | WI10                | Extra "From the connection string" group in the quick pick                                                  | A client ID the user just pasted would otherwise be invisible in a list whose purpose is to avoid retyping it.                        |
-| WI11                | Storage uses one secret slot with a `'system-assigned'` sentinel                                            | The `string[]` secrets format cannot express "present but empty", and a sentinel can never collide with a GUID.                       |     | WI14 | The unreachable case points at a closed port instead of unsetting the environment variables | Some developer machines, including Azure Cloud PCs, do answer on 169.254.169.254, which made the planned version host dependent. |
-| WI6 (revised)       | Error text collection is duck-typed instead of using `instanceof Error`                                     | The thrown value is not always a real `Error`, under Jest and across worker boundaries, which silenced the classifier entirely.       |
+| WI11                | Storage uses one secret slot with a `'system-assigned'` sentinel                                            | The `string[]` secrets format cannot express "present but empty", and a sentinel can never collide with a GUID.                       |     | WI14 | The unreachable case points at a closed port instead of unsetting the environment variables            | Some developer machines, including Azure Cloud PCs, do answer on 169.254.169.254, which made the planned version host dependent. |
+| WI6 (revised)       | Error text collection is duck-typed instead of using `instanceof Error`                                     | The thrown value is not always a real `Error`, under Jest and across worker boundaries, which silenced the classifier entirely.       |     | WI17 | Also threaded through `AzureExecuteStep` and `addConnectionFromRegistry`, which the plan does not list | They are how a discovered cluster becomes a saved connection; without them the chosen identity is dropped on save.               |
 
 ---
 
