@@ -34,7 +34,10 @@ commit) say so and name the commit that carries them.
 | 3     | WI14, WI15   | ✅ Done        |
 | 4     | WI16, WI17   | ✅ Done        |
 | 5     | WI18 to WI20 | ✅ Done        |
-| 6     | WI22 to WI25 | ⏳ In progress |
+| 6     | WI22 to WI25 | ✅ Done         |
+
+WI21 is on hold and expected to be dropped; see [D3](./decisions.md#d3-azure-environment-detection-open).
+WI26, WI27 and WI28 are deliberately after this work lands.
 
 Legend: ☐ not started, ⏳ in progress, ✅ done, ⛔ on hold, ➖ folded into another item.
 
@@ -518,6 +521,111 @@ single token cache per window, and so the worker never has to import `@azure/ide
 
 ---
 
+## Phase 6: hardening and documentation
+
+### WI22: Telemetry ✅
+
+**Commit:** `5693ea64`, _Instrument managed identity telemetry_
+
+**What.** `managedIdentityKind` and `managedIdentityClientIdSource` are recorded by
+[SelectManagedIdentityStep](src/documentdb/wizards/authenticate/SelectManagedIdentityStep.ts), and by
+[PromptConnectionStringStep](src/commands/newConnection/PromptConnectionStringStep.ts) for the case
+where an explicit hint skips that step. `managedIdentityFailureReason` is emitted by new
+[managedIdentityTelemetry.ts](src/documentdb/auth/managedIdentityTelemetry.ts).
+`copiedAuthMechanism` landed earlier with WI8.
+
+**Why.** Plan §12.
+
+**Notes and divergences.**
+
+- **Divergence (event shape):** the plan describes `managedIdentityFailureReason` as riding on the
+  existing `selectedAuthMethod` property, that is, on the `connect` event. It cannot: the failure
+  happens inside the driver's OIDC callback, and by the time the error surfaces at a connect handler
+  the driver has wrapped it and the message has been localized, so it is no longer classifiable. A
+  dedicated `connect.managedIdentityToken` event, emitted at the point of failure, is the only place
+  where the reason is still known. Confidence: high; the alternative is a property that is silently
+  always `other`.
+- The classifier is deliberately separate from the message (see WI6), so the reason code is stable
+  across translations.
+- The client ID is never emitted. It also goes into `context.valuesToMask` wherever it is read.
+- `azureEnvironmentDetected` is **not** implemented, per the current lean on
+  [D3](./decisions.md#d3-azure-environment-detection-open). `managedIdentityFailureReason` already
+  reports `noEndpoint`, and it does so from the real call rather than a speculative probe.
+
+### WI23: Localization and the dash check ✅
+
+**What.** `npm run l10n` regenerated `l10n/bundle.l10n.json` with 16 new managed identity strings.
+Every added line across `src/` and `docs/` was grepped for em dashes and en dashes; the result is
+empty.
+
+**Notes.** Pre-existing em dashes in comments of files touched for other reasons were left alone.
+The convention exists for user-facing strings and for new documentation, and rewriting unrelated
+comments would have made the diff much harder to review for no benefit. The check applied here is
+"no em dash or en dash on any **added** line", which is the property that can actually be maintained.
+
+Two entity references, `&mdash;` and `&middot;`, appear in the breadcrumb line of the new user-manual
+page. That is the established pattern of every other page in `docs/user-manual/`, and matching its
+siblings seemed more useful than being locally consistent with the rule.
+
+### WI24: Documentation ✅
+
+**Commit:** `bb82a56d`, _Document managed identity, add the validation checklist, update l10n_
+
+**What.**
+
+- New [docs/user-manual/connect-with-managed-identity.md](docs/user-manual/connect-with-managed-identity.md),
+  linked from `docs/index.md`. Covers prerequisites, the Azure VM scope, the identity picker, the
+  pasted connection string form, copying, a troubleshooting table keyed to the actual error
+  messages, and a comparison with interactive Entra ID.
+- A **Managed identity connections** section in
+  [copy-connection-string.md](docs/user-manual/copy-connection-string.md), including why no password
+  prompt appears and why the copied string is safe to share.
+- An `ENVIRONMENT` and `TOKEN_RESOURCE` subsection in
+  [connection-string-parameters.md](src/documentdb/utils/connection-string-parameters.md), stating
+  that we produce and read the form but never hand it to the driver, and why.
+
+**Why.** [D6.3](./decisions.md#d63-documentation-our-docs-folder).
+
+**Notes and divergences.**
+
+- **Divergence (target file):** the plan lists `docs/user-manual/how-to-construct-url.md` as needing
+  the `ENVIRONMENT` and `TOKEN_RESOURCE` documentation. That page is about the `vscode://` URI
+  handler, not about connection string parameters, so the content would have been in the wrong place.
+  It went into `connection-string-parameters.md` instead, which the plan also lists and which is
+  actually about this. Confidence: high.
+- The troubleshooting table quotes the real message text, so a wording change in
+  `managedIdentityErrors.ts` should be accompanied by an edit here.
+
+### WI25: Manual validation checklist ✅
+
+**What.** New [manual-validation-checklist.md](./manual-validation-checklist.md): 29 numbered cases
+across identity resolution, connection string interoperability, persistence and tree behaviour, the
+three query surfaces, and regression.
+
+**Why.** Plan WI25 and [D7](./decisions.md#d7-testing). Validation on real hardware is delegated, so
+the list has to be usable by someone who has not read the plan.
+
+**Notes.**
+
+- Structured as tables with a result column, and each section says **why** its rows exist, so a
+  failure can be reported against something specific. Case 3, the multiple-identity VM, is called out
+  as the reported incident.
+- Rows 26 to 29 exist because WI12 changed how a stored authentication method is resolved. The unit
+  tests for that use synthetic records; row 29 uses a connection actually written by an earlier
+  extension version, which is the thing the tests cannot fake.
+- Row 25, leaving a shell session open past the token lifetime, is the only check on the real
+  `expiresInSeconds` behaviour introduced in WI4.
+
+### WI21: Azure environment probe ⛔
+
+Not implemented, and expected to stay that way. Blocked on
+[D3](./decisions.md#d3-azure-environment-detection-open), whose current lean is "no probe". The
+discovery benefit it was meant to provide is carried by the static `detail` copy on the auth method
+(WI1), and the detection itself is done authoritatively by `ManagedIdentityCredential` at the moment
+it matters.
+
+---
+
 ## Deviations from the plan
 
 Recorded here in one place as well as in the individual entries, so a reviewer can see the whole
@@ -539,6 +647,8 @@ set at a glance.
 | WI14                  | The unreachable case points at a closed port instead of unsetting the environment variables                 | Some developer machines, including Azure Cloud PCs, do answer on 169.254.169.254, which made the planned version host dependent.             |
 | WI17                  | Also threaded through `AzureExecuteStep` and `addConnectionFromRegistry`, which the plan does not list      | They are how a discovered cluster becomes a saved connection; without them the chosen identity is dropped on save.                           |
 | WI20                  | Widened three auth-mechanism unions the plan does not mention, including the shell banner                   | The banner's ternary chain falls back to `SCRAM`, so a managed identity session would otherwise have been labelled as username and password. |
+| WI22 | `managedIdentityFailureReason` is a dedicated `connect.managedIdentityToken` event, not a property on `connect` | The failure happens inside the driver's OIDC callback; by the time it reaches a connect handler it is wrapped and localized, so it can no longer be classified. |
+| WI24 | `ENVIRONMENT` and `TOKEN_RESOURCE` documented in `connection-string-parameters.md`, not `how-to-construct-url.md` | The latter is about the `vscode://` URI handler, not about connection string parameters. |
 
 ---
 
