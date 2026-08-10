@@ -54,6 +54,7 @@ import { type AtlasCredentialsWebviewConfig } from './atlasCredentialsController
 import { type CredentialSubmitError } from './atlasCredentialsRouter';
 
 const ATLAS_CONSOLE_URL = 'https://cloud.mongodb.com/';
+const ATLAS_LEARN_MORE_URL = 'https://aka.ms/vscode-documentdb-atlas-discovery';
 
 type Phase = 'choose' | 'form' | 'checking' | 'success';
 type StageStatus = 'pending' | 'active' | 'done' | 'error' | 'warning';
@@ -143,6 +144,7 @@ const useStyles = makeStyles({
         transitionDuration: tokens.durationNormal,
         transitionTimingFunction: tokens.curveEasyEase,
     },
+    footerLearnMore: { marginLeft: 'auto' },
     footerElevated: {
         borderTopColor: tokens.colorNeutralStroke2,
         boxShadow: '0 -2px 6px rgba(0, 0, 0, 0.08)',
@@ -840,6 +842,13 @@ export const AtlasCredentialsView = (): JSX.Element => {
             </Button>
             <Button appearance="secondary" icon={<ArrowLeftRegular />} disabled={backDisabled} onClick={onBack}>
                 {l10n.t('Back')}
+            </Button>
+            <Button
+                appearance="secondary"
+                className={styles.footerLearnMore}
+                onClick={() => openLink(ATLAS_LEARN_MORE_URL)}
+            >
+                {l10n.t('Learn more')}
             </Button>
         </div>
     );

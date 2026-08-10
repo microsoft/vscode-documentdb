@@ -104,6 +104,8 @@ type Phase = 'introduction' | 'configure' | 'provisioning' | 'failed' | 'success
 type WizardStepId = 'introduction' | 'configure' | 'setup' | 'done';
 type StageStatus = 'pending' | 'active' | 'done' | 'error';
 
+const DOCUMENTDB_LOCAL_LEARN_MORE_URL = 'https://aka.ms/vscode-documentdb-local';
+
 function stepForPhase(phase: Phase): WizardStepId {
     switch (phase) {
         case 'introduction':
@@ -176,6 +178,7 @@ const useStyles = makeStyles({
         transitionTimingFunction: tokens.curveEasyEase,
     },
     footerActions: { display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: '8px' },
+    footerLearnMore: { marginLeft: 'auto' },
     footerNote: {
         display: 'flex',
         alignItems: 'flex-start',
@@ -2655,6 +2658,13 @@ export const LocalQuickStart = (): JSX.Element => {
                         {primaryLabel}
                     </Button>
                     {secondaryActions}
+                    <Button
+                        appearance="secondary"
+                        className={styles.footerLearnMore}
+                        onClick={() => handleOpenGuide(DOCUMENTDB_LOCAL_LEARN_MORE_URL)}
+                    >
+                        {l10n.t('Learn more')}
+                    </Button>
                 </div>
             </div>
         </main>

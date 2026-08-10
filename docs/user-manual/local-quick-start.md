@@ -6,6 +6,8 @@
 
 Set up and manage a DocumentDB Local container from the Connections view. The extension pulls the official image, creates a persistent Docker volume, waits for DocumentDB to accept connections, and saves the connection in VS Code.
 
+[DocumentDB](https://documentdb.io/) is an open-source, fully MongoDB-compatible database for modern application development. DocumentDB Local lets you run it in a Docker container for development and testing.
+
 ## Happy path
 
 With Docker running, setup takes only a few clicks:
