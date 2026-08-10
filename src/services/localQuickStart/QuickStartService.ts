@@ -711,9 +711,6 @@ export class QuickStartServiceImpl {
                     // Stop/Start and crashes on duplicate keys; sample data is seeded
                     // once, post-readiness, via `docker exec` (see seedSampleData).
                     environmentFiles: [envFilePath],
-                    // The image runs with a TTY, but Quick Start displays its logs in a plain-text
-                    // OutputChannel. Ask compliant processes not to emit terminal formatting.
-                    environmentVariables: { NO_COLOR: '1', TERM: 'dumb' },
                 },
                 secrets,
                 cts.token,

@@ -97,8 +97,6 @@ export interface CreateContainerOptions {
     readonly dataPath?: string;
     /** Paths to `--env-file`s carrying credentials, so they stay off the CLI (§8.2). */
     readonly environmentFiles?: ReadonlyArray<string>;
-    /** Non-secret environment variables passed directly to the container. */
-    readonly environmentVariables?: Readonly<Record<string, string>>;
     /** Post-image args appended after the image ref (optional; creds now go via env-file). */
     readonly command?: ReadonlyArray<string>;
 }
@@ -231,7 +229,6 @@ class ContainerRuntimeImpl implements IContainerRuntime {
                 // `127.0.0.1` also matches the loopback `isPortFree` pre-check above.
                 ports: [{ containerPort: options.containerPort, hostPort: options.hostPort, hostIp: '127.0.0.1' }],
                 mounts,
-                environmentVariables: options.environmentVariables ? { ...options.environmentVariables } : undefined,
                 environmentFiles: options.environmentFiles ? [...options.environmentFiles] : undefined,
                 command: options.command ? [...options.command] : undefined,
             }),
