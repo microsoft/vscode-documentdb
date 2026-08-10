@@ -89,6 +89,7 @@ import { updateCredentials } from '../commands/updateCredentials/updateCredentia
 import { doubleClickDebounceDelay } from '../constants';
 import { isVCoreAndRURolloutEnabled } from '../extension';
 import { ext } from '../extensionVariables';
+import { AtlasDiagnosticsProvider } from '../plugins/service-atlas-mongodb/AtlasDiagnosticsProvider';
 import { AtlasDiscoveryProvider } from '../plugins/service-atlas-mongodb/AtlasDiscoveryProvider';
 import {
     OPEN_ATLAS_CLUSTER_COMMAND_ID,
@@ -98,12 +99,15 @@ import { ADD_ATLAS_CREDENTIAL_COMMAND_ID } from '../plugins/service-atlas-mongod
 import { AzureMongoRUDiscoveryProvider } from '../plugins/service-azure-mongo-ru/AzureMongoRUDiscoveryProvider';
 import { AzureDiscoveryProvider } from '../plugins/service-azure-mongo-vcore/AzureDiscoveryProvider';
 import { AzureVMDiscoveryProvider } from '../plugins/service-azure-vm/AzureVMDiscoveryProvider';
+import { KubernetesDiagnosticsProvider } from '../plugins/service-kubernetes/KubernetesDiagnosticsProvider';
 import { KubernetesDiscoveryProvider } from '../plugins/service-kubernetes/KubernetesDiscoveryProvider';
 import { KubernetesReachabilityProvider } from '../plugins/service-kubernetes/KubernetesReachabilityProvider';
+import { ConnectionDiagnosticsService } from '../services/connectionDiagnosticsService';
 import { ConnectionReachabilityService } from '../services/connectionReachabilityService';
 import { DiscoveryService } from '../services/discoveryServices';
 import { migrateLegacyEmulatorConnections } from '../services/legacyEmulatorMigration';
 import { disposeQuickStartOutputChannel } from '../services/localQuickStart/ContainerRuntime';
+import { QuickStartDiagnosticsProvider } from '../services/localQuickStart/QuickStartDiagnosticsProvider';
 import { QuickStartService, sweepStaleQuickStartEnvFiles } from '../services/localQuickStart/QuickStartService';
 import { maybeShowReleaseNotesNotification } from '../services/releaseNotesNotification';
 import { DemoTask } from '../services/taskService/tasks/DemoTask';
@@ -119,6 +123,7 @@ import { RUBranchDataProvider } from '../tree/azure-resources-view/mongo-ru/RUBr
 import { ClustersWorkspaceBranchDataProvider } from '../tree/azure-workspace-view/ClustersWorkbenchBranchDataProvider';
 import { DocumentDbWorkspaceResourceProvider } from '../tree/azure-workspace-view/DocumentDbWorkspaceResourceProvider';
 import { ConnectionsBranchDataProvider } from '../tree/connections-view/ConnectionsBranchDataProvider';
+import { createQuickStartProgressBridge } from '../tree/connections-view/LocalQuickStart/quickStartProgressBridge';
 import { DiscoveryBranchDataProvider } from '../tree/discovery-view/DiscoveryBranchDataProvider';
 import { DiscoveryViewDragAndDropController } from '../tree/discovery-view/DiscoveryViewDragAndDropController';
 import { type ClusterItemBase } from '../tree/documentdb/ClusterItemBase';
@@ -129,6 +134,7 @@ import { type TreeElement } from '../tree/TreeElement';
 import { accumulateTelemetry } from '../utils/accumulatingTelemetry';
 import {
     registerCommandWithModalErrors,
+    registerCommandWithTreeNodeUnwrappingAndDiagnostics,
     registerCommandWithTreeNodeUnwrappingAndModalErrors,
 } from '../utils/commandErrorHandling';
 import { withCommandCorrelation, withTreeNodeCommandCorrelation } from '../utils/commandTelemetry';
@@ -166,6 +172,13 @@ export class ClustersExtension implements vscode.Disposable {
         // The generic Connections-view cluster node delegates to these via ConnectionReachabilityService.
         // See docs/ai-and-plans/PRs/621-kubernetes-discovery/connection-reachability-providers.md
         ConnectionReachabilityService.registerProvider(new KubernetesReachabilityProvider());
+
+        // Error-translation providers: they turn an infrastructure-caused database failure into an
+        // explanation the user can act on. They must never show UI or attempt recovery.
+        // See .github/skills/error-translation/SKILL.md
+        ConnectionDiagnosticsService.registerProvider(new QuickStartDiagnosticsProvider());
+        ConnectionDiagnosticsService.registerProvider(new KubernetesDiagnosticsProvider());
+        ConnectionDiagnosticsService.registerProvider(new AtlasDiagnosticsProvider());
     }
 
     registerConnectionsTree(_activateContext: IActionContext): void {
@@ -272,11 +285,12 @@ export class ClustersExtension implements vscode.Disposable {
                 const playgroundService = PlaygroundService.getInstance();
                 ext.context.subscriptions.push(playgroundService);
 
-                // Initialize Local Quick Start (managed local DocumentDB container).
-                // Reconcile detects a still-running container after a window reload.
+                // Initialize Local Quick Start (managed local DocumentDB container). Durable state
+                // and Docker are reconciled lazily when the collapsed node or webview is opened.
                 ext.context.subscriptions.push(QuickStartService);
                 ext.context.subscriptions.push({ dispose: disposeQuickStartOutputChannel });
                 ext.context.subscriptions.push({ dispose: disposeQuickStartLogFollow });
+                ext.context.subscriptions.push(createQuickStartProgressBridge());
                 ext.context.subscriptions.push(
                     QuickStartService.onDidChangeStatus(() => {
                         // Reset BEFORE refreshing (I2-17): a failure the user fixed in the Quick Start
@@ -286,7 +300,6 @@ export class ClustersExtension implements vscode.Disposable {
                         ext.connectionsBranchDataProvider?.refresh();
                     }),
                 );
-                void QuickStartService.reconcile();
                 // Self-heal after a crash that skipped provision()'s env-file cleanup (L9).
                 void sweepStaleQuickStartEnvFiles();
 
@@ -616,7 +629,7 @@ export class ClustersExtension implements vscode.Disposable {
                     withTreeNodeCommandCorrelation(refreshTreeElement),
                 );
 
-                registerCommandWithTreeNodeUnwrapping(
+                registerCommandWithTreeNodeUnwrappingAndDiagnostics(
                     'vscode-documentdb.command.createDatabase',
                     withTreeNodeCommandCorrelation(createAzureDatabase),
                 );
@@ -994,11 +1007,11 @@ export class ClustersExtension implements vscode.Disposable {
                     vscode.window.registerTerminalLinkProvider(new ShellTerminalLinkProvider()),
                 );
 
-                registerCommandWithTreeNodeUnwrapping(
+                registerCommandWithTreeNodeUnwrappingAndDiagnostics(
                     'vscode-documentdb.command.dropCollection',
                     withTreeNodeCommandCorrelation(deleteCollection),
                 );
-                registerCommandWithTreeNodeUnwrapping(
+                registerCommandWithTreeNodeUnwrappingAndDiagnostics(
                     'vscode-documentdb.command.dropDatabase',
                     withTreeNodeCommandCorrelation(deleteAzureDatabase),
                 );
@@ -1008,20 +1021,20 @@ export class ClustersExtension implements vscode.Disposable {
                     withTreeNodeCommandCorrelation(copyReference),
                 );
 
-                registerCommandWithTreeNodeUnwrapping(
+                registerCommandWithTreeNodeUnwrappingAndDiagnostics(
                     'vscode-documentdb.command.hideIndex',
                     withTreeNodeCommandCorrelation(hideIndex),
                 );
-                registerCommandWithTreeNodeUnwrapping(
+                registerCommandWithTreeNodeUnwrappingAndDiagnostics(
                     'vscode-documentdb.command.unhideIndex',
                     withTreeNodeCommandCorrelation(unhideIndex),
                 );
-                registerCommandWithTreeNodeUnwrapping(
+                registerCommandWithTreeNodeUnwrappingAndDiagnostics(
                     'vscode-documentdb.command.dropIndex',
                     withTreeNodeCommandCorrelation(dropIndex),
                 );
 
-                registerCommandWithTreeNodeUnwrapping(
+                registerCommandWithTreeNodeUnwrappingAndDiagnostics(
                     'vscode-documentdb.command.createCollection',
                     withTreeNodeCommandCorrelation(createCollection),
                 );
@@ -1031,7 +1044,7 @@ export class ClustersExtension implements vscode.Disposable {
                     withTreeNodeCommandCorrelation(createMongoDocument),
                 );
 
-                registerCommandWithTreeNodeUnwrapping(
+                registerCommandWithTreeNodeUnwrappingAndDiagnostics(
                     'vscode-documentdb.command.importDocuments',
                     withTreeNodeCommandCorrelation(importDocuments),
                 );
@@ -1050,7 +1063,7 @@ export class ClustersExtension implements vscode.Disposable {
                     'vscode-documentdb.command.internal.exportDocuments',
                     withCommandCorrelation(exportQueryResults),
                 );
-                registerCommandWithTreeNodeUnwrapping(
+                registerCommandWithTreeNodeUnwrappingAndDiagnostics(
                     'vscode-documentdb.command.exportDocuments',
                     withTreeNodeCommandCorrelation(exportEntireCollection),
                 );

@@ -255,11 +255,13 @@ export const QueryInsightsMain = (): JSX.Element => {
                 3: l10n.t('AI recommendations'),
             };
 
-            void trpcClient.common.displayErrorMessage.mutate({
-                message: l10n.t('Failed to load {0}', stageNames[stage]),
-                modal: false,
-                cause: errorMessage,
-            });
+            void trpcClient.common.explainOperationFailure.query({ message: errorMessage }).then((explained) =>
+                trpcClient.common.displayErrorMessage.mutate({
+                    message: explained ?? l10n.t('Failed to load {0}', stageNames[stage]),
+                    modal: false,
+                    cause: errorMessage,
+                }),
+            );
         },
         [trpcClient],
     );

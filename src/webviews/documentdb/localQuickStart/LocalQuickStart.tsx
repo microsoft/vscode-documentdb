@@ -50,6 +50,7 @@ import {
 import { Collapse } from '@fluentui/react-motion-components-preview';
 import * as l10n from '@vscode/l10n';
 import { Fragment, type JSX, type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { formatQuickStartMessage } from '../../../services/localQuickStart/quickStartMessages';
 import {
     type AdvancedQuickStartOptions,
     type DockerEndpointKind,
@@ -1316,7 +1317,7 @@ export const LocalQuickStart = (): JSX.Element => {
                         settled = true;
                         stopTimer();
                         setStageStatus((prev) => ({ ...prev, [event.stage]: event.status }));
-                        setSuccessMessage(event.message);
+                        setSuccessMessage(event.message && formatQuickStartMessage(event.message));
                         setPhase('success');
                     } else if (event.status === 'error') {
                         settled = true;
@@ -1330,7 +1331,9 @@ export const LocalQuickStart = (): JSX.Element => {
                             if (active) next[active] = 'error';
                             return next;
                         });
-                        setErrorMessage(event.error ?? event.message ?? l10n.t('Setup failed.'));
+                        setErrorMessage(
+                            event.message ? formatQuickStartMessage(event.message) : l10n.t('Setup failed.'),
+                        );
                         setTimedOut(event.timedOut === true);
                         if (event.dockerReadiness) {
                             // Docker became unusable mid-run: the remediation belongs beside the

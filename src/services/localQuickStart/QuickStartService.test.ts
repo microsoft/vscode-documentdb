@@ -8,7 +8,8 @@ import { ext } from '../../extensionVariables';
 import { StorageService } from '../storageService';
 import { disposeQuickStartOutputChannel, type IContainerRuntime } from './ContainerRuntime';
 
-import { getReadinessTimeoutMessage, QuickStartServiceImpl } from './QuickStartService';
+import { formatQuickStartMessage } from './quickStartMessages';
+import { QuickStartServiceImpl } from './QuickStartService';
 import { listInstances, PROVISIONING_LEASE_TTL_MS, upsertInstance, writeConnectionString } from './quickStartStore';
 import {
     DEFAULT_ALIAS,
@@ -62,6 +63,8 @@ function mockRuntime(overrides: Partial<IContainerRuntime>): IContainerRuntime {
     return {
         listByLabel: jest.fn().mockResolvedValue([]),
         inspectContainer: jest.fn().mockResolvedValue(undefined),
+        // Docker answering normally is the default, so an empty inspect means the container is gone.
+        isDockerReady: jest.fn().mockResolvedValue({ outcome: 'ready', daemonReachable: true }),
         removeContainer: jest.fn().mockResolvedValue(undefined),
         removeVolume: jest.fn().mockResolvedValue(undefined),
         isPortFree: jest.fn().mockResolvedValue(true),
@@ -243,15 +246,21 @@ describe('QuickStartService — WI-2d registry-driven reconcile (multi-instance)
 
     let originalSecretStorage: vscode.SecretStorage;
     let originalContext: vscode.ExtensionContext;
+    let originalOutputChannel: typeof ext.outputChannel;
+    let trace: jest.Mock;
 
     beforeEach(() => {
         originalSecretStorage = ext.secretStorage;
         originalContext = ext.context;
+        originalOutputChannel = ext.outputChannel;
+        trace = jest.fn();
+        ext.outputChannel = { trace } as unknown as typeof ext.outputChannel;
     });
 
     afterEach(() => {
         ext.secretStorage = originalSecretStorage;
         ext.context = originalContext;
+        ext.outputChannel = originalOutputChannel;
     });
 
     function inspectItem(id: string, opts: { running: boolean; port?: number; image?: string }): unknown {
@@ -266,6 +275,7 @@ describe('QuickStartService — WI-2d registry-driven reconcile (multi-instance)
     function reconcileRuntime(opts: {
         containers: Array<{ id: string; alias?: string; createdAt?: Date }>;
         inspect?: Record<string, unknown>;
+        isDockerReady?: jest.Mock;
         removeContainer?: jest.Mock;
         removeVolume?: jest.Mock;
     }): IContainerRuntime {
@@ -281,6 +291,7 @@ describe('QuickStartService — WI-2d registry-driven reconcile (multi-instance)
             inspectContainer: jest.fn((id: string) =>
                 Promise.resolve(inspect[id]),
             ) as unknown as IContainerRuntime['inspectContainer'],
+            ...(opts.isDockerReady ? { isDockerReady: opts.isDockerReady } : {}),
             removeContainer: opts.removeContainer ?? jest.fn().mockResolvedValue(undefined),
             removeVolume: opts.removeVolume ?? jest.fn().mockResolvedValue(undefined),
         });
@@ -311,6 +322,33 @@ describe('QuickStartService — WI-2d registry-driven reconcile (multi-instance)
         // listStatuses is ordered DEFAULT-first; both instances are durable + ready.
         expect(service.listStatuses().map((status) => status.alias)).toEqual([DEFAULT_ALIAS, ALIAS_2]);
         expect((await listInstances()).map((record) => record.alias).sort()).toEqual([ALIAS_2, DEFAULT_ALIAS].sort());
+    });
+
+    it('retains Docker host facts collected during reconciliation', async () => {
+        ext.secretStorage = fakeSecretStorage({});
+        ext.context = fakeContext(fakeMemento());
+        const readiness: DockerReadiness = {
+            outcome: 'ready',
+            environment: 'wsl',
+            endpointKind: 'unixSocket',
+            provider: 'dockerEngine',
+            providerEvidence: 'liveDaemon',
+            executionTarget: 'wsl',
+            canContinueAnyway: false,
+            checkedAtMs: 1,
+            cliInstalled: true,
+            cliVersion: 'Docker version 28.1.1',
+            daemonReachable: true,
+            osType: 'linux',
+            daemonArchitecture: 'amd64',
+        };
+        const isDockerReady = jest.fn().mockResolvedValue(readiness);
+        const service = new QuickStartServiceImpl(reconcileRuntime({ containers: [], isDockerReady }));
+
+        await service.reconcile();
+
+        expect(isDockerReady).toHaveBeenCalledWith({ suppressCommandEcho: true });
+        expect(service.getDockerReadinessSnapshot()).toBe(readiness);
     });
 
     it('surfaces a credential-unavailable instance as CredentialsMissing without removing it or its volume (R2)', async () => {
@@ -424,6 +462,161 @@ describe('QuickStartService — WI-2d registry-driven reconcile (multi-instance)
         expect(service.getStatus().missing).toBe(true);
     });
 
+    // `inspectContainer` reports "could not ask" and "not there" identically, so a stopped daemon
+    // used to be announced as a container someone had deleted — the tree then offered to recreate
+    // an instance that was sitting on disk, untouched.
+    it('refreshLiveState() does not report Missing when Docker cannot be asked', async () => {
+        ext.secretStorage = fakeSecretStorage({});
+        ext.context = fakeContext(fakeMemento());
+        await seedInstance(DEFAULT_ALIAS, CONN_1);
+
+        const inspect: Record<string, unknown> = {
+            c1: inspectItem('c1', { running: true, port: 10260, image: 'img:1' }),
+        };
+        const isDockerReady = jest.fn().mockResolvedValue({ outcome: 'ready', daemonReachable: true });
+        const service = new QuickStartServiceImpl(
+            mockRuntime({
+                listByLabel: jest
+                    .fn()
+                    .mockResolvedValue([{ id: 'c1', labels: { [QUICK_START_ALIAS_LABEL_KEY]: DEFAULT_ALIAS } }]),
+                inspectContainer: jest.fn((id: string) =>
+                    Promise.resolve(inspect[id]),
+                ) as unknown as IContainerRuntime['inspectContainer'],
+                isDockerReady: isDockerReady as unknown as IContainerRuntime['isDockerReady'],
+            }),
+        );
+
+        await service.reconcile();
+        expect(service.getStatus().state).toBe(InstanceState.Running);
+
+        // Docker Desktop is stopped: the container is still there, we simply cannot see it.
+        delete inspect.c1;
+        isDockerReady.mockResolvedValue({ outcome: 'diagnosed', daemonReachable: false });
+
+        await service.refreshLiveState();
+
+        expect(service.getStatus().missing).toBe(false);
+        // The last known state is kept rather than replaced by a guess.
+        expect(service.getStatus().state).toBe(InstanceState.Running);
+    });
+
+    it('ensureHydrated() lazily reconciles once and shares concurrent work', async () => {
+        ext.secretStorage = fakeSecretStorage({});
+        ext.context = fakeContext(fakeMemento());
+
+        let finishListing: ((containers: []) => void) | undefined;
+        const listByLabel = jest.fn(
+            () =>
+                new Promise<[]>((resolve) => {
+                    finishListing = resolve;
+                }),
+        );
+        const service = new QuickStartServiceImpl(mockRuntime({ listByLabel }));
+
+        expect(listByLabel).not.toHaveBeenCalled();
+        const first = service.ensureHydrated();
+        const second = service.ensureHydrated();
+        expect(listByLabel).toHaveBeenCalledTimes(1);
+
+        finishListing?.([]);
+        await Promise.all([first, second]);
+        await service.ensureHydrated();
+
+        expect(listByLabel).toHaveBeenCalledTimes(1);
+        expect(trace).toHaveBeenCalledWith(expect.stringContaining('Lazy hydration requested'));
+        expect(trace).toHaveBeenCalledWith(
+            expect.stringContaining('Discovery returned 0 managed container(s) and 0 durable record(s)'),
+        );
+        expect(trace).toHaveBeenCalledWith(expect.stringContaining('Lazy hydration completed'));
+    });
+
+    it('ensureHydrated() remains retryable when Docker discovery fails', async () => {
+        ext.secretStorage = fakeSecretStorage({});
+        ext.context = fakeContext(fakeMemento());
+
+        const listByLabel = jest.fn().mockRejectedValueOnce(new Error('Docker unavailable')).mockResolvedValue([]);
+        const service = new QuickStartServiceImpl(mockRuntime({ listByLabel }));
+
+        await expect(service.ensureHydrated()).rejects.toThrow('Docker unavailable');
+        expect(service.isHydrated).toBe(false);
+        expect(trace).toHaveBeenCalledWith(expect.stringContaining('Docker state remains unknown'));
+        expect(trace).toHaveBeenCalledWith(expect.stringContaining('the next Quick Start entry will retry'));
+
+        await service.ensureHydrated();
+        expect(service.isHydrated).toBe(true);
+        expect(listByLabel).toHaveBeenCalledTimes(2);
+    });
+
+    it('shares deep reconciliation between hydration and explicit refresh', async () => {
+        ext.secretStorage = fakeSecretStorage({});
+        ext.context = fakeContext(fakeMemento());
+
+        let finishListing: ((containers: []) => void) | undefined;
+        const listByLabel = jest.fn(
+            () =>
+                new Promise<[]>((resolve) => {
+                    finishListing = resolve;
+                }),
+        );
+        const service = new QuickStartServiceImpl(mockRuntime({ listByLabel }));
+
+        const hydration = service.ensureHydrated();
+        const refresh = service.refreshHydratedState();
+        expect(listByLabel).toHaveBeenCalledTimes(1);
+
+        finishListing?.([]);
+        await Promise.all([hydration, refresh]);
+
+        expect(service.isHydrated).toBe(true);
+        expect(listByLabel).toHaveBeenCalledTimes(1);
+    });
+
+    it('does not start a background live-state probe immediately after explicit refresh', async () => {
+        ext.secretStorage = fakeSecretStorage({});
+        ext.context = fakeContext(fakeMemento());
+
+        const service = new QuickStartServiceImpl(mockRuntime({}));
+
+        await service.refreshHydratedState();
+        service.refreshLiveStateInBackground();
+
+        expect(service.isRefreshingLiveState).toBe(false);
+    });
+
+    it('does not start a background live-state probe immediately after lazy hydration', async () => {
+        ext.secretStorage = fakeSecretStorage({});
+        ext.context = fakeContext(fakeMemento());
+        await seedInstance(DEFAULT_ALIAS, CONN_1);
+
+        const inspectContainer = jest.fn((id: string) =>
+            Promise.resolve({
+                id,
+                status: 'running',
+                ports: [{ containerPort: QUICK_START_PORT, hostPort: 10260 }],
+                image: { originalName: 'img:1' },
+                labels: { [QUICK_START_LABEL_KEY]: '1', [QUICK_START_ALIAS_LABEL_KEY]: DEFAULT_ALIAS },
+            }),
+        ) as unknown as IContainerRuntime['inspectContainer'];
+        const service = new QuickStartServiceImpl(
+            mockRuntime({
+                listByLabel: jest
+                    .fn()
+                    .mockResolvedValue([{ id: 'c1', labels: { [QUICK_START_ALIAS_LABEL_KEY]: DEFAULT_ALIAS } }]),
+                inspectContainer,
+            }),
+        );
+
+        await service.ensureHydrated();
+        const inspectsDuringHydration = jest.mocked(inspectContainer).mock.calls.length;
+
+        // The status events fired during reconciliation re-enter getChildren() once hydration is
+        // done, so the row would otherwise re-inspect the container it just adopted.
+        service.refreshLiveStateInBackground();
+
+        expect(service.isRefreshingLiveState).toBe(false);
+        expect(inspectContainer).toHaveBeenCalledTimes(inspectsDuringHydration);
+    });
+
     it('refreshLiveStateInBackground() de-duplicates and rate-limits the docker probe (M6)', async () => {
         ext.secretStorage = fakeSecretStorage({});
         ext.context = fakeContext(fakeMemento());
@@ -458,6 +651,58 @@ describe('QuickStartService — WI-2d registry-driven reconcile (multi-instance)
         // One probe for the burst, and the cooldown blocks the re-render the completion event causes.
         service.refreshLiveStateInBackground();
         expect(inspectContainer).toHaveBeenCalledTimes(1);
+    });
+
+    it('publishes an awaitable handle for in-flight lifecycle work', async () => {
+        ext.secretStorage = fakeSecretStorage({});
+        ext.context = fakeContext(fakeMemento());
+        await seedInstance(DEFAULT_ALIAS, CONN_1);
+
+        let finishStop!: () => void;
+        const stopContainer = jest.fn(
+            () =>
+                new Promise<void>((resolve) => {
+                    finishStop = resolve;
+                }),
+        );
+        const service = new QuickStartServiceImpl(
+            mockRuntime({
+                listByLabel: jest
+                    .fn()
+                    .mockResolvedValue([{ id: 'c1', labels: { [QUICK_START_ALIAS_LABEL_KEY]: DEFAULT_ALIAS } }]),
+                inspectContainer: jest.fn((id: string) =>
+                    Promise.resolve({
+                        id,
+                        status: 'running',
+                        ports: [{ containerPort: QUICK_START_PORT, hostPort: 10260 }],
+                        image: { originalName: 'img:1' },
+                        labels: { [QUICK_START_LABEL_KEY]: '1', [QUICK_START_ALIAS_LABEL_KEY]: DEFAULT_ALIAS },
+                    }),
+                ) as unknown as IContainerRuntime['inspectContainer'],
+                stopContainer,
+            }),
+        );
+
+        await service.reconcile();
+        expect(service.getStatus().state).toBe(InstanceState.Running);
+
+        let operationEvents = 0;
+        service.onDidChangeOperation(() => operationEvents++);
+
+        // The tree cannot own the spinner for work it did not start (the webview and the lifecycle
+        // commands both reach here), so the wait itself has to be observable.
+        const stopping = service.stop();
+        const operation = service.getInFlightOperation();
+        expect(operation?.kind).toBe('stopping');
+        expect(operationEvents).toBe(1);
+
+        await new Promise((resolve) => setTimeout(resolve, 0));
+        finishStop();
+        await stopping;
+
+        await expect(operation?.promise).resolves.toBeUndefined();
+        expect(service.getInFlightOperation()).toBeUndefined();
+        expect(operationEvents).toBe(2);
     });
 
     it('deleteContainer() refuses to remove a container that is not ours, even when surfaced as Missing (#9)', async () => {
@@ -523,7 +768,7 @@ describe('QuickStartService — WI-2d registry-driven reconcile (multi-instance)
         warn.mockRestore();
     });
 
-    it('start() on a container that drifted to running in another window refreshes without starting', async () => {
+    it('start() on a container that drifted to running refreshes silently without starting', async () => {
         ext.secretStorage = fakeSecretStorage({});
         ext.context = fakeContext(fakeMemento());
         await seedInstance(DEFAULT_ALIAS, CONN_1);
@@ -559,10 +804,263 @@ describe('QuickStartService — WI-2d registry-driven reconcile (multi-instance)
         await service.start();
 
         expect(startContainer).not.toHaveBeenCalled(); // start on an already-running container is a no-op
-        expect(info).toHaveBeenCalled(); // the user is told the state changed
+        expect(info).not.toHaveBeenCalled();
         expect(service.getStatus().state).toBe(InstanceState.Running); // corrected to the live state
         expect(service.getStatus().missing).toBe(false);
         info.mockRestore();
+    });
+
+    it('stop() on a container that drifted to stopped refreshes silently without stopping', async () => {
+        ext.secretStorage = fakeSecretStorage({});
+        ext.context = fakeContext(fakeMemento());
+        await seedInstance(DEFAULT_ALIAS, CONN_1);
+
+        const stopContainer = jest.fn().mockResolvedValue(undefined);
+        let running = true;
+        const service = new QuickStartServiceImpl(
+            mockRuntime({
+                listByLabel: jest
+                    .fn()
+                    .mockResolvedValue([{ id: 'c1', labels: { [QUICK_START_ALIAS_LABEL_KEY]: DEFAULT_ALIAS } }]),
+                inspectContainer: jest.fn((id: string) =>
+                    Promise.resolve({
+                        id,
+                        status: running ? 'running' : 'exited',
+                        ports: [{ containerPort: QUICK_START_PORT, hostPort: 10260 }],
+                        image: { originalName: 'img:1' },
+                        labels: { [QUICK_START_LABEL_KEY]: '1', [QUICK_START_ALIAS_LABEL_KEY]: DEFAULT_ALIAS },
+                    }),
+                ) as unknown as IContainerRuntime['inspectContainer'],
+                stopContainer,
+            }),
+        );
+
+        await service.reconcile();
+        running = false;
+        const info = jest.spyOn(vscode.window, 'showInformationMessage').mockResolvedValue(undefined);
+
+        await service.stop();
+
+        expect(stopContainer).not.toHaveBeenCalled();
+        expect(info).not.toHaveBeenCalled();
+        expect(service.getStatus().state).toBe(InstanceState.Stopped);
+        info.mockRestore();
+    });
+
+    it('prepareForConnection() updates an externally stopped container and rejects the connection', async () => {
+        ext.secretStorage = fakeSecretStorage({});
+        ext.context = fakeContext(fakeMemento());
+        await seedInstance(DEFAULT_ALIAS, CONN_1);
+
+        let running = true;
+        const service = new QuickStartServiceImpl(
+            mockRuntime({
+                listByLabel: jest
+                    .fn()
+                    .mockResolvedValue([{ id: 'c1', labels: { [QUICK_START_ALIAS_LABEL_KEY]: DEFAULT_ALIAS } }]),
+                inspectContainer: jest.fn((id: string) =>
+                    Promise.resolve({
+                        id,
+                        status: running ? 'running' : 'exited',
+                        ports: [{ containerPort: QUICK_START_PORT, hostPort: 10260 }],
+                        image: { originalName: 'img:1' },
+                        labels: { [QUICK_START_LABEL_KEY]: '1', [QUICK_START_ALIAS_LABEL_KEY]: DEFAULT_ALIAS },
+                    }),
+                ) as unknown as IContainerRuntime['inspectContainer'],
+            }),
+        );
+
+        await service.reconcile();
+        running = false;
+
+        await expect(service.prepareForConnection()).resolves.toBe('stopped');
+        expect(service.getStatus().state).toBe(InstanceState.Stopped);
+        expect(service.getStatus().missing).toBe(false);
+    });
+
+    it('prepareForConnection() accepts an owned running container', async () => {
+        ext.secretStorage = fakeSecretStorage({});
+        ext.context = fakeContext(fakeMemento());
+        await seedInstance(DEFAULT_ALIAS, CONN_1);
+
+        const service = new QuickStartServiceImpl(
+            mockRuntime({
+                listByLabel: jest
+                    .fn()
+                    .mockResolvedValue([{ id: 'c1', labels: { [QUICK_START_ALIAS_LABEL_KEY]: DEFAULT_ALIAS } }]),
+                inspectContainer: jest.fn((id: string) =>
+                    Promise.resolve({
+                        id,
+                        status: 'running',
+                        ports: [{ containerPort: QUICK_START_PORT, hostPort: 10260 }],
+                        image: { originalName: 'img:1' },
+                        labels: { [QUICK_START_LABEL_KEY]: '1', [QUICK_START_ALIAS_LABEL_KEY]: DEFAULT_ALIAS },
+                    }),
+                ) as unknown as IContainerRuntime['inspectContainer'],
+            }),
+        );
+
+        await service.reconcile();
+
+        await expect(service.prepareForConnection()).resolves.toBe('ready');
+        expect(service.getStatus().state).toBe(InstanceState.Running);
+    });
+
+    it('prepareForConnection() marks an externally removed container as Missing', async () => {
+        ext.secretStorage = fakeSecretStorage({});
+        ext.context = fakeContext(fakeMemento());
+        await seedInstance(DEFAULT_ALIAS, CONN_1);
+
+        let present = true;
+        const service = new QuickStartServiceImpl(
+            mockRuntime({
+                listByLabel: jest
+                    .fn()
+                    .mockResolvedValue([{ id: 'c1', labels: { [QUICK_START_ALIAS_LABEL_KEY]: DEFAULT_ALIAS } }]),
+                inspectContainer: jest.fn((id: string) =>
+                    Promise.resolve(
+                        present
+                            ? {
+                                  id,
+                                  status: 'running',
+                                  ports: [{ containerPort: QUICK_START_PORT, hostPort: 10260 }],
+                                  image: { originalName: 'img:1' },
+                                  labels: {
+                                      [QUICK_START_LABEL_KEY]: '1',
+                                      [QUICK_START_ALIAS_LABEL_KEY]: DEFAULT_ALIAS,
+                                  },
+                              }
+                            : undefined,
+                    ),
+                ) as unknown as IContainerRuntime['inspectContainer'],
+            }),
+        );
+
+        await service.reconcile();
+        present = false;
+
+        await expect(service.prepareForConnection()).resolves.toBe('missing');
+        expect(service.getStatus().missing).toBe(true);
+    });
+
+    it('inspectManagedInstance() reports the same verdict without correcting state or firing events', async () => {
+        ext.secretStorage = fakeSecretStorage({});
+        ext.context = fakeContext(fakeMemento());
+        await seedInstance(DEFAULT_ALIAS, CONN_1);
+
+        let present = true;
+        const service = new QuickStartServiceImpl(
+            mockRuntime({
+                listByLabel: jest
+                    .fn()
+                    .mockResolvedValue([{ id: 'c1', labels: { [QUICK_START_ALIAS_LABEL_KEY]: DEFAULT_ALIAS } }]),
+                inspectContainer: jest.fn((id: string) =>
+                    Promise.resolve(
+                        present
+                            ? {
+                                  id,
+                                  status: 'running',
+                                  ports: [{ containerPort: QUICK_START_PORT, hostPort: 10260 }],
+                                  image: { originalName: 'img:1' },
+                                  labels: {
+                                      [QUICK_START_LABEL_KEY]: '1',
+                                      [QUICK_START_ALIAS_LABEL_KEY]: DEFAULT_ALIAS,
+                                  },
+                              }
+                            : undefined,
+                    ),
+                ) as unknown as IContainerRuntime['inspectContainer'],
+            }),
+        );
+
+        await service.reconcile();
+        present = false;
+        const statusChanged = jest.fn();
+        service.onDidChangeStatus(statusChanged);
+
+        await expect(service.inspectManagedInstance()).resolves.toBe('missing');
+        expect(service.getStatus().missing).toBe(false);
+        expect(statusChanged).not.toHaveBeenCalled();
+    });
+
+    it('prepareForConnection() does not claim the container was removed when the Docker daemon is down', async () => {
+        ext.secretStorage = fakeSecretStorage({});
+        ext.context = fakeContext(fakeMemento());
+        await seedInstance(DEFAULT_ALIAS, CONN_1);
+
+        let daemonUp = true;
+        const service = new QuickStartServiceImpl(
+            mockRuntime({
+                listByLabel: jest
+                    .fn()
+                    .mockResolvedValue([{ id: 'c1', labels: { [QUICK_START_ALIAS_LABEL_KEY]: DEFAULT_ALIAS } }]),
+                inspectContainer: jest.fn((id: string) =>
+                    Promise.resolve(
+                        daemonUp
+                            ? {
+                                  id,
+                                  status: 'running',
+                                  ports: [{ containerPort: QUICK_START_PORT, hostPort: 10260 }],
+                                  image: { originalName: 'img:1' },
+                                  labels: {
+                                      [QUICK_START_LABEL_KEY]: '1',
+                                      [QUICK_START_ALIAS_LABEL_KEY]: DEFAULT_ALIAS,
+                                  },
+                              }
+                            : undefined,
+                    ),
+                ) as unknown as IContainerRuntime['inspectContainer'],
+                isDockerReady: jest
+                    .fn()
+                    .mockImplementation(() =>
+                        Promise.resolve(
+                            daemonUp
+                                ? { outcome: 'ready', daemonReachable: true }
+                                : { outcome: 'diagnosed', daemonReachable: false },
+                        ),
+                    ) as unknown as IContainerRuntime['isDockerReady'],
+            }),
+        );
+
+        await service.reconcile();
+        daemonUp = false;
+
+        await expect(service.prepareForConnection()).resolves.toBe('dockerUnreachable');
+        expect(service.getStatus().missing).toBe(false);
+    });
+
+    it('prepareForConnection() rejects a foreign container that reused the managed id', async () => {
+        ext.secretStorage = fakeSecretStorage({});
+        ext.context = fakeContext(fakeMemento());
+        await seedInstance(DEFAULT_ALIAS, CONN_1);
+
+        let owned = true;
+        const service = new QuickStartServiceImpl(
+            mockRuntime({
+                listByLabel: jest
+                    .fn()
+                    .mockResolvedValue([{ id: 'c1', labels: { [QUICK_START_ALIAS_LABEL_KEY]: DEFAULT_ALIAS } }]),
+                inspectContainer: jest.fn((id: string) =>
+                    Promise.resolve({
+                        id,
+                        status: 'running',
+                        ports: [{ containerPort: QUICK_START_PORT, hostPort: 10260 }],
+                        image: { originalName: 'img:1' },
+                        labels: owned
+                            ? { [QUICK_START_LABEL_KEY]: '1', [QUICK_START_ALIAS_LABEL_KEY]: DEFAULT_ALIAS }
+                            : {},
+                    }),
+                ) as unknown as IContainerRuntime['inspectContainer'],
+            }),
+        );
+
+        await service.reconcile();
+        owned = false;
+        const warning = jest.spyOn(vscode.window, 'showWarningMessage').mockResolvedValue(undefined);
+
+        await expect(service.prepareForConnection()).resolves.toBe('foreign');
+        expect(warning).toHaveBeenCalled();
+        warning.mockRestore();
     });
 
     it('scavenges a STALE provisioning reservation that never produced a container', async () => {
@@ -1029,9 +1527,10 @@ describe('QuickStartService — WI-2e-1 provision RR4 volume-wipe gate', () => {
             expect(events.at(-1)).toMatchObject({
                 stage: 'error',
                 status: 'error',
-                message: `Docker became unavailable during setup: daemon disappeared during ${
-                    failingStage === 'pulling' ? 'pull' : 'run'
-                }`,
+                message: {
+                    key: 'dockerUnavailableDuringSetup',
+                    detail: `daemon disappeared during ${failingStage === 'pulling' ? 'pull' : 'run'}`,
+                },
                 dockerReadiness: unavailable,
             });
             expect(isDockerReady).toHaveBeenLastCalledWith({ forceRefresh: true });
@@ -1071,7 +1570,7 @@ describe('QuickStartService — WI-2e-1 provision RR4 volume-wipe gate', () => {
         }
 
         expect(retryEvents[0]).toMatchObject({ stage: 'checking', status: 'active' });
-        expect(retryEvents.map((event) => event.message)).not.toContain('Setup is already in progress.');
+        expect(retryEvents.map((event) => event.message?.key)).not.toContain('setupAlreadyInProgress');
     });
 
     it('keeps an image failure on the provisioning path when Docker remains ready', async () => {
@@ -1103,7 +1602,10 @@ describe('QuickStartService — WI-2e-1 provision RR4 volume-wipe gate', () => {
             events.push(event);
         }
 
-        expect(events.at(-1)).toMatchObject({ stage: 'error', error: 'manifest unknown' });
+        expect(events.at(-1)).toMatchObject({
+            stage: 'error',
+            message: { key: 'unexpectedFailure', detail: 'manifest unknown' },
+        });
         expect(events.at(-1)?.dockerReadiness).toBeUndefined();
     });
 
@@ -1149,15 +1651,18 @@ describe('QuickStartService — WI-2e-1 provision RR4 volume-wipe gate', () => {
             events.push(event);
         }
 
-        expect(events.at(-1)).toMatchObject({ stage: 'error', error: 'manifest unknown' });
+        expect(events.at(-1)).toMatchObject({
+            stage: 'error',
+            message: { key: 'unexpectedFailure', detail: 'manifest unknown' },
+        });
         expect(events.at(-1)?.dockerReadiness).toBeUndefined();
     });
 
     it('adds the published-port explanation only for dev-container readiness timeouts', () => {
-        expect(getReadinessTimeoutMessage('devContainer')).toContain(
+        expect(formatQuickStartMessage({ key: 'readinessTimeout', environment: 'devContainer' })).toContain(
             'published localhost port might not be reachable from inside the dev container',
         );
-        expect(getReadinessTimeoutMessage('linux')).toBe(
+        expect(formatQuickStartMessage({ key: 'readinessTimeout', environment: 'linux' })).toBe(
             'DocumentDB did not accept connections in time. It may still be initializing.',
         );
     });

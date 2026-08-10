@@ -5,13 +5,16 @@
 
 import { type IActionContext } from '@microsoft/vscode-azext-utils';
 import * as vscode from 'vscode';
+import { QuickStartService } from '../../services/localQuickStart/QuickStartService';
 import { openLocalQuickStartWebview } from '../../webviews/documentdb/localQuickStart/localQuickStartController';
 
 /**
  * Opens the Local Quick Start webview. Primary entry point is the tree rocket
  * row (WI-6); this command is the command-palette / fallback launch (D10).
  */
-export function openLocalQuickStart(_context: IActionContext): void {
+export async function openLocalQuickStart(_context: IActionContext): Promise<void> {
+    // Never gate the webview on Docker: diagnosing a missing or stopped Docker is its whole job.
+    await QuickStartService.ensureHydrated().catch(() => undefined);
     const view = openLocalQuickStartWebview({ id: 'localQuickStart' });
     // Reveal in the panel's own column when it already has one (so reopening the create-or-reveal
     // singleton doesn't move a panel the user parked in another group), falling back to the active

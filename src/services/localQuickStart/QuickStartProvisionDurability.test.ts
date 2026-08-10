@@ -357,7 +357,7 @@ describe('QuickStartService — WP-3 provisioning durability and port model', ()
         const events = await collect(service.provision(new AbortController().signal, { port: QUICK_START_PORT }));
 
         expect(events.at(-1)).toMatchObject({ stage: 'checking', status: 'error' });
-        expect(events.at(-1)?.message).toContain(String(QUICK_START_PORT));
+        expect(events.at(-1)?.message).toEqual({ key: 'portInUse', port: QUICK_START_PORT });
         expect(service.getStatus().state).toBe(InstanceState.Error);
     });
 
@@ -383,8 +383,9 @@ describe('QuickStartService — WP-3 provisioning durability and port model', ()
 
         const events = await collect(service.provision(new AbortController().signal));
 
-        expect(events.at(-1)?.message).toContain(String(QUICK_START_PORT));
-        expect(events.at(-1)?.message).not.toContain('Bind for');
+        expect(events.at(-1)?.message).toEqual({ key: 'portInUse', port: QUICK_START_PORT });
+        // The daemon's own wording never rides along: a keyed message has nowhere to put it.
+        expect(events.at(-1)?.message?.detail).toBeUndefined();
     });
 
     describe('suggestPort / checkPort (Configure-step validation, L3)', () => {

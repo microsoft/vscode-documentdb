@@ -194,6 +194,7 @@ See `src/tree/models/BaseClusterModel.ts` and `docs/analysis/08-cluster-model-si
 
 - [skills/tree-cluster-architecture/SKILL.md](skills/tree-cluster-architecture/SKILL.md) - Required patterns for cluster tree items, dual identity, provider lookup, and regression tests
 - [skills/telemetry-instrumentation/SKILL.md](skills/telemetry-instrumentation/SKILL.md) - Telemetry instrumentation patterns
+- [skills/error-translation/SKILL.md](skills/error-translation/SKILL.md) - Turning infrastructure failures into actionable messages; providers translate, they never show UI
 
 ## Terminology
 

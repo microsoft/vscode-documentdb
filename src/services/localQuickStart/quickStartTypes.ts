@@ -146,12 +146,49 @@ export const PROVISION_STAGES: readonly ProvisionStage[] = [
     'waiting',
 ] as const;
 
+/**
+ * What a Quick Start message says, without saying it. The service reports the situation; the
+ * surfaces that render it own the wording — the same split the Docker guidance keys already use.
+ */
+export type QuickStartMessageKey =
+    | 'setupAlreadyInProgress'
+    | 'setupCancelled'
+    | 'credentialsUnavailable'
+    | 'portInUse'
+    | 'dockerCliMissing'
+    | 'dockerDaemonUnreachable'
+    | 'dockerUnavailableDuringSetup'
+    | 'readinessTimeout'
+    | 'instanceRunning'
+    | 'nothingToResume'
+    | 'stillInitializing'
+    | 'startedButExited'
+    | 'restartedButExited'
+    | 'unexpectedFailure';
+
+/**
+ * A situation plus the data needed to phrase it. `detail` is the one field that is never
+ * translated: it carries raw daemon or driver text, which is evidence rather than copy.
+ */
+export interface QuickStartMessage {
+    readonly key: QuickStartMessageKey;
+    /** Host port, for the keys that name one. */
+    readonly port?: number;
+    /** Host environment, for `readinessTimeout`, whose guidance differs per platform. */
+    readonly environment?: DockerHostEnvironment;
+    /** Raw daemon / driver text, rendered verbatim beside the localized copy. */
+    readonly detail?: string;
+}
+
 /** A single stage transition pushed through the service-level event sink (D13). */
 export interface StageEvent {
     readonly stage: ProvisionStage;
     readonly status: 'active' | 'done' | 'error';
-    readonly message?: string;
-    readonly error?: string;
+    /**
+     * Only carried by terminal events. Intermediate stages are labelled by the surface from
+     * {@link ProvisionStage}, so they need no payload.
+     */
+    readonly message?: QuickStartMessage;
     /** The actual bound host port — set on the terminal `done` event (for success guidance). */
     readonly boundPort?: number;
     /**
@@ -327,7 +364,7 @@ export type DockerReadiness = DockerReadyReadiness | DockerDiagnosedReadiness | 
 export interface QuickStartStatus {
     readonly state: InstanceState;
     readonly metadata?: InstanceMetadata;
-    readonly errorMessage?: string;
+    readonly error?: QuickStartMessage;
     /**
      * `Missing` badge (design §6.1): the extension holds metadata but Docker has
      * no matching container (e.g. the user removed it outside the extension).
@@ -357,7 +394,7 @@ export interface InstanceStatus {
     readonly state: InstanceState;
     readonly missing: boolean;
     readonly port?: number;
-    readonly errorMessage?: string;
+    readonly error?: QuickStartMessage;
     readonly canResumeReadiness: boolean;
     readonly metadata?: InstanceMetadata;
 }

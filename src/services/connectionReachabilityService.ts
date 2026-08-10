@@ -37,8 +37,14 @@ export interface ConnectionReachabilityProvider {
      * port-forward tunnel). Only called when {@link appliesTo} returned true. May be a no-op if
      * the connection is already reachable. Heavy, source-specific dependencies should be loaded
      * lazily inside this method so registering the provider stays cheap.
+     *
+     * @param clusterId The stable cluster identifier, when the caller knows it. Providers may use
+     * this to record a `clusterId` to source-metadata mapping, so that a later failure against the
+     * same cluster can be attributed back to this source by a
+     * {@link import('./connectionDiagnosticsService').ConnectionDiagnosticsProvider}. The stored
+     * connection properties are not available on those later paths.
      */
-    ensureReachable(connectionProperties: Record<string, unknown>): Promise<void>;
+    ensureReachable(connectionProperties: Record<string, unknown>, clusterId?: string): Promise<void>;
 }
 
 /**
@@ -75,14 +81,17 @@ class ConnectionReachabilityServiceImpl {
      * connect flow), where it is reported via the existing telemetry/error handling. Connections
      * with no applicable provider resolve immediately.
      */
-    public async ensureReachable(connectionProperties: Record<string, unknown> | undefined): Promise<void> {
+    public async ensureReachable(
+        connectionProperties: Record<string, unknown> | undefined,
+        clusterId?: string,
+    ): Promise<void> {
         if (!connectionProperties) {
             return;
         }
 
         for (const provider of this.providers) {
             if (provider.appliesTo(connectionProperties)) {
-                await provider.ensureReachable(connectionProperties);
+                await provider.ensureReachable(connectionProperties, clusterId);
             }
         }
     }

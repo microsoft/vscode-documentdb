@@ -28,6 +28,7 @@ import * as vscode from 'vscode';
 import { z } from 'zod';
 import { type API } from '../../DocumentDBExperiences';
 import { ext } from '../../extensionVariables';
+import { ConnectionDiagnosticsService } from '../../services/connectionDiagnosticsService';
 import { showConfirmationAsInSettings } from '../../utils/dialogs/showConfirmation';
 import { formatUrlForLogging, isSupportedExternalUrl, openUrl } from '../../utils/openUrl';
 import { openSurvey, promptAfterActionEventually } from '../../utils/survey';
@@ -141,6 +142,30 @@ const commonRouter = router({
                 },
             );
         }),
+    /**
+     * Asks whether a failed operation has a better explanation than the raw driver error, for
+     * example a DocumentDB Local container that is not running or a port-forward tunnel that is no
+     * longer up. Returns `null` when nothing applies, which means "show your own message".
+     *
+     * Named after the caller's situation (an operation failed) rather than a cause: the providers
+     * behind it explain container, tunnel and transport problems today, and are free to explain
+     * other infrastructure later without the name becoming a lie.
+     *
+     * Only the error MESSAGE crosses the webview boundary, because that is all tRPC preserves.
+     * A provider that needs an error's class or `code` cannot be served from a webview.
+     *
+     * @see .github/skills/error-translation/SKILL.md
+     */
+    explainOperationFailure: publicProcedure.input(z.object({ message: z.string() })).query(async ({ input, ctx }) => {
+        // Concrete webview contexts carry a clusterId; the shared base type does not.
+        const clusterId = (ctx as { clusterId?: string }).clusterId;
+        if (!clusterId) {
+            return null;
+        }
+
+        const diagnosis = await ConnectionDiagnosticsService.explain({ clusterId, error: input.message });
+        return diagnosis?.message ?? null;
+    }),
     displayErrorMessage: publicProcedure
         .input(
             z.object({

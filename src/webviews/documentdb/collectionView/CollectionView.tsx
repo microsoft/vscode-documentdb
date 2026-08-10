@@ -401,11 +401,13 @@ export const CollectionView = (): JSX.Element => {
 
                 setCurrentContext((prev) => ({ ...prev, isLoading: false, isFirstTimeLoad: false }));
             })
-            .catch((error) => {
+            .catch(async (error) => {
+                const cause = error instanceof Error ? error.message : String(error);
+                const explained = await trpcClient.common.explainOperationFailure.query({ message: cause });
                 void trpcClient.common.displayErrorMessage.mutate({
-                    message: l10n.t('Error while running the query'),
+                    message: explained ?? l10n.t('Error while running the query'),
                     modal: true,
-                    cause: error instanceof Error ? error.message : String(error),
+                    cause,
                 });
             })
             .finally(() => {
