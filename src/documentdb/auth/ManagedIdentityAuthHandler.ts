@@ -11,6 +11,7 @@ import { resolveAllowInvalidCertificates } from '../utils/tlsException';
 import { type AuthHandler, type AuthHandlerResponse } from './AuthHandler';
 import { DOCUMENTDB_ENTRA_SCOPE } from './entraScopes';
 import { describeManagedIdentityError } from './managedIdentityErrors';
+import { reportManagedIdentityTokenFailure } from './managedIdentityTelemetry';
 import { getOidcAllowedHosts } from './oidcAllowedHosts';
 
 /**
@@ -67,10 +68,12 @@ export class ManagedIdentityAuthHandler implements AuthHandler {
                     try {
                         token = await credential.getToken(DOCUMENTDB_ENTRA_SCOPE);
                     } catch (error) {
+                        reportManagedIdentityTokenFailure(error, clientId);
                         throw new Error(describeManagedIdentityError(error, clientId));
                     }
 
                     if (!token) {
+                        reportManagedIdentityTokenFailure(undefined, clientId);
                         throw new Error(describeManagedIdentityError(undefined, clientId));
                     }
 

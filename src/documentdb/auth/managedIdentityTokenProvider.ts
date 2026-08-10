@@ -5,6 +5,7 @@
 
 import { type TokenCredential } from '@azure/identity';
 import { describeManagedIdentityError } from './managedIdentityErrors';
+import { reportManagedIdentityTokenFailure } from './managedIdentityTelemetry';
 
 /**
  * One credential per identity, for the lifetime of the window.
@@ -33,10 +34,12 @@ export async function getManagedIdentityAccessToken(
     try {
         token = await credential.getToken(scopes);
     } catch (error) {
+        reportManagedIdentityTokenFailure(error, clientId);
         throw new Error(describeManagedIdentityError(error, clientId));
     }
 
     if (!token) {
+        reportManagedIdentityTokenFailure(undefined, clientId);
         throw new Error(describeManagedIdentityError(undefined, clientId));
     }
 
