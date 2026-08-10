@@ -14,6 +14,14 @@ export enum AuthMethodId {
     NativeAuth = 'NativeAuth',
     /** Microsoft Entra ID (Azure AD) authentication. */
     MicrosoftEntraID = 'MicrosoftEntraID',
+    /**
+     * Microsoft Entra ID using the managed identity of the Azure resource hosting VS Code.
+     *
+     * Note: unlike the other values, this one has no counterpart in the ARM `authConfig.allowedModes`
+     * vocabulary, so it is never produced by pass-through of service metadata. It is synthesized by
+     * an explicit rule in `clusterHelpers.ts`.
+     */
+    ManagedIdentity = 'ManagedIdentity',
     /** Anonymous connection without a username, password, or Entra ID. */
     NoAuth = 'NoAuth',
 }
@@ -46,6 +54,12 @@ export const MicrosoftEntraIDAuthMethod: AuthMethodInfo = {
     // iconName: 'Microsoft-Entra-ID-BW-icon.svg',
 } as const;
 
+export const ManagedIdentityAuthMethod: AuthMethodInfo = {
+    id: AuthMethodId.ManagedIdentity,
+    label: vscode.l10n.t('Managed Identity (Azure hosted)'),
+    detail: vscode.l10n.t('Use when VS Code is running on an Azure VM that has a managed identity assigned'),
+} as const;
+
 export const NoAuthMethod: AuthMethodInfo = {
     id: AuthMethodId.NoAuth,
     label: vscode.l10n.t('No Authentication'),
@@ -53,7 +67,12 @@ export const NoAuthMethod: AuthMethodInfo = {
 } as const;
 
 // Arrays for different contexts
-const authMethodsArray: AuthMethodInfo[] = [NativeAuthMethod, MicrosoftEntraIDAuthMethod, NoAuthMethod];
+const authMethodsArray: AuthMethodInfo[] = [
+    NativeAuthMethod,
+    MicrosoftEntraIDAuthMethod,
+    ManagedIdentityAuthMethod,
+    NoAuthMethod,
+];
 
 // Map for efficient lookup
 const authMethodsMap = new Map<AuthMethodId, AuthMethodInfo>(

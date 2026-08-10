@@ -40,6 +40,7 @@ import { meterSilentCatch } from '../utils/accumulatingTelemetry';
 import { type EmulatorConfiguration } from '../utils/emulatorConfiguration';
 import { type AuthHandler } from './auth/AuthHandler';
 import { AuthMethodId } from './auth/AuthMethod';
+import { ManagedIdentityAuthHandler } from './auth/ManagedIdentityAuthHandler';
 import { MicrosoftEntraIDAuthHandler } from './auth/MicrosoftEntraIDAuthHandler';
 import { NativeAuthHandler } from './auth/NativeAuthHandler';
 import { NoAuthHandler } from './auth/NoAuthHandler';
@@ -234,6 +235,9 @@ export class ClustersClient {
                 break;
             case AuthMethodId.MicrosoftEntraID:
                 authHandler = new MicrosoftEntraIDAuthHandler(credentials);
+                break;
+            case AuthMethodId.ManagedIdentity:
+                authHandler = new ManagedIdentityAuthHandler(credentials);
                 break;
             case AuthMethodId.NoAuth:
                 authHandler = new NoAuthHandler(credentials);

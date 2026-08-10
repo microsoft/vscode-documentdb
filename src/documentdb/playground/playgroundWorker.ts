@@ -18,6 +18,7 @@ import { DocumentDBShellRuntime } from '@documentdb-js/shell-runtime';
 import { randomUUID } from 'crypto';
 import { type MongoClientOptions, type MongoClient as MongoClientType } from 'mongodb';
 import { parentPort } from 'worker_threads';
+import { DOCUMENTDB_ENTRA_SCOPE } from '../auth/entraScopes';
 import { getOidcAllowedHosts } from '../auth/oidcAllowedHosts';
 import { type MainToWorkerMessage, type WorkerToMainMessage } from './workerTypes';
 
@@ -129,7 +130,7 @@ async function handleInit(msg: Extract<MainToWorkerMessage, { type: 'init' }>): 
                 const tokenRequest: WorkerToMainMessage = {
                     type: 'tokenRequest',
                     requestId,
-                    scopes: ['https://ossrdbms-aad.database.windows.net/.default'],
+                    scopes: [DOCUMENTDB_ENTRA_SCOPE],
                     tenantId: msg.tenantId,
                 };
                 parentPort!.postMessage(tokenRequest);

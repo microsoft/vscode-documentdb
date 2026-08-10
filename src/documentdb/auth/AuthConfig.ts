@@ -44,8 +44,25 @@ export interface EntraIdAuthConfig {
 }
 
 /**
+ * Configuration for authenticating with the managed identity of the Azure VM that is hosting
+ * VS Code.
+ *
+ * An "empty" configuration (`{}`) is meaningful: it selects the system-assigned identity. Persisting
+ * `undefined` instead would make the authentication method un-inferable after a window reload.
+ */
+export interface ManagedIdentityAuthConfig {
+    /**
+     * Client ID of a user-assigned managed identity.
+     * Omitted for the system-assigned identity.
+     * Required whenever the host has more than one candidate identity, because the instance metadata
+     * service cannot disambiguate on its own.
+     */
+    readonly clientId?: string;
+}
+
+/**
  * Union type representing all supported authentication configurations.
  * This type can be extended with additional auth methods in the future
  * (e.g., certificate-based auth, OAuth, etc.) without breaking existing code.
  */
-export type AuthConfig = NativeAuthConfig | EntraIdAuthConfig;
+export type AuthConfig = NativeAuthConfig | EntraIdAuthConfig | ManagedIdentityAuthConfig;
