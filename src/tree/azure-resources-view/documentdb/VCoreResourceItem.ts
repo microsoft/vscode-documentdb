@@ -21,6 +21,7 @@ import { type AuthenticateWizardContext } from '../../../documentdb/wizards/auth
 import { ChooseAuthMethodStep } from '../../../documentdb/wizards/authenticate/ChooseAuthMethodStep';
 import { ProvidePasswordStep } from '../../../documentdb/wizards/authenticate/ProvidePasswordStep';
 import { ProvideUserNameStep } from '../../../documentdb/wizards/authenticate/ProvideUsernameStep';
+import { SelectManagedIdentityStep } from '../../../documentdb/wizards/authenticate/SelectManagedIdentityStep';
 import { ext } from '../../../extensionVariables';
 import {
     extractCredentialsFromCluster,
@@ -133,11 +134,17 @@ export class VCoreResourceItem extends ClusterItemBase<AzureClusterModel> {
                 nativeAuthConfig,
                 undefined,
                 credentials.entraIdAuthConfig,
+                wizardContext.selectedAuthMethod === AuthMethodId.ManagedIdentity
+                    ? (wizardContext.managedIdentityAuthConfig ?? {})
+                    : undefined,
             );
 
             switch (wizardContext.selectedAuthMethod) {
                 case AuthMethodId.MicrosoftEntraID:
                     ext.outputChannel.append(l10n.t('Connecting to the cluster using Entra ID…'));
+                    break;
+                case AuthMethodId.ManagedIdentity:
+                    ext.outputChannel.append(l10n.t('Connecting to the cluster using a managed identity…'));
                     break;
                 default:
                     ext.outputChannel.append(
@@ -199,7 +206,14 @@ export class VCoreResourceItem extends ClusterItemBase<AzureClusterModel> {
      */
     private async promptForCredentials(wizardContext: AuthenticateWizardContext): Promise<boolean> {
         const wizard = new AzureWizard(wizardContext, {
-            promptSteps: [new ChooseAuthMethodStep(), new ProvideUserNameStep(), new ProvidePasswordStep()],
+            promptSteps: [
+                new ChooseAuthMethodStep(),
+                new SelectManagedIdentityStep<AuthenticateWizardContext>(
+                    (context) => context.selectedAuthMethod === AuthMethodId.ManagedIdentity,
+                ),
+                new ProvideUserNameStep(),
+                new ProvidePasswordStep(),
+            ],
             title: l10n.t('Authenticate to connect with your DocumentDB cluster'),
             showLoadingPrompt: true,
         });

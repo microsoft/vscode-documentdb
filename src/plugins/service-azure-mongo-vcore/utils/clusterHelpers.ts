@@ -108,6 +108,11 @@ export function extractCredentialsFromCluster(
     context.telemetry.properties.unknownAuthMethods = unknownMethodIds.join(',');
 
     if (credentials.availableAuthMethods.includes(AuthMethodId.MicrosoftEntraID)) {
+        // Managed identity is Entra ID on the wire and has no separate ARM allowedModes value, so it
+        // is synthesized by this explicit rule. The raw allowedModes telemetry above is left alone,
+        // so the synthesized entry never pollutes the service-side numbers.
+        credentials.availableAuthMethods.push(AuthMethodId.ManagedIdentity);
+
         credentials.entraIdAuthConfig = {
             tenantId: subscription.tenantId,
             subscriptionId: subscription.subscriptionId,

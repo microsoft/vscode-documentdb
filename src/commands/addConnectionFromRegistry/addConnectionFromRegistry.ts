@@ -179,6 +179,7 @@ export async function addConnectionFromRegistry(context: IActionContext, node: C
                 connectionString: parsedCS.toString(),
                 nativeAuthConfig: credentials.nativeAuthConfig,
                 entraIdAuthConfig: credentials.entraIdAuthConfig,
+                managedIdentityAuthConfig: credentials.managedIdentityAuthConfig,
             },
         };
 
