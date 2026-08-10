@@ -57,7 +57,7 @@ The User Manual provides guidance on using DocumentDB for VS Code. It contains d
   - [MongoDB Atlas](./user-manual/service-discovery-mongodb-atlas)
   - [Managing Azure Subscriptions](./user-manual/managing-azure-discovery)
 - [Connecting to Local Instances](./user-manual/local-connection)
-  - [DocumentDB Local Quick Start](./user-manual/local-quick-start)
+  - [Set up DocumentDB Local](./user-manual/local-quick-start)
   - [Azure Cosmos DB for MongoDB (RU) Emulator](./user-manual/local-connection-mongodb-ru)
   - [DocumentDB Local](./user-manual/local-connection-documentdb-local)
 

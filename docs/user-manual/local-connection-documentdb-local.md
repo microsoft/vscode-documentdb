@@ -6,7 +6,7 @@
 
 The **DocumentDB Local** option helps you work with a local DocumentDB instance for development, prototyping, and testing.
 
-Use [DocumentDB Local Quick Start](./local-quick-start) when you want the extension to create and manage the official container. Quick Start supports Docker Engine and Docker Desktop. It requires a Docker CLI that the VS Code extension host can use to reach a Linux-container Docker daemon.
+Use [Set up DocumentDB Local](./local-quick-start) when you want the extension to create and manage the official container. The setup supports Docker Engine and Docker Desktop. It requires a Docker CLI that the VS Code extension host can use to reach a Linux-container Docker daemon.
 
 Use the manual connection flow when DocumentDB Local is already running and you only need to save its connection details.
 
