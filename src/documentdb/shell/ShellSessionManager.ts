@@ -37,7 +37,7 @@ export interface ShellConnectionMetadata {
     /** Host extracted from the connection string (without credentials). */
     readonly host: string;
     /** Authentication method used for the connection. */
-    readonly authMechanism: 'NativeAuth' | 'MicrosoftEntraID' | 'NoAuth';
+    readonly authMechanism: 'NativeAuth' | 'MicrosoftEntraID' | 'ManagedIdentity' | 'NoAuth';
     /** Whether this is an emulator connection. */
     readonly isEmulator: boolean;
     /** Username for SCRAM auth (undefined for Entra ID). */
@@ -78,7 +78,7 @@ export class ShellSessionManager implements vscode.Disposable {
     /** Tracks the active database, surviving worker restarts. Updated on `use <db>`. */
     private _activeDatabase: string;
     /** Auth mechanism used for the current session (set after init). */
-    private _authMethod: 'NativeAuth' | 'MicrosoftEntraID' | 'NoAuth' | undefined;
+    private _authMethod: 'NativeAuth' | 'MicrosoftEntraID' | 'ManagedIdentity' | 'NoAuth' | undefined;
 
     constructor(connectionInfo: ShellConnectionInfo, callbacks?: ShellSessionCallbacks) {
         this._connectionInfo = connectionInfo;
@@ -146,7 +146,7 @@ export class ShellSessionManager implements vscode.Disposable {
     /**
      * Authentication method used for the current session.
      */
-    get authMethod(): 'NativeAuth' | 'MicrosoftEntraID' | 'NoAuth' | undefined {
+    get authMethod(): 'NativeAuth' | 'MicrosoftEntraID' | 'ManagedIdentity' | 'NoAuth' | undefined {
         return this._authMethod;
     }
 
@@ -287,8 +287,9 @@ export class ShellSessionManager implements vscode.Disposable {
             connectionString,
             clientOptions,
             databaseName: this._activeDatabase,
-            authMechanism: authMechanism as 'NativeAuth' | 'MicrosoftEntraID' | 'NoAuth',
+            authMechanism: authMechanism as 'NativeAuth' | 'MicrosoftEntraID' | 'ManagedIdentity' | 'NoAuth',
             tenantId: credentials.entraIdConfig?.tenantId,
+            managedIdentityClientId: credentials.managedIdentityConfig?.clientId,
             persistent: true,
         };
     }
@@ -321,20 +322,31 @@ export class ShellSessionManager implements vscode.Disposable {
         postResponse: (response: MainToWorkerMessage) => void,
     ): Promise<void> {
         try {
-            const { getSessionFromVSCode } = await import(
-                // eslint-disable-next-line import/no-internal-modules
-                '@microsoft/vscode-azext-azureauth/out/src/getSessionFromVSCode'
-            );
-            const session = await getSessionFromVSCode(msg.scopes as string[], msg.tenantId, { createIfNone: true });
+            let accessToken: string;
 
-            if (!session) {
-                throw new Error('Failed to obtain Entra ID session');
+            if (msg.source === 'managedIdentity') {
+                const { getManagedIdentityAccessToken } = await import('../auth/managedIdentityTokenProvider');
+                accessToken = (await getManagedIdentityAccessToken(msg.scopes as string[], msg.clientId)).accessToken;
+            } else {
+                const { getSessionFromVSCode } = await import(
+                    // eslint-disable-next-line import/no-internal-modules
+                    '@microsoft/vscode-azext-azureauth/out/src/getSessionFromVSCode'
+                );
+                const session = await getSessionFromVSCode(msg.scopes as string[], msg.tenantId, {
+                    createIfNone: true,
+                });
+
+                if (!session) {
+                    throw new Error('Failed to obtain Entra ID session');
+                }
+
+                accessToken = session.accessToken;
             }
 
             postResponse({
                 type: 'tokenResponse',
                 requestId: msg.requestId,
-                accessToken: session.accessToken,
+                accessToken,
             });
         } catch (error: unknown) {
             const errorMessage = error instanceof Error ? error.message : String(error);

@@ -66,9 +66,11 @@ export type MainToWorkerMessage =
           readonly connectionString: string;
           readonly clientOptions: SerializableMongoClientOptions;
           readonly databaseName: string;
-          readonly authMechanism: 'NativeAuth' | 'MicrosoftEntraID' | 'NoAuth';
+          readonly authMechanism: 'NativeAuth' | 'MicrosoftEntraID' | 'ManagedIdentity' | 'NoAuth';
           /** Tenant ID for Entra ID clusters */
           readonly tenantId?: string;
+          /** Client ID of a user-assigned managed identity. Absent means the system-assigned one. */
+          readonly managedIdentityClientId?: string;
           /**
            * When `true`, the worker keeps the @mongosh eval context alive across
            * evaluations (interactive shell mode). When `false` (default), each eval
@@ -132,6 +134,10 @@ export type WorkerToMainMessage =
           readonly requestId: string;
           readonly scopes: readonly string[];
           readonly tenantId?: string;
+          /** Where the main thread should get the token from. Absent means 'vscode', for compatibility. */
+          readonly source?: 'vscode' | 'managedIdentity';
+          /** Client ID of a user-assigned managed identity, when `source` is 'managedIdentity'. */
+          readonly clientId?: string;
       }
     | {
           readonly type: 'log';

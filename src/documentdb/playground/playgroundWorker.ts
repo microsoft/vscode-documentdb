@@ -116,8 +116,11 @@ async function handleInit(msg: Extract<MainToWorkerMessage, { type: 'init' }>): 
         ...msg.clientOptions,
     };
 
-    // For Entra ID, configure OIDC callback that requests tokens via IPC
-    if (msg.authMechanism === 'MicrosoftEntraID') {
+    // Entra ID and managed identity are the same OIDC mechanism on the wire; only the token source
+    // differs, and both are resolved on the main thread so there is one credential and one cache
+    // per window, and so the worker never needs @azure/identity.
+    if (msg.authMechanism === 'MicrosoftEntraID' || msg.authMechanism === 'ManagedIdentity') {
+        const usesManagedIdentity = msg.authMechanism === 'ManagedIdentity';
         options.authMechanism = 'MONGODB-OIDC';
         options.tls = true;
         options.authMechanismProperties = {
@@ -132,6 +135,8 @@ async function handleInit(msg: Extract<MainToWorkerMessage, { type: 'init' }>): 
                     requestId,
                     scopes: [DOCUMENTDB_ENTRA_SCOPE],
                     tenantId: msg.tenantId,
+                    source: usesManagedIdentity ? 'managedIdentity' : 'vscode',
+                    clientId: usesManagedIdentity ? msg.managedIdentityClientId : undefined,
                 };
                 parentPort!.postMessage(tokenRequest);
                 const accessToken = await tokenPromise;

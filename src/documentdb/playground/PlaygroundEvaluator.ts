@@ -284,8 +284,9 @@ export class PlaygroundEvaluator implements vscode.Disposable {
             connectionString,
             clientOptions,
             databaseName: connection.databaseName,
-            authMechanism: authMechanism as 'NativeAuth' | 'MicrosoftEntraID' | 'NoAuth',
+            authMechanism: authMechanism as 'NativeAuth' | 'MicrosoftEntraID' | 'ManagedIdentity' | 'NoAuth',
             tenantId: credentials.entraIdConfig?.tenantId,
+            managedIdentityClientId: credentials.managedIdentityConfig?.clientId,
         };
     }
 
@@ -331,27 +332,38 @@ export class PlaygroundEvaluator implements vscode.Disposable {
 
     /**
      * Handle a token request from the worker (Entra ID OIDC).
-     * Calls VS Code's auth API on the main thread and sends the token back.
+     * Token acquisition stays on the main thread so there is one credential and one cache per window.
      */
     private async handleTokenRequest(
         msg: Extract<WorkerToMainMessage, { type: 'tokenRequest' }>,
         postResponse: (response: MainToWorkerMessage) => void,
     ): Promise<void> {
         try {
-            const { getSessionFromVSCode } = await import(
-                // eslint-disable-next-line import/no-internal-modules
-                '@microsoft/vscode-azext-azureauth/out/src/getSessionFromVSCode'
-            );
-            const session = await getSessionFromVSCode(msg.scopes as string[], msg.tenantId, { createIfNone: true });
+            let accessToken: string;
 
-            if (!session) {
-                throw new Error('Failed to obtain Entra ID session');
+            if (msg.source === 'managedIdentity') {
+                const { getManagedIdentityAccessToken } = await import('../auth/managedIdentityTokenProvider');
+                accessToken = (await getManagedIdentityAccessToken(msg.scopes as string[], msg.clientId)).accessToken;
+            } else {
+                const { getSessionFromVSCode } = await import(
+                    // eslint-disable-next-line import/no-internal-modules
+                    '@microsoft/vscode-azext-azureauth/out/src/getSessionFromVSCode'
+                );
+                const session = await getSessionFromVSCode(msg.scopes as string[], msg.tenantId, {
+                    createIfNone: true,
+                });
+
+                if (!session) {
+                    throw new Error('Failed to obtain Entra ID session');
+                }
+
+                accessToken = session.accessToken;
             }
 
             postResponse({
                 type: 'tokenResponse',
                 requestId: msg.requestId,
-                accessToken: session.accessToken,
+                accessToken,
             });
         } catch (error: unknown) {
             const errorMessage = error instanceof Error ? error.message : String(error);
