@@ -349,6 +349,17 @@ describe('QuickStartService — WP-3 provisioning durability and port model', ()
         expect(labels[QUICK_START_OPERATION_LABEL_KEY]).toMatch(/^[0-9a-f]{16}$/);
     });
 
+    it('requests plain-text logs from the container', async () => {
+        const createAndRunContainer = jest.fn().mockResolvedValue('c1');
+        const service = new QuickStartServiceImpl(runtimeFor({ createAndRunContainer }));
+
+        await collect(service.provision(new AbortController().signal));
+
+        expect(createAndRunContainer.mock.calls[0][0]).toMatchObject({
+            environmentVariables: { NO_COLOR: '1', TERM: 'dumb' },
+        });
+    });
+
     // L3: typing the default port used to be indistinguishable from "not set", which silently
     // turned the exact-port contract into the auto-relocating one.
     it('honours an explicit default port exactly instead of relocating (L3)', async () => {

@@ -3,7 +3,7 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { MaskingLineBuffer, maskSecrets } from './outputMasking';
+import { MaskingLineBuffer, maskSecrets, sanitizeOutput } from './outputMasking';
 
 describe('outputMasking (Quick Start D14)', () => {
     const PASSWORD = 'Sup3rS3cretPwd';
@@ -25,6 +25,14 @@ describe('outputMasking (Quick Start D14)', () => {
 
         it('is a no-op when no secret is present', () => {
             expect(maskSecrets('nothing to hide here', [PASSWORD])).toBe('nothing to hide here');
+        });
+    });
+
+    describe('sanitizeOutput', () => {
+        it('strips ANSI formatting from gateway logs before masking secrets', () => {
+            const line = `\u001b[2m2026-08-10T11:25:23Z\u001b[0m \u001b[32m INFO\u001b[0m pass=${PASSWORD}`;
+
+            expect(sanitizeOutput(line, [PASSWORD])).toBe('2026-08-10T11:25:23Z  INFO pass=***');
         });
     });
 

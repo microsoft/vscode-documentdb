@@ -14,6 +14,8 @@
  * buffers by line and {@link maskSecrets} redacts every occurrence.
  */
 
+import { stripVTControlCharacters } from 'node:util';
+
 /** Replace every non-empty secret occurrence in `text` with `***`. */
 export function maskSecrets(text: string, secrets: ReadonlyArray<string>): string {
     let out = text;
@@ -23,6 +25,11 @@ export function maskSecrets(text: string, secrets: ReadonlyArray<string>): strin
         }
     }
     return out;
+}
+
+/** Remove terminal formatting before redacting output for the plain-text OutputChannel. */
+export function sanitizeOutput(text: string, secrets: ReadonlyArray<string>): string {
+    return maskSecrets(stripVTControlCharacters(text), secrets);
 }
 
 /**
@@ -56,7 +63,7 @@ export class MaskingLineBuffer {
         while ((newlineIndex = this.buffer.indexOf('\n')) >= 0) {
             const line = this.buffer.slice(0, newlineIndex).replace(/\r$/, '');
             this.buffer = this.buffer.slice(newlineIndex + 1);
-            this.emit(maskSecrets(line, this.secrets));
+            this.emit(sanitizeOutput(line, this.secrets));
         }
         // No newline in sight: emit what we have, but keep a tail at least as long as the longest
         // secret so a secret straddling the cut is still whole on the next pass and gets masked.
@@ -64,7 +71,7 @@ export class MaskingLineBuffer {
             const keep = Math.max(this.maxSecretLength, 1);
             const cut = this.buffer.length - keep;
             if (cut > 0) {
-                this.emit(maskSecrets(this.buffer.slice(0, cut), this.secrets));
+                this.emit(sanitizeOutput(this.buffer.slice(0, cut), this.secrets));
                 this.buffer = this.buffer.slice(cut);
             }
         }
@@ -72,7 +79,7 @@ export class MaskingLineBuffer {
 
     public flush(): void {
         if (this.buffer.length > 0) {
-            this.emit(maskSecrets(this.buffer, this.secrets));
+            this.emit(sanitizeOutput(this.buffer, this.secrets));
             this.buffer = '';
         }
     }
