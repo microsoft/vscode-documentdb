@@ -24,6 +24,7 @@ import { ChooseAuthMethodStep } from '../../documentdb/wizards/authenticate/Choo
 import { ProvidePasswordStep } from '../../documentdb/wizards/authenticate/ProvidePasswordStep';
 import { ProvideUserNameStep } from '../../documentdb/wizards/authenticate/ProvideUsernameStep';
 import { SaveCredentialsStep } from '../../documentdb/wizards/authenticate/SaveCredentialsStep';
+import { SelectManagedIdentityStep } from '../../documentdb/wizards/authenticate/SelectManagedIdentityStep';
 import { ext } from '../../extensionVariables';
 import { ConnectionReachabilityService } from '../../services/connectionReachabilityService';
 import { ConnectionStorageService, ConnectionType, isConnection } from '../../services/connectionStorageService';
@@ -68,6 +69,7 @@ export class DocumentDBClusterItem extends ClusterItemBase<ConnectionClusterMode
                       tenantId: connectionCredentials.secrets.entraIdAuthConfig.tenantId,
                   }
                 : undefined,
+            managedIdentityAuthConfig: connectionCredentials.secrets.managedIdentityAuthConfig,
         };
     }
 
@@ -107,6 +109,7 @@ export class DocumentDBClusterItem extends ClusterItemBase<ConnectionClusterMode
             let authMethod: AuthMethodId | undefined = authMethodFromString(
                 connectionCredentials.properties.selectedAuthMethod,
             );
+            let managedIdentityAuthConfig = connectionCredentials.secrets.managedIdentityAuthConfig;
 
             /**
              * Prompt for credentials if no auth method selected or
@@ -129,6 +132,8 @@ export class DocumentDBClusterItem extends ClusterItemBase<ConnectionClusterMode
                     adminUserName: username,
                     password: password,
                     resourceName: this.cluster.name,
+
+                    managedIdentityAuthConfig: managedIdentityAuthConfig,
 
                     // enforce the user to confirm theusername
                     selectedUserName: undefined,
@@ -154,6 +159,11 @@ export class DocumentDBClusterItem extends ClusterItemBase<ConnectionClusterMode
                     'wizardContext.selectedAuthMethod',
                     'DocumentDBClusterItem.ts',
                 );
+                // An empty config is meaningful: it selects the system-assigned identity.
+                managedIdentityAuthConfig =
+                    authMethod === AuthMethodId.ManagedIdentity
+                        ? (wizardContext.managedIdentityAuthConfig ?? {})
+                        : undefined;
 
                 if (wizardContext.saveCredentials) {
                     ext.outputChannel.append(
@@ -177,6 +187,7 @@ export class DocumentDBClusterItem extends ClusterItemBase<ConnectionClusterMode
                                           connectionPassword: password ?? '',
                                       }
                                     : undefined,
+                            managedIdentityAuthConfig: managedIdentityAuthConfig,
                         };
                         try {
                             await ConnectionStorageService.save(connectionType, connection, true);
@@ -203,6 +214,9 @@ export class DocumentDBClusterItem extends ClusterItemBase<ConnectionClusterMode
                 case AuthMethodId.MicrosoftEntraID:
                     ext.outputChannel.append(l10n.t('Connecting to the cluster using Entra ID…'));
                     break;
+                case AuthMethodId.ManagedIdentity:
+                    ext.outputChannel.append(l10n.t('Connecting to the cluster using a managed identity…'));
+                    break;
                 default:
                     ext.outputChannel.append(
                         l10n.t('Connecting to the cluster as "{username}"…', {
@@ -224,6 +238,7 @@ export class DocumentDBClusterItem extends ClusterItemBase<ConnectionClusterMode
                     : undefined,
                 this.cluster.emulatorConfiguration, // workspace items can potentially be connecting to an emulator, so we always pass it
                 connectionCredentials.secrets.entraIdAuthConfig,
+                managedIdentityAuthConfig,
             );
 
             let clustersClient: ClustersClient;
@@ -385,6 +400,9 @@ export class DocumentDBClusterItem extends ClusterItemBase<ConnectionClusterMode
         const wizard = new AzureWizard(wizardContext, {
             promptSteps: [
                 new ChooseAuthMethodStep(),
+                new SelectManagedIdentityStep<AuthenticateWizardContext>(
+                    (context) => context.selectedAuthMethod === AuthMethodId.ManagedIdentity,
+                ),
                 new ProvideUserNameStep(),
                 new ProvidePasswordStep(),
                 new SaveCredentialsStep(),

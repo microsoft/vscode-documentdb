@@ -7,7 +7,7 @@ import { type ConnectionItem } from '../services/connectionStorageService';
 import { CaseInsensitiveMap } from '../utils/CaseInsensitiveMap';
 import { type EmulatorConfiguration } from '../utils/emulatorConfiguration';
 import { type EntraIdAuthConfig, type ManagedIdentityAuthConfig, type NativeAuthConfig } from './auth/AuthConfig';
-import { AuthMethodId, type AuthMethodId as AuthMethodIdType } from './auth/AuthMethod';
+import { AuthMethodId, isSupportedAuthMethod, type AuthMethodId as AuthMethodIdType } from './auth/AuthMethod';
 import { addAuthenticationDataToConnectionString } from './utils/connectionStringHelpers';
 
 export interface CachedClusterCredentials {
@@ -281,20 +281,21 @@ export class CredentialCache {
         let selectedAuthMethod = authMethod;
         if (!selectedAuthMethod) {
             const explicitMethod = connectionItem.properties.selectedAuthMethod as AuthMethodIdType | undefined;
-            if (explicitMethod === AuthMethodId.NoAuth) {
-                // Respect an explicit "No Authentication" choice even though there is no
-                // native/entra config to infer from; otherwise it would fall back to Native.
-                selectedAuthMethod = AuthMethodId.NoAuth;
+            if (isSupportedAuthMethod(explicitMethod)) {
+                // Honor the persisted choice for EVERY known method, not just NoAuth. Inference is a
+                // fallback for records that predate the explicit field, and it cannot distinguish
+                // managed identity from interactive Entra ID: a managed identity connection
+                // discovered through ARM legitimately carries an entraIdAuthConfig as well.
+                selectedAuthMethod = explicitMethod;
+            } else if (secrets.managedIdentityAuthConfig) {
+                selectedAuthMethod = AuthMethodId.ManagedIdentity;
             } else if (secrets.entraIdAuthConfig) {
                 selectedAuthMethod = AuthMethodId.MicrosoftEntraID;
             } else if (secrets.nativeAuthConfig) {
                 selectedAuthMethod = AuthMethodId.NativeAuth;
             } else {
-                // Use the selected method from properties or first available method
                 selectedAuthMethod =
-                    explicitMethod ??
-                    (connectionItem.properties.availableAuthMethods[0] as AuthMethodIdType) ??
-                    AuthMethodId.NativeAuth;
+                    (connectionItem.properties.availableAuthMethods[0] as AuthMethodIdType) ?? AuthMethodId.NativeAuth;
             }
         }
 
@@ -311,6 +312,9 @@ export class CredentialCache {
             cacheEntraIdConfig = { ...secrets.entraIdAuthConfig };
         }
 
+        const cacheManagedIdentityConfig =
+            !isNoAuth && secrets.managedIdentityAuthConfig ? { ...secrets.managedIdentityAuthConfig } : undefined;
+
         // Use structured configurations
         const username = isNoAuth ? '' : (secrets.nativeAuthConfig?.connectionUser ?? '');
         const password = isNoAuth ? '' : (secrets.nativeAuthConfig?.connectionPassword ?? '');
@@ -323,6 +327,7 @@ export class CredentialCache {
             username || password ? { connectionUser: username, connectionPassword: password } : undefined,
             emulatorConfiguration,
             cacheEntraIdConfig,
+            cacheManagedIdentityConfig,
         );
     }
 }

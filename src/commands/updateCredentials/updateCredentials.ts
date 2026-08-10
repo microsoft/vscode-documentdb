@@ -11,6 +11,7 @@ import { CredentialCache } from '../../documentdb/CredentialCache';
 import { AzureDomains, hasDomainSuffix } from '../../documentdb/utils/connectionStringHelpers';
 import { DocumentDBConnectionString } from '../../documentdb/utils/DocumentDBConnectionString';
 import { Views } from '../../documentdb/Views';
+import { SelectManagedIdentityStep } from '../../documentdb/wizards/authenticate/SelectManagedIdentityStep';
 import { ext } from '../../extensionVariables';
 import { ConnectionStorageService, isConnection } from '../../services/connectionStorageService';
 import { type DocumentDBClusterItem } from '../../tree/connections-view/DocumentDBClusterItem';
@@ -66,6 +67,9 @@ export async function updateCredentials(context: IActionContext, node: DocumentD
         if (!supportedAuthMethods.includes(AuthMethodId.MicrosoftEntraID)) {
             supportedAuthMethods.push(AuthMethodId.MicrosoftEntraID);
         }
+        if (!supportedAuthMethods.includes(AuthMethodId.ManagedIdentity)) {
+            supportedAuthMethods.push(AuthMethodId.ManagedIdentity);
+        }
         if (!supportedAuthMethods.includes(AuthMethodId.NativeAuth)) {
             supportedAuthMethods.push(AuthMethodId.NativeAuth);
         }
@@ -79,6 +83,7 @@ export async function updateCredentials(context: IActionContext, node: DocumentD
         ...context,
         nativeAuthConfig: connectionCredentials?.secrets.nativeAuthConfig,
         entraIdAuthConfig: connectionCredentials?.secrets.entraIdAuthConfig,
+        managedIdentityAuthConfig: connectionCredentials?.secrets.managedIdentityAuthConfig,
         availableAuthenticationMethods: authMethodsFromString(supportedAuthMethods),
         selectedAuthenticationMethod: authMethodFromString(connectionCredentials?.properties.selectedAuthMethod),
         isEmulator: Boolean(node.cluster.emulatorConfiguration?.isEmulator),
@@ -93,6 +98,9 @@ export async function updateCredentials(context: IActionContext, node: DocumentD
         promptSteps: [
             new PromptAuthMethodStep(),
             new PromptTenantStep(),
+            new SelectManagedIdentityStep<UpdateCredentialsWizardContext>(
+                (wizardContext) => wizardContext.selectedAuthenticationMethod === AuthMethodId.ManagedIdentity,
+            ),
             new PromptUserNameStep(),
             new PromptPasswordStep(),
             new PromptReconnectStepForErrorNodes(),

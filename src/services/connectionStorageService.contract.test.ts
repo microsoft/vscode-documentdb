@@ -289,6 +289,41 @@ describe('ConnectionStorageService - Contract Tests', () => {
             expect(retrieved?.secrets.entraIdAuthConfig?.subscriptionId).toBe('sub-xyz-456');
         });
 
+        it('should preserve a user-assigned managed identity client ID', async () => {
+            const original = createCompleteConnectionItem();
+            original.properties.selectedAuthMethod = 'ManagedIdentity';
+            original.secrets.managedIdentityAuthConfig = { clientId: '11111111-2222-3333-4444-555555555555' };
+
+            await ConnectionStorageService.save(ConnectionType.Clusters, original);
+            const retrieved = await ConnectionStorageService.get(original.id, ConnectionType.Clusters);
+
+            expect(retrieved?.secrets.managedIdentityAuthConfig).toEqual({
+                clientId: '11111111-2222-3333-4444-555555555555',
+            });
+        });
+
+        it('should distinguish a system-assigned managed identity from no managed identity at all', async () => {
+            // An empty config selects the system-assigned identity. Collapsing it to undefined would
+            // make the auth method un-inferable after a window reload.
+            const systemAssigned = createCompleteConnectionItem();
+            systemAssigned.properties.selectedAuthMethod = 'ManagedIdentity';
+            systemAssigned.secrets.managedIdentityAuthConfig = {};
+
+            await ConnectionStorageService.save(ConnectionType.Clusters, systemAssigned);
+            const retrieved = await ConnectionStorageService.get(systemAssigned.id, ConnectionType.Clusters);
+
+            expect(retrieved?.secrets.managedIdentityAuthConfig).toEqual({});
+        });
+
+        it('should leave managedIdentityAuthConfig undefined for a native connection', async () => {
+            const original = createCompleteConnectionItem();
+
+            await ConnectionStorageService.save(ConnectionType.Clusters, original);
+            const retrieved = await ConnectionStorageService.get(original.id, ConnectionType.Clusters);
+
+            expect(retrieved?.secrets.managedIdentityAuthConfig).toBeUndefined();
+        });
+
         it('should handle connection with only connectionString (no auth configs)', async () => {
             const minimal: ConnectionItem = {
                 id: 'minimal-connection',

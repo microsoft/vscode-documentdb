@@ -6,6 +6,7 @@
 import { AzureWizardExecuteStep } from '@microsoft/vscode-azext-utils';
 import * as l10n from '@vscode/l10n';
 import { AuthMethodId } from '../../documentdb/auth/AuthMethod';
+import { rememberManagedIdentity } from '../../documentdb/auth/recentManagedIdentities';
 import { redactCredentialsFromConnectionString } from '../../documentdb/utils/connectionStringHelpers';
 import { DocumentDBConnectionString } from '../../documentdb/utils/DocumentDBConnectionString';
 import { areAllHostsLocal, canonicalizeTlsException } from '../../documentdb/utils/tlsException';
@@ -81,6 +82,14 @@ export class ExecuteStep extends AzureWizardExecuteStep<NewConnectionWizardConte
             // or Entra -> Native), stale Entra config could otherwise be persisted onto a connection
             // that is supposed to be credential-free or native. Mirror the native-credential gate.
             const usesEntraId = newAuthenticationMethod === AuthMethodId.MicrosoftEntraID;
+
+            // Same gate for managed identity. Note that an EMPTY config is meaningful here: it means
+            // the system-assigned identity, so it must be persisted rather than collapsed to
+            // undefined, or the method becomes un-inferable after a reload.
+            const usesManagedIdentity = newAuthenticationMethod === AuthMethodId.ManagedIdentity;
+            const newManagedIdentityAuthConfig = usesManagedIdentity
+                ? (context.managedIdentityAuthConfig ?? {})
+                : undefined;
 
             const newAvailableAuthenticationMethods =
                 context.availableAuthenticationMethods ?? (newAuthenticationMethod ? [newAuthenticationMethod] : []);
@@ -223,10 +232,15 @@ export class ExecuteStep extends AzureWizardExecuteStep<NewConnectionWizardConte
                     // Persist Entra ID config only for the Microsoft Entra ID method, so a
                     // credential-free or native connection never carries stale Entra metadata.
                     entraIdAuthConfig: usesEntraId ? context.entraIdAuthConfig : undefined,
+                    managedIdentityAuthConfig: newManagedIdentityAuthConfig,
                 },
             };
 
             await ConnectionStorageService.save(ConnectionType.Clusters, storageItem, true);
+
+            if (usesManagedIdentity) {
+                await rememberManagedIdentity(newManagedIdentityAuthConfig?.clientId, newConnectionLabel);
+            }
 
             // Build the reveal path based on whether this is in a subfolder
             const connectionPath = context.parentTreeId
