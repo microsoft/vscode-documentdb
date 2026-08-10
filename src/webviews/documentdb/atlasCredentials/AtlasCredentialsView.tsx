@@ -114,6 +114,7 @@ const useStyles = makeStyles({
     muted: { color: tokens.colorNeutralForeground2 },
     section: { display: 'flex', flexDirection: 'column', gap: '12px' },
     sectionHeader: { display: 'flex', flexDirection: 'column', gap: '4px' },
+    titleAndMessageBarBody: { display: 'flex', flexDirection: 'column', gap: '8px' },
     cardGrid: {
         display: 'grid',
         gridTemplateColumns: 'repeat(2, minmax(0, 1fr))',
@@ -615,8 +616,9 @@ export const AtlasCredentialsView = (): JSX.Element => {
             layout="multiline"
             icon={isNoProjectsWarning ? <WarningRegular /> : <ErrorCircleFilled />}
         >
-            <MessageBarBody>
-                <MessageBarTitle>{submitError.title}</MessageBarTitle> {submitError.message}
+            <MessageBarBody className={styles.titleAndMessageBarBody}>
+                <MessageBarTitle>{submitError.title}</MessageBarTitle>
+                {submitError.message}
             </MessageBarBody>
             <MessageBarActions>
                 {submitError.action && (
@@ -775,9 +777,9 @@ export const AtlasCredentialsView = (): JSX.Element => {
                     'You can now close this tab and explore your MongoDB Atlas clusters in the Service Discovery area.',
                 )}
             </Text>
-            <MessageBar intent="success">
-                <MessageBarBody>
-                    <MessageBarTitle>{l10n.t('All set')}</MessageBarTitle>{' '}
+            <MessageBar intent="success" layout="multiline">
+                <MessageBarBody className={styles.titleAndMessageBarBody}>
+                    <MessageBarTitle>{l10n.t('All set')}</MessageBarTitle>
                     {l10n.t('Your credential was successfully checked and saved, and is ready to use.')}
                 </MessageBarBody>
             </MessageBar>
