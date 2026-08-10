@@ -20,7 +20,6 @@ import { Views } from '../../../documentdb/Views';
 import { DocumentDBExperience } from '../../../DocumentDBExperiences';
 import { ext } from '../../../extensionVariables';
 import { StorageZone } from '../../../services/connectionStorageService';
-import { formatQuickStartMessage } from '../../../services/localQuickStart/quickStartMessages';
 import {
     QuickStartService,
     type QuickStartConnectionPreflightResult,
@@ -370,7 +369,7 @@ export class LocalQuickStartItem implements TreeElement, TreeElementWithContextV
                 createGenericElementWithContext({
                     id: `${this.id}/delete`,
                     contextValue: 'error',
-                    label: l10n.t('Click here to delete the container and start over'),
+                    label: l10n.t('Delete container'),
                     iconPath: new vscode.ThemeIcon('trash'),
                     commandId: 'vscode-documentdb.command.localQuickStart.delete',
                 }),
@@ -477,14 +476,7 @@ export class LocalQuickStartItem implements TreeElement, TreeElementWithContextV
                 case InstanceState.Stopped:
                     return [row('state_stopped', instanceStateLabel(status.state), idle)];
                 case InstanceState.Error:
-                    return [
-                        row(
-                            'state_error',
-                            status.error ? formatQuickStartMessage(status.error) : l10n.t('Error · click for details'),
-                            new vscode.ThemeIcon('warning', new vscode.ThemeColor('list.errorForeground')),
-                        ),
-                        ...this.createErrorRecoveryChildren(true),
-                    ];
+                    return this.createErrorRecoveryChildren(true);
                 default:
                     break;
             }

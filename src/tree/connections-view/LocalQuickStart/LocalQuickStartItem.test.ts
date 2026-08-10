@@ -150,7 +150,9 @@ describe('LocalQuickStartItem — configured instance description', () => {
 describe('LocalQuickStartItem — error recovery nodes (I2-4)', () => {
     afterEach(() => jest.restoreAllMocks());
 
-    async function childIds(status: Partial<QuickStartStatus>): Promise<string[]> {
+    async function children(
+        status: Partial<QuickStartStatus>,
+    ): Promise<Awaited<ReturnType<LocalQuickStartItem['getChildren']>>> {
         jest.spyOn(QuickStartService, 'ensureHydrated').mockResolvedValue(undefined);
         jest.spyOn(QuickStartService, 'isHydrated', 'get').mockReturnValue(false);
         jest.spyOn(QuickStartService, 'refreshLiveStateInBackground').mockReturnValue(undefined);
@@ -166,11 +168,11 @@ describe('LocalQuickStartItem — error recovery nodes (I2-4)', () => {
         const children = await item.getChildren();
         // The provider caches the failed children only when the element reports a retry node.
         expect(item.hasRetryNode(children)).toBe(true);
-        return children.map((child) => String(child.id));
+        return children;
     }
 
     it('offers retry, the setup log and Delete Container when a container exists', async () => {
-        const ids = await childIds({
+        const items = await children({
             metadata: {
                 containerId: 'c1',
                 alias: 'vscode-documentdb-local',
@@ -181,16 +183,17 @@ describe('LocalQuickStartItem — error recovery nodes (I2-4)', () => {
             },
         } as Partial<QuickStartStatus>);
 
-        expect(ids).toEqual([
-            'connectionsView/root/localQuickStart/instance',
+        expect(items.map((item) => item.id)).toEqual([
             'connectionsView/root/localQuickStart/retry',
             'connectionsView/root/localQuickStart/viewLogs',
             'connectionsView/root/localQuickStart/delete',
         ]);
+        expect(items[2].getTreeItem()).toHaveProperty('label', 'Delete container');
     });
 
     it('offers retry and the setup log only when nothing was created, and never a message-only row (N3)', async () => {
-        const ids = await childIds({ metadata: undefined });
+        const items = await children({ metadata: undefined });
+        const ids = items.map((item) => item.id);
 
         expect(ids).toEqual([
             'connectionsView/root/localQuickStart/start',
