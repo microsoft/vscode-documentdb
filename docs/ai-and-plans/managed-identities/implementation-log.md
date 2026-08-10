@@ -30,7 +30,7 @@ commit) say so and name the commit that carries them.
 | Phase | Work items   | Status         |
 | ----- | ------------ | -------------- |
 | 1     | WI1 to WI6   | ✅ Done        |
-| 2     | WI7 to WI13  | ⏳ In progress |
+| 2     | WI7 to WI13  | ✅ Done        |
 | 3     | WI14, WI15   | ⏳ In progress |
 | 4     | WI16, WI17   | ☐ Not started  |
 | 5     | WI18 to WI20 | ☐ Not started  |
@@ -264,6 +264,111 @@ writing `?? undefined`.
 
 Still open in WI11: `ConnectionSecrets` in the storage service.
 
+### WI10, WI11, WI12, WI13 — Identity selection and persistence ✅
+
+**Commit:** `dc991856` — _Select, persist and restore the managed identity of a connection_
+
+Grouped because they form one testable behaviour: a connection is not usable until the identity can
+be chosen, saved, and read back. WI12 in particular cannot be verified without WI13, since the bug it
+fixes only appears on the reload path.
+
+#### WI10 — `SelectManagedIdentityStep` and the recently-used store
+
+**What.** New [SelectManagedIdentityStep.ts](src/documentdb/wizards/authenticate/SelectManagedIdentityStep.ts)
+and [recentManagedIdentities.ts](src/documentdb/auth/recentManagedIdentities.ts), with tests.
+Registered in three places: the New Connection sub-wizard
+([PromptConnectionModeStep.ts](src/commands/newConnection/PromptConnectionModeStep.ts)), the Update
+Credentials wizard, and the connections-view authenticate wizard in
+[DocumentDBClusterItem.ts](src/tree/connections-view/DocumentDBClusterItem.ts).
+
+**Why.** Plan §7, decision [D2](./decisions.md#d2-how-the-user-selects-the-identity). The list shape
+follows `SelectAtlasDatabaseUserStep`: manual entry first with an `edit` icon, known values below
+under `QuickPickItemKind.Separator` headings.
+
+Source of the known rows is D2's option 1, **system-assigned plus recently used**, as the plan
+proposes. ARM enumeration of user-assigned identities and enumeration of the identities actually
+assigned to this VM remain phase 2, and the second still depends on
+[D3](./decisions.md#d3-azure-environment-detection-open).
+
+**Notes and divergences.**
+
+- **Divergence (shape):** the step is generic over its context
+  (`SelectManagedIdentityStep<T extends ManagedIdentitySelectionContext>`) and takes a predicate for
+  "is managed identity selected". The plan describes one class in the authenticate wizard plus a
+  sibling in the New Connection wizard. Two classes would have been near-identical, and the reason
+  they cannot share a context is trivial: `AuthenticateWizardContext` calls the field
+  `selectedAuthMethod` while the other two call it `selectedAuthenticationMethod`. A one-line
+  predicate at each call site is cheaper than a duplicated step, and it serves all three wizards
+  rather than two. Confidence: high.
+- **Divergence (addition):** a fourth group, **From the connection string**, appears above
+  "Recently used" when a `weak` hint supplied a client ID. Without it, a value the user just pasted
+  would be invisible in a list whose whole purpose is to avoid retyping it. It is de-duplicated
+  against the recent list.
+- `managedIdentityHint` was added to `AuthenticateWizardContext` as well, so the step's `shouldPrompt`
+  contract is the same in every wizard.
+- The recently-used list is capped at five, de-duplicated case-insensitively, and validated on read
+  with a type guard, since `globalState` content is untrusted input after a downgrade or manual edit.
+  It lives in `globalState` and not `SecretStorage` because a client ID is a tenant-scoped
+  identifier, not a credential.
+- Tests cover the invariants the plan asks for: manual entry is always first, separators appear only
+  for non-empty groups, the list is never empty, plus `shouldPrompt` for explicit versus weak hints
+  and the GUID validation.
+
+#### WI11 (completed) — Storage secrets
+
+**What.** `managedIdentityAuthConfig` added to `ConnectionSecrets` and `StoredItem.secrets`, with
+read and write paths in [connectionStorageService.ts](src/services/connectionStorageService.ts).
+
+**Why.** Plan §8.
+
+**Notes and divergences.**
+
+- **Divergence (storage encoding):** secrets are persisted as a flat `string[]`, which cannot express
+  "present but empty". A new slot `SecretIndex.ManagedIdentityClientId = 5` therefore holds either the
+  client ID or the sentinel `'system-assigned'`. An absent slot means the connection does not use
+  managed identity at all.
+
+  The alternative, inferring the empty config from `properties.selectedAuthMethod`, was rejected:
+  it would make the secrets reader depend on the properties reader, and a sentinel that can never
+  collide with a GUID costs one constant. Two slots (a marker plus a value) were also considered and
+  rejected as more storage for no additional information. Confidence: high; contract tests pin all
+  three cases.
+
+#### WI12 — Inference ladder
+
+**What.** `CredentialCache.setFromConnectionItem()` now honours a persisted `selectedAuthMethod` for
+**every** known method rather than only `NoAuth`, falling through to inference only when the field is
+absent or unrecognized. `managedIdentityConfig` is cleared for explicit `NoAuth`, matching the
+existing defense-in-depth rule.
+
+**Why.** Plan §8. This is the subtle one: adding a rung to the old ladder would not have worked,
+because a managed-identity connection discovered through ARM legitimately carries an
+`entraIdAuthConfig` (tenant and subscription), so the Entra rung would win and the connection would
+silently become an interactive Entra ID connection after a reload.
+
+**Notes.** The plan flags this as a behaviour change for existing connections (risk #4), so it comes
+with a dedicated regression block asserting that stored Native, Entra ID and NoAuth connections still
+resolve identically, that records with no persisted method still fall back to inference, and that an
+**unrecognized** method string falls through to inference rather than being trusted.
+
+#### WI13 — Persistence
+
+**What.** [newConnection/ExecuteStep.ts](src/commands/newConnection/ExecuteStep.ts) persists
+`managedIdentityAuthConfig` behind a `usesManagedIdentity` gate that mirrors the existing native and
+Entra gates, defaulting to `{}` rather than `undefined`.
+[updateCredentials/ExecuteStep.ts](src/commands/updateCredentials/ExecuteStep.ts) gains a
+`ManagedIdentity` branch and clears the config in every other branch, so switching methods cannot
+leave it behind. The same is done on the connections-view save path.
+
+**Why.** Plan §8 and the review precedent recorded in
+[755-no-auth-support/review-2026-06-23.md](docs/ai-and-plans/PRs/755-no-auth-support/review-2026-06-23.md),
+which is the same class of bug: a config for one method surviving a switch to another.
+
+**Notes.** `rememberManagedIdentity()` is called after a successful save, keyed by the connection
+label, so the "Recently used" group is populated from what the user actually did rather than from
+anything they had to configure ([D5](./decisions.md#d5-no-vs-code-settings-for-managed-identity):
+no settings).
+
 ---
 
 ## Phase 3: validation harness
@@ -282,14 +387,16 @@ Recorded here in one place as well as in the individual entries, so a reviewer c
 set at a glance.
 
 | Where               | Divergence                                                                                                  | Rationale                                                                                                                             |
-| ------------------- | ----------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
+| ------------------- | ----------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------- | --- | ---- | ----------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------- |
 | WI4                 | `expiresInSecondsFromTimestamp` subtracts a 300 second safety margin instead of returning the raw remainder | Avoids handing the driver a token that expires in flight. Floor-at-zero preserved. Reversible by changing one constant.               |
 | WI4                 | Helper takes an optional `now` argument                                                                     | Makes the unit tests deterministic. Defaulted, so callers are unaffected.                                                             |
 | WI6                 | Second export `classifyManagedIdentityError()` alongside `describeManagedIdentityError()`                   | §12 telemetry needs the reason code; deriving it from a localized message string would break under translation.                       |
 | WI1 to WI6 (commit) | All of phase 1 in one commit rather than six                                                                | The intermediate states do not build a working feature; five of the six commits would be dead code.                                   |
 | WI7                 | A `weak` hint does **not** preselect the auth method; only an `explicit` hint does                          | The plan's own `weak` row requires the user to be able to switch to interactive Entra ID, which is impossible once the method is set. |
 | WI7                 | The hint object is carried on the wizard context as `managedIdentityHint`, not just the config              | WI10 needs to know explicit versus weak in order to decide whether to skip the identity step.                                         |
-| WI7                 | A GUID username under a managed identity hint is never stored as `nativeAuthConfig`                         | It is an identity selector, not a database user; storing it as one produces a connection that reads as native auth.                   |
+| WI7                 | A GUID username under a managed identity hint is never stored as `nativeAuthConfig`                         | It is an identity selector, not a database user; storing it as one produces a connection that reads as native auth.                   |     | WI10 | One generic step with a predicate, instead of two near-identical step classes | The contexts differ only in the name of the selected-method field. Serves three wizards rather than two. |
+| WI10                | Extra "From the connection string" group in the quick pick                                                  | A client ID the user just pasted would otherwise be invisible in a list whose purpose is to avoid retyping it.                        |
+| WI11                | Storage uses one secret slot with a `'system-assigned'` sentinel                                            | The `string[]` secrets format cannot express "present but empty", and a sentinel can never collide with a GUID.                       |
 
 ---
 
