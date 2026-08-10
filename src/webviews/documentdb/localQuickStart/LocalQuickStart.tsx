@@ -2409,8 +2409,13 @@ export const LocalQuickStart = (): JSX.Element => {
             <MessageBar intent="success">
                 <MessageBarBody>
                     <MessageBarTitle>{l10n.t('All set')}</MessageBarTitle>{' '}
+                    {/*
+                     * Say plainly that the connection already exists. Without this, the copy
+                     * action next to it read as "now go and create the connection", and a
+                     * bug-bash user did exactly that, ending up with a duplicate (#857).
+                     */}
                     {l10n.t(
-                        'The instance is ready in the Connections view as “DocumentDB Local”. To connect, select Open Connection.',
+                        'This instance is already in the Connections view as “DocumentDB Local”. You do not need to create a connection for it.',
                     )}
                 </MessageBarBody>
             </MessageBar>
