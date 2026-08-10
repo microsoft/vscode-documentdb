@@ -9,17 +9,25 @@ import * as l10n from '@vscode/l10n';
  * Coarse classification of a managed identity token failure.
  *
  * Kept separate from the message so telemetry can report the reason without ever carrying
- * user-visible text or identifiers.
+ * user-visible text or identifiers, and without breaking when the extension is translated.
  */
 export type ManagedIdentityFailureReason = 'noEndpoint' | 'multipleIdentities' | 'identityNotAssigned' | 'other';
 
 /**
  * Classifies a raw failure from `ManagedIdentityCredential`.
  *
- * `@azure/identity` delegates managed identity to `@azure/msal-node`, so the surfaced error is
- * typically a `CredentialUnavailableError` or `AuthenticationError` wrapping an MSAL
- * `ManagedIdentityError`. Neither the error `name` nor the message is a stable contract, so this
- * matches defensively on both and always has a fallback.
+ * `@azure/identity` delegates managed identity to `@azure/msal-node`, and every failure observed so
+ * far surfaces as a `CredentialUnavailableError` regardless of cause, with the useful detail only in
+ * the message and in the `cause` chain. The error `name` is therefore not a usable signal on its
+ * own. The shapes below were captured from the real credential by
+ * `managedIdentityEndpoint.harness.test.ts`:
+ *
+ * - Multiple identities: `...Description: Multiple user assigned identities exist, please specify
+ *   the clientId / resourceId of the identity in the token request...`
+ * - Not assigned: `...Description: Identity not found...`
+ * - Unreachable: `ManagedIdentityCredential: Network unreachable. Message: network_error: ...`
+ *
+ * None of that is a stable contract, so matching is defensive and always falls through.
  */
 export function classifyManagedIdentityError(error: unknown): ManagedIdentityFailureReason {
     const haystack = collectErrorText(error).toLowerCase();
@@ -29,13 +37,13 @@ export function classifyManagedIdentityError(error: unknown): ManagedIdentityFai
     }
 
     // The reported incident: the instance metadata service refuses to pick between several
-    // identities and asks the caller to disambiguate.
+    // identities and asks the caller to disambiguate. Checked first, because the outer error name is
+    // the same for every case.
     if (
         haystack.includes('multiple user assigned identities') ||
         haystack.includes('multiple user-assigned identities') ||
         haystack.includes('more than one user-assigned') ||
         haystack.includes('multiple managed identities') ||
-        haystack.includes('please specify') ||
         haystack.includes('ambiguous')
     ) {
         return 'multipleIdentities';
@@ -44,7 +52,6 @@ export function classifyManagedIdentityError(error: unknown): ManagedIdentityFai
     if (
         haystack.includes('identity not found') ||
         haystack.includes('no user assigned identity') ||
-        haystack.includes('was not found') ||
         haystack.includes('not assigned') ||
         haystack.includes('identity_not_found')
     ) {
@@ -52,15 +59,15 @@ export function classifyManagedIdentityError(error: unknown): ManagedIdentityFai
     }
 
     if (
-        haystack.includes('credentialunavailable') ||
-        haystack.includes('managedidentitycredential is unavailable') ||
+        haystack.includes('network unreachable') ||
+        haystack.includes('network_error') ||
+        haystack.includes('is unavailable') ||
+        haystack.includes('no managed identity endpoint') ||
         haystack.includes('econnrefused') ||
         haystack.includes('ehostunreach') ||
         haystack.includes('enetunreach') ||
         haystack.includes('etimedout') ||
-        haystack.includes('timed out') ||
-        haystack.includes('no managed identity endpoint') ||
-        haystack.includes('unavailable')
+        haystack.includes('timed out')
     ) {
         return 'noEndpoint';
     }
@@ -96,8 +103,10 @@ export function describeManagedIdentityError(error: unknown, clientId?: string):
 /**
  * Flattens an error and its `cause` chain into a single searchable string.
  *
- * MSAL wraps the informative message one or two levels down, so matching only on the outermost
- * message would classify most real failures as `other`.
+ * Duck-typed rather than `instanceof Error`: an error crossing a worker or VM boundary loses its
+ * prototype, and MSAL wraps the informative message one or two levels down, so both a strict
+ * `instanceof` check and a look at only the outermost message would classify real failures as
+ * `other`.
  */
 function collectErrorText(error: unknown, depth: number = 0): string {
     if (depth > 4 || error === null || error === undefined) {
@@ -108,29 +117,48 @@ function collectErrorText(error: unknown, depth: number = 0): string {
         return error;
     }
 
-    if (!(error instanceof Error)) {
-        return typeof error === 'object' ? '' : String(error);
+    if (typeof error !== 'object') {
+        return String(error);
     }
 
-    const parts: string[] = [error.name, error.message];
+    const candidate = error as {
+        name?: unknown;
+        message?: unknown;
+        errorCode?: unknown;
+        errorMessage?: unknown;
+        cause?: unknown;
+    };
 
-    const candidate = error as Error & { errorCode?: unknown; cause?: unknown };
-    if (typeof candidate.errorCode === 'string') {
-        parts.push(candidate.errorCode);
+    const parts: string[] = [];
+    for (const value of [candidate.name, candidate.message, candidate.errorCode, candidate.errorMessage]) {
+        if (typeof value === 'string' && value.length > 0) {
+            parts.push(value);
+        }
     }
+
     if (candidate.cause !== undefined) {
         parts.push(collectErrorText(candidate.cause, depth + 1));
     }
 
-    return parts.filter((part) => typeof part === 'string' && part.length > 0).join(' ');
+    if (parts.length === 0) {
+        // Nothing recognizable. Avoid returning "[object Object]", which would only be noise.
+        const asString = String(error);
+        return asString === '[object Object]' ? '' : asString;
+    }
+
+    return parts.filter((part) => part.length > 0).join(' ');
 }
 
 function describeUnknownError(error: unknown): string {
-    if (error instanceof Error) {
-        return error.message;
+    // Prefer the message on its own: the flattened form is built for matching, not for reading, and
+    // it repeats the error name and the whole cause chain.
+    if (typeof error === 'object' && error !== null) {
+        const { message } = error as { message?: unknown };
+        if (typeof message === 'string' && message.length > 0) {
+            return message;
+        }
     }
-    if (error === undefined || error === null) {
-        return l10n.t('no token was returned');
-    }
-    return String(error);
+
+    const text = collectErrorText(error);
+    return text.length > 0 ? text : l10n.t('no token was returned');
 }

@@ -5,29 +5,60 @@
 
 import { classifyManagedIdentityError, describeManagedIdentityError } from './managedIdentityErrors';
 
+/**
+ * Messages captured from the real credential by `managedIdentityEndpoint.harness.test.ts`. Every
+ * one of them arrives as a `CredentialUnavailableError`, which is why the name is not a signal.
+ */
+const OBSERVED = {
+    multipleIdentities:
+        'ManagedIdentityCredential: Authentication failed. Message invalid_request: Error(s): Not Available - Timestamp: Not Available - Description: Multiple user assigned identities exist, please specify the clientId / resourceId of the identity in the token request - Correlation ID: Not Available',
+    identityNotFound:
+        'ManagedIdentityCredential: Authentication failed. Message invalid_request: Error(s): Not Available - Timestamp: Not Available - Description: Identity not found - Correlation ID: Not Available',
+    unreachable:
+        'ManagedIdentityCredential: Network unreachable. Message: network_error: See https://aka.ms/msal.js.errors#network_error for details',
+};
+
+function credentialUnavailable(message: string): Error {
+    const error = new Error(message);
+    error.name = 'CredentialUnavailableError';
+    return error;
+}
+
 describe('classifyManagedIdentityError', () => {
     it('detects the multiple-identity case', () => {
-        expect(
-            classifyManagedIdentityError(
-                new Error('Multiple user assigned identities exist, please specify the clientId'),
-            ),
-        ).toBe('multipleIdentities');
+        expect(classifyManagedIdentityError(credentialUnavailable(OBSERVED.multipleIdentities))).toBe(
+            'multipleIdentities',
+        );
     });
 
     it('detects an unreachable identity endpoint', () => {
-        const error = new Error('ManagedIdentityCredential is unavailable. No response received.');
-        error.name = 'CredentialUnavailableError';
-        expect(classifyManagedIdentityError(error)).toBe('noEndpoint');
+        expect(classifyManagedIdentityError(credentialUnavailable(OBSERVED.unreachable))).toBe('noEndpoint');
     });
 
     it('detects an identity that is not assigned to the machine', () => {
-        expect(classifyManagedIdentityError(new Error('Identity not found'))).toBe('identityNotAssigned');
+        expect(classifyManagedIdentityError(credentialUnavailable(OBSERVED.identityNotFound))).toBe(
+            'identityNotAssigned',
+        );
+    });
+
+    it('does not treat the shared CredentialUnavailableError name as a signal on its own', () => {
+        // All three real cases share this name, so a name-only match would misclassify every one of
+        // them as "no endpoint".
+        expect(classifyManagedIdentityError(credentialUnavailable('something entirely new'))).toBe('other');
     });
 
     it('looks through the cause chain, because MSAL wraps the informative message', () => {
-        const inner = new Error('Multiple managed identities are configured on this resource');
-        const outer = new Error('Authentication failed', { cause: inner });
+        const inner = { name: 'ServerError', errorMessage: 'Description: Multiple managed identities are configured' };
+        const outer = credentialUnavailable('Authentication failed');
+        (outer as Error & { cause?: unknown }).cause = inner;
+
         expect(classifyManagedIdentityError(outer)).toBe('multipleIdentities');
+    });
+
+    it('reads a duck-typed error that lost its prototype crossing a worker boundary', () => {
+        expect(
+            classifyManagedIdentityError({ name: 'CredentialUnavailableError', message: OBSERVED.unreachable }),
+        ).toBe('noEndpoint');
     });
 
     it('falls back to "other" for anything unrecognized', () => {
@@ -39,28 +70,27 @@ describe('classifyManagedIdentityError', () => {
 
 describe('describeManagedIdentityError', () => {
     it('names the cause and the remedy for the multiple-identity incident', () => {
-        const message = describeManagedIdentityError(new Error('multiple user assigned identities'));
+        const message = describeManagedIdentityError(credentialUnavailable(OBSERVED.multipleIdentities));
         expect(message).toMatch(/more than one managed identity/i);
         expect(message).toMatch(/client ID/i);
     });
 
     it('names the Azure VM requirement when no endpoint answered', () => {
-        const error = new Error('CredentialUnavailableError: no response');
-        expect(describeManagedIdentityError(error)).toMatch(/Azure VM/);
+        expect(describeManagedIdentityError(credentialUnavailable(OBSERVED.unreachable))).toMatch(/Azure VM/);
     });
 
     it('includes the client ID when a specific identity is not assigned', () => {
-        const message = describeManagedIdentityError(new Error('Identity not found'), 'abc-123');
+        const message = describeManagedIdentityError(credentialUnavailable(OBSERVED.identityNotFound), 'abc-123');
         expect(message).toContain('abc-123');
     });
 
     it('omits the client ID placeholder for a system-assigned identity', () => {
-        const message = describeManagedIdentityError(new Error('Identity not found'));
+        const message = describeManagedIdentityError(credentialUnavailable(OBSERVED.identityNotFound));
         expect(message).toMatch(/not assigned to this machine/);
         expect(message).not.toContain('{0}');
     });
 
-    it('passes unrecognized failures through with a prefix', () => {
+    it('passes unrecognized failures through with a prefix and without the error name', () => {
         expect(describeManagedIdentityError(new Error('boom'))).toBe('Managed Identity authentication failed: boom');
     });
 
