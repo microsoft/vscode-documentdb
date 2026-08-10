@@ -45,6 +45,7 @@ import { SchemaStore } from '../../../../documentdb/SchemaStore';
 import { ShellCommandIds } from '../../../../documentdb/shell/constants';
 import { meterSilentCatch } from '../../../../utils/accumulatingTelemetry';
 import { confirmIndexAction } from '../../../../utils/dialogs/confirmIndexAction';
+import { readOnlyJsonDocumentProvider } from '../../../../utils/readOnlyJsonDocumentProvider';
 import { type BaseRouterContext } from '../../../_integration/appRouter';
 import { publicProcedureWithTelemetry, router, type WithTelemetry } from '../../../_integration/trpc';
 import { FIELD_SUGGESTION_LIMIT } from './constants';
@@ -363,8 +364,8 @@ export const indexViewRouter = router({
     /**
      * BACKEND INTEGRATION POINT — openIndexDefinition
      * -----------------------------------------------------------------
-     * Opens the raw, server-reported index definition in a new untitled
-     * JSON document so the user can inspect any options the UI does not
+     * Opens the raw, server-reported index definition in a read-only JSON
+     * document so the user can inspect any options the UI does not
      * render explicitly. Re-fetches the live list and matches by name so
      * the output is always current; the synthetic `type` discriminator we
      * add in `listIndexes` is stripped so only real fields are shown.
@@ -386,9 +387,10 @@ export const indexViewRouter = router({
             delete definition.type;
             const prettyJson = JSON.stringify(definition, null, 4);
 
-            const vscode = await import('vscode');
-            const doc = await vscode.workspace.openTextDocument({ content: prettyJson, language: 'json' });
-            await vscode.window.showTextDocument(doc);
+            await readOnlyJsonDocumentProvider.openDocument(
+                l10n.t('{0} Index Definition', input.indexName),
+                prettyJson,
+            );
 
             return { ok: true };
         }),

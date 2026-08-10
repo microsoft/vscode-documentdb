@@ -28,6 +28,7 @@ import { type CollectionItem } from '../../../tree/documentdb/CollectionItem';
 import { accumulateTelemetry } from '../../../utils/accumulatingTelemetry';
 import { escapeJsString } from '../../../utils/escapeJsString';
 import { toFieldCompletionItems } from '../../../utils/json/data-api/autocomplete/toFieldCompletionItems';
+import { readOnlyJsonDocumentProvider } from '../../../utils/readOnlyJsonDocumentProvider';
 import { promptAfterActionEventually } from '../../../utils/survey';
 import { UsageImpact } from '../../../utils/surveyTypes';
 import { type BaseRouterContext } from '../../_integration/appRouter';
@@ -568,14 +569,7 @@ export const collectionsViewRouter = router({
         // Pretty-print the JSON
         const prettyJson = JSON.stringify(rawExplainOutput, null, 4);
 
-        // Open in a new untitled document with .json extension
-        const vscode = await import('vscode');
-        const doc = await vscode.workspace.openTextDocument({
-            content: prettyJson,
-            language: 'json',
-        });
-
-        await vscode.window.showTextDocument(doc);
+        await readOnlyJsonDocumentProvider.openDocument(l10n.t('Raw Explain Output'), prettyJson);
 
         return { success: true };
     }),
