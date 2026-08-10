@@ -574,7 +574,7 @@ export const IndexesTab = (): JSX.Element => {
     );
 
     return (
-        <div className="indexView">
+        <div className="indexesTab">
             {(isInitialLoading || isRefreshing) && (
                 <ProgressBar thickness="large" shape="square" className="progressBar" aria-hidden={true} />
             )}
