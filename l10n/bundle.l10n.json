@@ -1796,6 +1796,7 @@
   "Settings:": "Settings:",
   "Setup did not finish": "Setup did not finish",
   "Setup did not finish. {0}": "Setup did not finish. {0}",
+  "Setup failed: {0}": "Setup failed: {0}",
   "Setup failed.": "Setup failed.",
   "Setup is already in progress.": "Setup is already in progress.",
   "Setup progress": "Setup progress",

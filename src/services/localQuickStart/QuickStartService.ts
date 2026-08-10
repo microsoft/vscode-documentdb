@@ -1032,9 +1032,13 @@ export class QuickStartServiceImpl {
             const isTimeout = error instanceof ReadinessTimeoutError;
             const timedOut = !finalized && (isTimeout || aborted);
             resumeResult = aborted ? 'cancelled' : isTimeout ? 'timeout' : 'error';
+            // A repeat timeout is the same situation as the first one, so it earns the same
+            // environment-aware explanation rather than the raw probe error.
             const message: QuickStartMessage = aborted
                 ? { key: 'stillInitializing' }
-                : { key: 'unexpectedFailure', detail: errMessage(error) };
+                : isTimeout
+                  ? { key: 'readinessTimeout', environment: this.dockerReadiness?.environment }
+                  : { key: 'unexpectedFailure', detail: errMessage(error) };
             if (!finalized) {
                 this.setStatus(alias, InstanceState.Error, undefined, aborted ? undefined : message);
             }

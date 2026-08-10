@@ -15,7 +15,9 @@ import { type QuickStartMessage } from './quickStartTypes';
  * bundle the calling surface loaded.
  */
 export function formatQuickStartMessage(message: QuickStartMessage): string {
-    const detail = message.detail?.trim();
+    // Whitespace-only detail is no evidence at all; collapsing it here keeps every branch below
+    // from having to decide what an empty string means.
+    const detail = message.detail?.trim() || undefined;
 
     switch (message.key) {
         case 'setupAlreadyInProgress':
@@ -57,7 +59,10 @@ export function formatQuickStartMessage(message: QuickStartMessage): string {
             return l10n.t('The container started but exited shortly after. Check the Quick Start logs.');
         case 'restartedButExited':
             return l10n.t('The container restarted but exited shortly after. Check the Quick Start logs.');
+        case 'unexpectedFailure':
         default:
-            return detail ?? l10n.t('Setup failed.');
+            // Never return the raw text alone: it is English, and on its own it leaves a reader
+            // with no translated sentence telling them what it is about.
+            return detail ? l10n.t('Setup failed: {0}', detail) : l10n.t('Setup failed.');
     }
 }
