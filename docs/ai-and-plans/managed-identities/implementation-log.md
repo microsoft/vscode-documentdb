@@ -181,6 +181,97 @@ The seventh positional parameter is knowingly past the point of readability; the
 
 ## Phase 2: connection creation and persistence
 
+### WI7, WI8, WI9 — Connection string round-trip ✅
+
+**Commit:** `e4c6c36b` — _Read and write the driver-native managed identity connection string_
+
+Grouped into one commit on purpose. [D1a](./decisions.md#d1a-copy-connection-string-for-a-managed-identity-connection)
+and the [D1](./decisions.md#d1-token-acquisition-mechanism) normalisation rule are a symmetric pair,
+and plan risk #9 is precisely that they drift apart. Landing them together with a single round-trip
+test makes that drift a test failure rather than a support ticket.
+
+#### WI7 — `detectManagedIdentityHint()` and normalisation
+
+**What.** New [src/documentdb/auth/managedIdentityConnectionString.ts](src/documentdb/auth/managedIdentityConnectionString.ts)
+with `detectManagedIdentityHint()`, `stripManagedIdentityMarkers()`, `managedIdentityConfigFromHint()`,
+and the `MANAGED_IDENTITY_AUTH_MECHANISM_PROPERTIES` constant. Wired into
+[PromptConnectionStringStep.ts](src/commands/newConnection/PromptConnectionStringStep.ts). Tests in
+`managedIdentityConnectionString.test.ts`.
+
+**Why.** Plan §5.2. The detection table (explicit / weak / none) is implemented as written.
+
+**Notes and divergences.**
+
+- The hint is computed **before** the unconditional username clearing, which the plan calls "the
+  single easiest thing to get wrong in this work item". The call site carries a comment saying why
+  the ordering matters, because the next person to tidy up that function will otherwise move it.
+- When a hint is found, `nativeAuthConfig` is explicitly **not** populated from the username. A
+  GUID in the username position of an OIDC string is an identity selector, not a database user, and
+  storing it as one would produce a connection that silently reads as native auth.
+- **Divergence (behaviour, deliberate):** the plan's §5.2 normalisation step 1 says "set
+  `selectedAuthMethod = AuthMethodId.ManagedIdentity`" without qualification, but the same table's
+  `weak` row says the user should "still see the prompt so the user can confirm or switch to
+  interactive Entra ID". Those two cannot both be true, because
+  `PromptAuthMethodStep.shouldPrompt()` returns `!context.selectedAuthenticationMethod`: setting the
+  method **is** the thing that skips the prompt.
+
+  Resolved as: **explicit** hint preselects the method and settles the identity; **weak** hint
+  prefills `managedIdentityAuthConfig` but leaves the method unset, so the auth-method quick pick
+  still runs. This is the only reading under which the `weak` row's stated intent ("switch to
+  interactive Entra ID") is reachable, and it matches the manual checklist, which expects the method
+  to be preselected only for the verbatim documented Learn string. Confidence: high.
+
+- To let the identity step (WI10) distinguish the two cases, the hint itself is carried on the
+  wizard context as `managedIdentityHint`, rather than adding a separate boolean.
+- The client ID is pushed to `context.valuesToMask`, and only the hint **confidence** goes to
+  telemetry, per the plan's conventions item 3.
+
+#### WI8 — `Copy Connection String`
+
+**What.** `buildParsedConnectionString()` in
+[copyConnectionString.ts](src/commands/copyConnectionString/copyConnectionString.ts) now has a
+`ManagedIdentity` branch that sets `authMechanism=MONGODB-OIDC`, sets `authMechanismProperties` to
+`ENVIRONMENT:azure,TOKEN_RESOURCE:<resource>`, and puts the client ID in the username position.
+Telemetry gains `copiedAuthMechanism: 'managedIdentity'`.
+
+**Why.** Plan §5.1, decision [D1a](./decisions.md#d1a-copy-connection-string-for-a-managed-identity-connection).
+As the plan notes, this is a correctness fix as much as a feature: without it a managed-identity
+connection fell through and produced a string with no OIDC mechanism and an empty username, which
+reads as native auth.
+
+**Notes.**
+
+- No change was needed to suppress the password prompt: `canIncludeNativePassword()` already returns
+  false for any non-native method. Asserted by test T-13 rather than assumed.
+- Four new tests: user-assigned output, system-assigned output, and two round-trip tests (T-15,
+  T-16) that feed the clipboard content straight back through `detectManagedIdentityHint()`. T-16
+  specifically pins the `{}` versus `undefined` distinction for the system-assigned case.
+
+#### WI9 — Availability for vCore hosts
+
+**What.** `PromptConnectionStringStep` now pushes `AuthMethodId.ManagedIdentity` alongside
+`MicrosoftEntraID` when the host has the vCore domain suffix.
+
+**Why.** Plan §6. On the wire the two methods are the same mechanism and differ only in token
+source, so anywhere one is offered the other should be too.
+
+#### WI11 (partial) — Context and ephemeral credential plumbing
+
+`managedIdentityAuthConfig` was added to `NewConnectionWizardContext`, `AuthenticateWizardContext`,
+`UpdateCredentialsWizardContext`, and `EphemeralClusterCredentials`. Each declaration repeats the
+"`{}` means system-assigned" note, because that is the invariant most likely to be broken by someone
+writing `?? undefined`.
+
+Still open in WI11: `ConnectionSecrets` in the storage service.
+
+---
+
+## Phase 3: validation harness
+
+_WI15 is being delivered incrementally alongside the work items it covers, rather than as one late
+commit. The round-trip test (plan risk #9) landed with WI7 and WI8 in `e4c6c36b`; handler and error
+tests landed with phase 1 in `1e2a42a8`._
+
 <!-- Entries are appended below as work items complete. -->
 
 ---
@@ -190,12 +281,15 @@ The seventh positional parameter is knowingly past the point of readability; the
 Recorded here in one place as well as in the individual entries, so a reviewer can see the whole
 set at a glance.
 
-| Where               | Divergence                                                                                                  | Rationale                                                                                                               |
-| ------------------- | ----------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------- |
-| WI4                 | `expiresInSecondsFromTimestamp` subtracts a 300 second safety margin instead of returning the raw remainder | Avoids handing the driver a token that expires in flight. Floor-at-zero preserved. Reversible by changing one constant. |
-| WI4                 | Helper takes an optional `now` argument                                                                     | Makes the unit tests deterministic. Defaulted, so callers are unaffected.                                               |
-| WI6                 | Second export `classifyManagedIdentityError()` alongside `describeManagedIdentityError()`                   | §12 telemetry needs the reason code; deriving it from a localized message string would break under translation.         |
-| WI1 to WI6 (commit) | All of phase 1 in one commit rather than six                                                                | The intermediate states do not build a working feature; five of the six commits would be dead code.                     |
+| Where               | Divergence                                                                                                  | Rationale                                                                                                                             |
+| ------------------- | ----------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
+| WI4                 | `expiresInSecondsFromTimestamp` subtracts a 300 second safety margin instead of returning the raw remainder | Avoids handing the driver a token that expires in flight. Floor-at-zero preserved. Reversible by changing one constant.               |
+| WI4                 | Helper takes an optional `now` argument                                                                     | Makes the unit tests deterministic. Defaulted, so callers are unaffected.                                                             |
+| WI6                 | Second export `classifyManagedIdentityError()` alongside `describeManagedIdentityError()`                   | §12 telemetry needs the reason code; deriving it from a localized message string would break under translation.                       |
+| WI1 to WI6 (commit) | All of phase 1 in one commit rather than six                                                                | The intermediate states do not build a working feature; five of the six commits would be dead code.                                   |
+| WI7                 | A `weak` hint does **not** preselect the auth method; only an `explicit` hint does                          | The plan's own `weak` row requires the user to be able to switch to interactive Entra ID, which is impossible once the method is set. |
+| WI7                 | The hint object is carried on the wizard context as `managedIdentityHint`, not just the config              | WI10 needs to know explicit versus weak in order to decide whether to skip the identity step.                                         |
+| WI7                 | A GUID username under a managed identity hint is never stored as `nativeAuthConfig`                         | It is an identity selector, not a database user; storing it as one produces a connection that reads as native auth.                   |
 
 ---
 
