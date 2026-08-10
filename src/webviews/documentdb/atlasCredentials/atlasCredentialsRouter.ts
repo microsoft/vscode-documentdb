@@ -61,6 +61,8 @@ export type RouterContext = BaseRouterContext & {
      * shallow-clones the router context for each operation.
      */
     credentialState: { credentialsStored: boolean };
+    /** Invoked when the user cancels before storing credentials. */
+    onCancelled: () => void;
     /** Invoked from the success screen's Done action to resolve the opener and dispose the panel. */
     onCredentialsStored: () => void;
 };
@@ -500,6 +502,13 @@ export const atlasCredentialsRouter = router({
         const myCtx = ctx as WithTelemetry<RouterContext>;
         if (myCtx.credentialState.credentialsStored) {
             myCtx.onCredentialsStored();
+        }
+    }),
+
+    cancel: publicProcedureWithTelemetry.mutation(({ ctx }): void => {
+        const myCtx = ctx as WithTelemetry<RouterContext>;
+        if (!myCtx.credentialState.credentialsStored) {
+            myCtx.onCancelled();
         }
     }),
 

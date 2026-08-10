@@ -126,6 +126,7 @@ function createContext(credentialId?: string): RouterContext & {
         credentialId,
         credentialState: { credentialsStored: false },
         onCredentialPersisted: jest.fn(),
+        onCancelled: jest.fn(),
         onCredentialsStored: jest.fn(),
         actionContext: {
             telemetry: { properties: {}, measurements: {} },

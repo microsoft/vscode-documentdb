@@ -69,6 +69,12 @@ export function openAtlasCredentialsWebview(options: OpenAtlasCredentialsOptions
 
         const onCredentialPersisted = (): void => finish(true);
 
+        const onCancelled = (): void => {
+            finish(false);
+            // Let the mutation response reach the webview before disposing the panel.
+            setTimeout(() => state.controller?.dispose(), 0);
+        };
+
         const onCredentialsStored = (): void => {
             finish(true);
             // Dispose on the next tick so the mutation's success response is
@@ -86,6 +92,7 @@ export function openAtlasCredentialsWebview(options: OpenAtlasCredentialsOptions
             credentialLabel: options.credentialLabel,
             credentialState: state,
             onCredentialPersisted,
+            onCancelled,
             onCredentialsStored,
         };
 

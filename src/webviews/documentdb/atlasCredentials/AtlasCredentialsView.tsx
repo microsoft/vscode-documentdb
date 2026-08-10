@@ -31,7 +31,6 @@ import {
     tokens,
 } from '@fluentui/react-components';
 import {
-    ArrowLeftRegular,
     CheckmarkCircleFilled,
     CircleHintFilled,
     CloudRegular,
@@ -468,6 +467,10 @@ export const AtlasCredentialsView = (): JSX.Element => {
         }
     }, [isCompleting, trpcClient]);
 
+    const handleCancel = useCallback((): void => {
+        void trpcClient.atlasCredentials.cancel.mutate();
+    }, [trpcClient]);
+
     const hero = (
         <div className={styles.hero}>
             <CloudRegular aria-hidden className={styles.heroIcon} />
@@ -789,11 +792,12 @@ export const AtlasCredentialsView = (): JSX.Element => {
         </section>
     );
 
-    // Standardized navigation footer: primary action first, then Back. Back is always shown and is
-    // disabled where there is nowhere to go back to (first step, mid-verify, and on success).
+    // Standardized navigation footer: primary action first, then Cancel on the first step or Back
+    // on later steps. Back remains disabled while verification is in flight and on success.
     let primaryLabel: string;
     let primaryDisabled: boolean;
     let onPrimary: () => void;
+    let secondaryLabel = l10n.t('Back');
     let backDisabled: boolean;
     let onBack: () => void = handleBack;
 
@@ -806,7 +810,9 @@ export const AtlasCredentialsView = (): JSX.Element => {
                 setPhase('form');
             }
         };
-        backDisabled = true;
+        secondaryLabel = l10n.t('Cancel');
+        backDisabled = false;
+        onBack = handleCancel;
     } else if (phase === 'form') {
         primaryLabel = l10n.t('Verify & Save');
         primaryDisabled = !canSubmit;
@@ -840,8 +846,8 @@ export const AtlasCredentialsView = (): JSX.Element => {
             <Button appearance="primary" disabled={primaryDisabled} onClick={onPrimary}>
                 {primaryLabel}
             </Button>
-            <Button appearance="secondary" icon={<ArrowLeftRegular />} disabled={backDisabled} onClick={onBack}>
-                {l10n.t('Back')}
+            <Button appearance="secondary" disabled={backDisabled} onClick={onBack}>
+                {secondaryLabel}
             </Button>
             <Button
                 appearance="secondary"

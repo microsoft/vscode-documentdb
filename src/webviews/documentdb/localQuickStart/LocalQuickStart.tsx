@@ -36,7 +36,6 @@ import {
 } from '@fluentui/react-components';
 import {
     ArrowClockwiseRegular,
-    ArrowLeftRegular,
     ArrowResetRegular,
     CheckmarkCircleFilled,
     CircleHintFilled,
@@ -2513,7 +2512,7 @@ export const LocalQuickStart = (): JSX.Element => {
                     QUICK_START_CONTAINER_NAME,
                 );
         secondaryActions = (
-            <Button appearance="secondary" icon={<ArrowLeftRegular />} onClick={() => setPhase('introduction')}>
+            <Button appearance="secondary" onClick={() => setPhase('introduction')}>
                 {l10n.t('Back')}
             </Button>
         );
@@ -2546,7 +2545,7 @@ export const LocalQuickStart = (): JSX.Element => {
               )
             : l10n.t('Retrying runs every setup step again from the beginning, starting with the Docker check.');
         secondaryActions = (
-            <Button appearance="secondary" icon={<ArrowLeftRegular />} onClick={handleBackToConfigure}>
+            <Button appearance="secondary" onClick={handleBackToConfigure}>
                 {l10n.t('Back')}
             </Button>
         );
