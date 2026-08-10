@@ -27,7 +27,6 @@ import {
 } from '../../../services/localQuickStart/QuickStartService';
 import {
     InstanceState,
-    QUICK_START_PORT,
     type DockerReadiness,
     type QuickStartStatus,
 } from '../../../services/localQuickStart/quickStartTypes';
@@ -517,7 +516,7 @@ export class LocalQuickStartItem implements TreeElement, TreeElementWithContextV
                 createGenericElementWithContext({
                     id: `${this.id}/provisioning`,
                     contextValue: 'treeItem_quickStartProvisioning',
-                    label: `${l10n.t('Provisioning…')} · localhost:${String(status.port ?? QUICK_START_PORT)}`,
+                    label: l10n.t('Provisioning…'),
                     iconPath: new vscode.ThemeIcon('loading~spin'),
                 }),
             ];
