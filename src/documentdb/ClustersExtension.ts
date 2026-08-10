@@ -134,6 +134,7 @@ import { type TreeElement } from '../tree/TreeElement';
 import { accumulateTelemetry } from '../utils/accumulatingTelemetry';
 import {
     registerCommandWithModalErrors,
+    registerCommandWithTreeNodeUnwrappingAndDiagnostics,
     registerCommandWithTreeNodeUnwrappingAndModalErrors,
 } from '../utils/commandErrorHandling';
 import { withCommandCorrelation, withTreeNodeCommandCorrelation } from '../utils/commandTelemetry';
@@ -628,7 +629,7 @@ export class ClustersExtension implements vscode.Disposable {
                     withTreeNodeCommandCorrelation(refreshTreeElement),
                 );
 
-                registerCommandWithTreeNodeUnwrapping(
+                registerCommandWithTreeNodeUnwrappingAndDiagnostics(
                     'vscode-documentdb.command.createDatabase',
                     withTreeNodeCommandCorrelation(createAzureDatabase),
                 );
@@ -1006,11 +1007,11 @@ export class ClustersExtension implements vscode.Disposable {
                     vscode.window.registerTerminalLinkProvider(new ShellTerminalLinkProvider()),
                 );
 
-                registerCommandWithTreeNodeUnwrapping(
+                registerCommandWithTreeNodeUnwrappingAndDiagnostics(
                     'vscode-documentdb.command.dropCollection',
                     withTreeNodeCommandCorrelation(deleteCollection),
                 );
-                registerCommandWithTreeNodeUnwrapping(
+                registerCommandWithTreeNodeUnwrappingAndDiagnostics(
                     'vscode-documentdb.command.dropDatabase',
                     withTreeNodeCommandCorrelation(deleteAzureDatabase),
                 );
@@ -1020,20 +1021,20 @@ export class ClustersExtension implements vscode.Disposable {
                     withTreeNodeCommandCorrelation(copyReference),
                 );
 
-                registerCommandWithTreeNodeUnwrapping(
+                registerCommandWithTreeNodeUnwrappingAndDiagnostics(
                     'vscode-documentdb.command.hideIndex',
                     withTreeNodeCommandCorrelation(hideIndex),
                 );
-                registerCommandWithTreeNodeUnwrapping(
+                registerCommandWithTreeNodeUnwrappingAndDiagnostics(
                     'vscode-documentdb.command.unhideIndex',
                     withTreeNodeCommandCorrelation(unhideIndex),
                 );
-                registerCommandWithTreeNodeUnwrapping(
+                registerCommandWithTreeNodeUnwrappingAndDiagnostics(
                     'vscode-documentdb.command.dropIndex',
                     withTreeNodeCommandCorrelation(dropIndex),
                 );
 
-                registerCommandWithTreeNodeUnwrapping(
+                registerCommandWithTreeNodeUnwrappingAndDiagnostics(
                     'vscode-documentdb.command.createCollection',
                     withTreeNodeCommandCorrelation(createCollection),
                 );
@@ -1043,7 +1044,7 @@ export class ClustersExtension implements vscode.Disposable {
                     withTreeNodeCommandCorrelation(createMongoDocument),
                 );
 
-                registerCommandWithTreeNodeUnwrapping(
+                registerCommandWithTreeNodeUnwrappingAndDiagnostics(
                     'vscode-documentdb.command.importDocuments',
                     withTreeNodeCommandCorrelation(importDocuments),
                 );
@@ -1062,7 +1063,7 @@ export class ClustersExtension implements vscode.Disposable {
                     'vscode-documentdb.command.internal.exportDocuments',
                     withCommandCorrelation(exportQueryResults),
                 );
-                registerCommandWithTreeNodeUnwrapping(
+                registerCommandWithTreeNodeUnwrappingAndDiagnostics(
                     'vscode-documentdb.command.exportDocuments',
                     withTreeNodeCommandCorrelation(exportEntireCollection),
                 );

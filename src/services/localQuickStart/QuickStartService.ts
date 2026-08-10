@@ -1778,6 +1778,13 @@ export class QuickStartServiceImpl {
                     continue;
                 }
                 if (!inspected) {
+                    // "Could not ask" and "not there" look identical here, so confirm the daemon is
+                    // actually answering before claiming the container was removed — otherwise a
+                    // stopped Docker turns the row into recreate guidance for a container that is
+                    // still on disk.
+                    if ((await this.classifyUninspectableContainer()) !== undefined) {
+                        continue;
+                    }
                     // Container is gone — keep metadata so the user can recreate. Fire only on the
                     // TRANSITION into `missing` (like every sibling branch below): the tree renders
                     // this node expanded, so an unconditional fire would re-enter getChildren() →

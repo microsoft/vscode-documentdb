@@ -3,7 +3,7 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { UserCancelledError } from '@microsoft/vscode-azext-utils';
+import { callWithTelemetryAndErrorHandling, UserCancelledError } from '@microsoft/vscode-azext-utils';
 import { ConnectionDiagnosticsService, type ConnectionDiagnosticsProvider } from './connectionDiagnosticsService';
 
 jest.mock('@microsoft/vscode-azext-utils', () => ({
@@ -73,6 +73,35 @@ describe('ConnectionDiagnosticsService', () => {
         await jest.advanceTimersByTimeAsync(5_000);
 
         await expect(pending).resolves.toBeUndefined();
+    });
+
+    // The deadline used to be a plain race, which leaves the losing side running: later providers
+    // kept being queried, and an answer arriving after the caller had already been handed
+    // `undefined` was still reported as an explanation.
+    it('stops querying providers once the deadline has passed', async () => {
+        jest.useFakeTimers();
+        let releaseFirst: (() => void) | undefined;
+        const first = jest.fn(
+            () =>
+                new Promise<string>((resolve) => {
+                    releaseFirst = () => resolve('too late');
+                }),
+        );
+        const second = jest.fn().mockResolvedValue('second');
+        ConnectionDiagnosticsService.registerProvider(provider('first', first));
+        ConnectionDiagnosticsService.registerProvider(provider('second', second));
+
+        const pending = ConnectionDiagnosticsService.explain({ clusterId: 'c1', error: new Error('boom') });
+        await jest.advanceTimersByTimeAsync(5_000);
+        await expect(pending).resolves.toBeUndefined();
+
+        jest.mocked(callWithTelemetryAndErrorHandling).mockClear();
+        // The slow provider answers after the caller has given up.
+        releaseFirst?.();
+        await jest.advanceTimersByTimeAsync(1);
+
+        expect(second).not.toHaveBeenCalled();
+        expect(callWithTelemetryAndErrorHandling).not.toHaveBeenCalled();
     });
 
     it('replaces a provider registered twice under the same id', async () => {

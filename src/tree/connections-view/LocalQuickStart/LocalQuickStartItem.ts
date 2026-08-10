@@ -145,7 +145,7 @@ function dockerEndpointLabel(readiness: DockerReadiness): string {
 }
 
 function containerOsLabel(osType: 'linux' | 'windows'): string {
-    return osType === 'windows' ? 'Windows' : 'Linux';
+    return osType === 'windows' ? l10n.t('Windows') : l10n.t('Linux');
 }
 
 function shortenContainerId(containerId: string): string {
@@ -155,14 +155,16 @@ function shortenContainerId(containerId: string): string {
 function dockerProviderLabel(readiness: DockerReadiness): string {
     switch (readiness.provider) {
         case 'dockerDesktop':
-            return 'Docker Desktop';
+            return l10n.t('Docker Desktop');
         case 'dockerEngine':
-            return 'Docker Engine';
+            return l10n.t('Docker Engine');
         default:
             return l10n.t('Unknown');
     }
 }
 
+// Strings shared with the Quick Start webview are spelled identically on purpose, so each reaches
+// translators once. Bare acronyms (WSL, SSH, TCP) are left alone — there is nothing to translate.
 function executionTargetLabel(readiness: DockerReadiness): string {
     switch (readiness.executionTarget) {
         case 'wsl':
@@ -170,9 +172,9 @@ function executionTargetLabel(readiness: DockerReadiness): string {
         case 'ssh':
             return 'SSH';
         case 'devContainer':
-            return l10n.t('Dev Container');
+            return l10n.t('Dev container');
         case 'codespaces':
-            return 'GitHub Codespaces';
+            return l10n.t('GitHub Codespaces');
         case 'otherRemote':
             return l10n.t('Remote');
         default:

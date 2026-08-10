@@ -617,7 +617,7 @@ export class DocumentDBShellPty implements vscode.Pseudoterminal {
         try {
             await this.evaluateInput(trimmed);
         } catch (error: unknown) {
-            this.handleEvalError(error);
+            await this.handleEvalError(error);
         } finally {
             // Stop the spinner before writing results or the next prompt.
             this._spinner?.stop();
@@ -718,7 +718,7 @@ export class DocumentDBShellPty implements vscode.Pseudoterminal {
      * Handles display of eval errors in the terminal.
      * Called by handleLineInput when evaluateInput throws.
      */
-    private handleEvalError(error: unknown): void {
+    private async handleEvalError(error: unknown): Promise<void> {
         // Stop the spinner before writing error output.
         this._spinner?.stop();
         this._spinner = undefined;
@@ -734,6 +734,18 @@ export class DocumentDBShellPty implements vscode.Pseudoterminal {
         // the extracted code is preserved for future telemetry.
         const { message: errorMessage } = extractErrorCode(rawMessage);
         this.writeLine(this._outputFormatter.formatError(errorMessage));
+
+        // A session that connected fine can still break underneath the user — the container it
+        // talks to gets stopped, a port-forward drops — and the next command is where they find
+        // out. Written as a separate line so the raw text above stays intact for extractErrorCode
+        // and the checks below.
+        const diagnosis = await ConnectionDiagnosticsService.explain({
+            clusterId: this._connectionInfo.clusterId,
+            error,
+        });
+        if (diagnosis) {
+            this.writeLine(this._outputFormatter.formatError(diagnosis.message));
+        }
 
         // Show a hint line and clickable settings link for errors that reference a VS Code setting
         if (error instanceof SettingsHintError) {

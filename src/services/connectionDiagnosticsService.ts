@@ -156,11 +156,31 @@ class ConnectionDiagnosticsServiceImpl {
             return undefined;
         }
 
-        return withDeadline(this.askProviders(request));
+        // The deadline has to reach the loop, not just race it: an abandoned `Promise.race` loser
+        // keeps querying providers and would report an answer the caller has already stopped
+        // waiting for.
+        const expiry = new AbortController();
+        const timer = setTimeout(() => expiry.abort(), EXPLAIN_DEADLINE_MS);
+        try {
+            return await Promise.race([
+                this.askProviders(request, expiry.signal),
+                new Promise<undefined>((resolve) => expiry.signal.addEventListener('abort', () => resolve(undefined))),
+            ]);
+        } finally {
+            clearTimeout(timer);
+            expiry.abort();
+        }
     }
 
-    private async askProviders(request: ConnectionDiagnosticsRequest): Promise<ConnectionDiagnosis | undefined> {
+    private async askProviders(
+        request: ConnectionDiagnosticsRequest,
+        expired: AbortSignal,
+    ): Promise<ConnectionDiagnosis | undefined> {
         for (const provider of this.providers) {
+            if (expired.aborted) {
+                return undefined;
+            }
+
             let message: string | undefined;
 
             try {
@@ -169,6 +189,12 @@ class ConnectionDiagnosticsServiceImpl {
                 const detail = error instanceof Error ? error.message : String(error);
                 ext.outputChannel?.debug(`[ConnectionDiagnostics] Provider "${provider.id}" failed: ${detail}`);
                 continue;
+            }
+
+            // Checked again after the await: the caller has already been handed `undefined`, so
+            // reporting this as an explanation would record an answer nobody received.
+            if (expired.aborted) {
+                return undefined;
             }
 
             if (message) {
@@ -187,22 +213,6 @@ class ConnectionDiagnosticsServiceImpl {
      */
     public resetForTests(): void {
         this.providers.length = 0;
-    }
-}
-
-async function withDeadline<T>(work: Promise<T>): Promise<T | undefined> {
-    let timer: NodeJS.Timeout | undefined;
-    try {
-        return await Promise.race([
-            work,
-            new Promise<undefined>((resolve) => {
-                timer = setTimeout(() => resolve(undefined), EXPLAIN_DEADLINE_MS);
-            }),
-        ]);
-    } finally {
-        if (timer) {
-            clearTimeout(timer);
-        }
     }
 }
 

@@ -462,6 +462,44 @@ describe('QuickStartService — WI-2d registry-driven reconcile (multi-instance)
         expect(service.getStatus().missing).toBe(true);
     });
 
+    // `inspectContainer` reports "could not ask" and "not there" identically, so a stopped daemon
+    // used to be announced as a container someone had deleted — the tree then offered to recreate
+    // an instance that was sitting on disk, untouched.
+    it('refreshLiveState() does not report Missing when Docker cannot be asked', async () => {
+        ext.secretStorage = fakeSecretStorage({});
+        ext.context = fakeContext(fakeMemento());
+        await seedInstance(DEFAULT_ALIAS, CONN_1);
+
+        const inspect: Record<string, unknown> = {
+            c1: inspectItem('c1', { running: true, port: 10260, image: 'img:1' }),
+        };
+        const isDockerReady = jest.fn().mockResolvedValue({ outcome: 'ready', daemonReachable: true });
+        const service = new QuickStartServiceImpl(
+            mockRuntime({
+                listByLabel: jest
+                    .fn()
+                    .mockResolvedValue([{ id: 'c1', labels: { [QUICK_START_ALIAS_LABEL_KEY]: DEFAULT_ALIAS } }]),
+                inspectContainer: jest.fn((id: string) =>
+                    Promise.resolve(inspect[id]),
+                ) as unknown as IContainerRuntime['inspectContainer'],
+                isDockerReady: isDockerReady as unknown as IContainerRuntime['isDockerReady'],
+            }),
+        );
+
+        await service.reconcile();
+        expect(service.getStatus().state).toBe(InstanceState.Running);
+
+        // Docker Desktop is stopped: the container is still there, we simply cannot see it.
+        delete inspect.c1;
+        isDockerReady.mockResolvedValue({ outcome: 'diagnosed', daemonReachable: false });
+
+        await service.refreshLiveState();
+
+        expect(service.getStatus().missing).toBe(false);
+        // The last known state is kept rather than replaced by a guess.
+        expect(service.getStatus().state).toBe(InstanceState.Running);
+    });
+
     it('ensureHydrated() lazily reconciles once and shares concurrent work', async () => {
         ext.secretStorage = fakeSecretStorage({});
         ext.context = fakeContext(fakeMemento());
