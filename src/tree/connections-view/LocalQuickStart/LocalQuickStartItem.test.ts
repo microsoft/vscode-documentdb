@@ -106,6 +106,44 @@ describe('LocalQuickStartItem — CredentialsMissing row', () => {
     });
 });
 
+describe('LocalQuickStartItem — configured instance description', () => {
+    afterEach(() => jest.restoreAllMocks());
+
+    const metadata = {
+        containerId: 'c1',
+        alias: 'vscode-documentdb-local',
+        boundPort: 10260,
+        clusterId: 'quickstart-vscode-documentdb-local',
+        connectionString: 'mongodb://u:p@localhost:10260/',
+        username: 'u',
+    };
+
+    async function getInstanceTreeItem(state: InstanceState): Promise<ReturnType<LocalQuickStartItem['getTreeItem']>> {
+        jest.spyOn(QuickStartService, 'ensureHydrated').mockResolvedValue(undefined);
+        jest.spyOn(QuickStartService, 'isHydrated', 'get').mockReturnValue(false);
+        jest.spyOn(QuickStartService, 'refreshLiveStateInBackground').mockReturnValue(undefined);
+        jest.spyOn(QuickStartService, 'getStatus').mockReturnValue({
+            state,
+            metadata,
+            missing: false,
+            canResumeReadiness: false,
+        });
+
+        const [instance] = await new LocalQuickStartItem('connectionsView/root').getChildren();
+        return instance.getTreeItem();
+    }
+
+    it.each([
+        [InstanceState.Running, 'Running'],
+        [InstanceState.Stopped, 'Stopped'],
+    ])('shows only the %s status and keeps the endpoint in the tooltip', async (state, description) => {
+        const treeItem = await getInstanceTreeItem(state);
+
+        expect(treeItem.description).toBe(description);
+        expect(treeItem.tooltip).toHaveProperty('value', expect.stringContaining('localhost:10260'));
+    });
+});
+
 // Review §9.2 Q4 / N3 (I2-4): a genuine failure renders ACTIONABLE recovery nodes, not error text.
 // `Missing` / `CredentialsMissing` are service states with their own rows and are deliberately NOT
 // treated this way (I2-Q5) — the test above pins that contract.

@@ -251,7 +251,7 @@ class QuickStartClusterItem extends ClusterItemBase<ConnectionClusterModel> {
     /**
      * Keep the shared cluster presentation (icon, security tooltip) but force the state-aware
      * description — the TLS/SSL badge it would otherwise carry replaces the managed-instance
-     * state label (e.g. "Running · localhost:10260").
+     * state label (e.g. "Running").
      */
     public override getTreeItem(): vscode.TreeItem {
         const treeItem = buildClusterTreeItem({ id: this.id, contextValue: this.contextValue, cluster: this.cluster });
@@ -443,19 +443,13 @@ export class LocalQuickStartItem implements TreeElement, TreeElementWithContextV
                 connectionUser: metadata.username,
             };
             return [
-                new QuickStartClusterItem(
-                    model,
-                    `${instanceStateLabel(status.state)} · localhost:${String(metadata.boundPort)}`,
-                    'state_running',
-                    metadata.alias,
-                ),
+                new QuickStartClusterItem(model, instanceStateLabel(status.state), 'state_running', metadata.alias),
             ];
         }
 
         // Non-running managed states render as a non-browsable row carrying the
         // lifecycle menus (a stopped container can't be connected to / browsed).
         if (metadata) {
-            const port = metadata.boundPort;
             const row = (stateToken: string, description: string, icon: vscode.ThemeIcon): TreeElement => {
                 const id = `${this.id}/instance`;
                 const contextValue = createContextValue([INSTANCE_CONTEXT, stateToken]);
@@ -482,9 +476,7 @@ export class LocalQuickStartItem implements TreeElement, TreeElementWithContextV
                 case InstanceState.Stopping:
                     return [row('state_stopping', l10n.t('Stopping…'), idle)];
                 case InstanceState.Stopped:
-                    return [
-                        row('state_stopped', `${instanceStateLabel(status.state)} · localhost:${String(port)}`, idle),
-                    ];
+                    return [row('state_stopped', instanceStateLabel(status.state), idle)];
                 case InstanceState.Error:
                     return [
                         row(
