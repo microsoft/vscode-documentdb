@@ -231,6 +231,20 @@ const useStyles = makeStyles({
         '& .fui-Input': { minWidth: 0 },
         '& .fui-Input > input': { minWidth: 0 },
     },
+    credentialFields: {
+        display: 'grid',
+        gridTemplateColumns: 'repeat(2, minmax(0, 1fr))',
+        gap: '12px',
+        width: '100%',
+        '@media (max-width: 560px)': { gridTemplateColumns: 'minmax(0, 1fr)' },
+    },
+    credentialsValidation: {
+        display: 'flex',
+        alignItems: 'center',
+        gap: '4px',
+        gridColumn: '1 / -1',
+        color: tokens.colorPaletteRedForeground1,
+    },
     imagePath: { overflowWrap: 'anywhere' },
     stageList: {
         display: 'flex',
@@ -1035,7 +1049,9 @@ export const LocalQuickStart = (): JSX.Element => {
     // instance, since those inputs are hidden and their values are ignored.
     // eslint-disable-next-line no-control-regex
     const credForbidden = /[\u0000-\u001f\u007f]/;
-    const advValidation = ((): { field: 'port' | 'username' | 'password' | 'tag'; message: string } | undefined => {
+    const advValidation = (():
+        | { field: 'port' | 'credentials' | 'username' | 'password' | 'tag'; message: string }
+        | undefined => {
         const port = advPort.trim();
         if (port && (!/^\d+$/.test(port) || Number(port) < 1024 || Number(port) > 65535)) {
             return { field: 'port', message: l10n.t('Port must be a whole number between 1024 and 65535.') };
@@ -1059,7 +1075,7 @@ export const LocalQuickStart = (): JSX.Element => {
             const hasPass = pass.length > 0;
             if (useCustomCredentials && hasUser !== hasPass) {
                 return {
-                    field: hasUser ? 'password' : 'username',
+                    field: 'credentials',
                     message: l10n.t('Enter both a username and a password, or leave both blank to auto-generate.'),
                 };
             }
@@ -1829,14 +1845,13 @@ export const LocalQuickStart = (): JSX.Element => {
 
     // Reset lives in the input's own trailing slot, so it stays on the line it resets instead of
     // drifting down beside the field's hint.
-    const resetButton = (label: string, onReset: () => void, disabled: boolean): JSX.Element => (
+    const resetButton = (label: string, onReset: () => void): JSX.Element => (
         <Button
             appearance="subtle"
             size="small"
             icon={<ArrowResetRegular />}
             aria-label={label}
             title={label}
-            disabled={disabled}
             onClick={onReset}
         />
     );
@@ -1882,14 +1897,10 @@ export const LocalQuickStart = (): JSX.Element => {
                             portTouchedRef.current = true;
                             setAdvPort(data.value);
                         }}
-                        contentAfter={resetButton(
-                            l10n.t('Reset port to {0}', String(suggestedPort)),
-                            () => {
-                                portTouchedRef.current = true;
-                                setAdvPort(String(suggestedPort));
-                            },
-                            advPort === String(suggestedPort),
-                        )}
+                        contentAfter={resetButton(l10n.t('Reset port to {0}', String(suggestedPort)), () => {
+                            portTouchedRef.current = true;
+                            setAdvPort(String(suggestedPort));
+                        })}
                     />
                 </Field>
             ),
@@ -1921,10 +1932,8 @@ export const LocalQuickStart = (): JSX.Element => {
                         value={advTag}
                         maxLength={128}
                         onChange={(_event, data) => setAdvTag(data.value)}
-                        contentAfter={resetButton(
-                            l10n.t('Reset image tag to {0}', QUICK_START_DEFAULT_TAG),
-                            () => setAdvTag(QUICK_START_DEFAULT_TAG),
-                            advTag === QUICK_START_DEFAULT_TAG,
+                        contentAfter={resetButton(l10n.t('Reset image tag to {0}', QUICK_START_DEFAULT_TAG), () =>
+                            setAdvTag(QUICK_START_DEFAULT_TAG),
                         )}
                     />
                 </Field>
@@ -1938,16 +1947,16 @@ export const LocalQuickStart = (): JSX.Element => {
                 : useCustomCredentials
                   ? l10n.t('Your own username and password')
                   : l10n.t('Generated automatically'),
-            action: isRecreate
-                ? undefined
-                : rowAction(
-                      useCustomCredentials ? l10n.t('Use generated credentials') : l10n.t('Set your own credentials'),
-                      useCustomCredentials,
-                      () => setCustomCredentials((value) => !value),
-                  ),
+            action: isRecreate ? undefined : (
+                <Switch
+                    checked={!useCustomCredentials}
+                    aria-label={l10n.t('Generate credentials automatically')}
+                    onChange={(_event, data) => setCustomCredentials(!data.checked)}
+                />
+            ),
             editorOpen: useCustomCredentials,
             editor: isRecreate ? undefined : (
-                <>
+                <div className={styles.credentialFields}>
                     <Field
                         label={l10n.t('Username')}
                         validationState={advValidation?.field === 'username' ? 'error' : 'none'}
@@ -1957,6 +1966,10 @@ export const LocalQuickStart = (): JSX.Element => {
                             value={advUser}
                             maxLength={128}
                             placeholder={l10n.t('Enter a username')}
+                            aria-invalid={advValidation?.field === 'credentials' || undefined}
+                            aria-describedby={
+                                advValidation?.field === 'credentials' ? 'quickstart-credentials-error' : undefined
+                            }
                             onChange={(_event, data) => setAdvUser(data.value)}
                         />
                     </Field>
@@ -1970,10 +1983,25 @@ export const LocalQuickStart = (): JSX.Element => {
                             value={advPass}
                             maxLength={256}
                             placeholder={l10n.t('Enter a password')}
+                            aria-invalid={advValidation?.field === 'credentials' || undefined}
+                            aria-describedby={
+                                advValidation?.field === 'credentials' ? 'quickstart-credentials-error' : undefined
+                            }
                             onChange={(_event, data) => setAdvPass(data.value)}
                         />
                     </Field>
-                </>
+                    {advValidation?.field === 'credentials' && (
+                        <Text
+                            id="quickstart-credentials-error"
+                            role="alert"
+                            size={200}
+                            className={styles.credentialsValidation}
+                        >
+                            <ErrorCircleFilled aria-hidden />
+                            {advValidation.message}
+                        </Text>
+                    )}
+                </div>
             ),
         },
         {
