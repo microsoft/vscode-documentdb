@@ -221,9 +221,9 @@
             background-color: var(--colorNeutralBackground2);
         }
 
-        /* Adaptive list hover, on the cells so every data row responds evenly. */
-        .rowEven:not(.fieldsDetailRow):hover > td,
-        .rowOdd:not(.fieldsDetailRow):hover > td {
+        /* Adaptive list hover, on the cells so primary and detail rows respond evenly. */
+        .rowEven:hover > td,
+        .rowOdd:hover > td {
             background-color: var(--vscode-list-hoverBackground, var(--colorSubtleBackgroundHover));
         }
 
