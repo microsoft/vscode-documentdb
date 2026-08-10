@@ -78,6 +78,8 @@ import {
     QUICK_START_OPERATION_LABEL_KEY,
     QUICK_START_PORT,
     QUICK_START_PORT_SCAN_LIMIT,
+    type QuickStartMessage,
+    type QuickStartMessageKey,
     type QuickStartStatus,
     resolveQuickStartImage,
     type StageEvent,
@@ -89,25 +91,6 @@ export const QUICK_START_CLUSTER_ID = clusterId(DEFAULT_ALIAS);
 
 function traceQuickStart(message: string): void {
     ext.outputChannel?.trace(`[LocalQuickStart] ${message}`);
-}
-
-/**
- * Surfaced (design §12) when a labelled container + on-disk volume exist but the stored credentials
- * are gone, so the cluster can't be opened. Reconcile NEVER removes it (a lost secret does not prove
- * the volume is disposable — R2); the user decides (Delete for a clean slate, or restore the secret).
- */
-function credentialUnavailableMessage(): string {
-    return l10n.t(
-        'DocumentDB Local has data on disk but its saved credentials are missing, so it cannot be opened. Use "Delete Container" to remove it and start fresh (this erases the data).',
-    );
-}
-
-/** Shown when the chosen host port is taken — both by the pre-check and by the Docker bind failure. */
-function portInUseMessage(port: number): string {
-    return l10n.t(
-        'Port {0} is already in use. Go back to Configure to pick a different port, or free it, then try again.',
-        String(port),
-    );
 }
 
 /**
@@ -178,8 +161,8 @@ class ReadinessTimeoutError extends Error {
  * only learns about it once `finally` has cleared the `provisioning` guard.
  */
 class DockerNotReadyError extends Error {
-    constructor(message: string) {
-        super(message);
+    constructor(readonly messageKey: Extract<QuickStartMessageKey, 'dockerCliMissing' | 'dockerDaemonUnreachable'>) {
+        super(messageKey);
         this.name = 'DockerNotReadyError';
     }
 }
@@ -219,7 +202,7 @@ interface InstanceRuntimeState {
     lifecycleBusy: boolean;
     missing: boolean;
     pendingReadiness?: PendingReadiness;
-    errorMessage?: string;
+    error?: QuickStartMessage;
     inFlight?: QuickStartOperation;
 }
 
@@ -268,22 +251,12 @@ function resolveProvisionCredentials(options?: AdvancedQuickStartOptions): Gener
 function stageEvent(
     stage: ProvisionStage,
     status: StageEvent['status'],
-    message?: string,
-    error?: string,
+    message?: QuickStartMessage,
     boundPort?: number,
     timedOut?: boolean,
     dockerReadiness?: DockerReadiness,
 ): StageEvent {
-    return { stage, status, message, error, boundPort, timedOut, dockerReadiness };
-}
-
-export function getReadinessTimeoutMessage(environment: DockerHostEnvironment | undefined): string {
-    if (environment === 'devContainer') {
-        return l10n.t(
-            'DocumentDB did not accept connections in time. Docker may be running on the dev container host, so the published localhost port might not be reachable from inside the dev container.',
-        );
-    }
-    return l10n.t('DocumentDB did not accept connections in time. It may still be initializing.');
+    return { stage, status, message, boundPort, timedOut, dockerReadiness };
 }
 
 /** Cancellable delay that rejects if the signal aborts. */
@@ -407,7 +380,7 @@ export class QuickStartServiceImpl {
         return {
             state: entry.state,
             metadata: entry.metadata,
-            errorMessage: entry.errorMessage,
+            error: entry.error,
             missing: entry.missing,
             // Known even while provisioning (the port is decided in the wizard, L1/L3), so the tree
             // row can show the real address instead of assuming the canonical port.
@@ -449,7 +422,7 @@ export class QuickStartServiceImpl {
             state: entry.state,
             missing: entry.missing,
             port: entry.metadata?.boundPort ?? entry.port,
-            errorMessage: entry.errorMessage,
+            error: entry.error,
             canResumeReadiness: !entry.provisioning && !entry.lifecycleBusy && entry.pendingReadiness !== undefined,
             metadata: entry.metadata,
         };
@@ -523,14 +496,19 @@ export class QuickStartServiceImpl {
         }
     }
 
-    private setStatus(alias: string, state: InstanceState, metadata?: InstanceMetadata, errorMessage?: string): void {
+    private setStatus(
+        alias: string,
+        state: InstanceState,
+        metadata?: InstanceMetadata,
+        error?: QuickStartMessage,
+    ): void {
         const entry = this.stateFor(alias);
         entry.state = state;
         if (metadata !== undefined) {
             entry.metadata = metadata;
             entry.port = metadata.boundPort;
         }
-        entry.errorMessage = errorMessage;
+        entry.error = error;
         entry.missing = false;
         this.statusEmitter.fire();
     }
@@ -554,8 +532,7 @@ export class QuickStartServiceImpl {
         alias: string = DEFAULT_ALIAS,
     ): AsyncGenerator<StageEvent> {
         if (this.stateFor(alias).provisioning || this.stateFor(alias).lifecycleBusy) {
-            const message = l10n.t('Setup is already in progress.');
-            yield stageEvent('error', 'error', message, message);
+            yield stageEvent('error', 'error', { key: 'setupAlreadyInProgress' });
             return;
         }
         this.stateFor(alias).provisioning = true;
@@ -634,18 +611,14 @@ export class QuickStartServiceImpl {
             this.stateFor(alias).port = chosenPort;
 
             // --- checking ---
-            yield stageEvent('checking', 'active', 'Checking Docker…');
+            yield stageEvent('checking', 'active');
             const readiness = await this.checkDockerReadiness();
             readinessEnvironment = readiness.environment;
             this.throwIfAborted(signal);
             const continueAfterIndeterminateReadiness =
                 options?.continueAnyway === true && readiness.outcome === 'indeterminate';
             if ((!readiness.cliInstalled || !readiness.daemonReachable) && !continueAfterIndeterminateReadiness) {
-                throw new DockerNotReadyError(
-                    !readiness.cliInstalled
-                        ? l10n.t('Docker CLI was not found on your PATH. Install Docker and retry.')
-                        : l10n.t('Docker is installed but the daemon is not reachable. Start Docker and retry.'),
-                );
+                throw new DockerNotReadyError(!readiness.cliInstalled ? 'dockerCliMissing' : 'dockerDaemonUnreachable');
             }
 
             // Remove a pre-existing managed container so the run starts clean (it is labelled as
@@ -663,13 +636,9 @@ export class QuickStartServiceImpl {
             // `finally` removed it) and no `ready` record, so retrying it still works.
             if (!reusing && !startFresh) {
                 if (existing || hasReadyRecord) {
-                    this.setStatus(alias, InstanceState.CredentialsMissing, undefined, credentialUnavailableMessage());
-                    yield stageEvent(
-                        'checking',
-                        'error',
-                        credentialUnavailableMessage(),
-                        credentialUnavailableMessage(),
-                    );
+                    const credentialsUnavailable: QuickStartMessage = { key: 'credentialsUnavailable' };
+                    this.setStatus(alias, InstanceState.CredentialsMissing, undefined, credentialsUnavailable);
+                    yield stageEvent('checking', 'error', credentialsUnavailable);
                     return;
                 }
             }
@@ -685,9 +654,9 @@ export class QuickStartServiceImpl {
             // step suggests a free port, validates it while the user can still react, and sends it.
             // Setup never relocates it — a conflict here is a hard, explained error.
             if (!(await this.runtime.isPortFree(chosenPort))) {
-                const message = portInUseMessage(chosenPort);
+                const message: QuickStartMessage = { key: 'portInUse', port: chosenPort };
                 this.setStatus(alias, InstanceState.Error, undefined, message);
-                yield stageEvent('checking', 'error', message, message);
+                yield stageEvent('checking', 'error', message);
                 return;
             }
             this.throwIfAborted(signal);
@@ -704,7 +673,7 @@ export class QuickStartServiceImpl {
             }
 
             // --- pulling ---
-            yield stageEvent('pulling', 'active', 'Pulling the official image…');
+            yield stageEvent('pulling', 'active');
             activeDockerStage = 'pulling';
             await this.runtime.pullImage(imageRef, cts.token);
             activeDockerStage = undefined;
@@ -712,7 +681,7 @@ export class QuickStartServiceImpl {
             yield stageEvent('pulling', 'done');
 
             // --- creating (docker run -d creates and starts) ---
-            yield stageEvent('creating', 'active', 'Creating container…');
+            yield stageEvent('creating', 'active');
             if (leaseHeld) {
                 await this.renewProvisioningLease(alias, operationId, chosenPort);
             }
@@ -756,7 +725,7 @@ export class QuickStartServiceImpl {
             yield stageEvent('creating', 'done');
 
             // --- starting (confirm running, read bound port, follow logs) ---
-            yield stageEvent('starting', 'active', 'Starting container…');
+            yield stageEvent('starting', 'active');
             const inspected = await this.runtime.inspectContainer(containerId);
             // Fall back to the port we actually requested (not the canonical default) if the
             // inspect can't report the binding, so a custom port stays correct in the success
@@ -767,7 +736,7 @@ export class QuickStartServiceImpl {
             yield stageEvent('starting', 'done');
 
             // --- waiting (wire-protocol readiness, D7) ---
-            yield stageEvent('waiting', 'active', 'Waiting for DocumentDB to accept connections…');
+            yield stageEvent('waiting', 'active');
             const connectionString = composeConnectionString(credentials.username, credentials.password, boundPort);
             // Retain everything a "Wait longer" resume needs BEFORE probing, so a readiness
             // timeout can keep this running container and finish adoption later (§9.1).
@@ -805,23 +774,19 @@ export class QuickStartServiceImpl {
             await this.finalizeReadyInstance(pending, cts.token, signal);
             success = true;
             yield stageEvent('waiting', 'done');
-            yield stageEvent(
-                'done',
-                'done',
-                l10n.t('DocumentDB Local is running on localhost:{0}.', String(boundPort)),
-                undefined,
-                boundPort,
-            );
+            yield stageEvent('done', 'done', { key: 'instanceRunning', port: boundPort }, boundPort);
         } catch (error) {
             const aborted = signal.aborted;
             const dockerReadiness =
                 !aborted && activeDockerStage ? await this.getProvisioningDockerReadiness() : undefined;
             provisioningDockerFailureKind = dockerReadiness?.failureKind;
-            let message = aborted ? l10n.t('Setup was cancelled.') : errMessage(error);
+            const detail = errMessage(error);
+            let message: QuickStartMessage = aborted ? { key: 'setupCancelled' } : { key: 'unexpectedFailure', detail };
             if (!aborted && error instanceof DockerNotReadyError) {
                 this.stateFor(alias).pendingReadiness = undefined;
+                message = { key: error.messageKey };
                 this.setStatus(alias, InstanceState.Error, undefined, message);
-                terminalEvent = stageEvent('checking', 'error', message, message);
+                terminalEvent = stageEvent('checking', 'error', message);
             } else if (!aborted && error instanceof ReadinessTimeoutError && containerCreated && containerId) {
                 // The container is running but the database did not accept connections within the
                 // window — it may still be initializing. KEEP it running (finally skips teardown)
@@ -829,10 +794,10 @@ export class QuickStartServiceImpl {
                 // "Wait longer" resume finish adoption. The instance sits in Error until then. The
                 // event is buffered and emitted after `finally` (see below) so the flags are clean.
                 readinessTimedOut = true;
-                channel.appendLine(`[readiness-timeout] ${message}`);
-                message = getReadinessTimeoutMessage(readinessEnvironment);
+                channel.appendLine(`[readiness-timeout] ${detail}`);
+                message = { key: 'readinessTimeout', environment: readinessEnvironment };
                 this.setStatus(alias, InstanceState.Error, undefined, message);
-                terminalEvent = stageEvent('waiting', 'error', message, message, undefined, /* timedOut */ true);
+                terminalEvent = stageEvent('waiting', 'error', message, undefined, /* timedOut */ true);
             } else {
                 // Any other failure (or cancel) discards the attempt — drop the retained state so a
                 // stale timeout can't offer "Wait longer" against a container we're about to remove.
@@ -842,25 +807,17 @@ export class QuickStartServiceImpl {
                         // The port was free at the pre-check but taken while the image downloaded
                         // (M5). Say so in the same words as the pre-check instead of leaking the
                         // raw daemon string; the user re-picks the port in Configure.
-                        message = portInUseMessage(chosenPort);
+                        message = { key: 'portInUse', port: chosenPort };
                         portTaken = true;
                     } else if (dockerReadiness) {
-                        message = l10n.t('Docker became unavailable during setup: {0}', message);
+                        message = { key: 'dockerUnavailableDuringSetup', detail };
                     }
                     this.setStatus(alias, InstanceState.Error, undefined, message);
                 }
                 // Buffered and emitted after `finally` (like the timeout event) so a Retry click
                 // driven by this event can't race the still-set `provisioning` guard either
                 // (opus-4.7). On unsubscribe/return() the post-finally yield is simply skipped.
-                terminalEvent = stageEvent(
-                    'error',
-                    'error',
-                    message,
-                    aborted ? undefined : message,
-                    undefined,
-                    undefined,
-                    dockerReadiness,
-                );
+                terminalEvent = stageEvent('error', 'error', message, undefined, undefined, dockerReadiness);
             }
         } finally {
             // Stop the followLogs stream (started with cts.token). Disposing alone
@@ -1024,8 +981,7 @@ export class QuickStartServiceImpl {
     public async *resumeReadiness(signal: AbortSignal, alias: string = DEFAULT_ALIAS): AsyncGenerator<StageEvent> {
         const pending = this.stateFor(alias).pendingReadiness;
         if (!pending) {
-            const nothingToResume = l10n.t('There is nothing to resume.');
-            yield stageEvent('error', 'error', nothingToResume, nothingToResume);
+            yield stageEvent('error', 'error', { key: 'nothingToResume' });
             return;
         }
         if (this.stateFor(alias).provisioning || this.stateFor(alias).lifecycleBusy) {
@@ -1033,11 +989,7 @@ export class QuickStartServiceImpl {
             // observe). Carry the timed-out affordance so the webview keeps the Wait longer / Start
             // over view instead of flipping to the generic error (opus-4.8) — the container and
             // `pendingReadiness` are still retained.
-            // `error` is what the webview renders (it takes precedence over `message`), so it must
-            // carry the same localized sentence — a bare "in progress" marker reached the message
-            // bar verbatim and untranslated (#852).
-            const alreadyRunning = l10n.t('A setup operation is already in progress.');
-            yield stageEvent('error', 'error', alreadyRunning, alreadyRunning, undefined, true);
+            yield stageEvent('error', 'error', { key: 'setupAlreadyInProgress' }, undefined, true);
             return;
         }
         this.stateFor(alias).provisioning = true;
@@ -1054,7 +1006,7 @@ export class QuickStartServiceImpl {
         let resumeResult: 'success' | 'timeout' | 'cancelled' | 'error' = 'error';
         try {
             this.setStatus(alias, InstanceState.Provisioning, undefined, undefined);
-            yield stageEvent('waiting', 'active', 'Waiting for DocumentDB to accept connections…');
+            yield stageEvent('waiting', 'active');
             // Stream the container's logs during THIS wait so "View Docker output" shows the live
             // startup rather than only the stale first-attempt output (opus-4.8).
             void this.runtime.followLogs(pending.containerId, secretVariants(pending.password), cts.token);
@@ -1067,8 +1019,7 @@ export class QuickStartServiceImpl {
             terminalEvent = stageEvent(
                 'done',
                 'done',
-                l10n.t('DocumentDB Local is running on localhost:{0}.', String(pending.boundPort)),
-                undefined,
+                { key: 'instanceRunning', port: pending.boundPort },
                 pending.boundPort,
             );
         } catch (error) {
@@ -1081,9 +1032,13 @@ export class QuickStartServiceImpl {
             const isTimeout = error instanceof ReadinessTimeoutError;
             const timedOut = !finalized && (isTimeout || aborted);
             resumeResult = aborted ? 'cancelled' : isTimeout ? 'timeout' : 'error';
-            const message = aborted
-                ? l10n.t('Still initializing. Keep waiting, view the logs, or start over.')
-                : errMessage(error);
+            // A repeat timeout is the same situation as the first one, so it earns the same
+            // environment-aware explanation rather than the raw probe error.
+            const message: QuickStartMessage = aborted
+                ? { key: 'stillInitializing' }
+                : isTimeout
+                  ? { key: 'readinessTimeout', environment: this.dockerReadiness?.environment }
+                  : { key: 'unexpectedFailure', detail: errMessage(error) };
             if (!finalized) {
                 this.setStatus(alias, InstanceState.Error, undefined, aborted ? undefined : message);
             }
@@ -1093,7 +1048,7 @@ export class QuickStartServiceImpl {
             if (!timedOut) {
                 this.stateFor(alias).pendingReadiness = undefined;
             }
-            terminalEvent = stageEvent('waiting', 'error', message, aborted ? undefined : message, undefined, timedOut);
+            terminalEvent = stageEvent('waiting', 'error', message, undefined, timedOut);
         } finally {
             signal.removeEventListener('abort', onAbort);
             // Stop the followLogs stream (started with cts.token) before disposing.
@@ -1594,12 +1549,7 @@ export class QuickStartServiceImpl {
             if (await this.confirmStaysRunning(id)) {
                 this.setStatus(alias, InstanceState.Running);
             } else {
-                this.setStatus(
-                    alias,
-                    InstanceState.Error,
-                    undefined,
-                    l10n.t('The container started but exited shortly after. Check the Quick Start logs.'),
-                );
+                this.setStatus(alias, InstanceState.Error, undefined, { key: 'startedButExited' });
             }
         });
     }
@@ -1631,12 +1581,7 @@ export class QuickStartServiceImpl {
             if (await this.confirmStaysRunning(id)) {
                 this.setStatus(alias, InstanceState.Running);
             } else {
-                this.setStatus(
-                    alias,
-                    InstanceState.Error,
-                    undefined,
-                    l10n.t('The container restarted but exited shortly after. Check the Quick Start logs.'),
-                );
+                this.setStatus(alias, InstanceState.Error, undefined, { key: 'restartedButExited' });
             }
         });
     }
@@ -1867,7 +1812,10 @@ export class QuickStartServiceImpl {
         try {
             return await op();
         } catch (error) {
-            this.setStatus(alias, InstanceState.Error, undefined, errMessage(error));
+            this.setStatus(alias, InstanceState.Error, undefined, {
+                key: 'unexpectedFailure',
+                detail: errMessage(error),
+            });
             return undefined;
         } finally {
             entry.lifecycleBusy = false;
@@ -2000,7 +1948,7 @@ export class QuickStartServiceImpl {
             getQuickStartOutputChannel().appendLine(
                 `DocumentDB Local instance "${alias}" is present but its stored credentials are missing; surfacing as credential-unavailable (not removed).`,
             );
-            this.setStatus(alias, InstanceState.CredentialsMissing, undefined, credentialUnavailableMessage());
+            this.setStatus(alias, InstanceState.CredentialsMissing, undefined, { key: 'credentialsUnavailable' });
             return {};
         }
 
@@ -2022,7 +1970,7 @@ export class QuickStartServiceImpl {
             entry.missing = true;
             entry.state = InstanceState.Stopped;
             entry.port = record.port;
-            entry.errorMessage = undefined;
+            entry.error = undefined;
             this.statusEmitter.fire();
             return {};
         }

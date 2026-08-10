@@ -107,7 +107,7 @@ export type RouterContext = BaseRouterContext & {
 function toWebviewStatus(status: QuickStartStatus): QuickStartStatus {
     return {
         state: status.state,
-        errorMessage: status.errorMessage,
+        error: status.error,
         missing: status.missing,
         canResumeReadiness: status.canResumeReadiness,
     };
