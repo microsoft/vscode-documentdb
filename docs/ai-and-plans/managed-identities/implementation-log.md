@@ -27,14 +27,14 @@ commit) say so and name the commit that carries them.
 
 ## Status overview
 
-| Phase | Work items   | Status         |
-| ----- | ------------ | -------------- |
-| 1     | WI1 to WI6   | ✅ Done        |
-| 2     | WI7 to WI13  | ✅ Done        |
-| 3     | WI14, WI15   | ⏳ In progress |
-| 4     | WI16, WI17   | ☐ Not started  |
-| 5     | WI18 to WI20 | ☐ Not started  |
-| 6     | WI22 to WI25 | ☐ Not started  |
+| Phase | Work items   | Status        |
+| ----- | ------------ | ------------- |
+| 1     | WI1 to WI6   | ✅ Done       |
+| 2     | WI7 to WI13  | ✅ Done       |
+| 3     | WI14, WI15   | ✅ Done       |
+| 4     | WI16, WI17   | ☐ Not started |
+| 5     | WI18 to WI20 | ☐ Not started |
+| 6     | WI22 to WI25 | ☐ Not started |
 
 Legend: ☐ not started, ⏳ in progress, ✅ done, ⛔ on hold, ➖ folded into another item.
 
@@ -375,9 +375,57 @@ no settings).
 
 _WI15 is being delivered incrementally alongside the work items it covers, rather than as one late
 commit. The round-trip test (plan risk #9) landed with WI7 and WI8 in `e4c6c36b`; handler and error
-tests landed with phase 1 in `1e2a42a8`._
+tests landed with phase 1 in `1e2a42a8`; the credential-cache regression block landed with WI12 in
+`dc991856`._
 
-<!-- Entries are appended below as work items complete. -->
+### WI14 — Fake identity-endpoint harness ✅
+
+**Commits:** `bd1c6f4d` — _Add a fake identity-endpoint harness and correct the error mapping_,
+`95b0d197` — lint fixup.
+
+**What.** New [managedIdentityEndpoint.harness.test.ts](src/documentdb/auth/managedIdentityEndpoint.harness.test.ts),
+which points `IDENTITY_ENDPOINT` and `IDENTITY_HEADER` at a local `http.Server` and drives the real
+`ManagedIdentityCredential`. Six cases: system-assigned success, user-assigned success, expiry
+propagation, and the three failure shapes.
+
+**Why.** Plan Phase 3 and risk #5. WI6 was written against guessed error strings and could not be
+reviewed honestly until someone had seen the real ones.
+
+**What it found.** All three guesses in WI6 were wrong in ways that mattered:
+
+| Guess                                                                                                              | Reality                                                                                                                                                                                                                                                             |
+| ------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Failures arrive as a mix of `CredentialUnavailableError` and `AuthenticationError`, so the name is a useful signal | **Every** failure arrives as `CredentialUnavailableError`, whatever the cause. The old `'unavailable'` and `'credentialunavailable'` matches would have classified the multiple-identity incident as "no endpoint" if the ordering had ever changed. Both are gone. |
+| The MSAL error code is on the thrown error                                                                         | It is on the `cause` (`ServerError`), together with an `errorMessage` field the collector did not read. Both are now read at every level of the chain.                                                                                                              |
+| `'please specify'` and `'was not found'` are safe discriminators                                                   | Far too broad. Removed in favour of the observed phrases.                                                                                                                                                                                                           |
+
+Two further corrections came out of it:
+
+- **Errors are not always `instanceof Error`.** Under Jest the thrown value did not satisfy
+  `instanceof Error`, which silenced the whole classifier. The collector is now duck-typed on
+  `name`, `message`, `errorCode`, `errorMessage` and `cause`. This is not a test-only concern: the
+  same thing happens to an error crossing a worker boundary, which is exactly what
+  [§9](./managed-identities.md) does for the Playground and Shell.
+- **The `other` fallback message now prefers `message` alone** rather than the flattened matching
+  text, which repeated the error name and the entire cause chain at the user.
+
+The observed messages are recorded verbatim as constants in `managedIdentityErrors.test.ts`, so an
+`@azure/identity` upgrade that changes the wording fails in CI rather than in front of a user.
+
+**Notes and divergences.**
+
+- **Divergence (test design):** the plan's case 5 is "endpoint unreachable (env vars unset, and no
+  IMDS in the test environment)". That assumption is false on some developer machines: the machine
+  this was written on is an Azure-hosted Cloud PC whose instance metadata service answers in 45ms
+  with `Identity not found`. Unsetting the environment therefore produces a **different**
+  classification depending on where the test runs. The harness instead points `IDENTITY_ENDPOINT` at
+  a closed port, which forces a transport failure deterministically everywhere. Confidence: high;
+  the alternative is a test that is green on CI and red on an Azure workstation.
+- Each test calls `jest.resetModules()` first. MSAL selects and caches its managed identity source
+  from the environment at import time, so without it the later tests keep talking to the earlier
+  tests' now-closed servers. Diagnosing that took longer than writing the harness.
+- Timeouts are 30 seconds. The unreachable case takes about 5.7 seconds because of MSAL's internal
+  retries, which is over Jest's 5 second default.
 
 ---
 
@@ -387,16 +435,17 @@ Recorded here in one place as well as in the individual entries, so a reviewer c
 set at a glance.
 
 | Where               | Divergence                                                                                                  | Rationale                                                                                                                             |
-| ------------------- | ----------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------- | --- | ---- | ----------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------- |
+| ------------------- | ----------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------- | --- | ---- | ------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
 | WI4                 | `expiresInSecondsFromTimestamp` subtracts a 300 second safety margin instead of returning the raw remainder | Avoids handing the driver a token that expires in flight. Floor-at-zero preserved. Reversible by changing one constant.               |
 | WI4                 | Helper takes an optional `now` argument                                                                     | Makes the unit tests deterministic. Defaulted, so callers are unaffected.                                                             |
 | WI6                 | Second export `classifyManagedIdentityError()` alongside `describeManagedIdentityError()`                   | §12 telemetry needs the reason code; deriving it from a localized message string would break under translation.                       |
 | WI1 to WI6 (commit) | All of phase 1 in one commit rather than six                                                                | The intermediate states do not build a working feature; five of the six commits would be dead code.                                   |
 | WI7                 | A `weak` hint does **not** preselect the auth method; only an `explicit` hint does                          | The plan's own `weak` row requires the user to be able to switch to interactive Entra ID, which is impossible once the method is set. |
 | WI7                 | The hint object is carried on the wizard context as `managedIdentityHint`, not just the config              | WI10 needs to know explicit versus weak in order to decide whether to skip the identity step.                                         |
-| WI7                 | A GUID username under a managed identity hint is never stored as `nativeAuthConfig`                         | It is an identity selector, not a database user; storing it as one produces a connection that reads as native auth.                   |     | WI10 | One generic step with a predicate, instead of two near-identical step classes | The contexts differ only in the name of the selected-method field. Serves three wizards rather than two. |
+| WI7                 | A GUID username under a managed identity hint is never stored as `nativeAuthConfig`                         | It is an identity selector, not a database user; storing it as one produces a connection that reads as native auth.                   |     | WI10 | One generic step with a predicate, instead of two near-identical step classes               | The contexts differ only in the name of the selected-method field. Serves three wizards rather than two.                         |
 | WI10                | Extra "From the connection string" group in the quick pick                                                  | A client ID the user just pasted would otherwise be invisible in a list whose purpose is to avoid retyping it.                        |
-| WI11                | Storage uses one secret slot with a `'system-assigned'` sentinel                                            | The `string[]` secrets format cannot express "present but empty", and a sentinel can never collide with a GUID.                       |
+| WI11                | Storage uses one secret slot with a `'system-assigned'` sentinel                                            | The `string[]` secrets format cannot express "present but empty", and a sentinel can never collide with a GUID.                       |     | WI14 | The unreachable case points at a closed port instead of unsetting the environment variables | Some developer machines, including Azure Cloud PCs, do answer on 169.254.169.254, which made the planned version host dependent. |
+| WI6 (revised)       | Error text collection is duck-typed instead of using `instanceof Error`                                     | The thrown value is not always a real `Error`, under Jest and across worker boundaries, which silenced the classifier entirely.       |
 
 ---
 
