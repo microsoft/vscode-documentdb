@@ -48,6 +48,12 @@ jest.mock('../../extensionVariables', () => ({
 }));
 
 import { AuthMethodId } from '../../documentdb/auth/AuthMethod';
+import {
+    detectManagedIdentityHint,
+    managedIdentityConfigFromHint,
+    stripManagedIdentityMarkers,
+} from '../../documentdb/auth/managedIdentityConnectionString';
+import { DocumentDBConnectionString } from '../../documentdb/utils/DocumentDBConnectionString';
 import { copyConnectionString } from './copyConnectionString';
 
 interface FakeNode {
@@ -440,5 +446,92 @@ describe('copyConnectionString', () => {
         expect(mockShowWarningMessage).not.toHaveBeenCalled();
         expect(mockOpenUrl).toHaveBeenCalledTimes(1);
         expect(ctx.telemetry.properties.copyAction).toBe('learnMore');
+    });
+
+    describe('managed identity', () => {
+        const azureConnString = 'mongodb+srv://my-cluster.mongocluster.cosmos.azure.com/?retryWrites=true';
+        const clientId = '11111111-2222-3333-4444-555555555555';
+
+        it('T-13 user-assigned identity -> documented driver-native form, no password prompt', async () => {
+            const ctx = makeContext();
+            const node = makeNode('connectionsView;treeitem_documentdbcluster', {
+                connectionString: azureConnString,
+                availableAuthMethods: [AuthMethodId.ManagedIdentity],
+                selectedAuthMethod: AuthMethodId.ManagedIdentity,
+                managedIdentityAuthConfig: { clientId },
+            });
+
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            await copyConnectionString(ctx as any, node as any);
+
+            expect(mockShowQuickPick).not.toHaveBeenCalled();
+            const written = mockClipboardWriteText.mock.calls[0][0] as string;
+            expect(written).toContain('authMechanism=MONGODB-OIDC');
+            expect(written).toContain('ENVIRONMENT%3Aazure');
+            expect(written).toContain(`${clientId}@my-cluster.mongocluster.cosmos.azure.com`);
+            expect(written).toContain('retryWrites=true');
+            expect(ctx.telemetry.properties.passwordIncluded).toBe('notPrompted');
+            expect(ctx.telemetry.properties.copiedAuthMechanism).toBe('managedIdentity');
+        });
+
+        it('T-14 system-assigned identity -> same form without a username', async () => {
+            const ctx = makeContext();
+            const node = makeNode('connectionsView;treeitem_documentdbcluster', {
+                connectionString: azureConnString,
+                availableAuthMethods: [AuthMethodId.ManagedIdentity],
+                selectedAuthMethod: AuthMethodId.ManagedIdentity,
+                managedIdentityAuthConfig: {},
+            });
+
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            await copyConnectionString(ctx as any, node as any);
+
+            const written = mockClipboardWriteText.mock.calls[0][0] as string;
+            expect(written).toContain('authMechanism=MONGODB-OIDC');
+            expect(written).not.toContain('@my-cluster');
+        });
+
+        it('T-15 round-trip: what we copy is what we can read back (design §5.1 and §5.2)', async () => {
+            const ctx = makeContext();
+            const node = makeNode('connectionsView;treeitem_documentdbcluster', {
+                connectionString: azureConnString,
+                availableAuthMethods: [AuthMethodId.ManagedIdentity],
+                selectedAuthMethod: AuthMethodId.ManagedIdentity,
+                managedIdentityAuthConfig: { clientId },
+            });
+
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            await copyConnectionString(ctx as any, node as any);
+            const written = mockClipboardWriteText.mock.calls[0][0] as string;
+
+            const parsed = new DocumentDBConnectionString(written);
+            const hint = detectManagedIdentityHint(parsed);
+
+            expect(hint).toEqual({ clientId, confidence: 'explicit' });
+            expect(managedIdentityConfigFromHint(hint!)).toEqual({ clientId });
+
+            stripManagedIdentityMarkers(parsed);
+            expect(parsed.toString()).toContain('retryWrites=true');
+            expect(parsed.toString()).not.toContain('authMechanism');
+        });
+
+        it('T-16 round-trip for a system-assigned identity yields an empty config, not undefined', async () => {
+            const ctx = makeContext();
+            const node = makeNode('connectionsView;treeitem_documentdbcluster', {
+                connectionString: azureConnString,
+                availableAuthMethods: [AuthMethodId.ManagedIdentity],
+                selectedAuthMethod: AuthMethodId.ManagedIdentity,
+                managedIdentityAuthConfig: {},
+            });
+
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            await copyConnectionString(ctx as any, node as any);
+            const written = mockClipboardWriteText.mock.calls[0][0] as string;
+
+            const hint = detectManagedIdentityHint(new DocumentDBConnectionString(written));
+
+            expect(hint?.confidence).toBe('explicit');
+            expect(managedIdentityConfigFromHint(hint!)).toEqual({});
+        });
     });
 });

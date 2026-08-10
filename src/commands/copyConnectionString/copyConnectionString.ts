@@ -7,6 +7,7 @@ import { type IActionContext } from '@microsoft/vscode-azext-utils';
 import * as l10n from '@vscode/l10n';
 import * as vscode from 'vscode';
 import { AuthMethodId } from '../../documentdb/auth/AuthMethod';
+import { MANAGED_IDENTITY_AUTH_MECHANISM_PROPERTIES } from '../../documentdb/auth/managedIdentityConnectionString';
 import { DocumentDBConnectionString } from '../../documentdb/utils/DocumentDBConnectionString';
 import { Views } from '../../documentdb/Views';
 import { ext } from '../../extensionVariables';
@@ -143,6 +144,15 @@ function buildParsedConnectionString(credentials: EphemeralClusterCredentials): 
         parsedConnectionString.searchParams.set('authMechanism', 'MONGODB-OIDC');
     }
 
+    if (credentials.selectedAuthMethod === AuthMethodId.ManagedIdentity) {
+        // The documented driver-native form (D1a): it works in mongosh and application drivers on the
+        // same Azure VM, and it round-trips back into our own New Connection flow.
+        parsedConnectionString.searchParams.set('authMechanism', 'MONGODB-OIDC');
+        parsedConnectionString.searchParams.set('authMechanismProperties', MANAGED_IDENTITY_AUTH_MECHANISM_PROPERTIES);
+        // The client ID rides in the username position. Empty for the system-assigned identity.
+        parsedConnectionString.username = credentials.managedIdentityAuthConfig?.clientId ?? '';
+    }
+
     return parsedConnectionString;
 }
 
@@ -222,6 +232,9 @@ export async function copyStandardConnectionString(
     }
 
     context.telemetry.properties.passwordIncluded = passwordIncluded;
+    if (credentials.selectedAuthMethod === AuthMethodId.ManagedIdentity) {
+        context.telemetry.properties.copiedAuthMechanism = 'managedIdentity';
+    }
 
     await vscode.env.clipboard.writeText(parsedConnectionString.toString());
     void vscode.window.showInformationMessage(l10n.t('The connection string has been copied to the clipboard'));

@@ -15,7 +15,11 @@ import { type IconPath } from 'vscode';
 import { type Experience } from '../../DocumentDBExperiences';
 import { ClustersClient, type DatabaseItemModel } from '../../documentdb/ClustersClient';
 import { CredentialCache } from '../../documentdb/CredentialCache';
-import { type EntraIdAuthConfig, type NativeAuthConfig } from '../../documentdb/auth/AuthConfig';
+import {
+    type EntraIdAuthConfig,
+    type ManagedIdentityAuthConfig,
+    type NativeAuthConfig,
+} from '../../documentdb/auth/AuthConfig';
 import { type AuthMethodId } from '../../documentdb/auth/AuthMethod';
 import { ShellCommandIds } from '../../documentdb/shell/constants';
 import { ext } from '../../extensionVariables';
@@ -49,6 +53,8 @@ export type EphemeralClusterCredentials = {
     // Authentication method specific configurations
     nativeAuthConfig?: NativeAuthConfig;
     entraIdAuthConfig?: EntraIdAuthConfig;
+    /** An empty object selects the system-assigned identity, so absence and `{}` are different. */
+    managedIdentityAuthConfig?: ManagedIdentityAuthConfig;
 
     // Additional non-secret storage properties needed by a discovery provider.
     connectionProperties?: Record<string, unknown>;
