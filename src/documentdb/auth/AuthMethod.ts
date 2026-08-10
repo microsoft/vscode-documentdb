@@ -57,7 +57,7 @@ export const MicrosoftEntraIDAuthMethod: AuthMethodInfo = {
 export const ManagedIdentityAuthMethod: AuthMethodInfo = {
     id: AuthMethodId.ManagedIdentity,
     label: vscode.l10n.t('Managed Identity (Azure hosted)'),
-    detail: vscode.l10n.t('Use when VS Code is running on an Azure VM that has a managed identity assigned'),
+    detail: vscode.l10n.t('Authenticate using the managed identity assigned to this machine'),
 } as const;
 
 export const NoAuthMethod: AuthMethodInfo = {

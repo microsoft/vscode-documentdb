@@ -51,12 +51,14 @@ The same option appears in the **Azure Resources** and **Service Discovery** vie
 The extension asks which identity to authenticate as:
 
 - **Enter a client ID**: type the client ID of a user-assigned managed identity. It looks like `11111111-2222-3333-4444-555555555555`.
-- **System-assigned managed identity**: use the identity built into the VM. No client ID is needed.
+- **System-assigned managed identity**: use the machine's own identity. No client ID is needed.
 - **Recently used**: client IDs you have connected with before, shown with the connection they were last used for. This list is local to your machine and holds no secrets.
 
 **If the VM has more than one identity, the client ID is not optional.** The Azure instance metadata service cannot choose between several identities on its own, so a request without a client ID fails. This is the single most common cause of a failed managed identity connection.
 
 A client ID is a tenant-scoped identifier, not a credential. It is stored alongside the connection and it is safe to paste into a bug report.
+
+> **A note on "system-assigned".** Choosing that option sends no identity selector at all, and the instance metadata service answers with the machine's **default** identity. On a machine that has no system-assigned identity but exactly one user-assigned identity, the request therefore still succeeds and returns that user-assigned identity. If you need a specific identity, name it with its client ID rather than relying on the default.
 
 ## Paste a connection string instead
 
@@ -81,7 +83,7 @@ No password prompt appears, because there is no password to include. See [Copy C
 | Message                                                                 | What it means                                                                                                                                            |
 | ----------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | This machine has more than one managed identity                         | Reconnect and enter the client ID of the identity you want. The metadata service cannot pick one for you.                                                |
-| No managed identity was found                                           | VS Code is not running on an Azure VM with a managed identity assigned, or the instance metadata service is not reachable.                               |
+| No managed identity is available on this machine                        | VS Code is not running on an Azure resource with a managed identity assigned, or the instance metadata service is not reachable.                          |
 | The managed identity with client ID ... is not assigned to this machine | The client ID is valid but that identity is not attached to this VM. Check the VM's Identity blade in the Azure portal.                                  |
 | The connection is refused after a token was obtained                    | Authentication worked but the cluster does not recognize the identity. Register it on the cluster as described in [Before you start](#before-you-start). |
 

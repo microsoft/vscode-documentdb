@@ -626,6 +626,69 @@ it matters.
 
 ---
 
+## Post-review: host-type wording
+
+**Commit:** see below. Raised in review after the work items were complete.
+
+**What.** Three user-facing strings asserted that managed identity **requires** an Azure VM. Reworded
+so that Azure VM is named as an example rather than a requirement:
+
+| Where | Before | After |
+| --- | --- | --- |
+| [AuthMethod.ts](src/documentdb/auth/AuthMethod.ts) auth method `detail` | `Use when VS Code is running on an Azure VM that has a managed identity assigned` | `Authenticate using the managed identity assigned to this machine` |
+| [SelectManagedIdentityStep.ts](src/documentdb/wizards/authenticate/SelectManagedIdentityStep.ts) system-assigned row `detail` | `Use the identity built into this Azure VM` | `Use this machine's own identity, no client ID needed` |
+| [managedIdentityErrors.ts](src/documentdb/auth/managedIdentityErrors.ts) `noEndpoint` | `No managed identity was found. This method requires VS Code to be running on an Azure VM that has a managed identity assigned.` | `No managed identity is available on this machine. Managed identity authentication requires VS Code to be running on an Azure resource, such as an Azure VM, with an identity assigned.` |
+
+The icon on the system-assigned row also changed from `vm` to `device-desktop`.
+
+**Why.** Three separate problems, all traceable to the same original wording:
+
+1. **We never verify the host type.** [D3](./decisions.md#d3-azure-environment-detection-open) removed
+   the probe, so nothing in the extension knows whether it is on an Azure VM. The `noEndpoint`
+   message inferred an Azure VM requirement from a socket failure; what was actually observed is
+   `ManagedIdentityCredential: Network unreachable`.
+2. **"built into" was factually wrong.** A system-assigned identity is enabled on a resource and can
+   be disabled. Nothing is built in.
+3. **The auth method `detail` broke the parallel** of its sibling entries, which all begin
+   "Authenticate using...", and read as a tutorial for an audience that already knows when the method
+   applies.
+
+**On D0.** The original [D0](./decisions.md#d0-supported-platforms-azure-vms-only) Consequences read
+"Every user-facing string, doc page, and error message names Azure VM and nothing else." The intent
+was "drop the other platform examples, keep Azure VM"; it was implemented as "assert Azure VM as a
+requirement". `decisions.md` now carries the corrected phrasing and a dated correction note.
+Documentation and the validation checklist keep the hard Azure VM scoping, which is what D0 actually
+protects.
+
+**Also fixed: an icon collision.** The system-assigned row used `ThemeIcon('vm')`, which is the same
+icon the Azure VM **discovery provider** uses for a remote machine hosting a database. Those are
+opposite ends of the same connection, so sharing a glyph was actively misleading. See the note below.
+
+**Note on "system-assigned".** The row is labelled `System-assigned managed identity`, but the code
+sends no identity selector at all, so the instance metadata service returns the machine's **default**
+identity. On a machine with no system-assigned identity and exactly one user-assigned identity, the
+call still succeeds and returns the user-assigned one. The label was kept because it matches the
+Azure portal, and the nuance is documented in the user manual instead.
+
+### The Azure VM naming collision
+
+`src/plugins/service-azure-vm/` contributes a discovery provider whose user-facing strings also say
+"Azure VM": `Azure VMs (DocumentDB)`, `Azure VM Service Discovery`,
+`Azure VM: Attempting to authenticate with "{vmName}"`. Those name the **remote** machine hosting a
+database. Managed identity names the **local** machine hosting VS Code. Same words, opposite ends of
+the connection.
+
+There is no functional collision: `AzureVMResourceItem` hardcodes
+`availableAuthMethods: [AuthMethodId.NativeAuth]` and its wizard has no `ChooseAuthMethodStep`, so
+managed identity is never offered on a discovered VM node, and could not work there anyway because a
+self-hosted DocumentDB has no Entra ID support.
+
+The collision was linguistic and visual only, and the rewording resolves it structurally: the
+discovery provider always **names** a machine (`VM "contoso-db-01"`), while managed identity now
+**points at** one (`this machine`). No renaming of the discovery provider is needed.
+
+---
+
 ## Deviations from the plan
 
 Recorded here in one place as well as in the individual entries, so a reviewer can see the whole

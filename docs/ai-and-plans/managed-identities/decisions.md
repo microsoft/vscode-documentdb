@@ -40,9 +40,21 @@ not a scenario we assert, document, or regression-test.
 
 ### Consequences
 
-- Every user-facing string, doc page, and error message names **Azure VM** and nothing else.
-- The manual validation checklist covers Azure VM cases only.
+- **Azure VM is the only platform named as an example.** Where a string or a page needs to name a
+  host, it names Azure VM and no other platform. It does **not** state that Azure VM is a
+  requirement, because that is not true of the mechanism: `ManagedIdentityCredential` reaches the
+  identity endpoint the same way on every Azure host, and we never detect which one we are on
+  ([D3](#d3-azure-environment-detection-open) removed the probe). A string that asserted "requires an
+  Azure VM" would be claiming knowledge we do not have.
+- Documentation, the user manual, and the manual validation checklist keep the **hard** Azure VM
+  scoping: that is what we test and what we support.
 - Adding a platform later is a documentation and test change, not a code change.
+
+> **Correction, 2026-08-10.** This section originally read "Every user-facing string, doc page, and
+> error message names **Azure VM** and nothing else." That phrasing was intended to mean "drop the
+> other platform examples, keep Azure VM", but it was read during implementation as "assert Azure VM
+> as a requirement", and three strings were written that way. The wording above is the corrected
+> intent. See the [implementation log](./implementation-log.md) for the strings that changed.
 
 ---
 

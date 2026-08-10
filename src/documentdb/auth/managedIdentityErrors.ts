@@ -89,7 +89,7 @@ export function describeManagedIdentityError(error: unknown, clientId?: string):
             );
         case 'noEndpoint':
             return l10n.t(
-                'No managed identity was found. This method requires VS Code to be running on an Azure VM that has a managed identity assigned.',
+                'No managed identity is available on this machine. Managed identity authentication requires VS Code to be running on an Azure resource, such as an Azure VM, with an identity assigned.',
             );
         case 'identityNotAssigned':
             return clientId

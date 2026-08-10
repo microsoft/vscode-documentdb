@@ -152,7 +152,7 @@ export enum AuthMethodId {
 export const ManagedIdentityAuthMethod: AuthMethodInfo = {
   id: AuthMethodId.ManagedIdentity,
   label: vscode.l10n.t('Managed Identity (Azure hosted)'),
-  detail: vscode.l10n.t('Use when VS Code is running on an Azure VM that has a managed identity assigned'),
+  detail: vscode.l10n.t('Authenticate using the managed identity assigned to this machine'),
 } as const;
 ```
 
@@ -166,6 +166,11 @@ adjacent to the other Entra ID option.
 >
 > Label wording is **confirmed**: keep "Managed Identity (Azure hosted)". The `detail` line carries
 > the discovery hint that D3's probe was originally meant to provide, as static copy.
+>
+> **Revised in review, 2026-08-10.** The `detail` originally read "Use when VS Code is running on an
+> Azure VM that has a managed identity assigned". It asserted a host type we never verify, and it
+> broke the "Authenticate using..." parallel of the sibling entries. See the
+> [implementation log](./implementation-log.md#post-review-host-type-wording).
 
 ### 2. Configuration type
 
@@ -573,7 +578,7 @@ export function describeManagedIdentityError(error: unknown, clientId?: string):
 | Condition                                           | Message (localized)                                                                                                                                    |
 | --------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | Multiple candidate identities, no selector          | "This machine has more than one managed identity, so the right one cannot be chosen automatically. Reconnect and enter the client ID you want to use." |
-| No identity endpoint reachable                      | "No managed identity was found. This method requires VS Code to be running on an Azure VM that has a managed identity assigned."                       |
+| No identity endpoint reachable                      | "No managed identity is available on this machine. Managed identity authentication requires VS Code to be running on an Azure resource, such as an Azure VM, with an identity assigned."                       |
 | Endpoint reachable, requested identity not assigned | "The managed identity with client ID {0} is not assigned to this machine."                                                                             |
 | Anything else                                       | Pass through with a "Managed Identity authentication failed: {0}" prefix.                                                                              |
 
@@ -780,8 +785,8 @@ view and the Azure Resources view, and in Collection View plus Playground plus S
 - [ ] Same copied string used from a small Node driver script on that VM.
 - [ ] Same copied string pasted into New Connection in a second VS Code window. Expect an identical
       managed-identity connection, not a native-auth one.
-- [ ] Non-Azure machine, Managed Identity selected. Expect the "no managed identity was found"
-      message.
+- [ ] Non-Azure machine, Managed Identity selected. Expect the "no managed identity is available on
+      this machine" message.
 - [ ] The identity quick pick offers "Enter a client ID" first, and a previously used client ID
       appears under "Recently used" on the second connection.
 - [ ] Reload the window and reconnect a saved managed-identity connection.
