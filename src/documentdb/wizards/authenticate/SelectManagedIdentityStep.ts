@@ -122,8 +122,7 @@ export class SelectManagedIdentityStep<T extends ManagedIdentitySelectionContext
         items.push({
             label: l10n.t('System-assigned managed identity'),
             detail: l10n.t("Use this machine's own identity, no client ID needed"),
-            // Not the 'vm' icon: the Azure VM discovery provider uses it for a remote machine that
-            // hosts a database, which is the opposite end of the connection from this row.
+            // Not the 'vm' icon: nothing here verifies that the host is a virtual machine.
             iconPath: new vscode.ThemeIcon('device-desktop'),
             choice: 'systemAssigned',
         });

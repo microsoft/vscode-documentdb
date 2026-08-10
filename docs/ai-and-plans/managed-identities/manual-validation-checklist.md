@@ -41,7 +41,7 @@ original incident.
 | 4   | Same VM as 3, correct client ID entered                           | Connects.                                                                                           | ☐      |
 | 5   | Client ID of an identity **not registered on the cluster**        | Fails with a message that mentions cluster-side registration.                                       | ☐      |
 | 6   | Client ID of an identity **not assigned to this VM**              | Fails with "The managed identity with client ID ... is not assigned to this machine."               | ☐      |
-| 7   | Non-Azure machine, Managed Identity selected                     | Fails with "No managed identity is available on this machine...".                                   | ☐      |
+| 7   | Non-Azure machine, Managed Identity selected                      | Fails with "No managed identity is available on this machine...".                                   | ☐      |
 
 Case 3 is the one that matters most. An opaque failure here means the feature has not done its job,
 regardless of how many other rows pass.

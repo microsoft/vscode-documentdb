@@ -27,14 +27,14 @@ commit) say so and name the commit that carries them.
 
 ## Status overview
 
-| Phase | Work items   | Status         |
-| ----- | ------------ | -------------- |
-| 1     | WI1 to WI6   | ✅ Done        |
-| 2     | WI7 to WI13  | ✅ Done        |
-| 3     | WI14, WI15   | ✅ Done        |
-| 4     | WI16, WI17   | ✅ Done        |
-| 5     | WI18 to WI20 | ✅ Done        |
-| 6     | WI22 to WI25 | ✅ Done         |
+| Phase | Work items   | Status  |
+| ----- | ------------ | ------- |
+| 1     | WI1 to WI6   | ✅ Done |
+| 2     | WI7 to WI13  | ✅ Done |
+| 3     | WI14, WI15   | ✅ Done |
+| 4     | WI16, WI17   | ✅ Done |
+| 5     | WI18 to WI20 | ✅ Done |
+| 6     | WI22 to WI25 | ✅ Done |
 
 WI21 is on hold and expected to be dropped; see [D3](./decisions.md#d3-azure-environment-detection-open).
 WI26, WI27 and WI28 are deliberately after this work lands.
@@ -633,11 +633,11 @@ it matters.
 **What.** Three user-facing strings asserted that managed identity **requires** an Azure VM. Reworded
 so that Azure VM is named as an example rather than a requirement:
 
-| Where | Before | After |
-| --- | --- | --- |
-| [AuthMethod.ts](src/documentdb/auth/AuthMethod.ts) auth method `detail` | `Use when VS Code is running on an Azure VM that has a managed identity assigned` | `Authenticate using the managed identity assigned to this machine` |
-| [SelectManagedIdentityStep.ts](src/documentdb/wizards/authenticate/SelectManagedIdentityStep.ts) system-assigned row `detail` | `Use the identity built into this Azure VM` | `Use this machine's own identity, no client ID needed` |
-| [managedIdentityErrors.ts](src/documentdb/auth/managedIdentityErrors.ts) `noEndpoint` | `No managed identity was found. This method requires VS Code to be running on an Azure VM that has a managed identity assigned.` | `No managed identity is available on this machine. Managed identity authentication requires VS Code to be running on an Azure resource, such as an Azure VM, with an identity assigned.` |
+| Where                                                                                                                         | Before                                                                                                                           | After                                                                                                                                                                                    |
+| ----------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| [AuthMethod.ts](src/documentdb/auth/AuthMethod.ts) auth method `detail`                                                       | `Use when VS Code is running on an Azure VM that has a managed identity assigned`                                                | `Authenticate using the managed identity assigned to this machine`                                                                                                                       |
+| [SelectManagedIdentityStep.ts](src/documentdb/wizards/authenticate/SelectManagedIdentityStep.ts) system-assigned row `detail` | `Use the identity built into this Azure VM`                                                                                      | `Use this machine's own identity, no client ID needed`                                                                                                                                   |
+| [managedIdentityErrors.ts](src/documentdb/auth/managedIdentityErrors.ts) `noEndpoint`                                         | `No managed identity was found. This method requires VS Code to be running on an Azure VM that has a managed identity assigned.` | `No managed identity is available on this machine. Managed identity authentication requires VS Code to be running on an Azure resource, such as an Azure VM, with an identity assigned.` |
 
 The icon on the system-assigned row also changed from `vm` to `device-desktop`.
 
@@ -660,32 +660,14 @@ requirement". `decisions.md` now carries the corrected phrasing and a dated corr
 Documentation and the validation checklist keep the hard Azure VM scoping, which is what D0 actually
 protects.
 
-**Also fixed: an icon collision.** The system-assigned row used `ThemeIcon('vm')`, which is the same
-icon the Azure VM **discovery provider** uses for a remote machine hosting a database. Those are
-opposite ends of the same connection, so sharing a glyph was actively misleading. See the note below.
+**Icon.** The system-assigned row moved from `ThemeIcon('vm')` to `ThemeIcon('device-desktop')`, for
+the same reason as the wording: nothing verifies that the host is a virtual machine.
 
 **Note on "system-assigned".** The row is labelled `System-assigned managed identity`, but the code
 sends no identity selector at all, so the instance metadata service returns the machine's **default**
 identity. On a machine with no system-assigned identity and exactly one user-assigned identity, the
 call still succeeds and returns the user-assigned one. The label was kept because it matches the
 Azure portal, and the nuance is documented in the user manual instead.
-
-### The Azure VM naming collision
-
-`src/plugins/service-azure-vm/` contributes a discovery provider whose user-facing strings also say
-"Azure VM": `Azure VMs (DocumentDB)`, `Azure VM Service Discovery`,
-`Azure VM: Attempting to authenticate with "{vmName}"`. Those name the **remote** machine hosting a
-database. Managed identity names the **local** machine hosting VS Code. Same words, opposite ends of
-the connection.
-
-There is no functional collision: `AzureVMResourceItem` hardcodes
-`availableAuthMethods: [AuthMethodId.NativeAuth]` and its wizard has no `ChooseAuthMethodStep`, so
-managed identity is never offered on a discovered VM node, and could not work there anyway because a
-self-hosted DocumentDB has no Entra ID support.
-
-The collision was linguistic and visual only, and the rewording resolves it structurally: the
-discovery provider always **names** a machine (`VM "contoso-db-01"`), while managed identity now
-**points at** one (`this machine`). No renaming of the discovery provider is needed.
 
 ---
 
@@ -694,24 +676,24 @@ discovery provider always **names** a machine (`VM "contoso-db-01"`), while mana
 Recorded here in one place as well as in the individual entries, so a reviewer can see the whole
 set at a glance.
 
-| Where                 | Divergence                                                                                                  | Rationale                                                                                                                                    |
-| --------------------- | ----------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
-| WI1 to WI6 (commit)   | All of phase 1 in one commit rather than six                                                                | The intermediate states do not build a working feature; five of the six commits would be dead code.                                          |
-| WI4                   | `expiresInSecondsFromTimestamp` subtracts a 300 second safety margin instead of returning the raw remainder | Avoids handing the driver a token that expires in flight. Floor-at-zero preserved. Reversible by changing one constant.                      |
-| WI4                   | The helper takes an optional `now` argument                                                                 | Makes the unit tests deterministic. Defaulted, so callers are unaffected.                                                                    |
-| WI6                   | Second export `classifyManagedIdentityError()` alongside `describeManagedIdentityError()`                   | §12 telemetry needs the reason code; deriving it from a localized message string would break under translation.                              |
-| WI6 (revised by WI14) | Error text collection is duck-typed instead of using `instanceof Error`                                     | The thrown value is not always a real `Error`, under Jest and across worker boundaries, which silenced the classifier entirely.              |
-| WI7                   | A `weak` hint does **not** preselect the auth method; only an `explicit` hint does                          | The plan's own `weak` row requires the user to be able to switch to interactive Entra ID, which is impossible once the method is set.        |
-| WI7                   | The hint object is carried on the wizard context as `managedIdentityHint`, not just the config              | WI10 needs to know explicit versus weak in order to decide whether to skip the identity step.                                                |
-| WI7                   | A GUID username under a managed identity hint is never stored as `nativeAuthConfig`                         | It is an identity selector, not a database user; storing it as one produces a connection that reads as native auth.                          |
-| WI10                  | One generic step with a predicate, instead of two near-identical step classes                               | The contexts differ only in the name of the selected-method field. Serves three wizards rather than two.                                     |
-| WI10                  | Extra "From the connection string" group in the quick pick                                                  | A client ID the user just pasted would otherwise be invisible in a list whose whole purpose is to avoid retyping it.                         |
-| WI11                  | Storage uses one secret slot with a `'system-assigned'` sentinel                                            | The `string[]` secrets format cannot express "present but empty", and a sentinel can never collide with a GUID.                              |
-| WI14                  | The unreachable case points at a closed port instead of unsetting the environment variables                 | Some developer machines, including Azure Cloud PCs, do answer on 169.254.169.254, which made the planned version host dependent.             |
-| WI17                  | Also threaded through `AzureExecuteStep` and `addConnectionFromRegistry`, which the plan does not list      | They are how a discovered cluster becomes a saved connection; without them the chosen identity is dropped on save.                           |
-| WI20                  | Widened three auth-mechanism unions the plan does not mention, including the shell banner                   | The banner's ternary chain falls back to `SCRAM`, so a managed identity session would otherwise have been labelled as username and password. |
-| WI22 | `managedIdentityFailureReason` is a dedicated `connect.managedIdentityToken` event, not a property on `connect` | The failure happens inside the driver's OIDC callback; by the time it reaches a connect handler it is wrapped and localized, so it can no longer be classified. |
-| WI24 | `ENVIRONMENT` and `TOKEN_RESOURCE` documented in `connection-string-parameters.md`, not `how-to-construct-url.md` | The latter is about the `vscode://` URI handler, not about connection string parameters. |
+| Where                 | Divergence                                                                                                        | Rationale                                                                                                                                                       |
+| --------------------- | ----------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| WI1 to WI6 (commit)   | All of phase 1 in one commit rather than six                                                                      | The intermediate states do not build a working feature; five of the six commits would be dead code.                                                             |
+| WI4                   | `expiresInSecondsFromTimestamp` subtracts a 300 second safety margin instead of returning the raw remainder       | Avoids handing the driver a token that expires in flight. Floor-at-zero preserved. Reversible by changing one constant.                                         |
+| WI4                   | The helper takes an optional `now` argument                                                                       | Makes the unit tests deterministic. Defaulted, so callers are unaffected.                                                                                       |
+| WI6                   | Second export `classifyManagedIdentityError()` alongside `describeManagedIdentityError()`                         | §12 telemetry needs the reason code; deriving it from a localized message string would break under translation.                                                 |
+| WI6 (revised by WI14) | Error text collection is duck-typed instead of using `instanceof Error`                                           | The thrown value is not always a real `Error`, under Jest and across worker boundaries, which silenced the classifier entirely.                                 |
+| WI7                   | A `weak` hint does **not** preselect the auth method; only an `explicit` hint does                                | The plan's own `weak` row requires the user to be able to switch to interactive Entra ID, which is impossible once the method is set.                           |
+| WI7                   | The hint object is carried on the wizard context as `managedIdentityHint`, not just the config                    | WI10 needs to know explicit versus weak in order to decide whether to skip the identity step.                                                                   |
+| WI7                   | A GUID username under a managed identity hint is never stored as `nativeAuthConfig`                               | It is an identity selector, not a database user; storing it as one produces a connection that reads as native auth.                                             |
+| WI10                  | One generic step with a predicate, instead of two near-identical step classes                                     | The contexts differ only in the name of the selected-method field. Serves three wizards rather than two.                                                        |
+| WI10                  | Extra "From the connection string" group in the quick pick                                                        | A client ID the user just pasted would otherwise be invisible in a list whose whole purpose is to avoid retyping it.                                            |
+| WI11                  | Storage uses one secret slot with a `'system-assigned'` sentinel                                                  | The `string[]` secrets format cannot express "present but empty", and a sentinel can never collide with a GUID.                                                 |
+| WI14                  | The unreachable case points at a closed port instead of unsetting the environment variables                       | Some developer machines, including Azure Cloud PCs, do answer on 169.254.169.254, which made the planned version host dependent.                                |
+| WI17                  | Also threaded through `AzureExecuteStep` and `addConnectionFromRegistry`, which the plan does not list            | They are how a discovered cluster becomes a saved connection; without them the chosen identity is dropped on save.                                              |
+| WI20                  | Widened three auth-mechanism unions the plan does not mention, including the shell banner                         | The banner's ternary chain falls back to `SCRAM`, so a managed identity session would otherwise have been labelled as username and password.                    |
+| WI22                  | `managedIdentityFailureReason` is a dedicated `connect.managedIdentityToken` event, not a property on `connect`   | The failure happens inside the driver's OIDC callback; by the time it reaches a connect handler it is wrapped and localized, so it can no longer be classified. |
+| WI24                  | `ENVIRONMENT` and `TOKEN_RESOURCE` documented in `connection-string-parameters.md`, not `how-to-construct-url.md` | The latter is about the `vscode://` URI handler, not about connection string parameters.                                                                        |
 
 ---
 

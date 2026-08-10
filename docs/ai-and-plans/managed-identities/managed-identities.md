@@ -575,12 +575,12 @@ New file `src/documentdb/auth/managedIdentityErrors.ts`:
 export function describeManagedIdentityError(error: unknown, clientId?: string): string;
 ```
 
-| Condition                                           | Message (localized)                                                                                                                                    |
-| --------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| Multiple candidate identities, no selector          | "This machine has more than one managed identity, so the right one cannot be chosen automatically. Reconnect and enter the client ID you want to use." |
-| No identity endpoint reachable                      | "No managed identity is available on this machine. Managed identity authentication requires VS Code to be running on an Azure resource, such as an Azure VM, with an identity assigned."                       |
-| Endpoint reachable, requested identity not assigned | "The managed identity with client ID {0} is not assigned to this machine."                                                                             |
-| Anything else                                       | Pass through with a "Managed Identity authentication failed: {0}" prefix.                                                                              |
+| Condition                                           | Message (localized)                                                                                                                                                                      |
+| --------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Multiple candidate identities, no selector          | "This machine has more than one managed identity, so the right one cannot be chosen automatically. Reconnect and enter the client ID you want to use."                                   |
+| No identity endpoint reachable                      | "No managed identity is available on this machine. Managed identity authentication requires VS Code to be running on an Azure resource, such as an Azure VM, with an identity assigned." |
+| Endpoint reachable, requested identity not assigned | "The managed identity with client ID {0} is not assigned to this machine."                                                                                                               |
+| Anything else                                       | Pass through with a "Managed Identity authentication failed: {0}" prefix.                                                                                                                |
 
 The first row is the reported incident, so it gets a sentence that names the cause and says what to
 do. It is still a sentence, not a workflow.
