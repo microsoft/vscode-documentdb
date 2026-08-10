@@ -278,6 +278,9 @@ function delay(ms: number, signal: AbortSignal): Promise<void> {
     });
 }
 
+/** Synchronously readable across restarts, unlike the durable store behind {@link ensureHydrated}. */
+const LIKELY_INSTALLED_KEY = 'documentdb.localQuickStart.likelyInstalled';
+
 export class QuickStartServiceImpl {
     /**
      * Per-alias runtime state (WI-2). See {@link InstanceRuntimeState}.
@@ -317,6 +320,8 @@ export class QuickStartServiceImpl {
     private readonly statusEmitter = new vscode.EventEmitter<void>();
     /** Fires whenever the managed-instance status changes (drives the tree). */
     public readonly onDidChangeStatus = this.statusEmitter.event;
+
+    private readonly hintSubscription: vscode.Disposable;
 
     private readonly operationEmitter = new vscode.EventEmitter<void>();
     /**
@@ -359,7 +364,28 @@ export class QuickStartServiceImpl {
      * @param runtime Docker IO surface (WI-0). Defaults to the shared {@link ContainerRuntime}
      * singleton; tests inject a mock so the state machine runs with no real daemon.
      */
-    constructor(private readonly runtime: IContainerRuntime = ContainerRuntime) {}
+    constructor(private readonly runtime: IContainerRuntime = ContainerRuntime) {
+        // Registered first, so the hint is already correct when the tree rebuilds off the same event.
+        this.hintSubscription = this.onDidChangeStatus(() => this.syncLikelyInstalledHint());
+    }
+
+    /**
+     * Best-effort "has an instance ever been set up?", readable synchronously before
+     * {@link ensureHydrated} has reached Docker — the tree renders its root row long before then and
+     * would otherwise show the not-set-up copy to everyone, only to retract it on first expansion.
+     * Wrong only until the next status change corrects it.
+     */
+    public get isLikelyInstalled(): boolean {
+        return ext.context?.globalState.get<boolean>(LIKELY_INSTALLED_KEY) ?? false;
+    }
+
+    private syncLikelyInstalledHint(): void {
+        const likelyInstalled = this.stateFor(DEFAULT_ALIAS).metadata !== undefined;
+        if (likelyInstalled === this.isLikelyInstalled) {
+            return;
+        }
+        void ext.context?.globalState.update(LIKELY_INSTALLED_KEY, likelyInstalled);
+    }
 
     /** Latest Docker host facts collected by setup or deep reconciliation. */
     public getDockerReadinessSnapshot(): DockerReadiness | undefined {
@@ -439,6 +465,7 @@ export class QuickStartServiceImpl {
     }
 
     public dispose(): void {
+        this.hintSubscription.dispose();
         this.statusEmitter.dispose();
         this.operationEmitter.dispose();
     }
@@ -457,6 +484,9 @@ export class QuickStartServiceImpl {
             this.hydration = this.reconcile()
                 .then(() => {
                     this.hydrated = true;
+                    // Reconcile can settle without a status change (nothing was ever set up), which
+                    // would leave a stale hint behind.
+                    this.syncLikelyInstalledHint();
                     // Arms the background-probe cooldown: reconcile just produced an authoritative
                     // answer, and the status events it fired re-enter getChildren() once hydration
                     // is done, where an unarmed cooldown would re-inspect the same container.
@@ -488,6 +518,7 @@ export class QuickStartServiceImpl {
         try {
             await this.reconcile();
             this.hydrated = true;
+            this.syncLikelyInstalledHint();
             this.lastBackgroundRefreshAt = Date.now();
             traceQuickStart('Explicit node refresh completed.');
         } catch (error) {

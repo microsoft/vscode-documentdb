@@ -197,6 +197,17 @@ function executionTargetLabel(readiness: DockerReadiness): string {
     }
 }
 
+/** Hover copy for the not-set-up root: the value proposition plus the one prerequisite. */
+function buildEmptyStateTooltip(): vscode.MarkdownString {
+    const tooltip = new vscode.MarkdownString(`### ${l10n.t('Your own DocumentDB')}\n\n`);
+    tooltip.isTrusted = false;
+    tooltip.appendMarkdown(`${l10n.t('A local DocumentDB instance, set up for you. No configuration required.')}\n\n`);
+    tooltip.appendMarkdown(`- ${l10n.t('Ready in a couple of clicks')}\n`);
+    tooltip.appendMarkdown(`- ${l10n.t('Runs in Docker')}\n`);
+    tooltip.appendMarkdown(`- ${l10n.t('Safe to reset or delete at any time')}\n`);
+    return tooltip;
+}
+
 function buildInstanceTooltip(status: QuickStartStatus, baseTooltip?: vscode.MarkdownString): vscode.MarkdownString {
     const metadata = status.metadata;
     const readiness = QuickStartService.getDockerReadinessSnapshot();
@@ -335,7 +346,7 @@ class QuickStartClusterItem extends ClusterItemBase<ConnectionClusterModel> {
 }
 
 /**
- * Root node "DocumentDB Local - Quick Start" (WI-6). Renders unconditionally
+ * Root node "Your own DocumentDB" (WI-6). Renders unconditionally
  * (even with zero saved connections — handled in ConnectionsBranchDataProvider).
  *
  * - No managed instance → a rocket empty-state row that opens the Quick Start
@@ -563,10 +574,21 @@ export class LocalQuickStartItem implements TreeElement, TreeElementWithContextV
     };
 
     public getTreeItem(): vscode.TreeItem {
+        // Synchronous in-memory read; onDidChangeStatus refreshes the view, so this re-renders on change.
+        const status = QuickStartService.getStatus();
+        // The pitch is only true until there is something to browse, so it retires with the empty state.
+        // Before hydration nothing is known yet, so the persisted hint stands in and keeps the copy from
+        // appearing for users who already have an instance, only to vanish on first expansion.
+        const isEmptyState = QuickStartService.isHydrated
+            ? !status.metadata && status.state === InstanceState.NotInstalled
+            : !QuickStartService.isLikelyInstalled;
+
         return {
             id: this.id,
             contextValue: this.contextValue,
-            label: l10n.t('DocumentDB Local - Quick Start'),
+            label: l10n.t('Your own DocumentDB'),
+            description: isEmptyState ? l10n.t('zero-config local instance') : undefined,
+            tooltip: isEmptyState ? buildEmptyStateTooltip() : undefined,
             iconPath: this.iconPath,
             collapsibleState: vscode.TreeItemCollapsibleState.Collapsed,
         };

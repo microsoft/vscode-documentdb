@@ -21,7 +21,7 @@ The extension host matters. In a local VS Code window, Docker and DocumentDB Loc
 ## Start Quick Start
 
 1. Open the **Connections** view.
-2. Under **DocumentDB Local - Quick Start**, select **Quick Start**.
+2. Under **Your own DocumentDB**, select **Quick Start**.
 3. Review the Docker, port, platform, data, and security cards.
 4. Select **Start DocumentDB Local**.
 

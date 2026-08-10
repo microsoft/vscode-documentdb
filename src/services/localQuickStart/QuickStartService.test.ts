@@ -1821,3 +1821,108 @@ describe('QuickStartService — WI-2e-1 provision RR4 volume-wipe gate', () => {
         expect(service.getStatus().state).toBe(InstanceState.Error);
     });
 });
+
+/**
+ * The tree renders its root row long before {@link QuickStartServiceImpl.ensureHydrated} has reached
+ * Docker, so the not-set-up copy is gated on this persisted hint instead of live state. Getting it
+ * wrong shows the setup pitch to users who already have an instance, then retracts it on expansion.
+ */
+describe('QuickStartService — likely-installed hint', () => {
+    beforeAll(() => {
+        jest.spyOn(vscode.window, 'createOutputChannel').mockReturnValue({
+            name: 'test',
+            append: jest.fn(),
+            appendLine: jest.fn(),
+            replace: jest.fn(),
+            clear: jest.fn(),
+            show: jest.fn(),
+            hide: jest.fn(),
+            dispose: jest.fn(),
+        } as unknown as vscode.LogOutputChannel);
+        disposeQuickStartOutputChannel();
+    });
+
+    afterAll(() => {
+        disposeQuickStartOutputChannel();
+        jest.restoreAllMocks();
+    });
+
+    let originalSecretStorage: vscode.SecretStorage;
+    let originalContext: vscode.ExtensionContext;
+
+    beforeEach(() => {
+        originalSecretStorage = ext.secretStorage;
+        originalContext = ext.context;
+    });
+
+    afterEach(() => {
+        ext.secretStorage = originalSecretStorage;
+        ext.context = originalContext;
+    });
+
+    it('stays false for a user who has never set anything up', async () => {
+        ext.secretStorage = fakeSecretStorage({});
+        ext.context = fakeContext(fakeMemento());
+        const service = new QuickStartServiceImpl(mockRuntime({}));
+
+        expect(service.isLikelyInstalled).toBe(false);
+
+        await service.ensureHydrated();
+
+        expect(service.isLikelyInstalled).toBe(false);
+    });
+
+    it('survives a restart once an instance exists, so the next window knows before hydrating', async () => {
+        ext.secretStorage = fakeSecretStorage({});
+        const globalState = fakeMemento();
+        ext.context = fakeContext(globalState);
+        await seedInstance(DEFAULT_ALIAS, STORED_CONN);
+
+        const runtime = mockRuntime({
+            listByLabel: jest.fn().mockResolvedValue([{ id: 'c1' }]),
+            inspectContainer: jest.fn().mockResolvedValue({
+                id: 'c1',
+                status: 'exited',
+                ports: [{ containerPort: 10260, hostPort: 10273 }],
+                image: { originalName: 'ghcr.io/documentdb/documentdb-local:1.0.0' },
+            }),
+        });
+        const service = new QuickStartServiceImpl(runtime);
+        await service.ensureHydrated();
+
+        expect(service.isLikelyInstalled).toBe(true);
+
+        // A fresh service over the same globalState stands in for the next window: the hint must be
+        // readable with no hydration at all.
+        const nextWindow = new QuickStartServiceImpl(mockRuntime({}));
+
+        expect(nextWindow.isHydrated).toBe(false);
+        expect(nextWindow.isLikelyInstalled).toBe(true);
+    });
+
+    it('clears when the container is deleted, so the setup copy comes back', async () => {
+        ext.secretStorage = fakeSecretStorage({});
+        ext.context = fakeContext(fakeMemento());
+        await seedInstance(DEFAULT_ALIAS, STORED_CONN);
+
+        const labels = { [QUICK_START_LABEL_KEY]: '1', [QUICK_START_ALIAS_LABEL_KEY]: DEFAULT_ALIAS };
+        const runtime = mockRuntime({
+            listByLabel: jest.fn().mockResolvedValue([{ id: 'c1', labels }]),
+            inspectContainer: jest.fn().mockResolvedValue({
+                id: 'c1',
+                status: 'exited',
+                ports: [{ containerPort: 10260, hostPort: 10273 }],
+                image: { originalName: 'ghcr.io/documentdb/documentdb-local:1.0.0' },
+                labels,
+            }),
+        });
+        const service = new QuickStartServiceImpl(runtime);
+        await service.ensureHydrated();
+        expect(service.isLikelyInstalled).toBe(true);
+
+        // Asserted so an ownership refusal can never pass as a cleared hint.
+        expect(await service.deleteContainer()).toBe('deleted');
+
+        expect(service.isLikelyInstalled).toBe(false);
+    });
+});
