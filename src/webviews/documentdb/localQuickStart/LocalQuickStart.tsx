@@ -260,7 +260,8 @@ const useStyles = makeStyles({
     stageError: { color: tokens.colorPaletteRedForeground1, fontSize: '18px' },
     stagePending: { color: tokens.colorNeutralForeground4, fontSize: '18px' },
     dockerStatus: { display: 'flex', flexDirection: 'column', gap: '10px' },
-    messageBody: { display: 'flex', flexDirection: 'column', gap: '8px' },
+    stackedMessageBarBody: { display: 'flex', flexDirection: 'column', gap: '8px' },
+    titleAndMessageBarBody: { display: 'flex', flexDirection: 'column', gap: '8px' },
     recoveryCommand: { display: 'flex', flexDirection: 'column', gap: '8px' },
     // Copy stays pinned top-right: a multi-line command must not push it down or wrap it away.
     recoveryCommandBlock: {
@@ -323,7 +324,8 @@ const useStyles = makeStyles({
         flexWrap: 'wrap',
         gap: '8px',
     },
-    nextSteps: { display: 'flex', flexDirection: 'column', gap: '4px' },
+    nextSteps: { display: 'flex', flexDirection: 'column', gap: '4px', marginTop: '12px' },
+    nextStepsList: { display: 'flex', flexDirection: 'column', gap: '4px', margin: 0, paddingLeft: '20px' },
     // Visually hidden but exposed to assistive tech (WCAG 4.1.3 status text).
     srOnly: {
         position: 'absolute',
@@ -1996,7 +1998,7 @@ export const LocalQuickStart = (): JSX.Element => {
      */
     const existingInstanceNotice = existingInstanceGuard && (
         <MessageBar intent={existingInstanceGuard === 'credentialsMissing' ? 'warning' : 'info'} layout="multiline">
-            <MessageBarBody className={styles.messageBody}>
+            <MessageBarBody className={styles.titleAndMessageBarBody}>
                 {existingInstanceGuard === 'healthy' ? (
                     <>
                         <MessageBarTitle>{l10n.t('DocumentDB Local is already running')}</MessageBarTitle>
@@ -2050,7 +2052,7 @@ export const LocalQuickStart = (): JSX.Element => {
      */
     const dataChoiceBlock = canReuseExistingData && !forcedFresh && !startBlockedByGuard && (
         <MessageBar intent="info" layout="multiline">
-            <MessageBarBody className={styles.messageBody}>
+            <MessageBarBody className={styles.stackedMessageBarBody}>
                 {instanceMissing && (
                     <div>
                         {l10n.t(
@@ -2146,7 +2148,7 @@ export const LocalQuickStart = (): JSX.Element => {
             {shownDocker && (
                 <>
                     <MessageBar intent="error" layout="multiline" icon={<ErrorCircleFilled />}>
-                        <MessageBarBody className={styles.messageBody}>
+                        <MessageBarBody className={styles.stackedMessageBarBody}>
                             <div>
                                 <MessageBarTitle>
                                     {dockerFailureLabelMap[shownDocker.problem.failureKind ?? 'unknown']}
@@ -2349,9 +2351,9 @@ export const LocalQuickStart = (): JSX.Element => {
             {/* Only when a later failure still stands: otherwise the heading already says it. */}
             <Collapse visible={dockerRecovered && !canContinueSetup} unmountOnExit>
                 <div>
-                    <MessageBar intent="success">
-                        <MessageBarBody>
-                            <MessageBarTitle>{l10n.t('Docker is ready')}</MessageBarTitle>{' '}
+                    <MessageBar intent="success" layout="multiline">
+                        <MessageBarBody className={styles.titleAndMessageBarBody}>
+                            <MessageBarTitle>{l10n.t('Docker is ready')}</MessageBarTitle>
                             {l10n.t('The earlier failure is still shown below.')}
                         </MessageBarBody>
                     </MessageBar>
@@ -2406,33 +2408,32 @@ export const LocalQuickStart = (): JSX.Element => {
                     />
                 ))}
             </div>
-            <MessageBar intent="success">
-                <MessageBarBody>
-                    <MessageBarTitle>{l10n.t('All set')}</MessageBarTitle>{' '}
-                    {/*
-                     * Say plainly that the connection already exists. Without this, the copy
-                     * action next to it read as "now go and create the connection", and a
-                     * bug-bash user did exactly that, ending up with a duplicate (#857).
-                     */}
-                    {l10n.t(
-                        'This instance is already in the Connections view as “DocumentDB Local”. You do not need to create a connection for it.',
-                    )}
+            <MessageBar intent="success" layout="multiline">
+                <MessageBarBody className={styles.titleAndMessageBarBody}>
+                    <MessageBarTitle>{l10n.t('All set')}</MessageBarTitle>
+                    {l10n.t('The instance is ready in the Connections view as “DocumentDB Local”.')}
                 </MessageBarBody>
             </MessageBar>
             <div className={styles.nextSteps}>
-                <Text size={200} weight="semibold">
+                <Text size={300} weight="regular">
                     {l10n.t('Next steps')}
                 </Text>
-                <Text size={200}>
-                    {l10n.t(
-                        '• Open Connection: browse your databases in the Connections view, under “DocumentDB Local”.',
-                    )}
-                </Text>
-                <Text size={200}>
-                    {l10n.t(
-                        '• The container keeps running after VS Code closes. Manage it with Stop / Restart / Delete in the Connections view.',
-                    )}
-                </Text>
+                <ul className={styles.nextStepsList}>
+                    <li>
+                        <Text size={300}>
+                            {l10n.t(
+                                'Click Open Connection to browse your databases under “DocumentDB Local” in the Connections view.',
+                            )}
+                        </Text>
+                    </li>
+                    <li>
+                        <Text size={300}>
+                            {l10n.t(
+                                'The container keeps running after VS Code closes. Manage it with Stop, Restart, or Delete in the Connections view.',
+                            )}
+                        </Text>
+                    </li>
+                </ul>
             </div>
         </section>
     );
