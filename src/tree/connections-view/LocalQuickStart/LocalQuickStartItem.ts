@@ -31,7 +31,7 @@ import {
 } from '../../../services/localQuickStart/quickStartTypes';
 import { getResourcesPath } from '../../../utils/icons';
 import { createGenericElementWithContext } from '../../api/createGenericElementWithContext';
-import { containsRetryNode, createRetryNode } from '../../api/retryNode';
+import { containsRetryNode } from '../../api/retryNode';
 import { ClusterItemBase, type EphemeralClusterCredentials } from '../../documentdb/ClusterItemBase';
 import { type TreeCluster } from '../../models/BaseClusterModel';
 import { type TreeElement } from '../../TreeElement';
@@ -44,58 +44,75 @@ import { buildQuickStartInstanceTreeId, buildQuickStartTreeId } from './quickSta
 /** Base context token for the managed-instance row; menus gate on this + a state token. */
 const INSTANCE_CONTEXT = 'treeItem_quickStartInstance';
 
+function createQuickStartAction(
+    parentId: string,
+    idSuffix: string,
+    label: string,
+    iconId: string,
+    commandId: string,
+): TreeElement {
+    return createGenericElementWithContext({
+        id: `${parentId}/${idSuffix}`,
+        contextValue: 'treeItem_quickStartAction',
+        label,
+        iconPath: new vscode.ThemeIcon(iconId),
+        commandId,
+    });
+}
+
+function createQuickStartRetryAction(parentId: string, retryTarget: unknown): TreeElement {
+    return createGenericElementWithContext({
+        id: `${parentId}/retry`,
+        contextValue: 'error',
+        label: l10n.t('Retry setup'),
+        iconPath: new vscode.ThemeIcon('refresh'),
+        commandId: 'vscode-documentdb.command.localQuickStart.open',
+        commandArgs: [retryTarget],
+    });
+}
+
 /**
  * What the tree shows instead of databases when the container preflight says the instance cannot be
  * opened. Rendered as rows rather than a dialog: expanding a node is a browse gesture, and a modal
  * would block the expansion until it is answered and then leave the node empty anyway.
  */
 function buildPreflightChildren(parentId: string, verdict: QuickStartConnectionPreflightResult): TreeElement[] {
-    const id = `${parentId}/preflight`;
     const open = 'vscode-documentdb.command.localQuickStart.open';
+    const viewLogs = 'vscode-documentdb.command.localQuickStart.viewLogs';
 
     switch (verdict) {
         case 'stopped':
             return [
-                createGenericElementWithContext({
-                    id,
-                    contextValue: 'error',
-                    label: l10n.t('Click here to start DocumentDB Local'),
-                    iconPath: new vscode.ThemeIcon('play'),
-                    commandId: 'vscode-documentdb.command.localQuickStart.start',
-                }),
+                createQuickStartAction(
+                    parentId,
+                    'preflight/start',
+                    l10n.t('Start container'),
+                    'play',
+                    'vscode-documentdb.command.localQuickStart.start',
+                ),
             ];
         case 'missing':
             return [
-                createGenericElementWithContext({
-                    id,
-                    contextValue: 'error',
-                    label: l10n.t('The container is gone. Click here to recreate it'),
-                    iconPath: new vscode.ThemeIcon('warning', new vscode.ThemeColor('list.warningForeground')),
-                    commandId: open,
-                }),
+                createQuickStartAction(parentId, 'preflight/recreate', l10n.t('Recreate container'), 'refresh', open),
             ];
         case 'dockerUnreachable':
             return [
-                createGenericElementWithContext({
-                    id,
-                    contextValue: 'error',
-                    label: l10n.t('Docker does not appear to be running. Click here for details'),
-                    iconPath: new vscode.ThemeIcon('warning', new vscode.ThemeColor('list.warningForeground')),
-                    commandId: open,
-                }),
+                createQuickStartAction(
+                    parentId,
+                    'preflight/reviewDocker',
+                    l10n.t('Review Docker setup'),
+                    'tools',
+                    open,
+                ),
+                createQuickStartAction(parentId, 'preflight/viewLogs', l10n.t('View setup log'), 'output', viewLogs),
             ];
         case 'busy':
             // Progress belongs on the node itself (see quickStartProgressBridge), not on a child row.
             return [];
         default:
             return [
-                createGenericElementWithContext({
-                    id,
-                    contextValue: 'error',
-                    label: l10n.t('DocumentDB Local cannot be opened. Click here to review its setup'),
-                    iconPath: new vscode.ThemeIcon('warning', new vscode.ThemeColor('list.warningForeground')),
-                    commandId: open,
-                }),
+                createQuickStartAction(parentId, 'preflight/reviewSetup', l10n.t('Review setup'), 'tools', open),
+                createQuickStartAction(parentId, 'preflight/viewLogs', l10n.t('View setup log'), 'output', viewLogs),
             ];
     }
 }
@@ -354,14 +371,14 @@ export class LocalQuickStartItem implements TreeElement, TreeElementWithContextV
      */
     private createErrorRecoveryChildren(includeDelete: boolean): TreeElement[] {
         const children: TreeElement[] = [
-            createRetryNode(this.id, this, { commandId: 'vscode-documentdb.command.localQuickStart.open' }),
-            createGenericElementWithContext({
-                id: `${this.id}/viewLogs`,
-                contextValue: 'error',
-                label: l10n.t('Click here to view the setup log'),
-                iconPath: new vscode.ThemeIcon('output'),
-                commandId: 'vscode-documentdb.command.localQuickStart.viewLogs',
-            }),
+            createQuickStartRetryAction(this.id, this),
+            createQuickStartAction(
+                this.id,
+                'viewLogs',
+                l10n.t('View setup log'),
+                'output',
+                'vscode-documentdb.command.localQuickStart.viewLogs',
+            ),
         ];
 
         if (includeDelete) {
@@ -402,17 +419,20 @@ export class LocalQuickStartItem implements TreeElement, TreeElementWithContextV
         // Missing badge (design §6.1): metadata exists but Docker has no container.
         if (metadata && status.missing) {
             return [
-                createGenericElementWithContext({
-                    id: `${this.id}/instance`,
-                    contextValue: createContextValue([INSTANCE_CONTEXT, 'state_missing']),
-                    label: l10n.t('DocumentDB Local'),
-                    description: l10n.t('Missing · click to recreate'),
-                    tooltip: l10n.t(
-                        'The container was removed outside VS Code. Click to recreate it (your data is preserved), or use Delete Container to remove it and its data.',
-                    ),
-                    iconPath: new vscode.ThemeIcon('warning', new vscode.ThemeColor('list.warningForeground')),
-                    commandId: 'vscode-documentdb.command.localQuickStart.open',
-                }),
+                createQuickStartAction(
+                    this.id,
+                    'recreate',
+                    l10n.t('Recreate container'),
+                    'refresh',
+                    'vscode-documentdb.command.localQuickStart.open',
+                ),
+                createQuickStartAction(
+                    this.id,
+                    'delete',
+                    l10n.t('Delete container'),
+                    'trash',
+                    'vscode-documentdb.command.localQuickStart.delete',
+                ),
             ];
         }
 
@@ -487,17 +507,13 @@ export class LocalQuickStartItem implements TreeElement, TreeElementWithContextV
         // exposed from this row; the Configure step owns that decision.
         if (status.state === InstanceState.CredentialsMissing) {
             return [
-                createGenericElementWithContext({
-                    id: `${this.id}/instance`,
-                    contextValue: createContextValue([INSTANCE_CONTEXT, 'state_needsAttention']),
-                    label: l10n.t('DocumentDB Local'),
-                    description: l10n.t('Needs attention · review setup'),
-                    tooltip: l10n.t(
-                        'VS Code cannot access the saved credentials for this instance. Review the setup options; your container and data have not been changed.',
-                    ),
-                    iconPath: new vscode.ThemeIcon('warning', new vscode.ThemeColor('list.warningForeground')),
-                    commandId: 'vscode-documentdb.command.localQuickStart.open',
-                }),
+                createQuickStartAction(
+                    this.id,
+                    'reviewSetup',
+                    l10n.t('Review setup'),
+                    'tools',
+                    'vscode-documentdb.command.localQuickStart.open',
+                ),
             ];
         }
 
@@ -514,25 +530,22 @@ export class LocalQuickStartItem implements TreeElement, TreeElementWithContextV
             ];
         }
 
-        // NotInstalled (no metadata) → empty-state row that opens the Quick Start wizard.
-        const children: TreeElement[] = [
-            createGenericElementWithContext({
-                id: `${this.id}/start`,
-                contextValue: 'treeItem_quickStartAction',
-                label: l10n.t('Click here to set up DocumentDB Local'),
-                iconPath: new vscode.ThemeIcon('rocket'),
-                commandId: 'vscode-documentdb.command.localQuickStart.open',
-            }),
-        ];
-
         // A wizard failure that never got as far as creating anything (no metadata) is still
-        // reported here, but as ACTIONABLE recovery nodes rather than the message-only row this
-        // used to push (review N3). There is no container yet, so Delete is not offered.
+        // reported as recovery actions. There is no container yet, so Delete is not offered.
         if (status.state === InstanceState.Error) {
-            children.push(...this.createErrorRecoveryChildren(false));
+            return this.createErrorRecoveryChildren(false);
         }
 
-        return children;
+        // NotInstalled (no metadata) → empty-state row that opens the Quick Start wizard.
+        return [
+            createQuickStartAction(
+                this.id,
+                'start',
+                l10n.t('Set up DocumentDB Local'),
+                'rocket',
+                'vscode-documentdb.command.localQuickStart.open',
+            ),
+        ];
     }
 
     /** Explicit node refresh performs a full durable-store and Docker reconciliation. */

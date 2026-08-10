@@ -140,10 +140,9 @@ describe('QuickStartClusterItem — credential source of truth (H5)', () => {
         jest.spyOn(QuickStartService, 'prepareForConnection').mockResolvedValue('unavailable');
 
         const children = await (await getClusterItem()).getChildren();
+        const treeItems = await Promise.all(children.map(async (child) => child.getTreeItem()));
 
-        expect(children.map((child) => child.getTreeItem())).toEqual([
-            expect.objectContaining({ label: 'DocumentDB Local cannot be opened. Click here to review its setup' }),
-        ]);
+        expect(treeItems.map((item) => item.label)).toEqual(['Review setup', 'View setup log']);
         expect(mockGetClient).not.toHaveBeenCalled();
     });
 
@@ -155,7 +154,7 @@ describe('QuickStartClusterItem — credential source of truth (H5)', () => {
 
         expect(children.map((child) => child.getTreeItem())).toEqual([
             expect.objectContaining({
-                label: 'Click here to start DocumentDB Local',
+                label: 'Start container',
                 command: expect.objectContaining({ command: 'vscode-documentdb.command.localQuickStart.start' }),
             }),
         ]);
@@ -163,14 +162,24 @@ describe('QuickStartClusterItem — credential source of truth (H5)', () => {
         expect(mockGetClient).not.toHaveBeenCalled();
     });
 
+    it('offers to recreate a container that disappeared before expansion', async () => {
+        jest.spyOn(QuickStartService, 'prepareForConnection').mockResolvedValue('missing');
+
+        const children = await (await getClusterItem()).getChildren();
+        const treeItems = await Promise.all(children.map(async (child) => child.getTreeItem()));
+
+        expect(treeItems.map((item) => item.label)).toEqual(['Recreate container']);
+        expect(treeItems[0].command?.command).toBe('vscode-documentdb.command.localQuickStart.open');
+        expect(mockGetClient).not.toHaveBeenCalled();
+    });
+
     it('explains a Docker daemon that is not answering', async () => {
         jest.spyOn(QuickStartService, 'prepareForConnection').mockResolvedValue('dockerUnreachable');
 
         const children = await (await getClusterItem()).getChildren();
+        const treeItems = await Promise.all(children.map(async (child) => child.getTreeItem()));
 
-        expect(children.map((child) => child.getTreeItem())).toEqual([
-            expect.objectContaining({ label: 'Docker does not appear to be running. Click here for details' }),
-        ]);
+        expect(treeItems.map((item) => item.label)).toEqual(['Review Docker setup', 'View setup log']);
         expect(mockGetClient).not.toHaveBeenCalled();
     });
 

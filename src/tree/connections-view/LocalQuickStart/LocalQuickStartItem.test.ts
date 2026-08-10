@@ -3,7 +3,7 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { TreeItemCollapsibleState } from 'vscode';
+import { ThemeIcon, TreeItemCollapsibleState } from 'vscode';
 import { QuickStartService } from '../../../services/localQuickStart/QuickStartService';
 import { InstanceState, type QuickStartStatus } from '../../../services/localQuickStart/quickStartTypes';
 import { LocalQuickStartItem } from './LocalQuickStartItem';
@@ -75,10 +75,14 @@ describe('LocalQuickStartItem — lazy hydration', () => {
         const children = await new LocalQuickStartItem('connectionsView/root').getChildren();
 
         expect(children.map((child) => child.id)).toEqual(['connectionsView/root/localQuickStart/start']);
+        await expect(Promise.resolve(children[0].getTreeItem())).resolves.toHaveProperty(
+            'label',
+            'Set up DocumentDB Local',
+        );
     });
 });
 
-describe('LocalQuickStartItem — CredentialsMissing row', () => {
+describe('LocalQuickStartItem — action states', () => {
     afterEach(() => jest.restoreAllMocks());
 
     it('opens Quick Start to review setup without offering deletion in the tree', async () => {
@@ -97,12 +101,34 @@ describe('LocalQuickStartItem — CredentialsMissing row', () => {
 
         expect(children).toHaveLength(1);
         const treeItem = await children[0].getTreeItem();
-        const contextValue = String(treeItem.contextValue ?? '');
-        expect(contextValue).toContain('treeItem_quickStartInstance');
-        expect(contextValue).toContain('state_needsAttention');
-        expect(contextValue).not.toContain('state_credentialsMissing');
-        expect(treeItem.description).toBe('Needs attention · review setup');
+        expect(treeItem.label).toBe('Review setup');
+        expect(treeItem.iconPath).toEqual(new ThemeIcon('tools'));
         expect(treeItem.command?.command).toBe('vscode-documentdb.command.localQuickStart.open');
+    });
+
+    it('offers recreate and delete actions when the managed container is missing', async () => {
+        jest.spyOn(QuickStartService, 'ensureHydrated').mockResolvedValue(undefined);
+        jest.spyOn(QuickStartService, 'isHydrated', 'get').mockReturnValue(false);
+        jest.spyOn(QuickStartService, 'refreshLiveStateInBackground').mockReturnValue(undefined);
+        jest.spyOn(QuickStartService, 'getStatus').mockReturnValue({
+            state: InstanceState.Stopped,
+            metadata: {
+                containerId: 'c1',
+                alias: 'vscode-documentdb-local',
+                boundPort: 10260,
+                clusterId: 'quickstart-vscode-documentdb-local',
+                connectionString: 'mongodb://u:p@localhost:10260/',
+                username: 'u',
+            },
+            missing: true,
+            canResumeReadiness: false,
+        });
+
+        const children = await new LocalQuickStartItem('connectionsView/root').getChildren();
+        const treeItems = await Promise.all(children.map(async (child) => child.getTreeItem()));
+
+        expect(treeItems.map((item) => item.label)).toEqual(['Recreate container', 'Delete container']);
+        expect(treeItems.map((item) => item.iconPath)).toEqual([new ThemeIcon('refresh'), new ThemeIcon('trash')]);
     });
 });
 
@@ -188,6 +214,8 @@ describe('LocalQuickStartItem — error recovery nodes (I2-4)', () => {
             'connectionsView/root/localQuickStart/viewLogs',
             'connectionsView/root/localQuickStart/delete',
         ]);
+        const treeItems = await Promise.all(items.map(async (item) => item.getTreeItem()));
+        expect(treeItems.map((item) => item.label)).toEqual(['Retry setup', 'View setup log', 'Delete container']);
         expect(items[2].getTreeItem()).toHaveProperty('label', 'Delete container');
     });
 
@@ -196,10 +224,11 @@ describe('LocalQuickStartItem — error recovery nodes (I2-4)', () => {
         const ids = items.map((item) => item.id);
 
         expect(ids).toEqual([
-            'connectionsView/root/localQuickStart/start',
             'connectionsView/root/localQuickStart/retry',
             'connectionsView/root/localQuickStart/viewLogs',
         ]);
+        const treeItems = await Promise.all(items.map(async (item) => item.getTreeItem()));
+        expect(treeItems.map((item) => item.label)).toEqual(['Retry setup', 'View setup log']);
         expect(ids).not.toContain('connectionsView/root/localQuickStart/error');
     });
 });
