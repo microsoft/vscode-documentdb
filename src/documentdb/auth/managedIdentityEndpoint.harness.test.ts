@@ -22,7 +22,6 @@
  */
 
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'http';
-import { type AddressInfo } from 'net';
 import { classifyManagedIdentityError, describeManagedIdentityError } from './managedIdentityErrors';
 
 const CLIENT_ID = '11111111-2222-3333-4444-555555555555';
@@ -91,15 +90,17 @@ describe('ManagedIdentityCredential against a fake identity endpoint', () => {
     }
 
     async function startEndpoint(responder: Responder): Promise<void> {
-        server = createServer((request, response) => {
+        const created = createServer((request, response) => {
             const url = new URL(request.url ?? '/', 'http://127.0.0.1');
             requests.push({ query: url.searchParams, headers: request.headers });
             responder(request, response);
         });
+        server = created;
 
-        await new Promise<void>((resolve) => server!.listen(0, '127.0.0.1', resolve));
-        const { port } = server!.address() as AddressInfo;
-        useEndpoint(`http://127.0.0.1:${String(port)}/`);
+        await new Promise<void>((resolve) => created.listen(0, '127.0.0.1', resolve));
+        const address = created.address();
+        const port = typeof address === 'object' && address !== null ? address.port : 0;
+        useEndpoint(`http://127.0.0.1:${port}/`);
     }
 
     async function acquireToken(clientId?: string): Promise<{ token: string; expiresOnTimestamp: number }> {

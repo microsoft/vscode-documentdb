@@ -118,7 +118,7 @@ function collectErrorText(error: unknown, depth: number = 0): string {
     }
 
     if (typeof error !== 'object') {
-        return String(error);
+        return typeof error === 'symbol' ? error.toString() : `${error as boolean | number | bigint}`;
     }
 
     const candidate = error as {
@@ -141,9 +141,9 @@ function collectErrorText(error: unknown, depth: number = 0): string {
     }
 
     if (parts.length === 0) {
-        // Nothing recognizable. Avoid returning "[object Object]", which would only be noise.
-        const asString = String(error);
-        return asString === '[object Object]' ? '' : asString;
+        // Nothing recognizable. An object with no message and no cause carries no information worth
+        // showing, so it contributes nothing rather than "[object Object]".
+        return '';
     }
 
     return parts.filter((part) => part.length > 0).join(' ');
