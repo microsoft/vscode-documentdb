@@ -1,6 +1,7 @@
 # Managed Identity Support for Azure DocumentDB (vCore)
 
-**Status:** Plan, not started. Decisions confirmed 2026-08-10, except D3 (open)
+**Status:** Implemented on `dev/tnaum/managed-identities`, pending validation on the Azure VM repro.
+**Progress:** see [`implementation-log.md`](./implementation-log.md) and [`manual-validation-checklist.md`](./manual-validation-checklist.md)
 **Owner:** unassigned
 **Branch:** `dev/tnaum/managed-identities`
 **Companion docs:** [`research-findings.md`](./research-findings.md) (evidence),
@@ -651,24 +652,24 @@ This alone closes the incident for the reported scenario.
 
 | ID  | Description                                                                                                                                                                                           | Status |
 | --- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------ |
-| WI1 | Add `AuthMethodId.ManagedIdentity`, `ManagedIdentityAuthMethod`, register in `authMethodsArray`                                                                                                       | ☐      |
-| WI2 | Extract the shared Entra scope / token-resource constant. **Do not** touch the existing handler's `expiresInSeconds: 0`; the new handler reports its own from `AccessToken.expiresOnTimestamp` (D6.1) | ☐      |
-| WI3 | Add `ManagedIdentityAuthConfig`; extend `AuthConfig` union                                                                                                                                            | ☐      |
-| WI4 | Implement `ManagedIdentityAuthHandler` with a dynamic `@azure/identity` import                                                                                                                        | ☐      |
-| WI5 | Add the `ManagedIdentity` case to the `ClustersClient.initClient()` switch                                                                                                                            | ☐      |
-| WI6 | Implement `managedIdentityErrors.ts` / `describeManagedIdentityError()` (plain-language translation only, D6.2)                                                                                       | ☐      |
+| WI1 | Add `AuthMethodId.ManagedIdentity`, `ManagedIdentityAuthMethod`, register in `authMethodsArray`                                                                                                       | ✅     |
+| WI2 | Extract the shared Entra scope / token-resource constant. **Do not** touch the existing handler's `expiresInSeconds: 0`; the new handler reports its own from `AccessToken.expiresOnTimestamp` (D6.1) | ✅     |
+| WI3 | Add `ManagedIdentityAuthConfig`; extend `AuthConfig` union                                                                                                                                            | ✅     |
+| WI4 | Implement `ManagedIdentityAuthHandler` with a dynamic `@azure/identity` import                                                                                                                        | ✅     |
+| WI5 | Add the `ManagedIdentity` case to the `ClustersClient.initClient()` switch                                                                                                                            | ✅     |
+| WI6 | Implement `managedIdentityErrors.ts` / `describeManagedIdentityError()` (plain-language translation only, D6.2)                                                                                       | ✅     |
 
 ### Phase 2: connection creation and persistence
 
 | ID   | Description                                                                                                                                            | Status |
 | ---- | ------------------------------------------------------------------------------------------------------------------------------------------------------ | ------ |
-| WI7  | Implement `detectManagedIdentityHint()` and the normalisation rule (§5.2); wire into `PromptConnectionStringStep` **before** the username is cleared   | ☐      |
-| WI8  | `Copy Connection String`: emit the driver-native form for `ManagedIdentity` (§5.1)                                                                     | ☐      |
-| WI9  | Offer `ManagedIdentity` for vCore hosts in `PromptConnectionStringStep`                                                                                | ☐      |
-| WI10 | Implement `SelectManagedIdentityStep` (Atlas pattern, §7) plus the recently-used client ID store; register in both wizards; skip on an `explicit` hint | ☐      |
-| WI11 | Extend `ConnectionSecrets`, `CachedClusterCredentials`, `setAuthCredentials()`, `EphemeralClusterCredentials`, `AuthenticateWizardContext`             | ☐      |
-| WI12 | Rework the `setFromConnectionItem()` inference ladder to honour `selectedAuthMethod` for all known methods                                             | ☐      |
-| WI13 | Persist `managedIdentityAuthConfig` (including `{}` for system-assigned) in `ExecuteStep`                                                              | ☐      |
+| WI7  | Implement `detectManagedIdentityHint()` and the normalisation rule (§5.2); wire into `PromptConnectionStringStep` **before** the username is cleared   | ✅     |
+| WI8  | `Copy Connection String`: emit the driver-native form for `ManagedIdentity` (§5.1)                                                                     | ✅     |
+| WI9  | Offer `ManagedIdentity` for vCore hosts in `PromptConnectionStringStep`                                                                                | ✅     |
+| WI10 | Implement `SelectManagedIdentityStep` (Atlas pattern, §7) plus the recently-used client ID store; register in both wizards; skip on an `explicit` hint | ✅     |
+| WI11 | Extend `ConnectionSecrets`, `CachedClusterCredentials`, `setAuthCredentials()`, `EphemeralClusterCredentials`, `AuthenticateWizardContext`             | ✅     |
+| WI12 | Rework the `setFromConnectionItem()` inference ladder to honour `selectedAuthMethod` for all known methods                                             | ✅     |
+| WI13 | Persist `managedIdentityAuthConfig` (including `{}` for system-assigned) in `ExecuteStep`                                                              | ✅     |
 
 ### Phase 3: validation harness
 
@@ -676,33 +677,33 @@ Deliberately ahead of the remaining feature work: WI6 and WI11 cannot be reviewe
 
 | ID   | Description                                                                                                    | Status |
 | ---- | -------------------------------------------------------------------------------------------------------------- | ------ |
-| WI14 | Fake identity-endpoint test harness (see Testing below); capture real error shapes and feed them back into WI6 | ☐      |
-| WI15 | Unit tests per the Testing section, including the **copy then paste round-trip** across §5.1 and §5.2          | ☐      |
+| WI14 | Fake identity-endpoint test harness (see Testing below); capture real error shapes and feed them back into WI6 | ✅     |
+| WI15 | Unit tests per the Testing section, including the **copy then paste round-trip** across §5.1 and §5.2          | ✅     |
 
 ### Phase 4: Azure Resources and Discovery views
 
 | ID   | Description                                                                                                               | Status |
 | ---- | ------------------------------------------------------------------------------------------------------------------------- | ------ |
-| WI16 | Synthesize `ManagedIdentity` into `availableAuthMethods` in `clusterHelpers.ts`; keep raw `allowedModes` telemetry intact | ☐      |
-| WI17 | Thread `managedIdentityAuthConfig` through `VCoreResourceItem` and `DocumentDBResourceItem` `authenticateAndConnect()`    | ☐      |
+| WI16 | Synthesize `ManagedIdentity` into `availableAuthMethods` in `clusterHelpers.ts`; keep raw `allowedModes` telemetry intact | ✅     |
+| WI17 | Thread `managedIdentityAuthConfig` through `VCoreResourceItem` and `DocumentDBResourceItem` `authenticateAndConnect()`    | ✅     |
 
 ### Phase 5: Playground and Shell
 
 | ID   | Description                                                                                                                                         | Status |
 | ---- | --------------------------------------------------------------------------------------------------------------------------------------------------- | ------ |
-| WI18 | Extend `workerTypes.ts` (`authMechanism` union, `tokenRequest` `source` / `clientId`)                                                               | ☐      |
-| WI19 | Extend `playgroundWorker.ts` OIDC branch to cover `ManagedIdentity`                                                                                 | ☐      |
-| WI20 | Branch `handleTokenRequest()` in `PlaygroundEvaluator` and `ShellSessionManager`; cache credentials per client ID; extend both `buildInitMessage()` | ☐      |
+| WI18 | Extend `workerTypes.ts` (`authMechanism` union, `tokenRequest` `source` / `clientId`)                                                               | ✅     |
+| WI19 | Extend `playgroundWorker.ts` OIDC branch to cover `ManagedIdentity`                                                                                 | ✅     |
+| WI20 | Branch `handleTokenRequest()` in `PlaygroundEvaluator` and `ShellSessionManager`; cache credentials per client ID; extend both `buildInitMessage()` | ✅     |
 
 ### Phase 6: hardening and documentation
 
 | ID   | Description                                                                                                                                              | Status |
 | ---- | -------------------------------------------------------------------------------------------------------------------------------------------------------- | ------ |
 | WI21 | **On hold.** `azureEnvironmentProbe.ts` and quick-pick annotation. Blocked on D3; currently expected to be dropped                                       | ⛔     |
-| WI22 | Telemetry properties per §12                                                                                                                             | ☐      |
-| WI23 | `npm run l10n`; verify **no em dashes and no en dashes** in any new user-facing string (see Conventions)                                                 | ☐      |
-| WI24 | `docs/` updates (D6.3): new managed identity user-manual page, `copy-connection-string.md`, `how-to-construct-url.md`, `connection-string-parameters.md` | ☐      |
-| WI25 | Manual validation checklist for the Azure VM repro                                                                                                       | ☐      |
+| WI22 | Telemetry properties per §12                                                                                                                             | ✅     |
+| WI23 | `npm run l10n`; verify **no em dashes and no en dashes** in any new user-facing string (see Conventions)                                                 | ✅     |
+| WI24 | `docs/` updates (D6.3): new managed identity user-manual page, `copy-connection-string.md`, `how-to-construct-url.md`, `connection-string-parameters.md` | ✅     |
+| WI25 | Manual validation checklist for the Azure VM repro                                                                                                       | ✅     |
 
 ### After the work lands
 
