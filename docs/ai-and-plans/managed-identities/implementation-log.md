@@ -33,8 +33,8 @@ commit) say so and name the commit that carries them.
 | 2     | WI7 to WI13  | ✅ Done        |
 | 3     | WI14, WI15   | ✅ Done        |
 | 4     | WI16, WI17   | ✅ Done        |
-| 5     | WI18 to WI20 | ⏳ In progress |
-| 6     | WI22 to WI25 | ☐ Not started  |
+| 5     | WI18 to WI20 | ✅ Done        |
+| 6     | WI22 to WI25 | ⏳ In progress |
 
 Legend: ☐ not started, ⏳ in progress, ✅ done, ⛔ on hold, ➖ folded into another item.
 
@@ -479,23 +479,66 @@ few lines earlier breaks a test instead of quietly skewing service-side numbers.
 
 ---
 
+## Phase 5: Playground and Shell
+
+### WI18, WI19, WI20 — Managed identity in the worker-backed surfaces ✅
+
+**Commit:** `6db91ea7` — _Support managed identity in the Playground and the Interactive Shell_
+
+**What.**
+
+- [workerTypes.ts](src/documentdb/playground/workerTypes.ts): `authMechanism` gains
+  `'ManagedIdentity'`; `init` gains `managedIdentityClientId`; `tokenRequest` gains `source` and
+  `clientId`.
+- [playgroundWorker.ts](src/documentdb/playground/playgroundWorker.ts): the OIDC branch now fires for
+  both Entra ID and managed identity, tagging the token request with its source.
+- New [managedIdentityTokenProvider.ts](src/documentdb/auth/managedIdentityTokenProvider.ts):
+  main-thread token acquisition with one cached `ManagedIdentityCredential` per client ID.
+- `handleTokenRequest()` in both [PlaygroundEvaluator.ts](src/documentdb/playground/PlaygroundEvaluator.ts)
+  and [ShellSessionManager.ts](src/documentdb/shell/ShellSessionManager.ts) branches on `source`;
+  both `buildInitMessage()` pass the client ID through.
+
+**Why.** Plan §9. Token acquisition stays on the main thread so there is a single credential and a
+single token cache per window, and so the worker never has to import `@azure/identity`.
+
+**Notes and divergences.**
+
+- `source` is optional and an absent value means `'vscode'`, exactly as the plan specifies, so no
+  existing message shape changes meaning.
+- The credential cache matters more here than anywhere else. For interactive Entra ID a cache miss is
+  cheap because the VS Code session is itself cached; for managed identity every miss is a network
+  round trip to the identity endpoint. That is also why the handler reports a real `expiresInSeconds`
+  (WI4) instead of the `0` the interactive path uses.
+- **Divergence (small, unavoidable):** three unions outside the plan's list had to be widened, in
+  `ShellSessionManager`, `ShellTerminalLinkProvider` and `DocumentDBShellPty`. The last one is not
+  cosmetic: the shell banner derives its label with a ternary chain whose fallback is `SCRAM`, so
+  without a `ManagedIdentity` arm a managed identity session would have announced itself as
+  username-and-password authentication. Found by the compiler for the first two and by reading for
+  the third.
+
+---
+
 ## Deviations from the plan
 
 Recorded here in one place as well as in the individual entries, so a reviewer can see the whole
 set at a glance.
 
-| Where               | Divergence                                                                                                  | Rationale                                                                                                                             |
-| ------------------- | ----------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------- | --- | ---- | ------------------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------- |
-| WI4                 | `expiresInSecondsFromTimestamp` subtracts a 300 second safety margin instead of returning the raw remainder | Avoids handing the driver a token that expires in flight. Floor-at-zero preserved. Reversible by changing one constant.               |
-| WI4                 | Helper takes an optional `now` argument                                                                     | Makes the unit tests deterministic. Defaulted, so callers are unaffected.                                                             |
-| WI6                 | Second export `classifyManagedIdentityError()` alongside `describeManagedIdentityError()`                   | §12 telemetry needs the reason code; deriving it from a localized message string would break under translation.                       |
-| WI1 to WI6 (commit) | All of phase 1 in one commit rather than six                                                                | The intermediate states do not build a working feature; five of the six commits would be dead code.                                   |
-| WI7                 | A `weak` hint does **not** preselect the auth method; only an `explicit` hint does                          | The plan's own `weak` row requires the user to be able to switch to interactive Entra ID, which is impossible once the method is set. |
-| WI7                 | The hint object is carried on the wizard context as `managedIdentityHint`, not just the config              | WI10 needs to know explicit versus weak in order to decide whether to skip the identity step.                                         |
-| WI7                 | A GUID username under a managed identity hint is never stored as `nativeAuthConfig`                         | It is an identity selector, not a database user; storing it as one produces a connection that reads as native auth.                   |     | WI10 | One generic step with a predicate, instead of two near-identical step classes                          | The contexts differ only in the name of the selected-method field. Serves three wizards rather than two.                         |
-| WI10                | Extra "From the connection string" group in the quick pick                                                  | A client ID the user just pasted would otherwise be invisible in a list whose purpose is to avoid retyping it.                        |
-| WI11                | Storage uses one secret slot with a `'system-assigned'` sentinel                                            | The `string[]` secrets format cannot express "present but empty", and a sentinel can never collide with a GUID.                       |     | WI14 | The unreachable case points at a closed port instead of unsetting the environment variables            | Some developer machines, including Azure Cloud PCs, do answer on 169.254.169.254, which made the planned version host dependent. |
-| WI6 (revised)       | Error text collection is duck-typed instead of using `instanceof Error`                                     | The thrown value is not always a real `Error`, under Jest and across worker boundaries, which silenced the classifier entirely.       |     | WI17 | Also threaded through `AzureExecuteStep` and `addConnectionFromRegistry`, which the plan does not list | They are how a discovered cluster becomes a saved connection; without them the chosen identity is dropped on save.               |
+| Where                 | Divergence                                                                                                  | Rationale                                                                                                                                    |
+| --------------------- | ----------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
+| WI1 to WI6 (commit)   | All of phase 1 in one commit rather than six                                                                | The intermediate states do not build a working feature; five of the six commits would be dead code.                                          |
+| WI4                   | `expiresInSecondsFromTimestamp` subtracts a 300 second safety margin instead of returning the raw remainder | Avoids handing the driver a token that expires in flight. Floor-at-zero preserved. Reversible by changing one constant.                      |
+| WI4                   | The helper takes an optional `now` argument                                                                 | Makes the unit tests deterministic. Defaulted, so callers are unaffected.                                                                    |
+| WI6                   | Second export `classifyManagedIdentityError()` alongside `describeManagedIdentityError()`                   | §12 telemetry needs the reason code; deriving it from a localized message string would break under translation.                              |
+| WI6 (revised by WI14) | Error text collection is duck-typed instead of using `instanceof Error`                                     | The thrown value is not always a real `Error`, under Jest and across worker boundaries, which silenced the classifier entirely.              |
+| WI7                   | A `weak` hint does **not** preselect the auth method; only an `explicit` hint does                          | The plan's own `weak` row requires the user to be able to switch to interactive Entra ID, which is impossible once the method is set.        |
+| WI7                   | The hint object is carried on the wizard context as `managedIdentityHint`, not just the config              | WI10 needs to know explicit versus weak in order to decide whether to skip the identity step.                                                |
+| WI7                   | A GUID username under a managed identity hint is never stored as `nativeAuthConfig`                         | It is an identity selector, not a database user; storing it as one produces a connection that reads as native auth.                          |
+| WI10                  | One generic step with a predicate, instead of two near-identical step classes                               | The contexts differ only in the name of the selected-method field. Serves three wizards rather than two.                                     |
+| WI10                  | Extra "From the connection string" group in the quick pick                                                  | A client ID the user just pasted would otherwise be invisible in a list whose whole purpose is to avoid retyping it.                         |
+| WI11                  | Storage uses one secret slot with a `'system-assigned'` sentinel                                            | The `string[]` secrets format cannot express "present but empty", and a sentinel can never collide with a GUID.                              |
+| WI14                  | The unreachable case points at a closed port instead of unsetting the environment variables                 | Some developer machines, including Azure Cloud PCs, do answer on 169.254.169.254, which made the planned version host dependent.             |
+| WI17                  | Also threaded through `AzureExecuteStep` and `addConnectionFromRegistry`, which the plan does not list      | They are how a discovered cluster becomes a saved connection; without them the chosen identity is dropped on save.                           |
+| WI20                  | Widened three auth-mechanism unions the plan does not mention, including the shell banner                   | The banner's ternary chain falls back to `SCRAM`, so a managed identity session would otherwise have been labelled as username and password. |
 
 ---
 
