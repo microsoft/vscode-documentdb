@@ -92,7 +92,7 @@ export class ExecuteStep extends AzureWizardExecuteStep<NewLocalConnectionWizard
                 {
                     modal: true,
                     detail: l10n.t(
-                        'Quick Start added this instance to the Connections view, so there is no need to add it by hand. You can still create a separate connection if you want a different configuration for the same endpoint.',
+                        'DocumentDB Local setup added this instance to the Connections view, so there is no need to add it by hand. You can still create a separate connection if you want a different configuration for the same endpoint.',
                     ),
                 },
                 openExisting,

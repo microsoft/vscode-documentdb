@@ -56,9 +56,9 @@ export function formatQuickStartMessage(message: QuickStartMessage): string {
         case 'nothingToResume':
             return l10n.t('There is nothing to resume.');
         case 'startedButExited':
-            return l10n.t('The container started but exited shortly after. Check the Quick Start logs.');
+            return l10n.t('The container started but exited shortly after. Check the DocumentDB Local setup logs.');
         case 'restartedButExited':
-            return l10n.t('The container restarted but exited shortly after. Check the Quick Start logs.');
+            return l10n.t('The container restarted but exited shortly after. Check the DocumentDB Local setup logs.');
         case 'unexpectedFailure':
         default:
             // Never return the raw text alone: it is English, and on its own it leaves a reader
