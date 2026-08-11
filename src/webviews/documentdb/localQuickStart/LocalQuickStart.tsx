@@ -8,8 +8,6 @@ import {
     AccordionHeader,
     AccordionItem,
     AccordionPanel,
-    // USER-TEST PROTOTYPE: Remove with the footer experiment preview badge.
-    Badge,
     Button,
     CounterBadge,
     Field,
@@ -125,26 +123,10 @@ const useStyles = makeStyles({
         flexDirection: 'column',
         height: '100vh',
         overflow: 'hidden',
-        // USER-TEST PROTOTYPE: Anchors the temporary comparison switch.
+        // Containing block for absolutely-positioned descendants (the visually-hidden status text).
         position: 'relative',
     },
     scrollArea: { flex: 1, minHeight: 0, overflowY: 'auto' },
-    // USER-TEST PROTOTYPE: Remove both styles with the comparison switch and measurement logic.
-    scrollAreaInlineFooter: {
-        flex: '0 0 auto',
-        overflowY: 'visible',
-    },
-    prototypeToggle: {
-        position: 'absolute',
-        top: '16px',
-        right: '24px',
-        zIndex: 1,
-        padding: '4px 8px',
-        backgroundColor: tokens.colorNeutralBackground1,
-        display: 'flex',
-        alignItems: 'center',
-        gap: '6px',
-    },
     content: {
         display: 'flex',
         flexDirection: 'column',
@@ -513,7 +495,7 @@ function dockerPermissionDetailValues(): Readonly<Record<DockerPermissionDetail,
 
 function dockerGuidance(): Readonly<Record<DockerGuidanceKey, string>> {
     return {
-        installDocker: l10n.t('Install Docker Engine or Docker Desktop, then reopen Quick Start.'),
+        installDocker: l10n.t('Install Docker Engine or Docker Desktop, then reopen DocumentDB Local setup.'),
         installDockerWindows: l10n.t(
             'Install Docker Desktop, then restart VS Code. A VS Code that was already running does not pick up the PATH the installer adds, so Docker stays undetected until it is restarted. Reloading the window is not enough. Start Docker Desktop and wait until it is ready, then check again.',
         ),
@@ -533,7 +515,7 @@ function dockerGuidance(): Readonly<Record<DockerGuidanceKey, string>> {
             'You are in the Docker group, but this session started before that change. Sign out of your desktop session and sign back in. Reloading the window is not enough.',
         ),
         pendingRestartWsl: l10n.t(
-            'Your Docker group change requires a new WSL session. Run this command in a Windows terminal. This VS Code window will disconnect. Reconnect to WSL, then open Quick Start again.',
+            'Your Docker group change requires a new WSL session. Run this command in a Windows terminal. This VS Code window will disconnect. Reconnect to WSL, then open DocumentDB Local setup again.',
         ),
         pendingRestartSsh: l10n.t(
             'You are in the Docker group on the remote host, but the VS Code server started before that change. Run "Remote-SSH: Kill VS Code Server on Host", then reconnect.',
@@ -555,7 +537,9 @@ function dockerGuidance(): Readonly<Record<DockerGuidanceKey, string>> {
             'The active Docker context is unavailable. Select or repair a valid context, then check again.',
         ),
         checkTimedOut: l10n.t('Docker did not respond before the readiness check timed out.'),
-        unsupportedHost: l10n.t('Local Quick Start is supported when the extension runs on Windows, macOS, or Linux.'),
+        unsupportedHost: l10n.t(
+            'DocumentDB Local setup is supported when the extension runs on Windows, macOS, or Linux.',
+        ),
         windowsContainers: l10n.t('Switch Docker to Linux containers, then check again.'),
         notAccessible: l10n.t('The extension could not connect to the Docker daemon.'),
     };
@@ -1179,45 +1163,28 @@ export const LocalQuickStart = (): JSX.Element => {
         }
     }, [step, isProvisioning]);
 
-    // USER-TEST PROTOTYPE START: Footer experiment comparison. Remove this state, root/footer refs,
-    // measurement callback, prototype switch, and scrollAreaInlineFooter class after user testing.
-    // Off by default: the experimental adaptive footer position is opt-in via the preview switch.
-    const [adaptiveFooterEnabled, setAdaptiveFooterEnabled] = useState(false);
-    const [footerDocked, setFooterDocked] = useState(true);
-    const rootRef = useRef<HTMLElement>(null);
     const scrollAreaRef = useRef<HTMLDivElement>(null);
-    const footerRef = useRef<HTMLDivElement>(null);
     const [footerElevated, setFooterElevated] = useState(false);
+    // The footer takes a border and shadow only while the scroll area still has content below the
+    // fold, so a short step does not get a divider that separates nothing.
     const updateFooterLayout = useCallback((): void => {
-        const root = rootRef.current;
         const scrollArea = scrollAreaRef.current;
-        const content = contentRef.current;
-        const footer = footerRef.current;
-        if (root && scrollArea && content && footer) {
-            const contentOverflows = content.scrollHeight + footer.offsetHeight > root.clientHeight;
-            const shouldDock = !adaptiveFooterEnabled || contentOverflows;
-            setFooterDocked(shouldDock);
-            setFooterElevated(
-                shouldDock && scrollArea.scrollTop + scrollArea.clientHeight < scrollArea.scrollHeight - 1,
-            );
+        if (scrollArea) {
+            setFooterElevated(scrollArea.scrollTop + scrollArea.clientHeight < scrollArea.scrollHeight - 1);
         }
-    }, [adaptiveFooterEnabled]);
+    }, []);
     useEffect(() => {
-        const root = rootRef.current;
         const scrollArea = scrollAreaRef.current;
         const content = contentRef.current;
-        const footer = footerRef.current;
-        if (!root || !scrollArea || !content || !footer) {
+        if (!scrollArea || !content) {
             return;
         }
+        // The scroll area resizes when the footer does, so watching it and the content is enough.
         const observer = new ResizeObserver(updateFooterLayout);
-        observer.observe(root);
         observer.observe(scrollArea);
         observer.observe(content);
-        observer.observe(footer);
         return () => observer.disconnect();
     }, [updateFooterLayout, phase]);
-    // USER-TEST PROTOTYPE END
 
     const applyReadiness = useCallback((readiness: DockerReadiness): void => {
         checkReadinessRef.current = readiness;
@@ -2563,32 +2530,8 @@ export const LocalQuickStart = (): JSX.Element => {
     }
 
     return (
-        <main ref={rootRef} className={styles.root}>
-            {/* USER-TEST PROTOTYPE: Remove this switch and badge with the footer experiment logic above. */}
-            <div className={styles.prototypeToggle}>
-                <Switch
-                    checked={adaptiveFooterEnabled}
-                    label={l10n.t('Footer experiment')}
-                    onChange={(_event, data) => setAdaptiveFooterEnabled(data.checked)}
-                />
-                <Badge
-                    appearance="tint"
-                    size="small"
-                    shape="rounded"
-                    color="brand"
-                    aria-label={l10n.t('Footer experiment is in preview')}
-                >
-                    PREVIEW
-                </Badge>
-            </div>
-            <div
-                className={mergeClasses(
-                    styles.scrollArea,
-                    adaptiveFooterEnabled && !footerDocked && styles.scrollAreaInlineFooter,
-                )}
-                ref={scrollAreaRef}
-                onScroll={updateFooterLayout}
-            >
+        <main className={styles.root}>
+            <div className={styles.scrollArea} ref={scrollAreaRef} onScroll={updateFooterLayout}>
                 <div ref={contentRef} className={styles.content}>
                     <Announcer
                         when={phase === 'configure'}
@@ -2639,7 +2582,7 @@ export const LocalQuickStart = (): JSX.Element => {
                     {phase === 'success' && done}
                 </div>
             </div>
-            <div ref={footerRef} className={mergeClasses(styles.footer, footerElevated && styles.footerElevated)}>
+            <div className={mergeClasses(styles.footer, footerElevated && styles.footerElevated)}>
                 {footerNote && (
                     <div className={styles.footerNote}>
                         <InfoRegular aria-hidden className={styles.footerNoteIcon} />
