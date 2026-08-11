@@ -94,25 +94,25 @@ No password prompt appears, because there is no password to include. See [Copy C
 
 ## Troubleshooting
 
-| Message                                                                 | What it means                                                                                                                                            |
-| ----------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| This machine has more than one managed identity                         | Reconnect and enter the client ID of the identity you want. The metadata service cannot pick one for you.                                                |
-| No managed identity is available on this machine                        | VS Code is not running on an Azure resource with a managed identity assigned, or the instance metadata service is not reachable.                         |
-| The managed identity with client ID ... is not assigned to this machine | The client ID is valid but that identity is not attached to this VM. Check the VM's Identity blade in the Azure portal.                                  |
-| This managed identity belongs to Microsoft Entra tenant ..., but the cluster is in tenant ... | The VM and the cluster are in different tenants. There is no way to bridge that with a managed identity; use Entra ID sign-in instead. See [the tenant section](#the-identity-and-the-cluster-must-be-in-the-same-tenant). |
-| The connection is refused after a token was obtained                    | Authentication worked but the cluster does not recognize the identity. Register it on the cluster as described in [Before you start](#before-you-start). If the connection came from a pasted connection string, also check that the cluster is in the same tenant as the VM. |
+| Message                                                                                       | What it means                                                                                                                                                                                                                                                                 |
+| --------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| This machine has more than one managed identity                                               | Reconnect and enter the client ID of the identity you want. The metadata service cannot pick one for you.                                                                                                                                                                     |
+| No managed identity is available on this machine                                              | VS Code is not running on an Azure resource with a managed identity assigned, or the instance metadata service is not reachable.                                                                                                                                              |
+| The managed identity with client ID ... is not assigned to this machine                       | The client ID is valid but that identity is not attached to this VM. Check the VM's Identity blade in the Azure portal.                                                                                                                                                       |
+| This managed identity belongs to Microsoft Entra tenant ..., but the cluster is in tenant ... | The VM and the cluster are in different tenants. There is no way to bridge that with a managed identity; use Entra ID sign-in instead. See [the tenant section](#the-identity-and-the-cluster-must-be-in-the-same-tenant).                                                    |
+| The connection is refused after a token was obtained                                          | Authentication worked but the cluster does not recognize the identity. Register it on the cluster as described in [Before you start](#before-you-start). If the connection came from a pasted connection string, also check that the cluster is in the same tenant as the VM. |
 
 ## How it differs from Entra ID
 
 Both methods present a Microsoft Entra ID token to the cluster, and on the wire they are identical. The difference is where the token comes from:
 
-|                              | Entra ID for Azure DocumentDB | Managed Identity (Azure hosted)          |
-| ---------------------------- | ----------------------------- | ---------------------------------------- |
-| Who is authenticated         | The signed-in VS Code user    | The Azure VM                             |
-| Sign-in prompt               | Yes, the first time           | Never                                    |
-| Works without a user session | No                            | Yes                                      |
+|                              | Entra ID for Azure DocumentDB                 | Managed Identity (Azure hosted)             |
+| ---------------------------- | --------------------------------------------- | ------------------------------------------- |
+| Who is authenticated         | The signed-in VS Code user                    | The Azure VM                                |
+| Sign-in prompt               | Yes, the first time                           | Never                                       |
+| Works without a user session | No                                            | Yes                                         |
 | Tenants                      | You choose one, and can be a guest in several | Exactly one, fixed by the VM's subscription |
-| Cluster in another tenant    | Supported                     | Not possible                             |
-| Where it works               | Anywhere                      | On an Azure VM with an identity assigned |
+| Cluster in another tenant    | Supported                                     | Not possible                                |
+| Where it works               | Anywhere                                      | On an Azure VM with an identity assigned    |
 
 If you want the connection to be attributable to you, use Entra ID. If you want it attributable to the machine, or there is no interactive user, use Managed Identity.
