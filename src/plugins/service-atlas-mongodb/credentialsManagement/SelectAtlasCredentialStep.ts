@@ -6,6 +6,7 @@
 import { AzureWizardPromptStep, UserCancelledError } from '@microsoft/vscode-azext-utils';
 import * as l10n from '@vscode/l10n';
 import * as vscode from 'vscode';
+import { meterSilentCatch } from '../../../utils/accumulatingTelemetry';
 import { openAtlasCredentialsWebview } from '../../../webviews/documentdb/atlasCredentials/atlasCredentialsController';
 import { readAtlasCredentials, removeAllAtlasCredentials } from '../credentials/atlasCredentialStore';
 import { resolveCredentialLabel, type AtlasCredentialError } from '../discovery/AtlasDiscoveryService';
@@ -102,7 +103,10 @@ export class SelectAtlasCredentialStep extends AzureWizardPromptStep<AtlasCreden
 
         if (selected.isAddOption) {
             context.telemetry.properties.atlasCredentialAction = 'add';
-            const stored = await openAtlasCredentialsWebview();
+            const correlationProperty = context.telemetry.properties.journeyCorrelationId;
+            const stored = await openAtlasCredentialsWebview({
+                journeyCorrelationId: typeof correlationProperty === 'string' ? correlationProperty : undefined,
+            });
             if (!stored) {
                 // Cancelling the webview stores nothing. Return to the list rather than closing
                 // the whole flow, so the user can pick another action.
@@ -208,6 +212,7 @@ export async function loadCredentialStatuses(
         const snapshot = await context.discoveryService.listAll();
         errorsById = new Map(snapshot.credentialErrors.map((error) => [error.credentialId, error]));
     } catch {
+        meterSilentCatch('atlasCredentialManagement_loadStatuses');
         // listAll never throws for a single credential; a failure here means the whole read failed,
         // and the list is still worth showing without status annotations.
     }

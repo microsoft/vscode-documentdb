@@ -17,7 +17,9 @@
  * every credential that can reach it plus a healthy owner for follow-up requests.
  */
 
+import { callWithTelemetryAndErrorHandling } from '@microsoft/vscode-azext-utils';
 import * as l10n from '@vscode/l10n';
+import { meterSilentCatch } from '../../../utils/accumulatingTelemetry';
 import { createConcurrencyLimiter } from '../../../utils/concurrencyLimiter';
 import { AtlasApiClient, AtlasApiError } from '../api/AtlasApiClient';
 import { atlasTrace, describeCredential, formatMs, monotonicNow } from '../atlasTrace';
@@ -414,6 +416,36 @@ export class AtlasDiscoveryService {
         signal?: AbortSignal,
         forceFreshSessions = false,
     ): Promise<AtlasDiscoverySnapshot> {
+        let snapshot!: AtlasDiscoverySnapshot;
+        let discoveryError: Error | undefined;
+        await callWithTelemetryAndErrorHandling('serviceDiscovery.atlas.buildSnapshot', async (context) => {
+            context.errorHandling.suppressDisplay = true;
+            context.telemetry.properties.includeClusters = includeClusters ? 'true' : 'false';
+            context.telemetry.properties.forceFreshSessions = forceFreshSessions ? 'true' : 'false';
+            try {
+                snapshot = await this.buildSnapshotCore(includeClusters, signal, forceFreshSessions);
+                context.telemetry.measurements.credentialsQueried = snapshot.credentialsQueried;
+                context.telemetry.measurements.organizationCount = snapshot.organizations.length;
+                context.telemetry.measurements.projectCount = snapshot.projects.length;
+                context.telemetry.measurements.clusterCount = snapshot.clusters.length;
+                context.telemetry.measurements.credentialErrorCount = snapshot.credentialErrors.length;
+                context.telemetry.measurements.projectErrorCount = snapshot.projectErrors.length;
+            } catch (error) {
+                discoveryError = error instanceof Error ? error : new Error(String(error));
+                throw discoveryError;
+            }
+        });
+        if (discoveryError !== undefined) {
+            throw discoveryError;
+        }
+        return snapshot;
+    }
+
+    private async buildSnapshotCore(
+        includeClusters: boolean,
+        signal?: AbortSignal,
+        forceFreshSessions = false,
+    ): Promise<AtlasDiscoverySnapshot> {
         const credentials = await readAtlasCredentials();
         const limit = createConcurrencyLimiter({ concurrency: CREDENTIAL_CONCURRENCY });
         const startedAt = monotonicNow();
@@ -658,6 +690,7 @@ export class AtlasDiscoveryService {
         try {
             await updateAtlasCredentialMetadata(record.id, { orgId: organization.id, orgName: organization.name });
         } catch {
+            meterSilentCatch('atlasDiscovery_cacheOrganizationMetadata');
             // Caching the display name is best-effort; discovery must not fail because of it.
         }
     }

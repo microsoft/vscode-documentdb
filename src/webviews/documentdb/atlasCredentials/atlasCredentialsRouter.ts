@@ -36,6 +36,7 @@ import {
     upsertAtlasCredential,
     type AtlasCredentialSecrets,
 } from '../../../plugins/service-atlas-mongodb/credentials/atlasCredentialStore';
+import { meterSilentCatch } from '../../../utils/accumulatingTelemetry';
 import { type BaseRouterContext } from '../../_integration/appRouter';
 import { publicProcedureWithTelemetry, router, type WithTelemetry } from '../../_integration/trpc';
 
@@ -53,6 +54,8 @@ export type RouterContext = BaseRouterContext & {
     credentialId?: string;
     /** Optional user-supplied friendly name persisted alongside the credential. */
     credentialLabel?: string;
+    /** Correlates submissions and completion actions with the credential-management flow. */
+    journeyCorrelationId?: string;
     /** Resolves the opener so it can refresh the discovery tree before the success screen appears. */
     onCredentialPersisted: () => void;
     /**
@@ -97,6 +100,30 @@ export interface CredentialSubmitError {
 export type SubmitResult =
     | { readonly success: true }
     | { readonly success: false; readonly error: CredentialSubmitError; readonly failedStage: number };
+
+function initializeSubmitTelemetry(
+    ctx: WithTelemetry<RouterContext>,
+    authMethod: AtlasCredentialSecrets['authMethod'],
+): void {
+    ctx.actionContext.telemetry.properties.authMethod = authMethod;
+    ctx.actionContext.telemetry.properties.operationMode = ctx.credentialId ? 'edit' : 'add';
+    ctx.actionContext.telemetry.properties.hasCredentialLabel = ctx.credentialLabel ? 'true' : 'false';
+    if (ctx.journeyCorrelationId) {
+        ctx.actionContext.telemetry.properties.journeyCorrelationId = ctx.journeyCorrelationId;
+    }
+}
+
+function submitFailure(
+    ctx: WithTelemetry<RouterContext>,
+    error: CredentialSubmitError,
+    failedStage: number,
+    failedStageName: 'identity' | 'token' | 'projectAccess' | 'persistence',
+): SubmitResult {
+    ctx.actionContext.telemetry.properties.authSuccess = 'false';
+    ctx.actionContext.telemetry.properties.credentialErrorKind = error.kind;
+    ctx.actionContext.telemetry.properties.failedStage = failedStageName;
+    return { success: false, error, failedStage };
+}
 
 /**
  * Logs the full, raw verification failure to the extension output channel at error level (so it is
@@ -266,6 +293,7 @@ async function buildAtlasErrorAction(
             const organizations = await client.listOrganizations();
             orgId = organizations[0]?.id;
         } catch {
+            meterSilentCatch('atlasCredentials_buildErrorAction');
             // Ignore: fall back to the least specific destination below.
         }
     }
@@ -362,33 +390,26 @@ export const atlasCredentialsRouter = router({
         )
         .mutation(async ({ input, ctx }): Promise<SubmitResult> => {
             const myCtx = ctx as WithTelemetry<RouterContext>;
-            myCtx.actionContext.telemetry.properties.authMethod = 'apikey';
+            initializeSubmitTelemetry(myCtx, 'apikey');
 
             const publicKey = input.publicKey.trim();
             const privateKey = input.privateKey.trim();
 
             const identityError = await validateUpdateIdentity(myCtx, 'apikey', publicKey);
             if (identityError) {
-                return { success: false, error: identityError, failedStage: 0 };
+                return submitFailure(myCtx, identityError, 0, 'identity');
             }
 
             const client = new AtlasApiClient({ type: 'apikey', publicKey, privateKey });
             try {
                 const projects = await client.listProjects();
                 if (projects.length === 0) {
-                    return {
-                        success: false,
-                        error: await describeNoProjectsError(myCtx, 'apikey', client),
-                        failedStage: 0,
-                    };
+                    const error = await describeNoProjectsError(myCtx, 'apikey', client);
+                    return submitFailure(myCtx, error, 0, 'projectAccess');
                 }
             } catch (error) {
-                myCtx.actionContext.telemetry.properties.authSuccess = 'false';
-                return {
-                    success: false,
-                    error: await describeAtlasError(myCtx, error, 'apikey', undefined, client),
-                    failedStage: 0,
-                };
+                const describedError = await describeAtlasError(myCtx, error, 'apikey', undefined, client);
+                return submitFailure(myCtx, describedError, 0, 'projectAccess');
             }
 
             // Verification may finish after the user closed the panel. Disposing the webview aborts
@@ -400,7 +421,8 @@ export const atlasCredentialsRouter = router({
             try {
                 await persistCredential(myCtx, { authMethod: 'apikey', publicKey, privateKey });
             } catch (error) {
-                return { success: false, error: await describeAtlasError(myCtx, error, 'apikey'), failedStage: 1 };
+                const describedError = await describeAtlasError(myCtx, error, 'apikey');
+                return submitFailure(myCtx, describedError, 1, 'persistence');
             }
             myCtx.credentialState.credentialsStored = true;
             myCtx.onCredentialPersisted();
@@ -422,14 +444,14 @@ export const atlasCredentialsRouter = router({
         )
         .mutation(async ({ input, ctx }): Promise<SubmitResult> => {
             const myCtx = ctx as WithTelemetry<RouterContext>;
-            myCtx.actionContext.telemetry.properties.authMethod = 'serviceaccount';
+            initializeSubmitTelemetry(myCtx, 'serviceaccount');
 
             const clientId = input.clientId.trim();
             const clientSecret = input.clientSecret.trim();
 
             const identityError = await validateUpdateIdentity(myCtx, 'serviceaccount', clientId);
             if (identityError) {
-                return { success: false, error: identityError, failedStage: 0 };
+                return submitFailure(myCtx, identityError, 0, 'identity');
             }
 
             let accessToken: string;
@@ -442,34 +464,23 @@ export const atlasCredentialsRouter = router({
                 accessToken = tokenResponse.access_token;
                 expiresIn = tokenResponse.expires_in;
             } catch (error) {
-                myCtx.actionContext.telemetry.properties.authSuccess = 'false';
                 // `describeAtlasError` now classifies the typed `AtlasTokenError`, so a transient
                 // `429` / `5xx` keeps its retry wording instead of being collapsed into a
                 // credential-rejected message.
-                return {
-                    success: false,
-                    error: await describeAtlasError(myCtx, error, 'serviceaccount', clientId),
-                    failedStage: 0,
-                };
+                const describedError = await describeAtlasError(myCtx, error, 'serviceaccount', clientId);
+                return submitFailure(myCtx, describedError, 0, 'token');
             }
 
             const client = new AtlasApiClient({ type: 'serviceaccount', accessToken });
             try {
                 const projects = await client.listProjects();
                 if (projects.length === 0) {
-                    return {
-                        success: false,
-                        error: await describeNoProjectsError(myCtx, 'serviceaccount', client, clientId),
-                        failedStage: 1,
-                    };
+                    const error = await describeNoProjectsError(myCtx, 'serviceaccount', client, clientId);
+                    return submitFailure(myCtx, error, 1, 'projectAccess');
                 }
             } catch (error) {
-                myCtx.actionContext.telemetry.properties.authSuccess = 'false';
-                return {
-                    success: false,
-                    error: await describeAtlasError(myCtx, error, 'serviceaccount', clientId, client),
-                    failedStage: 1,
-                };
+                const describedError = await describeAtlasError(myCtx, error, 'serviceaccount', clientId, client);
+                return submitFailure(myCtx, describedError, 1, 'projectAccess');
             }
 
             // See the API Key path: a panel closed mid-verification aborts this signal, and a
@@ -485,11 +496,8 @@ export const atlasCredentialsRouter = router({
                     expiresAt: String(Date.now() + expiresIn * 1000),
                 });
             } catch (error) {
-                return {
-                    success: false,
-                    error: await describeAtlasError(myCtx, error, 'serviceaccount', clientId),
-                    failedStage: 2,
-                };
+                const describedError = await describeAtlasError(myCtx, error, 'serviceaccount', clientId);
+                return submitFailure(myCtx, describedError, 2, 'persistence');
             }
 
             myCtx.credentialState.credentialsStored = true;

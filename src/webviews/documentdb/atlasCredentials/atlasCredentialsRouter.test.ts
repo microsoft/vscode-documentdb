@@ -38,6 +38,10 @@ jest.mock('../../../extensionVariables', () => ({
     },
 }));
 
+jest.mock('../../../utils/accumulatingTelemetry', () => ({
+    meterSilentCatch: jest.fn(),
+}));
+
 jest.mock('../../../plugins/service-atlas-mongodb/api/AtlasApiClient', () => {
     class AtlasApiErrorMock extends Error {
         constructor(
@@ -165,7 +169,11 @@ describe('atlasCredentialsRouter', () => {
             orgId: 'org-1',
             order: 0,
         });
-        const context = createContext('credential-1');
+        const context = {
+            ...createContext('credential-1'),
+            credentialLabel: 'Production',
+            journeyCorrelationId: 'journey-1',
+        };
         const caller = createCallerFactory(atlasCredentialsRouter)({ ...context });
 
         const result = await caller.submitApiKey({ publicKey: 'public-key', privateKey: 'private-key' });
@@ -185,6 +193,15 @@ describe('atlasCredentialsRouter', () => {
             },
         });
         expect(context.credentialState.credentialsStored).toBe(false);
+        expect(context.actionContext.telemetry.properties).toMatchObject({
+            authMethod: 'apikey',
+            operationMode: 'edit',
+            hasCredentialLabel: 'true',
+            journeyCorrelationId: 'journey-1',
+            authSuccess: 'false',
+            credentialErrorKind: 'ipAccess',
+            failedStage: 'projectAccess',
+        });
     });
 
     it('uses the generic IP access error when Atlas omits the rejected address', async () => {
@@ -227,6 +244,12 @@ describe('atlasCredentialsRouter', () => {
         expect(context.credentialState.credentialsStored).toBe(true);
         expect(context.onCredentialPersisted).toHaveBeenCalledTimes(1);
         expect(context.onCredentialsStored).not.toHaveBeenCalled();
+        expect(context.actionContext.telemetry.properties).toMatchObject({
+            authMethod: 'apikey',
+            operationMode: 'add',
+            hasCredentialLabel: 'false',
+            authSuccess: 'true',
+        });
 
         const completeCaller = createCallerFactory(atlasCredentialsRouter)({ ...context });
         await completeCaller.complete();

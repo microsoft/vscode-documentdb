@@ -3,6 +3,22 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+jest.mock('@microsoft/vscode-azext-utils', () => ({
+    callWithTelemetryAndErrorHandling: jest.fn(
+        async (
+            _eventName: string,
+            callback: (context: {
+                errorHandling: Record<string, unknown>;
+                telemetry: { properties: Record<string, string>; measurements: Record<string, number> };
+            }) => Promise<unknown>,
+        ): Promise<unknown> =>
+            await callback({
+                errorHandling: {},
+                telemetry: { properties: {}, measurements: {} },
+            }),
+    ),
+}));
+
 const globalStateBacking = new Map<string, unknown>();
 const secretStorageBacking = new Map<string, string>();
 

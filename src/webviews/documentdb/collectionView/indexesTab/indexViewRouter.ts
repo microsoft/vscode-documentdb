@@ -102,6 +102,20 @@ function asRecord(value: unknown): Record<string, unknown> | undefined {
         : undefined;
 }
 
+function setIndexActionTelemetry(
+    ctx: WithTelemetry<RouterContext>,
+    actionType: 'drop' | 'hide' | 'unhide',
+    input: { sizeBytes?: number; usageOps?: number },
+): void {
+    ctx.actionContext.telemetry.properties.actionType = actionType;
+    if (input.sizeBytes !== undefined) {
+        ctx.actionContext.telemetry.measurements.indexSizeBytes = input.sizeBytes;
+    }
+    if (input.usageOps !== undefined) {
+        ctx.actionContext.telemetry.measurements.indexUsageOps = input.usageOps;
+    }
+}
+
 export const indexViewRouter = router({
     /**
      * BACKEND INTEGRATION POINT — getInfo
@@ -254,9 +268,25 @@ export const indexViewRouter = router({
             myCtx.actionContext.telemetry.properties.vectorCompression = input.compression?.kind ?? 'none';
             myCtx.actionContext.telemetry.measurements.vectorDimensions = input.dimensions;
         } else {
+            myCtx.actionContext.telemetry.properties.indexKind = input.fields.some((field) =>
+                field.field.includes('$**'),
+            )
+                ? 'wildcard'
+                : 'standard';
             myCtx.actionContext.telemetry.properties.fieldTypes = input.fields.map((f) => f.type).join(',');
-            myCtx.actionContext.telemetry.properties.compound = String(input.fields.length > 1);
-            myCtx.actionContext.telemetry.properties.ttl = String(typeof input.expireAfterSeconds === 'number');
+            myCtx.actionContext.telemetry.properties.compound = input.fields.length > 1 ? 'true' : 'false';
+            myCtx.actionContext.telemetry.properties.ttl =
+                typeof input.expireAfterSeconds === 'number' ? 'true' : 'false';
+            myCtx.actionContext.telemetry.properties.unique = input.unique === true ? 'true' : 'false';
+            myCtx.actionContext.telemetry.properties.sparse = input.sparse === true ? 'true' : 'false';
+            myCtx.actionContext.telemetry.properties.hasPartialFilterExpression = input.partialFilterExpression
+                ? 'true'
+                : 'false';
+            myCtx.actionContext.telemetry.properties.hasCollation = input.collation ? 'true' : 'false';
+            myCtx.actionContext.telemetry.properties.hasWildcardProjection = input.wildcardProjection
+                ? 'true'
+                : 'false';
+            myCtx.actionContext.telemetry.properties.indexNamedExplicitly = input.name?.trim() ? 'true' : 'false';
             myCtx.actionContext.telemetry.measurements.fieldCount = input.fields.length;
         }
 
@@ -333,6 +363,7 @@ export const indexViewRouter = router({
         )
         .mutation(async ({ input, ctx }) => {
             const myCtx = ctx as WithTelemetry<RouterContext>;
+            setIndexActionTelemetry(myCtx, 'drop', input);
             if (input.indexName === '_id_') {
                 throw new Error(l10n.t('The "_id_" index cannot be deleted.'));
             }
@@ -348,6 +379,7 @@ export const indexViewRouter = router({
                 sizeBytes: input.sizeBytes,
                 usageOps: input.usageOps,
             });
+            myCtx.actionContext.telemetry.properties.userCancelled = confirmed ? 'false' : 'true';
             if (!confirmed) {
                 return { ok: true, cancelled: true };
             }
@@ -414,6 +446,7 @@ export const indexViewRouter = router({
         )
         .mutation(async ({ input, ctx }) => {
             const myCtx = ctx as WithTelemetry<RouterContext>;
+            setIndexActionTelemetry(myCtx, 'hide', input);
             if (input.indexName === '_id_') {
                 throw new Error(l10n.t('The "_id_" index cannot be hidden.'));
             }
@@ -423,6 +456,7 @@ export const indexViewRouter = router({
                 sizeBytes: input.sizeBytes,
                 usageOps: input.usageOps,
             });
+            myCtx.actionContext.telemetry.properties.userCancelled = confirmed ? 'false' : 'true';
             if (!confirmed) {
                 return { ok: true, cancelled: true };
             }
@@ -445,6 +479,7 @@ export const indexViewRouter = router({
         )
         .mutation(async ({ input, ctx }) => {
             const myCtx = ctx as WithTelemetry<RouterContext>;
+            setIndexActionTelemetry(myCtx, 'unhide', input);
             if (input.indexName === '_id_') {
                 throw new Error(l10n.t('The "_id_" index visibility cannot be changed.'));
             }
@@ -454,6 +489,7 @@ export const indexViewRouter = router({
                 sizeBytes: input.sizeBytes,
                 usageOps: input.usageOps,
             });
+            myCtx.actionContext.telemetry.properties.userCancelled = confirmed ? 'false' : 'true';
             if (!confirmed) {
                 return { ok: true, cancelled: true };
             }

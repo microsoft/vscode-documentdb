@@ -191,11 +191,13 @@ export class AtlasCredentialActionStep extends AzureWizardPromptStep<AtlasCreden
         }
 
         const credentialIdentity = secrets.authMethod === 'apikey' ? secrets.publicKey : secrets.clientId;
+        const correlationProperty = context.telemetry.properties.journeyCorrelationId;
         const stored = await openAtlasCredentialsWebview({
             authMethod: secrets.authMethod,
             credentialId,
             credentialLabel: label,
             credentialIdentity,
+            journeyCorrelationId: typeof correlationProperty === 'string' ? correlationProperty : undefined,
         });
 
         context.telemetry.properties.atlasCredentialUpdateResult = stored ? 'succeeded' : 'cancelled';

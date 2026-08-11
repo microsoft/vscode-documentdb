@@ -23,7 +23,10 @@ export async function addAtlasCredential(
     context.telemetry.properties.discoveryProviderId = DISCOVERY_PROVIDER_ID;
     context.telemetry.properties.atlasCredentialAction = 'add';
 
-    const stored = await openAtlasCredentialsWebview();
+    const correlationProperty = context.telemetry.properties.journeyCorrelationId;
+    const stored = await openAtlasCredentialsWebview({
+        journeyCorrelationId: typeof correlationProperty === 'string' ? correlationProperty : undefined,
+    });
 
     context.telemetry.properties.credentialsManagementResult = stored ? 'Succeeded' : 'Canceled';
     if (stored) {

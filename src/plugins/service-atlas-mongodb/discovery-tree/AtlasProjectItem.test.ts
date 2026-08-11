@@ -62,6 +62,14 @@ jest.mock('../../../extensionVariables', () => ({
     },
 }));
 
+jest.mock('../../../utils/accumulatingTelemetry', () => ({
+    meterSilentCatch: jest.fn(),
+}));
+
+jest.mock('@microsoft/vscode-azext-utils', () => ({
+    callWithTelemetryAndErrorHandling: jest.fn(),
+}));
+
 import { window } from 'vscode';
 import { type AtlasDiscoveryService } from '../discovery/AtlasDiscoveryService';
 import { type AtlasProject } from '../models/AtlasProjectModel';

@@ -6,6 +6,7 @@
 import { AzureWizardPromptStep, UserCancelledError } from '@microsoft/vscode-azext-utils';
 import * as vscode from 'vscode';
 import { type NewConnectionWizardContext } from '../../../commands/newConnection/NewConnectionWizardContext';
+import { meterSilentCatch } from '../../../utils/accumulatingTelemetry';
 import { AtlasApiClient } from '../api/AtlasApiClient';
 import {
     getAtlasClusterStateLabel,
@@ -253,7 +254,10 @@ export class SelectAtlasClusterStep extends AzureWizardPromptStep<NewConnectionW
         // A transient token failure now throws rather than resolving `undefined`; either way the
         // wizard's fallback is the same neutral "manage credentials" affordance, so treat any
         // failure as "no usable session" here instead of surfacing it inside the QuickPick.
-        const session = await registry.getSession(credentialId).catch(() => undefined);
+        const session = await registry.getSession(credentialId).catch(() => {
+            meterSilentCatch('atlasDiscoveryWizard_getSession');
+            return undefined;
+        });
 
         const manageItem: AtlasClusterQuickPickItem = {
             itemType: 'manageCredentials',

@@ -19,6 +19,7 @@
  */
 
 import { CancellationTokenLike } from '@microsoft/vscode-processutils';
+import { randomUUID } from 'crypto';
 import * as vscode from 'vscode';
 import { z } from 'zod';
 import { getQuickStartOutputChannel, startDockerProvider } from '../../../services/localQuickStart/ContainerRuntime';
@@ -297,8 +298,15 @@ export const localQuickStartRouter = router({
 
         try {
             const advanced: AdvancedQuickStartOptions | undefined = input ?? undefined;
+            const journeyCorrelationId = randomUUID();
+            myCtx.actionContext.telemetry.properties.journeyCorrelationId = journeyCorrelationId;
             myCtx.actionContext.telemetry.properties.continueAnyway = String(advanced?.continueAnyway === true);
-            for await (const event of QuickStartService.provision(abortController.signal, advanced)) {
+            for await (const event of QuickStartService.provision(
+                abortController.signal,
+                advanced,
+                undefined,
+                journeyCorrelationId,
+            )) {
                 yield event;
             }
         } finally {

@@ -32,6 +32,7 @@ import { ClustersClient } from '../../documentdb/ClustersClient';
 import { CredentialCache } from '../../documentdb/CredentialCache';
 import { DocumentDBConnectionString } from '../../documentdb/utils/DocumentDBConnectionString';
 import { ext } from '../../extensionVariables';
+import { meterSilentCatch } from '../../utils/accumulatingTelemetry';
 import {
     ContainerRuntime,
     getBoundHostPort,
@@ -142,6 +143,11 @@ function errMessage(error: unknown): string {
     return error instanceof Error ? error.message : String(error);
 }
 
+function meterQuickStartSilentCatch(location: string): undefined {
+    meterSilentCatch(`quickStart_${location}`);
+    return undefined;
+}
+
 /**
  * Thrown by {@link QuickStartServiceImpl.waitForReadiness} when the wire-protocol probe
  * exhausts its window. Distinguished from other failures so a readiness timeout can KEEP
@@ -183,6 +189,7 @@ interface PendingReadiness {
     readonly password: string;
     readonly imageRef: string;
     readonly sampleDataRequested: boolean;
+    readonly journeyCorrelationId: string;
     /** A fresh (non-reusing) attempt owns its half-initialized volume, so a discard may wipe it. */
     readonly reusing: boolean;
 }
@@ -550,6 +557,30 @@ export class QuickStartServiceImpl {
         }
     }
 
+    private async runProvisionStage<T>(
+        stage: Exclude<ProvisionStage, 'done' | 'error'>,
+        journeyCorrelationId: string,
+        operation: () => Promise<T>,
+    ): Promise<T> {
+        let result!: T;
+        let operationError: Error | undefined;
+        await callWithTelemetryAndErrorHandling('documentDB.quickstart.provision.stage', async (telemetryContext) => {
+            telemetryContext.errorHandling.suppressDisplay = true;
+            telemetryContext.telemetry.properties.stage = stage;
+            telemetryContext.telemetry.properties.journeyCorrelationId = journeyCorrelationId;
+            try {
+                result = await operation();
+            } catch (error) {
+                operationError = error instanceof Error ? error : new Error(String(error));
+                throw operationError;
+            }
+        });
+        if (operationError !== undefined) {
+            throw operationError;
+        }
+        return result;
+    }
+
     /**
      * Provision the managed instance, yielding one {@link StageEvent} per
      * transition. Cancellation is via `signal`: a pull-phase cancel removes
@@ -561,6 +592,7 @@ export class QuickStartServiceImpl {
         signal: AbortSignal,
         options?: AdvancedQuickStartOptions,
         alias: string = DEFAULT_ALIAS,
+        journeyCorrelationId: string = crypto.randomUUID(),
     ): AsyncGenerator<StageEvent> {
         if (this.stateFor(alias).provisioning || this.stateFor(alias).lifecycleBusy) {
             yield stageEvent('error', 'error', { key: 'setupAlreadyInProgress' });
@@ -643,14 +675,19 @@ export class QuickStartServiceImpl {
 
             // --- checking ---
             yield stageEvent('checking', 'active');
-            const readiness = await this.checkDockerReadiness();
+            const readiness = await this.runProvisionStage('checking', journeyCorrelationId, async () => {
+                const result = await this.checkDockerReadiness();
+                this.throwIfAborted(signal);
+                const continueAfterIndeterminateReadiness =
+                    options?.continueAnyway === true && result.outcome === 'indeterminate';
+                if ((!result.cliInstalled || !result.daemonReachable) && !continueAfterIndeterminateReadiness) {
+                    throw new DockerNotReadyError(
+                        !result.cliInstalled ? 'dockerCliMissing' : 'dockerDaemonUnreachable',
+                    );
+                }
+                return result;
+            });
             readinessEnvironment = readiness.environment;
-            this.throwIfAborted(signal);
-            const continueAfterIndeterminateReadiness =
-                options?.continueAnyway === true && readiness.outcome === 'indeterminate';
-            if ((!readiness.cliInstalled || !readiness.daemonReachable) && !continueAfterIndeterminateReadiness) {
-                throw new DockerNotReadyError(!readiness.cliInstalled ? 'dockerCliMissing' : 'dockerDaemonUnreachable');
-            }
 
             // Remove a pre-existing managed container so the run starts clean (it is labelled as
             // ours, D9). When NOT reusing (no recoverable credentials) also drop any stale data
@@ -675,10 +712,14 @@ export class QuickStartServiceImpl {
             }
             if (existing) {
                 channel.appendLine(`Removing existing Quick Start container ${existing.id} for a clean run…`);
-                await this.runtime.removeContainer(existing.id).catch(() => undefined);
+                await this.runtime
+                    .removeContainer(existing.id)
+                    .catch(() => meterQuickStartSilentCatch('provision_removeExistingContainer'));
             }
             if (!reusing) {
-                await this.runtime.removeVolume(volumeName(alias)).catch(() => undefined);
+                await this.runtime
+                    .removeVolume(volumeName(alias))
+                    .catch(() => meterQuickStartSilentCatch('provision_removeStaleVolume'));
             }
 
             // The host port is ALWAYS explicit (review L3, "no magic after execute"): the Configure
@@ -706,9 +747,11 @@ export class QuickStartServiceImpl {
             // --- pulling ---
             yield stageEvent('pulling', 'active');
             activeDockerStage = 'pulling';
-            await this.runtime.pullImage(imageRef, cts.token);
+            await this.runProvisionStage('pulling', journeyCorrelationId, async () => {
+                await this.runtime.pullImage(imageRef, cts.token);
+                this.throwIfAborted(signal);
+            });
             activeDockerStage = undefined;
-            this.throwIfAborted(signal);
             yield stageEvent('pulling', 'done');
 
             // --- creating (docker run -d creates and starts) ---
@@ -720,50 +763,59 @@ export class QuickStartServiceImpl {
             // Write credentials to a temp env-file (deleted in finally) so they never
             // appear on the docker CLI / host process list (design §8.2). The image
             // reads USERNAME/PASSWORD from the environment.
-            envFilePath = await this.writeEnvFile(credentials.username, credentials.password);
+            const createdEnvFilePath = await this.writeEnvFile(credentials.username, credentials.password);
+            envFilePath = createdEnvFilePath;
             activeDockerStage = 'creating';
-            containerId = await this.runtime.createAndRunContainer(
-                {
-                    imageRef: imageRef,
-                    name: containerName(alias),
-                    labels: {
-                        [QUICK_START_LABEL_KEY]: '1',
-                        [QUICK_START_ALIAS_LABEL_KEY]: alias,
-                        // Per-run nonce so this run's cleanup sweep can only remove ITS container (H4).
-                        [QUICK_START_OPERATION_LABEL_KEY]: operationId,
+            containerId = await this.runProvisionStage('creating', journeyCorrelationId, async () => {
+                const createdContainerId = await this.runtime.createAndRunContainer(
+                    {
+                        imageRef: imageRef,
+                        name: containerName(alias),
+                        labels: {
+                            [QUICK_START_LABEL_KEY]: '1',
+                            [QUICK_START_ALIAS_LABEL_KEY]: alias,
+                            // Per-run nonce so this run's cleanup sweep can only remove ITS container (H4).
+                            [QUICK_START_OPERATION_LABEL_KEY]: operationId,
+                        },
+                        hostPort: chosenPort,
+                        containerPort: QUICK_START_PORT,
+                        // Persist data across recreation (§8/§11).
+                        volumeName: volumeName(alias),
+                        dataPath: QUICK_START_DATA_PATH,
+                        // Credentials via env-file (§8.2), not CLI args. We also do NOT bake
+                        // `--init-data true`: it re-runs the sample-data init on every
+                        // Stop/Start and crashes on duplicate keys; sample data is seeded
+                        // once, post-readiness, via `docker exec` (see seedSampleData).
+                        environmentFiles: [createdEnvFilePath],
                     },
-                    hostPort: chosenPort,
-                    containerPort: QUICK_START_PORT,
-                    // Persist data across recreation (§8/§11).
-                    volumeName: volumeName(alias),
-                    dataPath: QUICK_START_DATA_PATH,
-                    // Credentials via env-file (§8.2), not CLI args. We also do NOT bake
-                    // `--init-data true`: it re-runs the sample-data init on every
-                    // Stop/Start and crashes on duplicate keys; sample data is seeded
-                    // once, post-readiness, via `docker exec` (see seedSampleData).
-                    environmentFiles: [envFilePath],
-                },
-                secrets,
-                cts.token,
-            );
+                    secrets,
+                    cts.token,
+                );
+                this.throwIfAborted(signal);
+                return createdContainerId;
+            });
             activeDockerStage = undefined;
             containerCreated = true;
             if (!containerId) {
                 const item = await this.runtime.inspectContainer(containerName(alias));
                 containerId = item?.id ?? containerName(alias);
             }
-            this.throwIfAborted(signal);
+            const provisionedContainerId = containerId;
             yield stageEvent('creating', 'done');
 
             // --- starting (confirm running, read bound port, follow logs) ---
             yield stageEvent('starting', 'active');
-            const inspected = await this.runtime.inspectContainer(containerId);
+            const inspected = await this.runProvisionStage('starting', journeyCorrelationId, async () => {
+                const result = await this.runtime.inspectContainer(provisionedContainerId);
+                this.throwIfAborted(signal);
+                return result;
+            });
             // Fall back to the port we actually requested (not the canonical default) if the
             // inspect can't report the binding, so a custom port stays correct in the success
             // message + stored connection string.
             const boundPort = (inspected && getBoundHostPort(inspected)) || chosenPort;
             // Stream container logs to the channel during the wait (compensates for -dt detach, D2).
-            void this.runtime.followLogs(containerId, secrets, cts.token);
+            void this.runtime.followLogs(provisionedContainerId, secrets, cts.token);
             yield stageEvent('starting', 'done');
 
             // --- waiting (wire-protocol readiness, D7) ---
@@ -774,13 +826,14 @@ export class QuickStartServiceImpl {
             const pending: PendingReadiness = {
                 alias,
                 displayName: alias === DEFAULT_ALIAS ? DEFAULT_INSTANCE_DISPLAY_NAME : alias,
-                containerId,
+                containerId: provisionedContainerId,
                 connectionString,
                 boundPort,
                 username: credentials.username,
                 password: credentials.password,
                 imageRef,
                 sampleDataRequested,
+                journeyCorrelationId,
                 reusing,
             };
             this.stateFor(alias).pendingReadiness = pending;
@@ -798,11 +851,13 @@ export class QuickStartServiceImpl {
             if (leaseHeld) {
                 await this.renewProvisioningLease(alias, operationId, boundPort);
             }
-            await this.waitForReadiness(connectionString, signal);
-            this.throwIfAborted(signal);
+            await this.runProvisionStage('waiting', journeyCorrelationId, async () => {
+                await this.waitForReadiness(connectionString, signal);
+                this.throwIfAborted(signal);
 
-            // --- success (seed sample data, store creds, adopt as Running) ---
-            await this.finalizeReadyInstance(pending, cts.token, signal);
+                // --- success (seed sample data, store creds, adopt as Running) ---
+                await this.finalizeReadyInstance(pending, cts.token, signal);
+            });
             success = true;
             yield stageEvent('waiting', 'done');
             yield stageEvent('done', 'done', { key: 'instanceRunning', port: boundPort }, boundPort);
@@ -858,8 +913,12 @@ export class QuickStartServiceImpl {
                 // Cleanup (D12): when a container exists, stop+remove it.
                 if (containerCreated && containerId) {
                     channel.appendLine(`Cleaning up container ${containerId}…`);
-                    await this.runtime.stopContainer(containerId).catch(() => undefined);
-                    await this.runtime.removeContainer(containerId).catch(() => undefined);
+                    await this.runtime
+                        .stopContainer(containerId)
+                        .catch(() => meterQuickStartSilentCatch('provision_cleanupStopContainer'));
+                    await this.runtime
+                        .removeContainer(containerId)
+                        .catch(() => meterQuickStartSilentCatch('provision_cleanupRemoveContainer'));
                 } else if (createAttempted && !containerId) {
                     // The CLI may have been killed after the daemon created the container but
                     // before its id was captured — sweep by label. Scoped to THIS run's
@@ -872,10 +931,15 @@ export class QuickStartServiceImpl {
                             [QUICK_START_LABEL_KEY]: '1',
                             [QUICK_START_OPERATION_LABEL_KEY]: operationId,
                         })
-                        .catch(() => []);
+                        .catch(() => {
+                            meterQuickStartSilentCatch('provision_listOrphanedContainers');
+                            return [];
+                        });
                     for (const orphan of orphans) {
                         channel.appendLine(`Removing orphaned container ${orphan.id}…`);
-                        await this.runtime.removeContainer(orphan.id).catch(() => undefined);
+                        await this.runtime
+                            .removeContainer(orphan.id)
+                            .catch(() => meterQuickStartSilentCatch('provision_removeOrphanedContainer'));
                     }
                 }
                 // Restore the credential state this attempt overwrote (H3): a discarded attempt
@@ -887,6 +951,7 @@ export class QuickStartServiceImpl {
                             port: chosenPort,
                         });
                     } catch {
+                        meterQuickStartSilentCatch('provision_restoreCredentials');
                         // Best-effort restore; a stuck secret is surfaced by the next reconcile.
                     }
                 }
@@ -906,7 +971,9 @@ export class QuickStartServiceImpl {
             cts.dispose();
             // Delete the temp env-file (it carried the password in plaintext, §8.2).
             if (envFilePath) {
-                await fs.rm(envFilePath, { force: true }).catch(() => undefined);
+                await fs
+                    .rm(envFilePath, { force: true })
+                    .catch(() => meterQuickStartSilentCatch('provision_removeEnvironmentFile'));
             }
             // Provisioning outcome telemetry (design §14): result + whether we reused a
             // prior volume/creds + whether a port fallback was used + total duration, plus
@@ -928,6 +995,7 @@ export class QuickStartServiceImpl {
                 telemetryContext.telemetry.properties.customImage = String(usedCustomImage);
                 telemetryContext.telemetry.properties.sampleData = String(sampleDataRequested);
                 telemetryContext.telemetry.properties.dockerFailureKind = provisioningDockerFailureKind ?? 'none';
+                telemetryContext.telemetry.properties.journeyCorrelationId = journeyCorrelationId;
                 telemetryContext.telemetry.measurements.provisionMs = Date.now() - provisionStartedAt;
             });
             this.stateFor(alias).provisioning = false;
@@ -945,6 +1013,7 @@ export class QuickStartServiceImpl {
             const readiness = await this.checkDockerReadiness({ forceRefresh: true });
             return readiness.outcome === 'diagnosed' ? readiness : undefined;
         } catch {
+            meterQuickStartSilentCatch('provision_getDockerReadiness');
             return undefined;
         }
     }
@@ -984,7 +1053,9 @@ export class QuickStartServiceImpl {
         });
         // Drop any stale client cached under this id (e.g. from a prior run with different
         // credentials) so the next browse uses the fresh credentials.
-        await ClustersClient.deleteClient(clusterId(pending.alias)).catch(() => undefined);
+        await ClustersClient.deleteClient(clusterId(pending.alias)).catch(() =>
+            meterQuickStartSilentCatch('finalize_deleteCachedClient'),
+        );
         this.populateCredentialCache(pending.alias, pending.connectionString, pending.username, pending.password);
         this.setStatus(
             pending.alias,
@@ -1041,9 +1112,11 @@ export class QuickStartServiceImpl {
             // Stream the container's logs during THIS wait so "View Docker output" shows the live
             // startup rather than only the stale first-attempt output (opus-4.8).
             void this.runtime.followLogs(pending.containerId, secretVariants(pending.password), cts.token);
-            await this.waitForReadiness(pending.connectionString, signal);
-            this.throwIfAborted(signal);
-            await this.finalizeReadyInstance(pending, cts.token, signal);
+            await this.runProvisionStage('waiting', pending.journeyCorrelationId, async () => {
+                await this.waitForReadiness(pending.connectionString, signal);
+                this.throwIfAborted(signal);
+                await this.finalizeReadyInstance(pending, cts.token, signal);
+            });
             finalized = true;
             resumeResult = 'success';
             yield stageEvent('waiting', 'done');
@@ -1091,6 +1164,7 @@ export class QuickStartServiceImpl {
             void callWithTelemetryAndErrorHandling('documentDB.quickstart.resumeReadiness', (telemetryContext) => {
                 telemetryContext.errorHandling.suppressDisplay = true;
                 telemetryContext.telemetry.properties.resumeResult = resumeResult;
+                telemetryContext.telemetry.properties.journeyCorrelationId = pending.journeyCorrelationId;
                 telemetryContext.telemetry.measurements.resumeMs = Date.now() - resumeStartedAt;
             });
         }
@@ -1120,10 +1194,16 @@ export class QuickStartServiceImpl {
         entry.pendingReadiness = undefined;
         entry.lifecycleBusy = true;
         try {
-            await this.runtime.stopContainer(pending.containerId).catch(() => undefined);
-            await this.runtime.removeContainer(pending.containerId).catch(() => undefined);
+            await this.runtime
+                .stopContainer(pending.containerId)
+                .catch(() => meterQuickStartSilentCatch('discardTimedOut_stopContainer'));
+            await this.runtime
+                .removeContainer(pending.containerId)
+                .catch(() => meterQuickStartSilentCatch('discardTimedOut_removeContainer'));
             if (!pending.reusing) {
-                await this.runtime.removeVolume(volumeName(pending.alias)).catch(() => undefined);
+                await this.runtime
+                    .removeVolume(volumeName(pending.alias))
+                    .catch(() => meterQuickStartSilentCatch('discardTimedOut_removeVolume'));
             }
             this.setStatus(alias, InstanceState.NotInstalled, undefined, undefined);
             return true;
