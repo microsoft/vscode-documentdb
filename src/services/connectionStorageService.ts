@@ -210,7 +210,7 @@ export type ConnectionItem = StoredItem;
  * Auth config fields are stored individually as flat string values to avoid
  * nested object serialization issues with VS Code SecretStorage.
  */
-const enum SecretIndex {
+enum SecretIndex {
     ConnectionString = 0,
     // Native auth config fields (consolidated from legacy UserName/Password)
     NativeAuthConnectionUser = 1,
