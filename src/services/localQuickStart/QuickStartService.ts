@@ -562,6 +562,9 @@ export class QuickStartServiceImpl {
         journeyCorrelationId: string,
         operation: () => Promise<T>,
     ): Promise<T> {
+        // Throwing inside the callback is what records the stage as Failed. The error is captured and
+        // re-thrown here rather than via `errorHandling.rethrow`, which the framework ignores for a
+        // UserCancelledError — provisioning must never continue past a failed stage.
         let result!: T;
         let operationError: Error | undefined;
         await callWithTelemetryAndErrorHandling('documentDB.quickstart.provision.stage', async (telemetryContext) => {

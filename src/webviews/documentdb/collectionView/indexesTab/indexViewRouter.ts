@@ -49,7 +49,7 @@ import { readOnlyJsonDocumentProvider } from '../../../../utils/readOnlyJsonDocu
 import { type BaseRouterContext } from '../../../_integration/appRouter';
 import { publicProcedureWithTelemetry, router, type WithTelemetry } from '../../../_integration/trpc';
 import { FIELD_SUGGESTION_LIMIT } from './constants';
-import { buildCreateIndexShellCommand, buildIndexSpec, CreateIndexInputSchema } from './indexCreation';
+import { buildCreateIndexShellCommand, buildIndexSpec, CreateIndexInputSchema, isWildcardKey } from './indexCreation';
 import { isVectorCreateIndexInput, type IndexRow } from './types';
 import { getVectorIndexOptions } from './utils/vectorIndex';
 
@@ -269,7 +269,7 @@ export const indexViewRouter = router({
             myCtx.actionContext.telemetry.measurements.vectorDimensions = input.dimensions;
         } else {
             myCtx.actionContext.telemetry.properties.indexKind = input.fields.some((field) =>
-                field.field.includes('$**'),
+                isWildcardKey(field.field.trim()),
             )
                 ? 'wildcard'
                 : 'standard';

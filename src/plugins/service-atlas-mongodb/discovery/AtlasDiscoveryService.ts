@@ -416,6 +416,9 @@ export class AtlasDiscoveryService {
         signal?: AbortSignal,
         forceFreshSessions = false,
     ): Promise<AtlasDiscoverySnapshot> {
+        // Throwing inside the callback is what records the pass as Failed. The error is captured and
+        // re-thrown here rather than via `errorHandling.rethrow`, which the framework ignores for a
+        // UserCancelledError — callers must never receive an undefined snapshot.
         let snapshot!: AtlasDiscoverySnapshot;
         let discoveryError: Error | undefined;
         await callWithTelemetryAndErrorHandling('serviceDiscovery.atlas.buildSnapshot', async (context) => {
