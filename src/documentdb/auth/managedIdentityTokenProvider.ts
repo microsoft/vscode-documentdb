@@ -6,6 +6,7 @@
 import { type TokenCredential } from '@azure/identity';
 import { describeManagedIdentityError } from './managedIdentityErrors';
 import { reportManagedIdentityTokenFailure } from './managedIdentityTelemetry';
+import { verifyManagedIdentityTenant } from './managedIdentityTenant';
 
 /**
  * One credential per identity, for the lifetime of the window.
@@ -27,6 +28,7 @@ const credentialsByClientId = new Map<string, TokenCredential>();
 export async function getManagedIdentityAccessToken(
     scopes: string[],
     clientId: string | undefined,
+    clusterTenantId?: string,
 ): Promise<{ accessToken: string; expiresOnTimestamp: number }> {
     const credential = await getCredential(clientId);
 
@@ -42,6 +44,8 @@ export async function getManagedIdentityAccessToken(
         reportManagedIdentityTokenFailure(undefined, clientId);
         throw new Error(describeManagedIdentityError(undefined, clientId));
     }
+
+    verifyManagedIdentityTenant(token.token, clusterTenantId, clientId);
 
     return { accessToken: token.token, expiresOnTimestamp: token.expiresOnTimestamp };
 }

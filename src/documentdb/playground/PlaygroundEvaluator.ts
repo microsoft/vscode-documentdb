@@ -343,7 +343,8 @@ export class PlaygroundEvaluator implements vscode.Disposable {
 
             if (msg.source === 'managedIdentity') {
                 const { getManagedIdentityAccessToken } = await import('../auth/managedIdentityTokenProvider');
-                accessToken = (await getManagedIdentityAccessToken(msg.scopes as string[], msg.clientId)).accessToken;
+                accessToken = (await getManagedIdentityAccessToken(msg.scopes as string[], msg.clientId, msg.tenantId))
+                    .accessToken;
             } else {
                 const { getSessionFromVSCode } = await import(
                     // eslint-disable-next-line import/no-internal-modules

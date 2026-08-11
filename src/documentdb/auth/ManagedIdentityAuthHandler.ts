@@ -12,6 +12,7 @@ import { type AuthHandler, type AuthHandlerResponse } from './AuthHandler';
 import { DOCUMENTDB_ENTRA_SCOPE } from './entraScopes';
 import { describeManagedIdentityError } from './managedIdentityErrors';
 import { reportManagedIdentityTokenFailure } from './managedIdentityTelemetry';
+import { verifyManagedIdentityTenant } from './managedIdentityTenant';
 import { getOidcAllowedHosts } from './oidcAllowedHosts';
 
 /**
@@ -76,6 +77,8 @@ export class ManagedIdentityAuthHandler implements AuthHandler {
                         reportManagedIdentityTokenFailure(undefined, clientId);
                         throw new Error(describeManagedIdentityError(undefined, clientId));
                     }
+
+                    verifyManagedIdentityTenant(token.token, this.clusterCredentials.entraIdConfig?.tenantId, clientId);
 
                     return {
                         accessToken: token.token,

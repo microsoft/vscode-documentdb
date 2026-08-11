@@ -671,6 +671,62 @@ Azure portal, and the nuance is documented in the user manual instead.
 
 ---
 
+## Post-review: cross-tenant detection
+
+Raised in review: managed identity has no tenant selector, unlike interactive Entra ID. Investigated,
+then turned into a feature.
+
+**Why there is no selector.** A managed identity is a service principal in exactly one Microsoft
+Entra tenant, the tenant of the subscription owning the resource, and it cannot be a guest elsewhere.
+Verified against the installed packages: `ManagedIdentityCredential` accepts no `tenantId`
+constructor option, and although `getToken(scopes, options)` accepts `options.tenantId` through the
+shared `GetTokenOptions` interface, it **silently ignores** it. It never calls
+`processMultiTenantRequest`, `resolveTenantId` or `resolveAdditionallyAllowedTenantIds`, which
+`InteractiveBrowserCredential`, `DeviceCodeCredential` and `AzureCliCredential` all do. One level
+down, `@azure/msal-node` sends only `api-version`, `resource`, an optional identity selector,
+`token_sha256_to_refresh` and `xms_cc` to the identity endpoint. There is no tenant in the protocol.
+
+So a tenant prompt would have compiled, typechecked, and done nothing.
+
+**The consequence, which was undocumented.** If the VM and the cluster are in different tenants,
+managed identity cannot work at all. Not "needs configuration": there is no mechanism. Interactive
+Entra ID handles it via guest access and the tenant picker, which makes this a genuine functional
+difference between the two methods.
+
+**What was added.** New [managedIdentityTenant.ts](src/documentdb/auth/managedIdentityTenant.ts) with
+`readTenantIdFromAccessToken()` and `verifyManagedIdentityTenant()`, called from both token
+acquisition points ([ManagedIdentityAuthHandler](src/documentdb/auth/ManagedIdentityAuthHandler.ts)
+and [managedIdentityTokenProvider](src/documentdb/auth/managedIdentityTokenProvider.ts)). When the
+cluster's tenant is known and the token's `tid` claim differs, the connection fails immediately with
+a message naming both tenants, instead of the cluster rejecting the token with a generic
+authentication error.
+
+`ManagedIdentityFailureReason` gained `tenantMismatch`, and `managedIdentityTelemetry.ts` gained
+`reportManagedIdentityFailureReason()` for causes that are known proactively rather than classified
+from an error.
+
+**Design notes.**
+
+- **The cluster's tenant costs nothing to obtain.** For connections from Azure Resources and
+  Discovery, `clusterHelpers.ts` already populates `entraIdAuthConfig.tenantId` from the cluster's own
+  subscription. For the Playground and the Shell it already travels in the `tokenRequest` message, so
+  the check needed no protocol change: only an extra argument at two call sites.
+- **Deliberately conservative.** The check runs only when the cluster tenant is actually known, and
+  is skipped entirely when the `tid` claim cannot be read. A pasted connection string therefore keeps
+  its previous behaviour rather than risking a false positive on a working connection.
+- **Fail fast is safe here** because the mismatch is not recoverable: the token is certain to be
+  rejected. The only thing lost by stopping early is a round trip.
+- The token is not verified before reading the claim, and does not need to be: it came straight from
+  the identity endpoint and the value is used only to write a better sentence.
+
+**Documentation.** [connect-with-managed-identity.md](docs/user-manual/connect-with-managed-identity.md)
+gained a dedicated section, a fourth prerequisite, two rows in the comparison table (`Tenants`,
+`Cluster in another tenant`) and a troubleshooting row. The validation checklist gained cases 7a and
+7b, deliberately paired so the difference between "we know the tenant" and "we do not" is visible on
+real hardware.
+
+---
+
 ## Deviations from the plan
 
 Recorded here in one place as well as in the individual entries, so a reviewer can see the whole

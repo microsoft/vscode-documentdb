@@ -4,7 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { callWithTelemetryAndErrorHandling } from '@microsoft/vscode-azext-utils';
-import { classifyManagedIdentityError } from './managedIdentityErrors';
+import { classifyManagedIdentityError, type ManagedIdentityFailureReason } from './managedIdentityErrors';
 
 /**
  * Reports why a managed identity token could not be acquired.
@@ -17,8 +17,14 @@ import { classifyManagedIdentityError } from './managedIdentityErrors';
  * no analysis question needs it.
  */
 export function reportManagedIdentityTokenFailure(error: unknown, clientId: string | undefined): void {
-    const reason = classifyManagedIdentityError(error);
+    reportManagedIdentityFailureReason(classifyManagedIdentityError(error), clientId);
+}
 
+/** Reports a failure whose cause is already known, without going through error classification. */
+export function reportManagedIdentityFailureReason(
+    reason: ManagedIdentityFailureReason,
+    clientId: string | undefined,
+): void {
     void callWithTelemetryAndErrorHandling('connect.managedIdentityToken', (context) => {
         context.errorHandling.suppressDisplay = true;
         context.telemetry.properties.managedIdentityFailureReason = reason;

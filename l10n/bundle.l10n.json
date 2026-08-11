@@ -2108,6 +2108,7 @@
   "This machine": "This machine",
   "This machine (Docker)": "This machine (Docker)",
   "This machine has more than one managed identity, so the right one cannot be chosen automatically. Reconnect and enter the client ID you want to use.": "This machine has more than one managed identity, so the right one cannot be chosen automatically. Reconnect and enter the client ID you want to use.",
+  "This managed identity belongs to Microsoft Entra tenant {0}, but the cluster is in tenant {1}. A managed identity cannot authenticate across tenants. Use Entra ID sign-in instead, or connect from a machine in the cluster's tenant.": "This managed identity belongs to Microsoft Entra tenant {0}, but the cluster is in tenant {1}. A managed identity cannot authenticate across tenants. Use Entra ID sign-in instead, or connect from a machine in the cluster's tenant.",
   "This MongoDB Atlas project does not currently contain any clusters to connect to.": "This MongoDB Atlas project does not currently contain any clusters to connect to.",
   "This operation is not supported as it would create a circular dependency and never terminate. Please select a different target collection or database.": "This operation is not supported as it would create a circular dependency and never terminate. Please select a different target collection or database.",
   "This operation is not supported.": "This operation is not supported.",

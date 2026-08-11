@@ -11,7 +11,12 @@ import * as l10n from '@vscode/l10n';
  * Kept separate from the message so telemetry can report the reason without ever carrying
  * user-visible text or identifiers, and without breaking when the extension is translated.
  */
-export type ManagedIdentityFailureReason = 'noEndpoint' | 'multipleIdentities' | 'identityNotAssigned' | 'other';
+export type ManagedIdentityFailureReason =
+    | 'noEndpoint'
+    | 'multipleIdentities'
+    | 'identityNotAssigned'
+    | 'tenantMismatch'
+    | 'other';
 
 /**
  * Classifies a raw failure from `ManagedIdentityCredential`.
@@ -98,6 +103,21 @@ export function describeManagedIdentityError(error: unknown, clientId?: string):
         default:
             return l10n.t('Managed Identity authentication failed: {0}', describeUnknownError(error));
     }
+}
+
+/**
+ * Explains a token that was issued by the wrong Microsoft Entra tenant.
+ *
+ * Unlike the other reasons this one is detected proactively rather than classified from a failure:
+ * the token request succeeds, and only the cluster would reject it, with a generic authentication
+ * error that names no cause.
+ */
+export function describeManagedIdentityTenantMismatch(identityTenantId: string, clusterTenantId: string): string {
+    return l10n.t(
+        "This managed identity belongs to Microsoft Entra tenant {0}, but the cluster is in tenant {1}. A managed identity cannot authenticate across tenants. Use Entra ID sign-in instead, or connect from a machine in the cluster's tenant.",
+        identityTenantId,
+        clusterTenantId,
+    );
 }
 
 /**
