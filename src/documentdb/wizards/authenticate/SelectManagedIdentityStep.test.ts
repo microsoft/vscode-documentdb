@@ -50,11 +50,11 @@ describe('SelectManagedIdentityStep.buildItems', () => {
         mockGetRecentManagedIdentities.mockReturnValue([]);
     });
 
-    it('always puts the manual escape hatch first', () => {
+    it('puts the system-assigned identity first so it is selected by default', () => {
         const items = makeStep().buildItems();
+        const firstSelectableItem = items.find((item) => item.kind !== vscode.QuickPickItemKind.Separator);
 
-        expect(items[0].label).toBe('Enter a client ID');
-        expect(items[0].kind).toBeUndefined();
+        expect(firstSelectableItem?.label).toBe('System-assigned managed identity');
     });
 
     it('is never a dead end: with nothing known it still offers manual entry and system-assigned', () => {
@@ -90,6 +90,19 @@ describe('SelectManagedIdentityStep.buildItems', () => {
         expect(occurrences).toHaveLength(1);
         expect(items.some((item) => item.label === 'From the connection string')).toBe(true);
         expect(items.some((item) => item.label === 'Recently used')).toBe(false);
+    });
+
+    it('puts manual entry last and includes detail text', () => {
+        mockGetRecentManagedIdentities.mockReturnValue([
+            { clientId: 'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee', connectionLabel: 'contoso-prod' },
+        ]);
+
+        const items = makeStep().buildItems(CLIENT_ID);
+        const manualEntry = items.at(-1);
+
+        expect(items[2].label).toBe('From the connection string');
+        expect(manualEntry?.label).toBe('Enter a client ID');
+        expect(manualEntry?.detail).toBe('Type the client ID of a user-assigned managed identity');
     });
 });
 

@@ -32,10 +32,9 @@ interface IdentityQuickPickItem extends vscode.QuickPickItem {
  * machine, so on such a machine the client ID is not a nicety: without it the connection fails with
  * an error that names no cause. That is the incident this feature exists to close.
  *
- * The list follows the pattern already shipped in `SelectAtlasDatabaseUserStep`: the manual escape
- * hatch is row one, so anyone who already has a GUID is one keystroke away, and the known values sit
- * below it under separator headings. It is never a dead end; with nothing known it still shows the
- * manual entry row and the system-assigned option.
+ * The system-assigned identity is the default choice, followed by known client IDs and the manual
+ * escape hatch as the final fallback. It is never a dead end; with nothing known it still shows both
+ * identity options.
  */
 export class SelectManagedIdentityStep<T extends ManagedIdentitySelectionContext> extends AzureWizardPromptStep<T> {
     constructor(private readonly isManagedIdentitySelected: (context: T) => boolean) {
@@ -104,28 +103,20 @@ export class SelectManagedIdentityStep<T extends ManagedIdentitySelectionContext
     }
 
     /**
-     * Manual entry first, then the values we know about, each group under its own heading.
+     * System-assigned identity first, then the values we know about, with manual entry last.
      * A group with nothing in it contributes no separator, so the list never shows an empty heading.
      */
     public buildItems(prefilledClientId?: string): IdentityQuickPickItem[] {
         const items: IdentityQuickPickItem[] = [
+            { label: l10n.t('This machine'), kind: vscode.QuickPickItemKind.Separator },
             {
-                label: l10n.t('Enter a client ID'),
-                detail: l10n.t('Type the client ID of a user-assigned managed identity'),
-                iconPath: new vscode.ThemeIcon('edit'),
-                choice: 'manual',
-                alwaysShow: true,
+                label: l10n.t('System-assigned managed identity'),
+                detail: l10n.t("Use this machine's own identity, no client ID needed"),
+                // Not the 'vm' icon: nothing here verifies that the host is a virtual machine.
+                iconPath: new vscode.ThemeIcon('device-desktop'),
+                choice: 'systemAssigned',
             },
         ];
-
-        items.push({ label: l10n.t('This machine'), kind: vscode.QuickPickItemKind.Separator });
-        items.push({
-            label: l10n.t('System-assigned managed identity'),
-            detail: l10n.t("Use this machine's own identity, no client ID needed"),
-            // Not the 'vm' icon: nothing here verifies that the host is a virtual machine.
-            iconPath: new vscode.ThemeIcon('device-desktop'),
-            choice: 'systemAssigned',
-        });
 
         if (prefilledClientId) {
             items.push({ label: l10n.t('From the connection string'), kind: vscode.QuickPickItemKind.Separator });
@@ -155,6 +146,14 @@ export class SelectManagedIdentityStep<T extends ManagedIdentitySelectionContext
                 })),
             );
         }
+
+        items.push({
+            label: l10n.t('Enter a client ID'),
+            detail: l10n.t('Type the client ID of a user-assigned managed identity'),
+            iconPath: new vscode.ThemeIcon('edit'),
+            choice: 'manual',
+            alwaysShow: true,
+        });
 
         return items;
     }
