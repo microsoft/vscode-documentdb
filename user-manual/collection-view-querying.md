@@ -164,12 +164,12 @@ These type-aware suggestions appear at the top of the completion list, followed 
 
 The autocompletion is aware of where your cursor is within the query expression and adjusts what it suggests accordingly:
 
-| Cursor Position                                           | What You See                                                                        |
-| --------------------------------------------------------- | ----------------------------------------------------------------------------------- |
-| **At a key position** (e.g., `{ \| }`)                   | Field names and logical operators (`$and`, `$or`, `$nor`, `$not`)                   |
-| **At a value position** (e.g., `{ age: \| }`)            | Type-aware suggestions, comparison operators, BSON constructors, JavaScript globals |
-| **Inside an operator object** (e.g., `{ age: { \| } }`)  | Comparison and query operators without outer braces                                 |
-| **Inside an array** (e.g., `{ $and: [ \| ] }`)           | Same as key position (each array element is a query document)                       |
+| Cursor Position                                         | What You See                                                                        |
+| ------------------------------------------------------- | ----------------------------------------------------------------------------------- |
+| **At a key position** (e.g., `{ \| }`)                  | Field names and logical operators (`$and`, `$or`, `$nor`, `$not`)                   |
+| **At a value position** (e.g., `{ age: \| }`)           | Type-aware suggestions, comparison operators, BSON constructors, JavaScript globals |
+| **Inside an operator object** (e.g., `{ age: { \| } }`) | Comparison and query operators without outer braces                                 |
+| **Inside an array** (e.g., `{ $and: [ \| ] }`)          | Same as key position (each array element is a query document)                       |
 
 This means you see the right suggestions at the right time, instead of a flat list of everything.
 
@@ -244,5 +244,6 @@ From the Collection View, you can move your query to other surfaces:
 - **Open in Shell**: Click the toolbar button to pre-feed your current query into a new Interactive Shell session.
 - **Copy**: Copy the full find expression to the clipboard for use elsewhere.
 - **Paste**: Paste a find expression from the clipboard into the query editors. The extension parses the `find(filter, project).sort(sort)` format and populates each editor.
+- **Indexes**: Open the Indexes tab to inspect, create, and manage indexes for the current collection. See [Manage Indexes in Collection View](./collection-view-index-management).
 
 For more details, see the [Query Playground](./query-playground) and [Interactive Shell](./interactive-shell) documentation.
