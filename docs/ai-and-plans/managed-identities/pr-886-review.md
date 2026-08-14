@@ -772,6 +772,8 @@ cross-tenant managed identity failure` commit.
 Four things have to be in place, and all four are outside VS Code:
 ```
 
+<!-- FIXED (C2) in https://github.com/microsoft/vscode-documentdb/commit/590bc986: Changed the prerequisite lead-in to "Four things" and "all four" so it matches the four numbered requirements. This removes ambiguity about whether the same-tenant requirement is optional; a targeted scan confirms no stale "three" count remains on the page. -->
+
 Prefer the number over a vaguer "The following must be in place": the count is a useful signal to a
 reader skimming a troubleshooting page, and it is trivially maintainable. Also worth a quick scan of
 the rest of the page for any other "three" that drifted.
