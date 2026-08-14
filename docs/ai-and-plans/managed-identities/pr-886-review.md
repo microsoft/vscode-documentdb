@@ -764,6 +764,11 @@ The blocker is the `default` branch, not the number. Fix that first, in this ord
 Step 1 is not part of this PR and should not be. It belongs in a small storage-hardening PR of its
 own, where it can be tested against real v1, v2 and v3 fixtures.
 
+> **Tracked in [#887 — Harden connection storage reads for unknown future
+> versions](https://github.com/microsoft/vscode-documentdb/issues/887).** The issue separates the
+> tolerant-reader rollout from the later version bump and defines acceptance coverage for v1, v2,
+> v3, future-version connections, and future-version folders.
+
 ### Consequences for F1 = B
 
 The operator chose F1 = B, which adds `tenantId` to `ManagedIdentityAuthConfig` and therefore a second
@@ -976,11 +981,12 @@ Then the standard five: `npm run l10n`, `npm run prettier-fix`, `npm run lint`,
 > for `webpack.config.views.js`. The exact CI packaging command, `npm run package`, also succeeds and
 > produces the managed-identity preview VSIX.
 
-**Follow-up issues to file, not part of this PR:**
+**Follow-up issues, not part of this PR:**
 
-- Storage hardening: make the `fromStorageItem` `default` branch distinguish "unversioned v1" from
-  "unrecognised future version", so a later version bump stops being destructive. See the
-  [F8 addendum](#f8-addendum-operator-question-on-versioning).
+- [#887 — Harden connection storage reads for unknown future
+  versions](https://github.com/microsoft/vscode-documentdb/issues/887): make the `fromStorageItem`
+  fallback distinguish unversioned v1 records from unknown future versions before any later storage
+  version bump. See the [F8 addendum](#f8-addendum-operator-question-on-versioning).
 - The D4 issue (chained credential, MFA, service principals) that the plan already schedules for after
   this work lands.
 
