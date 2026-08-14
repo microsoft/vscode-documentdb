@@ -500,6 +500,8 @@ change that is otherwise invisible in a diff titled "managed identity".
 
 Agreed. No code change; the release-note line and the checklist line still need writing.
 
+<!-- FIXED (F6) in https://github.com/microsoft/vscode-documentdb/commit/db410ac7: Added a 0.10.0 changelog disclosure that explicit saved authentication methods now take precedence over credential inference, and added a manual regression case for Native and Entra ID connections created on 0.9.x. The implementation remains unchanged because honoring the persisted method is required to distinguish managed identity from Entra ID after reload; documenting and validating the broader cache behavior makes that intentional blast radius visible. -->
+
 ---
 
 ## F7. Version string must be reverted before merge (withdrawn)
