@@ -80,7 +80,7 @@ flowchart TD
     B -->|New Connection| C[Paste connection string]
     C --> D{Managed identity hint}
     D -->|Explicit and valid| E[Auto-select method and identity]
-    D -->|Explicit and non-GUID username| F[Silently select system-assigned identity ⚠️ P1]
+    D -->|Explicit and non-GUID username| F[Review or correct the supplied identity]
     D -->|Weak or none| G[Choose authentication method]
     G --> H[Choose system-assigned or enter client ID]
     H --> I([Connection saved, tree revealed, confirmation])
@@ -116,7 +116,7 @@ flowchart TD
 | 1   | Add New Connection, then choose Connection String | [PromptConnectionModeStep.ts](../../../../src/commands/newConnection/PromptConnectionModeStep.ts#L20)                                  | Connection saved, revealed, and confirmed; cancel               | Wizard + tree + notification |            |
 | 2   | Paste a documented `ENVIRONMENT:azure` string     | [PromptConnectionStringStep.ts](../../../../src/commands/newConnection/PromptConnectionStringStep.ts#L34)                              | Managed Identity and identity auto-selected                     | Wizard                       | Items 1, 6 |
 | 3   | Choose Managed Identity manually                  | [AuthMethod.ts](../../../../src/documentdb/auth/AuthMethod.ts#L61)                                                                     | Identity quick pick opens                                       | Wizard                       | Item 4     |
-| 4   | Choose system-assigned or enter a client ID       | [SelectManagedIdentityStep.ts](../../../../src/documentdb/wizards/authenticate/SelectManagedIdentityStep.ts#L43)                       | Config accepted; invalid GUID remains in input validation       | Wizard                       | Item 1     |
+| 4   | Choose system-assigned or enter a client ID       | [SelectManagedIdentityStep.ts](../../../../src/documentdb/wizards/authenticate/SelectManagedIdentityStep.ts#L43)                       | Config accepted; a supplied non-GUID value opens for editing    | Wizard                       | Item 1     |
 | 5   | Expand a vCore cluster in Azure Resources         | [VCoreResourceItem.ts](../../../../src/tree/azure-resources-view/documentdb/VCoreResourceItem.ts#L78)                                  | Databases; modal failure + Retry; cancel                        | Tree + modal + output        | Items 4, 5 |
 | 6   | Expand a vCore cluster in Service Discovery       | [DocumentDBResourceItem.ts](../../../../src/plugins/service-azure-mongo-vcore/discovery-tree/documentdb/DocumentDBResourceItem.ts#L90) | Databases; modal failure + Retry; cancel                        | Tree + modal + output        | Items 4, 5 |
 | 7   | Expand or Retry a saved connection                | [DocumentDBClusterItem.ts](../../../../src/tree/connections-view/DocumentDBClusterItem.ts#L105)                                        | Databases; modal failure + Retry and Update Credentials rows    | Tree + modal + output        | Item 2     |
@@ -149,9 +149,10 @@ error result and also shows a toast; Shell reports inside the terminal it owns.
 The feature adds Managed Identity as an explicit authentication method across manual connections,
 Azure Resources, Service Discovery, saved connections, Collection View, Query Playground, and
 Interactive Shell. The central journey is clear and the error translations are unusually actionable.
-After operator review, two P1 items remain open: a supplied identity selector should remain visible
-and editable instead of silently becoming system-assigned, and duplicate detection must distinguish
-authentication identities for both Managed Identity and Entra ID. The remaining four pre-assessment
+After operator review, two P1 items were implemented on this branch: a supplied identity selector now
+stays visible and editable instead of silently becoming system-assigned, and duplicate detection now
+compares the authentication identity, so two managed identities (or two Entra ID tenants) on one host
+are no longer mistaken for the same connection. The remaining four pre-assessment
 items are closed: the Connections tree already exposes Update Credentials recovery, method
 availability is deliberately permissive where certainty can go stale, the cross-tenant diagnostic
 difference is an unbroken edge case, and the near-term New Connection redesign supersedes further
@@ -161,14 +162,14 @@ work on paste confirmation.
 
 ## Priority index
 
-| #   | Priority | Item                                                                     | Status    |
-| --- | -------- | ------------------------------------------------------------------------ | --------- |
-| 1   | **P1**   | Supplied identity selector should remain visible and editable            | 🟠 Open   |
-| 2   | **P1**   | Multiple-identity guidance points users into a Retry loop                | 🚫 Closed |
-| 3   | **P1**   | Distinct authentication identities are rejected as duplicate connections | 🟠 Open   |
-| 4   | **P1**   | Managed Identity stays selectable when cluster metadata excludes it      | 🚫 Closed |
-| 5   | **P2**   | Cross-tenant diagnosis depends on the connection's origin                | 🚫 Closed |
-| 6   | **P2**   | Explicit pasted identity is applied without an identity review step      | 🚫 Closed |
+| #   | Priority | Item                                                                     | Status         |
+| --- | -------- | ------------------------------------------------------------------------ | -------------- |
+| 1   | **P1**   | Supplied identity selector should remain visible and editable            | ✅ Implemented |
+| 2   | **P1**   | Multiple-identity guidance points users into a Retry loop                | 🚫 Closed      |
+| 3   | **P1**   | Distinct authentication identities are rejected as duplicate connections | ✅ Implemented |
+| 4   | **P1**   | Managed Identity stays selectable when cluster metadata excludes it      | 🚫 Closed      |
+| 5   | **P2**   | Cross-tenant diagnosis depends on the connection's origin                | 🚫 Closed      |
+| 6   | **P2**   | Explicit pasted identity is applied without an identity review step      | 🚫 Closed      |
 
 ---
 
@@ -180,7 +181,7 @@ No P0 item was pre-discovered. Confirm this on a real Azure VM, especially with 
 
 ### 1. Supplied identity selector should remain visible and editable ⚠️
 
-**Priority:** P1 · **Status:** 🟠 Open
+**Priority:** P1 · **Status:** ✅ Implemented
 
 > **Operator direction (Iteration 1):** when an identity value is supplied, show it in an editable
 > field, as the username flow does. The user can accept or modify it, and the connection attempt can
@@ -205,6 +206,42 @@ request for the system-assigned identity.
 💡 **Suggestion:** distinguish "username absent" from "username present." Keep the system-assigned
 fast path only for the first case. For the second, preserve the supplied value in an editable
 client-ID field, allow the user to modify or accept it, and then proceed to the connection attempt.
+
+✅ **Implemented (Iteration 2).**
+
+**What changed**
+
+- [managedIdentityConnectionString.ts](../../../../src/documentdb/auth/managedIdentityConnectionString.ts)
+  now reports a third fact. `ManagedIdentityHint` gained `suppliedIdentity`, which carries the
+  username position when it holds something that is not GUID-shaped. "Username absent" and "username
+  present but unusable as a client ID" are no longer the same state.
+- `managedIdentityConfigFromHint()` deliberately does **not** write that value into the stored
+  configuration: it is a proposal to review, not a settled choice.
+- [SelectManagedIdentityStep.ts](../../../../src/documentdb/wizards/authenticate/SelectManagedIdentityStep.ts)
+  no longer skips itself for such a hint (`shouldPrompt` returns true whenever a supplied identity is
+  present), and lists the value under **From the connection string** with a warning icon and the
+  detail "Not a client ID yet. Select to review or correct this value". Selecting it opens the
+  client-ID input box pre-filled with that exact value.
+- [PromptConnectionStringStep.ts](../../../../src/commands/newConnection/PromptConnectionStringStep.ts)
+  masks the supplied value and stops recording `managedIdentityKind`/`managedIdentityClientIdSource`
+  for this case, because the identity step now runs and records the real outcome itself.
+
+**Why this shape**
+
+- The pasted value is routed through the quick pick rather than straight into the input box so the
+  step keeps a single code path and the system-assigned identity stays one keystroke away. The value
+  is still shown verbatim and is still editable, which was the point of the finding.
+- **Operator decision:** the client-ID field keeps its GUID validation. The pasted value can be
+  corrected but not accepted as-is when it is not GUID-shaped. Two facts drove this: the token
+  provider builds `ManagedIdentityCredential({ clientId })`, which only accepts a GUID, and the
+  `@microsoft/vscode-azext-utils` input box blocks Accept on _any_ validation message, so there is no
+  "warn but allow" middle ground to offer.
+
+**Verified by:** new cases in
+[managedIdentityConnectionString.test.ts](../../../../src/documentdb/auth/managedIdentityConnectionString.test.ts)
+and [SelectManagedIdentityStep.test.ts](../../../../src/documentdb/wizards/authenticate/SelectManagedIdentityStep.test.ts)
+covering the supplied-identity hint, the "do not store an unreviewed value" rule, `shouldPrompt`, and
+the editable quick-pick entry.
 
 ### 2. Multiple-identity guidance points users into a Retry loop ⚠️
 
@@ -234,7 +271,7 @@ resolution path.
 
 ### 3. Distinct authentication identities are rejected as duplicate connections ⚠️
 
-**Priority:** P1 · **Status:** 🟠 Open
+**Priority:** P1 · **Status:** ✅ Implemented
 
 > **Operator direction (Iteration 1):** expand duplicate detection to distinguish identities and
 > make sure Entra ID is handled correctly as well. **Reason:** connection identity is
@@ -257,6 +294,41 @@ why the product disallows it.
 💡 **Suggestion:** include authentication method and its method-specific identity in duplicate
 comparison. Cover both managed-identity client IDs and the corresponding Entra ID profile semantics,
 with focused tests for distinct profiles on the same host.
+
+✅ **Implemented (Iteration 2).**
+
+**What changed**
+
+- New [connectionAuthIdentity.ts](../../../../src/documentdb/auth/connectionAuthIdentity.ts) reduces a
+  connection's authentication choice to one comparable key: `native:<username>`,
+  `entraId:<tenantId>`, `managedIdentity:<clientId | system-assigned>`, or `none`. A stored
+  connection that predates the persisted method is still comparable, because the method is inferred
+  from the secrets that are present.
+- [ExecuteStep.ts](../../../../src/commands/newConnection/ExecuteStep.ts) and
+  [addConnectionFromRegistry.ts](../../../../src/commands/addConnectionFromRegistry/addConnectionFromRegistry.ts)
+  compare that key instead of the native username, in both the host branch and the Kubernetes
+  port-forward branch.
+- The message became truthful for every method: **"A connection to the same host with the same
+  authentication settings already exists."** The old text named a username that a managed-identity
+  connection does not have.
+
+**Why this shape**
+
+- One shared helper keeps the two save paths from drifting apart; both can produce a managed-identity
+  or Entra ID connection.
+- The system-assigned identity is a value (`system-assigned`), not an absence, so two system-assigned
+  entries on one host still collide while a user-assigned one does not collide with them.
+- For Entra ID the tenant is the only durable part of the choice (the signed-in user is not known
+  until a token is acquired), and an unspecified tenant is itself a distinct choice.
+- **Scope, per operator decision:** New Connection and Add-from-Discovery only. The emulator flow
+  ([newLocalConnection/ExecuteStep.ts](../../../../src/commands/newLocalConnection/ExecuteStep.ts))
+  and the URI handler ([vscodeUriHandler.ts](../../../../src/vscodeUriHandler.ts)) have no
+  managed-identity or Entra ID surface and were left untouched.
+
+**Verified by:** a new suite in
+[ExecuteStep.test.ts](../../../../src/commands/newConnection/ExecuteStep.test.ts) covering two client
+IDs on one host, the same client ID twice, system-assigned versus user-assigned, two Entra tenants,
+the same Entra tenant twice, and managed identity versus Entra ID on one host.
 
 ### 4. Managed Identity stays selectable when cluster metadata excludes it ⚠️
 
@@ -335,7 +407,12 @@ No P3 item was pre-discovered.
 
 ## Implemented
 
-No UX-review item has been implemented yet. Existing PR fixes remain documented in the
+| #   | Item                                                          | Change                                                                                                 |
+| --- | ------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------ |
+| 1   | Supplied identity selector should remain visible and editable | Hint carries `suppliedIdentity`; the identity step prompts and offers the value for editing            |
+| 3   | Distinct authentication identities rejected as duplicates     | Shared authentication-identity key drives duplicate detection in New Connection and Add-from-Discovery |
+
+Earlier PR fixes remain documented in the
 [code-review ledger](../../managed-identities/pr-886-review.md).
 
 ---
@@ -361,6 +438,16 @@ one; nothing is dropped without a terminal status.
 | 4   | Authentication availability filtering | Keep permissive because certainty differs by origin and can become stale                          | 🚫 Closed |
 | 5   | Cross-tenant diagnostic asymmetry     | Untestable edge case; no observed break                                                           | 🚫 Closed |
 | 6   | Explicit-paste confirmation           | Defer to the planned New Connection redesign                                                      | 🚫 Closed |
+
+### Iteration 2: implementation
+
+| #   | Item                          | Decision (why)                                                                                                                                                              | Outcome        |
+| --- | ----------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------- |
+| 1   | Supplied identity selector    | Carry the pasted value as a reviewable proposal and prompt for it; keep GUID validation because the token provider and the azext input box leave no "warn but allow" option | ✅ Implemented |
+| 3   | Duplicate connection identity | Compare a method-specific authentication key in the two save paths that can produce Managed Identity or Entra ID connections                                                | ✅ Implemented |
+
+No item is left open. Checklist run for both changes: `npm run l10n`, `npm run prettier-fix`,
+`npm run lint`, `npx jest --no-coverage` (3513 tests), `npm run build` — all clean.
 
 ---
 

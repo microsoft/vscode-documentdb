@@ -73,8 +73,12 @@ export class PromptConnectionStringStep extends AzureWizardPromptStep<NewConnect
                 context.valuesToMask.push(managedIdentityHint.clientId);
             }
 
+            if (managedIdentityHint.suppliedIdentity) {
+                context.valuesToMask.push(managedIdentityHint.suppliedIdentity);
+            }
+
             context.telemetry.properties.managedIdentityHint = managedIdentityHint.confidence;
-            if (managedIdentityHint.confidence === 'explicit') {
+            if (managedIdentityHint.confidence === 'explicit' && !managedIdentityHint.suppliedIdentity) {
                 // The identity step is skipped in this case, so it cannot record these itself.
                 context.telemetry.properties.managedIdentityKind = managedIdentityHint.clientId ? 'user' : 'system';
                 context.telemetry.properties.managedIdentityClientIdSource = managedIdentityHint.clientId

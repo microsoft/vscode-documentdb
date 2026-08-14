@@ -69,6 +69,23 @@ describe('SelectManagedIdentityStep.buildItems', () => {
         expect(manualEntry?.label).toBe('Enter a client ID');
         expect(manualEntry?.detail).toBe('Type the client ID of a user-assigned managed identity');
     });
+
+    it('offers a supplied identity that is not a client ID for editing', () => {
+        const items = makeStep().buildItems(undefined, 'alice');
+        const supplied = items.find((item) => item.label === 'alice');
+
+        expect(supplied).toBeDefined();
+        // 'manual' routes the value into the editable field instead of using it as-is.
+        expect(supplied?.choice).toBe('manual');
+        expect(supplied?.clientId).toBe('alice');
+    });
+
+    it('prefers a usable client ID over a supplied identity', () => {
+        const items = makeStep().buildItems(CLIENT_ID, 'alice');
+
+        expect(items.some((item) => item.label === 'alice')).toBe(false);
+        expect(items.some((item) => item.choice === 'clientId')).toBe(true);
+    });
 });
 
 describe('SelectManagedIdentityStep.shouldPrompt', () => {
@@ -90,6 +107,13 @@ describe('SelectManagedIdentityStep.shouldPrompt', () => {
 
     it('still prompts for a weak hint, so the user can confirm', () => {
         const context = makeContext({ managedIdentityHint: { clientId: CLIENT_ID, confidence: 'weak' } });
+
+        expect(makeStep().shouldPrompt(context)).toBe(true);
+    });
+
+    it('prompts for an explicit hint whose supplied identity is not a client ID', () => {
+        // Otherwise the pasted selector would be silently replaced by the system-assigned identity.
+        const context = makeContext({ managedIdentityHint: { suppliedIdentity: 'alice', confidence: 'explicit' } });
 
         expect(makeStep().shouldPrompt(context)).toBe(true);
     });

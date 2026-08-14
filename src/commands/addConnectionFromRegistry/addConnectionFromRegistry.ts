@@ -6,6 +6,7 @@
 import { type IActionContext } from '@microsoft/vscode-azext-utils';
 import * as l10n from '@vscode/l10n';
 import vscode from 'vscode';
+import { getConnectionAuthIdentity } from '../../documentdb/auth/connectionAuthIdentity';
 import { DocumentDBConnectionString } from '../../documentdb/utils/DocumentDBConnectionString';
 import { Views } from '../../documentdb/Views';
 import { API } from '../../DocumentDBExperiences';
@@ -87,19 +88,32 @@ export async function addConnectionFromRegistry(context: IActionContext, node: C
         const joinedHosts = [...parsedCS.hosts].sort().join(',');
         const newPortForwardMetadata = getKubernetesPortForwardMetadata(credentials.connectionProperties);
 
-        //  Sanity Check 1/2: is there a connection with the same username + host in there?
+        // A discovered cluster can legitimately be saved more than once, as long as each entry
+        // authenticates as a different identity (for example two user-assigned managed identities).
+        const newAuthIdentity = getConnectionAuthIdentity({
+            authMethod: credentials.selectedAuthMethod,
+            nativeAuthConfig: credentials.nativeAuthConfig,
+            entraIdAuthConfig: credentials.entraIdAuthConfig,
+            managedIdentityAuthConfig: credentials.managedIdentityAuthConfig,
+        });
+
+        //  Sanity Check 1/2: is there a connection with the same identity + host in there?
         const existingConnections = await ConnectionStorageService.getAll(ConnectionType.Clusters);
 
         const existingDuplicateConnection = existingConnections.find((existingConnection) => {
             const existingCS = new DocumentDBConnectionString(existingConnection.secrets.connectionString);
             const existingHostsJoined = [...existingCS.hosts].sort().join(',');
-            // Use nativeAuthConfig for comparison
-            const existingUsername = existingConnection.secrets.nativeAuthConfig?.connectionUser;
+            const existingAuthIdentity = getConnectionAuthIdentity({
+                authMethod: existingConnection.properties?.selectedAuthMethod,
+                nativeAuthConfig: existingConnection.secrets.nativeAuthConfig,
+                entraIdAuthConfig: existingConnection.secrets.entraIdAuthConfig,
+                managedIdentityAuthConfig: existingConnection.secrets.managedIdentityAuthConfig,
+            });
             const existingPortForwardMetadata = getKubernetesPortForwardMetadata(existingConnection.properties);
 
             if (newPortForwardMetadata || existingPortForwardMetadata) {
                 return (
-                    existingUsername === username &&
+                    existingAuthIdentity === newAuthIdentity &&
                     !!newPortForwardMetadata &&
                     !!existingPortForwardMetadata &&
                     getKubernetesPortForwardIdentity(existingPortForwardMetadata) ===
@@ -107,7 +121,7 @@ export async function addConnectionFromRegistry(context: IActionContext, node: C
                 );
             }
 
-            return existingUsername === username && existingHostsJoined === joinedHosts;
+            return existingAuthIdentity === newAuthIdentity && existingHostsJoined === joinedHosts;
         });
 
         if (existingDuplicateConnection) {
@@ -123,12 +137,15 @@ export async function addConnectionFromRegistry(context: IActionContext, node: C
                 expand: false, // Don't expand to avoid login prompts
             });
 
-            throw new UserFacingError(l10n.t('A connection with the same username and host already exists.'), {
-                details: l10n.t(
-                    'The existing connection has been selected in the Connections View.\n\nSelected connection name:\n"{0}"',
-                    existingDuplicateConnection.name,
-                ),
-            });
+            throw new UserFacingError(
+                l10n.t('A connection to the same host with the same authentication settings already exists.'),
+                {
+                    details: l10n.t(
+                        'The existing connection has been selected in the Connections View.\n\nSelected connection name:\n"{0}"',
+                        existingDuplicateConnection.name,
+                    ),
+                },
+            );
         }
 
         let newConnectionLabel = username && username.length > 0 ? `${username}@${joinedHosts}` : joinedHosts;

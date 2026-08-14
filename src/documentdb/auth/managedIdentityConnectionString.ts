@@ -22,6 +22,14 @@ export interface ManagedIdentityHint {
     /** Client ID taken from the username position, when it is GUID-shaped. */
     readonly clientId?: string;
     /**
+     * The username position when it holds something that is not GUID-shaped.
+     *
+     * The user asked for *some* identity, so the value must stay visible and editable; treating it
+     * as if no identity had been supplied would silently switch the connection to the
+     * system-assigned identity.
+     */
+    readonly suppliedIdentity?: string;
+    /**
      * `explicit` when `ENVIRONMENT:azure` was present, so the user's intent is unambiguous and the
      * identity prompt can be skipped. `weak` when only OIDC plus a GUID-shaped username was found,
      * which is suggestive but still worth confirming.
@@ -40,10 +48,12 @@ export function detectManagedIdentityHint(cs: DocumentDBConnectionString): Manag
         return undefined;
     }
 
-    const clientId = readGuidUsername(cs);
+    const username = (cs.username ?? '').trim();
+    const clientId = GUID_PATTERN.test(username) ? username : undefined;
+    const suppliedIdentity = clientId || username.length === 0 ? undefined : username;
 
     if (hasAzureEnvironmentProperty(cs)) {
-        return { clientId, confidence: 'explicit' };
+        return { clientId, suppliedIdentity, confidence: 'explicit' };
     }
 
     if (clientId) {
@@ -67,7 +77,12 @@ export function stripManagedIdentityMarkers(cs: DocumentDBConnectionString): voi
     cs.searchParams.delete('authMechanismProperties');
 }
 
-/** Builds the stored configuration for a hint. An empty object means the system-assigned identity. */
+/**
+ * Builds the stored configuration for a hint. An empty object means the system-assigned identity.
+ *
+ * A supplied value that is not GUID-shaped is deliberately not written here: it is a proposal for
+ * the identity step to show, not a settled configuration.
+ */
 export function managedIdentityConfigFromHint(hint: ManagedIdentityHint): ManagedIdentityAuthConfig {
     return hint.clientId ? { clientId: hint.clientId } : {};
 }
@@ -86,15 +101,4 @@ function hasAzureEnvironmentProperty(cs: DocumentDBConnectionString): boolean {
         .split(',')
         .map((entry) => entry.trim().toLowerCase())
         .includes(AZURE_ENVIRONMENT_PROPERTY.toLowerCase());
-}
-
-/**
- * Returns the username only when it is GUID-shaped.
- *
- * A username that is present but not GUID-shaped is deliberately ignored rather than guessed at:
- * the method selection still stands and the identity step gets to ask.
- */
-function readGuidUsername(cs: DocumentDBConnectionString): string | undefined {
-    const username = (cs.username ?? '').trim();
-    return GUID_PATTERN.test(username) ? username : undefined;
 }

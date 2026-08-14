@@ -63,12 +63,16 @@ describe('detectManagedIdentityHint', () => {
         expect(detectManagedIdentityHint(cs)).toEqual({ clientId: CLIENT_ID, confidence: 'explicit' });
     });
 
-    it('keeps the explicit selection but no client ID when the username is not GUID shaped', () => {
+    it('keeps a username that is not GUID shaped as a supplied identity to review', () => {
         const cs = parse(
             `mongodb+srv://alice@${HOST}/?authMechanism=MONGODB-OIDC&authMechanismProperties=${MANAGED_IDENTITY_AUTH_MECHANISM_PROPERTIES}`,
         );
 
-        expect(detectManagedIdentityHint(cs)).toEqual({ clientId: undefined, confidence: 'explicit' });
+        expect(detectManagedIdentityHint(cs)).toEqual({
+            clientId: undefined,
+            suppliedIdentity: 'alice',
+            confidence: 'explicit',
+        });
     });
 
     it('returns undefined for interactive Entra ID, which has no identity selector', () => {
@@ -115,5 +119,9 @@ describe('managedIdentityConfigFromHint', () => {
 
     it('maps a missing client ID to an empty object, meaning system-assigned', () => {
         expect(managedIdentityConfigFromHint({ confidence: 'explicit' })).toEqual({});
+    });
+
+    it('does not store a supplied identity that still needs review', () => {
+        expect(managedIdentityConfigFromHint({ suppliedIdentity: 'alice', confidence: 'explicit' })).toEqual({});
     });
 });

@@ -42,8 +42,9 @@ export class SelectManagedIdentityStep<T extends ManagedIdentitySelectionContext
 
     public async prompt(context: T): Promise<void> {
         const prefilledClientId = context.managedIdentityAuthConfig?.clientId;
+        const suppliedIdentity = context.managedIdentityHint?.suppliedIdentity;
 
-        const selected = await context.ui.showQuickPick(this.buildItems(prefilledClientId), {
+        const selected = await context.ui.showQuickPick(this.buildItems(prefilledClientId, suppliedIdentity), {
             stepName: 'selectManagedIdentity',
             placeHolder: l10n.t('Select the managed identity to use'),
             matchOnDetail: true,
@@ -67,12 +68,13 @@ export class SelectManagedIdentityStep<T extends ManagedIdentitySelectionContext
         const clientId = await context.ui.showInputBox({
             prompt: l10n.t('Enter the client ID of the user-assigned managed identity.'),
             placeHolder: l10n.t('For example, 11111111-2222-3333-4444-555555555555'),
-            value: prefilledClientId,
+            value: selected.clientId ?? prefilledClientId,
             ignoreFocusOut: true,
             validateInput: (value?: string) => this.validateClientId(value),
         });
 
-        this.applyClientId(context, clientId.trim(), 'prompt');
+        const trimmed = clientId.trim();
+        this.applyClientId(context, trimmed, trimmed === selected.clientId ? 'connectionString' : 'prompt');
     }
 
     public shouldPrompt(context: T): boolean {
@@ -80,8 +82,11 @@ export class SelectManagedIdentityStep<T extends ManagedIdentitySelectionContext
             return false;
         }
 
-        // A connection string that carried ENVIRONMENT:azure already answered this question.
-        return context.managedIdentityHint?.confidence !== 'explicit';
+        const hint = context.managedIdentityHint;
+
+        // A connection string that carried ENVIRONMENT:azure already answered this question, unless
+        // the identity it supplied is not usable as-is and therefore needs the user's review.
+        return hint?.confidence !== 'explicit' || !!hint.suppliedIdentity;
     }
 
     public validateClientId(this: void, value: string | undefined): string | undefined {
@@ -101,8 +106,12 @@ export class SelectManagedIdentityStep<T extends ManagedIdentitySelectionContext
     /**
      * System-assigned identity first, then the values we know about, with manual entry last.
      * A group with nothing in it contributes no separator, so the list never shows an empty heading.
+     *
+     * `suppliedIdentity` is a value the connection string put in the identity position that is not
+     * usable as a client ID. It is offered for editing rather than dropped, because it is the only
+     * evidence of which identity the user meant.
      */
-    public buildItems(prefilledClientId?: string): IdentityQuickPickItem[] {
+    public buildItems(prefilledClientId?: string, suppliedIdentity?: string): IdentityQuickPickItem[] {
         const items: IdentityQuickPickItem[] = [
             { label: l10n.t('This machine'), kind: vscode.QuickPickItemKind.Separator },
             {
@@ -121,6 +130,16 @@ export class SelectManagedIdentityStep<T extends ManagedIdentitySelectionContext
                 iconPath: new vscode.ThemeIcon('account'),
                 choice: 'clientId',
                 clientId: prefilledClientId,
+            });
+        } else if (suppliedIdentity) {
+            items.push({ label: l10n.t('From the connection string'), kind: vscode.QuickPickItemKind.Separator });
+            items.push({
+                label: suppliedIdentity,
+                detail: l10n.t('Not a client ID yet. Select to review or correct this value'),
+                iconPath: new vscode.ThemeIcon('warning'),
+                // 'manual' so the value opens in the editable field instead of being used as-is.
+                choice: 'manual',
+                clientId: suppliedIdentity,
             });
         }
 

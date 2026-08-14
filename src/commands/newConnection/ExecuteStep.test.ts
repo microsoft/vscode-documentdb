@@ -51,10 +51,18 @@ const HOST = 'a11y-reviews-documentdb-vscode.mongocluster.cosmos.azure.com';
 interface StoredSecrets {
     connectionString: string;
     nativeAuthConfig?: { connectionUser: string; connectionPassword: string };
-    entraIdAuthConfig?: { tenantId: string; subscriptionId: string };
+    entraIdAuthConfig?: { tenantId?: string; subscriptionId?: string };
+    managedIdentityAuthConfig?: { clientId?: string };
 }
 
-function existingNativeConnection(): { id: string; name: string; properties: object; secrets: StoredSecrets } {
+interface StoredConnection {
+    id: string;
+    name: string;
+    properties: object;
+    secrets: StoredSecrets;
+}
+
+function existingNativeConnection(): StoredConnection {
     return {
         id: 'existing-id',
         name: `a11y@${HOST}`,
@@ -67,13 +75,45 @@ function existingNativeConnection(): { id: string; name: string; properties: obj
     };
 }
 
-function existingNoAuthConnection(): { id: string; name: string; properties: object; secrets: StoredSecrets } {
+function existingNoAuthConnection(): StoredConnection {
     return {
         id: 'existing-noauth-id',
         name: HOST,
         properties: { type: 'connection', api: 'MongoDB Clusters' },
         secrets: {
             connectionString: `mongodb://${HOST}/`,
+        },
+    };
+}
+
+function existingManagedIdentityConnection(clientId?: string): StoredConnection {
+    return {
+        id: `existing-mi-${clientId ?? 'system'}`,
+        name: HOST,
+        properties: {
+            type: 'connection',
+            api: 'MongoDB Clusters',
+            selectedAuthMethod: AuthMethodId.ManagedIdentity,
+        },
+        secrets: {
+            connectionString: `mongodb://${HOST}/`,
+            managedIdentityAuthConfig: clientId ? { clientId } : {},
+        },
+    };
+}
+
+function existingEntraIdConnection(tenantId: string): StoredConnection {
+    return {
+        id: `existing-entra-${tenantId}`,
+        name: HOST,
+        properties: {
+            type: 'connection',
+            api: 'MongoDB Clusters',
+            selectedAuthMethod: AuthMethodId.MicrosoftEntraID,
+        },
+        secrets: {
+            connectionString: `mongodb://${HOST}/`,
+            entraIdAuthConfig: { tenantId, subscriptionId: 'sub-1' },
         },
     };
 }
@@ -141,7 +181,7 @@ describe('newConnection ExecuteStep — credential-free auth methods', () => {
 
         const step = new ExecuteStep();
         await expect(step.execute(makeContext(AuthMethodId.NoAuth) as never)).rejects.toThrow(
-            'A connection with the same username and host already exists.',
+            'A connection to the same host with the same authentication settings already exists.',
         );
         expect(mockSave).not.toHaveBeenCalled();
     });
@@ -151,7 +191,7 @@ describe('newConnection ExecuteStep — credential-free auth methods', () => {
 
         const step = new ExecuteStep();
         await expect(step.execute(makeContext(AuthMethodId.NativeAuth) as never)).rejects.toThrow(
-            'A connection with the same username and host already exists.',
+            'A connection to the same host with the same authentication settings already exists.',
         );
         expect(mockSave).not.toHaveBeenCalled();
     });
@@ -195,5 +235,90 @@ describe('newConnection ExecuteStep — credential-free auth methods', () => {
         expect(mockSave).toHaveBeenCalledTimes(1);
         expect(savedSecrets().entraIdAuthConfig).toBeUndefined();
         expect(savedSecrets().nativeAuthConfig).toEqual({ connectionUser: 'a11y', connectionPassword: 'pw' });
+    });
+});
+
+describe('newConnection ExecuteStep — duplicate detection compares the authentication identity', () => {
+    const CLIENT_ID_A = '11111111-2222-3333-4444-555555555555';
+    const CLIENT_ID_B = '99999999-8888-7777-6666-555555555555';
+
+    beforeEach(() => {
+        jest.clearAllMocks();
+        mockSave.mockResolvedValue(undefined);
+    });
+
+    function managedIdentityContext(clientId?: string): Record<string, unknown> {
+        const context = makeContext(AuthMethodId.ManagedIdentity);
+        context.nativeAuthConfig = undefined;
+        context.managedIdentityAuthConfig = clientId ? { clientId } : {};
+        return context;
+    }
+
+    it('allows a second managed identity on the same host when the client ID differs', async () => {
+        mockGetAll.mockResolvedValue([existingManagedIdentityConnection(CLIENT_ID_A)]);
+
+        const step = new ExecuteStep();
+        await expect(step.execute(managedIdentityContext(CLIENT_ID_B) as never)).resolves.toBeUndefined();
+
+        expect(mockSave).toHaveBeenCalledTimes(1);
+        expect(savedSecrets().managedIdentityAuthConfig).toEqual({ clientId: CLIENT_ID_B });
+    });
+
+    it('blocks a second managed identity on the same host with the same client ID', async () => {
+        mockGetAll.mockResolvedValue([existingManagedIdentityConnection(CLIENT_ID_A)]);
+
+        const step = new ExecuteStep();
+        await expect(step.execute(managedIdentityContext(CLIENT_ID_A) as never)).rejects.toThrow(
+            'A connection to the same host with the same authentication settings already exists.',
+        );
+        expect(mockSave).not.toHaveBeenCalled();
+    });
+
+    it('treats the system-assigned identity as its own identity, distinct from a user-assigned one', async () => {
+        mockGetAll.mockResolvedValue([existingManagedIdentityConnection(CLIENT_ID_A)]);
+
+        const step = new ExecuteStep();
+        await expect(step.execute(managedIdentityContext() as never)).resolves.toBeUndefined();
+
+        expect(mockSave).toHaveBeenCalledTimes(1);
+        expect(savedSecrets().managedIdentityAuthConfig).toEqual({});
+    });
+
+    it('blocks a second system-assigned managed identity on the same host', async () => {
+        mockGetAll.mockResolvedValue([existingManagedIdentityConnection()]);
+
+        const step = new ExecuteStep();
+        await expect(step.execute(managedIdentityContext() as never)).rejects.toThrow(
+            'A connection to the same host with the same authentication settings already exists.',
+        );
+        expect(mockSave).not.toHaveBeenCalled();
+    });
+
+    it('allows the same host with Entra ID in a different tenant', async () => {
+        mockGetAll.mockResolvedValue([existingEntraIdConnection('tenant-2')]);
+
+        const step = new ExecuteStep();
+        await expect(step.execute(makeContext(AuthMethodId.MicrosoftEntraID) as never)).resolves.toBeUndefined();
+
+        expect(mockSave).toHaveBeenCalledTimes(1);
+    });
+
+    it('blocks the same host with Entra ID in the same tenant', async () => {
+        mockGetAll.mockResolvedValue([existingEntraIdConnection('tenant-1')]);
+
+        const step = new ExecuteStep();
+        await expect(step.execute(makeContext(AuthMethodId.MicrosoftEntraID) as never)).rejects.toThrow(
+            'A connection to the same host with the same authentication settings already exists.',
+        );
+        expect(mockSave).not.toHaveBeenCalled();
+    });
+
+    it('does not confuse a managed identity with an Entra ID connection on the same host', async () => {
+        mockGetAll.mockResolvedValue([existingEntraIdConnection('tenant-1')]);
+
+        const step = new ExecuteStep();
+        await expect(step.execute(managedIdentityContext(CLIENT_ID_A) as never)).resolves.toBeUndefined();
+
+        expect(mockSave).toHaveBeenCalledTimes(1);
     });
 });

@@ -6,6 +6,7 @@
 import { AzureWizardExecuteStep } from '@microsoft/vscode-azext-utils';
 import * as l10n from '@vscode/l10n';
 import { AuthMethodId } from '../../documentdb/auth/AuthMethod';
+import { getConnectionAuthIdentity } from '../../documentdb/auth/connectionAuthIdentity';
 import { redactCredentialsFromConnectionString } from '../../documentdb/utils/connectionStringHelpers';
 import { DocumentDBConnectionString } from '../../documentdb/utils/DocumentDBConnectionString';
 import { areAllHostsLocal, canonicalizeTlsException } from '../../documentdb/utils/tlsException';
@@ -74,7 +75,6 @@ export class ExecuteStep extends AzureWizardExecuteStep<NewConnectionWizardConte
             // username (incorrectly blocking creation) and the credentials would leak into the
             // stored secrets of a connection that is supposed to be credential-free.
             const usesNativeCredentials = newAuthenticationMethod === AuthMethodId.NativeAuth;
-            const newUsername = usesNativeCredentials ? context.nativeAuthConfig?.connectionUser : undefined;
 
             // Entra ID configuration only applies to the Microsoft Entra ID method. If the user
             // backtracked through the wizard and changed the method (e.g. Entra -> No Authentication
@@ -97,7 +97,17 @@ export class ExecuteStep extends AzureWizardExecuteStep<NewConnectionWizardConte
             const newJoinedHosts = [...newParsedCS.hosts].sort().join(',');
             const newPortForwardMetadata = getKubernetesPortForwardMetadata(context.connectionProperties);
 
-            //  Sanity Check 1/2: is there a connection with the same username + host in there?
+            // Two connections are the same only when they reach the same host AS THE SAME IDENTITY.
+            // Comparing the native username alone made every managed identity on a host collide,
+            // because none of them has one.
+            const newAuthIdentity = getConnectionAuthIdentity({
+                authMethod: newAuthenticationMethod,
+                nativeAuthConfig: usesNativeCredentials ? context.nativeAuthConfig : undefined,
+                entraIdAuthConfig: usesEntraId ? context.entraIdAuthConfig : undefined,
+                managedIdentityAuthConfig: newManagedIdentityAuthConfig,
+            });
+
+            //  Sanity Check 1/2: is there a connection with the same identity + host in there?
             const existingConnections = await ConnectionStorageService.getAll(ConnectionType.Clusters);
 
             const existingDuplicateConnection = existingConnections.find((existingConnection) => {
@@ -112,13 +122,17 @@ export class ExecuteStep extends AzureWizardExecuteStep<NewConnectionWizardConte
                 try {
                     const existingCS = new DocumentDBConnectionString(secret);
                     const existingHostsJoined = [...existingCS.hosts].sort().join(',');
-                    // Use nativeAuthConfig for comparison
-                    const existingUsername = existingConnection.secrets.nativeAuthConfig?.connectionUser;
+                    const existingAuthIdentity = getConnectionAuthIdentity({
+                        authMethod: existingConnection.properties?.selectedAuthMethod,
+                        nativeAuthConfig: existingConnection.secrets.nativeAuthConfig,
+                        entraIdAuthConfig: existingConnection.secrets.entraIdAuthConfig,
+                        managedIdentityAuthConfig: existingConnection.secrets.managedIdentityAuthConfig,
+                    });
                     const existingPortForwardMetadata = getKubernetesPortForwardMetadata(existingConnection.properties);
 
                     if (newPortForwardMetadata || existingPortForwardMetadata) {
                         return (
-                            existingUsername === newUsername &&
+                            existingAuthIdentity === newAuthIdentity &&
                             !!newPortForwardMetadata &&
                             !!existingPortForwardMetadata &&
                             getKubernetesPortForwardIdentity(existingPortForwardMetadata) ===
@@ -126,7 +140,7 @@ export class ExecuteStep extends AzureWizardExecuteStep<NewConnectionWizardConte
                         );
                     }
 
-                    return existingUsername === newUsername && existingHostsJoined === newJoinedHosts;
+                    return existingAuthIdentity === newAuthIdentity && existingHostsJoined === newJoinedHosts;
                 } catch (error) {
                     // An existing stored connection has an invalid/corrupt connection string.
                     // Log it but don't block the user from creating a new connection.
@@ -150,12 +164,15 @@ export class ExecuteStep extends AzureWizardExecuteStep<NewConnectionWizardConte
                     expand: false, // Don't expand to avoid login prompts
                 });
 
-                throw new UserFacingError(l10n.t('A connection with the same username and host already exists.'), {
-                    details: l10n.t(
-                        'The existing connection has been selected in the Connections View.\n\nSelected connection name:\n"{0}"',
-                        existingDuplicateConnection.name,
-                    ),
-                });
+                throw new UserFacingError(
+                    l10n.t('A connection to the same host with the same authentication settings already exists.'),
+                    {
+                        details: l10n.t(
+                            'The existing connection has been selected in the Connections View.\n\nSelected connection name:\n"{0}"',
+                            existingDuplicateConnection.name,
+                        ),
+                    },
+                );
             }
 
             // remove obsolete authMechanism entry
