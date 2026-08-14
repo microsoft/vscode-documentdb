@@ -80,12 +80,6 @@ the reviewer saw), a **Finding** (what the code does and why), a **Suggestion**,
 Where every user action **starts** and where it **terminates**. Divergent terminations
 (modal vs. non-modal vs. silent) are flagged here and re-checked live.
 
-**ASCII flow**
-
-```text
-{{compact state / branch map — entry points on the left, terminal states on the right}}
-```
-
 **Mermaid**
 
 ```mermaid
@@ -196,7 +190,7 @@ react to, not decisions.
 
 ## Appendix A — current flow (reference)
 
-{{Full ASCII phase/flow diagram of the webview or wizard state machine, plus a
+{{Full Mermaid phase/flow diagram of the webview or wizard state machine, plus a
 phase-by-phase description. This is the detailed version of the User interaction map.}}
 ````
 
