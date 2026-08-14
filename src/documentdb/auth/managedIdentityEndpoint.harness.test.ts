@@ -77,7 +77,12 @@ describe('ManagedIdentityCredential against a fake identity endpoint', () => {
             server = undefined;
             await new Promise<void>((resolve) => toClose.close(() => resolve()));
         }
-        process.env = { ...originalEnv };
+        for (const key of Object.keys(process.env)) {
+            if (!(key in originalEnv)) {
+                delete process.env[key];
+            }
+        }
+        Object.assign(process.env, originalEnv);
     });
 
     function useEndpoint(url: string): void {
