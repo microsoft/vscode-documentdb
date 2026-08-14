@@ -746,6 +746,8 @@ That said, the reviewer is right that the code is relying on a leniency it never
 const decoded: unknown = JSON.parse(Buffer.from(payload, 'base64url').toString());
 ```
 
+<!-- FIXED (C1) in https://github.com/microsoft/vscode-documentdb/commit/71f54808: Changed JWT payload decoding to the semantically exact base64url encoding and added a fixture whose encoded payload contains both '-' and '_'. Node's base64 decoder already accepts the URL-safe alphabet, so the reported silent-failure impact did not apply; the explicit spelling removes that hidden reliance and makes the JWT format self-documenting. All 10 tenant tests pass. -->
+
 Reply to the bot noting that Node's `'base64'` already handles the URL-safe alphabet, so the stated
 impact does not apply, but the explicit spelling is being adopted for clarity.
 
