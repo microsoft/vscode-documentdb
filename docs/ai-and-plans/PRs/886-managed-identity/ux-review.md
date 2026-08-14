@@ -240,8 +240,10 @@ client-ID field, allow the user to modify or accept it, and then proceed to the 
   wall. It now trims before every check, accepts a client ID pasted without separators (or with them
   in the wrong places) and normalizes it to canonical form, and replaces the abstract "a client ID
   looks like ..." rejection with the grouped reading of what was typed, for example `111111122` is
-  reported as `Read as 11111112-2`. A value containing characters outside `0-9`/`a-f` is told so
-  directly instead of being grouped, because grouping it would suggest it is nearly right.
+  reported as `Read as 11111112-2`. A value containing characters outside `0-9`, `a-f`, and `-` is
+  told so directly instead of being grouped, because grouping it would suggest it is nearly right.
+  The example shown in every message is a single constant that contains hexadecimal letters, so it
+  demonstrates the rule it states.
 
 **Verified by:** new cases in
 [managedIdentityConnectionString.test.ts](../../../../src/documentdb/auth/managedIdentityConnectionString.test.ts)

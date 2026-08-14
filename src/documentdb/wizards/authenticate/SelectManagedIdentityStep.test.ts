@@ -153,10 +153,13 @@ describe('SelectManagedIdentityStep.validateClientId', () => {
     });
 
     it('names the allowed characters instead of guessing at a grouping', () => {
-        const message = makeStep().validateClientId('not-a-guid');
+        const message = makeStep().validateClientId('11 1111111111122222222222222222');
 
         expect(message).toBeDefined();
         expect(message).not.toContain('Read as');
+        // The dash is valid input, and the example has to demonstrate the letters it allows.
+        expect(message).toContain('dashes');
+        expect(message).toContain('a1b2c3d4-e5f6-4a7b-8c9d-0e1f2a3b4c5d');
     });
 });
 

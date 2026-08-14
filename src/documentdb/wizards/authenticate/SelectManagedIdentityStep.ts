@@ -12,6 +12,9 @@ import { type ManagedIdentityHint } from '../../auth/managedIdentityConnectionSt
 const GUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const HEX_ONLY_PATTERN = /^[0-9a-f]*$/i;
 
+/** Shown wherever the expected shape is explained. Uses letters as well as digits, because both are valid. */
+const CLIENT_ID_EXAMPLE = 'a1b2c3d4-e5f6-4a7b-8c9d-0e1f2a3b4c5d';
+
 /** The 8-4-4-4-12 grouping of a GUID. */
 const GUID_GROUP_SIZES = [8, 4, 4, 4, 12];
 
@@ -116,7 +119,7 @@ export class SelectManagedIdentityStep<T extends ManagedIdentitySelectionContext
 
         const clientId = await context.ui.showInputBox({
             prompt: l10n.t('Enter the client ID of the user-assigned managed identity.'),
-            placeHolder: l10n.t('For example, 11111111-2222-3333-4444-555555555555'),
+            placeHolder: l10n.t('For example, {0}', CLIENT_ID_EXAMPLE),
             value: selected.clientId ?? prefilledClientId,
             ignoreFocusOut: true,
             validateInput: (value?: string) => this.validateClientId(value),
@@ -152,15 +155,12 @@ export class SelectManagedIdentityStep<T extends ManagedIdentitySelectionContext
         const hexOnly = stripGuidSeparators(trimmed);
 
         if (!HEX_ONLY_PATTERN.test(hexOnly)) {
-            return l10n.t('A client ID uses only 0-9 and a-f, like 11111111-2222-3333-4444-555555555555.');
+            return l10n.t('A client ID uses only 0-9, a-f, and dashes, like {0}.', CLIENT_ID_EXAMPLE);
         }
 
         // Echoing the grouped reading is more useful than the abstract shape: it shows which group
         // the next character lands in and how much is still missing.
-        return l10n.t(
-            'Read as {0}. A complete client ID looks like 11111111-2222-3333-4444-555555555555.',
-            groupAsGuid(hexOnly),
-        );
+        return l10n.t('Read as {0}. A complete client ID looks like {1}.', groupAsGuid(hexOnly), CLIENT_ID_EXAMPLE);
     }
 
     /**
