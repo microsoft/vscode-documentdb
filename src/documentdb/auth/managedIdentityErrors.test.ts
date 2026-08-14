@@ -32,7 +32,27 @@ describe('classifyManagedIdentityError', () => {
     });
 
     it('detects an unreachable identity endpoint', () => {
-        expect(classifyManagedIdentityError(credentialUnavailable(OBSERVED.unreachable))).toBe('noEndpoint');
+        expect(classifyManagedIdentityError(credentialUnavailable(OBSERVED.unreachable))).toBe('endpointUnreachable');
+    });
+
+    it.each(['network unreachable', 'network_error', 'endpoint is unavailable', 'ETIMEDOUT', 'timed out'])(
+        'classifies transient transport keyword "%s" as endpointUnreachable',
+        (keyword) => {
+            expect(classifyManagedIdentityError(credentialUnavailable(keyword))).toBe('endpointUnreachable');
+        },
+    );
+
+    it.each(['no managed identity endpoint', 'ECONNREFUSED', 'EHOSTUNREACH', 'ENETUNREACH'])(
+        'classifies endpoint-absence keyword "%s" as noEndpoint',
+        (keyword) => {
+            expect(classifyManagedIdentityError(credentialUnavailable(keyword))).toBe('noEndpoint');
+        },
+    );
+
+    it('prioritizes a transport failure over broad identity-assignment wording', () => {
+        expect(classifyManagedIdentityError(credentialUnavailable('identity not assigned: network_error'))).toBe(
+            'endpointUnreachable',
+        );
     });
 
     it('detects an identity that is not assigned to the machine', () => {
@@ -58,7 +78,7 @@ describe('classifyManagedIdentityError', () => {
     it('reads a duck-typed error that lost its prototype crossing a worker boundary', () => {
         expect(
             classifyManagedIdentityError({ name: 'CredentialUnavailableError', message: OBSERVED.unreachable }),
-        ).toBe('noEndpoint');
+        ).toBe('endpointUnreachable');
     });
 
     it('falls back to "other" for anything unrecognized', () => {
@@ -75,8 +95,14 @@ describe('describeManagedIdentityError', () => {
         expect(message).toMatch(/client ID/i);
     });
 
-    it('names the Azure VM requirement when no endpoint answered', () => {
-        expect(describeManagedIdentityError(credentialUnavailable(OBSERVED.unreachable))).toMatch(/Azure VM/);
+    it('describes an unreachable endpoint as a transient network problem', () => {
+        const message = describeManagedIdentityError(credentialUnavailable(OBSERVED.unreachable));
+        expect(message).toMatch(/transient network problem/i);
+        expect(message).toMatch(/try again/i);
+    });
+
+    it('names the Azure VM requirement when no endpoint exists', () => {
+        expect(describeManagedIdentityError(credentialUnavailable('no managed identity endpoint'))).toMatch(/Azure VM/);
     });
 
     it('includes the client ID when a specific identity is not assigned', () => {

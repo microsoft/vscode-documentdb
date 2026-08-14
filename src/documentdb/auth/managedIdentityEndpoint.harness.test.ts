@@ -190,7 +190,7 @@ describe('ManagedIdentityCredential against a fake identity endpoint', () => {
 
         const error = await captureFailure();
 
-        expect(classifyManagedIdentityError(error)).toBe('noEndpoint');
-        expect(describeManagedIdentityError(error)).toMatch(/Azure VM/);
+        expect(classifyManagedIdentityError(error)).toBe('endpointUnreachable');
+        expect(describeManagedIdentityError(error)).toMatch(/try again/i);
     }, 30_000);
 });

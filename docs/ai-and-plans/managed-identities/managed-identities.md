@@ -582,7 +582,8 @@ export function describeManagedIdentityError(error: unknown, clientId?: string):
 | Condition                                           | Message (localized)                                                                                                                                                                      |
 | --------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Multiple candidate identities, no selector          | "This machine has more than one managed identity, so the right one cannot be chosen automatically. Reconnect and enter the client ID you want to use."                                   |
-| No identity endpoint reachable                      | "No managed identity is available on this machine. Managed identity authentication requires VS Code to be running on an Azure resource, such as an Azure VM, with an identity assigned." |
+| No identity endpoint exists                         | "No managed identity is available on this machine. Managed identity authentication requires VS Code to be running on an Azure resource, such as an Azure VM, with an identity assigned." |
+| Identity endpoint is temporarily unreachable        | "The managed identity endpoint could not be reached. This is usually a transient network problem. Try again."                                                                            |
 | Endpoint reachable, requested identity not assigned | "The managed identity with client ID {0} is not assigned to this machine."                                                                                                               |
 | Anything else                                       | Pass through with a "Managed Identity authentication failed: {0}" prefix.                                                                                                                |
 
@@ -634,12 +635,12 @@ available.
 
 Riding on the existing `selectedAuthMethod` property, add:
 
-| Property / measurement          | Values                                                                   |
-| ------------------------------- | ------------------------------------------------------------------------ |
-| `managedIdentityKind`           | `system` \| `user`                                                       |
-| `managedIdentityClientIdSource` | `connectionString` \| `prompt` \| `none`                                 |
-| `managedIdentityFailureReason`  | `noEndpoint` \| `multipleIdentities` \| `identityNotAssigned` \| `other` |
-| `copiedAuthMechanism`           | `managedIdentity`, on the copy command only                              |
+| Property / measurement          | Values                                                                                            |
+| ------------------------------- | ------------------------------------------------------------------------------------------------- |
+| `managedIdentityKind`           | `system` \| `user`                                                                                |
+| `managedIdentityClientIdSource` | `connectionString` \| `prompt` \| `none`                                                          |
+| `managedIdentityFailureReason`  | `noEndpoint` \| `endpointUnreachable` \| `multipleIdentities` \| `identityNotAssigned` \| `other` |
+| `copiedAuthMechanism`           | `managedIdentity`, on the copy command only                                                       |
 
 `azureEnvironmentDetected` is dropped unless D3 lands on the probe. `managedIdentityFailureReason`
 already distinguishes `noEndpoint`, which is the same signal obtained from the real call rather than

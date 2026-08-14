@@ -13,6 +13,7 @@ import * as l10n from '@vscode/l10n';
  */
 export type ManagedIdentityFailureReason =
     | 'noEndpoint'
+    | 'endpointUnreachable'
     | 'multipleIdentities'
     | 'identityNotAssigned'
     | 'tenantMismatch'
@@ -55,26 +56,31 @@ export function classifyManagedIdentityError(error: unknown): ManagedIdentityFai
     }
 
     if (
+        haystack.includes('network unreachable') ||
+        haystack.includes('network_error') ||
+        haystack.includes('is unavailable') ||
+        haystack.includes('etimedout') ||
+        haystack.includes('timed out')
+    ) {
+        return 'endpointUnreachable';
+    }
+
+    if (
+        haystack.includes('no managed identity endpoint') ||
+        haystack.includes('econnrefused') ||
+        haystack.includes('ehostunreach') ||
+        haystack.includes('enetunreach')
+    ) {
+        return 'noEndpoint';
+    }
+
+    if (
         haystack.includes('identity not found') ||
         haystack.includes('no user assigned identity') ||
         haystack.includes('not assigned') ||
         haystack.includes('identity_not_found')
     ) {
         return 'identityNotAssigned';
-    }
-
-    if (
-        haystack.includes('network unreachable') ||
-        haystack.includes('network_error') ||
-        haystack.includes('is unavailable') ||
-        haystack.includes('no managed identity endpoint') ||
-        haystack.includes('econnrefused') ||
-        haystack.includes('ehostunreach') ||
-        haystack.includes('enetunreach') ||
-        haystack.includes('etimedout') ||
-        haystack.includes('timed out')
-    ) {
-        return 'noEndpoint';
     }
 
     return 'other';
@@ -95,6 +101,10 @@ export function describeManagedIdentityError(error: unknown, clientId?: string):
         case 'noEndpoint':
             return l10n.t(
                 'No managed identity is available on this machine. Managed identity authentication requires VS Code to be running on an Azure resource, such as an Azure VM, with an identity assigned.',
+            );
+        case 'endpointUnreachable':
+            return l10n.t(
+                'The managed identity endpoint could not be reached. This is usually a transient network problem. Try again.',
             );
         case 'identityNotAssigned':
             return clientId
