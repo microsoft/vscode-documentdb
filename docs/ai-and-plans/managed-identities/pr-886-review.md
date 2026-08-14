@@ -180,9 +180,18 @@ B is the right long-term shape but should not gate this PR; file it alongside th
 
 Go straight to `ManagedIdentityAuthConfig.tenantId`. No interim patch.
 
-<!-- FIXED (F1) in https://github.com/microsoft/vscode-documentdb/commit/273d8d5a: Added tenantId to ManagedIdentityAuthConfig and persisted it in additive storage v3.0 slot 6. Azure resource and Discovery paths seed the tenant, identity selection preserves it, and the connection handler, Playground, and Shell consume it. This restores the proactive cross-tenant diagnostic after save/reload without retaining a sibling Entra ID config; focused tests cover storage round-trip, Azure extraction, selector preservation, and handler tenant validation. -->
+> **Fixed (F1) — [`273d8d5a`](https://github.com/microsoft/vscode-documentdb/commit/273d8d5a).**
+> Added `tenantId` to `ManagedIdentityAuthConfig` and persisted it in additive storage v3.0 slot 6.
+> Azure resource and Discovery paths seed the tenant, identity selection preserves it, and the
+> connection handler, Playground, and Shell consume it. This restores the proactive cross-tenant
+> diagnostic after save/reload without retaining a sibling Entra ID config; focused tests cover
+> storage round-trip, Azure extraction, selector preservation, and handler tenant validation.
 
-<!-- FOLLOW-UP (F1) in https://github.com/microsoft/vscode-documentdb/commit/c0821c4f: Replaced raw worker-auth string comparisons with AuthMethodId enum members in Playground and Shell. Final strict lint identified the mixed enum/string comparisons; using the owning enum preserves the F1 tenant routing while satisfying type-aware comparison rules. The complete final validation sequence passes. -->
+> **Follow-up (F1) — [`c0821c4f`](https://github.com/microsoft/vscode-documentdb/commit/c0821c4f).**
+> Replaced raw worker-auth string comparisons with `AuthMethodId` enum members in Playground and
+> Shell. Final strict lint identified the mixed enum/string comparisons; using the owning enum
+> preserves the F1 tenant routing while satisfying type-aware comparison rules. The complete final
+> validation sequence passes.
 
 Consequences to plan for, since B is the larger of the two options:
 
@@ -263,7 +272,13 @@ keep working with only a mock-target change. `expiresInSecondsFromTimestamp` sta
 Agreed, no changes to the recommendation. Sequence this after F1 = B so the tenant argument passed to
 `getManagedIdentityAccessToken()` is already reading from `ManagedIdentityAuthConfig.tenantId`.
 
-<!-- FIXED (F2) in https://github.com/microsoft/vscode-documentdb/commit/6d780fd4: Routed ManagedIdentityAuthHandler through getManagedIdentityAccessToken() and removed its duplicate credential construction, failure translation, telemetry, and tenant-validation path. This gives ordinary connections, Playground, and Shell one credential cache and one error/tenant implementation while the handler retains only MongoDB OIDC option assembly and expiry conversion. The focused handler suite now asserts the shared provider contract for system-assigned and user-assigned identities. -->
+> **Fixed (F2) — [`6d780fd4`](https://github.com/microsoft/vscode-documentdb/commit/6d780fd4).**
+> Routed `ManagedIdentityAuthHandler` through `getManagedIdentityAccessToken()` and removed its
+> duplicate credential construction, failure translation, telemetry, and tenant-validation path.
+> This gives ordinary connections, Playground, and Shell one credential cache and one error/tenant
+> implementation while the handler retains only DocumentDB API OIDC option assembly and expiry
+> conversion. The focused handler suite now asserts the shared provider contract for system-assigned
+> and user-assigned identities.
 
 ---
 
@@ -331,7 +346,13 @@ Agreed, no changes to the recommendation. Do not forget the two documentation to
 it: the amended availability rule in §6 of `managed-identities.md`, and a line in
 `manual-validation-checklist.md` covering a paste against a private-endpoint or custom-domain host.
 
-<!-- FIXED (F3) in https://github.com/microsoft/vscode-documentdb/commit/86e6efe3: Added Managed Identity to availableAuthenticationMethods whenever the pasted string carries a managed identity hint, with duplicate protection for recognized vCore hosts. Explicit driver-native intent now remains internally consistent even behind a private endpoint, CNAME, or custom domain where hostname classification cannot recognize vCore. A focused prompt-step test pins selection plus availability, and the design rule and manual checklist cover the custom-host scenario. -->
+> **Fixed (F3) — [`86e6efe3`](https://github.com/microsoft/vscode-documentdb/commit/86e6efe3).**
+> Added Managed Identity to `availableAuthenticationMethods` whenever the pasted string carries a
+> managed identity hint, with duplicate protection for recognized vCore hosts. Explicit
+> driver-native intent now remains internally consistent even behind a private endpoint, CNAME, or
+> custom domain where hostname classification cannot recognize vCore. A focused prompt-step test
+> pins selection plus availability, and the design rule and manual checklist cover the custom-host
+> scenario.
 
 ---
 
@@ -390,9 +411,18 @@ it is exactly the question that will be asked after release.
 
 Agreed, no changes to the recommendation. Two details worth pinning while implementing:
 
-<!-- FIXED (F4) in https://github.com/microsoft/vscode-documentdb/commit/2672c293: Added endpointUnreachable as a distinct failure reason for timeouts and generic network failures, with retry-oriented user guidance, while keeping explicit endpoint-absence signals under noEndpoint. Transport checks now run before broad identity-not-assigned matching so mixed MSAL messages classify accurately. Table-driven tests pin every transport keyword and precedence, and the real ManagedIdentityCredential endpoint harness confirms the observed network_error shape uses the new telemetry bucket. -->
+> **Fixed (F4) — [`2672c293`](https://github.com/microsoft/vscode-documentdb/commit/2672c293).**
+> Added `endpointUnreachable` as a distinct failure reason for timeouts and generic network failures,
+> with retry-oriented user guidance, while keeping explicit endpoint-absence signals under
+> `noEndpoint`. Transport checks now run before broad identity-not-assigned matching so mixed MSAL
+> messages classify accurately. Table-driven tests pin every transport keyword and precedence, and
+> the real `ManagedIdentityCredential` endpoint harness confirms the observed `network_error` shape
+> uses the new telemetry bucket.
 
-<!-- FOLLOW-UP (F4) in https://github.com/microsoft/vscode-documentdb/commit/583042d1: Regenerated localization after adding the endpointUnreachable message. This ensures the new transient-network guidance is present in the localization bundle rather than existing only at the TypeScript call site; npm run l10n and the complete final validation sequence pass. -->
+> **Follow-up (F4) — [`583042d1`](https://github.com/microsoft/vscode-documentdb/commit/583042d1).**
+> Regenerated localization after adding the `endpointUnreachable` message. This ensures the new
+> transient-network guidance is present in the localization bundle rather than existing only at the
+> TypeScript call site; `npm run l10n` and the complete final validation sequence pass.
 
 - Move the network group **above** the `identityNotAssigned` group, or the ordering problem noted in
   the evidence survives the split: a message carrying both "not assigned" and a transport hint still
@@ -439,11 +469,24 @@ but it should not ship as-is.
 Neither A nor B. Expected usage is low and it is not worth maintaining, so the "Recently used" list
 comes out entirely rather than being completed.
 
-<!-- FIXED (F5) in https://github.com/microsoft/vscode-documentdb/commit/b97e4323: Removed the recentManagedIdentities global-state module, the New Connection writer, the quick-pick group, the recent telemetry source, and its tests. The feature worked through only one of four entry points and its expected usage did not justify maintaining hidden cross-connection state. The selector now consistently offers system-assigned identity, an optional client ID from the current connection string, and manual entry; design and implementation docs record the removal, while the bounded non-secret preview key is intentionally left orphaned. -->
+> **Fixed (F5) — [`b97e4323`](https://github.com/microsoft/vscode-documentdb/commit/b97e4323).**
+> Removed the `recentManagedIdentities` global-state module, the New Connection writer, the
+> quick-pick group, the recent telemetry source, and its tests. The feature worked through only one
+> of four entry points and its expected usage did not justify maintaining hidden cross-connection
+> state. The selector now consistently offers system-assigned identity, an optional client ID from
+> the current connection string, and manual entry; design and implementation docs record the
+> removal, while the bounded non-secret preview key is intentionally left orphaned.
 
-<!-- FOLLOW-UP (F5) in https://github.com/microsoft/vscode-documentdb/commit/37c45f7a: Removed the stale "Recently used" option from the user manual. The implementation and design had already removed the feature, so leaving customer guidance behind would advertise an unavailable workflow; the Choosing the identity section now lists only the choices the selector actually presents. -->
+> **Follow-up (F5) — [`37c45f7a`](https://github.com/microsoft/vscode-documentdb/commit/37c45f7a).**
+> Removed the stale "Recently used" option from the user manual. The implementation and design had
+> already removed the feature, so leaving customer guidance behind would advertise an unavailable
+> workflow; the Choosing the identity section now lists only the choices the selector actually
+> presents.
 
-<!-- FOLLOW-UP (F5) in https://github.com/microsoft/vscode-documentdb/commit/583042d1: Regenerated localization after removing the recent-identities UI. This deletes the obsolete "Recently used" and "Used by {connection}" bundle entries so translated resources match the selector's actual surface; npm run l10n and the complete final validation sequence pass. -->
+> **Follow-up (F5) — [`583042d1`](https://github.com/microsoft/vscode-documentdb/commit/583042d1).**
+> Regenerated localization after removing the recent-identities UI. This deletes the obsolete
+> "Recently used" and "Used by {connection}" bundle entries so translated resources match the
+> selector's actual surface; `npm run l10n` and the complete final validation sequence pass.
 
 This is a defensible call and it resolves the finding outright: a feature that only works from one of
 four entry points is worse than no feature, and the quick pick still has the two rows that matter
@@ -506,7 +549,12 @@ change that is otherwise invisible in a diff titled "managed identity".
 
 Agreed. No code change; the release-note line and the checklist line still need writing.
 
-<!-- FIXED (F6) in https://github.com/microsoft/vscode-documentdb/commit/db410ac7: Added a 0.10.0 changelog disclosure that explicit saved authentication methods now take precedence over credential inference, and added a manual regression case for Native and Entra ID connections created on 0.9.x. The implementation remains unchanged because honoring the persisted method is required to distinguish managed identity from Entra ID after reload; documenting and validating the broader cache behavior makes that intentional blast radius visible. -->
+> **Fixed (F6) — [`db410ac7`](https://github.com/microsoft/vscode-documentdb/commit/db410ac7).**
+> Added a 0.10.0 changelog disclosure that explicit saved authentication methods now take precedence
+> over credential inference, and added a manual regression case for Native and Entra ID connections
+> created on 0.9.x. The implementation remains unchanged because honoring the persisted method is
+> required to distinguish managed identity from Entra ID after reload; documenting and validating
+> the broader cache behavior makes that intentional blast radius visible.
 
 ---
 
@@ -529,7 +577,13 @@ targets `release/0.10.0`, so this must go back to `0.10.0` (or whatever the rele
 
 The suffix is an intentional setting for preview builds, not a leftover. **F7 is withdrawn.**
 
-<!-- FIXED (F7) in https://github.com/microsoft/vscode-documentdb/commit/c5b948e2: Kept the intentional 0.10.0-managed-identity suffix and documented its side-loaded preview contract. The exact PR CI command, npm run package, does invoke @vscode/vsce 3.7.1 and was verified to package vscode-documentdb-0.10.0-managed-identity.vsix successfully, so the concern that the suffix must never reach VSCE does not apply to the current toolchain. The Marketplace release process must still restore numeric version 0.10.0 and regenerate the lockfile; no code/version change was made. -->
+> **Fixed (F7) — [`c5b948e2`](https://github.com/microsoft/vscode-documentdb/commit/c5b948e2).**
+> Kept the intentional `0.10.0-managed-identity` suffix and documented its side-loaded preview
+> contract. The exact PR CI command, `npm run package`, invokes `@vscode/vsce` 3.7.1 and was verified
+> to package `vscode-documentdb-0.10.0-managed-identity.vsix` successfully, so the concern that the
+> suffix must never reach VSCE does not apply to the current toolchain. The Marketplace release
+> process must still restore numeric version 0.10.0 and regenerate the lockfile; no code/version
+> change was made.
 
 The reviewer had no way to distinguish an intentional preview marker from the commit message
 `chore version bump for testing`, which reads like a leftover. One line in the PR description saying
@@ -576,7 +630,12 @@ does. Nobody should spend a version bump on this.
 > extension and this extension in the preview phase. any risks? only data loss of connection settings
 > is a real issue."
 
-<!-- FIXED (F8) in https://github.com/microsoft/vscode-documentdb/commit/cda40b10: Kept storage at version 3.0 and documented SecretIndex as an append-only slot registry. This avoids older preview builds treating an unknown version as v1 and potentially persisting lost folder/authentication settings; additive managed identity fields remain trailing slots that older readers safely ignore. The invariant now lives beside SecretIndex and in decision D8 so future storage changes preserve the compatibility contract. -->
+> **Fixed (F8) — [`cda40b10`](https://github.com/microsoft/vscode-documentdb/commit/cda40b10).**
+> Kept storage at version 3.0 and documented `SecretIndex` as an append-only slot registry. This
+> avoids older preview builds treating an unknown version as v1 and potentially persisting lost
+> folder/authentication settings; additive managed identity fields remain trailing slots that older
+> readers safely ignore. The invariant now lives beside `SecretIndex` and in decision D8 so future
+> storage changes preserve the compatibility contract.
 
 Answered in full below. **Short answer: do not bump.** A bump is not clean here, it is the one option
 that actually causes the data loss the question is asking about.
@@ -756,7 +815,11 @@ That said, the reviewer is right that the code is relying on a leniency it never
 const decoded: unknown = JSON.parse(Buffer.from(payload, 'base64url').toString());
 ```
 
-<!-- FIXED (C1) in https://github.com/microsoft/vscode-documentdb/commit/71f54808: Changed JWT payload decoding to the semantically exact base64url encoding and added a fixture whose encoded payload contains both '-' and '_'. Node's base64 decoder already accepts the URL-safe alphabet, so the reported silent-failure impact did not apply; the explicit spelling removes that hidden reliance and makes the JWT format self-documenting. All 10 tenant tests pass. -->
+> **Fixed (C1) — [`71f54808`](https://github.com/microsoft/vscode-documentdb/commit/71f54808).**
+> Changed JWT payload decoding to the semantically exact `base64url` encoding and added a fixture
+> whose encoded payload contains both `-` and `_`. Node's `base64` decoder already accepts the
+> URL-safe alphabet, so the reported silent-failure impact did not apply; the explicit spelling
+> removes that hidden reliance and makes the JWT format self-documenting. All 10 tenant tests pass.
 
 Reply to the bot noting that Node's `'base64'` already handles the URL-safe alphabet, so the stated
 impact does not apply, but the explicit spelling is being adopted for clarity.
@@ -784,7 +847,10 @@ cross-tenant managed identity failure` commit.
 Four things have to be in place, and all four are outside VS Code:
 ```
 
-<!-- FIXED (C2) in https://github.com/microsoft/vscode-documentdb/commit/590bc986: Changed the prerequisite lead-in to "Four things" and "all four" so it matches the four numbered requirements. This removes ambiguity about whether the same-tenant requirement is optional; a targeted scan confirms no stale "three" count remains on the page. -->
+> **Fixed (C2) — [`590bc986`](https://github.com/microsoft/vscode-documentdb/commit/590bc986).**
+> Changed the prerequisite lead-in to "Four things" and "all four" so it matches the four numbered
+> requirements. This removes ambiguity about whether the same-tenant requirement is optional; a
+> targeted scan confirms no stale "three" count remains on the page.
 
 Prefer the number over a vaguer "The following must be in place": the count is a useful signal to a
 reader skimming a troubleshooting page, and it is trivially maintainable. Also worth a quick scan of
@@ -827,7 +893,12 @@ afterEach(async () => {
 });
 ```
 
-  <!-- FIXED (C3) in https://github.com/microsoft/vscode-documentdb/commit/9299a23b: Changed the harness cleanup to delete test-added environment keys and Object.assign the original values onto the existing process.env object. Replacing process.env with a plain object can break native environment propagation for later tests in the shared Jest worker; mutating it in place preserves Node's special semantics while restoring full test isolation. The real endpoint harness passes all six cases. -->
+> **Fixed (C3) — [`9299a23b`](https://github.com/microsoft/vscode-documentdb/commit/9299a23b).**
+> Changed the harness cleanup to delete test-added environment keys and `Object.assign` the original
+> values onto the existing `process.env` object. Replacing `process.env` with a plain object can break
+> native environment propagation for later tests in the shared Jest worker; mutating it in place
+> preserves Node's special semantics while restoring full test isolation. The real endpoint harness
+> passes all six cases.
 
 An alternative is to reach for a helper library, but adding a dependency for one `afterEach` in one
 harness is not worth it. The loop is self-explanatory and stays local to the file that needs it.
@@ -898,7 +969,12 @@ rather than a completion; F1 grows because option B was chosen.
 Then the standard five: `npm run l10n`, `npm run prettier-fix`, `npm run lint`,
 `npx jest --no-coverage`, `npm run build`.
 
-<!-- VALIDATED at https://github.com/microsoft/vscode-documentdb/commit/583042d1: npm run l10n, npm run prettier-fix, npm run lint, npx jest --no-coverage, and npm run build all pass in the required order. Jest completed 218 suites, 3,502 tests, and 4 snapshots with no failures. The only lint output is the pre-existing ESLint v10 migration warning for webpack.config.views.js. The exact CI packaging command, npm run package, also succeeds and produces the managed-identity preview VSIX. -->
+> **Validated — [`583042d1`](https://github.com/microsoft/vscode-documentdb/commit/583042d1).**
+> `npm run l10n`, `npm run prettier-fix`, `npm run lint`, `npx jest --no-coverage`, and
+> `npm run build` all pass in the required order. Jest completed 218 suites, 3,502 tests, and 4
+> snapshots with no failures. The only lint output is the pre-existing ESLint v10 migration warning
+> for `webpack.config.views.js`. The exact CI packaging command, `npm run package`, also succeeds and
+> produces the managed-identity preview VSIX.
 
 **Follow-up issues to file, not part of this PR:**
 
