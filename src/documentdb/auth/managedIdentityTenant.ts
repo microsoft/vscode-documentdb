@@ -20,7 +20,7 @@ export function readTenantIdFromAccessToken(accessToken: string): string | undef
             return undefined;
         }
 
-        const decoded: unknown = JSON.parse(Buffer.from(payload, 'base64').toString());
+        const decoded: unknown = JSON.parse(Buffer.from(payload, 'base64url').toString());
         if (typeof decoded !== 'object' || decoded === null) {
             return undefined;
         }

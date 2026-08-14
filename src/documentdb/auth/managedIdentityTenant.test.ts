@@ -25,6 +25,16 @@ describe('readTenantIdFromAccessToken', () => {
         expect(readTenantIdFromAccessToken(tokenWithClaims({ tid: CLUSTER_TENANT }))).toBe(CLUSTER_TENANT);
     });
 
+    it('reads a base64url payload containing both URL-safe alphabet characters', () => {
+        const payload = Buffer.from(JSON.stringify({ tid: CLUSTER_TENANT, marker: '?????>>>>>~~~~' })).toString(
+            'base64url',
+        );
+        expect(payload).toContain('-');
+        expect(payload).toContain('_');
+
+        expect(readTenantIdFromAccessToken(`header.${payload}.signature`)).toBe(CLUSTER_TENANT);
+    });
+
     it('returns undefined when there is no tid claim', () => {
         expect(readTenantIdFromAccessToken(tokenWithClaims({ oid: 'something' }))).toBeUndefined();
     });
