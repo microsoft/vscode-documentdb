@@ -9,7 +9,7 @@
  *
  * - All runtime stdout/stderr/command lines are routed through a single
  *   {@link MaskedChannelWritable} that **line-buffers** and **redacts secrets**
- *   before writing to the "DocumentDB Local Quick Start" OutputChannel (D14):
+ *   before writing to the "DocumentDB Local Setup" OutputChannel (D14):
  *   the generated password must never reach the channel, even when a stream
  *   chunk splits it across a buffer boundary.
  * - `docker run` is detached (D4); because a detached run streams nothing back,
@@ -53,7 +53,7 @@ let outputChannel: vscode.OutputChannel | undefined;
 /** Lazily create the shared OutputChannel. */
 export function getQuickStartOutputChannel(): vscode.OutputChannel {
     if (!outputChannel) {
-        outputChannel = vscode.window.createOutputChannel('DocumentDB Local Quick Start');
+        outputChannel = vscode.window.createOutputChannel('DocumentDB Local Setup');
     }
     return outputChannel;
 }

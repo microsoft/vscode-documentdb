@@ -1,5 +1,23 @@
 # Change Log
 
+## 0.10.0
+
+### New Features
+
+- **DocumentDB Local**: Adds a guided setup that provisions a local, fully MongoDB-compatible DocumentDB instance with Docker — no manual container work required. The wizard verifies the Docker environment, pulls the official image, creates and starts a container, generates credentials, optionally loads sample data, and saves the connection to the Connections view. Lifecycle actions (Start, Stop, Restart, Delete, View Logs, Copy Connection String, Copy Password) are available on the instance in the tree. The host port shown in the Configure step is the port that gets bound — setup never substitutes it silently, and a port conflict is reported before anything is created. [#798](https://github.com/microsoft/vscode-documentdb/pull/798), [#794](https://github.com/microsoft/vscode-documentdb/pull/794), [#841](https://github.com/microsoft/vscode-documentdb/pull/841), [#849](https://github.com/microsoft/vscode-documentdb/pull/849), [#876](https://github.com/microsoft/vscode-documentdb/pull/876), [#879](https://github.com/microsoft/vscode-documentdb/pull/879)
+- **MongoDB Atlas Service Discovery**: Adds an Atlas discovery provider that lists your Atlas clusters directly in the Discovery view. Supports multiple credential sets with a dedicated credential-management webview, tree and flat-list presentations, filtering, opening a cluster in the Atlas portal, and saving a discovered cluster into DocumentDB Connections. Paused clusters are surfaced correctly rather than failing silently. [#765](https://github.com/microsoft/vscode-documentdb/pull/765), [#793](https://github.com/microsoft/vscode-documentdb/pull/793), [#799](https://github.com/microsoft/vscode-documentdb/pull/799), [#813](https://github.com/microsoft/vscode-documentdb/pull/813), [#834](https://github.com/microsoft/vscode-documentdb/pull/834), [#842](https://github.com/microsoft/vscode-documentdb/pull/842), [#850](https://github.com/microsoft/vscode-documentdb/pull/850)
+- **Index Management**: Adds an Index Management tab to the Collection View for reviewing and creating indexes, including a Create Index drawer with refined interactions and option handling shared with the Atlas UI. [#732](https://github.com/microsoft/vscode-documentdb/pull/732), [#781](https://github.com/microsoft/vscode-documentdb/pull/781), [#836](https://github.com/microsoft/vscode-documentdb/pull/836), [#837](https://github.com/microsoft/vscode-documentdb/pull/837)
+
+### Improvements
+
+- **Theme-Aware Webview Colors**: Fluent UI surfaces, strokes, and controls in the webviews now track the active VS Code theme instead of using fixed palette values. [#838](https://github.com/microsoft/vscode-documentdb/pull/838)
+- **Typed Status Reporting for DocumentDB Local**: Setup and lifecycle states are reported as typed message keys rather than pre-composed English sentences, so every user-facing situation is translatable and rendered consistently across the panel and the tree. [#879](https://github.com/microsoft/vscode-documentdb/pull/879), [#876](https://github.com/microsoft/vscode-documentdb/pull/876)
+
+### Fixes
+
+- **DocumentDB Local Bug Bash Fixes**: Resolves the issues found in the 0.10.0 bug bash — lifecycle commands no longer appear in the Command Palette where they cannot act, port messages are localized, Copy Connection String no longer leaks the password, the credential-missing state is an actionable row instead of a silent no-op, and deletion uses the shared confirmation flow. [#851](https://github.com/microsoft/vscode-documentdb/issues/851), [#852](https://github.com/microsoft/vscode-documentdb/issues/852), [#855](https://github.com/microsoft/vscode-documentdb/issues/855), [#856](https://github.com/microsoft/vscode-documentdb/issues/856), [#857](https://github.com/microsoft/vscode-documentdb/issues/857), [#858](https://github.com/microsoft/vscode-documentdb/issues/858), [#866](https://github.com/microsoft/vscode-documentdb/pull/866)
+- **Collection View Import and Export**: Fixes resolution of the import and export actions in the Collection View. [#871](https://github.com/microsoft/vscode-documentdb/pull/871)
+
 ## 0.9.2
 
 ### Improvements

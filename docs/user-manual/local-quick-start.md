@@ -32,7 +32,7 @@ Both Docker Engine and Docker Desktop are supported. Docker Desktop is not requi
 
 The extension host matters. In a local VS Code window, Docker and DocumentDB Local run on your machine. In WSL, SSH, a dev container, or Codespaces, they run in that extension-host environment. In remote sessions, `localhost:10260` refers to the extension host, not necessarily your local computer.
 
-The setup view shows pull, create, start, and connection-readiness progress. Docker command output is written to the **DocumentDB Local Quick Start** output channel.
+The setup view shows pull, create, start, and connection-readiness progress. Docker command output is written to the **DocumentDB Local Setup** output channel.
 
 ## Port
 
