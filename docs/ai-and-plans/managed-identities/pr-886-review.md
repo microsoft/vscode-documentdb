@@ -180,6 +180,8 @@ B is the right long-term shape but should not gate this PR; file it alongside th
 
 Go straight to `ManagedIdentityAuthConfig.tenantId`. No interim patch.
 
+<!-- FIXED (F1) in https://github.com/microsoft/vscode-documentdb/commit/273d8d5a: Added tenantId to ManagedIdentityAuthConfig and persisted it in additive storage v3.0 slot 6. Azure resource and Discovery paths seed the tenant, identity selection preserves it, and the connection handler, Playground, and Shell consume it. This restores the proactive cross-tenant diagnostic after save/reload without retaining a sibling Entra ID config; focused tests cover storage round-trip, Azure extraction, selector preservation, and handler tenant validation. -->
+
 Consequences to plan for, since B is the larger of the two options:
 
 - **A new persisted field** means a new `SecretIndex` slot (6), which lands on top of the slot 5 this
