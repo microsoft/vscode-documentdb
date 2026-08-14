@@ -22,7 +22,7 @@ This is the right choice for a shared jump box, a build agent, or any Azure VM w
 
 ## Before you start
 
-Three things have to be in place, and all three are outside VS Code:
+Four things have to be in place, and all four are outside VS Code:
 
 1. The Azure VM has a **system-assigned** or **user-assigned** managed identity.
 2. The identity is **registered on the DocumentDB cluster** as a user. Assigning an identity to a VM does not grant it any database access on its own. See [Azure DocumentDB role-based access control](https://learn.microsoft.com/azure/documentdb/how-to-connect-role-based-access-control).
