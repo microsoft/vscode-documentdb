@@ -79,11 +79,13 @@ export const DocumentView = (): JSX.Element => {
                 .then((response) => {
                     setContent(response);
                 })
-                .catch((error) => {
+                .catch(async (error) => {
+                    const cause = error instanceof Error ? error.message : String(error);
+                    const explained = await trpcClient.common.explainOperationFailure.query({ message: cause });
                     void trpcClient.common.displayErrorMessage.mutate({
-                        message: l10n.t('Error while loading the document'),
+                        message: explained ?? l10n.t('Error while loading the document'),
                         modal: false,
-                        cause: error instanceof Error ? error.message : String(error),
+                        cause,
                     });
                 })
                 .finally(() => {
@@ -182,11 +184,13 @@ export const DocumentView = (): JSX.Element => {
                 documentLength = response.length ?? 0;
                 setContent(response);
             })
-            .catch((error) => {
+            .catch(async (error) => {
+                const cause = error instanceof Error ? error.message : String(error);
+                const explained = await trpcClient.common.explainOperationFailure.query({ message: cause });
                 void trpcClient.common.displayErrorMessage.mutate({
-                    message: l10n.t('Error while refreshing the document'),
+                    message: explained ?? l10n.t('Error while refreshing the document'),
                     modal: false,
-                    cause: error instanceof Error ? error.message : String(error),
+                    cause,
                 });
             })
             .finally(() => {
@@ -231,11 +235,13 @@ export const DocumentView = (): JSX.Element => {
                 setIsLoading(false);
                 setIsDirty(false);
             })
-            .catch((error) => {
+            .catch(async (error) => {
+                const cause = error instanceof Error ? error.message : String(error);
+                const explained = await trpcClient.common.explainOperationFailure.query({ message: cause });
                 void trpcClient.common.displayErrorMessage.mutate({
-                    message: l10n.t('Error saving the document'),
+                    message: explained ?? l10n.t('Error saving the document'),
                     modal: true, // we want to show the error in a modal dialog as it's an important one, failed to save the document
-                    cause: error instanceof Error ? error.message : String(error),
+                    cause,
                 });
             })
             .finally(() => {

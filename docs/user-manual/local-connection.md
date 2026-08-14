@@ -12,6 +12,9 @@
 
 You have two main options for connecting to a local instance:
 
+- **Set up DocumentDB Local:**
+  [Create and manage the official DocumentDB Local container](./local-quick-start) with Docker Engine or Docker Desktop.
+
 - **Use Preconfigured Options:**
   The extension provides ready-to-use configurations for popular local setups:
   - **[Azure CosmosDB for MongoDB (RU) Emulator](./local-connection-mongodb-ru)**

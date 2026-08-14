@@ -21,6 +21,7 @@ import { extractErrorCode } from '../../documentdb/shell/ShellOutputFormatter';
 import { getHostsFromConnectionString } from '../../documentdb/utils/connectionStringHelpers';
 import { addDomainInfoToProperties } from '../../documentdb/utils/getClusterMetadata';
 import { ext } from '../../extensionVariables';
+import { ConnectionDiagnosticsService } from '../../services/connectionDiagnosticsService';
 import { classifyCodeBlock } from '../../utils/classifyCommand';
 import { promptAndConnectPlayground } from './connectDatabase';
 
@@ -244,7 +245,14 @@ export async function executePlaygroundCode(
                         await ext.playgroundResultProvider.showResult(sourceUri, formattedOutput);
                     }
 
-                    void vscode.window.showErrorMessage(l10n.t('Query playground execution failed: {0}', errorMessage));
+                    const diagnosis = await ConnectionDiagnosticsService.explain({
+                        clusterId: connection.clusterId,
+                        error,
+                    });
+
+                    void vscode.window.showErrorMessage(
+                        diagnosis?.message ?? l10n.t('Query playground execution failed: {0}', errorMessage),
+                    );
 
                     // Re-throw so framework automatically captures result: 'Failed',
                     // error, and errorMessage in telemetry

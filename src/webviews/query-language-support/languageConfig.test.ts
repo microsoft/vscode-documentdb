@@ -22,6 +22,7 @@ describe('languageConfig', () => {
             expect(EditorType.Project).toBe('project');
             expect(EditorType.Sort).toBe('sort');
             expect(EditorType.Aggregation).toBe('aggregation');
+            expect(EditorType.Json).toBe('json');
         });
     });
 

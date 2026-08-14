@@ -5,11 +5,13 @@
 
 import { type IActionContext } from '@microsoft/vscode-azext-utils';
 import * as l10n from '@vscode/l10n';
+import * as vscode from 'vscode';
 import { ClustersClient } from '../../documentdb/ClustersClient';
 import { ext } from '../../extensionVariables';
 import { type IndexItem } from '../../tree/documentdb/IndexItem';
-import { getConfirmationWithClick } from '../../utils/dialogs/getConfirmation';
+import { confirmIndexAction } from '../../utils/dialogs/confirmIndexAction';
 import { showConfirmationAsInSettings } from '../../utils/dialogs/showConfirmation';
+import { getIndexConfirmationStats } from '../index.shared/getIndexConfirmationStats';
 
 export async function hideIndex(context: IActionContext, node: IndexItem): Promise<void> {
     if (!node) {
@@ -32,12 +34,13 @@ export async function hideIndex(context: IActionContext, node: IndexItem): Promi
     const indexName = node.indexInfo.name;
     const collectionName = node.collectionInfo.name;
 
-    const confirmed = await getConfirmationWithClick(
-        l10n.t('Hide index?'),
-        l10n.t('Hide index "{indexName}" from collection "{collectionName}"?', { indexName, collectionName }) +
-            '\n' +
-            l10n.t('This will prevent the query planner from using this index.'),
-    );
+    const { sizeBytes, usageOps } = await getIndexConfirmationStats(node);
+    const confirmed = await confirmIndexAction('hide', {
+        indexName,
+        collectionName,
+        sizeBytes,
+        usageOps,
+    });
 
     if (!confirmed) {
         return;
@@ -67,6 +70,16 @@ export async function hideIndex(context: IActionContext, node: IndexItem): Promi
         if (success) {
             showConfirmationAsInSettings(l10n.t('Index "{indexName}" has been hidden.', { indexName }));
         }
+    } catch (error) {
+        // Failed user action -> modal (matches the webview matrix); suppress
+        // azext's default non-modal error and rethrow for telemetry.
+        const detail = error instanceof Error ? error.message : String(error);
+        context.errorHandling.suppressDisplay = true;
+        void vscode.window.showErrorMessage(l10n.t('Failed to hide index "{indexName}".', { indexName }), {
+            modal: true,
+            detail,
+        });
+        throw error;
     } finally {
         // Refresh parent (collection's indexes folder)
         const lastSlashIndex = node.id.lastIndexOf('/');

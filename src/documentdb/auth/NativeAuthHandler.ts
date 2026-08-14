@@ -6,6 +6,7 @@
 import { type MongoClientOptions } from 'mongodb';
 import { nonNullValue } from '../../utils/nonNull';
 import { type CachedClusterCredentials } from '../CredentialCache';
+import { resolveAllowInvalidCertificates } from '../utils/tlsException';
 import { type AuthHandler, type AuthHandlerResponse } from './AuthHandler';
 
 /**
@@ -17,22 +18,41 @@ export class NativeAuthHandler implements AuthHandler {
     public configureAuth(): Promise<AuthHandlerResponse> {
         const options: MongoClientOptions = {};
 
-        // Apply emulator-specific configuration if needed
-        if (this.clusterCredentials.emulatorConfiguration?.isEmulator) {
-            options.serverSelectionTimeoutMS = 4000;
+        const connectionString = nonNullValue(
+            this.clusterCredentials.connectionStringWithPassword,
+            'clusterCredentials.connectionStringWithPassword',
+            'NativeAuthHandler.ts',
+        );
 
-            if (this.clusterCredentials.emulatorConfiguration?.disableEmulatorSecurity) {
-                // Prevents self signed certificate error for emulator
-                options.tlsAllowInvalidCertificates = true;
-            }
+        // Emulator-specific tuning: a shorter server-selection timeout fails fast against a
+        // local instance that isn't up yet — also applied to a regular LOCAL connection that opted
+        // into the TLS exception (§7). Host-gated the same way as the TLS option, so an orphaned
+        // flag on a public host does NOT trigger the aggressive 4s fail-fast.
+        if (
+            this.clusterCredentials.emulatorConfiguration?.isEmulator ||
+            resolveAllowInvalidCertificates(
+                this.clusterCredentials.emulatorConfiguration?.disableEmulatorSecurity,
+                connectionString,
+            )
+        ) {
+            options.serverSelectionTimeoutMS = 4000;
+        }
+
+        // TLS-allow-invalid is driven by `disableEmulatorSecurity` (design §7), honored ONLY for
+        // local/private hosts ("hybrid" runtime policy): an orphaned flag on a public host is not
+        // activated, while an explicit `tlsAllowInvalidCertificates` URL param is still honored by
+        // the driver (we never force the option to `false`).
+        if (
+            resolveAllowInvalidCertificates(
+                this.clusterCredentials.emulatorConfiguration?.disableEmulatorSecurity,
+                connectionString,
+            )
+        ) {
+            options.tlsAllowInvalidCertificates = true;
         }
 
         return Promise.resolve({
-            connectionString: nonNullValue(
-                this.clusterCredentials.connectionStringWithPassword,
-                'clusterCredentials.connectionStringWithPassword',
-                'NativeAuthHandler.ts',
-            ),
+            connectionString,
             options,
         });
     }

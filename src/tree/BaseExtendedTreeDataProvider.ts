@@ -6,6 +6,7 @@
 import { createContextValue, type IActionContext } from '@microsoft/vscode-azext-utils';
 import * as vscode from 'vscode';
 import { ext } from '../extensionVariables';
+import { ConnectionDiagnosticsService } from '../services/connectionDiagnosticsService';
 import { dispose } from '../utils/vscodeUtils';
 import { type ExtendedTreeDataProvider } from './ExtendedTreeDataProvider';
 import { type TreeElement } from './TreeElement';
@@ -525,7 +526,7 @@ export abstract class BaseExtendedTreeDataProvider<T extends TreeElement>
         }
 
         // 2. Fetch the children of the current element
-        const children = await childrenFetchFunc();
+        const children = await this.fetchChildrenWithDiagnostics(element, context, childrenFetchFunc);
         context.telemetry.measurements.childrenCount = children?.length ?? 0;
 
         // 3. Check if the returned children contain an error node
@@ -578,6 +579,42 @@ export abstract class BaseExtendedTreeDataProvider<T extends TreeElement>
         }
 
         return children;
+    }
+
+    /**
+     * Single point where a failed expansion is translated into something the user can act on
+     * (a stopped DocumentDB Local container, a port-forward tunnel that is no longer up, an Atlas
+     * TLS rejection). Placed here rather than in each tree item or each view's provider, so every
+     * node below a cluster is covered in every view.
+     *
+     * The error itself is never modified: we only choose what to display, then rethrow it unchanged
+     * so telemetry and every downstream identity check keep working. Cluster nodes handle their own
+     * failures in `ClusterItemBase` and return error children instead of throwing, so they never
+     * reach this catch.
+     */
+    private async fetchChildrenWithDiagnostics(
+        element: T,
+        context: IActionContext,
+        childrenFetchFunc: () => Promise<T[] | null | undefined>,
+    ): Promise<T[] | null | undefined> {
+        try {
+            return await childrenFetchFunc();
+        } catch (error) {
+            // Cluster nodes and everything below them carry the same `cluster` model but share no
+            // interface, so this is structural rather than an `instanceof`.
+            const clusterId = (element as { cluster?: { clusterId?: string } }).cluster?.clusterId;
+            const diagnosis = clusterId ? await ConnectionDiagnosticsService.explain({ clusterId, error }) : undefined;
+
+            if (diagnosis) {
+                context.telemetry.properties.diagnosisProviderId = diagnosis.providerId;
+                context.errorHandling.suppressDisplay = true;
+                // `detail` is only rendered for modal messages, so the raw text is appended instead.
+                const cause = error instanceof Error ? error.message : String(error);
+                void vscode.window.showErrorMessage(`${diagnosis.message} (${cause})`);
+            }
+
+            throw error;
+        }
     }
 
     /**

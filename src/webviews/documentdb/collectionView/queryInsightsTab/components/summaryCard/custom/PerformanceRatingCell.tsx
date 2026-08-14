@@ -1,0 +1,220 @@
+/*---------------------------------------------------------------------------------------------
+ *  Copyright (c) Microsoft Corporation. All rights reserved.
+ *  Licensed under the MIT License. See License.txt in the project root for license information.
+ *--------------------------------------------------------------------------------------------*/
+
+import { Badge, Skeleton, SkeletonItem, Text, tokens, Tooltip } from '@fluentui/react-components';
+import { InfoRegular, WarningRegular } from '@fluentui/react-icons';
+import { CollapseRelaxed } from '@fluentui/react-motion-components-preview';
+import * as l10n from '@vscode/l10n';
+import type * as React from 'react';
+import { useMemo } from 'react';
+import '../../../../../../components/focusableBadge/focusableBadge.scss';
+import { type PerformanceDiagnostic } from '../../../../../../documentdb/collectionView/types/queryInsights';
+import { CellBase } from '../CellBase';
+import './PerformanceRatingCell.scss';
+
+export type PerformanceRating = 'poor' | 'fair' | 'good' | 'excellent';
+
+export interface PerformanceRatingCellProps {
+    /** The label displayed at the top of the cell */
+    label: string;
+
+    /** The performance rating level
+     * - undefined: Data is loading (shows skeleton)
+     * - null: Data is unavailable (shows nullValuePlaceholder)
+     * - PerformanceRating: Shows rating with color and diagnostics
+     */
+    rating: PerformanceRating | null | undefined;
+
+    /** Array of diagnostic messages explaining the rating */
+    diagnostics?: PerformanceDiagnostic[];
+
+    /** Whether the rating content is visible (for animation) */
+    visible?: boolean;
+
+    /** What to display when rating is explicitly null (data unavailable) */
+    nullValuePlaceholder?: string;
+}
+
+/**
+ * Custom cell component for displaying performance ratings with colored indicators.
+ * Spans the full width (2 columns) of the summary grid.
+ *
+ * Value handling:
+ * - undefined: Shows loading skeleton (data is being fetched)
+ * - null: Shows N/A or custom nullValuePlaceholder (data unavailable/error)
+ * - PerformanceRating: Displays rating badge with diagnostics
+ *
+ * Diagnostic badges are keyboard accessible with focus indicators.
+ *
+ * Example usage:
+ * ```tsx
+ * <PerformanceRatingCell
+ *   label={l10n.t('Performance Rating')}
+ *   rating="poor"
+ *   diagnostics={[
+ *     { type: 'negative', message: 'Collection scan detected' },
+ *     { type: 'positive', message: 'Fast execution time' }
+ *   ]}
+ *   visible={stageState >= 2}
+ * />
+ *
+ * // In error state
+ * <PerformanceRatingCell
+ *   label={l10n.t('Performance Rating')}
+ *   rating={null}
+ *   nullValuePlaceholder={l10n.t('Not available')}
+ * />
+ * ```
+ */
+/** Returns a random integer in [min, max] */
+const randW = (min: number, max: number): number => Math.floor(Math.random() * (max - min + 1)) + min;
+
+export const PerformanceRatingCell: React.FC<PerformanceRatingCellProps> = ({
+    label,
+    rating,
+    diagnostics,
+    visible = true,
+    nullValuePlaceholder = 'N/A',
+}) => {
+    // Stable random widths for badge skeletons — re-randomised each time the skeleton mounts
+    const badgeWidths = useMemo(
+        () => [randW(80, 140), randW(60, 110), randW(90, 150), randW(70, 120), randW(70, 120)],
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+        [rating === undefined],
+    );
+    const getRatingColor = (rating: PerformanceRating): string => {
+        switch (rating) {
+            case 'poor':
+                return tokens.colorPaletteRedBackground3;
+            case 'fair':
+                return tokens.colorPaletteYellowBackground3;
+            case 'good':
+                return tokens.colorPaletteGreenBackground3;
+            case 'excellent':
+                return tokens.colorPaletteLightGreenBackground3;
+        }
+    };
+
+    const getRatingText = (rating: PerformanceRating): string => {
+        switch (rating) {
+            case 'poor':
+                return l10n.t('Poor');
+            case 'fair':
+                return l10n.t('Fair');
+            case 'good':
+                return l10n.t('Good');
+            case 'excellent':
+                return l10n.t('Excellent');
+        }
+    };
+
+    // Determine the content to display based on rating value
+    let customContent: React.ReactNode;
+
+    // Step 1 — Filter: keep only high-signal positive badges + all neutral/negative
+    const SHOWN_POSITIVE_IDS: string[] = ['high_efficiency_ratio', 'fast_execution', 'index_used'];
+    const filteredDiagnostics = (diagnostics ?? []).filter(
+        (d) => d.type !== 'positive' || SHOWN_POSITIVE_IDS.includes(d.diagnosticId),
+    );
+
+    // Step 2 — Sort: positive → neutral → negative (standard UX convention)
+    const TYPE_ORDER: Record<string, number> = { positive: 0, neutral: 1, negative: 2 };
+    const visibleDiagnostics = [...filteredDiagnostics].sort(
+        (a, b) => (TYPE_ORDER[a.type] ?? 1) - (TYPE_ORDER[b.type] ?? 1),
+    );
+
+    if (rating === null) {
+        // Explicit null: data unavailable (will use CellBase's nullValuePlaceholder)
+        customContent = null;
+    } else if (rating === undefined) {
+        // Undefined: data loading — render a structured skeleton that mirrors the real layout
+        customContent = (
+            <Skeleton appearance="translucent" aria-label={l10n.t('Loading performance rating')}>
+                <div className="efficiencyIndicator efficiencyIndicator--skeleton">
+                    {/* Row 1: dot skeleton + rating-text skeleton */}
+                    <SkeletonItem shape="circle" size={12} className="efficiencyDotSkeleton" />
+                    <SkeletonItem size={16} style={{ width: '144px' }} />
+                    {/* Row 2: indent spacer + badge-pill skeletons */}
+                    <div />
+                    <div className="efficiencyBadges efficiencyBadges--skeleton">
+                        {badgeWidths.map((w, i) => (
+                            <SkeletonItem key={i} size={16} style={{ width: `${w}px` }} />
+                        ))}
+                    </div>
+                </div>
+            </Skeleton>
+        );
+    } else {
+        // Has rating: display with animation
+        customContent = (
+            <CollapseRelaxed visible={visible}>
+                <div role="group" aria-label={label} className="efficiencyIndicator">
+                    {/* First row, first column: dot */}
+                    <div
+                        className="efficiencyDot"
+                        style={{ backgroundColor: getRatingColor(rating) }}
+                        aria-hidden="true"
+                    />
+                    {/* First row, second column: rating text */}
+                    <Text weight="semibold" className="efficiencyRatingText">
+                        {getRatingText(rating)}
+                    </Text>
+                    {/* Second row, first column: empty */}
+                    {visibleDiagnostics.length > 0 && <div />}
+                    {/* Second row, second column: diagnostic badges with tooltips */}
+                    {visibleDiagnostics.length > 0 && (
+                        <div className="efficiencyBadges">
+                            {visibleDiagnostics.map((diagnostic, index) => (
+                                <Tooltip
+                                    key={index}
+                                    content={{
+                                        children: (
+                                            <div style={{ padding: '8px' }}>
+                                                <div
+                                                    style={{
+                                                        fontWeight: 600,
+                                                        marginBottom: '12px',
+                                                        fontSize: '16px',
+                                                        display: 'flex',
+                                                        alignItems: 'center',
+                                                        gap: '6px',
+                                                    }}
+                                                >
+                                                    {diagnostic.type === 'negative' && <WarningRegular />}
+                                                    {diagnostic.message}
+                                                </div>
+                                                <div style={{ whiteSpace: 'pre-line' }}>{diagnostic.details}</div>
+                                            </div>
+                                        ),
+                                    }}
+                                    positioning="above-start"
+                                    relationship="description"
+                                >
+                                    {/* Accessibility pattern: aria-label provides full context for screen readers,
+                                        while aria-hidden on children prevents double announcement of visible text.
+                                        Screen readers announce: "message. details" instead of just "message" */}
+                                    <Badge
+                                        appearance="tint"
+                                        color={diagnostic.type === 'positive' ? 'success' : 'informative'}
+                                        size="small"
+                                        shape="rounded"
+                                        icon={diagnostic.type === 'negative' ? <WarningRegular /> : <InfoRegular />}
+                                        tabIndex={0}
+                                        className="focusableBadge"
+                                        aria-label={`${diagnostic.message}. ${diagnostic.details}`}
+                                    >
+                                        <span aria-hidden="true">{diagnostic.message}</span>
+                                    </Badge>
+                                </Tooltip>
+                            ))}
+                        </div>
+                    )}
+                </div>
+            </CollapseRelaxed>
+        );
+    }
+
+    return <CellBase label={label} value={customContent} nullValuePlaceholder={nullValuePlaceholder} span="full" />;
+};

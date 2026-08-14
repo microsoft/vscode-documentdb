@@ -18,11 +18,17 @@ export class PromptPortStep extends AzureWizardPromptStep<NewLocalConnectionWiza
 
         switch (context.experience) {
             case CosmosDBMongoRUExperience:
-            case DocumentDBExperience:
-            default:
+                // The Cosmos DB Mongo (RU) emulator uses the legacy 10255 port.
                 defaultPort = context.port ? context.port.toString() : '10255';
                 promptText = l10n.t('Enter the port number');
                 placeHolder = l10n.t('The default port: 10255');
+                break;
+            case DocumentDBExperience:
+            default:
+                // Canonical DocumentDB local port (matches Quick Start and the image default).
+                defaultPort = context.port ? context.port.toString() : '10260';
+                promptText = l10n.t('Enter the port number');
+                placeHolder = l10n.t('The default port: 10260');
                 break;
         }
 

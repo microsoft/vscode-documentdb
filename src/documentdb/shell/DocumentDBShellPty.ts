@@ -7,6 +7,9 @@ import { callWithTelemetryAndErrorHandling, UserCancelledError } from '@microsof
 import * as l10n from '@vscode/l10n';
 import { randomUUID } from 'crypto';
 import * as vscode from 'vscode';
+import { ext } from '../../extensionVariables';
+import { ConnectionDiagnosticsService } from '../../services/connectionDiagnosticsService';
+import { maskSecrets } from '../../services/localQuickStart/outputMasking';
 import { type CompletionCategory } from '../../telemetry/completionCategories';
 import { accumulateTelemetry } from '../../utils/accumulatingTelemetry';
 import { classifyCommand, extractRunCommandName } from '../../utils/classifyCommand';
@@ -542,13 +545,51 @@ export class DocumentDBShellPty implements vscode.Pseudoterminal {
             const { message: errorMessage } = extractErrorCode(rawMessage);
             this.writeLine(this._outputFormatter.formatError(l10n.t('Failed to connect: {0}', errorMessage)));
 
+            // Written as a separate line rather than merged into the message above, so the raw text
+            // stays intact for extractErrorCode and the SettingsHintError check below.
+            const diagnosis = await ConnectionDiagnosticsService.explain({
+                clusterId: this._connectionInfo.clusterId,
+                error,
+            });
+            if (diagnosis) {
+                this.writeLine(this._outputFormatter.formatError(diagnosis.message));
+            }
+
+            // Logged so the failure survives in an output channel a user can share with us. Driver
+            // errors can quote the connection string, so the cached secrets are redacted first.
+            ext.outputChannel.error(
+                maskSecrets(
+                    `[Shell] Failed to connect to "${this._connectionInfo.clusterDisplayName}": ${rawMessage}` +
+                        (diagnosis ? ` (${diagnosis.providerId}: ${diagnosis.message})` : ''),
+                    this.credentialSecrets(),
+                ),
+            );
+
             // Show a hint line and clickable settings link for errors that reference a VS Code setting
             if (error instanceof SettingsHintError) {
                 this.writeSettingsHintLine(error);
             }
 
+            // A notification as well: the terminal may be in the background, or closed by the user
+            // before they read it.
+            void vscode.window.showErrorMessage(
+                diagnosis?.message ??
+                    l10n.t('Failed to connect to "{cluster}": {error}', {
+                        cluster: this._connectionInfo.clusterDisplayName,
+                        error: errorMessage,
+                    }),
+            );
+
+            // Deliberately no _closeEmitter.fire(): disposing the terminal would take the message
+            // with it. The session is still uninitialized, so ShellSessionManager.evaluate() re-runs
+            // initialize() and the next command the user types becomes the retry.
+            this.writeLine(
+                this._outputFormatter.formatSystemMessage(
+                    l10n.t('Run a command to try connecting again, or close this terminal.'),
+                ),
+            );
             this._inputHandler.setEnabled(true);
-            this._closeEmitter.fire(1);
+            this.showPrompt();
         }
     }
 
@@ -576,7 +617,7 @@ export class DocumentDBShellPty implements vscode.Pseudoterminal {
         try {
             await this.evaluateInput(trimmed);
         } catch (error: unknown) {
-            this.handleEvalError(error);
+            await this.handleEvalError(error);
         } finally {
             // Stop the spinner before writing results or the next prompt.
             this._spinner?.stop();
@@ -677,7 +718,7 @@ export class DocumentDBShellPty implements vscode.Pseudoterminal {
      * Handles display of eval errors in the terminal.
      * Called by handleLineInput when evaluateInput throws.
      */
-    private handleEvalError(error: unknown): void {
+    private async handleEvalError(error: unknown): Promise<void> {
         // Stop the spinner before writing error output.
         this._spinner?.stop();
         this._spinner = undefined;
@@ -693,6 +734,18 @@ export class DocumentDBShellPty implements vscode.Pseudoterminal {
         // the extracted code is preserved for future telemetry.
         const { message: errorMessage } = extractErrorCode(rawMessage);
         this.writeLine(this._outputFormatter.formatError(errorMessage));
+
+        // A session that connected fine can still break underneath the user — the container it
+        // talks to gets stopped, a port-forward drops — and the next command is where they find
+        // out. Written as a separate line so the raw text above stays intact for extractErrorCode
+        // and the checks below.
+        const diagnosis = await ConnectionDiagnosticsService.explain({
+            clusterId: this._connectionInfo.clusterId,
+            error,
+        });
+        if (diagnosis) {
+            this.writeLine(this._outputFormatter.formatError(diagnosis.message));
+        }
 
         // Show a hint line and clickable settings link for errors that reference a VS Code setting
         if (error instanceof SettingsHintError) {
@@ -1222,6 +1275,14 @@ export class DocumentDBShellPty implements vscode.Pseudoterminal {
     }
 
     // ─── Private: Telemetry helpers ──────────────────────────────────────────
+
+    /** Cached secrets for this cluster, so they can be redacted before anything is logged. */
+    private credentialSecrets(): string[] {
+        const credentials = CredentialCache.getCredentials(this._connectionInfo.clusterId);
+        return [credentials?.nativeAuthConfig?.connectionPassword, credentials?.connectionString].filter(
+            (secret): secret is string => !!secret,
+        );
+    }
 
     /**
      * Collect domain info from cached credentials for telemetry.

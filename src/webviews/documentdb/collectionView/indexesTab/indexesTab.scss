@@ -1,0 +1,785 @@
+/*---------------------------------------------------------------------------------------------
+ *  Copyright (c) Microsoft Corporation. All rights reserved.
+ *  Licensed under the MIT License. See License.txt in the project root for license information.
+ *--------------------------------------------------------------------------------------------*/
+
+@use '../../../index';
+
+.indexesTab {
+    @extend .selectionDisabled;
+
+    display: flex;
+    flex-direction: column;
+    // Fill the height left over in the CollectionView flex column (below the
+    // toolbar and tab strip) rather than claiming the full viewport — a 100vh
+    // here would overflow the clipped parent and push the list's footer count
+    // out of reach.
+    flex: 1 1 auto;
+    min-height: 0;
+    row-gap: 10px;
+
+    .indexManagementToolbar {
+        flex-wrap: nowrap;
+    }
+
+    .indexHeader {
+        display: flex;
+        flex-direction: row;
+        align-items: center;
+        justify-content: space-between;
+        gap: 10px;
+        padding: 0 10px;
+    }
+
+    // Self-contained index list (filter row + details table + count). Grows to
+    // fill the remaining height.
+    .indexList {
+        display: flex;
+        flex-direction: column;
+        flex: 1 1 auto;
+        min-height: 0;
+        margin-inline: var(--spacingHorizontalMNudge);
+        row-gap: 10px;
+    }
+
+    // Filter row: the filter box grows to fill the full width; the quick
+    // toggles and the Clear button sit on the right. No divider.
+    .indexToolbar {
+        width: 100%;
+        box-sizing: border-box;
+        gap: 8px;
+        padding-inline: 0;
+        flex-shrink: 0;
+
+        // Fluent buttons default to a semibold weight; keep the filter-row
+        // toggles and the Clear button at the regular weight for a lighter look.
+        .fui-Button {
+            font-weight: var(--fontWeightRegular);
+        }
+
+        .indexFilterInput {
+            flex: 1 1 auto;
+            min-width: 0;
+            max-width: none;
+        }
+
+        .indexFilterClear {
+            flex-shrink: 0;
+        }
+    }
+
+    // The scrollable list region. It fills the height left over below the
+    // filter row and scrolls internally when the table is tall. The "showing
+    // X of Y" count lives inside this area (after the table) so it scrolls
+    // into view at the end of the list rather than being pinned out of reach.
+    .indexContentContainer {
+        flex: 1 1 auto;
+        min-height: 0;
+        overflow: auto;
+    }
+
+    // Centered "showing X of Y" count, sized so it's clearly visible. Rendered
+    // at the bottom of the scrollable list area.
+    .indexListCount {
+        text-align: center;
+        padding: 8px 10px 4px;
+        color: var(--colorNeutralForeground2);
+        font-size: var(--fontSizeBase300);
+    }
+
+    // Centered "could not load" message shown in place of the table when the
+    // most recent load failed and there are no rows to fall back to. A filtered
+    // -to-empty list is intentionally NOT shown here (it keeps the count footer).
+    .indexEmptyState {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        min-height: 120px;
+        padding: 24px 10px;
+        text-align: center;
+        color: var(--colorNeutralForeground2);
+        font-size: var(--fontSizeBase300);
+    }
+
+    // Loading placeholder for the table area. Mirrors the Results tab skeleton:
+    // a header row followed by a grid of shimmering rows.
+    .indexTableSkeleton {
+        .indexSkeletonHeaderRow {
+            align-items: center;
+            padding-bottom: 10px;
+        }
+
+        .indexSkeletonGrid {
+            display: grid;
+            grid-template-columns: 1fr 1fr 1fr 1fr;
+            gap: 10px;
+        }
+    }
+
+    // Wraps the top-of-dashboard summary cards. The MetricsRow grid itself
+    // has no horizontal padding, so we align it with the table's gutter here.
+    .indexMetricsRowContainer {
+        flex-shrink: 0;
+        padding: 0 10px;
+    }
+
+    .fieldChip {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        padding: 2px 6px;
+        margin: 2px;
+        background-color: var(--colorNeutralBackground3);
+        border-radius: 4px;
+        font-family: var(--fontFamilyMonospace);
+        font-size: var(--fontSizeBase200);
+    }
+
+    .indexTable {
+        /*
+         * Fill the width we're given and never overflow horizontally.
+         * `table-layout: fixed` makes the browser honour the <colgroup>
+         * widths below; the name column has no explicit width, so it
+         * absorbs whatever space is left over (and shrinks first when the
+         * panel is narrow. The minimum width reserves 130px for Name after
+         * the explicitly-sized columns; narrower containers scroll instead.
+         */
+        width: 100%;
+        min-width: 726px;
+        table-layout: fixed;
+
+        // Leading status indicator in the name cell: a green check for ready
+        // indexes, or a spinner (tooltip: Building/Creating index) while in progress.
+        .indexStatusReady {
+            color: var(--colorStatusSuccessForeground1);
+            font-size: 16px;
+        }
+
+        .indexStatusSpinner {
+            display: inline-flex;
+        }
+
+        .colExpand {
+            width: 40px;
+        }
+        .colType {
+            width: 130px;
+        }
+        .colProperties {
+            width: 130px;
+        }
+        .colMemory {
+            width: 100px;
+        }
+        .colUsage {
+            width: 100px;
+        }
+        .colActions {
+            width: 96px;
+        }
+
+        td,
+        th {
+            vertical-align: middle;
+        }
+
+        /*
+         * Bolden the header column names. Fluent's TableHeaderCell renders the
+         * label inside a `.fui-TableHeaderCell__button` element that sets its
+         * own weight, so we target both the cell and that inner element.
+         */
+        th,
+        .fui-TableHeaderCell__button {
+            font-weight: var(--fontWeightSemibold);
+        }
+
+        /*
+         * Fluent gives the inner sortable-header button `background: inherit`.
+         * With translucent VS Code hover colors that repaints the same fill over
+         * the hovered <th>, producing a darker text-width band. Keep one layer.
+         */
+        .fui-TableHeaderCell__button {
+            background-color: transparent;
+        }
+
+        /*
+         * Alternating row backgrounds — mirrors the VS Code tree-view
+         * convention used in the Results tab. Parity is computed in the
+         * component (rowEven / rowOdd) from the data index so that the
+         * expanded detail row inherits the same shade as its parent.
+         *
+         * Painting on <td> rather than <tr> is what lets the detail row match
+         * its parent, but it also covers the hover and pressed fills Fluent
+         * paints on the <tr>. The two rules below restore them at the same
+         * cell level; reuse of this striping pattern must carry them along or
+         * rows lose their interaction feedback.
+         */
+        .rowEven > td {
+            background-color: var(--colorNeutralBackground1);
+        }
+        .rowOdd > td {
+            background-color: var(--colorNeutralBackground2);
+        }
+
+        /* Adaptive list hover, on the cells so primary and detail rows respond evenly. */
+        .rowEven:hover > td,
+        .rowOdd:hover > td {
+            background-color: var(--vscode-list-hoverBackground, var(--colorSubtleBackgroundHover));
+        }
+
+        /* Pressed fill; must stay after hover, both selectors have equal specificity. */
+        .rowEven:not(.fieldsDetailRow):active > td,
+        .rowOdd:not(.fieldsDetailRow):active > td {
+            background-color: var(--vscode-list-activeSelectionBackground, var(--colorSubtleBackgroundPressed));
+        }
+
+        /*
+         * Name column: width is driven by the fluid table layout (it takes
+         * the leftover space). We only set `word-break` here so long
+         * auto-generated names like `field1_1_field2_-1_field3_1` wrap inside
+         * the cell instead of forcing horizontal scroll.
+         */
+        .nameCell {
+            word-break: break-all;
+        }
+
+        .nameHeaderCell {
+            white-space: nowrap;
+        }
+
+        /* Narrow column reserved for the per-row expand chevron */
+        .expandHeaderCell,
+        .expandCell {
+            padding-right: 0;
+        }
+
+        /*
+         * Left-align the Usage column (header + cells). Fluent's
+         * TableCell/TableHeaderCell use `display: flex`, so we set both
+         * `justify-content` (flex main-axis) and `text-align` to keep the
+         * count snug against the left edge of the column.
+         */
+        .usageCell {
+            justify-content: flex-start;
+            text-align: left;
+        }
+
+        // Compact relative-size visual beside a metric's formatted value.
+        // The bar is decorative; the adjacent text remains the accessible value.
+        .indexMetricValue {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            min-width: 0;
+        }
+
+        .indexMetricText {
+            flex: 0 0 48px;
+            overflow: hidden;
+            text-align: right;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .relativeMetricTrack {
+            display: inline-flex;
+            flex: 0 0 32px;
+            align-items: center;
+            height: 8px;
+        }
+
+        .relativeMetricBar {
+            display: block;
+            min-width: 0;
+            height: 4px;
+            border-radius: var(--borderRadiusMedium);
+            background-color: var(--vscode-focusBorder);
+        }
+
+        /* Properties column: word-only option badges that wrap within the cell. */
+        .indexPropertiesCell {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 4px;
+        }
+
+        /*
+         * Detail sub-row: the field list lives in a full-width card
+         * (`.indexDetailsCard`). The cell's generous left padding indents the
+         * card so its left edge lines up with the Name column content (past
+         * the chevron column). Tweak the `50px` left value if it drifts.
+         */
+        .fieldsDetailRow .fieldsDetailCell {
+            padding: 8px 8px 10px 50px;
+        }
+
+        .indexDetailsCard {
+            width: 100%;
+            box-sizing: border-box;
+            /* Uniform inner padding — the column alignment is handled by the
+               cell's left padding above, so the card itself stays symmetric. */
+            padding: 12px 16px 12px 16px;
+            row-gap: 12px;
+        }
+
+        // Small caption above a detail section (e.g. "Fields").
+        .detailSectionLabel {
+            font-weight: var(--fontWeightSemibold);
+            color: var(--colorNeutralForeground3);
+            font-size: var(--fontSizeBase200);
+            margin-bottom: 6px;
+        }
+
+        // Index key definition rendered as inline, wrapping badges.
+        .keyBadges {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 6px;
+        }
+
+        .keyBadgeField {
+            font-family: var(--fontFamilyMonospace);
+        }
+
+        .keyBadgeDir {
+            margin-left: 6px;
+            opacity: 0.8;
+        }
+
+        // Present-only facts list (definition list).
+        .detailFacts {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+            margin: 0;
+        }
+
+        .detailFact {
+            display: flex;
+            gap: 8px;
+            font-size: var(--fontSizeBase200);
+
+            dt {
+                flex: 0 0 auto;
+                font-weight: var(--fontWeightSemibold);
+                color: var(--colorNeutralForeground3);
+            }
+
+            dd {
+                margin: 0;
+                color: var(--colorNeutralForeground2);
+                min-width: 0;
+                word-break: break-word;
+            }
+        }
+
+        .detailFactCode {
+            font-family: var(--fontFamilyMonospace);
+        }
+
+        // Header row: section label on the left, raw-definition button pinned
+        // to the top-right of the card.
+        .detailHeaderRow {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+
+            // Label sits inline with the button here, so drop its bottom margin.
+            .detailSectionLabel {
+                margin-bottom: 0;
+            }
+        }
+
+        .detailRawButton {
+            flex-shrink: 0;
+        }
+    }
+
+    .actionsCell {
+        display: flex;
+        flex-direction: row;
+        gap: 4px;
+    }
+}
+
+// Property-badge tooltip body (partial filter / collation / wildcard projection).
+// Fluent v9 portals tooltips to the document body, so this lives at the top
+// level rather than nested under `.indexesTab`.
+.indexPropertiesTooltipCode {
+    font-family: var(--fontFamilyMonospace);
+    white-space: pre-wrap;
+    word-break: break-word;
+}
+
+// Create Index drawer (Fluent OverlayDrawer, pinned to the panel's right edge).
+.createIndexDrawer {
+    // Header quick actions (Back / Hide) sit together in the header action slot.
+    .drawerHeaderActions {
+        display: flex;
+        align-items: center;
+        gap: 4px;
+    }
+
+    // The body scrolls vertically when the form grows taller than the drawer.
+    // A column flex context lets the Preview page's editor fill the free space.
+    // DrawerBody only gets Fluent's default bottom padding when it is the last
+    // child, so restore a content gap here because DrawerFooter follows it.
+    .createIndexDrawerBody {
+        display: flex;
+        flex-direction: column;
+        overflow-y: auto;
+        padding-bottom: var(--spacingVerticalL);
+    }
+
+    // Main-page footer: an optional "what's still required" line stacked above
+    // the action buttons, so the reason a disabled Create button can't be used
+    // is always visible next to it.
+    .createIndexFooterMain {
+        display: flex;
+        flex-direction: column;
+        row-gap: 10px;
+        width: 100%;
+    }
+
+    .createIndexFooterActions {
+        display: flex;
+        flex-direction: row;
+        align-items: center;
+        flex-wrap: wrap;
+        gap: 8px;
+    }
+
+    // A muted, non-alarming requirement hint (info icon + short sentence).
+    .submitRequirement {
+        display: flex;
+        align-items: flex-start;
+        gap: 6px;
+        color: var(--colorNeutralForeground3);
+        font-size: var(--fontSizeBase200);
+
+        .submitRequirementIcon {
+            flex: 0 0 auto;
+            font-size: 16px;
+            color: var(--colorNeutralForeground3);
+        }
+    }
+
+    .drawerPageTitle:focus-visible {
+        outline: 2px solid var(--colorStrokeFocus2);
+        outline-offset: 2px;
+    }
+}
+
+.createIndexForm {
+    display: flex;
+    flex-direction: column;
+    row-gap: 20px;
+
+    // Preview page: the specification editor fills the free vertical space
+    // instead of auto-sizing to its content.
+    &.previewForm {
+        flex: 1 1 auto;
+        min-height: 0;
+
+        .drawerSection {
+            flex: 1 1 auto;
+            min-height: 0;
+        }
+
+        .drawerSectionBody {
+            flex: 1 1 auto;
+            min-height: 0;
+            border: 1px solid var(--colorNeutralStroke2);
+            border-radius: var(--borderRadiusMedium);
+            overflow: hidden;
+        }
+    }
+
+    // A titled input section: bold title, muted one-line explanation, then inputs.
+    .drawerSection {
+        display: flex;
+        flex-direction: column;
+        row-gap: 6px;
+    }
+
+    .drawerSectionTitle {
+        font-weight: var(--fontWeightSemibold);
+        font-size: var(--fontSizeBase300);
+    }
+
+    // Required-field asterisk on a section title, matching Fluent's Field marker.
+    .drawerSectionRequired {
+        margin-inline-start: 4px;
+        color: var(--colorPaletteRedForeground3);
+        font-weight: var(--fontWeightRegular);
+    }
+
+    .drawerSectionHint {
+        color: var(--colorNeutralForeground3);
+        font-size: var(--fontSizeBase200);
+    }
+
+    // A small, always-visible worked example shown above the editor.
+    .drawerSectionExample {
+        color: var(--colorNeutralForeground3);
+        font-family: var(--fontFamilyMonospace);
+        font-size: var(--fontSizeBase200);
+        white-space: pre-wrap;
+        word-break: break-word;
+    }
+
+    .drawerSectionBody {
+        display: flex;
+        flex-direction: column;
+        row-gap: 10px;
+        margin-top: 2px;
+    }
+
+    /*
+     * Stack of field rows. Each row is [combobox] [type dropdown] [delete].
+     */
+    .indexFieldsList {
+        display: flex;
+        flex-direction: column;
+        row-gap: 8px;
+    }
+
+    .fieldRow {
+        display: flex;
+        flex-direction: row;
+        align-items: center;
+        flex-wrap: wrap;
+        gap: 10px;
+    }
+
+    // The field-name combobox grows to fill the row.
+    .fieldGrow {
+        flex: 1 1 180px;
+        min-width: 0;
+    }
+
+    // Three-way index-kind selector pinned to the top of the drawer content.
+    .indexKindTabs {
+        margin-bottom: 4px;
+    }
+
+    // The per-field type dropdown is wide enough to hold the longest option
+    // label ("Geospatial (2dsphere)") on a single line without wrapping.
+    .fieldType {
+        flex: 0 1 210px;
+        min-width: 160px;
+        white-space: nowrap;
+    }
+
+    // Experiment: option groups (Options, Name, etc.) render flat — no tinted
+    // box — so only the Advanced entry, JSON preview button, and the selected
+    // algorithm card carry a shade. Keeps the vertical rhythm via row-gap.
+    .typeOptions {
+        display: flex;
+        flex-direction: column;
+        row-gap: 12px;
+    }
+
+    // A single option: the switch plus its indented detail container.
+    // No row-gap here: Fluent's Switch already reserves vertical space below
+    // its label as part of the toggle's tap-target geometry, so an extra gap
+    // would double the spacing. Let that intrinsic spacing be the separation
+    // instead of fighting it with negative margins.
+    .optionItem {
+        display: flex;
+        flex-direction: column;
+        row-gap: 0;
+    }
+
+    // The switch plus its info icon, kept on one line and vertically centered.
+    .optionSwitchRow {
+        display: flex;
+        align-items: center;
+        column-gap: 4px;
+    }
+
+    // Small, focusable info icon revealing the option's explanation on hover/focus.
+    .optionInfoIcon {
+        font-size: 14px;
+        opacity: 0.6;
+
+        &:hover,
+        &:focus-visible {
+            opacity: 1;
+        }
+    }
+
+    // Restore the default label font-size on the small switch. Only the font
+    // size is overridden (not line-height) so the compact small line box — and
+    // thus the label's vertical alignment with the toggle — is preserved. The
+    // two-class selector outweighs Fluent's single-class size style.
+    .optionSwitchLabel {
+        font-size: var(--fontSizeBase300);
+    }
+
+    // The one place to tune the layout of every option's description, disabled
+    // reason, and revealed input. Aligns past the toggle with 20px of extra
+    // breathing room so the content sits clear of the switch label.
+    .optionDetail {
+        display: flex;
+        flex-direction: column;
+        row-gap: 6px;
+        padding-bottom: 6px;
+        padding-left: 52px;
+    }
+
+    .optionDescription {
+        color: var(--colorNeutralForeground3);
+        font-size: var(--fontSizeBase200);
+    }
+
+    // Experiment: the wildcard scope settings render flat (no tinted box) to
+    // match the unshaded option groups above.
+    .wildcardSettings {
+        display: flex;
+        flex-direction: column;
+        row-gap: 12px;
+    }
+
+    // Two side-by-side vector inputs (e.g. Dimensions + Similarity) that wrap to
+    // a single column when the drawer is too narrow to hold both.
+    .vectorDualField {
+        display: flex;
+        flex-direction: row;
+        gap: 12px;
+        flex-wrap: wrap;
+
+        > * {
+            flex: 1 1 160px;
+            min-width: 0;
+        }
+    }
+
+    // Algorithm picker: parallel Fluent selectable cards that wrap to a column
+    // on a narrow drawer.
+    .vectorAlgorithmCards {
+        display: flex;
+        flex-direction: row;
+        align-items: stretch;
+        gap: 8px;
+        flex-wrap: wrap;
+    }
+
+    .vectorAlgoCard {
+        flex: 1 1 150px;
+        align-self: stretch;
+        height: auto;
+        min-width: 0;
+        cursor: pointer;
+    }
+
+    .vectorAlgoCardHint {
+        color: var(--colorNeutralForeground3);
+        font-size: var(--fontSizeBase200);
+        line-height: var(--lineHeightBase200);
+    }
+
+    // Structured wildcard projection: mode radios plus a stacked list of
+    // field-name rows, each [combobox] [remove], mirroring the index field list.
+    .wildcardProjectionBody {
+        display: flex;
+        flex-direction: column;
+        row-gap: 10px;
+    }
+
+    .projectionFieldsList {
+        display: flex;
+        flex-direction: column;
+        row-gap: 8px;
+    }
+
+    .projectionFieldRow {
+        display: flex;
+        flex-direction: row;
+        align-items: center;
+        flex-wrap: wrap;
+        gap: 10px;
+    }
+
+    // "Advanced settings ›" navigation entry that pushes the advanced sub-page.
+    .advancedEntry {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        width: 100%;
+        padding: 12px;
+        background-color: var(--colorNeutralBackground2);
+        border: 1px solid var(--colorNeutralStroke2);
+        border-radius: var(--borderRadiusMedium);
+        cursor: pointer;
+        color: inherit;
+        font-family: inherit;
+        text-align: left;
+
+        &:hover {
+            background-color: var(--colorNeutralBackground2Hover);
+        }
+
+        &:focus-visible {
+            outline: 2px solid var(--colorStrokeFocus2);
+            outline-offset: 2px;
+        }
+
+        &:disabled {
+            cursor: default;
+            color: var(--colorNeutralForegroundDisabled);
+            background-color: var(--colorNeutralBackgroundDisabled);
+        }
+    }
+
+    .advancedEntryIcon {
+        flex-shrink: 0;
+        font-size: 20px;
+        color: var(--colorNeutralForeground2);
+    }
+
+    .advancedEntryText {
+        display: flex;
+        flex-direction: column;
+        flex: 1 1 auto;
+        min-width: 0;
+    }
+
+    .advancedEntryTitle {
+        font-weight: var(--fontWeightSemibold);
+        font-size: var(--fontSizeBase300);
+    }
+
+    .advancedEntrySub {
+        color: var(--colorNeutralForeground3);
+        font-size: var(--fontSizeBase200);
+    }
+
+    .advancedEntryBadge {
+        flex-shrink: 0;
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        font-size: var(--fontSizeBase200);
+        padding: 2px 8px;
+        border-radius: 10px;
+        background-color: var(--colorNeutralBackground4);
+        color: var(--colorNeutralForeground2);
+    }
+
+    .advancedEntryBadgeSet {
+        background-color: var(--colorStatusSuccessBackground2);
+        color: var(--colorStatusSuccessForeground2);
+    }
+
+    .advancedEntryBadgeError {
+        background-color: var(--colorStatusDangerBackground2);
+        color: var(--colorStatusDangerForeground2);
+    }
+
+    .advancedEntryChevron {
+        flex-shrink: 0;
+        color: var(--colorNeutralForeground3);
+    }
+}

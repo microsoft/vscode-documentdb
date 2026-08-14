@@ -6,6 +6,9 @@
 import { FluentProvider } from '@fluentui/react-components';
 import { type PropsWithChildren, type ReactNode } from 'react';
 import { useThemeState, WithTheme } from './state/ThemeContext';
+// Side-effect import: every webview renders through this provider, and they all share one
+// bundle, so this is what puts the global Fluent adaptations on the page.
+import './fluentOverrides.scss';
 
 export type DynamicThemeProviderProps = {
     useAdaptive?: boolean;

@@ -27,6 +27,14 @@ export enum EditorType {
     Project = 'project',
     Sort = 'sort',
     Aggregation = 'aggregation',
+    /**
+     * A plain, relaxed-JSON editor: it reuses the shared JavaScript tokenizer
+     * for highlighting and bracket handling, but intentionally offers NO
+     * completions or hover docs. Use it for "just JSON" inputs (e.g. an index's
+     * partial filter expression or collation) where suggesting query operators
+     * would falsely imply smartness the editor doesn't have.
+     */
+    Json = 'json',
 }
 
 /**
