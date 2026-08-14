@@ -277,6 +277,11 @@ fixes only appears on the reload path.
 
 #### WI10: `SelectManagedIdentityStep` and the recently-used store
 
+> **Review resolution F5:** The recently-used store and quick-pick group described historically below
+> were removed before merge. The selector now offers the system-assigned identity, an optional client
+> ID from the current connection string, and manual entry. The bounded preview global-state key is
+> intentionally left orphaned.
+
 **What.** New [SelectManagedIdentityStep.ts](src/documentdb/wizards/authenticate/SelectManagedIdentityStep.ts)
 and [recentManagedIdentities.ts](src/documentdb/auth/recentManagedIdentities.ts), with tests.
 Registered in three places: the New Connection sub-wizard
@@ -367,10 +372,8 @@ leave it behind. The same is done on the connections-view save path.
 [755-no-auth-support/review-2026-06-23.md](docs/ai-and-plans/PRs/755-no-auth-support/review-2026-06-23.md),
 which is the same class of bug: a config for one method surviving a switch to another.
 
-**Notes.** `rememberManagedIdentity()` is called after a successful save, keyed by the connection
-label, so the "Recently used" group is populated from what the user actually did rather than from
-anything they had to configure ([D5](./decisions.md#d5-no-vs-code-settings-for-managed-identity):
-no settings).
+**Review update.** The `rememberManagedIdentity()` call was removed with F5; no identity suggestion
+state is written after saving a connection.
 
 ---
 

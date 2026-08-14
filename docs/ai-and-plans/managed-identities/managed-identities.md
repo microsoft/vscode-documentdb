@@ -431,22 +431,19 @@ registration in the New Connection wizard), shown when
 `selectedAuthMethod === AuthMethodId.ManagedIdentity` and the identity is not already settled by an
 `explicit` hint from §5.2.
 
-It follows the pattern already shipped in
-`src/plugins/service-atlas-mongodb/connect/SelectAtlasDatabaseUserStep.ts`: the manual escape hatch
-is row one, known values are grouped below it under `QuickPickItemKind.Separator` headings, and the
-step is never a dead end.
+The system-assigned identity is first, an optional value from the current connection string is grouped
+under its own separator, and the manual escape hatch is last. The step is never a dead end.
 
 ```text
 Select the managed identity to use
 
-$(edit)     Enter a client ID
-            Type the client ID of a user-assigned managed identity
 ─────────── This machine ─────────────────────────────────────────
 $(vm)       System-assigned managed identity
             Use the identity built into this Azure VM
-─────────── Recently used ────────────────────────────────────────
+─────────── From the connection string ──────────────────────────
 $(account)  11111111-2222-3333-4444-555555555555
-            Used by "contoso-prod-cluster"
+$(edit)     Enter a client ID
+            Type the client ID of a user-assigned managed identity
 ```
 
 - **"Enter a client ID"** opens a GUID-validated input box, exactly as the Atlas step falls through
@@ -460,9 +457,9 @@ during review.
 
 #### Source of the "known" rows
 
-v1 proposal: **system-assigned plus recently used**, which needs no network and works identically in
-all three entry points. "Recently used" is a capped, de-duplicated list of client IDs in global
-state, displayed with the connection name they were last used with. No secrets, so no `SecretStorage`.
+v1 ships the system-assigned identity plus an optional client ID parsed from the current connection
+string. The proposed recently-used global-state list was removed before merge because only one entry
+point populated it and its expected usage did not justify the maintenance cost.
 
 ARM enumeration of user-assigned identities, and enumeration of the identities actually assigned to
 this VM, are phase 2. Both are described in the [D2 open item](./decisions.md#open-item-needs-a-call);
@@ -640,7 +637,7 @@ Riding on the existing `selectedAuthMethod` property, add:
 | Property / measurement          | Values                                                                   |
 | ------------------------------- | ------------------------------------------------------------------------ |
 | `managedIdentityKind`           | `system` \| `user`                                                       |
-| `managedIdentityClientIdSource` | `connectionString` \| `prompt` \| `recent` \| `none`                     |
+| `managedIdentityClientIdSource` | `connectionString` \| `prompt` \| `none`                                 |
 | `managedIdentityFailureReason`  | `noEndpoint` \| `multipleIdentities` \| `identityNotAssigned` \| `other` |
 | `copiedAuthMechanism`           | `managedIdentity`, on the copy command only                              |
 
@@ -678,7 +675,7 @@ This alone closes the incident for the reported scenario.
 | WI7  | Implement `detectManagedIdentityHint()` and the normalisation rule (§5.2); wire into `PromptConnectionStringStep` **before** the username is cleared   | ✅     |
 | WI8  | `Copy Connection String`: emit the driver-native form for `ManagedIdentity` (§5.1)                                                                     | ✅     |
 | WI9  | Offer `ManagedIdentity` for vCore hosts in `PromptConnectionStringStep`                                                                                | ✅     |
-| WI10 | Implement `SelectManagedIdentityStep` (Atlas pattern, §7) plus the recently-used client ID store; register in both wizards; skip on an `explicit` hint | ✅     |
+| WI10 | Implement `SelectManagedIdentityStep` (§7); register in both wizards; skip on an `explicit` hint; remove the proposed recently-used store before merge | ✅     |
 | WI11 | Extend `ConnectionSecrets`, `CachedClusterCredentials`, `setAuthCredentials()`, `EphemeralClusterCredentials`, `AuthenticateWizardContext`             | ✅     |
 | WI12 | Rework the `setFromConnectionItem()` inference ladder to honour `selectedAuthMethod` for all known methods                                             | ✅     |
 | WI13 | Persist `managedIdentityAuthConfig` (including `{}` for system-assigned) in `ExecuteStep`                                                              | ✅     |
@@ -794,8 +791,8 @@ view and the Azure Resources view, and in Collection View plus Playground plus S
       managed-identity connection, not a native-auth one.
 - [ ] Non-Azure machine, Managed Identity selected. Expect the "no managed identity is available on
       this machine" message.
-- [ ] The identity quick pick offers "Enter a client ID" first, and a previously used client ID
-      appears under "Recently used" on the second connection.
+- [ ] The identity quick pick offers the system-assigned identity first, an optional connection-string
+      client ID when present, and manual client-ID entry last.
 - [ ] Reload the window and reconnect a saved managed-identity connection.
 - [ ] Move a saved managed-identity connection into a folder, then reconnect (dual-ID regression).
 - [ ] Confirm existing interactive Entra ID connections, including multi-tenant, still work.

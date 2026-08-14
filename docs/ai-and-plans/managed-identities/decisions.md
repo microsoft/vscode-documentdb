@@ -205,8 +205,14 @@ next to every other connection type in the tree.
 
 ## D2. How the user selects the identity
 
-**Decision:** A quick pick that follows the same pattern as the Atlas database-user step: **lead with
-"Enter a client ID"**, then offer the known options below it under separators.
+**Decision:** A quick pick that leads with the system-assigned identity, optionally shows a client ID
+from the pasted connection string, and always ends with manual client-ID entry.
+
+The proposed "Recently used" group was removed before merge. It was only populated by New Connection,
+not Update Credentials or the Azure-backed tree entry points, and its expected usage did not justify
+maintaining a global-state store. Preview builds may leave behind the bounded
+`managedIdentity.recentClientIds` key; it contains at most five non-secret client IDs and is left
+orphaned rather than adding migration code.
 
 The reference implementation is
 `src/plugins/service-atlas-mongodb/connect/SelectAtlasDatabaseUserStep.ts`, whose `buildItems()` puts
@@ -218,14 +224,13 @@ the manual escape hatch first with an `edit` theme icon, then groups the discove
 ```text
 Select the managed identity to use
 
-$(edit)     Enter a client ID
-            Type the client ID of a user-assigned managed identity
 ─────────── This machine ─────────────────────────────────────────
 $(vm)       System-assigned managed identity
             Use the identity built into this Azure VM
-─────────── Recently used ────────────────────────────────────────
+─────────── From the connection string ──────────────────────────
 $(account)  11111111-2222-3333-4444-555555555555
-            Used by "contoso-prod-cluster"
+$(edit)     Enter a client ID
+            Type the client ID of a user-assigned managed identity
 ```
 
 Picking "Enter a client ID" opens a GUID-validated input box. Picking any other row writes the result
@@ -254,8 +259,8 @@ have already met it, and reusing it costs nothing.
 ### Consequences
 
 - One new prompt step class, gated by `shouldPrompt`.
-- "Recently used" needs a small store of previously used client IDs, keyed for display by the
-  connection they were used with. Global state, no secrets, capped and de-duplicated.
+- No global state is maintained for identity suggestions. The optional known row comes only from the
+  connection string currently being entered.
 - The list must never be a dead end: if nothing is known, the step still shows with just the manual
   entry row, or is skipped in favour of a plain input box.
 
@@ -263,8 +268,8 @@ have already met it, and reusing it costs nothing.
 
 **Where do the "known options" come from in v1?** Three candidate sources, in ascending cost:
 
-1. **System-assigned plus recently used.** No network, works in all three entry points, available
-   immediately. Thin on a first run, when the list is just two rows.
+1. **System-assigned only.** No network, works in every entry point, and requires no state. Chosen
+   for v1 after the recently-used proposal was removed.
 2. **ARM enumeration of `Microsoft.ManagedIdentity/userAssignedIdentities` in the subscription.**
    Names instead of GUIDs, which is the genuinely good experience. Only possible in the Azure
    Resources and Discovery views, where we hold an `AzureSubscription`; needs a new ARM client.
@@ -374,13 +379,14 @@ conflicts with per-connection configuration, and they make "why did this connect
 much harder to answer. The extension currently contributes **no** auth-related settings at all, and
 that is a property worth preserving until there is demand.
 
-D2's "recently used" list addresses most of the repeat-typing case without a setting, because it is
-derived from what the user has actually done rather than from something they had to configure.
+The selector deliberately keeps no cross-connection state. Repeated client-ID entry is accepted for
+v1 rather than introducing a hidden global source of truth before demand is established.
 
 ### Revisit when
 
-Someone reports having to enter the same client ID across many connections on managed hardware, and
-the recently-used list demonstrably does not cover it.
+Someone reports having to enter the same client ID across many connections on managed hardware. At
+that point, compare an explicit setting with ARM-backed identity enumeration rather than restoring an
+entry-point-dependent MRU list.
 
 ---
 
@@ -483,7 +489,5 @@ who runs it should not have to reverse-engineer which cases matter.
 ## Still open
 
 1. **D3**, probe or no probe. Argued above and in chat; leaning no probe.
-2. **D2**, which source feeds the "known options" rows in v1.
 
-Neither blocks implementation. D3 has a default (do not build it) and D2 has a default (system-assigned
-plus recently used); an implementer should follow those defaults unless told otherwise.
+D3 does not block implementation; its default is not to build the probe.

@@ -8,7 +8,6 @@ import * as l10n from '@vscode/l10n';
 import * as vscode from 'vscode';
 import { type ManagedIdentityAuthConfig } from '../../auth/AuthConfig';
 import { type ManagedIdentityHint } from '../../auth/managedIdentityConnectionString';
-import { getRecentManagedIdentities } from '../../auth/recentManagedIdentities';
 
 const GUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -61,11 +60,7 @@ export class SelectManagedIdentityStep<T extends ManagedIdentitySelectionContext
         }
 
         if (selected.choice === 'clientId' && selected.clientId) {
-            this.applyClientId(
-                context,
-                selected.clientId,
-                prefilledClientId === selected.clientId ? 'connectionString' : 'recent',
-            );
+            this.applyClientId(context, selected.clientId, 'connectionString');
             return;
         }
 
@@ -129,25 +124,6 @@ export class SelectManagedIdentityStep<T extends ManagedIdentitySelectionContext
             });
         }
 
-        const recent = getRecentManagedIdentities().filter(
-            (entry) => entry.clientId.toLowerCase() !== prefilledClientId?.toLowerCase(),
-        );
-
-        if (recent.length > 0) {
-            items.push({ label: l10n.t('Recently used'), kind: vscode.QuickPickItemKind.Separator });
-            items.push(
-                ...recent.map((entry) => ({
-                    label: entry.clientId,
-                    detail: entry.connectionLabel
-                        ? l10n.t('Used by "{connection}"', { connection: entry.connectionLabel })
-                        : undefined,
-                    iconPath: new vscode.ThemeIcon('account'),
-                    choice: 'clientId' as const,
-                    clientId: entry.clientId,
-                })),
-            );
-        }
-
         items.push({
             label: l10n.t('Enter a client ID'),
             detail: l10n.t('Type the client ID of a user-assigned managed identity'),
@@ -159,7 +135,7 @@ export class SelectManagedIdentityStep<T extends ManagedIdentitySelectionContext
         return items;
     }
 
-    private applyClientId(context: T, clientId: string, source: 'connectionString' | 'recent' | 'prompt'): void {
+    private applyClientId(context: T, clientId: string, source: 'connectionString' | 'prompt'): void {
         context.managedIdentityAuthConfig = { ...context.managedIdentityAuthConfig, clientId };
         context.valuesToMask.push(clientId);
         context.telemetry.properties.managedIdentityKind = 'user';

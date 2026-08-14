@@ -6,7 +6,6 @@
 import { AzureWizardExecuteStep } from '@microsoft/vscode-azext-utils';
 import * as l10n from '@vscode/l10n';
 import { AuthMethodId } from '../../documentdb/auth/AuthMethod';
-import { rememberManagedIdentity } from '../../documentdb/auth/recentManagedIdentities';
 import { redactCredentialsFromConnectionString } from '../../documentdb/utils/connectionStringHelpers';
 import { DocumentDBConnectionString } from '../../documentdb/utils/DocumentDBConnectionString';
 import { areAllHostsLocal, canonicalizeTlsException } from '../../documentdb/utils/tlsException';
@@ -237,10 +236,6 @@ export class ExecuteStep extends AzureWizardExecuteStep<NewConnectionWizardConte
             };
 
             await ConnectionStorageService.save(ConnectionType.Clusters, storageItem, true);
-
-            if (usesManagedIdentity) {
-                await rememberManagedIdentity(newManagedIdentityAuthConfig?.clientId, newConnectionLabel);
-            }
 
             // Build the reveal path based on whether this is in a subfolder
             const connectionPath = context.parentTreeId

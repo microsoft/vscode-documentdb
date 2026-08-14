@@ -19,11 +19,6 @@ jest.mock('@microsoft/vscode-azext-utils', () => ({
     AzureWizardPromptStep: class AzureWizardPromptStep {},
 }));
 
-const mockGetRecentManagedIdentities = jest.fn();
-jest.mock('../../auth/recentManagedIdentities', () => ({
-    getRecentManagedIdentities: () => mockGetRecentManagedIdentities() as unknown[],
-}));
-
 import * as vscode from 'vscode';
 import { AuthMethodId } from '../../auth/AuthMethod';
 import { type AuthenticateWizardContext } from './AuthenticateWizardContext';
@@ -45,11 +40,6 @@ function makeContext(overrides: Partial<AuthenticateWizardContext> = {}): Authen
 }
 
 describe('SelectManagedIdentityStep.buildItems', () => {
-    beforeEach(() => {
-        mockGetRecentManagedIdentities.mockReset();
-        mockGetRecentManagedIdentities.mockReturnValue([]);
-    });
-
     it('puts the system-assigned identity first so it is selected by default', () => {
         const items = makeStep().buildItems();
         const firstSelectableItem = items.find((item) => item.kind !== vscode.QuickPickItemKind.Separator);
@@ -64,39 +54,14 @@ describe('SelectManagedIdentityStep.buildItems', () => {
         expect(items.some((item) => item.label === 'System-assigned managed identity')).toBe(true);
     });
 
-    it('shows no "Recently used" heading when there is nothing recent', () => {
-        const items = makeStep().buildItems();
-
-        expect(items.some((item) => item.label === 'Recently used')).toBe(false);
-    });
-
-    it('groups recent client IDs under a separator', () => {
-        mockGetRecentManagedIdentities.mockReturnValue([{ clientId: CLIENT_ID, connectionLabel: 'contoso-prod' }]);
-
-        const items = makeStep().buildItems();
-        const separatorIndex = items.findIndex((item) => item.label === 'Recently used');
-
-        expect(separatorIndex).toBeGreaterThan(0);
-        expect(items[separatorIndex].kind).toBe(vscode.QuickPickItemKind.Separator);
-        expect(items[separatorIndex + 1].label).toBe(CLIENT_ID);
-    });
-
-    it('surfaces a client ID that came from the connection string without duplicating it', () => {
-        mockGetRecentManagedIdentities.mockReturnValue([{ clientId: CLIENT_ID }]);
-
+    it('surfaces a client ID that came from the connection string', () => {
         const items = makeStep().buildItems(CLIENT_ID);
-        const occurrences = items.filter((item) => item.label === CLIENT_ID);
 
-        expect(occurrences).toHaveLength(1);
+        expect(items.filter((item) => item.label === CLIENT_ID)).toHaveLength(1);
         expect(items.some((item) => item.label === 'From the connection string')).toBe(true);
-        expect(items.some((item) => item.label === 'Recently used')).toBe(false);
     });
 
     it('puts manual entry last and includes detail text', () => {
-        mockGetRecentManagedIdentities.mockReturnValue([
-            { clientId: 'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee', connectionLabel: 'contoso-prod' },
-        ]);
-
         const items = makeStep().buildItems(CLIENT_ID);
         const manualEntry = items.at(-1);
 
