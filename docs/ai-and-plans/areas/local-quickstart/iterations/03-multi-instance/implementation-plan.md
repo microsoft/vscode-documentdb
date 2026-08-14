@@ -1,9 +1,9 @@
 # Local Quick Start — Multiple Managed Instances: Implementation Plan
 
-> Full design: [`local-quickstart-v2.md`](../../local-quickstart/local-quickstart-v2.md).
-> Reverses: [`decision-instance-model.md`](../../local-quickstart/decision-instance-model.md)
+> Full design: [`local-quickstart-v2.md`](../../design.md).
+> Reverses: [`decision-instance-model.md`](../../decisions.md)
 > (single-instance v1 → **multi-instance in v1**, per owner decision 2026-07-06).
-> Running gap log: [`v1-readiness-gaps.md`](../../local-quickstart/v1-readiness-gaps.md).
+> Running gap log: [`v1-readiness-gaps.md`](../../v1-readiness-gaps.md).
 > Review history & resolutions: `review-and-resolutions.md` (created after the 5-agent review).
 >
 > **Audience:** an implementation agent (Opus/Sonnet-class) or a developer.

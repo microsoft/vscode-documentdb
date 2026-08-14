@@ -39,11 +39,11 @@ Both entry points the user reaches the feature through are wired correctly.
 - `KubernetesDiscoveryProvider.getDiscoveryWizard()` returns
   `promptSteps: [SelectContextStep, SelectServiceStep]`, `executeSteps: [KubernetesExecuteStep]`, with
   `showLoadingPrompt: true`. Registered via `DiscoveryService.registerProvider(new KubernetesDiscoveryProvider())`
-  in [ClustersExtension.ts](../../../../src/documentdb/ClustersExtension.ts#L138).
+  in [ClustersExtension.ts](../../../../../../src/documentdb/ClustersExtension.ts#L138).
 - `SelectContextStep` always prepends an **"Add Kubeconfig…"** item + separator, and selecting it runs
   `addKubeconfigSource` inline then exits cleanly via `UserCancelledError` + a modal retry prompt — so a
   user with zero sources is never dead-ended (the Azure-plugin pattern). Verified in
-  [SelectContextStep.ts](../../../../src/plugins/service-kubernetes/discovery-wizard/SelectContextStep.ts).
+  [SelectContextStep.ts](../../../../../../src/plugins/service-kubernetes/discovery-wizard/SelectContextStep.ts).
 - Per-source failures while building the context picker are caught and logged to the output channel; one
   broken source does **not** abort the whole picker (`try/catch` per source). Good.
 
@@ -80,7 +80,7 @@ Both entry points the user reaches the feature through are wired correctly.
 > longer silent: (1) discovered target nodes now show a `⚠️ Security: TLS/SSL certificate validation
 disabled` line in their hover tooltip — same treatment the Connections-view node gives an emulator with
 > security disabled — via `disablesTlsValidation()` in
-> [KubernetesResourceItem.ts](../../../../src/plugins/service-kubernetes/discovery-tree/documentdb/KubernetesResourceItem.ts);
+> [KubernetesResourceItem.ts](../../../../../../src/plugins/service-kubernetes/discovery-tree/documentdb/KubernetesResourceItem.ts);
 > and (2) a new **"Connection security (TLS/SSL)"** section in the user manual explains the default, why it
 > exists, and that **after saving** a discovered target you can edit the connection and remove
 > `tlsAllowInvalidCertificates=true` to re-enable certificate validation. Gating on the DKO `tlsReady`
@@ -96,7 +96,7 @@ params.set('authMechanism', 'SCRAM-SHA-256');
 params.set('replicaSet', 'rs0');
 ```
 
-[kubernetesClient.ts](../../../../src/plugins/service-kubernetes/kubernetesClient.ts#L523-L531)
+[kubernetesClient.ts](../../../../../../src/plugins/service-kubernetes/kubernetesClient.ts#L523-L531)
 
 These params are attached to **every** discovered target — both DKO (`createDkoTarget`) and **generic**
 (`createGenericDocumentDbTarget`) — and to the auto-credential path. So **all** Kubernetes-discovered
@@ -179,7 +179,7 @@ the client may **spawn the configured external command** to obtain a token.
 
 ### 2.4 🟡 `createCoreApi` mutates a shared `KubeConfig` (`setCurrentContext`)
 
-[kubernetesClient.ts](../../../../src/plugins/service-kubernetes/kubernetesClient.ts) — `createCoreApi`
+[kubernetesClient.ts](../../../../../../src/plugins/service-kubernetes/kubernetesClient.ts) — `createCoreApi`
 calls `kubeConfig.setCurrentContext(contextName)`, mutating the passed config. The code **already documents**
 that every current caller creates a fresh `KubeConfig` per call, so it's safe today, but a future caller
 that loads one config and fans out to multiple contexts concurrently would have clients silently re-targeted
@@ -199,7 +199,7 @@ per-call timeout), a single slow namespace ties up a worker and can stall the vi
 
 ### 2.6 🟡 Optional native deps `bufferutil` / `utf-8-validate` are externalized
 
-[webpack.config.ext.js](../../../../webpack.config.ext.js#L62-L65) marks `bufferutil` and `utf-8-validate`
+[webpack.config.ext.js](../../../../../../webpack.config.ext.js#L62-L65) marks `bufferutil` and `utf-8-validate`
 (optional websocket accelerators pulled in by `@kubernetes/client-node`'s `ws`) as
 `commonjs` externals, so they are **not bundled**. `ws` treats them as optional and degrades gracefully, so
 port-forward should still work without them — but this should be **confirmed against a packaged VSIX on a
@@ -212,11 +212,11 @@ clean machine**, since a `require()` of a missing external throws if `ws` ever h
 ### 2.7 🟡 `@kubernetes/client-node` pinned with a caret (`^1.4.0`) — ✅ DONE
 
 > ✅ **Resolved (commit `build(deps): pin @kubernetes/client-node to 1.4.0`).** The dependency is now pinned
-> to an **exact** `1.4.0` (no caret) in [package.json](../../../../package.json) and `package-lock.json` was
+> to an **exact** `1.4.0` (no caret) in [package.json](../../../../../../package.json) and `package-lock.json` was
 > synced. A future `npm install` can no longer silently pull a newer 1.x with behavior changes in the areas
 > this feature depends on (`onInvalidEntry`, `loadFromDefault` synthetic-config shape, exec auth).
 
-[package.json](../../../../package.json) — was `^1.4.0` (1.4.0 installed). A caret range lets a future
+[package.json](../../../../../../package.json) — was `^1.4.0` (1.4.0 installed). A caret range lets a future
 `npm install` pull a newer 1.x with behavior changes in the very area this feature depends on
 (`onInvalidEntry`, `loadFromDefault` synthetic-config shape, exec auth). The code already hardens against
 some of this defensively (`isSyntheticDefaultKubeConfig`, `?? []` guards).
@@ -231,7 +231,7 @@ from the current code. A reviewer trusting that doc could be misled:
 
 - **§8.1 ClusterIP "Copy…" quick pick** (with `kubectl port-forward` command + Learn more) is described as
   _deferred to iteration 3_, but it is **implemented** in
-  [copyConnectionString.ts](../../../../src/commands/copyConnectionString/copyConnectionString.ts)
+  [copyConnectionString.ts](../../../../../../src/commands/copyConnectionString/copyConnectionString.ts)
   (`copyKubernetesPortForwardConnection`, `buildKubectlPortForwardCommand`,
   `KUBERNETES_PORT_FORWARD_LEARN_MORE_URL`).
 - **Discovered-target icon:** §8.1/§9.4 describe a _reachability glyph_ (`globe`/`server`/`plug`/`warning`)

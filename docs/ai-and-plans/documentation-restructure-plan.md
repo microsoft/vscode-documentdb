@@ -561,7 +561,7 @@ Next to `npm run l10n` in `.github/copilot-instructions.md`:
 ### 8.4 Fix the broken `ux-pr-review` references
 
 Four references across two files, all pointing at
-`docs/ai-and-plans/PRs/{pr-number}-{slug}/ux-review.md`:
+`docs/ai-and-plans/areas/atlas-discovery/{pr-number}-{slug}/ux-review.md`:
 
 | File                                                                 | Line | Note                                         |
 | -------------------------------------------------------------------- | ---- | -------------------------------------------- |

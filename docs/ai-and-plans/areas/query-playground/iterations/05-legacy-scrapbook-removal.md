@@ -48,4 +48,4 @@ Before deletion, two reusable utilities were relocated:
 
 ## UX Preservation
 
-Before any code was deleted, a comprehensive UX preservation document was created ([06-scrapbook-rebuild.md](6-query-playground.md)) documenting every feature, user flow, CodeLens pattern, connection management approach, and package.json contribution of the legacy scrapbook. This served as the sole reference for what the new Query Playground needed to replicate.
+Before any code was deleted, a comprehensive UX preservation document was created ([06-scrapbook-rebuild.md](./06-query-playground.md)) documenting every feature, user flow, CodeLens pattern, connection management approach, and package.json contribution of the legacy scrapbook. This served as the sole reference for what the new Query Playground needed to replicate.

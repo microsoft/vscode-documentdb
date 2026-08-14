@@ -2,7 +2,7 @@
 
 > **PR:** [#576 — Add context-aware shell completion and inline suggestions](https://github.com/microsoft/vscode-documentdb/pull/576)
 > **Reviewed:** 2026-04-14, updated 2026-04-15
-> **Plan doc:** [9-shell-autocompletion.md](./9-shell-autocompletion.md)
+> **Plan doc:** [9-shell-autocompletion.md](./09-shell-autocompletion.md)
 > **Sources:** Manual code review + [Copilot automated review](https://github.com/microsoft/vscode-documentdb/pull/576)
 > **Update:** Second-pass manual review added 8 more issues beyond the first draft, focused on mid-line editing, nested fields, multi-argument methods, and long-query terminal behavior.
 
@@ -128,12 +128,12 @@ const fieldLookup: FieldTypeLookup = (fieldName) => fieldTypeByPath.get(fieldNam
 ### #5 — ~~Typo in `terminal-enhancements.md` doc path~~ ✅ RESOLVED
 
 **Severity: S5 — Nit**
-**File:** `docs/ai-and-plans/future-work/terminal-enhancements.md`
+**File:** `docs/ai-and-plans/areas/interactive-shell/future-work.md`
 **Origin:** [Copilot review comment on terminal-enhancements.md](https://github.com/microsoft/vscode-documentdb/pull/576#discussion_r2043764845)
 **Resolved:** [`408c514`](https://github.com/microsoft/vscode-documentdb/commit/408c514) — Fixed typo: `shell-autocomletion` → `shell-autocompletion`.
 
 ```
-**Architecture docs:** `docs/ai-and-plans/shell-autocomletion/9-shell-autocompletion.md`
+**Architecture docs:** `docs/ai-and-plans/areas/interactive-shell/iterations/09-shell-autocompletion.md`
 ```
 
 Should be `shell-autocompletion` (missing `p`).

@@ -33,16 +33,16 @@ JSON sent to webview via tRPC
 
 | File                                                                                                                                                          | Role                                                                     |
 | ------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------ |
-| [src/documentdb/queryInsights/ExplainPlanAnalyzer.ts](../../src/documentdb/queryInsights/ExplainPlanAnalyzer.ts)                                              | Core analysis: `analyzeExecutionStats()`, `calculatePerformanceRating()` |
-| [src/documentdb/queryInsights/transformations.ts](../../src/documentdb/queryInsights/transformations.ts)                                                      | `transformStage2Response()` — shapes data for the webview                |
-| [src/webviews/documentdb/collectionView/collectionViewRouter.ts](../../src/webviews/documentdb/collectionView/collectionViewRouter.ts)                        | tRPC route handler for `getQueryInsightsStage2`                          |
-| [src/webviews/documentdb/collectionView/types/queryInsights.ts](../../src/webviews/documentdb/collectionView/types/queryInsights.ts)                          | Shared types (`QueryInsightsStage2Response`, `PerformanceDiagnostic`)    |
+| [src/documentdb/queryInsights/ExplainPlanAnalyzer.ts](../../../../../src/documentdb/queryInsights/ExplainPlanAnalyzer.ts)                                              | Core analysis: `analyzeExecutionStats()`, `calculatePerformanceRating()` |
+| [src/documentdb/queryInsights/transformations.ts](../../../../../src/documentdb/queryInsights/transformations.ts)                                                      | `transformStage2Response()` — shapes data for the webview                |
+| [src/webviews/documentdb/collectionView/collectionViewRouter.ts](../../../../../src/webviews/documentdb/collectionView/collectionViewRouter.ts)                        | tRPC route handler for `getQueryInsightsStage2`                          |
+| [src/webviews/documentdb/collectionView/types/queryInsights.ts](../../../../../src/webviews/documentdb/collectionView/types/queryInsights.ts)                          | Shared types (`QueryInsightsStage2Response`, `PerformanceDiagnostic`)    |
 | [QueryInsightsTab.tsx](../../src/webviews/documentdb/collectionView/components/queryInsightsTab/QueryInsightsTab.tsx)                                         | React component rendering the full tab                                   |
 | [PerformanceRatingCell.tsx](../../src/webviews/documentdb/collectionView/components/queryInsightsTab/components/summaryCard/custom/PerformanceRatingCell.tsx) | Badge rendering (Fluent UI `Badge` + `Tooltip`)                          |
 | [GenericCell.tsx](../../src/webviews/documentdb/collectionView/components/queryInsightsTab/components/summaryCard/GenericCell.tsx)                            | Simple value cell in the 2×2 grid                                        |
 | [CellBase.tsx](../../src/webviews/documentdb/collectionView/components/queryInsightsTab/components/summaryCard/CellBase.tsx)                                  | Base cell component with skeleton/null handling                          |
 | [SummaryCard.tsx / .scss](../../src/webviews/documentdb/collectionView/components/queryInsightsTab/components/summaryCard/SummaryCard.tsx)                    | Card wrapper + CSS grid (`grid-template-columns: repeat(2, 1fr)`)        |
-| [ClustersClient.ts](../../src/documentdb/ClustersClient.ts)                                                                                                   | `estimateDocumentCount()` — already exists, with fallback                |
+| [ClustersClient.ts](../../../../../src/documentdb/ClustersClient.ts)                                                                                                   | `estimateDocumentCount()` — already exists, with fallback                |
 
 ---
 

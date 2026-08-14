@@ -4,7 +4,7 @@
 **Branch:** `feature/local-quickstart/POC`
 **Base:** `guanzhou/local-quickstart-design`
 **Date:** 2026-06-22
-**Companions:** [`poc-implementation-plan.md`](./poc-implementation-plan.md) (the *how*) ·
+**Companions:** [`poc-implementation-plan.md`](./implementation-plan.md) (the *how*) ·
 [`review-and-resolutions.md`](./review-and-resolutions.md) (the 5-agent review + every resolution).
 **Folder note:** rename to `<PR#>-local-quickstart-poc` once a PR is opened (matches the
 existing `653-local-quickstart-design` convention).
@@ -13,12 +13,12 @@ existing `653-local-quickstart-design` convention).
 
 This document records the **decisions and rationale** behind a **proof-of-concept (POC)**
 for the Local Quick Start feature. The POC exists to be **demoed**, not shipped. Its job is
-to prove the end-to-end value of the full design ([`local-quickstart-v2.md`](../../local-quickstart/local-quickstart-v2.md))
+to prove the end-to-end value of the full design ([`local-quickstart-v2.md`](../../design.md))
 with the **smallest credible vertical slice**, and to de-risk the parts the design leaves as
 "architecture, not an implementation plan."
 
 It is the companion "why" to the step-by-step "how" in
-[`poc-implementation-plan.md`](./poc-implementation-plan.md). Read this first.
+[`poc-implementation-plan.md`](./implementation-plan.md). Read this first.
 
 ## One-sentence goal (unchanged from the design)
 
@@ -158,5 +158,5 @@ avoid CLI-arg exposure?*
 ## Status
 
 Planning only. The detailed work breakdown, acceptance checks, and demo script live in
-[`poc-implementation-plan.md`](./poc-implementation-plan.md). The multi-agent review of this
+[`poc-implementation-plan.md`](./implementation-plan.md). The multi-agent review of this
 plan and its resolutions will be recorded in `review-and-resolutions.md`.

@@ -22,7 +22,7 @@ which is **invalid MQL** for field names that are not valid `$`-prefix reference
 | `say"hi"`       | `$say"hi"`          | ❌     |
 
 This was documented as future work in
-[`future-work.md`](../../../src/utils/json/data-api/autocomplete/future-work.md)
+[`future-work.md`](../../../../../src/utils/json/data-api/autocomplete/future-work.md)
 (item 2), with `$getField` (Option B) recommended as the fix.
 
 An initial pass added a single-segment `$getField` fallback, but it had three
@@ -44,8 +44,8 @@ branch, so the PR carried unrelated `IndexesItem.ts` changes that duplicated a
 feature **already merged to `main`** — the source of the merge conflict. The
 branch was rebased onto `main`, dropping the stale `#659` commits and keeping
 only the `#709` work. The PR now changes four files: the two autocomplete
-sources ([`toFieldCompletionItems.ts`](../../../src/utils/json/data-api/autocomplete/toFieldCompletionItems.ts)
-and its test), the [`future-work.md`](../../../src/utils/json/data-api/autocomplete/future-work.md)
+sources ([`toFieldCompletionItems.ts`](../../../../../src/utils/json/data-api/autocomplete/toFieldCompletionItems.ts)
+and its test), the [`future-work.md`](../../../../../src/utils/json/data-api/autocomplete/future-work.md)
 status update, and this note.
 
 ---
@@ -185,7 +185,7 @@ literally named `a.order-items`.
 ## Edge cases covered (tests)
 
 All in
-[`toFieldCompletionItems.test.ts`](../../../src/utils/json/data-api/autocomplete/toFieldCompletionItems.test.ts):
+[`toFieldCompletionItems.test.ts`](../../../../../src/utils/json/data-api/autocomplete/toFieldCompletionItems.test.ts):
 
 | Case                                  | Input            | `referenceText`                                                                  |
 | ------------------------------------- | ---------------- | -------------------------------------------------------------------------------- |

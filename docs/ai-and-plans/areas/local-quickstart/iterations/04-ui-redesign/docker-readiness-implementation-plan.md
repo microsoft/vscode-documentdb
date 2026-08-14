@@ -2,7 +2,7 @@
 
 **Date:** 2026-08-02
 **Status:** Slice A and Slice B implementation complete; cross-platform manual verification handoff remains
-**Related design:** [local-quickstart-v2.md](local-quickstart-v2.md)
+**Related design:** [local-quickstart-v2.md](../../design.md)
 
 > **User-facing language:** Use **Docker** as the default term in cards, summaries, and general status messages. This keeps the primary experience simple and avoids exposing implementation details that most users do not need. Use **Docker CLI**, **Docker daemon**, **Docker Engine**, or **Docker Desktop** only when the distinction explains a specific failure or names the exact action being offered, such as `Start Docker Desktop`. The implementation must still detect and model these components separately; this simplification applies only to presentation.
 
@@ -24,7 +24,7 @@ The implementation must have a direct, easy-to-follow execution flow. Platform c
 
 ## Current State
 
-The current implementation is concentrated in [ContainerRuntime.ts](../../../src/services/localQuickStart/ContainerRuntime.ts):
+The current implementation is concentrated in [ContainerRuntime.ts](../../../../../../src/services/localQuickStart/ContainerRuntime.ts):
 
 1. `docker -v` checks whether the CLI is available.
 2. `docker info` checks whether a daemon is reachable.

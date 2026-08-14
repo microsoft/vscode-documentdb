@@ -1,6 +1,6 @@
 # Local Quick Start POC — Plan Review & Resolutions
 
-**Artifact under review:** [`poc-implementation-plan.md`](./poc-implementation-plan.md) +
+**Artifact under review:** [`poc-implementation-plan.md`](./implementation-plan.md) +
 [`description.md`](./description.md) (rev. 1 → rev. 2).
 **Branch:** `feature/local-quickstart/POC`
 **Date:** 2026-06-22

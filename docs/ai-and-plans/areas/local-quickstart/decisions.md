@@ -2,7 +2,7 @@
 
 **Status:** Accepted (production v1) · **Date:** 2026-06-25
 **Scope:** Production v1 of Local Quick Start (not the POC).
-**Design doc:** [`local-quickstart-v2.md`](./local-quickstart-v2.md) (§10.1 labels, §10.2
+**Design doc:** [`local-quickstart-v2.md`](./design.md) (§10.1 labels, §10.2
 existing-container conflict, §13.10 attach, §15 roadmap, decision log).
 **Raised by:** German Eichberger (xgerman) in design review — "manage multiple
 containers / versions" and "connect to a retained test container."

@@ -31,7 +31,7 @@ The two Copilot comments are included below with stable references. One is a val
 ### F1 - High - Breaking APIs are shipped in a patch version
 
 **Source:** Independent review
-**Locations:** [`packages/vscode-ext-webview/package.json`](../../../packages/vscode-ext-webview/package.json), [`packages/vscode-ext-webview/MIGRATION.md`](../../../packages/vscode-ext-webview/MIGRATION.md)
+**Locations:** [`packages/vscode-ext-webview/package.json`](../../../../../packages/vscode-ext-webview/package.json), [`packages/vscode-ext-webview/MIGRATION.md`](../../../../../packages/vscode-ext-webview/MIGRATION.md)
 
 The package version changes from `0.9.1` to `0.9.2`, while the PR intentionally makes several source-breaking changes:
 
@@ -46,15 +46,15 @@ For a pre-1.0 package, npm still treats patch releases within the same minor lin
 
 > **Verified — confirmed accurate, with one mitigating nuance.**
 >
-> - Version bump confirmed: [`package.json`](../../../packages/vscode-ext-webview/package.json) is `0.9.2`.
-> - All four breaking changes are real in the working tree: `telemetryMiddlewareBody` is now curried (`(runner, options) => middleware`) and `TelemetryRunner<TEnrichment>` is generic ([`telemetry.ts`](../../../packages/vscode-ext-webview/src/host/middleware/telemetry.ts)); `ProcedureLogger.log` is gone, replaced by `onStart?`/`onEnd?` ([`logging.ts`](../../../packages/vscode-ext-webview/src/host/middleware/logging.ts)); `WithTelemetry` no longer exists in `src/webviews/_integration/` (replaced by the `RpcEnrichment` interface + `ctx.actionContext`).
+> - Version bump confirmed: [`package.json`](../../../../../packages/vscode-ext-webview/package.json) is `0.9.2`.
+> - All four breaking changes are real in the working tree: `telemetryMiddlewareBody` is now curried (`(runner, options) => middleware`) and `TelemetryRunner<TEnrichment>` is generic ([`telemetry.ts`](../../../../../packages/vscode-ext-webview/src/host/middleware/telemetry.ts)); `ProcedureLogger.log` is gone, replaced by `onStart?`/`onEnd?` ([`logging.ts`](../../../../../packages/vscode-ext-webview/src/host/middleware/logging.ts)); `WithTelemetry` no longer exists in `src/webviews/_integration/` (replaced by the `RpcEnrichment` interface + `ctx.actionContext`).
 > - Semver claim confirmed empirically in this workspace: `semver.satisfies('0.9.2','^0.9.1') === true`, range resolves to `>=0.9.1 <0.10.0-0`.
-> - **Nuance the original review omits:** [`MIGRATION.md`](../../../packages/vscode-ext-webview/MIGRATION.md) opens with an explicit policy statement — _"This package is pre-1.0, so minor/patch bumps may carry breaking changes"_ — and documents the change under a `0.9.1 → 0.9.2` heading. So the patch-level break is a deliberate, documented author decision, not an oversight. That does not remove the caret-range hazard for consumers (F1 stands), but the fix could equally be to keep `0.9.2` **and** narrow the documented/consumed dependency to a tilde/exact range (`~0.9.1` / `0.9.x` pinned) rather than forcing a `0.10.0` bump. Recommend calling that alternative out explicitly.
+> - **Nuance the original review omits:** [`MIGRATION.md`](../../../../../packages/vscode-ext-webview/MIGRATION.md) opens with an explicit policy statement — _"This package is pre-1.0, so minor/patch bumps may carry breaking changes"_ — and documents the change under a `0.9.1 → 0.9.2` heading. So the patch-level break is a deliberate, documented author decision, not an oversight. That does not remove the caret-range hazard for consumers (F1 stands), but the fix could equally be to keep `0.9.2` **and** narrow the documented/consumed dependency to a tilde/exact range (`~0.9.1` / `0.9.x` pinned) rather than forcing a `0.10.0` bump. Recommend calling that alternative out explicitly.
 
 ### F2 - Medium - Dispatch logging never calls `ProcedureLogger.onStart`
 
 **Source:** Independent review
-**Locations:** [`packages/vscode-ext-webview/src/host/attachTrpc.ts`](../../../packages/vscode-ext-webview/src/host/attachTrpc.ts), [`packages/vscode-ext-webview/src/host/middleware/logging.ts`](../../../packages/vscode-ext-webview/src/host/middleware/logging.ts), [`packages/vscode-ext-webview/ADVANCED.md`](../../../packages/vscode-ext-webview/ADVANCED.md)
+**Locations:** [`packages/vscode-ext-webview/src/host/attachTrpc.ts`](../../../../../packages/vscode-ext-webview/src/host/attachTrpc.ts), [`packages/vscode-ext-webview/src/host/middleware/logging.ts`](../../../../../packages/vscode-ext-webview/src/host/middleware/logging.ts), [`packages/vscode-ext-webview/ADVANCED.md`](../../../../../packages/vscode-ext-webview/ADVANCED.md)
 
 `ProcedureLogger` now advertises symmetric optional `onStart` and `onEnd` hooks. `loggingMiddlewareBody` invokes both, but the dispatch path used by `attachTrpc`, `WebviewController`, and `openWebview` only invokes `onEnd`. A consumer can pass an `onStart`-only logger through the documented panel option and receive no events at all. This also conflicts with the PR summary's claim that `ProcedureLogger` gains symmetric hooks.
 
@@ -62,29 +62,29 @@ For a pre-1.0 package, npm still treats patch releases within the same minor lin
 
 > **Verified — confirmed accurate.**
 >
-> - `onStart` is referenced in exactly two places in `src/`: the middleware body ([`logging.ts` line 109](../../../packages/vscode-ext-webview/src/host/middleware/logging.ts)) and its unit test. It appears nowhere in the transport.
-> - [`attachTrpc.ts`](../../../packages/vscode-ext-webview/src/host/attachTrpc.ts) accepts `logger?: ProcedureLogger` (the full expanded interface) but its `logProcedure` helper calls `logger?.onEnd?.(...)` only (line 206). A consumer passing an `onStart`-only logger through the panel option receives nothing.
-> - Supporting evidence for the "intentionally middleware-only" branch of the recommendation: the package's own [`README.md`](../../../packages/vscode-ext-webview/README.md) dispatch-logger example (≈line 320) demonstrates `onEnd` only. So there is a plausible design intent that `onStart` is a middleware-only concern — which makes the **type contract**, not the runtime, the real defect. I lean toward the review's second option: keep dispatch `onEnd`-only but narrow the dispatch logger parameter type (e.g. `Pick<ProcedureLogger, 'onEnd'>`) so the compiler rejects an `onStart`-only logger at the panel boundary, rather than adding an `onStart` dispatch event that has no timing home. Either fix closes the finding; the type-narrowing one is lower risk.
+> - `onStart` is referenced in exactly two places in `src/`: the middleware body ([`logging.ts` line 109](../../../../../packages/vscode-ext-webview/src/host/middleware/logging.ts)) and its unit test. It appears nowhere in the transport.
+> - [`attachTrpc.ts`](../../../../../packages/vscode-ext-webview/src/host/attachTrpc.ts) accepts `logger?: ProcedureLogger` (the full expanded interface) but its `logProcedure` helper calls `logger?.onEnd?.(...)` only (line 206). A consumer passing an `onStart`-only logger through the panel option receives nothing.
+> - Supporting evidence for the "intentionally middleware-only" branch of the recommendation: the package's own [`README.md`](../../../../../packages/vscode-ext-webview/README.md) dispatch-logger example (≈line 320) demonstrates `onEnd` only. So there is a plausible design intent that `onStart` is a middleware-only concern — which makes the **type contract**, not the runtime, the real defect. I lean toward the review's second option: keep dispatch `onEnd`-only but narrow the dispatch logger parameter type (e.g. `Pick<ProcedureLogger, 'onEnd'>`) so the compiler rejects an `onStart`-only logger at the panel boundary, rather than adding an `onStart` dispatch event that has no timing home. Either fix closes the finding; the type-narrowing one is lower risk.
 
 ### F3 - Low - `getInfo` asserts telemetry enrichment that is not present
 
 **Source:** Copilot reviewer
 **Copilot reference:** [discussion_r3581536213](https://github.com/microsoft/vscode-documentdb/pull/795#discussion_r3581536213), thread `PRRT_kwDOODtcO86Q2l0P`, comment `3581536213`
-**Location:** [`src/webviews/documentdb/documentView/documentsViewRouter.ts`](../../../src/webviews/documentdb/documentView/documentsViewRouter.ts)
+**Location:** [`src/webviews/documentdb/documentView/documentsViewRouter.ts`](../../../../../src/webviews/documentdb/documentView/documentsViewRouter.ts)
 
 `RouterContext.actionContext` is required, but `getInfo` uses the uninstrumented `publicProcedure`. Its `ctx as RouterContext` assertion therefore claims that `actionContext` exists even though the telemetry runner did not inject it. The current handler only serializes the context, so this does not cause a present runtime failure, but the assertion makes a later `myCtx.actionContext` access appear safe when it is not.
 
 **Recommendation:** Type the local value as `Omit<RouterContext, 'actionContext'>`, avoid the cast by exposing an appropriate root context type, or instrument `getInfo` if it should have telemetry.
 
 > **Verified — confirmed accurate.**
-> [`documentsViewRouter.ts` line 51](../../../src/webviews/documentdb/documentView/documentsViewRouter.ts) defines `getInfo: publicProcedure.query(({ ctx }) => { const myCtx = ctx as RouterContext; ... })`. `publicProcedure` is the uninstrumented base, so no runner injects `actionContext`, yet the cast asserts `RouterContext` (which declares `actionContext: IActionContext` as required). The handler body only does `JSON.stringify(myCtx)`, so there is no present runtime failure — the defect is purely the unsound assertion, exactly as stated. `Omit<RouterContext, 'actionContext'>` is the cleanest fix and keeps the sibling instrumented procedures (which legitimately read `myCtx.actionContext.telemetry`) honest.
+> [`documentsViewRouter.ts` line 51](../../../../../src/webviews/documentdb/documentView/documentsViewRouter.ts) defines `getInfo: publicProcedure.query(({ ctx }) => { const myCtx = ctx as RouterContext; ... })`. `publicProcedure` is the uninstrumented base, so no runner injects `actionContext`, yet the cast asserts `RouterContext` (which declares `actionContext: IActionContext` as required). The handler body only does `JSON.stringify(myCtx)`, so there is no present runtime failure — the defect is purely the unsound assertion, exactly as stated. `Omit<RouterContext, 'actionContext'>` is the cleanest fix and keeps the sibling instrumented procedures (which legitimately read `myCtx.actionContext.telemetry`) honest.
 
 ## Copilot comment disposition
 
 ### C1 - None - Claimed context loss is disproven by tRPC v11
 
 **Copilot reference:** [discussion_r3581536170](https://github.com/microsoft/vscode-documentdb/pull/795#discussion_r3581536170), thread `PRRT_kwDOODtcO86Q2lz2`, comment `3581536170`
-**Location:** [`packages/vscode-ext-webview/src/host/middleware/telemetry.ts`](../../../packages/vscode-ext-webview/src/host/middleware/telemetry.ts)
+**Location:** [`packages/vscode-ext-webview/src/host/middleware/telemetry.ts`](../../../../../packages/vscode-ext-webview/src/host/middleware/telemetry.ts)
 
 Copilot reported that `invocation.next({ ctx: enrichment })` replaces the existing router context and drops fields such as `signal`, `sessionId`, and `clusterId`.
 
@@ -114,7 +114,7 @@ The original review inspected only the package's own docs (`README.md`, `MIGRATI
 ### F4 - Medium - Skill guides reference removed `WithTelemetry` / `ctx.telemetry` / `trpcToTelemetry`
 
 **Source:** Independent review (documentation)
-**Locations:** [`.github/skills/webview-trpc-messaging/SKILL.md`](../../../.github/skills/webview-trpc-messaging/SKILL.md), [`.github/skills/telemetry-instrumentation/SKILL.md`](../../../.github/skills/telemetry-instrumentation/SKILL.md)
+**Locations:** [`.github/skills/webview-trpc-messaging/SKILL.md`](../../../../../.github/skills/webview-trpc-messaging/SKILL.md), [`.github/skills/telemetry-instrumentation/SKILL.md`](../../../../../.github/skills/telemetry-instrumentation/SKILL.md)
 
 `WithTelemetry` was deleted (F1) and replaced by the `RpcEnrichment` interface plus a `ctx.actionContext` slot; procedures now read `ctx.actionContext.telemetry`, and the DocumentDB middleware is `telemetryMiddlewareBody` + `documentDbTelemetryRunner`, not a helper named `trpcToTelemetry`. The skill guides were not updated with the PR and are now stale:
 
@@ -123,7 +123,7 @@ The original review inspected only the package's own docs (`README.md`, `MIGRATI
   - Example imports and casts use `type WithTelemetry` and `ctx as WithTelemetry<RouterContext>` (lines 60, 65, 169, 200, 239) — none of these compile against the current code.
   - The "Telemetry" section (lines 157-171) attributes wiring to `trpcToTelemetry` (file-local) and reads `ctx.telemetry`; current code injects `ctx.actionContext` and reads `ctx.actionContext.telemetry`.
   - The anti-pattern checklist (line 282) recommends `WithTelemetry<RouterContext>` as the correct cast — now actively wrong guidance.
-- `telemetry-instrumentation/SKILL.md`: the webview example (lines 76-81) and lines 341-345 read/write `ctx.telemetry.properties/measurements` for a `publicProcedureWithTelemetry` procedure; the correct path is `ctx.actionContext.telemetry.*` (verified against [`queryInsightsRouter.ts`](../../../src/webviews/documentdb/collectionView/queryInsights/queryInsightsRouter.ts), e.g. `myCtx.actionContext.telemetry.properties.platform`).
+- `telemetry-instrumentation/SKILL.md`: the webview example (lines 76-81) and lines 341-345 read/write `ctx.telemetry.properties/measurements` for a `publicProcedureWithTelemetry` procedure; the correct path is `ctx.actionContext.telemetry.*` (verified against [`queryInsightsRouter.ts`](../../../../../src/webviews/documentdb/collectionView/queryInsights/queryInsightsRouter.ts), e.g. `myCtx.actionContext.telemetry.properties.platform`).
 
 **Impact:** A contributor (or an AI agent following these skills, which the repo instructions direct it to do) will produce code that fails to compile or silently uses the wrong context shape. This is user-facing for maintainers even though it is not shipped in the extension bundle.
 
@@ -132,7 +132,7 @@ The original review inspected only the package's own docs (`README.md`, `MIGRATI
 ### F5 - Low - Stale `trpcToTelemetry` references in shipped code comments
 
 **Source:** Independent review (documentation)
-**Location:** [`src/webviews/documentdb/collectionView/queryInsights/queryInsightsEventsRouter.ts`](../../../src/webviews/documentdb/collectionView/queryInsights/queryInsightsEventsRouter.ts)
+**Location:** [`src/webviews/documentdb/collectionView/queryInsights/queryInsightsEventsRouter.ts`](../../../../../src/webviews/documentdb/collectionView/queryInsights/queryInsightsEventsRouter.ts)
 
 Explanatory comments at lines ~47, ~62, and ~160 still describe the telemetry path as `trpcToTelemetry wraps opts.next()`. That helper name no longer exists after this PR's reshape (the equivalent is `telemetryMiddlewareBody` delegating to the DocumentDB `TelemetryRunner`). The comments are now misleading about how the surrounding subscription-completion event relates to middleware timing.
 

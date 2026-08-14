@@ -1,7 +1,7 @@
 # Implementation plan: `@microsoft/vscode-ext-webview` redesign + migration
 
 **Audience:** an autonomous coding agent.
-**Source of truth for the API:** [webview-rpc-package-decoupling-design.md](./webview-rpc-package-decoupling-design.md) **§13 (Decisions summary)**. Where this plan and §13 disagree, **§13 wins**; stop and flag the conflict.
+**Source of truth for the API:** [webview-rpc-package-decoupling-design.md](../../design.md) **§13 (Decisions summary)**. Where this plan and §13 disagree, **§13 wins**; stop and flag the conflict.
 **Date:** 2026-06-29.
 
 This plan reshapes the preview webview package into the layered design locked in
@@ -520,7 +520,7 @@ config, sourceLayout, devServerHost, telemetry?, icon?, viewColumn? }`). Add
 
 - Goal: a reusable record of the before/after for our team and as a template for
   the Cosmos PR.
-- Steps: create `docs/ai-and-plans/webview-ext-migration-manual.md`. Include:
+- Steps: create `docs/ai-and-plans/practices/webview-ext-migration-manual.md`. Include:
   the old-to-new **rename map** (package, folder, subpaths, symbols); the
   telemetry-model migration (bound middleware to `TelemetryRunner` adapter); the
   hook split with before/after call sites; and **two migration paths for a
@@ -573,7 +573,7 @@ Declare completion only when **all** of the following hold:
    `ADVANCED.md` exist, reference only shipped symbols, together cover every
    topic in the old `vscode-ext-react-webview/README.md` at equal or greater
    detail, and contain no em dashes or en dashes.
-10. `docs/ai-and-plans/webview-ext-migration-manual.md` exists, internal/unlinked.
+10. `docs/ai-and-plans/practices/webview-ext-migration-manual.md` exists, internal/unlinked.
 11. Every work item is its own commit; all fixes are follow-up commits; no
     amends, no force-push, no history rewrite.
 12. No `TDD:` test was modified to pass; if any `TDD:` test failed, the operator
@@ -1315,7 +1315,7 @@ extensionContext, ...options })`. The constructor now wires tRPC itself
 ### WI-G1 - Add internal webview-ext migration manual (2026-06-30) [MILESTONE final DoD]
 
 - Status: done.
-- Summary: created `docs/ai-and-plans/webview-ext-migration-manual.md`, an
+- Summary: created `docs/ai-and-plans/practices/webview-ext-migration-manual.md`, an
   internal, unlinked record of the migration and a template for the parallel
   vscode-cosmosdb adoption PR. It covers: the old-to-new rename map (package,
   folder, the 2-subpath to 4-subpath split, and a per-symbol table including the
@@ -1361,7 +1361,7 @@ the one rename below keeps every exported symbol name identical.
 
 The three planning docs (the design doc, this plan, and the migration manual)
 were moved from the flat `docs/ai-and-plans/` into
-`docs/ai-and-plans/PRs/766-webview-ext-package-redesign/`, matching the existing
+`docs/ai-and-plans/areas/webview-ext-package/`, matching the existing
 per-PR convention in that folder. Earlier progress-log entries (for example
 WI-G1) still cite the old flat path; those are historical and were left as-is.
 

@@ -12,7 +12,7 @@
 The Atlas MongoDB discovery provider is the fourth service-discovery plugin in the
 extension (after the three Azure plugins and the recently-finalized Kubernetes plugin).
 The Kubernetes plugin went through a long, deliberate UX pass documented in
-[bugbash-090-kubernetes-ux-review.md](https://github.com/microsoft/vscode-documentdb/blob/main/docs/ai-and-plans/PRs/621-kubernetes-discovery/bugbash-090-kubernetes-ux-review.md)
+[bugbash-090-kubernetes-ux-review.md](https://github.com/microsoft/vscode-documentdb/blob/main/docs/ai-and-plans/areas/kubernetes-discovery/iterations/01-kubernetes-discovery/bugbash-090-ux-review.md)
 (30 bug-bash issues + 14 iterations). That pack is the closest, most current statement
 of the team's discovery-tree UX conventions.
 
@@ -29,8 +29,8 @@ don't generalize; those are marked **N/A** below and not analyzed in depth.
 the Kubernetes pack. This revision adds a code-level analysis of the **three shipped Azure
 discovery plugins** — `service-azure-mongo-vcore`, `service-azure-mongo-ru`, and
 `service-azure-vm` — plus their high-level user-manual pages
-([Service Discovery overview](../../../user-manual/service-discovery.md),
-[Managing Azure Discovery](../../../user-manual/managing-azure-discovery.md), and the three
+([Service Discovery overview](../../../../user-manual/service-discovery.md),
+[Managing Azure Discovery](../../../../user-manual/managing-azure-discovery.md), and the three
 per-provider pages). The headline result: **Kubernetes and the three Azure plugins
 independently converged on the same conventions** (modal-on-load + a canonical "Click here to
 retry" node; an always-present "Manage Accounts…/Sign in…" item in the subscription picker;
@@ -81,7 +81,7 @@ improvements beyond the sibling plugins.
 
 Each Kubernetes item is mapped to Atlas with an **applicability** rating based on reading the
 Atlas code (tree items, auth flows, wizard, `package.json` menus) and the
-[PR #733 decisions doc](./decisions.md):
+[PR #733 decisions doc](../decisions.md):
 
 | Rating     | Meaning                                                                        |
 | ---------- | ------------------------------------------------------------------------------ |
@@ -205,7 +205,7 @@ fits best; both are already proven in the codebase, so neither is risky.
 ### 4.4 High-level conventions from the user manual
 
 The shipped Azure providers are documented in
-[managing-azure-discovery.md](../../../user-manual/managing-azure-discovery.md) and three
+[managing-azure-discovery.md](../../../../user-manual/managing-azure-discovery.md) and three
 per-provider pages. Two documented conventions are worth mirroring in Atlas, and one doc gap
 should be closed:
 
@@ -224,7 +224,7 @@ should be closed:
   the org/project filter. Confirm the Atlas wizard does not silently inherit the panel filter.
 - **Filter persistence across sessions** is a documented promise for Azure; confirm Atlas's
   org and project filters persist and pre-select on reopen (relates to §9.2).
-- **Documentation gap:** [service-discovery.md](../../../user-manual/service-discovery.md)
+- **Documentation gap:** [service-discovery.md](../../../../user-manual/service-discovery.md)
   lists only the three Azure providers under "Available Service Discovery Plugins"; **Atlas is
   not yet listed and has no per-provider manual page.** Add a `service-discovery-atlas-mongodb`
   page (covering the two auth methods and the org/project model) and
@@ -328,7 +328,7 @@ Kubernetes "won't-fix" items (double-click-to-expand, query-table contrast) are 
 8. **(P3, Low) Consider a stable root identity icon**, moving expired/authenticating state
    into the tooltip/description (#10).
 9. **(P2, Low–Med, docs) Add a `service-discovery-atlas-mongodb` user-manual page** and list
-   Atlas in [service-discovery.md](../../../user-manual/service-discovery.md) (§4.4); gives
+   Atlas in [service-discovery.md](../../../../user-manual/service-discovery.md) (§4.4); gives
    "Learn More" a target.
 10. **(P2, Low) Confirm the Add-Connection wizard shows orgs/projects unfiltered** and that
     org/project filters persist across sessions, per the documented Azure rule (§4.4).

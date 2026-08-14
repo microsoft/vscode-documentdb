@@ -12,8 +12,8 @@
   `src/commands/index.*Index/`
 - **PR / branch:** [microsoft/vscode-documentdb#732](https://github.com/microsoft/vscode-documentdb/pull/732) ·
   `dev/khelanmodi/index-management-ui`
-- **Related design docs:** [Index Management UI notes](feature-01-index-management-overview.md) ·
-  [Collection view toolbar/tab redesign](feature-02-collectionview-toolbar-redesign.md) ·
+- **Related design docs:** [Index Management UI notes](../../design.md) ·
+  [Collection view toolbar/tab redesign](../../design-collectionview-toolbar.md) ·
   [Technical review](code-review-2026-07-20.md)
 - **Scope:** the UX-facing surface (tree entry, tab structure, wording, index table,
   create flow, lifecycle actions, feedback, accessibility, and error recovery). Backend
@@ -36,7 +36,7 @@ already exists in the filter bar — see [IndexListFilterBar.tsx](../../../../sr
 degradation is confirmed to also swallow the large-collection warning, so it stays P2 with a
 sharper solution.
 
-The existing design decisions in [Index Management UI notes](feature-01-index-management-overview.md)
+The existing design decisions in [Index Management UI notes](../../design.md)
 are treated as constraints rather than reopened findings. In particular: fixed column
 widths, optimistic sorted insertion, the driver-shaped create form, and one shared detailed
 confirmation modal for delete/hide/unhide are already deliberate choices.
@@ -177,8 +177,8 @@ flowchart TD
 
 | #   | User action (entry)                      | Where it lives                                                                                                                                                                                                                          | Terminal state(s)                                                 | Surface                     | ⚠️  |
 | --- | ---------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------- | --------------------------- | --- |
-| 1   | Double-click the Explorer `Indexes` node | [IndexesItem.ts](../../../../src/tree/documentdb/IndexesItem.ts#L140)                                                                                                                                                                   | Collection view opens on Indexes tab                              | Tree → webview              |     |
-| 2   | Select the `Indexes` tab                 | [CollectionView.tsx](../../../../src/webviews/documentdb/collectionView/CollectionView.tsx#L613)                                                                                                                                        | Index list starts loading                                         | Webview tab                 |     |
+| 1   | Double-click the Explorer `Indexes` node | [IndexesItem.ts](../../../../../../src/tree/documentdb/IndexesItem.ts#L140)                                                                                                                                                                   | Collection view opens on Indexes tab                              | Tree → webview              |     |
+| 2   | Select the `Indexes` tab                 | [CollectionView.tsx](../../../../../../src/webviews/documentdb/collectionView/CollectionView.tsx#L613)                                                                                                                                        | Index list starts loading                                         | Webview tab                 |     |
 | 3   | Load or manually refresh indexes         | [IndexesTab.tsx](../../../../src/webviews/documentdb/indexView/IndexesTab.tsx#L156)                                                                                                                                                     | Table/metrics or non-modal error                                  | Skeleton / toast            | ⚠️  |
 | 4   | Filter by text, Hidden, or Unused        | [IndexList.tsx](../../../../src/webviews/documentdb/indexView/components/indexList/IndexList.tsx#L103)                                                                                                                                  | Filtered rows and count; possibly a bare table                    | Webview                     | ⚠️  |
 | 5   | Expand a row                             | [IndexTable.tsx](../../../../src/webviews/documentdb/indexView/components/indexList/IndexTable.tsx#L194)                                                                                                                                | Inline field/details panel                                        | Webview                     |     |
@@ -188,7 +188,7 @@ flowchart TD
 | 9   | Create directly                          | [IndexesTab.tsx](../../../../src/webviews/documentdb/indexView/IndexesTab.tsx#L307)                                                                                                                                                     | Optimistic row + toast, or modal + hidden preserved form          | Webview / VS Code message   | ⚠️  |
 | 10  | Create in playground or shell            | [IndexesTab.tsx](../../../../src/webviews/documentdb/indexView/IndexesTab.tsx#L414)                                                                                                                                                     | Target opens, or non-modal error with drawer retained             | Editor / shell / toast      |     |
 | 11  | Delete, hide, or unhide in the table     | [IndexesTab.tsx](../../../../src/webviews/documentdb/indexView/IndexesTab.tsx#L353)                                                                                                                                                     | Modal → cancel, refreshed row, success toast, or error toast      | Webview / modal / toast     | ⚠️  |
-| 12  | Delete, hide, or unhide in Explorer      | [dropIndex.ts](../../../../src/commands/index.dropIndex/dropIndex.ts#L12) · [hideIndex.ts](../../../../src/commands/index.hideIndex/hideIndex.ts#L12) · [unhideIndex.ts](../../../../src/commands/index.unhideIndex/unhideIndex.ts#L12) | Modal → temporary tree status → configured success feedback/error | Tree / modal / notification |     |
+| 12  | Delete, hide, or unhide in Explorer      | [dropIndex.ts](../../../../../../src/commands/index.dropIndex/dropIndex.ts#L12) · [hideIndex.ts](../../../../../../src/commands/index.hideIndex/hideIndex.ts#L12) · [unhideIndex.ts](../../../../../../src/commands/index.unhideIndex/unhideIndex.ts#L12) | Modal → temporary tree status → configured success feedback/error | Tree / modal / notification |     |
 
 ---
 
@@ -309,8 +309,8 @@ spinner only appears once the work is already done, then lingers ~2s.
   [IndexesTab.tsx#L401](../../../../src/webviews/documentdb/indexView/IndexesTab.tsx#L401).
 - 🔍 The Explorer path shows the _real_ operation interval via `showDeleting` /
   `runWithTemporaryDescription`. See
-  [dropIndex.ts#L45](../../../../src/commands/index.dropIndex/dropIndex.ts#L45) and
-  [hideIndex.ts#L52](../../../../src/commands/index.hideIndex/hideIndex.ts#L52).
+  [dropIndex.ts#L45](../../../../../../src/commands/index.dropIndex/dropIndex.ts#L45) and
+  [hideIndex.ts#L52](../../../../../../src/commands/index.hideIndex/hideIndex.ts#L52).
 
 💡 **Suggestion / solution:** Split the confirmation from the operation so the row can go
 busy _before_ the server call, and drop the artificial hold. Sketch:
@@ -399,7 +399,7 @@ const handleCreateSubmit = async (input) => {
 > ✅ **Implemented (Iteration 1):** extended `common.displayErrorMessage` to accept `actions`
 > and return the picked one; the create-failure modal now offers **Edit and retry**, which
 > calls `openCreateDialog()` with the preserved form (the fast drawer-close is kept). Files:
-> [appRouter.ts](../../../../src/webviews/_integration/appRouter.ts#L140),
+> [appRouter.ts](../../../../../../src/webviews/_integration/appRouter.ts#L140),
 > [IndexesTab.tsx](../../../../src/webviews/documentdb/indexView/IndexesTab.tsx#L343).
 > Commit: see `feat(indexView): add Edit and retry to the create-index failure modal`.
 
@@ -431,15 +431,15 @@ const handleCreateSubmit = async (input) => {
 > - Extended `common.displayInformationMessage` with an `asOperationSummary` flag that routes
 >   through `showConfirmationAsInSettings`, so webview completion toasts honour the same
 >   `ShowOperationSummaries` setting as the tree. Files:
->   [appRouter.ts](../../../../src/webviews/_integration/appRouter.ts#L159).
+>   [appRouter.ts](../../../../../../src/webviews/_integration/appRouter.ts#L159).
 > - Webview: create/delete success toasts gated; **added** hide/unhide success toasts; delete,
 >   hide, unhide, and prepare-in-target failures now modal. Files:
 >   [IndexesTab.tsx](../../../../src/webviews/documentdb/indexView/IndexesTab.tsx#L326).
 > - Tree: delete/hide/unhide failures now show a modal error (azext default display suppressed,
 >   error rethrown for telemetry); success already used `showConfirmationAsInSettings`. Files:
->   [dropIndex.ts](../../../../src/commands/index.dropIndex/dropIndex.ts#L64),
->   [hideIndex.ts](../../../../src/commands/index.hideIndex/hideIndex.ts#L72),
->   [unhideIndex.ts](../../../../src/commands/index.unhideIndex/unhideIndex.ts#L66).
+>   [dropIndex.ts](../../../../../../src/commands/index.dropIndex/dropIndex.ts#L64),
+>   [hideIndex.ts](../../../../../../src/commands/index.hideIndex/hideIndex.ts#L72),
+>   [unhideIndex.ts](../../../../../../src/commands/index.unhideIndex/unhideIndex.ts#L66).
 >   Commit: see `fix(indexView): unify index-action feedback (modal failures, gated success toasts)`.
 
 > ✅ **Follow-up (Iteration 2):** the gated-toast pattern now has a named helper. Added
@@ -471,8 +471,8 @@ depending on which action and which entry point.
 - ⚠️ Webview **hide/unhide give no success feedback at all**
   ([IndexesTab.tsx#L395-L403](../../../../src/webviews/documentdb/indexView/IndexesTab.tsx#L395)),
   while Explorer hide/unhide _do_ via `showConfirmationAsInSettings`
-  ([hideIndex.ts#L70](../../../../src/commands/index.hideIndex/hideIndex.ts#L70),
-  [unhideIndex.ts#L56](../../../../src/commands/index.unhideIndex/unhideIndex.ts#L56)).
+  ([hideIndex.ts#L70](../../../../../../src/commands/index.hideIndex/hideIndex.ts#L70),
+  [unhideIndex.ts#L56](../../../../../../src/commands/index.unhideIndex/unhideIndex.ts#L56)).
 
 💡 **Suggestion / solution:** Adopt one explicit **outcome matrix** and apply it at both entry
 points. A workable house style, consistent with the shipped discovery providers:
@@ -770,7 +770,7 @@ context, not open findings:
 
 - ✅ Delete, Hide, and Unhide share one detailed host-side modal across webview and Explorer.
   The documented tradeoff is that tree delete no longer honors the configurable typed/word
-  confirmation style. See [Index Management UI notes](feature-01-index-management-overview.md#4-safe-host-side-confirmations-unified-across-webview--tree-view).
+  confirmation style. See [Index Management UI notes](../../design.md#4-safe-host-side-confirmations-unified-across-webview--tree-view).
 - ✅ The `_id_` action buttons use `disabledFocusable` and explanatory tooltips, so keyboard
   users can reach the protected-state explanation. See
   [IndexTable.tsx](../../../../src/webviews/documentdb/indexView/components/indexList/IndexTable.tsx#L300).

@@ -2,9 +2,9 @@
 
 **Status:** In progress · **Date:** 2026-06-26
 **Scope:** Gap analysis between the production design
-([`local-quickstart-v2.md`](./local-quickstart-v2.md) §15 v1.0 "must ship" + UX sections
+([`local-quickstart-v2.md`](./design.md) §15 v1.0 "must ship" + UX sections
 §3–§12) and the current implementation (the POC on branch `feature/local-quickstart/POC`).
-**Companion:** [`decision-instance-model.md`](./decision-instance-model.md) (single-instance v1).
+**Companion:** [`decision-instance-model.md`](./decisions.md) (single-instance v1).
 
 This is the ranked work list to take Local Quick Start from a demo-POC to a shippable v1.
 Ranking is by **user stakes**, not by effort. Each row cites the design section and the current

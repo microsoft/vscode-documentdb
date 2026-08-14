@@ -1738,9 +1738,9 @@ to support and must not leave a selectable but nonfunctional option.
 
 ## Related repository material
 
-- [DocumentDB-supported indexes](./reference-01-documentdb-supported-indexes.md)
-- [Collection View toolbar/tab redesign](./feature-02-collectionview-toolbar-redesign.md)
-- [Index Management UI notes](./feature-01-index-management-overview.md)
+- [DocumentDB-supported indexes](./reference-supported-indexes.md)
+- [Collection View toolbar/tab redesign](./design-collectionview-toolbar.md)
+- [Index Management UI notes](./design.md)
 - [Generated index reference](../../../../packages/documentdb-js-operator-registry/src/indexReference.ts)
 - [Current Create Index drawer](../../../../src/webviews/documentdb/indexView/components/CreateIndexDrawer.tsx)
 - [Create-index validation and builder](../../../../src/webviews/documentdb/indexView/indexCreation.ts)

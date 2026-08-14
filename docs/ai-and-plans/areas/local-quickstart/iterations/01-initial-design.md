@@ -16,7 +16,7 @@ and the deviations that override shared/base behavior inside our own codebase.
 It exists so human reviewers and review agents don't have to re-derive the
 rationale — or mistake a deliberate deviation for an oversight.
 
-Full design: [`../../local-quickstart/local-quickstart-v2.md`](../../local-quickstart/local-quickstart-v2.md)
+Full design: [`../../local-quickstart/local-quickstart-v2.md`](../design.md)
 (iteration 2, supersedes iteration 1). Review-resolution map is in v2 §18.
 
 ## Reference: PostgreSQL "Local Docker Server"

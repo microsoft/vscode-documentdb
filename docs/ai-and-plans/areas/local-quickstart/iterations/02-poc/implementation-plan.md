@@ -1,7 +1,7 @@
 # Local Quick Start — POC: Implementation Plan
 
 > Companion to [`description.md`](./description.md) (read that first for the *why*).
-> Full design: [`local-quickstart-v2.md`](../../local-quickstart/local-quickstart-v2.md).
+> Full design: [`local-quickstart-v2.md`](../../design.md).
 > Review history & resolutions: [`review-and-resolutions.md`](./review-and-resolutions.md).
 >
 > **Audience:** an implementation agent (Opus/Sonnet-class) or a developer.

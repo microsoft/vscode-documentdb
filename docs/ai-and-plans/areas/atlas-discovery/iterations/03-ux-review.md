@@ -7,9 +7,9 @@
 > branch), and — for each item — offers a **suggestion** and a **status**. Items are
 > **sorted by priority** (P0 → P3).
 
-- **Feature area:** [src/plugins/service-atlas-mongodb/](../../../../src/plugins/service-atlas-mongodb)
+- **Feature area:** [src/plugins/service-atlas-mongodb/](../../../../../src/plugins/service-atlas-mongodb)
 - **PR / branch:** [microsoft/vscode-documentdb#733](https://github.com/microsoft/vscode-documentdb/pull/733) · `dev/tnaum/atlas-discovery-review-iteration-2`
-- **Related design docs:** [decisions.md](./decisions.md) · [ux-review-iteration-1-k8s-alignment.md](./ux-review-iteration-1-k8s-alignment.md) · [ux-review-iteration-2-cluster-item.md](./ux-review-iteration-2-cluster-item.md) · [atlas-mongodb-discovery-flow.md](../../../atlas-mongodb-discovery-flow.md)
+- **Related design docs:** [decisions.md](../decisions.md) · [ux-review-iteration-1-k8s-alignment.md](./01-ux-review-k8s-alignment.md) · [ux-review-iteration-2-cluster-item.md](./02-ux-review-cluster-item.md) · [atlas-mongodb-discovery-flow.md](../../../../atlas-mongodb-discovery-flow.md)
 - **Scope:** the UX-facing surface (tree structure, wording, icons, webviews, lifecycle
   actions, error recovery). Backend internals appear only where they explain a
   user-visible symptom.
@@ -159,16 +159,16 @@ the sign-in node (item 1).
 
 | #   | User action (entry)                   | Where it lives                                                                                                                    | Terminal state(s)                                      | Surface           | ⚠️  |
 | --- | ------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------ | ----------------- | --- |
-| 1   | Expand root (signed out)              | [AtlasServiceRootItem.getChildren](../../../../src/plugins/service-atlas-mongodb/discovery-tree/AtlasServiceRootItem.ts#L39)      | **Auto-opens** auth QuickPick → success/`Sign in` node | quickpick / tree  | ⚠️  |
-| 2   | Root load / auth failure              | [AtlasServiceRootItem.showLoadFailure](../../../../src/plugins/service-atlas-mongodb/discovery-tree/AtlasServiceRootItem.ts#L205) | **Modal** + `Click here to retry` node                 | modal + tree      | ✅  |
-| 3   | Expand project, load clusters         | [AtlasProjectItem.getChildren](../../../../src/plugins/service-atlas-mongodb/discovery-tree/AtlasProjectItem.ts#L36)              | **Passive** error/warning rows                         | tree only         | ⚠️  |
-| 4   | Expand cluster (SCRAM connect)        | [AtlasClusterItem.authenticateAndConnect](../../../../src/plugins/service-atlas-mongodb/discovery-tree/AtlasClusterItem.ts#L100)  | Databases / **modal** on failure                       | modal             | ✅  |
+| 1   | Expand root (signed out)              | [AtlasServiceRootItem.getChildren](../../../../../src/plugins/service-atlas-mongodb/discovery-tree/AtlasServiceRootItem.ts#L39)      | **Auto-opens** auth QuickPick → success/`Sign in` node | quickpick / tree  | ⚠️  |
+| 2   | Root load / auth failure              | [AtlasServiceRootItem.showLoadFailure](../../../../../src/plugins/service-atlas-mongodb/discovery-tree/AtlasServiceRootItem.ts#L205) | **Modal** + `Click here to retry` node                 | modal + tree      | ✅  |
+| 3   | Expand project, load clusters         | [AtlasProjectItem.getChildren](../../../../../src/plugins/service-atlas-mongodb/discovery-tree/AtlasProjectItem.ts#L36)              | **Passive** error/warning rows                         | tree only         | ⚠️  |
+| 4   | Expand cluster (SCRAM connect)        | [AtlasClusterItem.authenticateAndConnect](../../../../../src/plugins/service-atlas-mongodb/discovery-tree/AtlasClusterItem.ts#L100)  | Databases / **modal** on failure                       | modal             | ✅  |
 | 5   | Auth (API Key / Service Account)      | [AtlasApiKeyFlow.executeApiKeyFlow](../../../../src/plugins/service-atlas-mongodb/auth/AtlasApiKeyFlow.ts#L15)                    | Toast on success / **modal** on failure                | toast + modal     | ✅  |
-| 6   | Manage Credentials (signed in)        | [AtlasDiscoveryProvider.configureCredentials](../../../../src/plugins/service-atlas-mongodb/AtlasDiscoveryProvider.ts#L169)       | QuickPick (account / sign out / exit)                  | quickpick         |     |
-| 7   | Organizations filter                  | [AtlasDiscoveryProvider.showOrganizations](../../../../src/plugins/service-atlas-mongodb/AtlasDiscoveryProvider.ts#L221)          | Tree refresh / **modal** on fetch failure              | quickpick + modal | ✅  |
-| 8   | Project filter (funnel icon)          | [AtlasDiscoveryProvider.configureTreeItemFilter](../../../../src/plugins/service-atlas-mongodb/AtlasDiscoveryProvider.ts#L104)    | Tree refresh / info toast on empty                     | quickpick + toast |     |
-| 9   | Add-Connection wizard: select project | [SelectAtlasProjectStep.prompt](../../../../src/plugins/service-atlas-mongodb/discovery-wizard/SelectAtlasSteps.ts#L22)           | QuickPick / **raw throw** closes wizard                | quickpick / throw | ⚠️  |
-| 10  | Add-Connection wizard: select cluster | [SelectAtlasClusterStep.prompt](../../../../src/plugins/service-atlas-mongodb/discovery-wizard/SelectAtlasSteps.ts#L57)           | QuickPick (IDLE-only) / **raw throw** closes wizard    | quickpick / throw | ⚠️  |
+| 6   | Manage Credentials (signed in)        | [AtlasDiscoveryProvider.configureCredentials](../../../../../src/plugins/service-atlas-mongodb/AtlasDiscoveryProvider.ts#L169)       | QuickPick (account / sign out / exit)                  | quickpick         |     |
+| 7   | Organizations filter                  | [AtlasDiscoveryProvider.showOrganizations](../../../../../src/plugins/service-atlas-mongodb/AtlasDiscoveryProvider.ts#L221)          | Tree refresh / **modal** on fetch failure              | quickpick + modal | ✅  |
+| 8   | Project filter (funnel icon)          | [AtlasDiscoveryProvider.configureTreeItemFilter](../../../../../src/plugins/service-atlas-mongodb/AtlasDiscoveryProvider.ts#L104)    | Tree refresh / info toast on empty                     | quickpick + toast |     |
+| 9   | Add-Connection wizard: select project | [SelectAtlasProjectStep.prompt](../../../../../src/plugins/service-atlas-mongodb/discovery-wizard/SelectAtlasSteps.ts#L22)           | QuickPick / **raw throw** closes wizard                | quickpick / throw | ⚠️  |
+| 10  | Add-Connection wizard: select cluster | [SelectAtlasClusterStep.prompt](../../../../../src/plugins/service-atlas-mongodb/discovery-wizard/SelectAtlasSteps.ts#L57)           | QuickPick (IDLE-only) / **raw throw** closes wizard    | quickpick / throw | ⚠️  |
 
 ---
 
@@ -334,9 +334,9 @@ don't do this. We already have an error node that lets a user sign in. That is e
 
 **Finding:**
 
-- ⚠️ [AtlasServiceRootItem.getChildren](../../../../src/plugins/service-atlas-mongodb/discovery-tree/AtlasServiceRootItem.ts#L39) calls `promptAuthentication()` **automatically** on expand when no session exists — opening the auth-method QuickPick as a side effect of expanding a tree node. Only if the user _cancels_ does it fall back to `createSignInNode()` (via the `consumeSuppressAutoPrompt()` latch).
+- ⚠️ [AtlasServiceRootItem.getChildren](../../../../../src/plugins/service-atlas-mongodb/discovery-tree/AtlasServiceRootItem.ts#L39) calls `promptAuthentication()` **automatically** on expand when no session exists — opening the auth-method QuickPick as a side effect of expanding a tree node. Only if the user _cancels_ does it fall back to `createSignInNode()` (via the `consumeSuppressAutoPrompt()` latch).
 - 🔍 This is the "no magic" convention (checklist §12): expanding a node should not launch a modal picker the user didn't request. All Azure siblings render a passive placeholder and wait for an explicit "Manage Credentials" / sign-in click.
-- 🔍 The [sign-in node](../../../../src/plugins/service-atlas-mongodb/discovery-tree/AtlasServiceRootItem.ts#L183) already exists and already routes to `manageCredentials` — so the auto-prompt is redundant.
+- 🔍 The [sign-in node](../../../../../src/plugins/service-atlas-mongodb/discovery-tree/AtlasServiceRootItem.ts#L183) already exists and already routes to `manageCredentials` — so the auto-prompt is redundant.
 
 💡 **Suggestion:** Remove the auto-prompt branch; on "no session" simply return
 `createSignInNode()`. The user signs in explicitly by clicking that node (or the inline
@@ -373,8 +373,8 @@ IP filters on the cluster. Simple retry is enough."_
 
 **Finding:**
 
-- ⚠️ [executeApiKeyFlow](../../../../src/plugins/service-atlas-mongodb/auth/AtlasApiKeyFlow.ts#L59) shows a modal on rejection and `return false`. Back in [AtlasServiceRootItem](../../../../src/plugins/service-atlas-mongodb/discovery-tree/AtlasServiceRootItem.ts#L51), a failed `promptAuthentication()` renders the generic **sign-in** node — there is **no dedicated "retry" affordance** that re-runs the _same_ credentials, and no "update credentials" node to correct a typo without starting over.
-- 🔍 The root already has a canonical `Click here to retry` node ([createRetryNode](../../../../src/plugins/service-atlas-mongodb/discovery-tree/AtlasServiceRootItem.ts#L192)) for _load_ failures — but the **auth-flow failure** path doesn't reuse it.
+- ⚠️ [executeApiKeyFlow](../../../../src/plugins/service-atlas-mongodb/auth/AtlasApiKeyFlow.ts#L59) shows a modal on rejection and `return false`. Back in [AtlasServiceRootItem](../../../../../src/plugins/service-atlas-mongodb/discovery-tree/AtlasServiceRootItem.ts#L51), a failed `promptAuthentication()` renders the generic **sign-in** node — there is **no dedicated "retry" affordance** that re-runs the _same_ credentials, and no "update credentials" node to correct a typo without starting over.
+- 🔍 The root already has a canonical `Click here to retry` node ([createRetryNode](../../../../../src/plugins/service-atlas-mongodb/discovery-tree/AtlasServiceRootItem.ts#L192)) for _load_ failures — but the **auth-flow failure** path doesn't reuse it.
 - 🔍 Reviewer's rationale matters: an auth failure is frequently **transient/fixable outside the extension** (add the key to the project, allow the current IP in the Access List — the API-key modal already hints at this). A one-click retry lets the user fix Atlas-side and re-list without re-typing.
 
 💡 **Suggestion:** After an auth-flow failure, return the existing **`Click here to retry`**
@@ -455,9 +455,9 @@ it was just the permissions of the API key; I had to add more to see an existing
 
 **Finding:**
 
-- ⚠️ Atlas returns **200 with an empty `results` array** for an under-permissioned key — [AtlasApiClient.listProjects](../../../../src/plugins/service-atlas-mongodb/api/AtlasApiClient.ts#L49) surfaces no error, so [fetchProjectItems](../../../../src/plugins/service-atlas-mongodb/discovery-tree/AtlasServiceRootItem.ts#L114) hits the `projects.length === 0` branch and renders **"No projects found"** / "Create a project in the Atlas console". That is a **misdiagnosis**: the account _has_ projects, the key just can't see them.
+- ⚠️ Atlas returns **200 with an empty `results` array** for an under-permissioned key — [AtlasApiClient.listProjects](../../../../../src/plugins/service-atlas-mongodb/api/AtlasApiClient.ts#L49) surfaces no error, so [fetchProjectItems](../../../../../src/plugins/service-atlas-mongodb/discovery-tree/AtlasServiceRootItem.ts#L114) hits the `projects.length === 0` branch and renders **"No projects found"** / "Create a project in the Atlas console". That is a **misdiagnosis**: the account _has_ projects, the key just can't see them.
 - ⚠️ The **long text lives in the node `description`**, which VS Code truncates in the tree — so it is both _wrong_ and _unreadable_ (checklist: detail belongs in a tooltip, not a truncating description).
-- 🔍 The extension already fetches organizations in parallel ([fetchProjectItems](../../../../src/plugins/service-atlas-mongodb/discovery-tree/AtlasServiceRootItem.ts#L112)). "Orgs visible but zero projects" is a strong signal of a **permissions scope** problem rather than a genuinely empty account.
+- 🔍 The extension already fetches organizations in parallel ([fetchProjectItems](../../../../../src/plugins/service-atlas-mongodb/discovery-tree/AtlasServiceRootItem.ts#L112)). "Orgs visible but zero projects" is a strong signal of a **permissions scope** problem rather than a genuinely empty account.
 
 💡 **Suggestion:** Disambiguate the empty case: if `orgs.length > 0 && projects.length === 0`,
 show a **permissions-oriented** empty state ("No projects visible to this API key — check the
@@ -478,7 +478,7 @@ tooltip. The generic empty-account guidance also moved from `description` to a t
 information item — **No projects visible to this API key** — with a long tooltip. The item
 cannot be acted on. Non-actionable status rows should not occupy the discovery tree.
 
-**Finding:** [AtlasServiceRootItem.fetchProjectItems](../../../../src/plugins/service-atlas-mongodb/discovery-tree/AtlasServiceRootItem.ts#L90)
+**Finding:** [AtlasServiceRootItem.fetchProjectItems](../../../../../src/plugins/service-atlas-mongodb/discovery-tree/AtlasServiceRootItem.ts#L90)
 currently returns an `info` tree item for both no-visible-projects and genuinely empty-account
 results. The root already has the established error-recovery contract: a modal explanation,
 the canonical **Click here to retry** action from `createRetryNode()`, and a retry-node cache
@@ -535,13 +535,13 @@ the network), then expand a **project** — you get a plain error row, not the m
 
 **Finding:**
 
-- ⚠️ [AtlasProjectItem.getChildren](../../../../src/plugins/service-atlas-mongodb/discovery-tree/AtlasProjectItem.ts#L36) surfaces **four** failure classes as passive
+- ⚠️ [AtlasProjectItem.getChildren](../../../../../src/plugins/service-atlas-mongodb/discovery-tree/AtlasProjectItem.ts#L36) surfaces **four** failure classes as passive
   `createGenericElementWithContext` rows with **no modal and no canonical retry node**:
   - no session → `warning` icon, "Please sign in to MongoDB Atlas again."
   - 401/403 with session cleared → `error` icon, "Please sign in to MongoDB Atlas again."
   - 401/403 transient → `error` icon, **raw** `error.message`
   - generic → `error` icon, "Failed to load clusters: {0}"
-- 🔍 The **root** was already migrated to the house style — [AtlasServiceRootItem](../../../../src/plugins/service-atlas-mongodb/discovery-tree/AtlasServiceRootItem.ts#L80) calls `showLoadFailure()` (modal) + a single `Click here to retry` node. The project item is the **lone outlier** across the feature.
+- 🔍 The **root** was already migrated to the house style — [AtlasServiceRootItem](../../../../../src/plugins/service-atlas-mongodb/discovery-tree/AtlasServiceRootItem.ts#L80) calls `showLoadFailure()` (modal) + a single `Click here to retry` node. The project item is the **lone outlier** across the feature.
 - 🔍 Same inconsistency iteration 1 §F flagged for _both_ levels; the root half shipped, the project half did not. **This is the shared home for the retry work in items 2 and 3.**
 
 💡 **Suggestion:** Mirror the root pattern in `AtlasProjectItem`: on a real load attempt,
@@ -595,7 +595,7 @@ connectable clusters in this project" step rather than throwing. See
 
 > **Decision (Iteration 3):** Adopt the **Azure style** (Option A). The Add-Connection wizard
 > **always** shows a top `alwaysShow` item that opens credential management — mirror Azure's
-> smart wording from [SelectSubscriptionStep](../../../../src/plugins/api-shared/azure/wizard/SelectSubscriptionStep.ts#L120):
+> smart wording from [SelectSubscriptionStep](../../../../../src/plugins/api-shared/azure/wizard/SelectSubscriptionStep.ts#L120):
 > label **"Manage MongoDB Atlas Credentials…"**, detail _"Sign in with a different API key or
 > Service Account to see more projects and clusters."_, `key` icon, followed by a separator
 > and the project/cluster list. On selection, run credential management, show a short
@@ -606,7 +606,7 @@ connectable clusters in this project" step rather than throwing. See
 
 ✅ **Implemented (Iteration 3):** [313950f2](https://github.com/microsoft/vscode-documentdb/commit/313950f2)
 landed Item 5 in
-[SelectAtlasSteps.ts](../../../../src/plugins/service-atlas-mongodb/discovery-wizard/SelectAtlasSteps.ts) and follows the Azure wizard contract end-to-end.
+[SelectAtlasSteps.ts](../../../../../src/plugins/service-atlas-mongodb/discovery-wizard/SelectAtlasSteps.ts) and follows the Azure wizard contract end-to-end.
 
 - Added typed quick-pick item models for project and cluster steps, including explicit
   `manageCredentials` and empty-state item types.
@@ -638,10 +638,10 @@ filter-related for the Atlas discovery, including any associated storage."_
 
 **Finding:** Filtering is spread across several surfaces, all of which would be removed:
 
-- ⚠️ **Project filter** — [AtlasDiscoveryProvider.configureTreeItemFilter](../../../../src/plugins/service-atlas-mongodb/AtlasDiscoveryProvider.ts#L104) (the "Filter Entries…" QuickPick) and the `enableFilterCommand` token on the root [contextValue](../../../../src/plugins/service-atlas-mongodb/discovery-tree/AtlasServiceRootItem.ts#L29).
-- ⚠️ **Org filter** — [AtlasDiscoveryProvider.showOrganizations](../../../../src/plugins/service-atlas-mongodb/AtlasDiscoveryProvider.ts#L221) and the "account → organizations" branch of [configureCredentials](../../../../src/plugins/service-atlas-mongodb/AtlasDiscoveryProvider.ts#L169).
-- ⚠️ **Filter application + empty state** — the org/project filter logic and the "All projects are hidden by filter" node in [fetchProjectItems](../../../../src/plugins/service-atlas-mongodb/discovery-tree/AtlasServiceRootItem.ts#L114).
-- ⚠️ **Session-manager API + storage** — `getSelectedOrgId` / `setSelectedOrgId` / `getSelectedProjectIds` / `setSelectedProjectIds` in [AtlasSessionManager](../../../../src/plugins/service-atlas-mongodb/auth/AtlasSessionManager.ts), plus the `STATE_SELECTED_PROJECTS` and `STATE_SELECTED_ORG_ID` keys in [config.ts](../../../../src/plugins/service-atlas-mongodb/config.ts#L37).
+- ⚠️ **Project filter** — [AtlasDiscoveryProvider.configureTreeItemFilter](../../../../../src/plugins/service-atlas-mongodb/AtlasDiscoveryProvider.ts#L104) (the "Filter Entries…" QuickPick) and the `enableFilterCommand` token on the root [contextValue](../../../../../src/plugins/service-atlas-mongodb/discovery-tree/AtlasServiceRootItem.ts#L29).
+- ⚠️ **Org filter** — [AtlasDiscoveryProvider.showOrganizations](../../../../../src/plugins/service-atlas-mongodb/AtlasDiscoveryProvider.ts#L221) and the "account → organizations" branch of [configureCredentials](../../../../../src/plugins/service-atlas-mongodb/AtlasDiscoveryProvider.ts#L169).
+- ⚠️ **Filter application + empty state** — the org/project filter logic and the "All projects are hidden by filter" node in [fetchProjectItems](../../../../../src/plugins/service-atlas-mongodb/discovery-tree/AtlasServiceRootItem.ts#L114).
+- ⚠️ **Session-manager API + storage** — `getSelectedOrgId` / `setSelectedOrgId` / `getSelectedProjectIds` / `setSelectedProjectIds` in [AtlasSessionManager](../../../../src/plugins/service-atlas-mongodb/auth/AtlasSessionManager.ts), plus the `STATE_SELECTED_PROJECTS` and `STATE_SELECTED_ORG_ID` keys in [config.ts](../../../../../src/plugins/service-atlas-mongodb/config.ts#L37).
 - 🔍 Atlas discovery **has never shipped**, so there is **no persisted user state to migrate** — the storage keys can simply be deleted.
 
 💡 **Suggestion:** Remove all of the above (command registration, provider methods, session
@@ -683,7 +683,7 @@ and info on where the data is to be taken from."_
 **Finding:**
 
 - 🔍 Today entry is a bare [QuickPick](../../../../src/plugins/service-atlas-mongodb/auth/AtlasAuthQuickPick.ts#L19) → a sequence of [`showInputBox`](../../../../src/plugins/service-atlas-mongodb/auth/AtlasApiKeyFlow.ts#L18) prompts (public key, private key). There is nowhere to explain _where in the Atlas console_ to create/find a key, what an Access List is, or the difference between an API Key and a Service Account. The QuickPick secondary text is also in `description` (truncates) rather than `detail`.
-- 🔍 The repo already has a React webview stack ([packages/vscode-ext-react-webview](../../../../packages/vscode-ext-react-webview), [src/webviews/](../../../../src/webviews)) and a tRPC messaging pattern (see the `webview-trpc-messaging` skill), so a guided form is well-supported.
+- 🔍 The repo already has a React webview stack ([packages/vscode-ext-react-webview](../../../../packages/vscode-ext-react-webview), [src/webviews/](../../../../../src/webviews)) and a tRPC messaging pattern (see the `webview-trpc-messaging` skill), so a guided form is well-supported.
 - 🔍 This **subsumes the earlier P3 "move secondary text to `detail`" item** — a webview replaces that surface entirely.
 
 💡 **Suggestion:** Build a small guided webview: step 1 chooses the method (with real
@@ -712,14 +712,14 @@ _Likely a follow-up PR, not a release blocker — confirm scope._
 
 _New files:_
 
-- [`src/webviews/documentdb/atlasCredentials/atlasCredentialsRouter.ts`](../../../../src/webviews/documentdb/atlasCredentials/atlasCredentialsRouter.ts) — host-side tRPC router. `RouterContext` carries a live `AtlasSessionManager` reference and a `onCredentialsStored` one-shot callback (both survive the shallow context clone in `attachTrpc`). Two mutations: `submitApiKey` (trims keys, stores for retry first via `storeApiKeyCredentialsForRetry`, validates against `AtlasApiClient.listProjects`, then calls `storeApiKeyCredentials` + `onCredentialsStored`) and `submitServiceAccount` (same pattern via `fetchServiceAccountToken`). On 401/403, `describeAtlasError` appends an Access-List/permissions hint. Telemetry records `authMethod` and `authSuccess`.
-- [`src/webviews/documentdb/atlasCredentials/atlasCredentialsController.ts`](../../../../src/webviews/documentdb/atlasCredentials/atlasCredentialsController.ts) — exports `AtlasCredentialsWebviewConfig` (JSON-safe, carries only `authMethod`) and `openAtlasCredentialsWebview(authMethod, sessionManager): Promise<boolean>`. Wraps the panel in a `Promise`; `onCredentialsStored` resolves `true` and disposes the panel on the next tick (so the mutation response reaches the webview first); `onDisposed` resolves `false`.
-- [`src/webviews/documentdb/atlasCredentials/AtlasCredentialsView.tsx`](../../../../src/webviews/documentdb/atlasCredentials/AtlasCredentialsView.tsx) — React form (Fluent UI v9). Layout: title → brief intro text → collapsible `<details>` step-by-step guide (4 steps; step 2 has a nested sub-list for org creation) → documentation + console links → form fields → Connect button + spinner → permission hint. The step-by-step guide covers the full journey from sign-in through IDENTITY & ACCESS → Applications → the correct tab. Both auth methods share steps 1–3; step 4 diverges (API Keys tab vs. Service Accounts tab). Inline `MessageBar` shows validation errors without closing the form. On success the host disposes the panel — no client-side navigation needed.
+- [`src/webviews/documentdb/atlasCredentials/atlasCredentialsRouter.ts`](../../../../../src/webviews/documentdb/atlasCredentials/atlasCredentialsRouter.ts) — host-side tRPC router. `RouterContext` carries a live `AtlasSessionManager` reference and a `onCredentialsStored` one-shot callback (both survive the shallow context clone in `attachTrpc`). Two mutations: `submitApiKey` (trims keys, stores for retry first via `storeApiKeyCredentialsForRetry`, validates against `AtlasApiClient.listProjects`, then calls `storeApiKeyCredentials` + `onCredentialsStored`) and `submitServiceAccount` (same pattern via `fetchServiceAccountToken`). On 401/403, `describeAtlasError` appends an Access-List/permissions hint. Telemetry records `authMethod` and `authSuccess`.
+- [`src/webviews/documentdb/atlasCredentials/atlasCredentialsController.ts`](../../../../../src/webviews/documentdb/atlasCredentials/atlasCredentialsController.ts) — exports `AtlasCredentialsWebviewConfig` (JSON-safe, carries only `authMethod`) and `openAtlasCredentialsWebview(authMethod, sessionManager): Promise<boolean>`. Wraps the panel in a `Promise`; `onCredentialsStored` resolves `true` and disposes the panel on the next tick (so the mutation response reaches the webview first); `onDisposed` resolves `false`.
+- [`src/webviews/documentdb/atlasCredentials/AtlasCredentialsView.tsx`](../../../../../src/webviews/documentdb/atlasCredentials/AtlasCredentialsView.tsx) — React form (Fluent UI v9). Layout: title → brief intro text → collapsible `<details>` step-by-step guide (4 steps; step 2 has a nested sub-list for org creation) → documentation + console links → form fields → Connect button + spinner → permission hint. The step-by-step guide covers the full journey from sign-in through IDENTITY & ACCESS → Applications → the correct tab. Both auth methods share steps 1–3; step 4 diverges (API Keys tab vs. Service Accounts tab). Inline `MessageBar` shows validation errors without closing the form. On success the host disposes the panel — no client-side navigation needed.
 
 _Modified files:_
 
-- [`src/webviews/_integration/appRouter.ts`](../../../../src/webviews/_integration/appRouter.ts) — registered `atlasCredentialsRouter` as a top-level key alongside `common` and `mongoClusters`.
-- [`src/webviews/_integration/WebviewRegistry.ts`](../../../../src/webviews/_integration/WebviewRegistry.ts) — registered `atlasCredentials: AtlasCredentialsView`.
+- [`src/webviews/_integration/appRouter.ts`](../../../../../src/webviews/_integration/appRouter.ts) — registered `atlasCredentialsRouter` as a top-level key alongside `common` and `mongoClusters`.
+- [`src/webviews/_integration/WebviewRegistry.ts`](../../../../../src/webviews/_integration/WebviewRegistry.ts) — registered `atlasCredentials: AtlasCredentialsView`.
 - [`src/plugins/service-atlas-mongodb/auth/AtlasApiKeyFlow.ts`](../../../../src/plugins/service-atlas-mongodb/auth/AtlasApiKeyFlow.ts) — rewritten: calls `sessionManager.setAuthenticating()`, opens `openAtlasCredentialsWebview('apikey', sessionManager)`, on `false` calls `cancelAuthentication()` and returns `false`; on `true` shows the success toast and returns `true`. All input-box and standalone-validation logic removed.
 - [`src/plugins/service-atlas-mongodb/auth/AtlasServiceAccountFlow.ts`](../../../../src/plugins/service-atlas-mongodb/auth/AtlasServiceAccountFlow.ts) — rewritten analogously for `'serviceaccount'`.
 
@@ -769,14 +769,14 @@ A GitHub Copilot review caught that the shared `common.openUrl` procedure logged
 webview-provided URLs at info level, including credentials, query values, and fragments. The
 debugging added for Atlas deep links therefore affected every caller of the shared procedure.
 
-- [`src/utils/openUrl.ts`](../../../../src/utils/openUrl.ts) now validates external URLs as HTTP(S)
+- [`src/utils/openUrl.ts`](../../../../../src/utils/openUrl.ts) now validates external URLs as HTTP(S)
   and formats diagnostics from `origin + pathname`, preserving query parameter names while
   replacing every value with `<redacted>` and replacing the entire fragment with `<redacted>`.
   Reconstructing from `origin` also strips URL userinfo.
-- [`src/webviews/_integration/appRouter.ts`](../../../../src/webviews/_integration/appRouter.ts)
+- [`src/webviews/_integration/appRouter.ts`](../../../../../src/webviews/_integration/appRouter.ts)
   rejects malformed and non-HTTP(S) values before the mutation body runs, logs the sanitized URL
   at trace rather than info, and opens the original validated URL.
-- [`src/utils/openUrl.test.ts`](../../../../src/utils/openUrl.test.ts) covers accepted HTTP(S)
+- [`src/utils/openUrl.test.ts`](../../../../../src/utils/openUrl.test.ts) covers accepted HTTP(S)
   URLs, missing schemes, malformed values, unsupported schemes, credentials, repeated query
   parameters, encoded parameter names, and fragments. The focused suite passes all 9 cases.
 
@@ -799,9 +799,9 @@ we can do it."_
 
 **Finding:**
 
-- 🔍 Atlas today is **single-session**: [AtlasSessionManager](../../../../src/plugins/service-atlas-mongodb/auth/AtlasSessionManager.ts) holds one `AtlasSession`, and [configureCredentials](../../../../src/plugins/service-atlas-mongodb/AtlasDiscoveryProvider.ts#L169) shows a flat account / sign-out / exit QuickPick. There is no concept of a credential list.
-- 🔍 The Azure reference is [configureAzureCredentials](../../../../src/plugins/api-shared/azure/credentialsManagement/configureAzureCredentials.ts#L94) → an `AzureWizard` of `SelectAccountStep` → `AccountTenantsStep` → `TenantActionStep` (+ `ExecuteStep`), titled "Manage Azure Accounts", supporting multiple accounts with add/remove. That structure maps cleanly onto Atlas (accounts/keys instead of Azure accounts; orgs/projects instead of tenants/subscriptions).
-- 🔍 **Reuse the Kubernetes storage stack (build on what we already have).** Atlas currently persists secrets with **fixed single-slot keys** — [AtlasSessionManager](../../../../src/plugins/service-atlas-mongodb/auth/AtlasSessionManager.ts) calls `secretStorage.store('atlas-mongodb.apikey.publicKey', …)` etc., which structurally allows **exactly one** API key and one Service Account. Kubernetes already solved "an ordered list of credentials, each with its own secrets" on top of the shared **[StorageService](../../../../src/services/storageService.ts)** — a per-workspace item store that persists **`properties` → `globalState`** and **`secrets` → `SecretStorage`** in a single typed API. The reference wrapper is [sourceStore.ts](../../../../src/plugins/service-kubernetes/sources/sourceStore.ts): each source is a `StorageItem` with an `order` field for stable display order, an inline secret in `secrets[]`, and an in-memory cache with explicit invalidation.
+- 🔍 Atlas today is **single-session**: [AtlasSessionManager](../../../../src/plugins/service-atlas-mongodb/auth/AtlasSessionManager.ts) holds one `AtlasSession`, and [configureCredentials](../../../../../src/plugins/service-atlas-mongodb/AtlasDiscoveryProvider.ts#L169) shows a flat account / sign-out / exit QuickPick. There is no concept of a credential list.
+- 🔍 The Azure reference is [configureAzureCredentials](../../../../../src/plugins/api-shared/azure/credentialsManagement/configureAzureCredentials.ts#L94) → an `AzureWizard` of `SelectAccountStep` → `AccountTenantsStep` → `TenantActionStep` (+ `ExecuteStep`), titled "Manage Azure Accounts", supporting multiple accounts with add/remove. That structure maps cleanly onto Atlas (accounts/keys instead of Azure accounts; orgs/projects instead of tenants/subscriptions).
+- 🔍 **Reuse the Kubernetes storage stack (build on what we already have).** Atlas currently persists secrets with **fixed single-slot keys** — [AtlasSessionManager](../../../../src/plugins/service-atlas-mongodb/auth/AtlasSessionManager.ts) calls `secretStorage.store('atlas-mongodb.apikey.publicKey', …)` etc., which structurally allows **exactly one** API key and one Service Account. Kubernetes already solved "an ordered list of credentials, each with its own secrets" on top of the shared **[StorageService](../../../../../src/services/storageService.ts)** — a per-workspace item store that persists **`properties` → `globalState`** and **`secrets` → `SecretStorage`** in a single typed API. The reference wrapper is [sourceStore.ts](../../../../../src/plugins/service-kubernetes/sources/sourceStore.ts): each source is a `StorageItem` with an `order` field for stable display order, an inline secret in `secrets[]`, and an in-memory cache with explicit invalidation.
 - 🔍 **API-redesign impact (as the reviewer noted):** `AtlasSessionManager` becomes a store of **N** credentials (each API key / Service Account), the API client is selected per credential, and the tree must attribute each org/project/cluster to the credential that surfaced it (relevant to the org level in item 8). This is the biggest structural change of the three design items.
 
 💡 **Suggestion:** Adopt the Azure `credentialsManagement/` wizard shape for the UI (a
@@ -871,8 +871,8 @@ clusters with project and org info in the description."_
 
 **Finding:**
 
-- 🔍 Kubernetes implements exactly this: [config.ts](../../../../src/plugins/service-kubernetes/config.ts#L79) defines `KubernetesViewMode = 'list' | 'tree'` + a `DISCOVERY_VIEW_MODE_STATE_KEY` globalState key; [switchKubernetesViewMode.ts](../../../../src/plugins/service-kubernetes/commands/switchKubernetesViewMode.ts) provides the two commands; [KubernetesContextItem.getChildren](../../../../src/plugins/service-kubernetes/discovery-tree/KubernetesContextItem.ts#L168) branches on the mode; a `discoveryKubernetesViewModeTree` / `…List` contextValue marker drives an **inline toggle whose icon reflects the current mode** (package.json menus, [~L880](../../../../package.json#L880)).
-- ⚠️ **Structural note:** Atlas today has **no org tree level** — the hierarchy is Project → Cluster, with org only used for filtering/labels ([AtlasProjectItem](../../../../src/plugins/service-atlas-mongodb/discovery-tree/AtlasProjectItem.ts)). Reviewer #5's "tree = orgs → projects → clusters" therefore **adds a new Org tree level**, which also interacts with multi-credential attribution (item 7).
+- 🔍 Kubernetes implements exactly this: [config.ts](../../../../../src/plugins/service-kubernetes/config.ts#L79) defines `KubernetesViewMode = 'list' | 'tree'` + a `DISCOVERY_VIEW_MODE_STATE_KEY` globalState key; [switchKubernetesViewMode.ts](../../../../../src/plugins/service-kubernetes/commands/switchKubernetesViewMode.ts) provides the two commands; [KubernetesContextItem.getChildren](../../../../../src/plugins/service-kubernetes/discovery-tree/KubernetesContextItem.ts#L168) branches on the mode; a `discoveryKubernetesViewModeTree` / `…List` contextValue marker drives an **inline toggle whose icon reflects the current mode** (package.json menus, [~L880](../../../../../package.json#L880)).
+- ⚠️ **Structural note:** Atlas today has **no org tree level** — the hierarchy is Project → Cluster, with org only used for filtering/labels ([AtlasProjectItem](../../../../../src/plugins/service-atlas-mongodb/discovery-tree/AtlasProjectItem.ts)). Reviewer #5's "tree = orgs → projects → clusters" therefore **adds a new Org tree level**, which also interacts with multi-credential attribution (item 7).
 
 💡 **Suggestion:** Port the K8s view-mode scaffold verbatim (config key + two commands +
 contextValue marker + inline toggle). **Tree mode:** new `AtlasOrgItem` → `AtlasProjectItem`
@@ -929,7 +929,7 @@ intentional and give the empty case a friendly in-flow message (ties into item 5
 > mismatch.
 
 ✅ **Implemented (Iteration 3):** [368a4cff](https://github.com/microsoft/vscode-documentdb/commit/368a4cff)
-updated [SelectAtlasSteps.ts](../../../../src/plugins/service-atlas-mongodb/discovery-wizard/SelectAtlasSteps.ts)
+updated [SelectAtlasSteps.ts](../../../../../src/plugins/service-atlas-mongodb/discovery-wizard/SelectAtlasSteps.ts)
 to align the wizard with the tree.
 
 - Removed the `IDLE`-only filter from the cluster list builder so all Atlas clusters now appear
@@ -959,7 +959,7 @@ to align the wizard with the tree.
 
 **Finding:**
 
-- ⚠️ [AtlasProjectItem.getTreeItem](../../../../src/plugins/service-atlas-mongodb/discovery-tree/AtlasProjectItem.ts#L112) sets `label`, `description`, `iconPath` but **no `tooltip`**. The cluster tooltip is rich markdown; the project has none (iteration 1 §D flagged this; still open). Related to item 3 — longer detail belongs in a tooltip, not a truncating description.
+- ⚠️ [AtlasProjectItem.getTreeItem](../../../../../src/plugins/service-atlas-mongodb/discovery-tree/AtlasProjectItem.ts#L112) sets `label`, `description`, `iconPath` but **no `tooltip`**. The cluster tooltip is rich markdown; the project has none (iteration 1 §D flagged this; still open). Related to item 3 — longer detail belongs in a tooltip, not a truncating description.
 
 💡 **Suggestion:** Add a grouped markdown tooltip (org name, project ID, cluster count) in
 the same `---`-separated style as the cluster tooltip for cross-provider consistency.
@@ -969,7 +969,7 @@ the same `---`-separated style as the cluster tooltip for cross-provider consist
 ✅ **Implemented (Iteration 3):** [41ec69f2](https://github.com/microsoft/vscode-documentdb/commit/41ec69f2) — `AtlasProjectItem` now has a private `buildTooltip()` method that returns a `vscode.MarkdownString` with project name (bold heading), org name (if present), project ID, and cluster count. `getTreeItem()` wires it in via the `tooltip` property. **Verification:** `npm run l10n` (1652 keys), `npm run prettier-fix`, `npm run lint`, `npx jest --no-coverage` (2668 tests / 159 suites), and `npm run build` all passed.
 
 > **Decision (Iteration 4, Step 6):** The escaping gap is closed by reusing the repository-wide
-> [`escapeMarkdown`](../../../../src/webviews/utils/escapeMarkdown.ts) helper rather than the
+> [`escapeMarkdown`](../../../../../src/webviews/utils/escapeMarkdown.ts) helper rather than the
 > private copy that lived inside `AtlasClusterItem`. **Deviation from the literal instruction**
 > ("use the same helper as the cluster tooltip"): the cluster tooltip's private copy was deleted
 > and both tooltips now call the shared helper. Reason — the shared helper escapes a strict
@@ -995,7 +995,7 @@ underscore-bearing project IDs, and asserts the tooltip stays `isTrusted = false
 
 **Finding:**
 
-- ⚠️ [AtlasDiscoveryProvider](../../../../src/plugins/service-atlas-mongodb/AtlasDiscoveryProvider.ts#L44) `onDidChangeSession` calls `resetNodeErrorState(rootId)` + `refresh()` but never `reveal()`/expands the root, so after sign-in the user must manually expand to see projects (Kubernetes reveals the newly-added source — iteration 1 §B/#22).
+- ⚠️ [AtlasDiscoveryProvider](../../../../../src/plugins/service-atlas-mongodb/AtlasDiscoveryProvider.ts#L44) `onDidChangeSession` calls `resetNodeErrorState(rootId)` + `refresh()` but never `reveal()`/expands the root, so after sign-in the user must manually expand to see projects (Kubernetes reveals the newly-added source — iteration 1 §B/#22).
 
 💡 **Suggestion:** After `transitionTo(Active)`, reveal + expand the Atlas root so projects
 appear without a manual expand.
@@ -1018,7 +1018,7 @@ appear without a manual expand.
 > from an API key to a Service Account can therefore show stale identity. Test credential
 > replacement and correct the display-name lifecycle before closure.
 
-**Finding:** [getStateDescription](../../../../src/plugins/service-atlas-mongodb/discovery-tree/AtlasServiceRootItem.ts#L221) only annotates `Expired` / `Authenticating`; when `Active` the description is blank even though `getUserDisplayName()` is available (iteration 1 §9.1). Gains extra value under multi-credential (item 7): the root could show _which_ credential is active.
+**Finding:** [getStateDescription](../../../../../src/plugins/service-atlas-mongodb/discovery-tree/AtlasServiceRootItem.ts#L221) only annotates `Expired` / `Authenticating`; when `Active` the description is blank even though `getUserDisplayName()` is available (iteration 1 §9.1). Gains extra value under multi-credential (item 7): the root could show _which_ credential is active.
 
 💡 **Suggestion:** Surface the signed-in display name / org in the root description or
 tooltip when Active.
@@ -1065,14 +1065,14 @@ filter state left to surface. **Reason:** no filtering, no filter indicator.
 Items resolved in iterations 1–2, re-verified against the current branch (do not re-open
 without cause):
 
-- ✅ **Root renamed to "MongoDB Atlas"** — [config.ts LABEL](../../../../src/plugins/service-atlas-mongodb/config.ts#L15) + [root label](../../../../src/plugins/service-atlas-mongodb/discovery-tree/AtlasServiceRootItem.ts#L163).
-- ✅ **Stable root identity icon** (`cloud`); transient state moved to `description` — [getStateDescription](../../../../src/plugins/service-atlas-mongodb/discovery-tree/AtlasServiceRootItem.ts#L221).
-- ✅ **Cluster uses a static brand-mark icon**; state moved to description + tooltip (iteration 2 Finding 2-A) — [AtlasClusterItem.getTreeItem](../../../../src/plugins/service-atlas-mongodb/discovery-tree/AtlasClusterItem.ts#L213).
-- ✅ **Cluster `description` trimmed to tier + state** with `·` separators (iteration 2 Finding 2-B) — [buildDescription](../../../../src/plugins/service-atlas-mongodb/discovery-tree/AtlasClusterItem.ts#L266).
-- ✅ **Root load failures use modal + canonical "Click here to retry" node** (iteration 1 §F) — [AtlasServiceRootItem](../../../../src/plugins/service-atlas-mongodb/discovery-tree/AtlasServiceRootItem.ts#L92).
+- ✅ **Root renamed to "MongoDB Atlas"** — [config.ts LABEL](../../../../../src/plugins/service-atlas-mongodb/config.ts#L15) + [root label](../../../../../src/plugins/service-atlas-mongodb/discovery-tree/AtlasServiceRootItem.ts#L163).
+- ✅ **Stable root identity icon** (`cloud`); transient state moved to `description` — [getStateDescription](../../../../../src/plugins/service-atlas-mongodb/discovery-tree/AtlasServiceRootItem.ts#L221).
+- ✅ **Cluster uses a static brand-mark icon**; state moved to description + tooltip (iteration 2 Finding 2-A) — [AtlasClusterItem.getTreeItem](../../../../../src/plugins/service-atlas-mongodb/discovery-tree/AtlasClusterItem.ts#L213).
+- ✅ **Cluster `description` trimmed to tier + state** with `·` separators (iteration 2 Finding 2-B) — [buildDescription](../../../../../src/plugins/service-atlas-mongodb/discovery-tree/AtlasClusterItem.ts#L266).
+- ✅ **Root load failures use modal + canonical "Click here to retry" node** (iteration 1 §F) — [AtlasServiceRootItem](../../../../../src/plugins/service-atlas-mongodb/discovery-tree/AtlasServiceRootItem.ts#L92).
 - ✅ **Auth-flow failures use modals** (not toasts) — [AtlasApiKeyFlow](../../../../src/plugins/service-atlas-mongodb/auth/AtlasApiKeyFlow.ts#L59).
-- ✅ **Cluster connection failure uses a modal** — [authenticateAndConnect](../../../../src/plugins/service-atlas-mongodb/discovery-tree/AtlasClusterItem.ts#L196).
-- ✅ **Wizard pre-authenticates** (no session → auth QuickPick, clean `UserCancelledError` on cancel) — [promptSignInForWizard](../../../../src/plugins/service-atlas-mongodb/AtlasDiscoveryProvider.ts#L84).
+- ✅ **Cluster connection failure uses a modal** — [authenticateAndConnect](../../../../../src/plugins/service-atlas-mongodb/discovery-tree/AtlasClusterItem.ts#L196).
+- ✅ **Wizard pre-authenticates** (no session → auth QuickPick, clean `UserCancelledError` on cancel) — [promptSignInForWizard](../../../../../src/plugins/service-atlas-mongodb/AtlasDiscoveryProvider.ts#L84).
 - ✅ **No destructive inline actions**; single shared `manageCredentials` entry point.
 
 ---
@@ -1187,8 +1187,8 @@ are _not_ extra work items and they are _not_ all gating. Two categories:
 > gating dependency for the org level in item 8.
 >
 > **Persistence — reuse, don't reinvent.** Whichever option, build the storage on the
-> shared **[StorageService](../../../../src/services/storageService.ts)** the way Kubernetes
-> does in [sourceStore.ts](../../../../src/plugins/service-kubernetes/sources/sourceStore.ts)
+> shared **[StorageService](../../../../../src/services/storageService.ts)** the way Kubernetes
+> does in [sourceStore.ts](../../../../../src/plugins/service-kubernetes/sources/sourceStore.ts)
 > (ordered list of `StorageItem`s; `properties` → globalState, `secrets` → SecretStorage;
 > in-memory cache). No migration is required — Atlas discovery has never shipped, so the
 > current single-slot [AtlasSessionManager](../../../../src/plugins/service-atlas-mongodb/auth/AtlasSessionManager.ts)
@@ -1204,7 +1204,7 @@ are _not_ extra work items and they are _not_ all gating. Two categories:
 | **C. Defer**                                                                  | No work                                                        | Feature gap vs Kubernetes                                         |
 
 > 💡 **Suggested:** Option A, sequenced last — it depends on the org-aware credential model
-> (item 7). Reuse [switchKubernetesViewMode.ts](../../../../src/plugins/service-kubernetes/commands/switchKubernetesViewMode.ts),
+> (item 7). Reuse [switchKubernetesViewMode.ts](../../../../../src/plugins/service-kubernetes/commands/switchKubernetesViewMode.ts),
 > the `config.ts` mode key, and the inline contextValue toggle verbatim.
 
 ---
@@ -1226,8 +1226,8 @@ The **release-blocking** P1 work (items 1–5) is independent of the above and c
 ## Appendix A — current flow (reference)
 
 See the full data-flow write-up in
-[atlas-mongodb-discovery-flow.md](../../../atlas-mongodb-discovery-flow.md) and the
-decision rationale in [decisions.md](./decisions.md). The two-layer auth model (Atlas Admin
+[atlas-mongodb-discovery-flow.md](../../../../atlas-mongodb-discovery-flow.md) and the
+decision rationale in [decisions.md](../decisions.md). The two-layer auth model (Atlas Admin
 API session for discovery vs. SCRAM database credentials for connection) is the key mental
 model: "signed in to Atlas" (Layer 1) does **not** mean "authenticated to the database"
 (Layer 2) — the user is still prompted for SCRAM credentials on cluster expand.
@@ -1252,7 +1252,7 @@ it is implemented and verified, explicitly closed with a reason, or moved to a l
 ### Architecture decision now established
 
 The multi-credential feasibility POC and UX design are complete. See
-[multi-credential-poc-plan.md](./multi-credential-poc-plan.md) for the Atlas Admin API research,
+[multi-credential-poc-plan.md](../multi-credential-research.md) for the Atlas Admin API research,
 isolated experiments, selected tree/webview design, and alternatives that were rejected.
 Production work should now implement these decisions rather than repeat the feasibility phase:
 
@@ -1285,24 +1285,24 @@ design from this review summary:
 
 | Need                                                      | Controlling POC section                                                                                                               | Current evidence/status                                                                                                              |
 | --------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
-| Credential scope and same-org project union               | [§3.1 — Credential scoping](./multi-credential-poc-plan.md#31-credential-scoping--the-load-bearing-fact)                              | ✅ Different-org, same-org subset/overlap/disjoint union, healthy emptiness, and Service Account scope parity live-confirmed         |
-| Store, session, aggregation, labels, and token lifecycle  | [§5 — Proposed API-level design](./multi-credential-poc-plan.md#5-proposed-api-level-design)                                          | Production design selected; no production implementation yet                                                                         |
-| Partial-result and error taxonomy                         | [§6 — Error reporting model](./multi-credential-poc-plan.md#6-error-reporting-model--partial-results-with-per-credential-attribution) | ✅ Healthy `200 []`, unrestricted/detail `200`, enforced non-match `403`, matching-IP `200`, and invalid-secret `401` live-confirmed |
-| QuickPick, webview, tree, list, empty, and retry behavior | [§7 — Selected credential/tree UX](./multi-credential-poc-plan.md#7-credential-management--tree-ux-selected-design)                   | Selected design; archived alternatives in §7.7 are not implementation options                                                        |
-| Answers to the seven original POC questions               | [§8 — POC answers](./multi-credential-poc-plan.md#8-answers-to-the-seven-poc-questions-ledger-step-0)                                 | All seven answered at design/isolated-experiment level                                                                               |
-| Component ownership and data flow                         | [§9 — Reference architecture](./multi-credential-poc-plan.md#9-reference-architecture-diagram)                                        | Use as the implementation boundary map                                                                                               |
-| Relative slices and decision gates                        | [§11 — Effort and gates](./multi-credential-poc-plan.md#11-effort-estimate-decision-gates--scrap-criteria)                            | Slices A–G define the intended dependency order                                                                                      |
+| Credential scope and same-org project union               | [§3.1 — Credential scoping](../multi-credential-research.md#31-credential-scoping--the-load-bearing-fact)                              | ✅ Different-org, same-org subset/overlap/disjoint union, healthy emptiness, and Service Account scope parity live-confirmed         |
+| Store, session, aggregation, labels, and token lifecycle  | [§5 — Proposed API-level design](../multi-credential-research.md#5-proposed-api-level-design)                                          | Production design selected; no production implementation yet                                                                         |
+| Partial-result and error taxonomy                         | [§6 — Error reporting model](../multi-credential-research.md#6-error-reporting-model--partial-results-with-per-credential-attribution) | ✅ Healthy `200 []`, unrestricted/detail `200`, enforced non-match `403`, matching-IP `200`, and invalid-secret `401` live-confirmed |
+| QuickPick, webview, tree, list, empty, and retry behavior | [§7 — Selected credential/tree UX](../multi-credential-research.md#7-credential-management--tree-ux-selected-design)                   | Selected design; archived alternatives in §7.7 are not implementation options                                                        |
+| Answers to the seven original POC questions               | [§8 — POC answers](../multi-credential-research.md#8-answers-to-the-seven-poc-questions-ledger-step-0)                                 | All seven answered at design/isolated-experiment level                                                                               |
+| Component ownership and data flow                         | [§9 — Reference architecture](../multi-credential-research.md#9-reference-architecture-diagram)                                        | Use as the implementation boundary map                                                                                               |
+| Relative slices and decision gates                        | [§11 — Effort and gates](../multi-credential-research.md#11-effort-estimate-decision-gates--scrap-criteria)                            | Slices A–G define the intended dependency order                                                                                      |
 
 The POC's completed experiments are evidence for architecture decisions, not production test
 coverage:
 
 | Experiment                                                                                                                                | Status                                | What an implementing agent may rely on                                                                                                 |
 | ----------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------- |
-| [Experiment 1 — aggregation semantics](./multi-credential-poc-plan.md#experiment-1--aggregation-semantics)                                | ✅ Executed in isolation              | `Promise.allSettled` preserves healthy credential results when peers fail; `Promise.all` does not                                      |
-| [Experiment 2 — non-throwing aggregation](./multi-credential-poc-plan.md#experiment-2--single-list-all-api-with-per-credential-isolation) | ✅ Executed in isolation              | One aggregation surface can return organizations, projects, clusters, and credential-scoped errors together                            |
-| [Experiment 3 — parallel fan-out](./multi-credential-poc-plan.md#experiment-3--parallel-vs-sequential-fan-out)                            | ✅ Executed in isolation              | Parallel fan-out produced an approximately 8× improvement for eight simulated credentials; production must still use a bounded limiter |
-| [Experiment 4 — token-bucket headroom](./multi-credential-poc-plan.md#experiment-4--token-bucket-headroom)                                | ✅ Executed analytically/in isolation | Discovery request volume is far below documented limits; retain defensive `429`/`Retry-After` handling                                 |
-| [Live-check matrix](./multi-credential-poc-plan.md#residual-live-matrix)                                                                  | ✅ Blocking gates complete            | Only optional Service Account L2/cluster-detail parity remains; L3 is mocked-contract-only and L4 uses production telemetry            |
+| [Experiment 1 — aggregation semantics](../multi-credential-research.md#experiment-1--aggregation-semantics)                                | ✅ Executed in isolation              | `Promise.allSettled` preserves healthy credential results when peers fail; `Promise.all` does not                                      |
+| [Experiment 2 — non-throwing aggregation](../multi-credential-research.md#experiment-2--single-list-all-api-with-per-credential-isolation) | ✅ Executed in isolation              | One aggregation surface can return organizations, projects, clusters, and credential-scoped errors together                            |
+| [Experiment 3 — parallel fan-out](../multi-credential-research.md#experiment-3--parallel-vs-sequential-fan-out)                            | ✅ Executed in isolation              | Parallel fan-out produced an approximately 8× improvement for eight simulated credentials; production must still use a bounded limiter |
+| [Experiment 4 — token-bucket headroom](../multi-credential-research.md#experiment-4--token-bucket-headroom)                                | ✅ Executed analytically/in isolation | Discovery request volume is far below documented limits; retain defensive `429`/`Retry-After` handling                                 |
+| [Live-check matrix](../multi-credential-research.md#residual-live-matrix)                                                                  | ✅ Blocking gates complete            | Only optional Service Account L2/cluster-detail parity remains; L3 is mocked-contract-only and L4 uses production telemetry            |
 
 The executable production tests listed in Steps 2–7 below are still required. Do not cite the
 isolated experiment script as proof that storage, session restoration, webview cancellation,
@@ -1482,7 +1482,7 @@ of the [#814](https://github.com/microsoft/vscode-documentdb/issues/814) follow-
 **Discovery (2026-07-28) — an IP-blocked _first_ add cannot resolve the organization at all, so its
 deep link necessarily degrades to the console root.** A general `[openUrl]` trace was added to the
 shared `openUrl` procedure in
-[appRouter.ts](../../../../src/webviews/_integration/appRouter.ts) — it logs the exact URL right
+[appRouter.ts](../../../../../src/webviews/_integration/appRouter.ts) — it logs the exact URL right
 before `openExternal`, so what the deep link points at can be confirmed from the DocumentDB output
 channel. For a Service Account whose first add is blocked by the org's access list, the trace showed
 `https://cloud.mongodb.com` (root): there is no stored record yet, so no cached `orgId`, and the one
@@ -1498,7 +1498,7 @@ stays under [#814](https://github.com/microsoft/vscode-documentdb/issues/814).
 ### Step 1 — Live API gates closed
 
 The POC established feasibility, selected the architecture, and completed the blocking checks in
-[§10.2 — live Atlas experiments](./multi-credential-poc-plan.md#102-experiments-requiring-a-live-atlas-account):
+[§10.2 — live Atlas experiments](../multi-credential-research.md#102-experiments-requiring-a-live-atlas-account):
 
 1. **L1 passed:** different-org attribution, same-org subset/overlap/disjoint union, healthy
    no-project scope, organization/project/cluster detail retrieval, and Service Account scope
@@ -1513,7 +1513,7 @@ privacy-reviewed production telemetry for Service Account token-mint throttling/
 classification and use observed frequency to decide whether further mitigation is needed.
 
 The exact sanitized evidence and residual optional Service Account enforcement/cluster-detail
-checks are maintained in the [POC live matrix](./multi-credential-poc-plan.md#residual-live-matrix).
+checks are maintained in the [POC live matrix](../multi-credential-research.md#residual-live-matrix).
 No remaining live check blocks Step 2.
 
 **Blocking open questions: none.** The remaining pagination tests, production telemetry,
@@ -1523,7 +1523,7 @@ not prerequisites for starting the multi-credential foundation.
 ### Step 2 — Build the multi-credential foundation (#7, #12)
 
 Land the POC's
-[slices A–C](./multi-credential-poc-plan.md#111-effort-relative) before adding production UI:
+[slices A–C](../multi-credential-research.md#111-effort-relative) before adding production UI:
 
 1. Add `AtlasCredentialStore` on `StorageService`, with one stable random ID per credential,
    versioned non-secret metadata, independent secret slots, stable ordering, and cache
@@ -1544,7 +1544,7 @@ regression.
 
 ### Step 3 — Implement credential management and lifecycle (#6, #7, #12)
 
-Build the [selected credential-management flow](./multi-credential-poc-plan.md#72-credential-management-wizard-quickpick--webview--paths--flows)
+Build the [selected credential-management flow](../multi-credential-research.md#72-credential-management-wizard-quickpick--webview--paths--flows)
 on the new store:
 
 - add a **Manage MongoDB Atlas Credentials** QuickPick with credential status, Add, Retry,
@@ -1564,7 +1564,7 @@ delete another credential's secrets or healthy tree data.
 
 ### Step 4 — Build the merged organization tree and recovery UX (#2, #3, #7, #8)
 
-Render the [selected quiet tree](./multi-credential-poc-plan.md#73-tree-mode--the-quiet-tree)
+Render the [selected quiet tree](../multi-credential-research.md#73-tree-mode--the-quiet-tree)
 from the aggregated snapshot:
 
 - healthy path: organization → project → cluster, with duplicate resources merged by Atlas ID;
@@ -1585,7 +1585,7 @@ credentials** until the consolidated action replaces them.
 
 ### Step 5 — Add List mode and complete wizard attribution (#5, #8)
 
-Add the item-#8 [List mode](./multi-credential-poc-plan.md#74-list-mode--same-error-node-no-switch)
+Add the item-#8 [List mode](../multi-credential-research.md#74-list-mode--same-error-node-no-switch)
 only after the merged snapshot powers Tree mode:
 
 - List mode renders deduplicated clusters with `organization · project` context and the same

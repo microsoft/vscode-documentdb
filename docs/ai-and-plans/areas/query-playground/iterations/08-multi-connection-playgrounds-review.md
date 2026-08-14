@@ -1,6 +1,6 @@
 # Multi-Connection Playgrounds — Pre-Review: Corner Cases
 
-> Review of [multi-connection-playgrounds.md](multi-connection-playgrounds.md) plan vs implementation.
+> Review of [multi-connection-playgrounds.md](./08-multi-connection-playgrounds.md) plan vs implementation.
 > Focus: connection failures, worker crashes, recovery paths.
 
 ## Recovery Model Summary

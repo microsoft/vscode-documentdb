@@ -370,7 +370,7 @@ export class DocumentDBClusterItem extends ClusterItemBase<ConnectionClusterMode
      * The call is cheap and a no-op when no provider applies (the common case). Failures propagate to
      * the connect flow's telemetry/error handling.
      *
-     * @see docs/ai-and-plans/PRs/621-kubernetes-discovery/connection-reachability-providers.md
+     * @see docs/ai-and-plans/areas/kubernetes-discovery/connection-reachability-providers.md
      */
     private async ensureConnectionReachable(
         connectionProperties: Record<string, unknown> | undefined,

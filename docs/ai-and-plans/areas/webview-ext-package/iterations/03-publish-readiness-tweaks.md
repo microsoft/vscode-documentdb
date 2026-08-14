@@ -6,7 +6,7 @@
 **Package:** `packages/vscode-ext-webview` (`@microsoft/vscode-ext-webview`, `0.9.0-preview`)
 
 This note records three small, low-risk improvements made to the webview API
-package after it was merged in [PR #766](../766-webview-ext-package-redesign/).
+package after it was merged in [PR #766](./02-package-redesign/).
 They came out of review feedback, a follow-up question about peer
 dependencies, and an external consumer's documentation bug report. No runtime
 or API behaviour changes — this is packaging metadata plus documentation only.
@@ -181,7 +181,7 @@ were imprecise.
 
 ### What
 
-`docs/ai-and-plans/PRs/766-webview-ext-package-redesign/webview-ext-migration-manual.md`
+`docs/ai-and-plans/practices/webview-ext-migration-manual.md`
 listed `WithTelemetry<T, TTelemetry>` under the `.` (shared) entry point in the
 "New primitives that had no old equivalent" table. That is wrong — it is
 exported from `./host`. Also added `WithTelemetry` to the `./host` row of the
@@ -218,7 +218,7 @@ already correct.
 | ---------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `packages/vscode-ext-webview/package.json`                                               | Add `"sideEffects": false`.                                                                                                                          |
 | `packages/vscode-ext-webview/README.md`                                                  | Clarify optional peer dependencies in the install prose and the peer-dependency table; correct `WithTelemetry`'s documented entry point to `./host`. |
-| `docs/ai-and-plans/PRs/766-webview-ext-package-redesign/webview-ext-migration-manual.md` | Correct `WithTelemetry`'s documented entry point to `./host`.                                                                                        |
+| `docs/ai-and-plans/practices/webview-ext-migration-manual.md` | Correct `WithTelemetry`'s documented entry point to `./host`.                                                                                        |
 
 ## Commits
 

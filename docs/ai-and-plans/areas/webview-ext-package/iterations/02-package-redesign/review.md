@@ -94,7 +94,7 @@ exceptions → telemetry), R766-N06 (create-or-reveal). R766-S01 stands as agree
 > current consumers pay nothing today. The Iteration 2 chapter re-analyses options
 > A/B/C and the side effects on existing projects.
 
-Reference: [packages/vscode-ext-webview/src/host/attachTrpc.ts](../../../../packages/vscode-ext-webview/src/host/attachTrpc.ts#L331-L348)
+Reference: [packages/vscode-ext-webview/src/host/attachTrpc.ts](../../../../../../packages/vscode-ext-webview/src/host/attachTrpc.ts#L331-L348)
 
 `attachTrpc` registers a webview message listener and immediately reads `message.op.type`. Any panel that already uses `postMessage` for a non-tRPC message will send an object without `op`, which causes the handler to throw before the message can be ignored.
 
@@ -104,7 +104,7 @@ Suggested fix: add a small runtime guard before the `switch`, for example checki
 
 ### R766-02: Medium - Public `WebviewController.dispose()` leaves the webview panel open
 
-Reference: [packages/vscode-ext-webview/src/host/WebviewController.ts](../../../../packages/vscode-ext-webview/src/host/WebviewController.ts#L311-L338)
+Reference: [packages/vscode-ext-webview/src/host/WebviewController.ts](../../../../../../packages/vscode-ext-webview/src/host/WebviewController.ts#L311-L338)
 
 The README advertises the `openWebview` return value as a handle with `dispose`, but `dispose()` only marks the controller disposed, fires `onDisposed`, and disposes registered listeners. It deliberately does not call `this._panel.dispose()`, based on the internal assumption that only the panel owns the controller lifecycle.
 
@@ -114,7 +114,7 @@ Suggested fix: split disposal into two paths. Public `dispose()` should close th
 
 ### R766-03: Medium - `ADVANCED.md` is referenced but excluded from the npm package
 
-References: [packages/vscode-ext-webview/package.json](../../../../packages/vscode-ext-webview/package.json#L38-L41), [packages/vscode-ext-webview/README.md](../../../../packages/vscode-ext-webview/README.md#L216-L238)
+References: [packages/vscode-ext-webview/package.json](../../../../../../packages/vscode-ext-webview/package.json#L38-L41), [packages/vscode-ext-webview/README.md](../../../../../../packages/vscode-ext-webview/README.md#L216-L238)
 
 The package whitelist ships only `dist` and `README.md`, but the README repeatedly sends advanced users to `ADVANCED.md`. Consumers installing the package from npm will not get that file in the tarball.
 
@@ -124,7 +124,7 @@ Suggested fix: include `ADVANCED.md` in the package `files` array. Consider also
 
 ### R766-04: Low - `ADVANCED.md` contradicts the implementation for subscription errors
 
-References: [packages/vscode-ext-webview/ADVANCED.md](../../../../packages/vscode-ext-webview/ADVANCED.md#L195-L199), [packages/vscode-ext-webview/src/webview/errorLink.ts](../../../../packages/vscode-ext-webview/src/webview/errorLink.ts#L55-L88), [packages/vscode-ext-webview/src/react/useRpcEvents.ts](../../../../packages/vscode-ext-webview/src/react/useRpcEvents.ts#L16-L23)
+References: [packages/vscode-ext-webview/ADVANCED.md](../../../../../../packages/vscode-ext-webview/ADVANCED.md#L195-L199), [packages/vscode-ext-webview/src/webview/errorLink.ts](../../../../../../packages/vscode-ext-webview/src/webview/errorLink.ts#L55-L88), [packages/vscode-ext-webview/src/react/useRpcEvents.ts](../../../../../../packages/vscode-ext-webview/src/react/useRpcEvents.ts#L16-L23)
 
 The advanced manual says subscription errors are surfaced through the global event channel as well as each subscription's `.subscribe({ onError })` handler. The implementation intentionally excludes subscriptions from `eventLink`, and the hook docs say subscriptions are excluded to avoid surfacing them twice.
 
@@ -134,7 +134,7 @@ Suggested fix: update `ADVANCED.md` to match the implementation: query and mutat
 
 GitHub review thread: `PRRT_kwDOODtcO86OCV7g` (Copilot reviewer, unresolved, can resolve)
 
-Reference: [src/webviews/documentdb/documentView/documentsViewController.ts](../../../../src/webviews/documentdb/documentView/documentsViewController.ts#L41-L73)
+Reference: [src/webviews/documentdb/documentView/documentsViewController.ts](../../../../../../src/webviews/documentdb/documentView/documentsViewController.ts#L41-L73)
 
 Copilot flagged that `openDocumentWebview` declares a non-optional return type but stores the controller in `handle.controller?: AppWebviewController<...>` and then returns `handle.controller`.
 
@@ -146,7 +146,7 @@ Suggested fix: avoid returning through the optional property. Store the result i
 
 GitHub review threads: `PRRT_kwDOODtcO86OCV77` and `PRRT_kwDOODtcO86OCV8H` (Copilot reviewer, both unresolved, both can resolve)
 
-References: [packages/vscode-ext-webview/src/host/attachTrpc.ts](../../../../packages/vscode-ext-webview/src/host/attachTrpc.ts#L250-L260), [packages/vscode-ext-webview/src/host/attachTrpc.ts](../../../../packages/vscode-ext-webview/src/host/attachTrpc.ts#L366-L375)
+References: [packages/vscode-ext-webview/src/host/attachTrpc.ts](../../../../../../packages/vscode-ext-webview/src/host/attachTrpc.ts#L250-L260), [packages/vscode-ext-webview/src/host/attachTrpc.ts](../../../../../../packages/vscode-ext-webview/src/host/attachTrpc.ts#L366-L375)
 
 Copilot flagged both calls to `iterator.return?.({ value: undefined, done: true })`. The comment is valid: `AsyncIterator.return(value?)` accepts the return value, not an `IteratorResult` object. Passing `{ value, done }` is misleading and can leak that object as the iterator's final return value for custom iterators.
 
@@ -162,7 +162,7 @@ I would not collapse the three host tiers. The factory is useful for greenfield 
 
 ### R766-S02: Consider making production logging opt-in or mode-aware
 
-Reference: [packages/vscode-ext-webview/src/webview/connectTrpc.ts](../../../../packages/vscode-ext-webview/src/webview/connectTrpc.ts#L105-L107)
+Reference: [packages/vscode-ext-webview/src/webview/connectTrpc.ts](../../../../../../packages/vscode-ext-webview/src/webview/connectTrpc.ts#L105-L107)
 
 `connectTrpc` always inserts tRPC's `loggerLink()`. That is friendly while developing a starter project, but it may surprise production consumers by logging every RPC call from the webview side. Since `WebviewController` already has explicit telemetry/logging options on the host side, the client side would be more predictable if logging were controlled by a `logger` / `loggerLink` / `enableLogger` option, or omitted by default in production-oriented helpers.
 
@@ -172,11 +172,11 @@ This is not a correctness bug, but it is worth second-guessing before the previe
 
 The decision to ship middleware bodies instead of a package-owned telemetry procedure is sound. It keeps the package instance-agnostic and avoids baking in Azure telemetry policy.
 
-The cost is that consumers need a local `WithTelemetry<T>` helper or a similar narrowing pattern when procedure code reads `ctx.telemetry`. DocumentDB already has that helper in [src/webviews/\_integration/trpc.ts](../../../../src/webviews/_integration/trpc.ts#L58-L64). Add that pattern to `ADVANCED.md` so agents have a copyable way to do the right thing instead of inventing ad hoc casts at every procedure.
+The cost is that consumers need a local `WithTelemetry<T>` helper or a similar narrowing pattern when procedure code reads `ctx.telemetry`. DocumentDB already has that helper in [src/webviews/\_integration/trpc.ts](../../../../../../src/webviews/_integration/trpc.ts#L58-L64). Add that pattern to `ADVANCED.md` so agents have a copyable way to do the right thing instead of inventing ad hoc casts at every procedure.
 
 ### R766-S04: The README should avoid promising a single message listener
 
-Reference: [packages/vscode-ext-webview/README.md](../../../../packages/vscode-ext-webview/README.md#L202-L208)
+Reference: [packages/vscode-ext-webview/README.md](../../../../../../packages/vscode-ext-webview/README.md#L202-L208)
 
 The README says every component receives the same client and "the same single `message` listener." The shared-client part is true, but the transport currently registers per-operation `message` listeners under `vscodeLink`. The claim is not important to the API contract and can be softened to avoid describing internals that may change.
 
@@ -197,7 +197,7 @@ first pass missed (`R766-N*`), and (3) give every discovery an
 options/pros-cons/recommendation block so a follow-up discussion can be focused
 by ID.
 
-I also read the locked design (`docs/ai-and-plans/PRs/766-webview-ext-package-redesign/webview-rpc-package-decoupling-design.md`,
+I also read the locked design (`docs/ai-and-plans/areas/webview-ext-package/design.md`,
 §13 "Decisions summary"). **Bottom line up front: the implementation faithfully
 matches the locked design** — the four subpaths, the `open`/`attach`/`connect`
 verb system, `initWebviewTrpc`, middleware bodies + adapters, and the
@@ -232,7 +232,7 @@ severity of R766-01 and two rationale/scope refinements (R766-02, R766-03).
 > ⏭ **Moved to Iteration 2.** Options A/B/C are re-examined in the Iteration 2
 > chapter, together with the side-effect analysis for existing projects.
 
-Reference: [packages/vscode-ext-webview/src/host/attachTrpc.ts](../../../../packages/vscode-ext-webview/src/host/attachTrpc.ts#L331-L333)
+Reference: [packages/vscode-ext-webview/src/host/attachTrpc.ts](../../../../../../packages/vscode-ext-webview/src/host/attachTrpc.ts#L331-L333)
 
 The defect is real and verified: the listener callback is `async` and its first
 act is `switch (message.op.type)`, with no guard. A foreign `postMessage` whose
@@ -287,7 +287,7 @@ revisit only if real channel-multiplexing demand appears.
 
 ### R766-02 — refinement
 
-Reference: [packages/vscode-ext-webview/src/host/WebviewController.ts](../../../../packages/vscode-ext-webview/src/host/WebviewController.ts#L323-L338)
+Reference: [packages/vscode-ext-webview/src/host/WebviewController.ts](../../../../../../packages/vscode-ext-webview/src/host/WebviewController.ts#L323-L338)
 
 Confirmed. One correction to the code's own reasoning: the doc comment says the
 panel is not closed to avoid a "circular call chain
@@ -301,7 +301,7 @@ Corroborating evidence that this is a latent (not yet triggered) issue: a repo
 search shows DocumentDB never calls `controller.dispose()` or
 `revealToForeground()` on these controllers, and the `openWebview` test only
 asserts `isDisposed`/`onDisposed` — never that the panel closed
-([openWebview.test.ts](../../../../packages/vscode-ext-webview/src/host/openWebview.test.ts#L84-L92)).
+([openWebview.test.ts](../../../../../../packages/vscode-ext-webview/src/host/openWebview.test.ts#L84-L92)).
 The handle method is essentially untested and unused in-repo, which is why the
 gap survived.
 
@@ -329,7 +329,7 @@ mock panel's `dispose()` was called.
 
 ### R766-03 — broaden to include the license
 
-References: [package.json](../../../../packages/vscode-ext-webview/package.json#L38-L41), [README.md](../../../../packages/vscode-ext-webview/README.md#L334-L336)
+References: [package.json](../../../../../../packages/vscode-ext-webview/package.json#L38-L41), [README.md](../../../../../../packages/vscode-ext-webview/README.md#L334-L336)
 
 Confirmed: `files` is `["dist", "README.md"]`, so `ADVANCED.md` (linked ~10×
 from the README) is not in the tarball. Additionally, the README's License
@@ -354,7 +354,7 @@ MIT package.
 
 ### R766-04 — align the doc down to the implementation
 
-References: [ADVANCED.md](../../../../packages/vscode-ext-webview/ADVANCED.md#L197-L199), [errorLink.ts](../../../../packages/vscode-ext-webview/src/webview/errorLink.ts#L71-L82), [useRpcEvents.ts](../../../../packages/vscode-ext-webview/src/react/useRpcEvents.ts#L20-L21)
+References: [ADVANCED.md](../../../../../../packages/vscode-ext-webview/ADVANCED.md#L197-L199), [errorLink.ts](../../../../../../packages/vscode-ext-webview/src/webview/errorLink.ts#L71-L82), [useRpcEvents.ts](../../../../../../packages/vscode-ext-webview/src/react/useRpcEvents.ts#L20-L21)
 
 Confirmed contradiction. `eventLink` guards `if (op.type !== 'subscription')` on
 both `next` and `error`, and the `useRpcEvents` doc comment says subscriptions
@@ -376,7 +376,7 @@ _are_ surfaced on `onError`.
 
 ### R766-05 — store in a local, return the local
 
-Reference: [documentsViewController.ts](../../../../src/webviews/documentdb/documentView/documentsViewController.ts#L41-L73)
+Reference: [documentsViewController.ts](../../../../../../src/webviews/documentdb/documentView/documentsViewController.ts#L41-L73)
 
 Confirmed low. It type-checks because TS narrows `handle.controller` to
 non-`undefined` right after the direct assignment (no intervening call), so no
@@ -397,7 +397,7 @@ runtime bug. It is purely a readability/robustness nit.
 
 ### R766-06 — call `return()` with no argument
 
-References: [attachTrpc.ts](../../../../packages/vscode-ext-webview/src/host/attachTrpc.ts#L259), [attachTrpc.ts](../../../../packages/vscode-ext-webview/src/host/attachTrpc.ts#L374)
+References: [attachTrpc.ts](../../../../../../packages/vscode-ext-webview/src/host/attachTrpc.ts#L259), [attachTrpc.ts](../../../../../../packages/vscode-ext-webview/src/host/attachTrpc.ts#L374)
 
 Confirmed at both sites. `AsyncIterator.return(value?)` takes the _return value_,
 not an `IteratorResult`; passing `{ value: undefined, done: true }` sets that
@@ -409,7 +409,7 @@ keep the existing rejection-swallowing. (No competing option worth listing.)
 
 ### R766-S02 / S03 / S04 — recommendations
 
-- **R766-S02** (`loggerLink()` always on — [connectTrpc.ts](../../../../packages/vscode-ext-webview/src/webview/connectTrpc.ts#L106)):
+- **R766-S02** (`loggerLink()` always on — [connectTrpc.ts](../../../../../../packages/vscode-ext-webview/src/webview/connectTrpc.ts#L106)):
   add `ConnectTrpcOptions.logger?: boolean` (default `false`); the facade and
   hooks stay quiet unless observability is requested. Reject an env-based
   default — webview bundles have no reliable `NODE_ENV`. **Recommend: opt-in
@@ -417,11 +417,11 @@ keep the existing rejection-swallowing. (No competing option worth listing.)
 - **R766-S03** (document the telemetry-narrowing pattern): add the
   `WithTelemetry<T>` recipe to ADVANCED.md and optionally ship a generic
   `type WithTelemetry<TCtx, TTelemetry>` from `./host`; also fix the stale
-  DocumentDB comment ([trpc.ts](../../../../src/webviews/_integration/trpc.ts#L60-L67))
+  DocumentDB comment ([trpc.ts](../../../../../../src/webviews/_integration/trpc.ts#L60-L67))
   that calls itself a "replacement for the package's `WithTelemetry` helper"
   when the package exports none. **Recommend: document + ship a tiny generic
   helper.**
-- **R766-S04** (README "single message listener" — [README.md](../../../../packages/vscode-ext-webview/README.md#L207-L211)):
+- **R766-S04** (README "single message listener" — [README.md](../../../../../../packages/vscode-ext-webview/README.md#L207-L211)):
   soften to "a shared client per webview"; drop the "single `message` listener"
   claim, which is false (one listener per in-flight op). **Recommend: reword.**
 
@@ -432,7 +432,7 @@ keep the existing rejection-swallowing. (No competing option worth listing.)
 > ⏭ **Moved to Iteration 2**, bundled with R766-01 — both transport edges (host
 > `attachTrpc` and webview `onReceive`) should be guarded together.
 
-Reference: [packages/vscode-ext-webview/src/webview/connectTrpc.ts](../../../../packages/vscode-ext-webview/src/webview/connectTrpc.ts#L92-L100)
+Reference: [packages/vscode-ext-webview/src/webview/connectTrpc.ts](../../../../../../packages/vscode-ext-webview/src/webview/connectTrpc.ts#L92-L100)
 
 This is the webview-side mirror of R766-01. `onReceive` registers a `window`
 `message` listener whose guard is `if ((event.data as VsCodeLinkResponseMessage).id)`.
@@ -464,7 +464,7 @@ edges reject foreign traffic consistently).
 > ⏭ **Moved to Iteration 2.** The Iteration 2 chapter shows consumer code for
 > options A and B side by side with today's usage.
 
-References: [initWebviewTrpc.ts](../../../../packages/vscode-ext-webview/src/shared/initWebviewTrpc.ts#L57-L64), [attachTrpc.ts](../../../../packages/vscode-ext-webview/src/host/attachTrpc.ts#L134-L139), [ADVANCED.md](../../../../packages/vscode-ext-webview/ADVANCED.md#L88-L89)
+References: [initWebviewTrpc.ts](../../../../../../packages/vscode-ext-webview/src/shared/initWebviewTrpc.ts#L57-L64), [attachTrpc.ts](../../../../../../packages/vscode-ext-webview/src/host/attachTrpc.ts#L134-L139), [ADVANCED.md](../../../../../../packages/vscode-ext-webview/ADVANCED.md#L88-L89)
 
 This is the finding most in tension with the "simple for the 90%" north star. To
 get a typed context (the whole point of `initWebviewTrpc<Ctx>()`), the greenfield
@@ -519,7 +519,7 @@ agents: it removes an entire coordinated step from the documented quick start.
 > ⏭ **Moved to Iteration 2.** Option B (a non-executed `application/json` data
 > block) and its consumer side effects are analysed in the Iteration 2 chapter.
 
-References: [WebviewController.ts](../../../../packages/vscode-ext-webview/src/host/WebviewController.ts#L267), [WebviewController.ts](../../../../packages/vscode-ext-webview/src/host/WebviewController.ts#L272-L276)
+References: [WebviewController.ts](../../../../../../packages/vscode-ext-webview/src/host/WebviewController.ts#L267), [WebviewController.ts](../../../../../../packages/vscode-ext-webview/src/host/WebviewController.ts#L272-L276)
 
 `getDocumentTemplate` builds inline `<script>` blocks by string interpolation:
 
@@ -558,7 +558,7 @@ as the cleaner long-term shape. Reject C for the facade.
 
 ### R766-N04: Low - `AttachTrpcResult` leaks live mutable internal `Map`s
 
-Reference: [packages/vscode-ext-webview/src/host/attachTrpc.ts](../../../../packages/vscode-ext-webview/src/host/attachTrpc.ts#L64-L68)
+Reference: [packages/vscode-ext-webview/src/host/attachTrpc.ts](../../../../../../packages/vscode-ext-webview/src/host/attachTrpc.ts#L64-L68)
 
 `attachTrpc` returns its internal `activeOperations` and `activeSubscriptions`
 `Map`s directly (documented as "live map"). A consumer can `.clear()`,
@@ -588,7 +588,7 @@ mutation.
 > telemetry (not just the console) are explored in the Iteration 2 chapter; not
 > implemented this pass, per request.
 
-Reference: [packages/vscode-ext-webview/src/webview/events.ts](../../../../packages/vscode-ext-webview/src/webview/events.ts#L110-L129)
+Reference: [packages/vscode-ext-webview/src/webview/events.ts](../../../../../../packages/vscode-ext-webview/src/webview/events.ts#L110-L129)
 
 `emitSuccess`/`emitError`/`emitAborted` invoke handlers synchronously inside the
 `eventLink` `next`/`error` callbacks. The channel's own contract says it is
@@ -614,7 +614,7 @@ iteration, not the caller.
 > ⏭ **Moved to Iteration 2** (unchanged recommendation: document the pattern,
 > don't build it into the package yet).
 
-References: [openWebview.ts](../../../../packages/vscode-ext-webview/src/host/openWebview.ts#L42-L50), [documentsViewController.ts](../../../../src/webviews/documentdb/documentView/documentsViewController.ts#L29-L73)
+References: [openWebview.ts](../../../../../../packages/vscode-ext-webview/src/host/openWebview.ts#L42-L50), [documentsViewController.ts](../../../../../../src/webviews/documentdb/documentView/documentsViewController.ts#L29-L73)
 
 Every `openWebview` / `openAppWebview` call creates a **new** panel. DocumentDB
 does not dedupe (opening the same document twice yields two tabs); Cosmos solves
@@ -641,7 +641,7 @@ panel-registry state.
 
 ### R766-N07: Low - `useConfiguration` can crash the webview on malformed initial data
 
-Reference: [packages/vscode-ext-webview/src/react/useConfiguration.ts](../../../../packages/vscode-ext-webview/src/react/useConfiguration.ts#L23-L29)
+Reference: [packages/vscode-ext-webview/src/react/useConfiguration.ts](../../../../../../packages/vscode-ext-webview/src/react/useConfiguration.ts#L23-L29)
 
 `JSON.parse(decodeURIComponent(window.config?.__initialData ?? '{}'))` runs in a
 `useState` initializer. If `__initialData` is malformed (a consumer hand-rolling
@@ -663,7 +663,7 @@ encoding, so risk is low.
 
 ### R766-N08: Low - The `telemetry` controller option is actually a dispatch _logger_, overloading the word
 
-Reference: [packages/vscode-ext-webview/src/host/WebviewController.ts](../../../../packages/vscode-ext-webview/src/host/WebviewController.ts#L92-L99)
+Reference: [packages/vscode-ext-webview/src/host/WebviewController.ts](../../../../../../packages/vscode-ext-webview/src/host/WebviewController.ts#L92-L99)
 
 `WebviewControllerOptions.telemetry?: ProcedureLogger` is the zero-config console
 _logging_ sink. But ADVANCED.md uses "telemetry" for the _analytics_ path
@@ -1161,14 +1161,14 @@ that is what we measure: its **peak** and **average**, plus the dispatch volume
 that multiplies it.
 
 **Where to sample it (for free).** The host already tracks every in-flight
-operation in [`AttachTrpcResult.activeOperations` + `.activeSubscriptions`](../../../../packages/vscode-ext-webview/src/host/attachTrpc.ts#L55-L78)
+operation in [`AttachTrpcResult.activeOperations` + `.activeSubscriptions`](../../../../../../packages/vscode-ext-webview/src/host/attachTrpc.ts#L55-L78)
 (exposed read-only in R766-N04). Their combined size _is_ `N`. Because each
 in-flight operation is exactly one host map entry **and** one webview listener,
 the host-side count is a faithful, zero-cost proxy for the webview fan-out — no
 webview→host round-trip needed.
 
 **How to emit it — reuse the accumulating telemetry.**
-[`callWithAccumulatingTelemetry`](../../../../src/utils/accumulatingTelemetry.ts)
+[`callWithAccumulatingTelemetry`](../../../../../../src/utils/accumulatingTelemetry.ts)
 already reduces a `distributions` gauge to `min / max / sum / count` across a
 batch and sums plain `measurements`, so one call per dispatched operation gives
 us the whole picture without per-op event spam:
@@ -1253,7 +1253,7 @@ shipped them together, adopting **option 1** from the
   quiet — a generic consumer is not opted into telemetry or events it may not
   want.
 - **DocumentDB opts in for itself.**
-  [`reportObserverError`](../../../../src/webviews/_integration/observability/reportObserverError.ts)
+  [`reportObserverError`](../../../../../../src/webviews/_integration/observability/reportObserverError.ts)
   keeps the structured `console.error` (path + phase) and additionally elevates
   the error to the webview's browser `reportError()` global — the "general
   observability" of option 5 — without re-entering the tRPC channel, so a throwing
@@ -1314,10 +1314,10 @@ and analyzes the options. **All four items were implemented in this iteration**
 
 | ID       | Source                                                                                                          | Sev. | Title                                                               |
 | -------- | --------------------------------------------------------------------------------------------------------------- | ---- | ------------------------------------------------------------------- |
-| R766-C01 | [`telemetryMiddlewareBody`](../../../../packages/vscode-ext-webview/src/host/middleware/telemetry.ts#L119-L153) | Low  | Telemetry middleware records error details for aborted calls        |
-| R766-C02 | [`documentDbTelemetryRunner`](../../../../src/webviews/_integration/trpc.ts#L90-L118)                           | Low  | DocumentDB runner overwrites error fields for canceled ops          |
-| R766-C03 | [`connectTrpc.onReceive`](../../../../packages/vscode-ext-webview/src/webview/connectTrpc.ts#L109-L123)         | Low  | Webview `onReceive` guard accepts any `id` (prototype / non-string) |
-| R766-C04 | [`useTrpcClient`](../../../../src/webviews/_integration/useTrpcClient.ts#L18-L20)                               | Info | `useTrpcClient` wrapper lacks an explicit return type (suppressed)  |
+| R766-C01 | [`telemetryMiddlewareBody`](../../../../../../packages/vscode-ext-webview/src/host/middleware/telemetry.ts#L119-L153) | Low  | Telemetry middleware records error details for aborted calls        |
+| R766-C02 | [`documentDbTelemetryRunner`](../../../../../../src/webviews/_integration/trpc.ts#L90-L118)                           | Low  | DocumentDB runner overwrites error fields for canceled ops          |
+| R766-C03 | [`connectTrpc.onReceive`](../../../../../../packages/vscode-ext-webview/src/webview/connectTrpc.ts#L109-L123)         | Low  | Webview `onReceive` guard accepts any `id` (prototype / non-string) |
+| R766-C04 | [`useTrpcClient`](../../../../../../src/webviews/_integration/useTrpcClient.ts#L18-L20)                               | Info | `useTrpcClient` wrapper lacks an explicit return type (suppressed)  |
 
 **Themes.** C01 + C02 are the same defect on two layers — canceled operations get
 tagged with error fields — and must be fixed together (C02 would otherwise undo
@@ -1359,7 +1359,7 @@ when `!aborted`.
 
 **Current state — the classification is already correct; the error _fields_ are
 not.**
-[`telemetryMiddlewareBody`](../../../../packages/vscode-ext-webview/src/host/middleware/telemetry.ts#L119-L153)
+[`telemetryMiddlewareBody`](../../../../../../packages/vscode-ext-webview/src/host/middleware/telemetry.ts#L119-L153)
 sets `result = 'Failed'` only when `!aborted`, so an aborted call is already
 labeled `Canceled`. What still leaks is the error **name and message**, because
 that block sits under `if (!result.ok)` but not under `if (!aborted)`:
@@ -1418,7 +1418,7 @@ error fields for any `!result.ok`, even when canceled; guard the enrichment when
 
 **Why this pairs with C01 (and why C01 alone is not enough).** The runner's
 enrichment runs _after_ the middleware body, on the **same** telemetry bag
-([`documentDbTelemetryRunner`](../../../../src/webviews/_integration/trpc.ts#L90-L118)):
+([`documentDbTelemetryRunner`](../../../../../../src/webviews/_integration/trpc.ts#L90-L118)):
 
 ```ts
 const result = await execute(context.telemetry as …); // the body runs here (C01)
@@ -1443,7 +1443,7 @@ fix is silently undone for DocumentDB, so the two must land together.
   then gate the block with `&& !aborted`. Zero new public surface. _Con:_
   duplicates the abort-reading logic the package already has, so the two can drift.
 - **Option B — export and reuse `getInvocationSignal`.** The package has
-  [`getInvocationSignal(ctx)`](../../../../packages/vscode-ext-webview/src/host/middleware/types.ts#L68-L70)
+  [`getInvocationSignal(ctx)`](../../../../../../packages/vscode-ext-webview/src/host/middleware/types.ts#L68-L70)
   but does not export it from `./host`. Export it and call
   `getInvocationSignal(invocation.ctx)?.aborted`, so body and runner share one
   abort check. _Con:_ a small public-API addition.
@@ -1484,11 +1484,11 @@ if (data !== null && typeof data === 'object' && 'id' in data) {
 typeof (message as { id?: unknown }).id === 'string'; /* …plus op shape… */
 ```
 
-[`VsCodeLinkResponseMessage.id`](../../../../packages/vscode-ext-webview/src/shared/wireProtocol.ts#L51-L64)
+[`VsCodeLinkResponseMessage.id`](../../../../../../packages/vscode-ext-webview/src/shared/wireProtocol.ts#L51-L64)
 is typed `string`, yet `'id' in data` is true for an **inherited** `id` and never
 checks the **value type** — so the webview edge is weaker than both the wire type
 and the
-[host guard](../../../../packages/vscode-ext-webview/src/host/attachTrpc.ts#L134-L149).
+[host guard](../../../../../../packages/vscode-ext-webview/src/host/attachTrpc.ts#L134-L149).
 
 **Options.**
 
@@ -1528,7 +1528,7 @@ accidental type widening if the framework hook signature changes.
 
 Copilot suppressed this itself, but it matches this repo's TypeScript guideline
 ("**Always specify return types** for functions"). The wrapper
-([`useTrpcClient`](../../../../src/webviews/_integration/useTrpcClient.ts#L18-L20))
+([`useTrpcClient`](../../../../../../src/webviews/_integration/useTrpcClient.ts#L18-L20))
 is a one-line pass-through with an inferred return.
 
 **Options.**
@@ -1610,7 +1610,7 @@ adopt it correctly with the least possible boilerplate?
 
 > ✅ **Decision (2026-07-05): Option B — document the pattern, do not add a helper
 > to the library.** The pattern E01 asks for already exists in consumer space as
-> DocumentDB's [`openAppWebview`](../../../../src/webviews/_integration/openAppWebview.ts)
+> DocumentDB's [`openAppWebview`](../../../../../../src/webviews/_integration/openAppWebview.ts)
 > (a ~15-line preset that binds the fixed wiring — `router`, `trpc`,
 > `sourceLayout`, `logger` — so each per-view factory states only what is unique
 > to its view). It is a proven reference implementation of E01 Option A, but kept
@@ -1658,10 +1658,10 @@ manual for a first-time consumer.
 ## R766-E02 — `viewType` is a shared key, but the package does not help keep it in sync
 
 > ✅ **Decision (2026-07-05): non-issue — no action.** DocumentDB already solves
-> this at compile time: [`WebviewRegistry`](../../../../src/webviews/_integration/WebviewRegistry.ts)
+> this at compile time: [`WebviewRegistry`](../../../../../../src/webviews/_integration/WebviewRegistry.ts)
 > derives `type WebviewName = keyof typeof WebviewRegistry`, and both the host
 > (`openAppWebview` / `OpenAppWebviewOptions.webviewName`) and the webview
-> (`render(key, …)` in [index.tsx](../../../../src/webviews/index.tsx)) are typed
+> (`render(key, …)` in [index.tsx](../../../../../../src/webviews/index.tsx)) are typed
 > to that union — so a drifted / mistyped `viewType` is a **compile error**, not a
 > blank panel. The coupling E02 worries about is already enforced by the type
 > system in the reference consumer. Nothing to do in the package; the
@@ -1694,7 +1694,7 @@ helping them preserve it.
 
 > ✅ **Decision (2026-07-05): no work to be done.** The webview bootstrap is
 > already a single shared `render(key, vscodeApi)` entrypoint
-> ([index.tsx](../../../../src/webviews/index.tsx)) that looks up the component in
+> ([index.tsx](../../../../../../src/webviews/index.tsx)) that looks up the component in
 > `WebviewRegistry` and wraps it in `WithWebviewContext` once; per-view code adds
 > nothing to the bootstrap. Making `WithWebviewContext` default to
 > `acquireVsCodeApi()` was considered and rejected: passing `vscodeApi` explicitly

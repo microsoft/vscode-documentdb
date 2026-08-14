@@ -12,8 +12,8 @@
   create lifecycle in `IndexesTab.tsx`
 - **PR / branch:** [microsoft/vscode-documentdb#732](https://github.com/microsoft/vscode-documentdb/pull/732) ·
   `dev/khelanmodi/index-management-ui`
-- **Related design docs:** [Index Management UI notes](feature-01-index-management-overview.md) ·
-  [Vector index support](feature-03-vector-index-support.md) · [Original UX review](ux-review-iteration-1-2.md)
+- **Related design docs:** [Index Management UI notes](../../design.md) ·
+  [Vector index support](../../design-vector-index-support.md) · [Original UX review](ux-review-iteration-1-2.md)
 - **Scope:** the redesigned create drawer, mode switching, validation, progressive
   disclosure, preview and command hand-off, feedback, accessibility, narrow layouts, and
   regressions in the already-reviewed list/action journeys
@@ -225,7 +225,7 @@ prepared command.
   [indexViewRouter.ts](../../../../src/webviews/documentdb/indexView/indexViewRouter.ts#L239).
 - 🔍 The design contract says to implement this form for Azure DocumentDB, not substitute an
   Atlas search-index command, and records the authoritative capability source as an open
-  decision. See [vector-index-support.md](feature-03-vector-index-support.md#open-decisions).
+  decision. See [vector-index-support.md](../../design-vector-index-support.md#open-decisions).
 
 💡 **Suggestion:** Until a reliable capability response exists, label Vector as a preview
 with explicit Azure DocumentDB scope and explain that server support is verified on create.

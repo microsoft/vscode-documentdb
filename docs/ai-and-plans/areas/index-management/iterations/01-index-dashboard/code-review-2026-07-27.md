@@ -23,9 +23,9 @@ Baseline: `origin/main` (`c745a327`) ... `dev/khelanmodi/index-management-ui` (`
 
 This review used the current PR diff against `origin/main`, not the stale local `main` branch. It reviewed the implementation and intent records in this folder, especially:
 
-- [feature-01-index-management-overview.md](./feature-01-index-management-overview.md)
-- [feature-02-collectionview-toolbar-redesign.md](./feature-02-collectionview-toolbar-redesign.md)
-- [feature-03-vector-index-support.md](./feature-03-vector-index-support.md)
+- [feature-01-index-management-overview.md](../../design.md)
+- [feature-02-collectionview-toolbar-redesign.md](../../design-collectionview-toolbar.md)
+- [feature-03-vector-index-support.md](../../design-vector-index-support.md)
 - [code-review-2026-07-20.md](./code-review-2026-07-20.md)
 
 The completed UX review was not repeated. The focus was correctness, user input crossing the extension-host boundary, server-result handling, destructive operations, async state, empty catches, generated commands, and supporting scraper/dev-tooling changes.
@@ -38,10 +38,10 @@ The July 20 findings were used as a regression checklist. Their resolved defects
 
 Files:
 
-- [confirmIndexAction.ts](../../../../src/utils/dialogs/confirmIndexAction.ts#L48-L77)
-- [dropIndex.ts](../../../../src/commands/index.dropIndex/dropIndex.ts#L29-L42)
+- [confirmIndexAction.ts](../../../../../../src/utils/dialogs/confirmIndexAction.ts#L48-L77)
+- [dropIndex.ts](../../../../../../src/commands/index.dropIndex/dropIndex.ts#L29-L42)
 - [indexViewRouter.ts](../../../../src/webviews/documentdb/indexView/indexViewRouter.ts#L313-L365)
-- [package.json](../../../../package.json#L1300-L1319)
+- [package.json](../../../../../../package.json#L1300-L1319)
 
 Copilot thread: [Delete confirmation bypasses the configured confirmation style](https://github.com/microsoft/vscode-documentdb/pull/732#discussion_r3658535066)
 
@@ -274,9 +274,9 @@ Suggested direction: remove the redundant `aria-label` and let the visible text 
 
 Files:
 
-- [resizeObserverLoopDetector.ts](../../../../src/webviews/_integration/observability/resizeObserverLoopDetector.ts#L40-L80)
-- [index.tsx](../../../../src/webviews/index.tsx#L20-L27)
-- [webpack.config.views.js](../../../../webpack.config.views.js#L78-L112)
+- [resizeObserverLoopDetector.ts](../../../../../../src/webviews/_integration/observability/resizeObserverLoopDetector.ts#L40-L80)
+- [index.tsx](../../../../../../src/webviews/index.tsx#L20-L27)
+- [webpack.config.views.js](../../../../../../webpack.config.views.js#L78-L112)
 
 Copilot thread: [ResizeObserver detector installation is not idempotent](https://github.com/microsoft/vscode-documentdb/pull/732#discussion_r3658535023)
 
@@ -286,7 +286,7 @@ This is **Low** because the code is dead-code-eliminated from production and aff
 
 Suggested direction: make installation idempotent with a `globalThis`/`window` sentinel that survives module replacement, or register an HMR dispose callback that removes the exact listener.
 
-**Reviewer verification & recommended solution (2026-07-28):** Confirmed. [resizeObserverLoopDetector.ts](../../../../src/webviews/_integration/observability/resizeObserverLoopDetector.ts#L44-L80) adds a `window` 'error' listener on every call with no guard, and [index.tsx](../../../../src/webviews/index.tsx#L23-L25) calls it from `render()` under a `NODE_ENV !== 'production'` guard, so HMR re-execution can stack listeners. Dev-only, dead-code-eliminated from production — **nit**.
+**Reviewer verification & recommended solution (2026-07-28):** Confirmed. [resizeObserverLoopDetector.ts](../../../../../../src/webviews/_integration/observability/resizeObserverLoopDetector.ts#L44-L80) adds a `window` 'error' listener on every call with no guard, and [index.tsx](../../../../../../src/webviews/index.tsx#L23-L25) calls it from `render()` under a `NODE_ENV !== 'production'` guard, so HMR re-execution can stack listeners. Dev-only, dead-code-eliminated from production — **nit**.
 
 ```ts
 export function installResizeObserverLoopDetector(): void {

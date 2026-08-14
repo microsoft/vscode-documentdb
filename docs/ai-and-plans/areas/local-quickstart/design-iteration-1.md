@@ -2,7 +2,7 @@
 
 > **⚠️ This is Iteration 1.** This document was the initial comprehensive UX
 > exploration. It has been superseded by
-> **[Iteration 2 — Revised Design](./local-quickstart-v2.md)**, which
+> **[Iteration 2 — Revised Design](./design.md)**, which
 > incorporates PR review feedback, simplifies the tree architecture, and
 > removes the dedicated local connection subtree. Keep this document as
 > reference for the original rationale and edge-case analysis.

@@ -111,7 +111,7 @@ Scenario:
 
 > **Verifier assessment — VERIFIED. Severity: Medium (agree).**
 >
-> Confirmed: `modifyIndexVisibility` catches and returns `{ ok: 0, errmsg }` at [LlmEnhancedFeatureApis.ts:655-659](../../../../src/documentdb/LlmEnhancedFeatureApis.ts#L655-L659), while the router's `hideIndex`/`unhideIndex` discard the returned `Document` and return `{ ok: true, cancelled: false }` ([indexViewRouter.ts:539](../../../../src/webviews/documentdb/indexView/indexViewRouter.ts#L539), [line 563](../../../../src/webviews/documentdb/indexView/indexViewRouter.ts#L563)). This is a stark inconsistency: sibling `createIndex` ([line 377](../../../../src/webviews/documentdb/indexView/indexViewRouter.ts#L377)) and `dropIndex` ([line 467](../../../../src/webviews/documentdb/indexView/indexViewRouter.ts#L467)) both inspect `result.ok === 0 || result.note` and throw. `handleToggleHidden` awaits the mutation, so the masked failure produces a spinner + refresh showing unchanged state and no error. High-confidence, real finding.
+> Confirmed: `modifyIndexVisibility` catches and returns `{ ok: 0, errmsg }` at [LlmEnhancedFeatureApis.ts:655-659](../../../../../../src/documentdb/LlmEnhancedFeatureApis.ts#L655-L659), while the router's `hideIndex`/`unhideIndex` discard the returned `Document` and return `{ ok: true, cancelled: false }` ([indexViewRouter.ts:539](../../../../src/webviews/documentdb/indexView/indexViewRouter.ts#L539), [line 563](../../../../src/webviews/documentdb/indexView/indexViewRouter.ts#L563)). This is a stark inconsistency: sibling `createIndex` ([line 377](../../../../src/webviews/documentdb/indexView/indexViewRouter.ts#L377)) and `dropIndex` ([line 467](../../../../src/webviews/documentdb/indexView/indexViewRouter.ts#L467)) both inspect `result.ok === 0 || result.note` and throw. `handleToggleHidden` awaits the mutation, so the masked failure produces a spinner + refresh showing unchanged state and no error. High-confidence, real finding.
 >
 > **Solution options**
 >
@@ -369,7 +369,7 @@ Scenario:
 
 > **Verifier assessment — VERIFIED. Severity: Low (agree).**
 >
-> Confirmed: the Indexes tab ProgressBar at [IndexesTab.tsx:434-436](../../../../src/webviews/documentdb/indexView/IndexesTab.tsx#L434-L436) omits `aria-hidden`, while the identical CollectionView bar sets `aria-hidden={true}` at [CollectionView.tsx:589](../../../../src/webviews/documentdb/collectionView/CollectionView.tsx#L589). Real inconsistency; screen-reader noise only.
+> Confirmed: the Indexes tab ProgressBar at [IndexesTab.tsx:434-436](../../../../src/webviews/documentdb/indexView/IndexesTab.tsx#L434-L436) omits `aria-hidden`, while the identical CollectionView bar sets `aria-hidden={true}` at [CollectionView.tsx:589](../../../../../../src/webviews/documentdb/collectionView/CollectionView.tsx#L589). Real inconsistency; screen-reader noise only.
 >
 > **Solution options**
 >
@@ -437,7 +437,7 @@ Scenario:
 
 > **Verifier assessment — VERIFIED. Severity: Low (agree).**
 >
-> Confirmed "opertor" in the scraped source ([operator-reference.md:1474](../../../../packages/documentdb-js-operator-registry/resources/scraped/operator-reference.md#L1474), [line 2870](../../../../packages/documentdb-js-operator-registry/resources/scraped/operator-reference.md#L2870)), the generated `src` ([accumulators.ts:103](../../../../packages/documentdb-js-operator-registry/src/accumulators.ts#L103), [expressionOperators.ts:239](../../../../packages/documentdb-js-operator-registry/src/expressionOperators.ts#L239)), and the built `dist`. Because `$maxN` appears in two scraped categories, editing only the generated TS is overwritten on the next generation run.
+> Confirmed "opertor" in the scraped source ([operator-reference.md:1474](../../../../../../packages/documentdb-js-operator-registry/resources/scraped/operator-reference.md#L1474), [line 2870](../../../../../../packages/documentdb-js-operator-registry/resources/scraped/operator-reference.md#L2870)), the generated `src` ([accumulators.ts:103](../../../../../../packages/documentdb-js-operator-registry/src/accumulators.ts#L103), [expressionOperators.ts:239](../../../../../../packages/documentdb-js-operator-registry/src/expressionOperators.ts#L239)), and the built `dist`. Because `$maxN` appears in two scraped categories, editing only the generated TS is overwritten on the next generation run.
 >
 > **Solution options**
 >

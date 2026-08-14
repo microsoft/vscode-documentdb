@@ -46,7 +46,7 @@ Anything dropped in `src/webviews/static/` is served at `/static/<name>.html`.
 ## The harness
 
 A minimal page that mounts one registered webview. The view name is the key from
-[`src/webviews/_integration/WebviewRegistry.ts`](../../src/webviews/_integration/WebviewRegistry.ts) —
+[`src/webviews/_integration/WebviewRegistry.ts`](../../../src/webviews/_integration/WebviewRegistry.ts) —
 `localQuickStart`, `collectionView`, `atlasCredentials`, and so on.
 
 ```html
@@ -114,9 +114,9 @@ no palette, blank page. If you see that stack, it is the harness, not the compon
 The stub above is enough for pages that do not need data, but any view that issues a tRPC call will
 hang on it. To drive real states — a failed Docker check, a populated grid — answer the wire
 protocol directly. The shapes are in
-[`packages/vscode-ext-webview/src/shared/wireProtocol.ts`](../../packages/vscode-ext-webview/src/shared/wireProtocol.ts);
+[`packages/vscode-ext-webview/src/shared/wireProtocol.ts`](../../../packages/vscode-ext-webview/src/shared/wireProtocol.ts);
 the host side that produces them is
-[`packages/vscode-ext-webview/src/host/attachTrpc.ts`](../../packages/vscode-ext-webview/src/host/attachTrpc.ts).
+[`packages/vscode-ext-webview/src/host/attachTrpc.ts`](../../../packages/vscode-ext-webview/src/host/attachTrpc.ts).
 
 The webview sends `{ id, op }` where `op` carries `type`, `path` and `input`. Reply on the `window`
 message bus:

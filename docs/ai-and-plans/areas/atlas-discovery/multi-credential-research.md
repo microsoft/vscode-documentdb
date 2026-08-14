@@ -1,7 +1,7 @@
 # Multi-credential Atlas discovery — feasibility POC plan & API research report
 
 > **Status:** Research + design proposal (no production code yet).
-> **Scope:** Step 0 (POC) of the [Iteration 3 open-work ledger](./ux-review-iteration-3.md#step-0--multi-credential-feasibility-poc-do-first),
+> **Scope:** Step 0 (POC) of the [Iteration 3 open-work ledger](./iterations/03-ux-review.md#step-0--multi-credential-feasibility-poc-do-first),
 > covering review items **#7** (multi-credential management), **#8** (org level + tree/list),
 > and **#12** (credential identity/label lifecycle).
 > **Audience:** engineers deciding whether to build multi-credential Atlas discovery, and

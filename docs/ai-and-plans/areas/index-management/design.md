@@ -29,7 +29,7 @@ documented separately in this folder (`reference-01-documentdb-supported-indexes
 `reference-02-operator-registry-scraper.md`).
 
 The CollectionView chrome changes delivered with the dashboard are documented
-in [CollectionView Toolbar / Tab Redesign](./feature-02-collectionview-toolbar-redesign.md),
+in [CollectionView Toolbar / Tab Redesign](./design-collectionview-toolbar.md),
 including the per-work-item implementation progress and validation checkpoints.
 
 ---

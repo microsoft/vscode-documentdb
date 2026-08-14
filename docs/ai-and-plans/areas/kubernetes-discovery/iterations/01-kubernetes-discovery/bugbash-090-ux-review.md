@@ -48,21 +48,21 @@ cold and understand both _what_ was decided and _why_.
 
 > **This is a running log written during iteration; some passages below were authored when items were
 > still open and now read as out‑of‑date. The corrections that matter are stamped here. For
-> _current_ behavior, the [Kubernetes user manual](../../../user-manual/service-discovery-kubernetes.md)
+> _current_ behavior, the [Kubernetes user manual](../../../../../user-manual/service-discovery-kubernetes.md)
 > and the [pre‑merge code review](./pre-merge-code-review.md) are the source of truth — not this log.**
 >
 > 1. **ClusterIP "Copy…" quick pick — SHIPPED (not deferred).** §4.3 / §7.2 / §8.1 discuss the
 >    teammate‑share `kubectl port-forward` snippet as "still deferred." It actually **shipped**: the
 >    ClusterIP node has a grouped **"Copy…"** quick pick (connection string with/without password, the
 >    `kubectl port-forward` command, and a **Learn more** docs link). See
->    [copyConnectionString.ts](../../../../src/commands/copyConnectionString/copyConnectionString.ts)
+>    [copyConnectionString.ts](../../../../../../src/commands/copyConnectionString/copyConnectionString.ts)
 >    (`copyKubernetesPortForwardConnection`, `buildKubectlPortForwardCommand`).
 > 2. **Discovered‑target icon — DocumentDB brand mark, not the reachability glyph.** §8.1 / §9.2 describe
 >    the node `iconPath` as a `globe`/`server`/`plug`/`warning` reachability glyph. The shipped node uses
 >    the **DocumentDB brand icon** (so it reads as a first‑class cluster); the reachability glyph now
 >    lives only on the tooltip's "Reachability" line. See `buildTooltip()` / the constructor `iconPath`
 >    in
->    [KubernetesResourceItem.ts](../../../../src/plugins/service-kubernetes/discovery-tree/documentdb/KubernetesResourceItem.ts).
+>    [KubernetesResourceItem.ts](../../../../../../src/plugins/service-kubernetes/discovery-tree/documentdb/KubernetesResourceItem.ts).
 > 3. **Context/namespace connection errors — modal only, no in‑tree error‑summary node (post‑merge,
 >    2026‑06‑16).** §F/#19 Iteration 1 says the classified `⚠ Connection failed: …` summary node was
 >    "retained but now sits below the retry action." That is now **out‑of‑date**: the summary node was
@@ -805,7 +805,7 @@ A third round acted on three of the open discussions below:
 
 > ✅ **Update (post‑merge): this shipped.** The text below was written while the snippet was still open.
 > The grouped **"Copy…"** quick pick (incl. the `kubectl port-forward` command + Learn more) is now in
-> [copyConnectionString.ts](../../../../src/commands/copyConnectionString/copyConnectionString.ts). The
+> [copyConnectionString.ts](../../../../../../src/commands/copyConnectionString/copyConnectionString.ts). The
 > discussion is retained for the record.
 
 **The gap.** A ClusterIP target is only reachable through a **machine-local** `port-forward` tunnel.
@@ -1060,13 +1060,13 @@ command exclusions it forced, and the icon override. It also fixes a wording bug
 
 The reasoning behind `KubernetesResourceItem` overriding `contextValue` (and the matching
 `!(discovery.kubernetesService)` exclusions in `package.json`) is **not recorded** anywhere in the
-`docs/ai-and-plans/PRs/…` folder. That made this review materially harder: from the code alone it's
+`docs/ai-and-plans/areas/atlas-discovery/…` folder. That made this review materially harder: from the code alone it's
 ambiguous whether the override was a deliberate "ClusterIP commands assume direct reachability, so hide
 them" decision or an accident. We're proceeding on the **assumption it was an intentional guard** (hide
 copy/shell/etc. because a ClusterIP needs a tunnel), but that guess should be confirmed by the author.
 
 > 📌 **Process work item:** going forward, keep a short **decision log / reasoning doc per PR** in
-> `docs/ai-and-plans/PRs/<pr>/` (as we do for other PRs). It helps human reviewers and code-review agents
+> `docs/ai-and-plans/areas/atlas-discovery/<pr>/` (as we do for other PRs). It helps human reviewers and code-review agents
 > understand _why_ a non-obvious deviation (like overriding a shared base's context value) was made.
 
 ### 9.1 Problem statement
@@ -1301,7 +1301,7 @@ were extended to T-12 (grouped picker variants: without/with password, kubectl c
   proposes a `FileDecorationProvider` that shows which clusters are connected vs. not across the
   Connections tree in general (more broadly useful than a Kubernetes-only reachability badge). The
   tooltip + description already carry the per-node reachability signal in the meantime.
-- 📌 **Per-PR decision log** (§9.0) — keep reasoning/decision docs in `docs/ai-and-plans/PRs/<pr>/` so
+- 📌 **Per-PR decision log** (§9.0) — keep reasoning/decision docs in `docs/ai-and-plans/areas/atlas-discovery/<pr>/` so
   non-obvious deviations (like the original context-value override) are reviewable by humans and agents.
 - ⏳ **Live-verification checklist** (§8.5) — reveal-on-add, drag-and-drop, Windows path display,
   reload-with-active-tunnel, single-modal-on-error.

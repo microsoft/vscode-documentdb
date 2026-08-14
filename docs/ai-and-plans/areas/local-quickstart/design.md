@@ -1,6 +1,6 @@
 # Local Quick Start — Revised Design (Iteration 2)
 
-> **Supersedes:** [Iteration 1](./local-quickstart.md) — kept as reference
+> **Supersedes:** [Iteration 1](./design-iteration-1.md) — kept as reference
 > for original rationale and edge-case analysis.
 >
 > **What changed:** Simplified tree architecture, removed dedicated local
@@ -10,7 +10,7 @@
 > **Scope:** UX design and architecture. Not an implementation plan.
 >
 > **Docker readiness update:** The provider-neutral behavior in
-> [docker-readiness-implementation-plan.md](./docker-readiness-implementation-plan.md)
+> [docker-readiness-implementation-plan.md](./iterations/04-ui-redesign/docker-readiness-implementation-plan.md)
 > supersedes the Docker Desktop-only examples in this historical design. Docker
 > Engine and Docker Desktop are supported providers; the prerequisite is a Docker
 > CLI that can reach a Linux-container daemon from the extension host.
@@ -905,4 +905,4 @@ folded in from that study:
 | (Kept **better in v2**)                                                                               | Zero required fields, persistent volume, 60 s wire-protocol readiness, full lifecycle, labels+adopt, stricter telemetry                               |
 
 A reviewer-facing decision note for this PR lives at
-[`../PRs/653-local-quickstart-design/description.md`](../PRs/653-local-quickstart-design/description.md).
+[`../PRs/653-local-quickstart-design/description.md`](./iterations/01-initial-design.md).
