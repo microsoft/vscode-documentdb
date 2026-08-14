@@ -9,6 +9,7 @@ code:
     - packages/documentdb-js-schema-analyzer/**
 verified: 2026-08-14
 ---
+
 # Future Work: Schema & Infrastructure
 
 > Schema enhancements, build optimizations, and architectural improvements.

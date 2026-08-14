@@ -5,6 +5,7 @@ status: historical
 prs: [676]
 created: 2026-05-22
 ---
+
 # PR #676: Webview API package preview hardening and consumer reshape
 
 **Branch:** `dev/tnaum/webview-api-package`

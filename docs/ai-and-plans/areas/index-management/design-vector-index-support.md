@@ -7,6 +7,7 @@ code:
     - src/webviews/documentdb/indexView/**
 verified: 2026-08-14
 ---
+
 # Vector index support for Index Management
 
 **Status:** Azure DocumentDB vCore creation and listing contract manually

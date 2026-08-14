@@ -5,6 +5,7 @@ status: historical
 prs: [543]
 created: 2026-04-10
 ---
+
 # Step 7 — Query Playground CompletionItemProvider
 
 **PR:** [#543](https://github.com/microsoft/vscode-documentdb/pull/543)

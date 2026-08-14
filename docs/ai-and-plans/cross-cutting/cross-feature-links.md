@@ -4,6 +4,7 @@ kind: iteration
 status: historical
 created: 2026-04-16
 ---
+
 # Step 10 — Cross-Feature Navigation Links
 
 **Status:** Implementation complete — experimental, ready for UX review

@@ -8,6 +8,7 @@ code:
     - src/webviews/documentdb/indexView/**
 verified: 2026-08-14
 ---
+
 # CollectionView Toolbar / Tab Redesign
 
 **Branch:** `dev/khelanmodi/index-management-ui`

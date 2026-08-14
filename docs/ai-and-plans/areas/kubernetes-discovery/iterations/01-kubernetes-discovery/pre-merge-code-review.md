@@ -5,6 +5,7 @@ status: historical
 prs: [621]
 created: 2026-06-15
 ---
+
 # PR #621 — Kubernetes Service Discovery: Pre-Merge Code Review
 
 > **Purpose:** the final engineering review before merging

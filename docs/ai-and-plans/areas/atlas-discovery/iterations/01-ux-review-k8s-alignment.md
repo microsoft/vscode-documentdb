@@ -5,6 +5,7 @@ status: historical
 prs: [733]
 created: 2026-06-17
 ---
+
 # PR #733 — Atlas MongoDB Discovery: UX Review (Iteration 1) — Alignment with the Kubernetes + Azure Discovery Conventions
 
 **Branch:** `dev/bchoudhury/atlas-mongodb-discovery`

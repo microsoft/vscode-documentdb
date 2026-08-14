@@ -5,6 +5,7 @@ status: historical
 prs: [690]
 created: 2026-05-28
 ---
+
 # PR #690: AI model transparency for Query Insights panel
 
 **Branch:** `dev/tnaum/query-insights-model-transparency`

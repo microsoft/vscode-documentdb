@@ -4,6 +4,7 @@ kind: review
 status: historical
 created: 2026-04-15
 ---
+
 # Multi-Connection Playgrounds — Pre-Review: Corner Cases
 
 > Review of [multi-connection-playgrounds.md](./08-multi-connection-playgrounds.md) plan vs implementation.

@@ -8,6 +8,7 @@ code:
     - src/webviews/documentdb/indexView/**
 verified: 2026-08-14
 ---
+
 # PR #732: Operator-registry scraper migration + index metadata
 
 **Branch:** `dev/khelanmodi/index-management-ui`

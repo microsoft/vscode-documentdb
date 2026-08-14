@@ -5,6 +5,7 @@ status: historical
 prs: [506]
 created: 2026-04-10
 ---
+
 # Step 2 — SchemaAnalyzer Refactoring
 
 **PR:** [#506](https://github.com/microsoft/vscode-documentdb/pull/506)

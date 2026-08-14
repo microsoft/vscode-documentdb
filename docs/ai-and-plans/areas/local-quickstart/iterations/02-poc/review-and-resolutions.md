@@ -4,6 +4,7 @@ kind: review
 status: historical
 created: 2026-06-22
 ---
+
 # Local Quick Start POC — Plan Review & Resolutions
 
 **Artifact under review:** [`poc-implementation-plan.md`](./implementation-plan.md) +

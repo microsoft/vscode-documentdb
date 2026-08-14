@@ -5,6 +5,7 @@ status: historical
 prs: [758]
 created: 2026-06-24
 ---
+
 # PR Summary — Query Playground connections across save / reopen + Connect picker
 
 > PR: [microsoft/vscode-documentdb#758](https://github.com/microsoft/vscode-documentdb/pull/758)

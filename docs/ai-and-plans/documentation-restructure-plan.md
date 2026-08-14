@@ -11,12 +11,51 @@ created: 2026-08-13
 > memory of the discussion that produced it. Everything needed to execute the
 > migration is in this document.
 >
-> **Status:** analysis complete, decisions locked, **nothing migrated yet**.
-> Execution is deliberately deferred until 0.10.0 is merged (see §9).
+> **Status:** **executed 2026-08-14.** §1–§8 and §10 have landed; see the
+> execution record below for what was done and where the execution deviated.
+> §8A (skills) is still open.
 >
 > **How to use this document:** read §1–§4 to understand _why_, §5–§7 for the
 > target shape and templates, §8–§10 to execute. §11 lists what was explicitly
 > rejected — do not re-open those without new evidence.
+
+---
+
+## 0. Execution record (2026-08-14)
+
+The migration landed in four commits: a pure-rename commit, a link-repair commit,
+a frontmatter-plus-pilot commit, and a READMEs commit, followed by the policy
+updates in §8.1–§8.4.
+
+**Result:** 92 documents moved into 11 areas plus `cross-cutting/` and
+`practices/`; every document carries frontmatter; every area has a README; the
+pilot acceptance test in §10 passes (all seven questions answerable from
+`areas/local-quickstart/README.md`, and zero broken links or anchors inside that
+area). Repo-wide, broken links in `docs/ai-and-plans/` fell from 322 to 219, and
+**zero** of the remainder were caused by the migration — they are dead paths left
+by earlier source refactors, from before this work.
+
+**Deviations from the plan, and why:**
+
+| §         | Plan said                                                                           | What was done                                                                                                                                                                                          | Why                                                                                                                                                                                                                                                                                           |
+| --------- | ----------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| §4 rule 2 | "One file per iteration"; folder only at ~3+ documents or a >1000-line merge        | An iteration with exactly two documents (a plan and its review) keeps both as adjacent flat files, `NN-slug.md` + `NN-slug-review.md`. Folders are still used at 3+ documents or >1000 combined lines. | Merging would have rewritten content in a commit meant to be mechanical, destroyed `git log --follow` for the second document, and gained nothing: two adjacent flat files sort together and produce no mostly-empty directory, which is what rule 2 exists to prevent. Affects 5 iterations. |
+| §7.1      | `PRs/714-…` "(2 files, merged into one iteration)"                                  | Kept as a flat pair, like the other two-document iterations                                                                                                                                            | Consistency with the rule above. It was the only explicit merge instruction in the plan.                                                                                                                                                                                                      |
+| §5        | `cross-cutting/decisions.md` for extension-wide calls (dual-ID scheme, terminology) | Not created                                                                                                                                                                                            | No source document for those decisions exists in the corpus. Writing entries with no recorded options or rationale would have manufactured evidence. Create it when a real extension-wide decision needs recording.                                                                           |
+| §7.1      | Per-area `future-work.md` replaces the central `future-work/` folder                | `query-playground` and `completions-and-schema` each keep two: `future-work.md` and `future-work-<topic>.md`                                                                                           | Both areas inherited two distinct future-work lists. Folding them into one file needed heading surgery that would have broken existing anchors, for no navigational gain: both areas stay well under the ~6-root-file threshold in rule 5.                                                    |
+| §9.2      | Three commits; link repairs cover intra-document links                              | Four commits, and the link-repair commit also updates three `@see` comments in `src/`                                                                                                                  | Those comments were the only reverse index from code back to design rationale, which §6.1 calls the highest-value optional metadata. Leaving them broken would have defeated the point. The fourth commit separates the pilot from the remaining areas.                                       |
+| §9.1      | Do not start until 0.10.0 is merged                                                 | Executed on a branch off `main` at 0.10.0                                                                                                                                                              | Operator instruction.                                                                                                                                                                                                                                                                         |
+| §7.4      | Rebase PR #886 and relocate `managed-identities/` into `areas/`                     | Not done                                                                                                                                                                                               | Operator instruction: open PRs update themselves to the new structure after this lands.                                                                                                                                                                                                       |
+| §8A       | Skills work                                                                         | Not done                                                                                                                                                                                               | The plan marks §8A "OPEN FOR DISCUSSION" and says not to implement without confirming.                                                                                                                                                                                                        |
+
+**One bonus repair**, outside the plan's scope but made while the link paths were
+already being touched: 102 markdown links written root-relative (`src/foo/Bar.ts`
+rather than `../../../src/foo/Bar.ts`) never resolved from their own directory,
+before or after the move. They now resolve.
+
+**Still open:** all of §8A, and the `04.6-collection-view-ux-improvements.md`
+placement in §12 (filed under `completions-and-schema` as the plan provisionally
+directed; noted as such in that area's README).
 
 ---
 

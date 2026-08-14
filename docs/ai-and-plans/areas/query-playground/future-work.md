@@ -8,6 +8,7 @@ code:
     - src/services/playground/**
 verified: 2026-08-14
 ---
+
 # Future Work: Query Playground Enhancements
 
 > Improvements to the Query Playground (`.documentdb` files) that were deferred during the initial implementation.

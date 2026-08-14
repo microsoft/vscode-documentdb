@@ -5,6 +5,7 @@ status: historical
 prs: [616]
 created: 2026-04-27
 ---
+
 # PR #616: Align AI Analysis with Static Analysis in Query Insights
 
 **Status:** Open

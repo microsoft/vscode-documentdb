@@ -8,6 +8,7 @@ code:
     - src/plugins/service-atlas-mongodb/**
 verified: 2026-08-14
 ---
+
 # PR #733 — Atlas MongoDB Discovery: Work Items and Design Decisions
 
 **Branch:** `dev/bchoudhury/atlas-mongodb-discovery`

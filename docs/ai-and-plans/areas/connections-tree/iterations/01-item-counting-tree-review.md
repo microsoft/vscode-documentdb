@@ -5,6 +5,7 @@ status: historical
 prs: [714]
 created: 2026-06-01
 ---
+
 # PR #714 Review: Show item counts on tree nodes
 
 **PR:** https://github.com/microsoft/vscode-documentdb/pull/714

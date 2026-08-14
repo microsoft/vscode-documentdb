@@ -4,6 +4,7 @@ kind: iteration
 status: historical
 created: 2026-06-23
 ---
+
 # Report: Username / Password Presence Checks & TLS Override Handling
 
 **Scope:** Locate every place in the codebase that requires (or silently assumes) a

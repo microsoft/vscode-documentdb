@@ -5,6 +5,7 @@ status: historical
 prs: [726]
 created: 2026-06-02
 ---
+
 # PR #726: Speed up connection load and clarify in-memory wrapping
 
 **Branch:** `dev/tnaum/storeage-optimization`

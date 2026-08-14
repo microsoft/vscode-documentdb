@@ -5,6 +5,7 @@ status: historical
 prs: [733]
 created: 2026-06-30
 ---
+
 # PR #733 — Atlas MongoDB Discovery: UX Review (Iteration 2) — Cluster Item Presentation
 
 **Branch:** `dev/bchoudhury/atlas-mongodb-discovery`

@@ -5,6 +5,7 @@ status: historical
 prs: [621]
 created: 2026-06-09
 ---
+
 # Bug Bash 0.9.0 — Kubernetes Service Discovery UX Review Pack
 
 > **Who this is for:** anyone about to do a hands‑on UX review (trying the extension,

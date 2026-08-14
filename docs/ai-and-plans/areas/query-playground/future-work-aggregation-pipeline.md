@@ -8,6 +8,7 @@ code:
     - src/services/playground/**
 verified: 2026-08-14
 ---
+
 # Future Work: Aggregation Pipeline
 
 > Aggregation Pipeline Editor and CompletionItemProvider — deferred from the shell integration feature, to be delivered as a separate work item.

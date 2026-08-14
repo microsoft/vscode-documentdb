@@ -5,6 +5,7 @@ status: historical
 prs: [876]
 created: 2026-08-09
 ---
+
 # PR #876 review — "Keep DocumentDB Local state in sync and explain infrastructure-caused failures"
 
 - Base: `release/0.10.0`, head: `dev/tnaum/quickstart-improvements`

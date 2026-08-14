@@ -1,9 +1,22 @@
 # Review document template
 
-Copy this skeleton verbatim into `docs/ai-and-plans/PRs/{pr-number}-{slug}/ux-review.md`
-and fill the `{{…}}` placeholders during the pre-assessment. Keep the section order.
-Sections marked _(seed now)_ are produced during **Prepare**; the P0–P3 item bodies are
-filled during the **Live review**.
+Copy this skeleton verbatim into `docs/ai-and-plans/areas/{area}/iterations/NN-{slug}.md`
+(or `.../iterations/NN-{slug}/ux-review.md` when that iteration already holds several
+documents) and fill the `{{…}}` placeholders during the pre-assessment. Keep the section
+order. Sections marked _(seed now)_ are produced during **Prepare**; the P0–P3 item bodies
+are filled during the **Live review**.
+
+The file needs frontmatter, as every document in the knowledge base does:
+
+```yaml
+---
+area: { { area-slug } }
+kind: ux-review
+status: historical
+prs: [{ { pr-number } }]
+created: { { date } }
+---
+```
 
 ---
 

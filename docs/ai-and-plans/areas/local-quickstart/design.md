@@ -10,6 +10,7 @@ code:
     - src/webviews/documentdb/localQuickStart/**
 verified: 2026-08-14
 ---
+
 # Local Quick Start — Revised Design (Iteration 2)
 
 > **Supersedes:** [Iteration 1](./design-iteration-1.md) — kept as reference

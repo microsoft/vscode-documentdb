@@ -5,6 +5,7 @@ status: historical
 prs: [533]
 created: 2026-04-10
 ---
+
 # Step 5 — Legacy Scrapbook Removal
 
 **PR:** [#533](https://github.com/microsoft/vscode-documentdb/pull/533)

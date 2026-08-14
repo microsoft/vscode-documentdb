@@ -37,12 +37,19 @@ Before finishing work on a PR, agents **must** run the following steps in order:
    ```bash
    npm run build
    ```
+6. **Area docs** — If this PR changes behavior described in an area's current docs, update `docs/ai-and-plans/areas/<name>/README.md` (and `design.md` if applicable) in the same PR.
 
 > ⚠️ **An agent must not finish or terminate until all five steps above have been run and pass successfully.** Skipping these steps leads to CI failures.
 
-## Git Safety
+## Feature Knowledge Base
 
-- **Never use `git add -f`** to force-add files. If `git add` refuses a file, it is likely in `.gitignore` for a reason (e.g., `docs/plan/`, `docs/analysis/`, build outputs). Do NOT override this with `-f`.
+`docs/ai-and-plans/` records how features were designed and **why**. Much of it is AI-written under human supervision; the durable value is the recorded operator decisions and their reasoning.
+
+- `docs/ai-and-plans/README.md` — area index. Short and maintained. Read it when a task touches an area.
+- `areas/<name>/README.md` and the flat files beside it are the **best available account** of an area's design and intent. They are maintained, but they describe intent, not guaranteed current behavior.
+- `areas/<name>/iterations/**` is **history**. Read only the specific iteration needed to resolve provenance, rationale, or a regression. Never bulk-load it. Plans and reviews there are evidence of past reasoning, not a description of the product today.
+- **On conflict, the code wins for behavior; active docs win for intent.** If they disagree, do not silently pick one — name the doc and the code, and offer to correct the doc.
+- Never treat `status: historical` or `status: superseded` as current.
 - When `git add` warns that a path is ignored, **stop and inform the user** instead of force-adding.
 - Files in `docs/plan/` and `docs/analysis/` are **local planning documents** that must not be committed to the repository.
 

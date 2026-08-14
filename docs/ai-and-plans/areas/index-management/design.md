@@ -8,6 +8,7 @@ code:
     - src/webviews/documentdb/indexView/**
 verified: 2026-08-14
 ---
+
 # PR #732: Index Management tab (Index Dashboard)
 
 **Branch:** `dev/khelanmodi/index-management-ui`

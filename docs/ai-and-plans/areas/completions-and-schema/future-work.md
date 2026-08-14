@@ -9,6 +9,7 @@ code:
     - packages/documentdb-js-schema-analyzer/**
 verified: 2026-08-14
 ---
+
 # Future Work: Completion & IntelliSense Improvements
 
 > Enhancements to the autocompletion and IntelliSense system across all editor surfaces.

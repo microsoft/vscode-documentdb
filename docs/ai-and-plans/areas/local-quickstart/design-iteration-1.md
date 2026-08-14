@@ -10,6 +10,7 @@ code:
     - src/tree/connections-view/LocalQuickStart/**
     - src/webviews/documentdb/localQuickStart/**
 ---
+
 # Local Quick Start — UX Design Reference (Iteration 1)
 
 > **⚠️ This is Iteration 1.** This document was the initial comprehensive UX

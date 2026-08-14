@@ -5,6 +5,7 @@ status: historical
 prs: [583]
 created: 2026-04-15
 ---
+
 # Multi-Connection Playgrounds
 
 > **Status: ✅ Complete** — Implemented in PR [#583](https://github.com/microsoft/vscode-documentdb/pull/583).

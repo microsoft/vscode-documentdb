@@ -5,6 +5,7 @@ status: historical
 prs: [732]
 created: 2026-07-27
 ---
+
 # Index Management Create Drawer Redesign — UX Review Iteration 3
 
 > **Who this is for:** anyone about to do a hands-on UX review of the redesigned

@@ -4,6 +4,7 @@ kind: iteration
 status: historical
 created: 2026-07-06
 ---
+
 # WI-2 core — execution plan (the multi-instance service state machine)
 
 > Elaborates [`implementation-plan.md`](./implementation-plan.md) §4.2/§4.3/§5 WI-2 + §7/§8 into a

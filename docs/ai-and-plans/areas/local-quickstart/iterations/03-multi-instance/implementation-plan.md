@@ -4,6 +4,7 @@ kind: iteration
 status: historical
 created: 2026-07-06
 ---
+
 # Local Quick Start — Multiple Managed Instances: Implementation Plan
 
 > Full design: [`local-quickstart-v2.md`](../../design.md).

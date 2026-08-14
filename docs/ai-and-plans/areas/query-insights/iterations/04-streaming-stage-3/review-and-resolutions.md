@@ -5,6 +5,7 @@ status: historical
 prs: [711]
 created: 2026-06-05
 ---
+
 # PR #711 — Review and Resolutions (Streaming Stage 3 UX)
 
 **PR:** [WIP] feat(query-insights): streaming UX for Stage 3 AI recommendations

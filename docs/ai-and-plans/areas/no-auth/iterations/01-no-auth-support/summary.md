@@ -5,6 +5,7 @@ status: historical
 prs: [755]
 created: 2026-06-23
 ---
+
 # PR Summary — "No Authentication" connection support
 
 > PR: [microsoft/vscode-documentdb#755](https://github.com/microsoft/vscode-documentdb/pull/755)

@@ -8,6 +8,7 @@ code:
     - src/commands/openInteractiveShell/**
 verified: 2026-08-14
 ---
+
 # Future Work: Terminal Enhancements
 
 > Items specific to the Interactive Shell's terminal UI surface (Pseudoterminal). These are tracked so work can be picked up independently.

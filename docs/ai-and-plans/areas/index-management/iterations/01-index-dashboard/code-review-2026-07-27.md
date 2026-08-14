@@ -5,6 +5,7 @@ status: historical
 prs: [732]
 created: 2026-07-27
 ---
+
 # PR #732 Review: Current-state correctness and input/output handling
 
 Review date: 2026-07-27
