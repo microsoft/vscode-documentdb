@@ -10,6 +10,55 @@ import { type ManagedIdentityAuthConfig } from '../../auth/AuthConfig';
 import { type ManagedIdentityHint } from '../../auth/managedIdentityConnectionString';
 
 const GUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const HEX_ONLY_PATTERN = /^[0-9a-f]*$/i;
+
+/** The 8-4-4-4-12 grouping of a GUID. */
+const GUID_GROUP_SIZES = [8, 4, 4, 4, 12];
+
+function stripGuidSeparators(value: string): string {
+    return value.trim().replace(/-/g, '');
+}
+
+/**
+ * Re-inserts the GUID group separators, for as many characters as are present.
+ *
+ * Anything past the 32nd character is kept as a trailing group so an over-long value stays visible
+ * rather than looking correct.
+ */
+export function groupAsGuid(hexOnly: string): string {
+    const groups: string[] = [];
+    let position = 0;
+
+    for (const size of GUID_GROUP_SIZES) {
+        if (position >= hexOnly.length) {
+            break;
+        }
+
+        groups.push(hexOnly.slice(position, position + size));
+        position += size;
+    }
+
+    if (position < hexOnly.length) {
+        groups.push(hexOnly.slice(position));
+    }
+
+    return groups.join('-');
+}
+
+/**
+ * Accepts a client ID that was pasted without separators, or with them in the wrong places, and
+ * returns it in canonical form. A value that is not 32 hexadecimal characters is only trimmed.
+ */
+export function normalizeClientId(value: string | undefined): string {
+    const trimmed = (value ?? '').trim();
+    const hexOnly = stripGuidSeparators(trimmed);
+
+    if (hexOnly.length !== 32 || !HEX_ONLY_PATTERN.test(hexOnly)) {
+        return trimmed;
+    }
+
+    return groupAsGuid(hexOnly);
+}
 
 /** The subset of a wizard context this step needs, so it can serve every wizard that offers the method. */
 export interface ManagedIdentitySelectionContext extends IActionContext {
@@ -73,8 +122,8 @@ export class SelectManagedIdentityStep<T extends ManagedIdentitySelectionContext
             validateInput: (value?: string) => this.validateClientId(value),
         });
 
-        const trimmed = clientId.trim();
-        this.applyClientId(context, trimmed, trimmed === selected.clientId ? 'connectionString' : 'prompt');
+        const normalized = normalizeClientId(clientId);
+        this.applyClientId(context, normalized, normalized === selected.clientId ? 'connectionString' : 'prompt');
     }
 
     public shouldPrompt(context: T): boolean {
@@ -96,11 +145,22 @@ export class SelectManagedIdentityStep<T extends ManagedIdentitySelectionContext
             return l10n.t('A client ID is required. Go back to choose the system-assigned identity instead.');
         }
 
-        if (!GUID_PATTERN.test(trimmed)) {
-            return l10n.t('A client ID looks like 11111111-2222-3333-4444-555555555555.');
+        if (GUID_PATTERN.test(normalizeClientId(trimmed))) {
+            return undefined;
         }
 
-        return undefined;
+        const hexOnly = stripGuidSeparators(trimmed);
+
+        if (!HEX_ONLY_PATTERN.test(hexOnly)) {
+            return l10n.t('A client ID uses only 0-9 and a-f, like 11111111-2222-3333-4444-555555555555.');
+        }
+
+        // Echoing the grouped reading is more useful than the abstract shape: it shows which group
+        // the next character lands in and how much is still missing.
+        return l10n.t(
+            'Read as {0}. A complete client ID looks like 11111111-2222-3333-4444-555555555555.',
+            groupAsGuid(hexOnly),
+        );
     }
 
     /**

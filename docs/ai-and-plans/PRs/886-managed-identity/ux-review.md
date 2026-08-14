@@ -236,12 +236,19 @@ client-ID field, allow the user to modify or accept it, and then proceed to the 
   provider builds `ManagedIdentityCredential({ clientId })`, which only accepts a GUID, and the
   `@microsoft/vscode-azext-utils` input box blocks Accept on _any_ validation message, so there is no
   "warn but allow" middle ground to offer.
+- **Follow-up (operator, Iteration 2):** since the field is the only gate, it had to stop being a
+  wall. It now trims before every check, accepts a client ID pasted without separators (or with them
+  in the wrong places) and normalizes it to canonical form, and replaces the abstract "a client ID
+  looks like ..." rejection with the grouped reading of what was typed, for example `111111122` is
+  reported as `Read as 11111112-2`. A value containing characters outside `0-9`/`a-f` is told so
+  directly instead of being grouped, because grouping it would suggest it is nearly right.
 
 **Verified by:** new cases in
 [managedIdentityConnectionString.test.ts](../../../../src/documentdb/auth/managedIdentityConnectionString.test.ts)
 and [SelectManagedIdentityStep.test.ts](../../../../src/documentdb/wizards/authenticate/SelectManagedIdentityStep.test.ts)
-covering the supplied-identity hint, the "do not store an unreviewed value" rule, `shouldPrompt`, and
-the editable quick-pick entry.
+covering the supplied-identity hint, the "do not store an unreviewed value" rule, `shouldPrompt`, the
+editable quick-pick entry, separator-free and misplaced-separator input, whitespace, the grouped
+reading of partial and over-long values, and the non-hexadecimal message.
 
 ### 2. Multiple-identity guidance points users into a Retry loop ⚠️
 
@@ -444,10 +451,11 @@ one; nothing is dropped without a terminal status.
 | #   | Item                          | Decision (why)                                                                                                                                                              | Outcome        |
 | --- | ----------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------- |
 | 1   | Supplied identity selector    | Carry the pasted value as a reviewable proposal and prompt for it; keep GUID validation because the token provider and the azext input box leave no "warn but allow" option | ✅ Implemented |
+| 1b  | Client-ID field helpfulness   | Trim, accept a separator-free client ID, and report the grouped reading of what was typed instead of only the expected shape                                                | ✅ Implemented |
 | 3   | Duplicate connection identity | Compare a method-specific authentication key in the two save paths that can produce Managed Identity or Entra ID connections                                                | ✅ Implemented |
 
 No item is left open. Checklist run for both changes: `npm run l10n`, `npm run prettier-fix`,
-`npm run lint`, `npx jest --no-coverage` (3513 tests), `npm run build` — all clean.
+`npm run lint`, `npx jest --no-coverage` (3522 tests), `npm run build` — all clean.
 
 ---
 

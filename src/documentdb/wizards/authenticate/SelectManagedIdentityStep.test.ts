@@ -3,16 +3,20 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+function interpolate(message: string, ...args: unknown[]): string {
+    return message.replace(/\{(\d+)\}/g, (_match, index: string) => String(args[Number(index)]));
+}
+
 jest.mock('vscode', () => ({
     ThemeIcon: class ThemeIcon {
         constructor(public readonly id: string) {}
     },
     QuickPickItemKind: { Separator: -1, Default: 0 },
-    l10n: { t: jest.fn((message: string) => message) },
+    l10n: { t: jest.fn(interpolate) },
 }));
 
 jest.mock('@vscode/l10n', () => ({
-    t: jest.fn((message: string) => message),
+    t: jest.fn(interpolate),
 }));
 
 jest.mock('@microsoft/vscode-azext-utils', () => ({
@@ -22,7 +26,7 @@ jest.mock('@microsoft/vscode-azext-utils', () => ({
 import * as vscode from 'vscode';
 import { AuthMethodId } from '../../auth/AuthMethod';
 import { type AuthenticateWizardContext } from './AuthenticateWizardContext';
-import { SelectManagedIdentityStep } from './SelectManagedIdentityStep';
+import { groupAsGuid, normalizeClientId, SelectManagedIdentityStep } from './SelectManagedIdentityStep';
 
 const CLIENT_ID = '11111111-2222-3333-4444-555555555555';
 
@@ -124,11 +128,54 @@ describe('SelectManagedIdentityStep.validateClientId', () => {
         expect(makeStep().validateClientId(CLIENT_ID)).toBeUndefined();
     });
 
+    it('accepts a GUID surrounded by whitespace', () => {
+        expect(makeStep().validateClientId(`  ${CLIENT_ID}\t`)).toBeUndefined();
+    });
+
+    it('accepts a client ID pasted without separators', () => {
+        expect(makeStep().validateClientId(CLIENT_ID.replace(/-/g, ''))).toBeUndefined();
+    });
+
+    it('accepts a client ID whose separators sit in the wrong places', () => {
+        expect(makeStep().validateClientId('1111-11112222333344445555-55555555')).toBeUndefined();
+    });
+
     it('rejects an empty value and points at the system-assigned option', () => {
         expect(makeStep().validateClientId('')).toMatch(/system-assigned/i);
     });
 
-    it('rejects anything that is not GUID shaped', () => {
-        expect(makeStep().validateClientId('not-a-guid')).toBeDefined();
+    it('reports how an incomplete value is read, so the user can see what is missing', () => {
+        expect(makeStep().validateClientId('111111122')).toContain('11111112-2');
+    });
+
+    it('keeps the extra characters visible when the value is too long', () => {
+        expect(makeStep().validateClientId(`${CLIENT_ID}99`)).toContain('555555555555-99');
+    });
+
+    it('names the allowed characters instead of guessing at a grouping', () => {
+        const message = makeStep().validateClientId('not-a-guid');
+
+        expect(message).toBeDefined();
+        expect(message).not.toContain('Read as');
+    });
+});
+
+describe('normalizeClientId', () => {
+    it('restores the separators of a value pasted without them', () => {
+        expect(normalizeClientId(CLIENT_ID.replace(/-/g, ''))).toBe(CLIENT_ID);
+    });
+
+    it('leaves a value that is not 32 hexadecimal characters alone, apart from trimming', () => {
+        expect(normalizeClientId('  alice  ')).toBe('alice');
+    });
+});
+
+describe('groupAsGuid', () => {
+    it('groups a partial value as far as it goes', () => {
+        expect(groupAsGuid('111111122')).toBe('11111112-2');
+    });
+
+    it('groups a full value into 8-4-4-4-12', () => {
+        expect(groupAsGuid(CLIENT_ID.replace(/-/g, ''))).toBe(CLIENT_ID);
     });
 });
