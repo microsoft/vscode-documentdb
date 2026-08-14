@@ -8,23 +8,11 @@ import { type CachedClusterCredentials } from '../CredentialCache';
 import { AuthMethodId } from './AuthMethod';
 import { expiresInSecondsFromTimestamp, ManagedIdentityAuthHandler } from './ManagedIdentityAuthHandler';
 
-const getToken = jest.fn();
-const credentialConstructor = jest.fn();
+const getManagedIdentityAccessToken = jest.fn();
 
-jest.mock(
-    '@azure/identity',
-    () => ({
-        ManagedIdentityCredential: class {
-            constructor(options?: unknown) {
-                credentialConstructor(options);
-            }
-            public getToken(scope: unknown): unknown {
-                return getToken(scope);
-            }
-        },
-    }),
-    { virtual: true },
-);
+jest.mock('./managedIdentityTokenProvider', () => ({
+    getManagedIdentityAccessToken: (...args: unknown[]) => getManagedIdentityAccessToken(...args),
+}));
 
 function buildCredentials(overrides: Partial<CachedClusterCredentials> = {}): CachedClusterCredentials {
     return {
@@ -68,9 +56,11 @@ describe('expiresInSecondsFromTimestamp', () => {
 
 describe('ManagedIdentityAuthHandler', () => {
     beforeEach(() => {
-        getToken.mockReset();
-        credentialConstructor.mockReset();
-        getToken.mockResolvedValue({ token: 'a-token', expiresOnTimestamp: Date.now() + 3600 * 1000 });
+        getManagedIdentityAccessToken.mockReset();
+        getManagedIdentityAccessToken.mockResolvedValue({
+            accessToken: 'a-token',
+            expiresOnTimestamp: Date.now() + 3600 * 1000,
+        });
     });
 
     it('configures the OIDC mechanism with a curated allowed-hosts list', async () => {
@@ -99,21 +89,33 @@ describe('ManagedIdentityAuthHandler', () => {
         expect(connectionString).toContain('retryWrites=true');
     });
 
-    it('creates a system-assigned credential when no client ID is configured', async () => {
+    it('requests a token for the system-assigned identity when no client ID is configured', async () => {
         const handler = new ManagedIdentityAuthHandler(buildCredentials({ managedIdentityConfig: {} }));
 
-        await handler.configureAuth();
+        const { options } = await handler.configureAuth();
+        await invokeOidcCallback(options);
 
-        expect(credentialConstructor).toHaveBeenCalledWith(undefined);
+        expect(getManagedIdentityAccessToken).toHaveBeenCalledWith(
+            ['https://ossrdbms-aad.database.windows.net/.default'],
+            undefined,
+            undefined,
+        );
     });
 
-    it('creates a user-assigned credential when a client ID is configured', async () => {
+    it('requests a token for the configured user-assigned identity and cluster tenant', async () => {
         const clientId = '11111111-2222-3333-4444-555555555555';
-        const handler = new ManagedIdentityAuthHandler(buildCredentials({ managedIdentityConfig: { clientId } }));
+        const handler = new ManagedIdentityAuthHandler(
+            buildCredentials({ managedIdentityConfig: { clientId, tenantId: 'cluster-tenant' } }),
+        );
 
-        await handler.configureAuth();
+        const { options } = await handler.configureAuth();
+        await invokeOidcCallback(options);
 
-        expect(credentialConstructor).toHaveBeenCalledWith({ clientId });
+        expect(getManagedIdentityAccessToken).toHaveBeenCalledWith(
+            ['https://ossrdbms-aad.database.windows.net/.default'],
+            clientId,
+            'cluster-tenant',
+        );
     });
 
     it('returns the acquired token with a real expiry through the OIDC callback', async () => {
@@ -126,42 +128,13 @@ describe('ManagedIdentityAuthHandler', () => {
         expect(response.expiresInSeconds).toBeGreaterThan(0);
     });
 
-    it('validates the token against the tenant in managed identity config', async () => {
-        const payload = Buffer.from(JSON.stringify({ tid: 'token-tenant' })).toString('base64url');
-        getToken.mockResolvedValue({
-            token: `header.${payload}.signature`,
-            expiresOnTimestamp: Date.now() + 3600 * 1000,
-        });
-        const handler = new ManagedIdentityAuthHandler(
-            buildCredentials({
-                managedIdentityConfig: { tenantId: 'cluster-tenant' },
-                entraIdConfig: { tenantId: 'token-tenant' },
-            }),
-        );
-
-        const { options } = await handler.configureAuth();
-
-        await expect(invokeOidcCallback(options)).rejects.toThrow(
-            /managed identity cannot authenticate across tenants/i,
-        );
-    });
-
-    it('translates a credential failure into a readable message', async () => {
-        getToken.mockRejectedValue(new Error('Multiple user assigned identities exist, please specify the clientId'));
+    it('propagates the provider readable failure', async () => {
+        getManagedIdentityAccessToken.mockRejectedValue(new Error('More than one managed identity is available.'));
         const handler = new ManagedIdentityAuthHandler(buildCredentials());
 
         const { options } = await handler.configureAuth();
 
         await expect(invokeOidcCallback(options)).rejects.toThrow(/more than one managed identity/i);
-    });
-
-    it('translates a null token into the same readable failure path', async () => {
-        getToken.mockResolvedValue(null);
-        const handler = new ManagedIdentityAuthHandler(buildCredentials());
-
-        const { options } = await handler.configureAuth();
-
-        await expect(invokeOidcCallback(options)).rejects.toThrow(/Managed Identity authentication failed/i);
     });
 
     it('honors the host-gated TLS exception', async () => {

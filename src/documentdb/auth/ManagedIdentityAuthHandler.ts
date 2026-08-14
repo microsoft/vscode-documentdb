@@ -3,16 +3,13 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { type AccessToken } from '@azure/identity';
 import { type MongoClientOptions, type OIDCResponse } from 'mongodb';
 import { type CachedClusterCredentials } from '../CredentialCache';
 import { DocumentDBConnectionString } from '../utils/DocumentDBConnectionString';
 import { resolveAllowInvalidCertificates } from '../utils/tlsException';
 import { type AuthHandler, type AuthHandlerResponse } from './AuthHandler';
 import { DOCUMENTDB_ENTRA_SCOPE } from './entraScopes';
-import { describeManagedIdentityError } from './managedIdentityErrors';
-import { reportManagedIdentityTokenFailure } from './managedIdentityTelemetry';
-import { verifyManagedIdentityTenant } from './managedIdentityTenant';
+import { getManagedIdentityAccessToken } from './managedIdentityTokenProvider';
 import { getOidcAllowedHosts } from './oidcAllowedHosts';
 
 /**
@@ -44,11 +41,8 @@ export class ManagedIdentityAuthHandler implements AuthHandler {
     constructor(private readonly clusterCredentials: CachedClusterCredentials) {}
 
     public async configureAuth(): Promise<AuthHandlerResponse> {
-        // Dynamic import: @azure/identity pulls in MSAL and must stay out of the activation path.
-        const { ManagedIdentityCredential } = await import('@azure/identity');
-
         const clientId = this.clusterCredentials.managedIdentityConfig?.clientId;
-        const credential = clientId ? new ManagedIdentityCredential({ clientId }) : new ManagedIdentityCredential();
+        const tenantId = this.clusterCredentials.managedIdentityConfig?.tenantId;
 
         const dbConnectionString = new DocumentDBConnectionString(this.clusterCredentials.connectionString);
         dbConnectionString.username = '';
@@ -65,27 +59,10 @@ export class ManagedIdentityAuthHandler implements AuthHandler {
             authMechanismProperties: {
                 ALLOWED_HOSTS: getOidcAllowedHosts(this.clusterCredentials.connectionString),
                 OIDC_CALLBACK: async (): Promise<OIDCResponse> => {
-                    let token: AccessToken | null;
-                    try {
-                        token = await credential.getToken(DOCUMENTDB_ENTRA_SCOPE);
-                    } catch (error) {
-                        reportManagedIdentityTokenFailure(error, clientId);
-                        throw new Error(describeManagedIdentityError(error, clientId));
-                    }
-
-                    if (!token) {
-                        reportManagedIdentityTokenFailure(undefined, clientId);
-                        throw new Error(describeManagedIdentityError(undefined, clientId));
-                    }
-
-                    verifyManagedIdentityTenant(
-                        token.token,
-                        this.clusterCredentials.managedIdentityConfig?.tenantId,
-                        clientId,
-                    );
+                    const token = await getManagedIdentityAccessToken([DOCUMENTDB_ENTRA_SCOPE], clientId, tenantId);
 
                     return {
-                        accessToken: token.token,
+                        accessToken: token.accessToken,
                         expiresInSeconds: expiresInSecondsFromTimestamp(token.expiresOnTimestamp),
                     };
                 },
