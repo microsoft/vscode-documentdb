@@ -148,26 +148,27 @@ error result and also shows a toast; Shell reports inside the terminal it owns.
 
 The feature adds Managed Identity as an explicit authentication method across manual connections,
 Azure Resources, Service Discovery, saved connections, Collection View, Query Playground, and
-Interactive Shell. The central journey is clear and the error translations are unusually actionable,
-but four code-confirmed gaps deserve hands-on attention: malformed explicit selectors can silently
-become system-assigned, the multiple-identity recovery message points at a Retry loop instead of
-Update Credentials, duplicate detection collapses distinct identities on one host, and cluster-known
-authentication availability is presented as merely "unknown" and remains selectable. Two softer
-checks cover the intentionally different cross-tenant diagnostics and the no-confirmation fast path
-for a valid documented connection string.
+Interactive Shell. The central journey is clear and the error translations are unusually actionable.
+After operator review, two P1 items remain open: a supplied identity selector should remain visible
+and editable instead of silently becoming system-assigned, and duplicate detection must distinguish
+authentication identities for both Managed Identity and Entra ID. The remaining four pre-assessment
+items are closed: the Connections tree already exposes Update Credentials recovery, method
+availability is deliberately permissive where certainty can go stale, the cross-tenant diagnostic
+difference is an unbroken edge case, and the near-term New Connection redesign supersedes further
+work on paste confirmation.
 
 ---
 
 ## Priority index
 
-| #   | Priority | Item                                                                    | Status         |
-| --- | -------- | ----------------------------------------------------------------------- | -------------- |
-| 1   | **P1**   | Non-GUID explicit selector silently becomes system-assigned             | 🟠 Open        |
-| 2   | **P1**   | Multiple-identity guidance points users into a Retry loop               | 🟠 Open        |
-| 3   | **P1**   | Distinct user-assigned identities are rejected as duplicate connections | 🟠 Open        |
-| 4   | **P1**   | Managed Identity stays selectable when cluster metadata excludes it     | 🟠 Open        |
-| 5   | **P2**   | Cross-tenant diagnosis depends on the connection's origin               | 🟡 Open (soft) |
-| 6   | **P2**   | Explicit pasted identity is applied without an identity review step     | 🟡 Open (soft) |
+| #   | Priority | Item                                                                     | Status    |
+| --- | -------- | ------------------------------------------------------------------------ | --------- |
+| 1   | **P1**   | Supplied identity selector should remain visible and editable            | 🟠 Open   |
+| 2   | **P1**   | Multiple-identity guidance points users into a Retry loop                | 🚫 Closed |
+| 3   | **P1**   | Distinct authentication identities are rejected as duplicate connections | 🟠 Open   |
+| 4   | **P1**   | Managed Identity stays selectable when cluster metadata excludes it      | 🚫 Closed |
+| 5   | **P2**   | Cross-tenant diagnosis depends on the connection's origin                | 🚫 Closed |
+| 6   | **P2**   | Explicit pasted identity is applied without an identity review step      | 🚫 Closed |
 
 ---
 
@@ -177,9 +178,14 @@ No P0 item was pre-discovered. Confirm this on a real Azure VM, especially with 
 
 ## P1: Broken / misleading, or consistency & safety
 
-### 1. Non-GUID explicit selector silently becomes system-assigned ⚠️
+### 1. Supplied identity selector should remain visible and editable ⚠️
 
 **Priority:** P1 · **Status:** 🟠 Open
+
+> **Operator direction (Iteration 1):** when an identity value is supplied, show it in an editable
+> field, as the username flow does. The user can accept or modify it, and the connection attempt can
+> reject it if it is not valid. **Reason:** the supplied value may still be correct; the runtime
+> authentication attempt is the authoritative check.
 
 **Observation to confirm:** paste an explicit `ENVIRONMENT:azure` connection string whose username
 position is non-empty but not a GUID. The wizard should not silently reinterpret that value as a
@@ -196,13 +202,17 @@ request for the system-assigned identity.
   skips the identity step for every explicit hint. `{}` then means system-assigned, so the pasted
   selector is discarded without warning.
 
-💡 **Suggestion:** distinguish "username absent" from "username present but invalid." Keep the
-system-assigned fast path only for the first case; route the second through the client-ID input and
-its existing validation.
+💡 **Suggestion:** distinguish "username absent" from "username present." Keep the system-assigned
+fast path only for the first case. For the second, preserve the supplied value in an editable
+client-ID field, allow the user to modify or accept it, and then proceed to the connection attempt.
 
 ### 2. Multiple-identity guidance points users into a Retry loop ⚠️
 
-**Priority:** P1 · **Status:** 🟠 Open
+**Priority:** P1 · **Status:** 🚫 Closed
+
+> **Decision (Iteration 1):** close as already solved. **Reason:** the Connections error state
+> includes `Click here to update credentials` specifically so the user can select a client ID after
+> this failure.
 
 **Observation to confirm:** save a system-assigned configuration on a VM with multiple identities,
 expand the connection, read the failure message, and follow its stated recovery path.
@@ -219,12 +229,17 @@ expand the connection, read the failure message, and follow its stated recovery 
   adds a separate `Click here to update credentials` row to the error state. The problem is that the
   message points to Retry/reconnect rather than to that action.
 
-💡 **Suggestion:** name the actual recovery action in the message ("Choose Update Credentials and
-enter the client ID...") or offer it directly from the modal. See [O1](#o1-how-should-multiple-identity-recovery-work-item-2).
+🚫 **Closed:** no change requested. The existing Update Credentials recovery row is the intended
+resolution path.
 
-### 3. Distinct user-assigned identities are rejected as duplicate connections ⚠️
+### 3. Distinct authentication identities are rejected as duplicate connections ⚠️
 
 **Priority:** P1 · **Status:** 🟠 Open
+
+> **Operator direction (Iteration 1):** expand duplicate detection to distinguish identities and
+> make sure Entra ID is handled correctly as well. **Reason:** connection identity is
+> authentication-method-specific; host plus native username is insufficient for both Managed
+> Identity and Entra ID.
 
 **Observation to confirm:** add the same cluster twice with two different user-assigned client IDs.
 The second connection should either be allowed or the duplicate explanation should accurately state
@@ -239,13 +254,18 @@ why the product disallows it.
   already exists," even when the two client IDs differ. This hides a legitimate multi-identity
   workflow and gives a factually wrong explanation.
 
-💡 **Suggestion:** include authentication method and managed-identity client ID in the connection
-identity, or explicitly decide that only one saved profile per host is supported and rewrite the
-message around that rule.
+💡 **Suggestion:** include authentication method and its method-specific identity in duplicate
+comparison. Cover both managed-identity client IDs and the corresponding Entra ID profile semantics,
+with focused tests for distinct profiles on the same host.
 
 ### 4. Managed Identity stays selectable when cluster metadata excludes it ⚠️
 
-**Priority:** P1 · **Status:** 🟠 Open
+**Priority:** P1 · **Status:** 🚫 Closed
+
+> **Decision (Iteration 1):** leave the permissive behavior as-is. **Reason:** Discovery may know the
+> cluster's current allowed modes, but an ordinary Connections entry cannot always verify them, and
+> saved metadata can become stale if the cluster configuration changes. Keeping one simple behavior
+> avoids presenting temporary knowledge as permanent fact.
 
 **Observation to confirm:** use an Azure Resources or Discovery cluster whose allowed modes exclude
 Entra ID, then inspect and select Managed Identity in the authentication picker.
@@ -261,15 +281,17 @@ Entra ID, then inspect and select Managed Identity in the authentication picker.
   can genuinely be unknown. In Azure Resources and Discovery, however, the cluster's allowed modes
   are already known, so the wording and behavior are misleading.
 
-💡 **Suggestion:** filter unavailable methods for ARM/Discovery entry points, or visually disable
-them with an accurate "Not enabled on this cluster" explanation while retaining the permissive
-manual-connection behavior.
+🚫 **Closed:** no change requested. Authentication remains selectable when support cannot be treated
+as durable knowledge.
 
 ## P2: Polish, expectation, or feature gap
 
 ### 5. Cross-tenant diagnosis depends on the connection's origin ⚠️
 
-**Priority:** P2 · **Status:** 🟡 Open (soft)
+**Priority:** P2 · **Status:** 🚫 Closed
+
+> **Decision (Iteration 1):** close without a change. **Reason:** this is an edge case the operator
+> cannot currently test, and no broken behavior has been observed.
 
 **Observation to confirm:** compare the same cross-tenant failure from Azure Resources and from a
 pasted connection string (manual validation cases 7a and 7b).
@@ -282,12 +304,14 @@ pasted connection string (manual validation cases 7a and 7b).
 - 🔍 The manual checklist documents the pasted-string path as an expected plain server authentication
   failure. This is a deliberate information-boundary difference, not currently a correctness bug.
 
-💡 **Suggestion:** confirm that the generic pasted-string failure is still actionable enough. If it
-is not, prefer a Learn More affordance or troubleshooting copy over guessing a tenant mismatch.
+🚫 **Closed:** no change requested unless a reproducible user-facing failure is observed later.
 
 ### 6. Explicit pasted identity is applied without an identity review step ⚠️
 
-**Priority:** P2 · **Status:** 🟡 Open (soft)
+**Priority:** P2 · **Status:** 🚫 Closed
+
+> **Decision (Iteration 1):** close without a change. **Reason:** the New Connection experience will
+> be redesigned in the near future, so refining this confirmation step now would be short-lived work.
 
 **Observation to confirm:** paste a valid documented user-assigned connection string and note whether
 skipping both the authentication-method and identity quick picks feels clear or surprising.
@@ -302,9 +326,8 @@ skipping both the authentication-method and identity quick picks feels clear or 
   round-trips without extra prompts. The review question is whether speed or explicit review better
   matches user expectations for a consequential authentication choice.
 
-💡 **Suggestion:** keep the seamless path if it reads clearly in practice. If not, add a lightweight
-summary before save or make the completion message name the selected authentication method and
-identity type. See [O2](#o2-should-explicit-paste-remain-a-zero-confirmation-path-item-6).
+🚫 **Closed:** defer this question to the future New Connection experience rather than changing the
+current flow.
 
 ## P3: Nice-to-have / cosmetic / acknowledged
 
@@ -328,6 +351,17 @@ one; nothing is dropped without a terminal status.
 | --- | --------------------------- | -------------- | ------------------------------ |
 | 1-6 | Pre-assessment Flags seeded | -              | Open for hands-on confirmation |
 
+### Iteration 1: operator triage
+
+| #   | Item                                  | Decision (why)                                                                                    | Outcome   |
+| --- | ------------------------------------- | ------------------------------------------------------------------------------------------------- | --------- |
+| 1   | Supplied identity selector            | Keep visible and editable; let the connection attempt authoritatively validate the supplied value | 🟠 Open   |
+| 2   | Multiple-identity recovery            | Existing Update Credentials row is the intended recovery                                          | 🚫 Closed |
+| 3   | Duplicate connection identity         | Expand comparison for Managed Identity and Entra ID                                               | 🟠 Open   |
+| 4   | Authentication availability filtering | Keep permissive because certainty differs by origin and can become stale                          | 🚫 Closed |
+| 5   | Cross-tenant diagnostic asymmetry     | Untestable edge case; no observed break                                                           | 🚫 Closed |
+| 6   | Explicit-paste confirmation           | Defer to the planned New Connection redesign                                                      | 🚫 Closed |
+
 ---
 
 ## Open ideas: options, pros & cons
@@ -337,24 +371,25 @@ not decisions.
 
 ### O1. How should multiple-identity recovery work? (item 2)
 
+> 🚫 **Resolved (Iteration 1):** no additional recovery UI. The existing `Click here to update
+credentials` row is the intended path.
+
 | Option                                  | Pros                                              | Cons                                                               |
 | --------------------------------------- | ------------------------------------------------- | ------------------------------------------------------------------ |
 | **A. Correct the error text only**      | Small change; points at the existing recovery row | User must dismiss the modal and find the row                       |
 | **B. Add an Update Credentials button** | Recovery is immediate and explicit                | Couples the shared error presentation to a saved item              |
 | **C. Retry opens identity selection**   | Existing Retry label becomes truthful             | Changes Retry semantics and may add prompts for transient failures |
 
-> 💡 **Suggested:** B when the failing item is a saved connection, with A as the minimum fix.
-
 ### O2. Should explicit paste remain a zero-confirmation path? (item 6)
+
+> 🚫 **Resolved (Iteration 1):** leave the current flow unchanged and revisit the question as part
+> of the planned New Connection redesign.
 
 | Option                                    | Pros                                             | Cons                                                 |
 | ----------------------------------------- | ------------------------------------------------ | ---------------------------------------------------- |
 | **A. Keep the current fast path**         | Exact copy/paste round-trip; least friction      | Authentication choice is not reviewed before storage |
 | **B. Show a compact summary before save** | Makes identity and auth method explicit          | Adds a step to a deliberately interoperable workflow |
 | **C. Enrich the success confirmation**    | Preserves speed while making the outcome visible | Feedback arrives only after the connection is stored |
-
-> 💡 **Suggested:** start with A during hands-on review; choose C only if reviewers consistently
-> cannot tell which identity was saved.
 
 ---
 
