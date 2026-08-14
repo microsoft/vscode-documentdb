@@ -4,6 +4,7 @@
 **Head:** `dev/tnaum/managed-identities` → **Base:** `release/0.10.0`
 **Merge base:** `c8e35105` · 25 commits · 98 files · +6288 / -961
 **Reviewed:** 2026-08-13
+**Operator feedback recorded:** 2026-08-14
 **Reviewer:** agent-assisted code review
 
 ---
@@ -52,6 +53,12 @@ There is, however, **one Medium finding that quietly disables the feature's own 
 things this PR exists to deliver. Everything else is either a consistency issue that can be
 scheduled, or trivia.
 
+> **Post-feedback status.** The operator has reviewed every finding; see
+> [Operator decisions](#operator-decisions). F7 is **withdrawn** (the version suffix is a deliberate
+> preview marker). F5 is resolved by **removing** the feature rather than fixing it. F1 was escalated
+> from the interim fix to the clean shape, which makes it the largest remaining item. The revised
+> [pre-merge checklist](#pre-merge-checklist) at the end is the authoritative one.
+
 ### Findings at a glance
 
 | ID  | Severity     | Finding                                                                                    | Fix before merge?      |
@@ -62,11 +69,36 @@ scheduled, or trivia.
 | F4  | Low / Medium | Transient network failures are reported as "no managed identity on this machine"           | Recommended            |
 | F5  | Low          | "Recently used" identities are only recorded from one of four entry points                 | No, follow-up          |
 | F6  | Low          | The `CredentialCache` inference change alters behaviour for **all** auth methods           | No, but call it out    |
-| F7  | **Blocker**  | `package.json` version is pinned to `0.10.0-managed-identity`                              | **Yes**                |
+| F7  | ~~Blocker~~  | ~~`package.json` version is pinned to `0.10.0-managed-identity`~~ **Withdrawn**            | ~~Yes~~ No             |
 | F8  | Low          | New secret slot added without a storage version bump                                       | No, document it        |
 | C1  | Low          | Copilot: JWT payload decoded as `base64` rather than `base64url`                           | Optional (false alarm) |
 | C2  | Low          | Copilot: user manual says "three things", lists four                                       | **Yes** (one line)     |
 | C3  | Low          | Copilot: harness test replaces `process.env` wholesale                                     | Recommended            |
+
+---
+
+## Operator decisions
+
+Recorded 2026-08-14. These supersede the reviewer's recommendation wherever the two differ. Each
+finding below also carries an **Operator decision** block at the end of its section.
+
+| ID  | Reviewer recommended    | Operator chose             | Notes                                                           |
+| --- | ----------------------- | -------------------------- | --------------------------------------------------------------- |
+| F1  | A now, B as a follow-up | **B**                      | Go straight to the clean shape, skip the interim patch          |
+| F2  | A                       | **A**                      | Agreed                                                          |
+| F3  | A                       | **A**                      | Agreed                                                          |
+| F4  | A                       | **A**                      | Agreed                                                          |
+| F5  | B                       | **Remove the feature**     | Low expected usage, not worth maintaining                       |
+| F6  | Document only           | **Accepted as-is**         | Agreed                                                          |
+| F7  | Revert the version bump | **Keep it**                | Intentional setting for preview builds                          |
+| F8  | Keep `3.0`, document    | **Question raised**        | See [F8 addendum](#f8-addendum-operator-question-on-versioning) |
+| C1  | Adopt `base64url`       | **Agreed with assessment** |                                                                 |
+| C2  | Fix the count           | **Agreed with assessment** |                                                                 |
+| C3  | Mutate in place         | **Agreed with assessment** |                                                                 |
+
+> **F1 note.** Choosing B makes F1 a larger change than the "fix before merge" label assumed. It adds
+> a persisted field, so it interacts directly with the F8 versioning question. Sequence them: settle
+> F8 first, then implement F1 = B against that decision.
 
 ---
 
@@ -144,6 +176,31 @@ managed identity connection with an Entra tenant, reloads it through
 
 B is the right long-term shape but should not gate this PR; file it alongside the D4 follow-up issue.
 
+### Operator decision: **B**
+
+Go straight to `ManagedIdentityAuthConfig.tenantId`. No interim patch.
+
+Consequences to plan for, since B is the larger of the two options:
+
+- **A new persisted field** means a new `SecretIndex` slot (6), which lands on top of the slot 5 this
+  PR already adds. Both are additive within the existing array, so the same reasoning as F8 applies:
+  see the [F8 addendum](#f8-addendum-operator-question-on-versioning) before writing it.
+- **Populate it wherever the cluster tenant is known**: `clusterHelpers.extractCredentialsFromCluster`
+  (ARM), `AzureExecuteStep`, and the two Azure-backed tree items. The Connections view has no tenant
+  to offer, so `tenantId` stays `undefined` there and the check keeps its early return. That is the
+  same coverage A would have delivered, but without depending on a sibling method's config.
+- **`ManagedIdentityAuthHandler` and `getManagedIdentityAccessToken` read from the managed identity
+  config**, not `entraIdConfig`. Combined with F2 = A there is then exactly one place to change.
+- **The clearing logic in `updateCredentials/ExecuteStep.ts` becomes correct as written.** Wiping
+  `entraIdAuthConfig` when switching to managed identity is the right thing to do once the tenant no
+  longer lives there, so that line stays and the bug disappears rather than being patched around.
+- Still add the storage round-trip regression test described above, asserting `tenantId` survives
+  `ConnectionStorageService` → `CredentialCache` on the new field.
+
+> Because this grows the change, note that it is now a merge blocker of real size rather than a
+> four-line fix. If the preview timeline is tight, shipping A and following with B is still available,
+> but that is explicitly **not** what was chosen.
+
 ---
 
 ## F2. Two token paths, two caches, duplicated logic
@@ -196,6 +253,11 @@ try/catch, `reportManagedIdentityTokenFailure`, `describeManagedIdentityError` a
 It deletes code, removes a class of future drift, and the existing
 `ManagedIdentityAuthHandler.test.ts` already mocks `@azure/identity` at the module level, so it will
 keep working with only a mock-target change. `expiresInSecondsFromTimestamp` stays in the handler.
+
+### Operator decision: **A**
+
+Agreed, no changes to the recommendation. Sequence this after F1 = B so the tenant argument passed to
+`getManagedIdentityAccessToken()` is already reading from `ManagedIdentityAuthConfig.tenantId`.
 
 ---
 
@@ -257,6 +319,12 @@ hostname, is the extension being clever at the user's expense. Update §6 of `ma
 to record the amended rule: _offered wherever Entra ID is offered, **or** wherever the connection
 string explicitly asked for it._
 
+### Operator decision: **A**
+
+Agreed, no changes to the recommendation. Do not forget the two documentation touches that come with
+it: the amended availability rule in §6 of `managed-identities.md`, and a line in
+`manual-validation-checklist.md` covering a paste against a private-endpoint or custom-domain host.
+
 ---
 
 ## F4. Transient network failures are reported as a permanent host misconfiguration
@@ -310,6 +378,17 @@ The telemetry split is the real prize: "is this feature failing because people a
 because IMDS is flaky behind their proxy?" is a question the current single bucket cannot answer, and
 it is exactly the question that will be asked after release.
 
+### Operator decision: **A**
+
+Agreed, no changes to the recommendation. Two details worth pinning while implementing:
+
+- Move the network group **above** the `identityNotAssigned` group, or the ordering problem noted in
+  the evidence survives the split: a message carrying both "not assigned" and a transport hint still
+  resolves to the wrong bucket.
+- Add the new `endpointUnreachable` value to `ManagedIdentityFailureReason` and extend
+  `managedIdentityErrors.test.ts` with a case for each transport keyword, so the split is pinned
+  rather than assumed.
+
 ---
 
 ## F5. "Recently used" identities are recorded from only one of four entry points
@@ -343,6 +422,39 @@ symmetric statement is that gaining a stale entry is harmless too. One place bea
 cancel case bothers the reviewer, take A and add the missing calls. It is not worth a long debate,
 but it should not ship as-is.
 
+### Operator decision: **remove the feature**
+
+Neither A nor B. Expected usage is low and it is not worth maintaining, so the "Recently used" list
+comes out entirely rather than being completed.
+
+This is a defensible call and it resolves the finding outright: a feature that only works from one of
+four entry points is worse than no feature, and the quick pick still has the two rows that matter
+(system-assigned, and manual entry) plus the prefill from the connection string.
+
+**Scope of the removal:**
+
+- Delete `src/documentdb/auth/recentManagedIdentities.ts`.
+- Remove the import and the `rememberManagedIdentity()` call from
+  `src/commands/newConnection/ExecuteStep.ts` (line ~242), and the now-unused `newConnectionLabel`
+  argument threading if it exists only for this.
+- In `SelectManagedIdentityStep.buildItems()`, drop the `getRecentManagedIdentities()` block and the
+  "Recently used" separator. Keep the "This machine" and "From the connection string" groups and the
+  manual-entry row.
+- Drop the `'recent'` value from the `source` union in `applyClientId()`, leaving
+  `'connectionString' | 'prompt'`. Note this narrows the `managedIdentityClientIdSource` telemetry
+  property; that is fine, but say so in the PR description so nobody hunts for a missing bucket.
+- Remove the corresponding cases from `SelectManagedIdentityStep.test.ts`.
+- Remove the `managedIdentity.recentClientIds` `globalState` key. Preview builds may already have
+  written it. It is a bounded array of five non-secret strings, so **leave the orphaned key rather
+  than adding cleanup code**; a migration to delete five strings costs more than it saves.
+
+**Also update the design docs**, or the next reader will treat the missing rows as a regression:
+
+- `decisions.md` **D2**, whose chosen shape explicitly shows a "Recently used" group in the quick pick
+  mock-up. Record that the group was cut before merge and why.
+- `managed-identities.md` §7 and any work item referencing the MRU.
+- `manual-validation-checklist.md`, if it asks the validator to confirm the list populates.
+
 ---
 
 ## F6. The `CredentialCache` inference change affects every auth method, not just managed identity
@@ -372,11 +484,16 @@ notes, and add one line to `manual-validation-checklist.md`: _open an existing N
 Entra ID connection created on 0.9.x and confirm both still connect._ This is cheap insurance for a
 change that is otherwise invisible in a diff titled "managed identity".
 
+### Operator decision: **accepted as-is**
+
+Agreed. No code change; the release-note line and the checklist line still need writing.
+
 ---
 
-## F7. Version string must be reverted before merge
+## F7. Version string must be reverted before merge (withdrawn)
 
-**Severity: Blocker (trivial).**
+**Severity: Blocker (trivial).** **Withdrawn after operator feedback**, see the decision below. The
+original finding is kept verbatim so the reasoning trail stays intact.
 
 ```json
 // package.json
@@ -387,6 +504,20 @@ From commit `8a386ca9 chore version bump for testing`. `package-lock.json` carri
 targets `release/0.10.0`, so this must go back to `0.10.0` (or whatever the release branch holds).
 
 **Recommendation:** revert `8a386ca9` before merge. No alternatives worth listing.
+
+### Operator decision: **keep it, not a finding**
+
+The suffix is an intentional setting for preview builds, not a leftover. **F7 is withdrawn.**
+
+The reviewer had no way to distinguish an intentional preview marker from the commit message
+`chore version bump for testing`, which reads like a leftover. One line in the PR description saying
+the suffix is deliberate would stop the next reviewer, human or bot, raising it again.
+
+One thing to confirm rather than assume: `0.10.0-managed-identity` is not a valid semver prerelease
+for the VS Code Marketplace, which requires `major.minor.patch` with integer parts only. If these
+preview builds are only ever side-loaded as a VSIX this is irrelevant. If any of them is expected to
+go through `vsce package` for a pre-release publish, the suffix will be rejected there, and the usual
+pattern is a numeric pre-release version instead.
 
 ---
 
@@ -416,12 +547,157 @@ or prompt for a password on a connection that has none.
 Add two lines to `decisions.md` recording that slot 5 is additive within `3.0` and what a downgrade
 does. Nobody should spend a version bump on this.
 
+### Operator decision: **question raised**
+
+> "add new version, this is clean. is a bump to 4 not easier than to 3.1? I don't recall how we're
+> comparing the versions in there. do note that we'll have some users switching between older
+> extension and this extension in the preview phase. any risks? only data loss of connection settings
+> is a real issue."
+
+Answered in full below. **Short answer: do not bump.** A bump is not clean here, it is the one option
+that actually causes the data loss the question is asking about.
+
+---
+
+## F8 addendum: operator question on versioning
+
+Three questions were asked. Taking them in order.
+
+### 1. "Is a bump to 4 not easier than to 3.1? How are we comparing versions?"
+
+**Neither is easier. Versions are not compared at all; they are matched as exact strings.**
+
+```ts
+// src/services/connectionStorageService.ts, fromStorageItem()
+switch (item.version) {
+  case '3.0':
+    return this.reconstructStoredItemFromSecrets(item);
+  case '2.0':
+    return this.wrapV2AsCurrent(this.convertV2ToConnectionItem(item));
+  default:
+    // v1.0 (no version field)
+    return this.wrapV2AsCurrent(this.wrapV1AsV2(item));
+}
+```
+
+There is no ordering, no `semver` comparison, no "greater than" anywhere. The census in
+`getStorageStatistics()` uses the same exact-match `switch`. So `'3.1'` and `'4.0'` cost precisely the
+same thing: one new `case` label. The choice between them is pure naming, and it does not affect
+difficulty in either direction.
+
+That also means the version field carries **no compatibility semantics today**. It is a shape tag, not
+a compatibility contract, which is exactly why bumping it does not buy the safety the word "version"
+implies.
+
+### 2. "Any risks with users switching between the older extension and this one during preview?"
+
+**Yes, and this is the decisive point: the risk is created by bumping, not by staying at `3.0`.**
+
+The released extension has the identical `switch` (verified on `origin/main`, line 1108). So an older
+extension reading a record written by the preview build behaves as follows:
+
+| Written as | Older extension takes | What it does                                                    |
+| ---------- | --------------------- | --------------------------------------------------------------- |
+| `'3.0'`    | `case '3.0'`          | Reads slots 0 to 4 correctly, **silently ignores slot 5**       |
+| `'3.1'`    | `default`             | **Treats the record as unversioned v1** and runs `wrapV1AsV2()` |
+| `'4.0'`    | `default`             | Same as `'3.1'`. Identical outcome                              |
+
+The `default` branch is not a graceful fallback. It is the v1 legacy path, and it makes assumptions
+that are simply false for a v3 record:
+
+```ts
+// wrapV1AsV2(): a v1 record kept credentials inside the connection string
+const rawSecret = item?.secrets?.[0] ?? '';
+if (!rawSecret || rawSecret.trim().length === 0) {
+    throw new Error(`Cannot wrap v1 item ...`);   // item is skipped entirely
+}
+const parsedCS = new DocumentDBConnectionString(rawSecret);
+const username = parsedCS.username;               // empty in v3: credentials are in slots 1 and 2
+// ...
+properties: {
+    parentId: undefined,                          // folder membership discarded
+    availableAuthMethods: [AuthMethodId.NativeAuth],
+    selectedAuthMethod: AuthMethodId.NativeAuth,  // every method flattened to Native
+},
+secrets: {
+    nativeAuthConfig: username ? { ... } : undefined,   // undefined, so the username is lost
+    // entraIdAuthConfig is not carried at all
+},
+```
+
+So bumping the version would, for **every connection the preview build has touched**, cause the older
+extension to:
+
+- **Flatten the folder tree.** `parentId` is forced to `undefined`, so every connection jumps to the
+  root.
+- **Rewrite the auth method to Native** for every connection, including Entra ID and No Auth ones.
+- **Lose the username**, because it looks for it inside the connection string where v3 no longer keeps
+  it. The password in slot 2 is never read.
+- **Lose `entraIdAuthConfig`** entirely, tenant and subscription included.
+- **Skip the item outright** if slot 0 is empty, which is the normal shape for a folder record.
+
+And this is not confined to display. The degraded object is what the old extension then hands to
+`save()`, which writes it back as `version: '3.0'` with the losses baked in. That is a real,
+persistent, user-visible loss of connection settings, which is the exact failure mode the question
+identified as the only one that matters.
+
+By contrast, staying at `'3.0'` degrades gracefully and reversibly. The old extension reads the record
+correctly, ignores slot 5 because indexed access on a missing element yields `undefined`, and sees
+only one thing it does not understand: `selectedAuthMethod: 'ManagedIdentity'`. That fails
+`isSupportedAuthMethod()` and falls through the old inference ladder to Entra ID or Native, so a
+managed identity connection shows up as an interactive Entra ID prompt. Annoying, obvious, and it
+repairs itself the moment the user is back on the preview build, because nothing was overwritten
+unless they explicitly re-saved that one connection.
+
+### 3. "Is the new version cleaner?"
+
+It is more expressive, and in a codebase where readers tolerated unknown versions it would be the
+right instinct. Here the reader predates the writer and cannot be changed retroactively, so the
+expressive option is the destructive one.
+
+The cleanliness that was actually wanted is achievable without touching the version field:
+
+- Keep `version: '3.0'`.
+- Document the slot allocation as an append-only registry next to the `SecretIndex` enum: slots are
+  assigned once, never reused, never reordered, and a reader that does not know a slot ignores it.
+- Record it as a decision in `decisions.md` so the invariant is discoverable rather than folkloric.
+
+That gives the same clarity a bump would signal, without the downgrade cliff.
+
+### Recommended sequence if a real version bump is wanted later
+
+The blocker is the `default` branch, not the number. Fix that first, in this order:
+
+1. **Ship a tolerant reader.** Change `default` to distinguish "no version field" (genuine v1) from
+   "a version string I do not recognise" (future format), and treat the latter as the newest known
+   shape rather than as v1. This is a small, self-contained change and it is worth doing regardless of
+   whether a bump ever happens; the current behaviour would bite any future format change the same
+   way.
+2. **Wait for that release to reach the users who matter.** During a preview phase where people switch
+   builds deliberately, that is a short wait.
+3. **Then bump**, to `'4.0'` or `'3.1'`, whichever reads better. By then the choice really is only
+   naming.
+
+Step 1 is not part of this PR and should not be. It belongs in a small storage-hardening PR of its
+own, where it can be tested against real v1, v2 and v3 fixtures.
+
+### Consequences for F1 = B
+
+The operator chose F1 = B, which adds `tenantId` to `ManagedIdentityAuthConfig` and therefore a second
+new slot (`SecretIndex` 6). Everything above applies to it unchanged: **add it additively inside
+`3.0`**, do not let a second new field become the argument for a bump. Two additive slots carry the
+same downgrade cost as one, which is to say almost none.
+
 ---
 
 ## Copilot reviewer comments
 
 Three inline comments were left by `copilot-pull-request-reviewer[bot]`. Assessment and proposed
 resolution for each.
+
+> **Operator decision, all three: agreed with the assessment.** C1 adopt `'base64url'` for clarity and
+> reply to the bot correcting the stated impact; C2 fix the count; C3 mutate `process.env` in place.
+> No deviations from the proposed resolutions below.
 
 ### C1. `readTenantIdFromAccessToken` decodes with `'base64'` instead of `'base64url'`
 
@@ -557,26 +833,48 @@ Worth recording, because these are the parts a future reviewer should not second
 
 ## Pre-merge checklist
 
-Ordered by what should block the merge.
+Revised against the [operator decisions](#operator-decisions). F7 is withdrawn; F5 becomes a removal
+rather than a completion; F1 grows because option B was chosen.
 
-1. **F7**: revert the `0.10.0-managed-identity` version bump (`package.json`, `package-lock.json`).
-2. **F1**: stop discarding `entraIdAuthConfig` for managed identity connections, in
-   `updateCredentials/ExecuteStep.ts` and `DocumentDBClusterItem.ts`; add a storage round-trip
-   regression test.
-3. **C2**: "Three things" → "Four things" in the user manual.
-4. **F3**: always list `ManagedIdentity` in `availableAuthenticationMethods` when a hint was
-   detected; amend §6 of `managed-identities.md`.
-5. **F2**: route `ManagedIdentityAuthHandler` through `getManagedIdentityAccessToken()`.
-6. **F4**: split the unreachable-endpoint reason out of `noEndpoint`.
-7. **C3**: mutate `process.env` in place in the harness `afterEach`.
-8. **C1**: `'base64url'` plus a fixture; reply to the bot correcting the stated impact.
-9. **F5**: record the MRU entry inside `SelectManagedIdentityStep.applyClientId()`.
-10. **F6 / F8**: documentation only: note the `CredentialCache` ladder change in the release notes
-    and add the 0.9.x-connection regression line to `manual-validation-checklist.md`; record the
-    additive slot-5 decision in `decisions.md`.
+**Blocking, in dependency order:**
+
+1. **F8**: keep `version: '3.0'`. Add the append-only slot-registry note next to `SecretIndex` and
+   record the decision in `decisions.md`. This has to be settled first because F1 depends on it.
+2. **F1 = B**: add `tenantId` to `ManagedIdentityAuthConfig` as additive `SecretIndex` slot 6;
+   populate it from ARM, `AzureExecuteStep` and the two Azure-backed tree items; read it in the
+   handler and the token provider; keep the `entraIdAuthConfig` clearing in
+   `updateCredentials/ExecuteStep.ts` as-is. Add the storage round-trip regression test.
+3. **F2 = A**: route `ManagedIdentityAuthHandler` through `getManagedIdentityAccessToken()`. Do this
+   after F1 so there is one place reading the new tenant field.
+4. **F3 = A**: always list `ManagedIdentity` in `availableAuthenticationMethods` when a hint was
+   detected; amend §6 of `managed-identities.md`; add the private-endpoint paste test.
+5. **F5 = removal**: delete `recentManagedIdentities.ts`, the "Recently used" group, the `'recent'`
+   telemetry source and the related tests; update D2 in `decisions.md` and the checklist.
+6. **F4 = A**: split `endpointUnreachable` out of `noEndpoint` and move the network group above
+   `identityNotAssigned`.
+7. **C2**: "Three things" → "Four things" in the user manual.
+8. **C3**: mutate `process.env` in place in the harness `afterEach`.
+9. **C1**: `'base64url'` plus a `-`/`_` fixture; reply to the bot correcting the stated impact.
+
+**Documentation only:**
+
+10. **F6**: note the `CredentialCache` ladder change in the release notes; add the 0.9.x-connection
+    regression line to `manual-validation-checklist.md`.
+11. **F7**: add a line to the PR description stating the `-managed-identity` suffix is a deliberate
+    preview marker, so it is not raised again. Confirm it never reaches `vsce package`.
+
+**Withdrawn:** F7 as a code change.
 
 Then the standard five: `npm run l10n`, `npm run prettier-fix`, `npm run lint`,
 `npx jest --no-coverage`, `npm run build`.
+
+**Follow-up issues to file, not part of this PR:**
+
+- Storage hardening: make the `fromStorageItem` `default` branch distinguish "unversioned v1" from
+  "unrecognised future version", so a later version bump stops being destructive. See the
+  [F8 addendum](#f8-addendum-operator-question-on-versioning).
+- The D4 issue (chained credential, MFA, service principals) that the plan already schedules for after
+  this work lands.
 
 Finally, the whole thing still depends on **`manual-validation-checklist.md` being executed on a real
 Azure VM**. No amount of harness testing substitutes for the multi-identity IMDS response, which is
