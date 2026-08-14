@@ -1,5 +1,11 @@
 # Change Log
 
+## 0.10.0
+
+### Improvements
+
+- **Authentication Method Persistence**: Explicitly saved authentication methods now take precedence over inference from stored credential fields. This keeps managed identity connections on the selected method after reload; existing Native and Microsoft Entra ID connections remain compatible. [#886](https://github.com/microsoft/vscode-documentdb/pull/886)
+
 ## 0.9.2
 
 ### Improvements

@@ -79,6 +79,7 @@ to see how much better the diagnosis is when we happen to know the cluster's ten
 | 19  | Reverse of 18: switch a native connection to Managed Identity              | The username and password are cleared; the identity step appears.       | ☐      |
 | 20  | Connect the same cluster from the **Azure Resources** view                 | Managed Identity is offered and works.                                  | ☐      |
 | 21  | Connect the same cluster from the **Service Discovery** view, then save it | The saved connection keeps the identity.                                | ☐      |
+| 21a | Open existing Native and Entra ID connections created with extension 0.9.x | Both retain their saved authentication method and connect successfully. | ☐      |
 
 ---
 
