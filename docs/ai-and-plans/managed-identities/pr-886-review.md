@@ -433,6 +433,8 @@ but it should not ship as-is.
 Neither A nor B. Expected usage is low and it is not worth maintaining, so the "Recently used" list
 comes out entirely rather than being completed.
 
+<!-- FIXED (F5) in https://github.com/microsoft/vscode-documentdb/commit/b97e4323: Removed the recentManagedIdentities global-state module, the New Connection writer, the quick-pick group, the recent telemetry source, and its tests. The feature worked through only one of four entry points and its expected usage did not justify maintaining hidden cross-connection state. The selector now consistently offers system-assigned identity, an optional client ID from the current connection string, and manual entry; design and implementation docs record the removal, while the bounded non-secret preview key is intentionally left orphaned. -->
+
 This is a defensible call and it resolves the finding outright: a feature that only works from one of
 four entry points is worse than no feature, and the quick pick still has the two rows that matter
 (system-assigned, and manual entry) plus the prefill from the connection string.
