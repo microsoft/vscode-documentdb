@@ -388,7 +388,10 @@ two VS Code windows is an obvious thing to try.
 ### 6. Availability rules
 
 Managed identity is offered wherever interactive Entra ID is offered, because on the wire they are
-the same mechanism and differ only in token source (`research-findings.md` §5.3).
+the same mechanism and differ only in token source (`research-findings.md` §5.3). It is also offered
+whenever a pasted connection string carries a managed identity hint, even if a private endpoint,
+CNAME, or custom domain prevents host-based vCore classification. The user's explicit string must
+not produce a selected method that is absent from the connection's available methods.
 
 **Pasted connection string**, `src/commands/newConnection/PromptConnectionStringStep.ts`:
 
@@ -397,6 +400,10 @@ const supportedAuthMethods: AuthMethodId[] = [AuthMethodId.NativeAuth];
 
 if (hasDomainSuffix(AzureDomains.vCore, ...parsedConnectionString.hosts)) {
   supportedAuthMethods.push(AuthMethodId.MicrosoftEntraID);
+  supportedAuthMethods.push(AuthMethodId.ManagedIdentity);
+}
+
+if (managedIdentityHint && !supportedAuthMethods.includes(AuthMethodId.ManagedIdentity)) {
   supportedAuthMethods.push(AuthMethodId.ManagedIdentity);
 }
 

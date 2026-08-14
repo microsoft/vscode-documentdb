@@ -107,6 +107,12 @@ export class PromptConnectionStringStep extends AzureWizardPromptStep<NewConnect
             supportedAuthMethods.push(AuthMethodId.ManagedIdentity);
         }
 
+        if (managedIdentityHint && !supportedAuthMethods.includes(AuthMethodId.ManagedIdentity)) {
+            // An explicit or suggestive driver-native string remains internally consistent even when
+            // a private endpoint or CNAME prevents host-based vCore classification.
+            supportedAuthMethods.push(AuthMethodId.ManagedIdentity);
+        }
+
         // Anonymous ("no authentication") connections are always offered.
         supportedAuthMethods.push(AuthMethodId.NoAuth);
 

@@ -33,17 +33,17 @@ original incident.
 
 ## Identity resolution
 
-| #   | Case                                                              | Expected                                                                                            | Result |
-| --- | ----------------------------------------------------------------- | --------------------------------------------------------------------------------------------------- | ------ |
-| 1   | VM with **only** a system-assigned identity, no client ID entered | Connects.                                                                                           | ☐      |
-| 2   | VM with **one** user-assigned identity, no client ID entered      | Connects.                                                                                           | ☐      |
-| 3   | VM with **two or more** identities, no client ID entered          | Fails with "This machine has more than one managed identity...". **This is the reported incident.** | ☐      |
-| 4   | Same VM as 3, correct client ID entered                           | Connects.                                                                                           | ☐      |
-| 5   | Client ID of an identity **not registered on the cluster**        | Fails with a message that mentions cluster-side registration.                                       | ☐      |
-| 6   | Client ID of an identity **not assigned to this VM**              | Fails with "The managed identity with client ID ... is not assigned to this machine."               | ☐      |
-| 7   | Non-Azure machine, Managed Identity selected                      | Fails with "No managed identity is available on this machine...".                                   | ☐      |
-| 7a  | Cluster in a **different tenant** from the VM, connection created from the **Azure Resources** view | Fails before connecting, with a message naming both tenant IDs. | ☐      |
-| 7b  | Same, but the connection was created by **pasting a connection string** | The tenant is unknown to us, so expect a plain authentication failure from the server. Confirm it is not misreported as one of the other reasons. | ☐      |
+| #   | Case                                                                                                | Expected                                                                                                                                          | Result |
+| --- | --------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------- | ------ |
+| 1   | VM with **only** a system-assigned identity, no client ID entered                                   | Connects.                                                                                                                                         | ☐      |
+| 2   | VM with **one** user-assigned identity, no client ID entered                                        | Connects.                                                                                                                                         | ☐      |
+| 3   | VM with **two or more** identities, no client ID entered                                            | Fails with "This machine has more than one managed identity...". **This is the reported incident.**                                               | ☐      |
+| 4   | Same VM as 3, correct client ID entered                                                             | Connects.                                                                                                                                         | ☐      |
+| 5   | Client ID of an identity **not registered on the cluster**                                          | Fails with a message that mentions cluster-side registration.                                                                                     | ☐      |
+| 6   | Client ID of an identity **not assigned to this VM**                                                | Fails with "The managed identity with client ID ... is not assigned to this machine."                                                             | ☐      |
+| 7   | Non-Azure machine, Managed Identity selected                                                        | Fails with "No managed identity is available on this machine...".                                                                                 | ☐      |
+| 7a  | Cluster in a **different tenant** from the VM, connection created from the **Azure Resources** view | Fails before connecting, with a message naming both tenant IDs.                                                                                   | ☐      |
+| 7b  | Same, but the connection was created by **pasting a connection string**                             | The tenant is unknown to us, so expect a plain authentication failure from the server. Confirm it is not misreported as one of the other reasons. | ☐      |
 
 Case 3 is the one that matters most. An opaque failure here means the feature has not done its job,
 regardless of how many other rows pass.
@@ -58,6 +58,7 @@ to see how much better the diagnosis is when we happen to know the cluster's ten
 | #   | Case                                                                                                         | Expected                                                                                                          | Result |
 | --- | ------------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------- | ------ |
 | 8   | Paste the documented Learn connection string verbatim, including `authMechanismProperties=ENVIRONMENT:azure` | Managed Identity is preselected and the identity step is skipped.                                                 | ☐      |
+| 8a  | Paste that explicit managed identity string with a private-endpoint, CNAME, or custom-domain host            | Managed Identity is preselected and remains present in the connection's available authentication methods.         | ☐      |
 | 9   | Same, but with the user position empty                                                                       | Preselected, resolves to the system-assigned identity.                                                            | ☐      |
 | 10  | Paste a string with `authMechanism=MONGODB-OIDC` and a GUID user, but no `ENVIRONMENT`                       | The authentication method quick pick still appears, with the client ID prefilled once Managed Identity is chosen. | ☐      |
 | 11  | **Copy Connection String** on a managed identity connection                                                  | No password prompt. The copied string carries `ENVIRONMENT:azure`.                                                | ☐      |
