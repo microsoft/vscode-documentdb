@@ -1,3 +1,10 @@
+---
+area: query-insights
+kind: iteration
+status: historical
+prs: [690, 711]
+created: 2026-06-01
+---
 # PR #711: Streaming UX for Stage 3 AI recommendations
 
 **Branch:** `dev/tnaum/stream-query-insights`

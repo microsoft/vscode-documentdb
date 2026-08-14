@@ -1,3 +1,10 @@
+---
+area: index-management
+kind: ux-review
+status: historical
+prs: [732]
+created: 2026-07-22
+---
 # Index Management — UX Review Pack
 
 > **Who this is for:** anyone about to do a hands-on UX review of the **Index Management**

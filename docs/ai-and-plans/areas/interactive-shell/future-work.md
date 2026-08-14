@@ -1,3 +1,13 @@
+---
+area: interactive-shell
+kind: plan
+status: active
+created: 2026-04-10
+code:
+    - src/documentdb/shell/**
+    - src/commands/openInteractiveShell/**
+verified: 2026-08-14
+---
 # Future Work: Terminal Enhancements
 
 > Items specific to the Interactive Shell's terminal UI surface (Pseudoterminal). These are tracked so work can be picked up independently.

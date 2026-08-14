@@ -1,3 +1,10 @@
+---
+area: interactive-shell
+kind: review
+status: historical
+prs: [576]
+created: 2026-04-14
+---
 # PR #576 — Shell Autocompletion: Critical Review
 
 > **PR:** [#576 — Add context-aware shell completion and inline suggestions](https://github.com/microsoft/vscode-documentdb/pull/576)

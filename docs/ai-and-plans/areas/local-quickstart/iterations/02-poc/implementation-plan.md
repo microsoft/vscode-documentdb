@@ -1,3 +1,9 @@
+---
+area: local-quickstart
+kind: iteration
+status: historical
+created: 2026-06-22
+---
 # Local Quick Start — POC: Implementation Plan
 
 > Companion to [`description.md`](./description.md) (read that first for the *why*).

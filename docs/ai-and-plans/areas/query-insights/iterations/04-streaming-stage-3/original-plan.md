@@ -1,3 +1,10 @@
+---
+area: query-insights
+kind: iteration
+status: historical
+prs: [711]
+created: 2026-05-29
+---
 # Query Insights Stage 3 — Progressive Streaming — IMPLEMENTATION PLAN
 
 > **Historical note (2026-06-01):** this is the original plan that drove

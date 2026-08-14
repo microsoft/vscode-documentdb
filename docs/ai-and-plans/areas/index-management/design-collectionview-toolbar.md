@@ -1,3 +1,13 @@
+---
+area: index-management
+kind: design
+status: active
+prs: [732]
+created: 2026-07-21
+code:
+    - src/webviews/documentdb/indexView/**
+verified: 2026-08-14
+---
 # CollectionView Toolbar / Tab Redesign
 
 **Branch:** `dev/khelanmodi/index-management-ui`

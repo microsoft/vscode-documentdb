@@ -1,3 +1,14 @@
+---
+area: webview-ext-package
+kind: design
+status: active
+prs: [766]
+created: 2026-06-24
+code:
+    - packages/vscode-ext-webview/**
+    - src/webviews/_integration/**
+verified: 2026-08-14
+---
 # Making `@microsoft/vscode-ext-react-webview` flexible enough for vscode-cosmosdb to adopt
 
 **Status:** design proposal (no code) · **Date:** 2026-06-24

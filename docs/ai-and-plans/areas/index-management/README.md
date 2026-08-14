@@ -1,3 +1,13 @@
+---
+area: index-management
+kind: notes
+status: active
+prs: [732]
+created: 2026-07-27
+code:
+    - src/webviews/documentdb/indexView/**
+verified: 2026-08-14
+---
 # PR #732 — Index Management tab (Index Dashboard)
 
 **PR:** [microsoft/vscode-documentdb#732](https://github.com/microsoft/vscode-documentdb/pull/732)

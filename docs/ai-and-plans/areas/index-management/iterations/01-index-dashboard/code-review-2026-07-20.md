@@ -1,3 +1,10 @@
+---
+area: index-management
+kind: review
+status: historical
+prs: [732]
+created: 2026-07-20
+---
 # PR #732 Review: Index Management tab
 
 Review date: 2026-07-20

@@ -1,3 +1,14 @@
+---
+area: completions-and-schema
+kind: plan
+status: active
+created: 2026-04-10
+code:
+    - src/documentdb/query-language/**
+    - packages/documentdb-js-operator-registry/**
+    - packages/documentdb-js-schema-analyzer/**
+verified: 2026-08-14
+---
 # Future Work: Schema & Infrastructure
 
 > Schema enhancements, build optimizations, and architectural improvements.

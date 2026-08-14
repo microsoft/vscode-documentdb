@@ -1,3 +1,9 @@
+---
+area: local-quickstart
+kind: iteration
+status: historical
+created: 2026-08-04
+---
 # Local Quick Start UI redesign decisions
 
 > **Read _Finalization_ (the last chapter) first.** It records the shipped design and supersedes any

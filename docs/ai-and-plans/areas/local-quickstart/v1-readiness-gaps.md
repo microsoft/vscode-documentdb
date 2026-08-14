@@ -1,3 +1,15 @@
+---
+area: local-quickstart
+kind: checklist
+status: active
+created: 2026-06-26
+code:
+    - src/commands/localQuickStart/**
+    - src/services/localQuickStart/**
+    - src/tree/connections-view/LocalQuickStart/**
+    - src/webviews/documentdb/localQuickStart/**
+verified: 2026-08-14
+---
 # Local Quick Start — v1 production-readiness gaps
 
 **Status:** In progress · **Date:** 2026-06-26

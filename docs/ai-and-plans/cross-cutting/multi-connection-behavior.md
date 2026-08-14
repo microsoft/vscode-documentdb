@@ -1,3 +1,10 @@
+---
+area: cross-cutting
+kind: notes
+status: active
+created: 2026-04-15
+verified: 2026-08-14
+---
 # Multi-Connection Behavior — User-Facing Facts
 
 > Pre-seed for user documentation. These facts describe the runtime behavior

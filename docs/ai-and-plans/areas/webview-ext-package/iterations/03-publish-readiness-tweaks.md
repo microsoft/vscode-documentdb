@@ -1,3 +1,10 @@
+---
+area: webview-ext-package
+kind: iteration
+status: historical
+prs: [766, 786]
+created: 2026-07-06
+---
 # PR #786 — `@microsoft/vscode-ext-webview` publish-readiness tweaks
 
 **Branch:** `dev/tnaum/webview-api-tweak` → `main`

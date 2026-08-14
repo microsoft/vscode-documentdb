@@ -1,3 +1,12 @@
+---
+area: index-management
+kind: research
+status: active
+created: 2026-07-07
+code:
+    - src/webviews/documentdb/indexView/**
+verified: 2026-08-14
+---
 # DocumentDB-supported indexes (from documentation scraping)
 
 **Source:** [MicrosoftDocs/nosql-docs](https://github.com/MicrosoftDocs/nosql-docs) →

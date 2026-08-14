@@ -1,3 +1,10 @@
+---
+area: query-playground
+kind: iteration
+status: historical
+prs: [536]
+created: 2026-04-10
+---
 # Step 6 — Query Playground
 
 **PR:** [#536](https://github.com/microsoft/vscode-documentdb/pull/536)

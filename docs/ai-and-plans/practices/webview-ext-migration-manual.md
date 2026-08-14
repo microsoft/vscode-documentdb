@@ -1,3 +1,10 @@
+---
+area: practices
+kind: practice
+status: active
+created: 2026-06-30
+verified: 2026-08-14
+---
 # Webview-ext migration manual (internal)
 
 Status: internal working note. Not linked from any index, README, or design doc.

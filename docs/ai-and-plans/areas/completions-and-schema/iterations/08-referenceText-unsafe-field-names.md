@@ -1,3 +1,10 @@
+---
+area: completions-and-schema
+kind: iteration
+status: historical
+prs: [717]
+created: 2026-06-23
+---
 # PR #717: Correct MQL aggregation references for unsafe field names
 
 **Branch:** `fix/709-referenceText-unsafe-field-names`

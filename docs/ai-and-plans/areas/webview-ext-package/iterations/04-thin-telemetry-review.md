@@ -1,3 +1,10 @@
+---
+area: webview-ext-package
+kind: review
+status: historical
+prs: [795]
+created: 2026-07-14
+---
 # PR #795: Thin telemetry middleware and generic TelemetryRunner
 
 **PR:** [microsoft/vscode-documentdb#795](https://github.com/microsoft/vscode-documentdb/pull/795)

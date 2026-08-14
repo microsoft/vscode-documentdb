@@ -1,3 +1,10 @@
+---
+area: interactive-shell
+kind: iteration
+status: historical
+prs: [631]
+created: 2026-05-12
+---
 # PR #631: Visible Underline for Shell Terminal Links
 
 ## Why

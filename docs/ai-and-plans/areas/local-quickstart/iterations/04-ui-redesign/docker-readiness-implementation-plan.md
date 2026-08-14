@@ -1,3 +1,9 @@
+---
+area: local-quickstart
+kind: iteration
+status: historical
+created: 2026-08-02
+---
 # Local Quick Start Docker Readiness - Implementation Plan
 
 **Date:** 2026-08-02
@@ -859,7 +865,7 @@ The permission classifier, raw info parser, architecture normalizer, and live En
 
 #### Slice B implementation checkpoint (completed 2026-08-03)
 
-Completed and pushed in [commit `6117a83a`](https://github.com/microsoft/vscode-documentdb/commit/6117a83a0cf74e7e35c2a6337ff31f1a17557e44). The new [DocumentDB Local Quick Start user guide](../../../user-manual/local-quick-start.md) documents Docker Engine and Docker Desktop as supported provider choices, the extension-host execution target, the no-install/no-silent-start/no-elevation rules, starting Quick Start, readiness cards, Refresh, masked output, Linux/WSL group recovery, native service recovery, rootless launch limits, WSL Desktop integration, context/remote endpoint recovery, Linux-container mode, provisioning-time Docker recovery, and dev-container published-port behavior.
+Completed and pushed in [commit `6117a83a`](https://github.com/microsoft/vscode-documentdb/commit/6117a83a0cf74e7e35c2a6337ff31f1a17557e44). The new [DocumentDB Local Quick Start user guide](../../../../../user-manual/local-quick-start.md) documents Docker Engine and Docker Desktop as supported provider choices, the extension-host execution target, the no-install/no-silent-start/no-elevation rules, starting Quick Start, readiness cards, Refresh, masked output, Linux/WSL group recovery, native service recovery, rootless launch limits, WSL Desktop integration, context/remote endpoint recovery, Linux-container mode, provisioning-time Docker recovery, and dev-container published-port behavior.
 
 The local-connection overview, DocumentDB Local manual page, user-manual index, and repository README now link to the guide and distinguish container management from connecting to an already-running instance. The v2 design reference has a prominent supersession note and its normative prerequisite table, Docker-not-ready mockup, and cross-cutting launch rule are provider-neutral rather than Desktop-only.
 

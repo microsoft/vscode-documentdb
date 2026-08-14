@@ -1,3 +1,10 @@
+---
+area: atlas-discovery
+kind: ux-review
+status: historical
+prs: [733]
+created: 2026-07-13
+---
 # MongoDB Atlas Discovery — UX Review Pack (Iteration 3)
 
 > **Who this is for:** anyone about to do a hands-on UX review of the **MongoDB Atlas

@@ -1,3 +1,12 @@
+---
+area: atlas-discovery
+kind: research
+status: active
+created: 2026-07-24
+code:
+    - src/plugins/service-atlas-mongodb/**
+verified: 2026-08-14
+---
 # Multi-credential Atlas discovery — feasibility POC plan & API research report
 
 > **Status:** Research + design proposal (no production code yet).

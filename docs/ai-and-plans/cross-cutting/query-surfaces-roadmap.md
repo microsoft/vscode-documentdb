@@ -1,3 +1,10 @@
+---
+area: cross-cutting
+kind: plan
+status: historical
+prs: [506, 508, 513, 518]
+created: 2026-04-10
+---
 # Interactive Shell Integration — High-Level Plan
 
 ## Overview

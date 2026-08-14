@@ -1,3 +1,9 @@
+---
+area: webview-ext-package
+kind: iteration
+status: historical
+created: 2026-06-29
+---
 # Implementation plan: `@microsoft/vscode-ext-webview` redesign + migration
 
 **Audience:** an autonomous coding agent.

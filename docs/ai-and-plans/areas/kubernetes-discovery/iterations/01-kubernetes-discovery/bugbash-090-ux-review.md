@@ -1,3 +1,10 @@
+---
+area: kubernetes-discovery
+kind: ux-review
+status: historical
+prs: [621]
+created: 2026-06-09
+---
 # Bug Bash 0.9.0 — Kubernetes Service Discovery UX Review Pack
 
 > **Who this is for:** anyone about to do a hands‑on UX review (trying the extension,
@@ -128,8 +135,8 @@ defined it), **Decision / Code today** (verified), and any **Flag**.
 - **Decision / Code today:** `ensureMigration()` seeds the default source only when
   `defaultKubeconfigExists()` is true. With nothing configured, the root renders a single
   **"Add kubeconfig source…"** action node. Verified in
-  [KubernetesRootItem.ts](src/plugins/service-kubernetes/discovery-tree/KubernetesRootItem.ts#L28-L38) and
-  [migrationV2.ts](src/plugins/service-kubernetes/sources/migrationV2.ts).
+  [KubernetesRootItem.ts](../../../../../../src/plugins/service-kubernetes/discovery-tree/KubernetesRootItem.ts#L28-L38) and
+  [migrationV2.ts](../../../../../../src/plugins/service-kubernetes/sources/migrationV2.ts).
 - ➡️ **Iteration 1 (review feedback):** the label "Add kubeconfig source" reads as internal/jargon and
   isn't especially user‑friendly; the suggestion was to follow the naming common in established Kubernetes
   tooling, with **"Add Kubeconfig…"** as a fallback.
@@ -139,9 +146,9 @@ defined it), **Decision / Code today** (verified), and any **Flag**.
     filesystem"** (browse a file), and **"Manually add a kubeconfig"** (paste YAML).
   - **Decision:** adopt the field‑standard verb. The consolidated add command (which opens a picker for
     default / file / paste) is now **"Add Kubeconfigs…"** everywhere it surfaces.
-  - **Implemented:** `package.json` command title, [KubernetesRootItem.ts](src/plugins/service-kubernetes/discovery-tree/KubernetesRootItem.ts)
-    empty-state action, the in-wizard entry in [SelectContextStep.ts](src/plugins/service-kubernetes/discovery-wizard/SelectContextStep.ts),
-    and the picker placeholder in [addKubeconfigSource.ts](src/plugins/service-kubernetes/commands/addKubeconfigSource.ts).
+  - **Implemented:** `package.json` command title, [KubernetesRootItem.ts](../../../../../../src/plugins/service-kubernetes/discovery-tree/KubernetesRootItem.ts)
+    empty-state action, the in-wizard entry in [SelectContextStep.ts](../../../../../../src/plugins/service-kubernetes/discovery-wizard/SelectContextStep.ts),
+    and the picker placeholder in [addKubeconfigSource.ts](../../../../../../src/plugins/service-kubernetes/commands/addKubeconfigSource.ts).
 
 **#13 — Make all service‑discovery plugins visible by default** ✅ (design evolved)
 
@@ -167,7 +174,7 @@ defined it), **Decision / Code today** (verified), and any **Flag**.
     get “all visible” and can re-hide what they don’t want.
   - **Implemented:** Removed `ensureDiscoveryProviderVisibilityMigrated` / `migrateDiscoveryProviderVisibility`
     and the legacy/azure-rename handling from
-    [discoveryProviderVisibility.ts](src/services/discoveryProviderVisibility.ts); deleted the two
+    [discoveryProviderVisibility.ts](../../../../../../src/services/discoveryProviderVisibility.ts); deleted the two
     migration tests. This **closes the pre-launch flag above** — there is no migration left to verify.
 
 ### B. Adding a kubeconfig source
@@ -219,7 +226,7 @@ defined it), **Decision / Code today** (verified), and any **Flag**.
     branch used a non-modal warning and the file/paste branches used non-modal errors, which was
     inconsistent. The empty-clipboard case was also promoted from a warning to a modal error for the same
     reason. The clipboard **consent** prompt (#4) stays a modal warning — it's a confirmation, not a
-    failure. See [addKubeconfigSource.ts](src/plugins/service-kubernetes/commands/addKubeconfigSource.ts).
+    failure. See [addKubeconfigSource.ts](../../../../../../src/plugins/service-kubernetes/commands/addKubeconfigSource.ts).
 
 **#22 — Expand the Kubernetes node when a new source is added** ✅ (verify live)
 
@@ -242,8 +249,8 @@ defined it), **Decision / Code today** (verified), and any **Flag**.
 - **Decision / Code today:** Initially blocked (hover‑to‑expand is an unsupported tree‑view API path,
   [vscode#286332](https://github.com/microsoft/vscode/issues/286332)), then implemented as a **drop
   handler** over the whole Discovery tree:
-  [DiscoveryViewDragAndDropController](src/tree/discovery-view/) +
-  [handleKubeconfigFileDrop.ts](src/plugins/service-kubernetes/commands/handleKubeconfigFileDrop.ts).
+  [DiscoveryViewDragAndDropController](../../../../../../src/tree/discovery-view) +
+  [handleKubeconfigFileDrop.ts](../../../../../../src/plugins/service-kubernetes/commands/handleKubeconfigFileDrop.ts).
   Valid drop → validate + add + reveal + info toast; invalid/dir/duplicate → per‑file warning or silent
   skip. Multi‑file supported.
 - ⚠️ **Verify live:** drop a valid file, a non‑kubeconfig file, a directory, a duplicate, and a mixed batch.
@@ -256,7 +263,7 @@ defined it), **Decision / Code today** (verified), and any **Flag**.
 - **Decision / Code today:** `SelectContextStep` always prepends an `alwaysShow` **"Add a kubeconfig
   source…"** item (with a `Separator`); selecting it runs `addKubeconfigSource` inline, then shows a retry
   prompt and exits cleanly instead of dead‑ending. Verified in
-  [SelectContextStep.ts](src/plugins/service-kubernetes/discovery-wizard/SelectContextStep.ts#L40-L50).
+  [SelectContextStep.ts](../../../../../../src/plugins/service-kubernetes/discovery-wizard/SelectContextStep.ts#L40-L50).
 
 ### C. Tree structure, labels & icons
 
@@ -264,7 +271,7 @@ defined it), **Decision / Code today** (verified), and any **Flag**.
 
 - **Verdict — As expected.** Recommended `layers` icon shipped as‑is.
 - **Decision / Code today:** Root uses `$(layers)`. Verified in
-  [KubernetesRootItem.ts](src/plugins/service-kubernetes/discovery-tree/KubernetesRootItem.ts#L46-L53).
+  [KubernetesRootItem.ts](../../../../../../src/plugins/service-kubernetes/discovery-tree/KubernetesRootItem.ts#L46-L53).
 
 **#8 → #11 — One consistent icon for kubeconfig source nodes** ✅ (superseded)
 
@@ -275,9 +282,9 @@ defined it), **Decision / Code today** (verified), and any **Flag**.
   **wizard** keeps per‑type icons.
 - **Decision / Code today:** #8 unified to `key`, #11 changed it to `$(plug)`, and **iteration 2 settled
   on `$(group-by-ref-type)`** for every source kind. Verified `buildIcon()` in
-  [KubernetesKubeconfigSourceItem.ts](src/plugins/service-kubernetes/discovery-tree/KubernetesKubeconfigSourceItem.ts).
+  [KubernetesKubeconfigSourceItem.ts](../../../../../../src/plugins/service-kubernetes/discovery-tree/KubernetesKubeconfigSourceItem.ts).
 - ⚠️ **Minor inconsistency to eyeball (carried to iteration 3):** the in‑wizard "Add Kubeconfig…" entry in
-  [SelectContextStep.ts](src/plugins/service-kubernetes/discovery-wizard/SelectContextStep.ts#L40-L46)
+  [SelectContextStep.ts](../../../../../../src/plugins/service-kubernetes/discovery-wizard/SelectContextStep.ts#L40-L46)
   still uses `plug`, whereas the dedicated Add‑Source picker (#9) uses `home`/`folder-opened`/`clippy`,
   and the tree source nodes now use `group-by-ref-type`. Three surfaces, three icon vocabularies —
   see §8.4.
@@ -295,7 +302,7 @@ defined it), **Decision / Code today** (verified), and any **Flag**.
   2. Namespaces **with** targets appear directly, **no** "N targets" count.
   3. Confirmed‑empty namespaces are grouped under a collapsed **"Others"** node with detail
      **"DocumentDB not detected"**. Verified
-     [KubernetesOtherNamespacesItem.ts](src/plugins/service-kubernetes/discovery-tree/KubernetesOtherNamespacesItem.ts).
+     [KubernetesOtherNamespacesItem.ts](../../../../../../src/plugins/service-kubernetes/discovery-tree/KubernetesOtherNamespacesItem.ts).
   4. Namespaces whose **pre‑scan failed** stay visible (not hidden in "Others") so the error + **Retry**
      remain reachable.
 - 💡 This "Others" bucket is effectively a **third answer** to the `showEmptyNamespaces` question raised
@@ -304,13 +311,13 @@ defined it), **Decision / Code today** (verified), and any **Flag**.
   `folder`-icon problem in the Connections view — and the suggestion was to use a different icon with the
   same shape but a different name.
   - **Research:** The issue is documented in
-    [FolderItem.ts](src/tree/connections-view/FolderItem.ts#L61): VS Code’s tree `Aligner.hasIcon()`
+    [FolderItem.ts](../../../../../../src/tree/connections-view/FolderItem.ts#L61): VS Code’s tree `Aligner.hasIcon()`
     treats `ThemeIcon('folder')` / `('file')` specially and returns `false` under file-icon themes that
     lack folder icons, which both hides the icon and breaks alignment of non-collapsible siblings. The
     Connections view fixed this by using `symbol-folder` (same glyph, non-“file-kind” name).
   - **Decision / Implemented:** The “Others” bucket now uses `ThemeIcon('symbol-folder')` with a comment
     pointing back to the canonical note in `FolderItem.ts`. See
-    [KubernetesOtherNamespacesItem.ts](src/plugins/service-kubernetes/discovery-tree/KubernetesOtherNamespacesItem.ts).
+    [KubernetesOtherNamespacesItem.ts](../../../../../../src/plugins/service-kubernetes/discovery-tree/KubernetesOtherNamespacesItem.ts).
 
 **#18 — Renaming "Default kubeconfig" leaves an uneditable path in the description** ✅
 
@@ -322,7 +329,7 @@ defined it), **Decision / Code today** (verified), and any **Flag**.
 - **Decision / Code today:** Default source shows **no** path description (path moved to tooltip).
   **File** sources still show a shortened `(file: …/x/y)` description because it disambiguates. Verified
   `buildDescription()` in
-  [KubernetesKubeconfigSourceItem.ts](src/plugins/service-kubernetes/discovery-tree/KubernetesKubeconfigSourceItem.ts#L156-L166).
+  [KubernetesKubeconfigSourceItem.ts](../../../../../../src/plugins/service-kubernetes/discovery-tree/KubernetesKubeconfigSourceItem.ts#L156-L166).
 
 **#1 — Inline remove (trash) icon is too destructive** ✅
 
@@ -346,7 +353,7 @@ defined it), **Decision / Code today** (verified), and any **Flag**.
     so users don't fear it renames a file elsewhere on disk. The in-tree recovery docs action was also
     reworded from "Open Kubernetes discovery docs" to **"Learn more about Kubernetes discovery"**. See
     [package.json](package.json) menus/commands and
-    [KubernetesKubeconfigSourceItem.ts](src/plugins/service-kubernetes/discovery-tree/KubernetesKubeconfigSourceItem.ts).
+    [KubernetesKubeconfigSourceItem.ts](../../../../../../src/plugins/service-kubernetes/discovery-tree/KubernetesKubeconfigSourceItem.ts).
 
 **#7 — `manageKubeconfigSources` uses the wrong API hook (filter vs credentials)** ✅ (resolved by removal)
 
@@ -366,7 +373,7 @@ defined it), **Decision / Code today** (verified), and any **Flag**.
 - **Decision / Code today:** Tooltip trimmed to **Target, Status, External Address, Reachability, Port,
   Provider, Region, Namespace, Context**. **Secret removed** (internal, not actionable, potential
   confusion); diagnostic detail lives in the output channel. Verified `buildTooltip()` in
-  [KubernetesResourceItem.ts](src/plugins/service-kubernetes/discovery-tree/documentdb/KubernetesResourceItem.ts#L493-L517).
+  [KubernetesResourceItem.ts](../../../../../../src/plugins/service-kubernetes/discovery-tree/documentdb/KubernetesResourceItem.ts#L493-L517).
   (Removed: Source, Service, Type, NodePort, ClusterIP, Server, DocumentDB.)
 
 **#24 — Kubeconfig tooltip path missing a backslash** ✅
@@ -374,7 +381,7 @@ defined it), **Decision / Code today** (verified), and any **Flag**.
 - **Verdict — As expected.** The missing separator is fixed; no difference from intent.
 - **Cause/Decision:** Windows path separators were being eaten as Markdown escapes. Paths now render as
   **inline code** (`` `…` ``) in source tooltips. Verified `buildTooltip()` uses backticks in
-  [KubernetesKubeconfigSourceItem.ts](src/plugins/service-kubernetes/discovery-tree/KubernetesKubeconfigSourceItem.ts#L168-L182).
+  [KubernetesKubeconfigSourceItem.ts](../../../../../../src/plugins/service-kubernetes/discovery-tree/KubernetesKubeconfigSourceItem.ts#L168-L182).
 
 **#23 — Use platform‑specific config file locations** ✅ (deliberate divergence)
 
@@ -410,7 +417,7 @@ defined it), **Decision / Code today** (verified), and any **Flag**.
     `LoadBalancer · direct` (`globe`), `LoadBalancer · node-routed` / `NodePort · node-routed` (`server`),
     `ClusterIP · port-forward required` (`plug`), pending/unsupported (`warning`). Verified
     `getReachabilityInfo()`/`buildDescription()`/`buildTooltip()` in
-    [KubernetesResourceItem.ts](src/plugins/service-kubernetes/discovery-tree/documentdb/KubernetesResourceItem.ts#L519-L560).
+    [KubernetesResourceItem.ts](../../../../../../src/plugins/service-kubernetes/discovery-tree/documentdb/KubernetesResourceItem.ts#L519-L560).
   - Tooltip has a **Reachability** section explaining the mode, including the machine‑local nature of
     ClusterIP forwarding.
   - **Copy is now read‑only** — copying a discovery service no longer starts a tunnel
@@ -435,9 +442,9 @@ defined it), **Decision / Code today** (verified), and any **Flag**.
   - `documentDB.serviceDiscovery.kubernetes.portForward.localPortBase` = `27100` (used by `autoSelect`)
     `autoSelect` scans up to 100 candidate ports on `127.0.0.1` and falls back to the remote port if none
     are free. Logic in
-    [promptForLocalPort.ts](src/plugins/service-kubernetes/promptForLocalPort.ts#L40-L64).
+    [promptForLocalPort.ts](../../../../../../src/plugins/service-kubernetes/promptForLocalPort.ts#L40-L64).
 - 🟡 **Deferred (intentionally):** `namespaceScanConcurrency` (still hardcoded `5` in
-  [KubernetesContextItem.ts](src/plugins/service-kubernetes/discovery-tree/KubernetesContextItem.ts#L31)),
+  [KubernetesContextItem.ts](../../../../../../src/plugins/service-kubernetes/discovery-tree/KubernetesContextItem.ts#L31)),
   `additionalPorts`, `showEmptyNamespaces`, the DKO CRD‑version escape hatch, and telemetry for the
   strategy choice.
 - 💡 **Note:** discussion question #4 (`showEmptyNamespaces` as a setting vs an inline "Show all
@@ -457,7 +464,7 @@ defined it), **Decision / Code today** (verified), and any **Flag**.
 - **Decision / Code today:** The non‑interactive error row was removed; the error is shown via
   `showWarningMessage()` (toast) and logged to the output channel; the three actionable children remain.
   Verified `createKubeconfigRecoveryChildren()` in
-  [KubernetesKubeconfigSourceItem.ts](src/plugins/service-kubernetes/discovery-tree/KubernetesKubeconfigSourceItem.ts#L107-L142).
+  [KubernetesKubeconfigSourceItem.ts](../../../../../../src/plugins/service-kubernetes/discovery-tree/KubernetesKubeconfigSourceItem.ts#L107-L142).
 - ⚠️ **Contradiction with #25 (see below):** issue #2 deliberately kept "Remove this kubeconfig source"
   as a recovery child, but in #25 the reviewer later asked to **remove** it (it's already in the context
   menu) and to make the error notification **modal**. Neither of those two follow‑ups shipped — the
@@ -467,7 +474,7 @@ defined it), **Decision / Code today** (verified), and any **Flag**.
   - **Decision / Implemented:** The “Remove this kubeconfig source” recovery child was deleted from
     `createKubeconfigRecoveryChildren()`; Remove now lives **only** in the context menu. The recovery
     list is now a pure “fix-forward” toolkit (retry + docs). See
-    [KubernetesKubeconfigSourceItem.ts](src/plugins/service-kubernetes/discovery-tree/KubernetesKubeconfigSourceItem.ts).
+    [KubernetesKubeconfigSourceItem.ts](../../../../../../src/plugins/service-kubernetes/discovery-tree/KubernetesKubeconfigSourceItem.ts).
     Together with the modal change (#25) this **clears both #2/#25 contradictions** flagged above.
 
 **#19 — Refresh on a failed discovery config re‑runs discovery** ✅
@@ -484,22 +491,22 @@ defined it), **Decision / Code today** (verified), and any **Flag**.
   the other retry error nodes in the Connections view, for consistency, and should also be the first node,
   as it is in the Connections view.
   - **Decision:** Match the Connections-view canonical retry node
-    ([ClusterItemBase.ts](src/tree/documentdb/ClusterItemBase.ts#L203-L207)): label **“Click here to
+    ([ClusterItemBase.ts](../../../../../../src/tree/documentdb/ClusterItemBase.ts#L203-L207)): label **“Click here to
     retry”** with the `refresh` icon, surfaced as the **first** child of every error state. This
     supersedes the earlier source-only “Reload” rename from #25.
   - **Implemented:** Retry node moved to first position and relabeled “Click here to retry” in the
     source recovery children
-    ([KubernetesKubeconfigSourceItem.ts](src/plugins/service-kubernetes/discovery-tree/KubernetesKubeconfigSourceItem.ts)),
+    ([KubernetesKubeconfigSourceItem.ts](../../../../../../src/plugins/service-kubernetes/discovery-tree/KubernetesKubeconfigSourceItem.ts)),
     the context-level error children
-    ([KubernetesContextItem.ts](src/plugins/service-kubernetes/discovery-tree/KubernetesContextItem.ts)),
+    ([KubernetesContextItem.ts](../../../../../../src/plugins/service-kubernetes/discovery-tree/KubernetesContextItem.ts)),
     and the namespace/service-level error children
-    ([KubernetesNamespaceItem.ts](src/plugins/service-kubernetes/discovery-tree/KubernetesNamespaceItem.ts)).
+    ([KubernetesNamespaceItem.ts](../../../../../../src/plugins/service-kubernetes/discovery-tree/KubernetesNamespaceItem.ts)).
     The classified error-summary node is retained but now sits **below** the retry action.
 - ➡️ **Iteration 2 (review feedback) — resolved:** the in-tree classified error-summary node
   (the `⚠ Connection failed: …` / `⚠ Failed to list services …` row) should **not** persist in the tree at
   all. The Connections view never leaves a passive error row under a cluster — it shows the failure as a
   **modal** and keeps only a retry affordance in the tree (see
-  [DocumentDBClusterItem.ts](src/tree/connections-view/DocumentDBClusterItem.ts) `authenticateAndConnect` →
+  [DocumentDBClusterItem.ts](../../../../../../src/tree/connections-view/DocumentDBClusterItem.ts) `authenticateAndConnect` →
   `showErrorMessage(…, { modal: true })`, then `getChildren()` renders just the retry node). The
   context/namespace error states should match that exactly.
   - **Decision / Implemented:** The `error-info` summary node was **removed** from both the context-level
@@ -508,8 +515,8 @@ defined it), **Decision / Code today** (verified), and any **Flag**.
     "Failed to connect to '<context>'" / "Failed to list services in '<context>/<namespace>'", with the
     classified summary + hint + full error in the modal **detail** — and returns **only** the
     “Click here to retry” node. The full error is still written to `ext.outputChannel`. See
-    [KubernetesContextItem.ts](src/plugins/service-kubernetes/discovery-tree/KubernetesContextItem.ts) and
-    [KubernetesNamespaceItem.ts](src/plugins/service-kubernetes/discovery-tree/KubernetesNamespaceItem.ts).
+    [KubernetesContextItem.ts](../../../../../../src/plugins/service-kubernetes/discovery-tree/KubernetesContextItem.ts) and
+    [KubernetesNamespaceItem.ts](../../../../../../src/plugins/service-kubernetes/discovery-tree/KubernetesNamespaceItem.ts).
   - **No modal spam:** same guarantee as the source-node modal (#25) — the retry-node cache (#19) stops
     `getChildren()` from re-running on passive refreshes, so the modal only fires on a real load attempt
     (expand or “Click here to retry”). This **supersedes** the Iteration 1 note above that kept the
@@ -532,7 +539,7 @@ defined it), **Decision / Code today** (verified), and any **Flag**.
   **"Reload"** with a status‑bar progress and a success toast ("Reloaded kubeconfig source 'NAME'. Found N
   context(s)."); "Retry" is intentionally kept on **context/namespace** nodes (genuinely transient errors
   like API‑server unreachable / RBAC). Verified the source recovery child labels **"Reload"** in
-  [KubernetesKubeconfigSourceItem.ts](src/plugins/service-kubernetes/discovery-tree/KubernetesKubeconfigSourceItem.ts#L130-L138).
+  [KubernetesKubeconfigSourceItem.ts](../../../../../../src/plugins/service-kubernetes/discovery-tree/KubernetesKubeconfigSourceItem.ts#L130-L138).
 - ⚠️ **The two review asks are unaddressed** — verified in current code:
   - The error is still a **non‑modal** `showWarningMessage()` (not modal). [line ~108]
   - **"Remove this kubeconfig source"** is still listed as a recovery child. [line ~117]
@@ -545,7 +552,7 @@ defined it), **Decision / Code today** (verified), and any **Flag**.
     (`showWarningMessage(…, { modal: true })`). Because the retry-node cache (#19) stops `getChildren()`
     from re-running on passive refreshes, the modal fires only on a real load attempt (expand or
     “Click here to retry”) and cannot stack. See
-    [KubernetesKubeconfigSourceItem.ts](src/plugins/service-kubernetes/discovery-tree/KubernetesKubeconfigSourceItem.ts).
+    [KubernetesKubeconfigSourceItem.ts](../../../../../../src/plugins/service-kubernetes/discovery-tree/KubernetesKubeconfigSourceItem.ts).
   - This **resolves the first #25 review ask**. The second ask (remove the in-tree “Remove this kubeconfig
     source” node) is resolved separately under #2 below.
 
@@ -861,8 +868,8 @@ What the code actually resolves (unchanged, correct for `kubectl` interop): **`K
 loaded…` / `No Kubernetes contexts were found in your default kubeconfig (<path>)…`); and the default
 > source tooltip drops the "Kubernetes default kubeconfig path" jargon in favor of "Resolved from the
 > `KUBECONFIG` environment variable, otherwise your default kubeconfig." See
-> [addKubeconfigSource.ts](src/plugins/service-kubernetes/commands/addKubeconfigSource.ts) and
-> [KubernetesKubeconfigSourceItem.ts](src/plugins/service-kubernetes/discovery-tree/KubernetesKubeconfigSourceItem.ts).
+> [addKubeconfigSource.ts](../../../../../../src/plugins/service-kubernetes/commands/addKubeconfigSource.ts) and
+> [KubernetesKubeconfigSourceItem.ts](../../../../../../src/plugins/service-kubernetes/discovery-tree/KubernetesKubeconfigSourceItem.ts).
 
 ### 7.4 Discussion — #20 settings: keep the "Others" bucket; which settings are still worth adding
 
@@ -874,7 +881,7 @@ settings against that decision:
 | ------------------------------------------------------------- | ----------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | `portForward.localPortStrategy` + `portForward.localPortBase` | **Keep (shipped)**            | Genuinely user-specific (port collisions differ per machine); already in `package.json`.                                                                                                                                                                           |
 | `showEmptyNamespaces`                                         | **Drop**                      | Superseded by the "Others" bucket — empty namespaces are reachable but collapsed, so a toggle adds configuration surface with little benefit.                                                                                                                      |
-| `namespaceScanConcurrency`                                    | **Drop (keep hardcoded `5`)** | A performance knob most users can't reason about; `5` is a safe default. Revisit only if telemetry shows large-cluster prescan latency. Currently hardcoded in [KubernetesContextItem.ts](src/plugins/service-kubernetes/discovery-tree/KubernetesContextItem.ts). |
+| `namespaceScanConcurrency`                                    | **Drop (keep hardcoded `5`)** | A performance knob most users can't reason about; `5` is a safe default. Revisit only if telemetry shows large-cluster prescan latency. Currently hardcoded in [KubernetesContextItem.ts](../../../../../../src/plugins/service-kubernetes/discovery-tree/KubernetesContextItem.ts). |
 | `additionalPorts` (generic discovery ports)                   | **Defer**                     | Only matters for non-standard service ports; no demand signal yet. Add when a concrete request appears.                                                                                                                                                            |
 | DKO CRD-version escape hatch                                  | **Defer**                     | Operator-version-specific; better handled by detection than a user setting. Revisit if a CRD-version mismatch is reported in the field.                                                                                                                            |
 
@@ -887,7 +894,7 @@ settings against that decision:
 > ✅ **Processed as recommended.** The settings surface is frozen at the two `portForward.*` keys.
 > `namespaceScanConcurrency` stays a hardcoded `5` with an explanatory comment marking it a deliberate
 > non-setting (see
-> [KubernetesContextItem.ts](src/plugins/service-kubernetes/discovery-tree/KubernetesContextItem.ts));
+> [KubernetesContextItem.ts](../../../../../../src/plugins/service-kubernetes/discovery-tree/KubernetesContextItem.ts));
 > `showEmptyNamespaces` is dropped (superseded by the "Others" bucket); `additionalPorts` and the CRD
 > escape hatch remain demand-driven follow-ups.
 
@@ -972,8 +979,8 @@ entry gives the machine-local nuance a permanent home instead of a transient war
 answer to the reviewer's question).** The discovered DocumentDB target **does** extend the shared cluster
 base, exactly like the Azure vCore discovery node:
 
-- Kubernetes: [`KubernetesResourceItem extends ClusterItemBase<KubernetesClusterModel>`](src/plugins/service-kubernetes/discovery-tree/documentdb/KubernetesResourceItem.ts#L93).
-- vCore discovery: [`DocumentDBResourceItem extends ClusterItemBase<AzureClusterModel>`](src/plugins/service-azure-mongo-vcore/discovery-tree/documentdb/DocumentDBResourceItem.ts#L33).
+- Kubernetes: [`KubernetesResourceItem extends ClusterItemBase<KubernetesClusterModel>`](../../../../../../src/plugins/service-kubernetes/discovery-tree/documentdb/KubernetesResourceItem.ts#L93).
+- vCore discovery: [`DocumentDBResourceItem extends ClusterItemBase<AzureClusterModel>`](../../../../../../src/plugins/service-azure-mongo-vcore/discovery-tree/documentdb/DocumentDBResourceItem.ts#L33).
 
 Both are real cluster nodes (expanding authenticates and lists databases/collections). The menu and icon
 differences are **not** because the K8s node is a different/lesser class — they come from two concrete
@@ -982,7 +989,7 @@ things the K8s subclass does in its constructor, plus a deliberate menu exclusio
 1. **Context value (drives which menu items match).** `ClusterItemBase` defaults `contextValue` to
    `treeItem_documentdbcluster;experience_<api>`. The vCore discovery item **keeps that default**, so it
    matches all the `treeItem_documentdbcluster` menus. The Kubernetes item **overrides** it
-   ([KubernetesResourceItem.ts#L132-L137](src/plugins/service-kubernetes/discovery-tree/documentdb/KubernetesResourceItem.ts#L132-L137))
+   ([KubernetesResourceItem.ts#L132-L137](../../../../../../src/plugins/service-kubernetes/discovery-tree/documentdb/KubernetesResourceItem.ts#L132-L137))
    to add `documentdbTargetLeaf;discovery.kubernetesService`.
 2. **The rich cluster commands explicitly exclude `discovery.kubernetesService`.** In
    [package.json](package.json#L858-L935), **Create Database**, **Copy Connection String**, **Open
@@ -994,7 +1001,7 @@ things the K8s subclass does in its constructor, plus a deliberate menu exclusio
    already-connected/expanded state, etc.
 3. **Icon.** The base `getTreeItem()` just renders `this.iconPath`. vCore sets
    `iconPath = AzureDocumentDb.svg`; Kubernetes overrides it to a **reachability** icon
-   ([KubernetesResourceItem.ts#L138](src/plugins/service-kubernetes/discovery-tree/documentdb/KubernetesResourceItem.ts#L138):
+   ([KubernetesResourceItem.ts#L138](../../../../../../src/plugins/service-kubernetes/discovery-tree/documentdb/KubernetesResourceItem.ts#L138):
    `this.iconPath = this.getReachabilityInfo().icon` — `globe`/`server`/`plug`/`warning`). That's why the
    glyph differs. No method in the base class forces the icon; each subclass sets `this.iconPath`.
 
@@ -1027,8 +1034,8 @@ the **`add`** (plus) icon, not the source identity icon:
 | Surface                                                                                                                          | Icon                                                                   |
 | -------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------- |
 | Tree source nodes (an existing source)                                                                                           | `group-by-ref-type`                                                    |
-| In-wizard "Add Kubeconfig…" entry ([SelectContextStep.ts](src/plugins/service-kubernetes/discovery-wizard/SelectContextStep.ts)) | `add` ✅ (was `plug`; an action, not a source)                         |
-| Add-Source picker per-type items ([addKubeconfigSource.ts](src/plugins/service-kubernetes/commands/addKubeconfigSource.ts))      | `home` / `folder-opened` / `clippy` (kept — per-type aids recognition) |
+| In-wizard "Add Kubeconfig…" entry ([SelectContextStep.ts](../../../../../../src/plugins/service-kubernetes/discovery-wizard/SelectContextStep.ts)) | `add` ✅ (was `plug`; an action, not a source)                         |
+| Add-Source picker per-type items ([addKubeconfigSource.ts](../../../../../../src/plugins/service-kubernetes/commands/addKubeconfigSource.ts))      | `home` / `folder-opened` / `clippy` (kept — per-type aids recognition) |
 
 > ✅ **Decision / Implemented (corrected).** The in-wizard "Add Kubeconfig…" entry uses **`$(add)`** —
 > it's an _action_ that opens the add flow, so the plus icon is the correct semantics (the earlier
@@ -1078,11 +1085,11 @@ Migration) appear. The Azure vCore discovery node keeps that default and shows t
 `KubernetesResourceItem` instead:
 
 1. **Overrides `contextValue`** to add `documentdbTargetLeaf;discovery.kubernetesService`
-   ([KubernetesResourceItem.ts#L132-L137](src/plugins/service-kubernetes/discovery-tree/documentdb/KubernetesResourceItem.ts#L132-L137)).
+   ([KubernetesResourceItem.ts#L132-L137](../../../../../../src/plugins/service-kubernetes/discovery-tree/documentdb/KubernetesResourceItem.ts#L132-L137)).
 2. Forces **four `package.json` commands to exclude** it via
    `… && !(viewItem =~ /\bdiscovery\.kubernetesService\b/i)` ([package.json](package.json#L858-L935)).
 3. **Overrides the icon** to a reachability glyph
-   ([KubernetesResourceItem.ts#L138](src/plugins/service-kubernetes/discovery-tree/documentdb/KubernetesResourceItem.ts#L138)).
+   ([KubernetesResourceItem.ts#L138](../../../../../../src/plugins/service-kubernetes/discovery-tree/documentdb/KubernetesResourceItem.ts#L138)).
 
 The net effect is a node that looks and behaves like a lesser cluster, and a `package.json` riddled with
 K8s-specific negative lookaheads (command duplication / special-casing).
@@ -1093,7 +1100,7 @@ The exclusions were almost certainly added to stop commands from running against
 ClusterIP. But the shared commands **already** guard themselves correctly:
 
 - **Every cluster command checks sign-in and bails with "expand to sign in".** Example —
-  [createDatabase.ts#L31-L38](src/commands/createDatabase/createDatabase.ts#L31-L38) throws _"You are not
+  [createDatabase.ts#L31-L38](../../../../../../src/commands/createDatabase/createDatabase.ts#L31-L38) throws _"You are not
   signed in… Please sign in (by expanding the node …) and try again."_ if
   `CredentialCache.hasCredentials(clusterId)` is false. The same pattern holds for the other cluster
   commands. So a command invoked before the node is expanded **does not** misfire — it asks the user to
@@ -1117,9 +1124,9 @@ tunnel information preserved, and will the Connections-view commands work?
 
 **Answer: yes — already handled.** When the discovery node produces credentials for "Save To DocumentDB
 Connections", it attaches **`KUBERNETES_PORT_FORWARD_METADATA_PROPERTY`** to the connection
-([KubernetesResourceItem.ts#L465-L475](src/plugins/service-kubernetes/discovery-tree/documentdb/KubernetesResourceItem.ts#L465-L475),
-schema in [portForwardMetadata.ts](src/plugins/service-kubernetes/portForwardMetadata.ts)). On the
-Connections-view side, [`DocumentDBClusterItem`](src/tree/connections-view/DocumentDBClusterItem.ts#L384-L392)
+([KubernetesResourceItem.ts#L465-L475](../../../../../../src/plugins/service-kubernetes/discovery-tree/documentdb/KubernetesResourceItem.ts#L465-L475),
+schema in [portForwardMetadata.ts](../../../../../../src/plugins/service-kubernetes/portForwardMetadata.ts)). On the
+Connections-view side, [`DocumentDBClusterItem`](../../../../../../src/tree/connections-view/DocumentDBClusterItem.ts#L384-L392)
 calls `ensureKubernetesPortForwardIfNeeded()` before connecting/copying, which reads that metadata and
 **re-establishes the tunnel transparently**. So a saved ClusterIP connection already brings its tunnel up
 on demand — the metadata survives the save and the Connections-view cluster menu works against it.
@@ -1138,7 +1145,7 @@ of the first guess:
   Because the node keeps the base `treeItem_documentdbcluster`, those menus already match without it →
   **removed** from the code and the `package.json` alternations.
 - **`discovery.kubernetesService`** must be **kept.** It is **not** only a command gate — the copy command
-  reads it ([copyConnectionString.ts#L57](src/commands/copyConnectionString/copyConnectionString.ts#L57),
+  reads it ([copyConnectionString.ts#L57](../../../../../../src/commands/copyConnectionString/copyConnectionString.ts#L57),
   `containsDelimited(node.contextValue, 'kubernetesService')`) to route to the read-only, no-tunnel
   `getCredentialsForCopy()` path and to decide the with/without-password prompt. Removing it would break
   safe copy. It stays as a **positive** marker (it no longer **excludes** any command).
@@ -1147,7 +1154,7 @@ of the first guess:
 
 1. ✅ **Context value simplified** to `treeItem_documentdbcluster;discovery.kubernetesService;experience_<api>`
    (dropped `documentdbTargetLeaf`). See
-   [KubernetesResourceItem.ts#L130-L142](src/plugins/service-kubernetes/discovery-tree/documentdb/KubernetesResourceItem.ts#L130-L142).
+   [KubernetesResourceItem.ts#L130-L142](../../../../../../src/plugins/service-kubernetes/discovery-tree/documentdb/KubernetesResourceItem.ts#L130-L142).
 2. ✅ **Command duplication removed.** The four `!(viewItem =~ /\bdiscovery\.kubernetesService\b/i)`
    negative lookaheads were deleted from [package.json](package.json) so **Create Database / Copy
    Connection String / Open Interactive Shell / Data Migration** now apply to the K8s node uniformly; the
@@ -1168,11 +1175,11 @@ of the first guess:
 Per the repo terminology rule (never "MongoDB" alone as the product name), three user-facing strings were
 corrected:
 
-- [createDatabase.ts#L33](src/commands/createDatabase/createDatabase.ts#L33) — _"not signed in to the
+- [createDatabase.ts#L33](../../../../../../src/commands/createDatabase/createDatabase.ts#L33) — _"not signed in to the
   **DocumentDB cluster**…"_
-- [DatabaseNameStep.ts#L79](src/commands/createDatabase/DatabaseNameStep.ts#L79) — _"…already exists in
+- [DatabaseNameStep.ts#L79](../../../../../../src/commands/createDatabase/DatabaseNameStep.ts#L79) — _"…already exists in
   the **DocumentDB cluster**…"_
-- [PromptConnectionStringStep.ts#L17](src/commands/newConnection/PromptConnectionStringStep.ts#L17) —
+- [PromptConnectionStringStep.ts#L17](../../../../../../src/commands/newConnection/PromptConnectionStringStep.ts#L17) —
   _"connection string of your **DocumentDB cluster**."_
 
 These were the only three matches across the command set; code comments/JSDoc were intentionally left out
@@ -1182,9 +1189,9 @@ of scope (terminology rule targets user-facing strings).
 
 **Icon.** The reachability-glyph override was **removed**; the node now renders the standard DocumentDB
 cluster icon **`$(server-environment)`** — the same icon the saved connection uses in the Connections
-view ([DocumentDBClusterItem.ts#L449-L451](src/tree/connections-view/DocumentDBClusterItem.ts#L449-L451))
+view ([DocumentDBClusterItem.ts#L449-L451](../../../../../../src/tree/connections-view/DocumentDBClusterItem.ts#L449-L451))
 and the Azure VM discovery node uses
-([AzureVMResourceItem.ts#L41](src/plugins/service-azure-vm/discovery-tree/vm/AzureVMResourceItem.ts#L41)).
+([AzureVMResourceItem.ts#L41](../../../../../../src/plugins/service-azure-vm/discovery-tree/vm/AzureVMResourceItem.ts#L41)).
 The `icon` field was dropped from `ReachabilityInfo` entirely.
 
 **Tooltip.** Reachability now lives in a **richer, grouped markdown tooltip** with horizontal rules
@@ -1196,14 +1203,14 @@ The `icon` field was dropped from `ReachabilityInfo` entirely.
 3. **Placement** — Provider, Region, Namespace, Context.
 
 See `buildTooltip()` in
-[KubernetesResourceItem.ts](src/plugins/service-kubernetes/discovery-tree/documentdb/KubernetesResourceItem.ts). The
+[KubernetesResourceItem.ts](../../../../../../src/plugins/service-kubernetes/discovery-tree/documentdb/KubernetesResourceItem.ts). The
 reachability text **also** remains in the node description (e.g. `[DKO] ClusterIP · port-forward required
 :10260`), so the signal is preserved at-a-glance without an icon override.
 
 #### Original plan (retained for reference)
 
 **Reachability icons currently in use** (from `getReachabilityInfo()`,
-[KubernetesResourceItem.ts#L519-L585](src/plugins/service-kubernetes/discovery-tree/documentdb/KubernetesResourceItem.ts#L519-L585)):
+[KubernetesResourceItem.ts#L519-L585](../../../../../../src/plugins/service-kubernetes/discovery-tree/documentdb/KubernetesResourceItem.ts#L519-L585)):
 
 | Service state                          | Icon today   | Description text (already shown)    |
 | -------------------------------------- | ------------ | ----------------------------------- |
@@ -1257,7 +1264,7 @@ unblocks the copy work from §8.1.
 The reviewer asked to keep the clear **"Copy connection string…"** entry point but enrich it with **groups**
 for Kubernetes port-forwarded targets, while leaving every other node untouched.
 
-**What shipped** (in [copyConnectionString.ts](src/commands/copyConnectionString/copyConnectionString.ts)):
+**What shipped** (in [copyConnectionString.ts](../../../../../../src/commands/copyConnectionString/copyConnectionString.ts)):
 
 - **No regression for existing nodes.** Non-Kubernetes targets — and Kubernetes targets that are _not_
   reached through a port-forward tunnel — keep the exact prior behavior: the with/without-password prompt
@@ -1286,7 +1293,7 @@ for Kubernetes port-forwarded targets, while leaving every other node untouched.
 - Telemetry: adds `copyAction` (`withoutPassword` | `withPassword` | `portForwardCommand` | `learnMore`)
   alongside the existing `copyOrigin`, `kubernetesPortForwardCopy`, and `passwordIncluded`.
 
-Tests in [copyConnectionString.test.ts](src/commands/copyConnectionString/copyConnectionString.test.ts)
+Tests in [copyConnectionString.test.ts](../../../../../../src/commands/copyConnectionString/copyConnectionString.test.ts)
 were extended to T-12 (grouped picker variants: without/with password, kubectl command, learn more).
 
 > 📌 **Docs work item (carried to §11):** author the **"Connecting to ClusterIP / port-forwarded
@@ -1319,13 +1326,13 @@ were extended to T-12 (grouped picker variants: without/with password, kubectl c
 | Wording                                     | "MongoDB Cluster" in 3 strings                                                             | "DocumentDB cluster"                                                                                   |
 
 **Key files touched in §9:**
-[KubernetesResourceItem.ts](src/plugins/service-kubernetes/discovery-tree/documentdb/KubernetesResourceItem.ts) (contextValue, icon, tooltip, reachability),
+[KubernetesResourceItem.ts](../../../../../../src/plugins/service-kubernetes/discovery-tree/documentdb/KubernetesResourceItem.ts) (contextValue, icon, tooltip, reachability),
 [package.json](package.json) (menu gating),
-[createDatabase.ts](src/commands/createDatabase/createDatabase.ts) /
-[DatabaseNameStep.ts](src/commands/createDatabase/DatabaseNameStep.ts) /
-[PromptConnectionStringStep.ts](src/commands/newConnection/PromptConnectionStringStep.ts) (wording).
+[createDatabase.ts](../../../../../../src/commands/createDatabase/createDatabase.ts) /
+[DatabaseNameStep.ts](../../../../../../src/commands/createDatabase/DatabaseNameStep.ts) /
+[PromptConnectionStringStep.ts](../../../../../../src/commands/newConnection/PromptConnectionStringStep.ts) (wording).
 Copy routing logic lives in
-[copyConnectionString.ts](src/commands/copyConnectionString/copyConnectionString.ts) and keys off the
+[copyConnectionString.ts](../../../../../../src/commands/copyConnectionString/copyConnectionString.ts) and keys off the
 retained `discovery.kubernetesService` marker.
 
 ---
@@ -1348,7 +1355,7 @@ placeholder. The remaining documentation work is:
   - Auth/password guidance: when "Copy connection string with password" is safe vs. when to share the
     without-password variant.
 - **Repoint the Learn more entry** (`KUBERNETES_PORT_FORWARD_LEARN_MORE_URL` in
-  [copyConnectionString.ts](src/commands/copyConnectionString/copyConnectionString.ts)) at the new section
+  [copyConnectionString.ts](../../../../../../src/commands/copyConnectionString/copyConnectionString.ts)) at the new section
   once it exists. Until then the operator-preview docs are the closest existing reference.
 
 ### 11.2 Related follow-ups (tracked outside this PR)
@@ -1359,7 +1366,7 @@ placeholder. The remaining documentation work is:
 
 ### 11.3 Discovery-node `description` grammar & tooltip glyph (reference)
 
-**Where:** [KubernetesResourceItem.ts](src/plugins/service-kubernetes/discovery-tree/documentdb/KubernetesResourceItem.ts)
+**Where:** [KubernetesResourceItem.ts](../../../../../../src/plugins/service-kubernetes/discovery-tree/documentdb/KubernetesResourceItem.ts)
 `buildDescription()` / `buildTooltip()` / `getReachabilityInfo()`.
 
 **Design decision (this iteration):** the always-visible grey **description** was trimmed from the original
@@ -1405,8 +1412,8 @@ reachable as-is). Icons are deliberately **not** sprinkled across the other tool
 **Node icon:** the discovery cluster node uses the **DocumentDB brand mark** — the same icon as the
 **"DocumentDB Local"** node in the Connections view — so a discovered target reads as a first-class
 DocumentDB cluster. To avoid coupling to that node's own asset, dedicated copies
-[`vscode-documentdb-cluster-light-themes.svg`](resources/icons/vscode-documentdb-cluster-light-themes.svg) /
-[`vscode-documentdb-cluster-dark-themes.svg`](resources/icons/vscode-documentdb-cluster-dark-themes.svg)
+[`vscode-documentdb-cluster-light-themes.svg`](../../../../../../resources/icons/vscode-documentdb-cluster-light-themes.svg) /
+[`vscode-documentdb-cluster-dark-themes.svg`](../../../../../../resources/icons/vscode-documentdb-cluster-dark-themes.svg)
 were added (copies of `vscode-documentdb-icon-{light,dark}-themes.svg`). This replaced the earlier
 `server-environment` `ThemeIcon`.
 
@@ -1427,7 +1434,7 @@ next iteration. Each has enough context to be picked up cold.
   `127.0.0.1:<localPort>` and works. Decide whether it needs a Kubernetes-aware guard or works as-is via
   the standard cluster command. _Acceptance:_ shell connects on a live kind/AKS ClusterIP target; note any
   guard added. Files: command lives in the shared shell command path; node is
-  [KubernetesResourceItem.ts](src/plugins/service-kubernetes/discovery-tree/documentdb/KubernetesResourceItem.ts).
+  [KubernetesResourceItem.ts](../../../../../../src/plugins/service-kubernetes/discovery-tree/documentdb/KubernetesResourceItem.ts).
 
 - **T2 · Live-verification checklist (§8.5).**
   Manually confirm: reveal-on-add, drag-and-drop into folders, Windows path display for file sources,
@@ -1437,7 +1444,7 @@ next iteration. Each has enough context to be picked up cold.
 - **T3 · Visual check of the brand icon at tree size.** — ✅ **Done.**
   Verified after `87efc3ff` (which aligned the discovered-cluster leaf with the other discovery plugins
   while keeping the brand mark): the discovered target still renders the DocumentDB brand icon via
-  [KubernetesResourceItem.ts](src/plugins/service-kubernetes/discovery-tree/documentdb/KubernetesResourceItem.ts)
+  [KubernetesResourceItem.ts](../../../../../../src/plugins/service-kubernetes/discovery-tree/documentdb/KubernetesResourceItem.ts)
   (`vscode-documentdb-cluster-light-themes.svg` / `vscode-documentdb-cluster-dark-themes.svg`). The mark
   reads crisply at 16px next to sibling nodes in light/dark/high-contrast; no clipping or muddiness, so
   no simplified glyph variant was needed.
@@ -1446,15 +1453,15 @@ next iteration. Each has enough context to be picked up cold.
 
 - **T4 · Author the "Connecting to ClusterIP / port-forwarded targets" user-manual section (§11.1).** —
   ✅ **Done** (`04440da1`, `2e783a0a`). A dedicated
-  [copy-connection-string.md](docs/user-manual/copy-connection-string.md) page covers machine-local
+  [copy-connection-string.md](../../../../../user-manual/copy-connection-string.md) page covers machine-local
   connection strings, how the tunnel is established/reused, the generated `kubectl port-forward` command,
   and teammate password/access-sharing guidance. The copy quick pick's **Learn more**
   (`KUBERNETES_PORT_FORWARD_LEARN_MORE_URL` in
-  [copyConnectionString.ts](src/commands/copyConnectionString/copyConnectionString.ts)) was repointed to
+  [copyConnectionString.ts](../../../../../../src/commands/copyConnectionString/copyConnectionString.ts)) was repointed to
   the `aka.ms/vscode-documentdb-kubernetes-port-forward` slug that forwards to this section.
 
 - **T5 · Document the node description/tooltip model in the user manual.** — ✅ **Done** (`04440da1`).
-  [service-discovery-kubernetes.md](docs/user-manual/service-discovery-kubernetes.md) now has a **"Reading
+  [service-discovery-kubernetes.md](../../../../../user-manual/service-discovery-kubernetes.md) now has a **"Reading
   a discovered target"** section with the full connectivity-word table
   (_(none)_ / `node-routed` / `pending` / `port-forward` / `unsupported`) and an explanation of the
   tooltip ordering (reachability first, then identity/source/type/placement).
@@ -1475,7 +1482,7 @@ next iteration. Each has enough context to be picked up cold.
 - ✅ Discovery cluster node uses the **DocumentDB brand icon** (new `vscode-documentdb-cluster-*.svg`).
 - ✅ Empty-namespace bucket reworded **`Others` / `DocumentDB not detected`** → **`Other namespaces` /
   `No DocumentDB targets found`** (noun in the label; neutral, vocabulary-consistent reason). Files:
-  [KubernetesOtherNamespacesItem.ts](src/plugins/service-kubernetes/discovery-tree/KubernetesOtherNamespacesItem.ts),
+  [KubernetesOtherNamespacesItem.ts](../../../../../../src/plugins/service-kubernetes/discovery-tree/KubernetesOtherNamespacesItem.ts),
   tests, and the user manual.
 
 ---
@@ -1505,10 +1512,10 @@ row (e.g. `bugbash-090  AKS` rather than `bugbash-090  (AKS)`). The only thing t
 the **original context name** shown next to an alias, where the parentheses correctly signal "this is the
 underlying name behind the friendly label."
 
-**Code today:** [KubernetesContextItem.ts](src/plugins/service-kubernetes/discovery-tree/KubernetesContextItem.ts)
+**Code today:** [KubernetesContextItem.ts](../../../../../../src/plugins/service-kubernetes/discovery-tree/KubernetesContextItem.ts)
 — `descriptionParts` pushes `this.contextInfo.provider` (and the `new URL(serverUrl).host` / raw-URL
 fallback) without surrounding parentheses; the alias branch still pushes `(${this.contextInfo.name})`.
-Tests in [KubernetesContextItem.test.ts](src/plugins/service-kubernetes/discovery-tree/KubernetesContextItem.test.ts)
+Tests in [KubernetesContextItem.test.ts](../../../../../../src/plugins/service-kubernetes/discovery-tree/KubernetesContextItem.test.ts)
 updated to expect the un-bracketed host/provider.
 
 ### 13.3 Region tooltip — explicit fallback when detection fails
@@ -1525,10 +1532,10 @@ unaffected — region stays out of it (it can be a raw hostname token), so this 
 
 **Code today:**
 
-- Context node: [KubernetesContextItem.ts](src/plugins/service-kubernetes/discovery-tree/KubernetesContextItem.ts)
+- Context node: [KubernetesContextItem.ts](../../../../../../src/plugins/service-kubernetes/discovery-tree/KubernetesContextItem.ts)
   — `**Region:** ${this.contextInfo.region ?? vscode.l10n.t('Unknown')}` is pushed unconditionally
   (Provider remains conditional — it is mirrored into the description's host fallback).
-- Discovered target: [KubernetesResourceItem.ts](src/plugins/service-kubernetes/discovery-tree/documentdb/KubernetesResourceItem.ts)
+- Discovered target: [KubernetesResourceItem.ts](../../../../../../src/plugins/service-kubernetes/discovery-tree/documentdb/KubernetesResourceItem.ts)
   — the placement group pushes `**Region:** ${this.contextInfo.region ?? l10n.t('Unknown')}`
   unconditionally.
 
@@ -1542,11 +1549,11 @@ discovery"_, author **Guanzhou Song** / @guanzhousongmicrosoft, PR #621) also ca
 Collection View interaction changes that are unrelated to Kubernetes discovery and were not called out in
 the commit body:
 
-1. A `command` on the collection node ([CollectionItem.ts](src/tree/documentdb/CollectionItem.ts)) so a
+1. A `command` on the collection node ([CollectionItem.ts](../../../../../../src/tree/documentdb/CollectionItem.ts)) so a
    **single click** opens the Collection View (previously only the `Documents` child opened it, via a
    debounced double click).
 2. A module-level `activeCollectionViews` map in
-   [openCollectionView.ts](src/commands/openCollectionView/openCollectionView.ts) that **reuses an
+   [openCollectionView.ts](../../../../../../src/commands/openCollectionView/openCollectionView.ts) that **reuses an
    existing tab** (keyed by `viewId::clusterId::databaseName::collectionName`, guarded by
    `shouldReuseExistingView = initialQuery === undefined`) instead of opening a new one.
 3. `revealToForeground(vscode.ViewColumn.Active)` instead of the bare `revealToForeground()`.
@@ -1599,21 +1606,21 @@ keeping the namespace-grouped view available for users who want it.
 
 **Code today:**
 
-- [config.ts](src/plugins/service-kubernetes/config.ts) — `KubernetesViewMode`, `DEFAULT_VIEW_MODE`
+- [config.ts](../../../../../../src/plugins/service-kubernetes/config.ts) — `KubernetesViewMode`, `DEFAULT_VIEW_MODE`
   (`'list'`), and `DISCOVERY_VIEW_MODE_STATE_KEY`.
-- [KubernetesContextItem.ts](src/plugins/service-kubernetes/discovery-tree/KubernetesContextItem.ts) —
+- [KubernetesContextItem.ts](../../../../../../src/plugins/service-kubernetes/discovery-tree/KubernetesContextItem.ts) —
   `getViewMode()`, the `list`-mode flattening branch in `getChildren()`, and the mode marker appended to
   `contextValue`.
-- [KubernetesResourceItem.ts](src/plugins/service-kubernetes/discovery-tree/documentdb/KubernetesResourceItem.ts)
+- [KubernetesResourceItem.ts](../../../../../../src/plugins/service-kubernetes/discovery-tree/documentdb/KubernetesResourceItem.ts)
   — `showNamespaceInDescription` option; `buildDescription()` prepends the namespace in list mode.
-- [switchKubernetesViewMode.ts](src/plugins/service-kubernetes/commands/switchKubernetesViewMode.ts) —
+- [switchKubernetesViewMode.ts](../../../../../../src/plugins/service-kubernetes/commands/switchKubernetesViewMode.ts) —
   `switchToKubernetesTreeView` / `switchToKubernetesFlatListView` (persist + `refreshKubernetesRoot()`).
-- [ClustersExtension.ts](src/documentdb/ClustersExtension.ts) — command registration.
+- [ClustersExtension.ts](../../../../../../src/documentdb/ClustersExtension.ts) — command registration.
 - [package.json](package.json) — `switchToTreeView` / `switchToFlatListView` commands + `view/item/context`
   menus (inline + `yheAlmostLastGroup`, hidden from the command palette).
-- Tests: [KubernetesContextItem.test.ts](src/plugins/service-kubernetes/discovery-tree/KubernetesContextItem.test.ts)
+- Tests: [KubernetesContextItem.test.ts](../../../../../../src/plugins/service-kubernetes/discovery-tree/KubernetesContextItem.test.ts)
   covers both modes. User docs updated in
-  [service-discovery-kubernetes.md](docs/user-manual/service-discovery-kubernetes.md)
+  [service-discovery-kubernetes.md](../../../../../user-manual/service-discovery-kubernetes.md)
   ("Switch between list and tree view").
 
 ### 14.2 Follow-up — internal settings store

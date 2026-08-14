@@ -1,3 +1,10 @@
+---
+area: interactive-shell
+kind: review
+status: historical
+prs: [580]
+created: 2026-04-15
+---
 # PR #580 Review — Interactive Shell with Syntax Highlighting
 
 **PR:** https://github.com/microsoft/vscode-documentdb/pull/580

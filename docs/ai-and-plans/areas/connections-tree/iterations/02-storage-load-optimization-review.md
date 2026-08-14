@@ -1,3 +1,10 @@
+---
+area: connections-tree
+kind: review
+status: historical
+prs: [726]
+created: 2026-06-03
+---
 # PR #726 — Storage Risk Review and Resolutions
 
 PR: https://github.com/microsoft/vscode-documentdb/pull/726

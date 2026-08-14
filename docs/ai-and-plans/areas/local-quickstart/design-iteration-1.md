@@ -1,3 +1,15 @@
+---
+area: local-quickstart
+kind: design
+status: superseded
+created: 2026-05-18
+superseded-by: design.md
+code:
+    - src/commands/localQuickStart/**
+    - src/services/localQuickStart/**
+    - src/tree/connections-view/LocalQuickStart/**
+    - src/webviews/documentdb/localQuickStart/**
+---
 # Local Quick Start — UX Design Reference (Iteration 1)
 
 > **⚠️ This is Iteration 1.** This document was the initial comprehensive UX

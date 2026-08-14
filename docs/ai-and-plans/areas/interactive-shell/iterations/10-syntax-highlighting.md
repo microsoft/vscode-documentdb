@@ -1,3 +1,9 @@
+---
+area: interactive-shell
+kind: iteration
+status: historical
+created: 2026-04-14
+---
 # Interactive Shell — Input Syntax Highlighting
 
 ## Goal

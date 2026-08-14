@@ -1,3 +1,10 @@
+---
+area: interactive-shell
+kind: iteration
+status: historical
+prs: [508, 576]
+created: 2026-04-14
+---
 # Step 9: Shell Tab Completion & Ghost Text
 
 > **PR:** [#576 — Add context-aware shell completion and inline suggestions](https://github.com/microsoft/vscode-documentdb/pull/576)

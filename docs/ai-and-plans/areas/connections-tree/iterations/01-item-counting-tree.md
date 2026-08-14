@@ -1,3 +1,10 @@
+---
+area: connections-tree
+kind: iteration
+status: historical
+prs: [714]
+created: 2026-06-01
+---
 # PR #714: Show item counts on tree nodes (indexes, collections)
 
 **Branch:** `dev/tnaum/item-counting-tree`

@@ -1,3 +1,10 @@
+---
+area: interactive-shell
+kind: iteration
+status: historical
+prs: [561]
+created: 2026-04-10
+---
 # Step 8 — Interactive Shell
 
 **PR:** [#561](https://github.com/microsoft/vscode-documentdb/pull/561)

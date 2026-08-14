@@ -1,3 +1,13 @@
+---
+area: query-playground
+kind: plan
+status: active
+created: 2026-04-10
+code:
+    - src/documentdb/playground/**
+    - src/services/playground/**
+verified: 2026-08-14
+---
 # Future Work: Query Playground Enhancements
 
 > Improvements to the Query Playground (`.documentdb` files) that were deferred during the initial implementation.

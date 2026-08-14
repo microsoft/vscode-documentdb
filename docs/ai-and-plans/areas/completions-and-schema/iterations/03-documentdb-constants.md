@@ -1,3 +1,10 @@
+---
+area: completions-and-schema
+kind: iteration
+status: historical
+prs: [513]
+created: 2026-04-10
+---
 # Step 3 — `operator-registry` Package
 
 **PR:** [#513](https://github.com/microsoft/vscode-documentdb/pull/513)

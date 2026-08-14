@@ -1,3 +1,9 @@
+---
+area: local-quickstart
+kind: iteration
+status: historical
+created: 2026-06-22
+---
 # Local Quick Start — POC: Design Decisions & Scope
 
 **Status:** Planning — **reviewed by 5 agents over two rounds; revised to consensus (rev. 3), all five APPROVE, no blocking issues**. No implementation yet.

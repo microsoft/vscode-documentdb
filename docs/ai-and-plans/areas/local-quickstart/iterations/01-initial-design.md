@@ -1,3 +1,10 @@
+---
+area: local-quickstart
+kind: iteration
+status: historical
+prs: [653]
+created: 2026-06-15
+---
 # PR #653: Local DocumentDB Quick Start — Design Decisions
 
 **Status:** Open

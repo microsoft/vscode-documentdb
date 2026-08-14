@@ -1,3 +1,9 @@
+---
+area: query-insights
+kind: iteration
+status: historical
+created: 2026-04-27
+---
 # Query Insights Performance Rating — Implementation Plan
 
 **Date:** 2026-04-27

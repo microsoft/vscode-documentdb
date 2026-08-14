@@ -1,3 +1,12 @@
+---
+area: index-management
+kind: design
+status: active
+created: 2026-07-27
+code:
+    - src/webviews/documentdb/indexView/**
+verified: 2026-08-14
+---
 # Vector index support for Index Management
 
 **Status:** Azure DocumentDB vCore creation and listing contract manually

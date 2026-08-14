@@ -1,3 +1,13 @@
+---
+area: kubernetes-discovery
+kind: design
+status: active
+prs: [621]
+created: 2026-06-10
+code:
+    - src/plugins/service-kubernetes/**
+verified: 2026-08-14
+---
 # Connection Reachability Providers
 
 _Status: implemented on `dev/guanzhousong/kubernetes-service-discovery` (PR #621 follow-up)._

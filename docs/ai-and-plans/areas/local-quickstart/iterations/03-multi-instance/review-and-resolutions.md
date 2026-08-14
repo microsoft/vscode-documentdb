@@ -1,3 +1,9 @@
+---
+area: local-quickstart
+kind: review
+status: historical
+created: 2026-07-06
+---
 # Multi-Instance Plan — Review & Resolutions
 
 Companion to [`implementation-plan.md`](./implementation-plan.md). Records the 5-agent plan review

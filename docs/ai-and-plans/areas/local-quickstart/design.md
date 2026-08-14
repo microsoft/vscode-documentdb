@@ -1,3 +1,15 @@
+---
+area: local-quickstart
+kind: design
+status: active
+created: 2026-06-09
+code:
+    - src/commands/localQuickStart/**
+    - src/services/localQuickStart/**
+    - src/tree/connections-view/LocalQuickStart/**
+    - src/webviews/documentdb/localQuickStart/**
+verified: 2026-08-14
+---
 # Local Quick Start — Revised Design (Iteration 2)
 
 > **Supersedes:** [Iteration 1](./design-iteration-1.md) — kept as reference

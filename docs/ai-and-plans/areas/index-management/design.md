@@ -1,3 +1,13 @@
+---
+area: index-management
+kind: design
+status: active
+prs: [732]
+created: 2026-07-17
+code:
+    - src/webviews/documentdb/indexView/**
+verified: 2026-08-14
+---
 # PR #732: Index Management tab (Index Dashboard)
 
 **Branch:** `dev/khelanmodi/index-management-ui`

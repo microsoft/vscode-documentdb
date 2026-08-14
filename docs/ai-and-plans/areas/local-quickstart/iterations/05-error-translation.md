@@ -1,3 +1,10 @@
+---
+area: local-quickstart
+kind: iteration
+status: historical
+prs: [876]
+created: 2026-08-09
+---
 # PR #876 review — "Keep DocumentDB Local state in sync and explain infrastructure-caused failures"
 
 - Base: `release/0.10.0`, head: `dev/tnaum/quickstart-improvements`
@@ -37,7 +44,7 @@ The test gaps listed at the end are covered by the commits above, except the one
 Found while walking the first-run render sequence, after the original review.
 
 `setStatus()` fires the status emitter unconditionally, and the subscriber in
-[ClustersExtension.ts](src/documentdb/ClustersExtension.ts) refreshes the whole Connections tree. So
+[ClustersExtension.ts](../../../../../src/documentdb/ClustersExtension.ts) refreshes the whole Connections tree. So
 `adoptContainer()` during hydration queues a tree refresh, which re-enters `getChildren()` *after*
 `hydrated` has flipped to `true`. That call therefore captures `wasHydrated === true` and starts
 `refreshLiveStateInBackground()`. Since `lastBackgroundRefreshAt` was still `0`, the 5 s cooldown
@@ -97,8 +104,8 @@ Findings below are ordered by severity. Line references are to the head of the b
 no `docker` binary, or a stopped daemon, it rejects. That rejection now propagates through
 `reconcile()` → `ensureHydrated()` into two unguarded call sites:
 
-- [src/tree/connections-view/LocalQuickStart/LocalQuickStartItem.ts](src/tree/connections-view/LocalQuickStart/LocalQuickStartItem.ts) — `getChildren()` awaits `ensureHydrated()` with no `try`. `ConnectionsBranchDataProvider.getChildren` runs inside `callWithTelemetryAndErrorHandling`, so the user gets an error toast and an **empty** Quick Start node.
-- [src/commands/localQuickStart/openLocalQuickStart.ts](src/commands/localQuickStart/openLocalQuickStart.ts) — the command awaits `ensureHydrated()` **before** `openLocalQuickStartWebview()`, so the webview never opens.
+- [src/tree/connections-view/LocalQuickStart/LocalQuickStartItem.ts](../../../../../src/tree/connections-view/LocalQuickStart/LocalQuickStartItem.ts) — `getChildren()` awaits `ensureHydrated()` with no `try`. `ConnectionsBranchDataProvider.getChildren` runs inside `callWithTelemetryAndErrorHandling`, so the user gets an error toast and an **empty** Quick Start node.
+- [src/commands/localQuickStart/openLocalQuickStart.ts](../../../../../src/commands/localQuickStart/openLocalQuickStart.ts) — the command awaits `ensureHydrated()` **before** `openLocalQuickStartWebview()`, so the webview never opens.
 
 Net effect: the users who most need Quick Start (no Docker yet) lose both entry points into it.
 The existing test `ensureHydrated() remains retryable when Docker discovery fails` pins the
@@ -125,7 +132,7 @@ Add regression tests for both (neither path is covered today).
 
 ### H2 — `UserCancelledError` gets translated into a modal "DocumentDB Local is not running"
 
-[src/utils/commandErrorHandling.ts](src/utils/commandErrorHandling.ts) calls `explain()` for every
+[src/utils/commandErrorHandling.ts](../../../../../src/utils/commandErrorHandling.ts) calls `explain()` for every
 error that is not a `UserFacingError`. `UserCancelledError` is not filtered.
 
 Two providers do not look at the error at all before answering:
@@ -137,7 +144,7 @@ Two providers do not look at the error at all before answering:
 So: user opens *Create Database* on a Quick Start cluster whose container is stopped, presses Esc →
 `UserCancelledError` → **modal** dialog "DocumentDB Local does not appear to be running." The same
 applies to `fetchChildrenWithDiagnostics` in
-[src/tree/BaseExtendedTreeDataProvider.ts](src/tree/BaseExtendedTreeDataProvider.ts).
+[src/tree/BaseExtendedTreeDataProvider.ts](../../../../../src/tree/BaseExtendedTreeDataProvider.ts).
 
 **Suggested fix.** One central guard, since the PR's own thesis is "there is exactly one rule to
 remember":
@@ -219,7 +226,7 @@ void vscode.window.showErrorMessage(diagnosis.message, {
 ```
 
 `MessageOptions.detail` is only rendered for modal messages — the repo already documents this in
-[src/webviews/_integration/appRouter.ts](src/webviews/_integration/appRouter.ts) ("The content of
+[src/webviews/_integration/appRouter.ts](../../../../../src/webviews/_integration/appRouter.ts) ("The content of
 the 'detail' field is only shown when modal is true"). Combined with
 `context.errorHandling.suppressDisplay = true`, the raw driver error now disappears from this
 surface entirely, which is the opposite of the PR's "keep the raw text as detail" rule.
@@ -239,7 +246,7 @@ The PR description explicitly positions this channel as something users share fo
 Driver errors can embed the connection string (`MongoParseError: Invalid connection string:
 mongodb://user:pass@…`), and Quick Start credentials are auto-generated and live in that string. The
 repo already has masking helpers (`maskSecrets` in `ContainerRuntime.ts`,
-[src/services/localQuickStart/outputMasking.ts](src/services/localQuickStart/outputMasking.ts)).
+[src/services/localQuickStart/outputMasking.ts](../../../../../src/services/localQuickStart/outputMasking.ts)).
 
 **Suggested fix.** Mask before logging, and add a test that a URI-with-credentials never reaches the
 channel.
@@ -280,15 +287,15 @@ that is on top of the driver's own server-selection timeout.
 
 | # | Finding | Where |
 | --- | --- | --- |
-| L1 | Root row changed from `Expanded` to `Collapsed`. Deliberate (it is what makes hydration lazy), but on a fresh install the primary onboarding affordance now sits behind a chevron. Worth a UX sign-off, and worth calling out in the release notes. | [LocalQuickStartItem.ts](src/tree/connections-view/LocalQuickStart/LocalQuickStartItem.ts) |
+| L1 | Root row changed from `Expanded` to `Collapsed`. Deliberate (it is what makes hydration lazy), but on a fresh install the primary onboarding affordance now sits behind a chevron. Worth a UX sign-off, and worth calling out in the release notes. | [LocalQuickStartItem.ts](../../../../../src/tree/connections-view/LocalQuickStart/LocalQuickStartItem.ts) |
 | L2 | `stoppedInstancePrompt` is a module-level singleton with no alias key, and the Start command takes no alias. Harmless today (single instance), but the file elsewhere is careful about the multi-instance seam. Key it by alias. | same |
 | L3 | Tooltip shows raw identifiers to users: `status.state` (`NotInstalled`, `CredentialsMissing`), `readiness.endpointKind` (`unixSocket`), `readiness.osType` (`linux`). The file already has `dockerProviderLabel` / `executionTargetLabel` for exactly this. | same |
-| L4 | `unwrapArgs()` moved outside the `try`, so a throw from unwrapping now bypasses the `UserFacingError` handling. Keep it inside with a `let`. | [commandErrorHandling.ts](src/utils/commandErrorHandling.ts) |
-| L5 | `explainOperationFailure` passes a bare `string` as `error`. Documented, but the parameter is typed `unknown`, so nothing stops a future provider from doing `instanceof` and silently never matching from webviews. Consider a distinct `message` field on the request. | [appRouter.ts](src/webviews/_integration/appRouter.ts) |
-| L6 | Because `QuickStartDiagnosticsProvider` ignores the error, **every** webview failure on the Quick Start cluster (including a bad query) triggers a `docker inspect`. Cheap, but it contradicts "answer the cheap question first". | [QuickStartDiagnosticsProvider.ts](src/services/localQuickStart/QuickStartDiagnosticsProvider.ts) |
-| L7 | `refreshHydratedState()` runs a full Docker reconciliation from a context-menu click with no progress indication and rethrows into the generic handler. Consider `withProgress` on the tree item. | [LocalQuickStartItem.ts](src/tree/connections-view/LocalQuickStart/LocalQuickStartItem.ts) |
+| L4 | `unwrapArgs()` moved outside the `try`, so a throw from unwrapping now bypasses the `UserFacingError` handling. Keep it inside with a `let`. | [commandErrorHandling.ts](../../../../../src/utils/commandErrorHandling.ts) |
+| L5 | `explainOperationFailure` passes a bare `string` as `error`. Documented, but the parameter is typed `unknown`, so nothing stops a future provider from doing `instanceof` and silently never matching from webviews. Consider a distinct `message` field on the request. | [appRouter.ts](../../../../../src/webviews/_integration/appRouter.ts) |
+| L6 | Because `QuickStartDiagnosticsProvider` ignores the error, **every** webview failure on the Quick Start cluster (including a bad query) triggers a `docker inspect`. Cheap, but it contradicts "answer the cheap question first". | [QuickStartDiagnosticsProvider.ts](../../../../../src/services/localQuickStart/QuickStartDiagnosticsProvider.ts) |
+| L7 | `refreshHydratedState()` runs a full Docker reconciliation from a context-menu click with no progress indication and rethrows into the generic handler. Consider `withProgress` on the tree item. | [LocalQuickStartItem.ts](../../../../../src/tree/connections-view/LocalQuickStart/LocalQuickStartItem.ts) |
 | L8 | `escapeMarkdown` escapes `-` and `.`, so tests assert on `documentdb\-local` and `28\.1\.1`. Narrowing the character class would keep the tests readable. | same |
-| L9 | Removing the "changed in another window" notification for `start()`/`stop()` drift is a good call, but the two removed l10n strings (`running`, `stopped`) suggest checking no other surface still relies on them. | [QuickStartService.ts](src/services/localQuickStart/QuickStartService.ts) |
+| L9 | Removing the "changed in another window" notification for `start()`/`stop()` drift is a good call, but the two removed l10n strings (`running`, `stopped`) suggest checking no other surface still relies on them. | [QuickStartService.ts](../../../../../src/services/localQuickStart/QuickStartService.ts) |
 
 ---
 

@@ -1,3 +1,10 @@
+---
+area: completions-and-schema
+kind: iteration
+status: historical
+prs: [518]
+created: 2026-04-10
+---
 # Step 4 — Filter CompletionItemProvider
 
 **PR:** [#518](https://github.com/microsoft/vscode-documentdb/pull/518)

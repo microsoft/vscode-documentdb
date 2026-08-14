@@ -1,3 +1,10 @@
+---
+area: local-quickstart
+kind: review
+status: historical
+prs: [798]
+created: 2026-08-04
+---
 # PR #798 — DocumentDB Local with Quick Start helpers — Code Review
 
 **Date:** 2026-08-04
