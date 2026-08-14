@@ -10,6 +10,7 @@ import type * as vscode from 'vscode';
 import { ext } from '../../extensionVariables';
 import { meterSilentCatch } from '../../utils/accumulatingTelemetry';
 import { getBatchSizeSetting } from '../../utils/workspacUtils';
+import { AuthMethodId } from '../auth/AuthMethod';
 import { CredentialCache } from '../CredentialCache';
 import { resolveAllowInvalidCertificates } from '../utils/tlsException';
 import { type ExecutionResult, type PlaygroundConnection } from './types';
@@ -246,11 +247,11 @@ export class PlaygroundEvaluator implements vscode.Disposable {
             throw new Error(l10n.t('No credentials found for cluster "{0}"', connection.clusterDisplayName));
         }
 
-        const authMechanism = credentials.authMechanism ?? 'NativeAuth';
+        const authMechanism = credentials.authMechanism ?? AuthMethodId.NativeAuth;
 
         // Build connection string
         let connectionString: string;
-        if (authMechanism === 'NativeAuth') {
+        if (authMechanism === AuthMethodId.NativeAuth) {
             connectionString = CredentialCache.getConnectionStringWithPassword(connection.clusterId);
         } else {
             // Entra ID and NoAuth: use connection string without embedded credentials
@@ -286,7 +287,7 @@ export class PlaygroundEvaluator implements vscode.Disposable {
             databaseName: connection.databaseName,
             authMechanism: authMechanism as 'NativeAuth' | 'MicrosoftEntraID' | 'ManagedIdentity' | 'NoAuth',
             tenantId:
-                authMechanism === 'ManagedIdentity'
+                authMechanism === AuthMethodId.ManagedIdentity
                     ? credentials.managedIdentityConfig?.tenantId
                     : credentials.entraIdConfig?.tenantId,
             managedIdentityClientId: credentials.managedIdentityConfig?.clientId,

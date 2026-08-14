@@ -8,6 +8,7 @@ import * as vscode from 'vscode';
 import { ext } from '../../extensionVariables';
 import { getBatchSizeSetting } from '../../utils/workspacUtils';
 import { CredentialCache } from '../CredentialCache';
+import { AuthMethodId } from '../auth/AuthMethod';
 import { WorkerSessionManager, type WorkerSessionCallbacks } from '../playground/WorkerSessionManager';
 import {
     type MainToWorkerMessage,
@@ -251,10 +252,10 @@ export class ShellSessionManager implements vscode.Disposable {
             throw new Error(l10n.t('No credentials found for cluster {0}', this._connectionInfo.clusterId));
         }
 
-        const authMechanism = credentials.authMechanism ?? 'NativeAuth';
+        const authMechanism = credentials.authMechanism ?? AuthMethodId.NativeAuth;
 
         let connectionString: string;
-        if (authMechanism === 'NativeAuth') {
+        if (authMechanism === AuthMethodId.NativeAuth) {
             connectionString = CredentialCache.getConnectionStringWithPassword(this._connectionInfo.clusterId);
         } else {
             // Entra ID and NoAuth use the connection string without embedded credentials.
@@ -289,7 +290,7 @@ export class ShellSessionManager implements vscode.Disposable {
             databaseName: this._activeDatabase,
             authMechanism: authMechanism as 'NativeAuth' | 'MicrosoftEntraID' | 'ManagedIdentity' | 'NoAuth',
             tenantId:
-                authMechanism === 'ManagedIdentity'
+                authMechanism === AuthMethodId.ManagedIdentity
                     ? credentials.managedIdentityConfig?.tenantId
                     : credentials.entraIdConfig?.tenantId,
             managedIdentityClientId: credentials.managedIdentityConfig?.clientId,
