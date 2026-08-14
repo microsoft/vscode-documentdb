@@ -554,6 +554,8 @@ does. Nobody should spend a version bump on this.
 > extension and this extension in the preview phase. any risks? only data loss of connection settings
 > is a real issue."
 
+<!-- FIXED (F8) in https://github.com/microsoft/vscode-documentdb/commit/cda40b10: Kept storage at version 3.0 and documented SecretIndex as an append-only slot registry. This avoids older preview builds treating an unknown version as v1 and potentially persisting lost folder/authentication settings; additive managed identity fields remain trailing slots that older readers safely ignore. The invariant now lives beside SecretIndex and in decision D8 so future storage changes preserve the compatibility contract. -->
+
 Answered in full below. **Short answer: do not bump.** A bump is not clean here, it is the one option
 that actually causes the data loss the question is asking about.
 
