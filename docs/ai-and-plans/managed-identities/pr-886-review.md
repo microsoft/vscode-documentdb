@@ -261,6 +261,8 @@ keep working with only a mock-target change. `expiresInSecondsFromTimestamp` sta
 Agreed, no changes to the recommendation. Sequence this after F1 = B so the tenant argument passed to
 `getManagedIdentityAccessToken()` is already reading from `ManagedIdentityAuthConfig.tenantId`.
 
+<!-- FIXED (F2) in https://github.com/microsoft/vscode-documentdb/commit/6d780fd4: Routed ManagedIdentityAuthHandler through getManagedIdentityAccessToken() and removed its duplicate credential construction, failure translation, telemetry, and tenant-validation path. This gives ordinary connections, Playground, and Shell one credential cache and one error/tenant implementation while the handler retains only MongoDB OIDC option assembly and expiry conversion. The focused handler suite now asserts the shared provider contract for system-assigned and user-assigned identities. -->
+
 ---
 
 ## F3. An explicit pasted connection string can select a method the host never offered
