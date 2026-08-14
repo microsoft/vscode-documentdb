@@ -19,6 +19,7 @@ edit to `managed-identities.md` rather than a redesign.
 | D5  | **Confirmed**                | Unchanged                                                               |
 | D6  | **Confirmed, rescoped**      | D6.1 out of scope, D6.2 simplified, D6.3 retargeted to `docs/`          |
 | D7  | **Confirmed**                | Unchanged, not contested                                                |
+| D8  | **Confirmed**                | Keep additive managed identity fields in storage v3.0                   |
 
 ---
 
@@ -430,6 +431,23 @@ note, but the committed work is updating **our own** documentation under `docs/`
 - `docs/user-manual/how-to-construct-url.md` and
   `src/documentdb/utils/connection-string-parameters.md`: the `ENVIRONMENT` and `TOKEN_RESOURCE`
   properties, and the fact that we produce but do not consume them (pending the D1a open item).
+
+---
+
+## D8. Managed identity fields remain additive in storage v3.0
+
+**Decision:** keep the storage version at `3.0` and allocate managed identity fields in new,
+append-only `SecretIndex` slots.
+
+Storage versions are exact shape tags, not ordered compatibility versions. Released extension
+versions reconstruct `3.0` records while ignoring trailing array slots they do not know. By contrast,
+an unknown `3.1` or `4.0` record falls into the unversioned-v1 compatibility path, which can discard
+folder membership and authentication settings if the older extension subsequently saves it. Keeping
+the additive fields in `3.0` therefore avoids persistent data loss for preview users switching
+between extension versions.
+
+Assigned secret indexes are never reordered or reused. A future version bump must first ship a
+tolerant reader that distinguishes a genuinely unversioned v1 record from an unknown future version.
 
 ---
 

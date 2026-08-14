@@ -216,6 +216,9 @@ export type ConnectionItem = StoredItem;
  *
  * Auth config fields are stored individually as flat string values to avoid
  * nested object serialization issues with VS Code SecretStorage.
+ *
+ * Slots are append-only: never reuse or reorder an assigned index. Older extension versions safely
+ * ignore unknown trailing slots, which lets additive fields remain compatible with storage v3.0.
  */
 const enum SecretIndex {
     ConnectionString = 0,
