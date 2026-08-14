@@ -182,6 +182,8 @@ Go straight to `ManagedIdentityAuthConfig.tenantId`. No interim patch.
 
 <!-- FIXED (F1) in https://github.com/microsoft/vscode-documentdb/commit/273d8d5a: Added tenantId to ManagedIdentityAuthConfig and persisted it in additive storage v3.0 slot 6. Azure resource and Discovery paths seed the tenant, identity selection preserves it, and the connection handler, Playground, and Shell consume it. This restores the proactive cross-tenant diagnostic after save/reload without retaining a sibling Entra ID config; focused tests cover storage round-trip, Azure extraction, selector preservation, and handler tenant validation. -->
 
+<!-- FOLLOW-UP (F1) in https://github.com/microsoft/vscode-documentdb/commit/c0821c4f: Replaced raw worker-auth string comparisons with AuthMethodId enum members in Playground and Shell. Final strict lint identified the mixed enum/string comparisons; using the owning enum preserves the F1 tenant routing while satisfying type-aware comparison rules. The complete final validation sequence passes. -->
+
 Consequences to plan for, since B is the larger of the two options:
 
 - **A new persisted field** means a new `SecretIndex` slot (6), which lands on top of the slot 5 this
@@ -390,6 +392,8 @@ Agreed, no changes to the recommendation. Two details worth pinning while implem
 
 <!-- FIXED (F4) in https://github.com/microsoft/vscode-documentdb/commit/2672c293: Added endpointUnreachable as a distinct failure reason for timeouts and generic network failures, with retry-oriented user guidance, while keeping explicit endpoint-absence signals under noEndpoint. Transport checks now run before broad identity-not-assigned matching so mixed MSAL messages classify accurately. Table-driven tests pin every transport keyword and precedence, and the real ManagedIdentityCredential endpoint harness confirms the observed network_error shape uses the new telemetry bucket. -->
 
+<!-- FOLLOW-UP (F4) in https://github.com/microsoft/vscode-documentdb/commit/583042d1: Regenerated localization after adding the endpointUnreachable message. This ensures the new transient-network guidance is present in the localization bundle rather than existing only at the TypeScript call site; npm run l10n and the complete final validation sequence pass. -->
+
 - Move the network group **above** the `identityNotAssigned` group, or the ordering problem noted in
   the evidence survives the split: a message carrying both "not assigned" and a transport hint still
   resolves to the wrong bucket.
@@ -438,6 +442,8 @@ comes out entirely rather than being completed.
 <!-- FIXED (F5) in https://github.com/microsoft/vscode-documentdb/commit/b97e4323: Removed the recentManagedIdentities global-state module, the New Connection writer, the quick-pick group, the recent telemetry source, and its tests. The feature worked through only one of four entry points and its expected usage did not justify maintaining hidden cross-connection state. The selector now consistently offers system-assigned identity, an optional client ID from the current connection string, and manual entry; design and implementation docs record the removal, while the bounded non-secret preview key is intentionally left orphaned. -->
 
 <!-- FOLLOW-UP (F5) in https://github.com/microsoft/vscode-documentdb/commit/37c45f7a: Removed the stale "Recently used" option from the user manual. The implementation and design had already removed the feature, so leaving customer guidance behind would advertise an unavailable workflow; the Choosing the identity section now lists only the choices the selector actually presents. -->
+
+<!-- FOLLOW-UP (F5) in https://github.com/microsoft/vscode-documentdb/commit/583042d1: Regenerated localization after removing the recent-identities UI. This deletes the obsolete "Recently used" and "Used by {connection}" bundle entries so translated resources match the selector's actual surface; npm run l10n and the complete final validation sequence pass. -->
 
 This is a defensible call and it resolves the finding outright: a feature that only works from one of
 four entry points is worse than no feature, and the quick pick still has the two rows that matter
