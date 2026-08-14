@@ -6,6 +6,12 @@
 **Branch:** `dev/tnaum/managed-identities`
 **Baseline commit:** `77e905d9` (research findings only, no code)
 
+> **Preview packaging:** `0.10.0-managed-identity` is an intentional version for side-loaded preview
+> builds, not the release version. The PR's CI path runs `npm run package`, which invokes
+> `@vscode/vsce` 3.7.1; that exact command was verified on 2026-08-14 and successfully produced
+> `vscode-documentdb-0.10.0-managed-identity.vsix`. Before a Marketplace release, the standard
+> release process must restore the numeric `0.10.0` version and regenerate the lockfile.
+
 ---
 
 ## How to read this log
