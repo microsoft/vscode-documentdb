@@ -30,7 +30,7 @@ updates in §8.1–§8.4.
 **Result:** 92 documents moved into 11 areas plus `cross-cutting/` and
 `practices/`; every document carries frontmatter; every area has a README; the
 pilot acceptance test in §10 passes (all seven questions answerable from
-`areas/local-quickstart/README.md`, and zero broken links or anchors inside that
+`features/local-quickstart/README.md`, and zero broken links or anchors inside that
 area). Repo-wide, broken links in `docs/ai-and-plans/` fell from 322 to 219, and
 **zero** of the remainder were caused by the migration — they are dead paths left
 by earlier source refactors, from before this work.
@@ -45,13 +45,23 @@ by earlier source refactors, from before this work.
 | §7.1      | Per-area `future-work.md` replaces the central `future-work/` folder                | `query-playground` and `completions-and-schema` each keep two: `future-work.md` and `future-work-<topic>.md`                                                                                           | Both areas inherited two distinct future-work lists. Folding them into one file needed heading surgery that would have broken existing anchors, for no navigational gain: both areas stay well under the ~6-root-file threshold in rule 5.                                                    |
 | §9.2      | Three commits; link repairs cover intra-document links                              | Four commits, and the link-repair commit also updates three `@see` comments in `src/`                                                                                                                  | Those comments were the only reverse index from code back to design rationale, which §6.1 calls the highest-value optional metadata. Leaving them broken would have defeated the point. The fourth commit separates the pilot from the remaining areas.                                       |
 | §9.1      | Do not start until 0.10.0 is merged                                                 | Executed on a branch off `main` at 0.10.0                                                                                                                                                              | Operator instruction.                                                                                                                                                                                                                                                                         |
-| §7.4      | Rebase PR #886 and relocate `managed-identities/` into `areas/`                     | Not done                                                                                                                                                                                               | Operator instruction: open PRs update themselves to the new structure after this lands.                                                                                                                                                                                                       |
+| §7.4      | Rebase PR #886 and relocate `managed-identities/` into `features/`                     | Not done                                                                                                                                                                                               | Operator instruction: open PRs update themselves to the new structure after this lands.                                                                                                                                                                                                       |
 | §8A       | Skills work                                                                         | Not done                                                                                                                                                                                               | The plan marks §8A "OPEN FOR DISCUSSION" and says not to implement without confirming.                                                                                                                                                                                                        |
 
 **One bonus repair**, outside the plan's scope but made while the link paths were
 already being touched: 102 markdown links written root-relative (`src/foo/Bar.ts`
 rather than `../../../src/foo/Bar.ts`) never resolved from their own directory,
 before or after the move. They now resolve.
+
+### Post-migration change: `areas/` → `features/` (2026-08-14)
+
+The directory level §5.1 named `areas/` was renamed to `features/` on operator
+decision, immediately after the migration landed. §5.1's original reasoning —
+that not everything under it is a user-facing feature, `webview-ext-package`
+being the example — is still true and is still the strongest argument against
+the name. It was outweighed by `features/` being the word a contributor reaches
+for first. §5.1 is annotated rather than rewritten, so the argument the reversal
+had to answer stays on the record.
 
 **Still open:** all of §8A, and the `04.6-collection-view-ux-improvements.md`
 placement in §12 (filed under `completions-and-schema` as the plan provisionally
@@ -238,7 +248,7 @@ docs/ai-and-plans/
 ├── practices/                         # reusable contributor procedure, not area history
 │   ├── live-preview-playwright.md
 │   └── webview-ext-migration-manual.md
-└── areas/
+└── features/
     └── local-quickstart/
         ├── README.md                  # purpose, status, code map, timeline, decision index, reading order
         ├── decisions.md               # status table + append-only entries
@@ -255,6 +265,11 @@ docs/ai-and-plans/
 ```
 
 ### 5.1 Naming
+
+> **Reversed after the migration (2026-08-14).** The directory level is now
+> `features/`, not `areas/` — see the execution record in §0. The paragraph
+> below is the original reasoning, kept because it is the argument the reversal
+> had to answer.
 
 - **Directory level is `areas/`**, matching the required `area:` frontmatter
   field. Chosen over `features/` because not everything is a user-facing feature
@@ -522,7 +537,7 @@ design), and relocation of `implementation-log.md` into `iterations/`.
 **It is the first post-migration conformance check.** Handling:
 
 > After the migration lands, rebase PR #886 onto `main` and `git mv` its
-> documents into `areas/managed-identities/`, splitting `managed-identities.md`
+> documents into `features/managed-identities/`, splitting `managed-identities.md`
 > into `README.md` + `design.md` and adding frontmatter, **inside that PR**.
 
 The rebase is cheap: the migration touches only `docs/`, and #886's ~102 files
@@ -533,7 +548,7 @@ wrong and should be revisited before the remaining areas move.
 Target shape:
 
 ```
-areas/managed-identities/
+features/managed-identities/
 ├── README.md                        # new
 ├── design.md                        # ← managed-identities.md
 ├── decisions.md                     # as-is + frontmatter
@@ -564,10 +579,10 @@ operator decisions and their reasoning.
 
 - `docs/ai-and-plans/README.md` — area index. Short and maintained. Read it
   when a task touches an area.
-- `areas/<name>/README.md` and the flat files beside it are the **best
+- `features/<name>/README.md` and the flat files beside it are the **best
   available account** of an area's design and intent. They are maintained, but
   they describe intent, not guaranteed current behavior.
-- `areas/<name>/iterations/**` is **history**. Read only the specific iteration
+- `features/<name>/iterations/**` is **history**. Read only the specific iteration
   needed to resolve provenance, rationale, or a regression. Never bulk-load it.
   Plans and reviews there are evidence of past reasoning, not a description of
   the product today.
@@ -595,12 +610,12 @@ operator decisions and their reasoning.
 Next to `npm run l10n` in `.github/copilot-instructions.md`:
 
 > If this PR changes behavior described in an area's current docs, update
-> `areas/<name>/README.md` (and `design.md` if applicable) in the same PR.
+> `features/<name>/README.md` (and `design.md` if applicable) in the same PR.
 
 ### 8.4 Fix the broken `ux-pr-review` references
 
 Four references across two files, all pointing at
-`docs/ai-and-plans/areas/atlas-discovery/{pr-number}-{slug}/ux-review.md`:
+`docs/ai-and-plans/PRs/{pr-number}-{slug}/ux-review.md`:
 
 | File                                                                 | Line | Note                                         |
 | -------------------------------------------------------------------- | ---- | -------------------------------------------- |
@@ -609,7 +624,7 @@ Four references across two files, all pointing at
 | `.github/skills/ux-pr-review/SKILL.md`                               | 96   | where to create the file                     |
 | `.github/skills/ux-pr-review/SKILL.md`                               | 104  | "`PRs/` is tracked" guidance                 |
 
-Retarget to `docs/ai-and-plans/areas/<area>/iterations/NN-<slug>.md` (or
+Retarget to `docs/ai-and-plans/features/<area>/iterations/NN-<slug>.md` (or
 `.../ux-review.md` when the iteration is a folder). Replace the dead example on
 line 26 with a real one. Line 175 also cross-references `CONTRIBUTING.md` §6.3,
 which moves if §8.8 goes ahead.
@@ -673,7 +688,7 @@ currently one-directional. Concrete mapping now that §7.1 exists:
   Copilot reviewer threads → validation gate (different vendor, standard
   context) → independent sweep; then author decisions, per-work-item commits,
   author final review, plus the file-an-issue escape hatch.
-- **Writes to:** `areas/<area>/iterations/NN-<slug>/code-review.md`.
+- **Writes to:** `features/<area>/iterations/NN-<slug>/code-review.md`.
 
 ### 8A.5 Open questions for this section
 
@@ -739,7 +754,7 @@ retrieval problem appears.
 5. Update `CONTRIBUTING.md`, `.github/copilot-instructions.md`, and the
    `ux-pr-review` skill paths (§8.1–§8.4).
 6. **After the migration lands:** rebase PR #886 and relocate its documents into
-   `areas/managed-identities/` inside that PR (§7.4). This doubles as the first
+   `features/managed-identities/` inside that PR (§7.4). This doubles as the first
    conformance check on work authored before the rules existed.
 7. Revisit §8A (skills) with the maintainer — still open.
 

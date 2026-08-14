@@ -170,7 +170,7 @@ export class ClustersExtension implements vscode.Disposable {
         // Connection-reachability providers: source-specific steps that make a saved connection
         // reachable before connecting (e.g. re-establishing a Kubernetes port-forward tunnel).
         // The generic Connections-view cluster node delegates to these via ConnectionReachabilityService.
-        // See docs/ai-and-plans/areas/kubernetes-discovery/connection-reachability-providers.md
+        // See docs/ai-and-plans/features/kubernetes-discovery/connection-reachability-providers.md
         ConnectionReachabilityService.registerProvider(new KubernetesReachabilityProvider());
 
         // Error-translation providers: they turn an infrastructure-caused database failure into an

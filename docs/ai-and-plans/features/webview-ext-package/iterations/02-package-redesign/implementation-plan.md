@@ -1368,7 +1368,7 @@ the one rename below keeps every exported symbol name identical.
 
 The three planning docs (the design doc, this plan, and the migration manual)
 were moved from the flat `docs/ai-and-plans/` into
-`docs/ai-and-plans/areas/webview-ext-package/`, matching the existing
+`docs/ai-and-plans/features/webview-ext-package/`, matching the existing
 per-PR convention in that folder. Earlier progress-log entries (for example
 WI-G1) still cite the old flat path; those are historical and were left as-is.
 

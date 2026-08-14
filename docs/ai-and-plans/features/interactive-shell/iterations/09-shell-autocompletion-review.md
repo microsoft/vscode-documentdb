@@ -136,12 +136,12 @@ const fieldLookup: FieldTypeLookup = (fieldName) => fieldTypeByPath.get(fieldNam
 ### #5 — ~~Typo in `terminal-enhancements.md` doc path~~ ✅ RESOLVED
 
 **Severity: S5 — Nit**
-**File:** `docs/ai-and-plans/areas/interactive-shell/future-work.md`
+**File:** `docs/ai-and-plans/features/interactive-shell/future-work.md`
 **Origin:** [Copilot review comment on terminal-enhancements.md](https://github.com/microsoft/vscode-documentdb/pull/576#discussion_r2043764845)
 **Resolved:** [`408c514`](https://github.com/microsoft/vscode-documentdb/commit/408c514) — Fixed typo: `shell-autocomletion` → `shell-autocompletion`.
 
 ```
-**Architecture docs:** `docs/ai-and-plans/areas/interactive-shell/iterations/09-shell-autocompletion.md`
+**Architecture docs:** `docs/ai-and-plans/features/interactive-shell/iterations/09-shell-autocompletion.md`
 ```
 
 Should be `shell-autocompletion` (missing `p`).

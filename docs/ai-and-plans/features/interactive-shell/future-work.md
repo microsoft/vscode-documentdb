@@ -52,7 +52,7 @@ VS Code's Terminal Suggest feature (IntelliSense popup in terminals) is stable s
 ## ~~2. Tab Completion Fallback~~ ✅
 
 **Completed in:** [PR #576](https://github.com/microsoft/vscode-documentdb/pull/576)
-**Architecture docs:** `docs/ai-and-plans/areas/interactive-shell/iterations/09-shell-autocompletion.md`
+**Architecture docs:** `docs/ai-and-plans/features/interactive-shell/iterations/09-shell-autocompletion.md`
 
 Implemented as a self-contained tab completion system in the Pseudoterminal with context-aware completions (7 context types), color-coded bash/zsh-style multi-column picker, and inline ghost text for single prefix matches. See the architecture docs for full details and design decisions.
 

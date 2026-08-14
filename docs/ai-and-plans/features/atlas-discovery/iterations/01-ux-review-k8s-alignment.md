@@ -20,7 +20,7 @@ created: 2026-06-17
 The Atlas MongoDB discovery provider is the fourth service-discovery plugin in the
 extension (after the three Azure plugins and the recently-finalized Kubernetes plugin).
 The Kubernetes plugin went through a long, deliberate UX pass documented in
-[bugbash-090-kubernetes-ux-review.md](https://github.com/microsoft/vscode-documentdb/blob/main/docs/ai-and-plans/areas/kubernetes-discovery/iterations/01-kubernetes-discovery/bugbash-090-ux-review.md)
+[bugbash-090-kubernetes-ux-review.md](https://github.com/microsoft/vscode-documentdb/blob/main/docs/ai-and-plans/features/kubernetes-discovery/iterations/01-kubernetes-discovery/bugbash-090-ux-review.md)
 (30 bug-bash issues + 14 iterations). That pack is the closest, most current statement
 of the team's discovery-tree UX conventions.
 

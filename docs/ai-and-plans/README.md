@@ -14,7 +14,7 @@ worth extracting is what was chosen, what was rejected, and why.
 | Code and tests                   | actual behavior                          | why it is like this                            |
 | Area root files (`design.md`, …) | intent, architecture, constraints        | exact current behavior                         |
 | `decisions.md` (active entries)  | why a choice was made, what was rejected | whether it is still in force — check the table |
-| `areas/*/iterations/**`          | what was believed at that date           | anything today                                 |
+| `features/*/iterations/**`          | what was believed at that date           | anything today                                 |
 
 On conflict, **the code wins for behavior and the active docs win for intent**. Do not silently pick
 one: name the document and the code, report the mismatch, and offer to correct the document. Never
@@ -24,17 +24,17 @@ treat `status: historical` or `status: superseded` as current.
 
 | Area                                                             | What it covers                                                                            | Status            |
 | ---------------------------------------------------------------- | ----------------------------------------------------------------------------------------- | ----------------- |
-| [local-quickstart](./areas/local-quickstart/README.md)           | Run DocumentDB locally in one click: Docker provisioning, readiness, lifecycle             | shipped 0.10.0    |
-| [query-insights](./areas/query-insights/README.md)               | Query performance rating, static analysis, and streaming AI recommendations                | shipped           |
-| [interactive-shell](./areas/interactive-shell/README.md)         | The in-terminal REPL, its runtime, completions, and highlighting                           | shipped           |
-| [query-playground](./areas/query-playground/README.md)           | `.documentdb` files, persistent worker evaluation, per-document connections                | shipped           |
-| [completions-and-schema](./areas/completions-and-schema/README.md) | Operator registry, schema analyzer, and the shared completion layer                        | shipped           |
-| [index-management](./areas/index-management/README.md)           | The Indexes tab, the create drawer, and the Collection View chrome redesign                | shipped           |
-| [atlas-discovery](./areas/atlas-discovery/README.md)             | MongoDB Atlas discovery: Admin API auth, discovery tree, credentials                       | shipped           |
-| [kubernetes-discovery](./areas/kubernetes-discovery/README.md)   | Kubernetes service discovery and connect-time reachability providers                       | shipped           |
-| [webview-ext-package](./areas/webview-ext-package/README.md)     | `@microsoft/vscode-ext-webview`: the extracted webview transport package                   | published preview |
-| [connections-tree](./areas/connections-tree/README.md)           | The Connections view: node item counts, connection load performance                        | shipped           |
-| [no-auth](./areas/no-auth/README.md)                             | Credential-free connections and connection-string TLS handling                             | shipped           |
+| [local-quickstart](./features/local-quickstart/README.md)           | Run DocumentDB locally in one click: Docker provisioning, readiness, lifecycle             | shipped 0.10.0    |
+| [query-insights](./features/query-insights/README.md)               | Query performance rating, static analysis, and streaming AI recommendations                | shipped           |
+| [interactive-shell](./features/interactive-shell/README.md)         | The in-terminal REPL, its runtime, completions, and highlighting                           | shipped           |
+| [query-playground](./features/query-playground/README.md)           | `.documentdb` files, persistent worker evaluation, per-document connections                | shipped           |
+| [completions-and-schema](./features/completions-and-schema/README.md) | Operator registry, schema analyzer, and the shared completion layer                        | shipped           |
+| [index-management](./features/index-management/README.md)           | The Indexes tab, the create drawer, and the Collection View chrome redesign                | shipped           |
+| [atlas-discovery](./features/atlas-discovery/README.md)             | MongoDB Atlas discovery: Admin API auth, discovery tree, credentials                       | shipped           |
+| [kubernetes-discovery](./features/kubernetes-discovery/README.md)   | Kubernetes service discovery and connect-time reachability providers                       | shipped           |
+| [webview-ext-package](./features/webview-ext-package/README.md)     | `@microsoft/vscode-ext-webview`: the extracted webview transport package                   | published preview |
+| [connections-tree](./features/connections-tree/README.md)           | The Connections view: node item counts, connection load performance                        | shipped           |
+| [no-auth](./features/no-auth/README.md)                             | Credential-free connections and connection-string TLS handling                             | shipped           |
 
 Two buckets sit beside the areas:
 
@@ -50,7 +50,7 @@ Two buckets sit beside the areas:
 ## How an area is laid out
 
 ```
-areas/<name>/
+features/<name>/
 ├── README.md      # purpose, code map, architecture, timeline, decisions index, open gaps
 ├── decisions.md   # status table + numbered entries, where the area has one
 ├── design.md      # durable design, plus any other durable docs, flat

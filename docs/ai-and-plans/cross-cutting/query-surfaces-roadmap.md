@@ -14,7 +14,7 @@ This document describes the high-level plan for adding interactive shell capabil
 
 The work was delivered as a series of incremental steps, each producing a reviewable PR merged into the `feature/shell-integration` branch. The umbrella PR is [#508](https://github.com/microsoft/vscode-documentdb/pull/508).
 
-> **Note:** Aggregation Pipeline Editor completions were intentionally deferred and will be delivered as a separate work item. See [future-work/aggregation-pipeline.md](../areas/query-playground/future-work-aggregation-pipeline.md).
+> **Note:** Aggregation Pipeline Editor completions were intentionally deferred and will be delivered as a separate work item. See [future-work/aggregation-pipeline.md](../features/query-playground/future-work-aggregation-pipeline.md).
 
 ---
 
@@ -125,8 +125,8 @@ All query surfaces (filter, project, sort) use `@mongodb-js/shell-bson-parser` f
 
 ## Deferred Work
 
-- **Aggregation Pipeline CompletionItemProvider** — Stage-aware completions inside `aggregate()` calls. See [future-work/aggregation-pipeline.md](../areas/query-playground/future-work-aggregation-pipeline.md).
-- **Terminal autocompletion** — Awaiting VS Code `TerminalCompletionProvider` API finalization. See [future-work/terminal-enhancements.md](../areas/interactive-shell/future-work.md).
+- **Aggregation Pipeline CompletionItemProvider** — Stage-aware completions inside `aggregate()` calls. See [future-work/aggregation-pipeline.md](../features/query-playground/future-work-aggregation-pipeline.md).
+- **Terminal autocompletion** — Awaiting VS Code `TerminalCompletionProvider` API finalization. See [future-work/terminal-enhancements.md](../features/interactive-shell/future-work.md).
 - **Schema persistence** — Saving `SchemaStore` data across VS Code sessions.
 - **Per-file connections** — Each Playground file remembers its own connection.
 

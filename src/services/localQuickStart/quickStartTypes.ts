@@ -6,7 +6,7 @@
 /**
  * Shared types and constants for the Local Quick Start POC.
  *
- * See docs/ai-and-plans/areas/local-quickstart/ for the design and plan.
+ * See docs/ai-and-plans/features/local-quickstart/ for the design and plan.
  * Terminology: "DocumentDB" is the service; the wire protocol is the MongoDB/DocumentDB API.
  */
 

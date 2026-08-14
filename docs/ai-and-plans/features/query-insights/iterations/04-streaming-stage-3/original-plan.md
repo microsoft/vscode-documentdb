@@ -10,7 +10,7 @@ created: 2026-05-29
 
 > **Historical note (2026-06-01):** this is the original plan that drove
 > [PR #711](https://github.com/microsoft/vscode-documentdb/pull/711). It was
-> moved here (`docs/ai-and-plans/areas/query-insights/iterations/04-streaming-stage-3/`) alongside
+> moved here (`docs/ai-and-plans/features/query-insights/iterations/04-streaming-stage-3/`) alongside
 > the PR's [description.md](./description.md) so both artifacts live together.
 > The plan itself is preserved as-is (work-item outcome blocks, deviation log,
 > and all) so future contributors can read how the streaming work was scoped

@@ -1,6 +1,6 @@
 # Review document template
 
-Copy this skeleton verbatim into `docs/ai-and-plans/areas/{area}/iterations/NN-{slug}.md`
+Copy this skeleton verbatim into `docs/ai-and-plans/features/{area}/iterations/NN-{slug}.md`
 (or `.../iterations/NN-{slug}/ux-review.md` when that iteration already holds several
 documents) and fill the `{{…}}` placeholders during the pre-assessment. Keep the section
 order. Sections marked _(seed now)_ are produced during **Prepare**; the P0–P3 item bodies

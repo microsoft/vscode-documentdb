@@ -272,8 +272,8 @@ Durable knowledge belongs to the area that owns it. Iteration files preserve the
 
 ### 5.1 Where a document goes
 
-- **An existing area** — `docs/ai-and-plans/areas/<area>/`. Durable documents (`design.md`, `decisions.md`, references, `future-work.md`) sit flat at the area root. The history of one round of work goes in `iterations/NN-slug.md`, or `iterations/NN-slug/` once it grows past roughly three documents.
-- **A new area** — create `docs/ai-and-plans/areas/<slug>/` with a `README.md`. Pick a slug a contributor who has never seen the repo would guess; never an abbreviation or an invented umbrella term. Add it to the area index in the knowledge-base README.
+- **An existing area** — `docs/ai-and-plans/features/<area>/`. Durable documents (`design.md`, `decisions.md`, references, `future-work.md`) sit flat at the area root. The history of one round of work goes in `iterations/NN-slug.md`, or `iterations/NN-slug/` once it grows past roughly three documents.
+- **A new area** — create `docs/ai-and-plans/features/<slug>/` with a `README.md`. Pick a slug a contributor who has never seen the repo would guess; never an abbreviation or an invented umbrella term. Add it to the area index in the knowledge-base README.
 - **Genuinely cross-cutting** — `docs/ai-and-plans/cross-cutting/`. Rare: one document must actually govern several areas.
 - **A reusable contributor procedure** — `docs/ai-and-plans/practices/`.
 
@@ -295,7 +295,7 @@ Documents do not wait for a PR number. The area slug exists before the PR does, 
 
 ### 5.4 Keep the area docs current
 
-If a PR changes behavior described in an area's current documents, update `areas/<area>/README.md` (and `design.md` if applicable) in the same PR.
+If a PR changes behavior described in an area's current documents, update `features/<area>/README.md` (and `design.md` if applicable) in the same PR.
 
 ## 6. AI-Assisted Review Workflow
 
@@ -305,7 +305,7 @@ Contributors are expected to pre-review their own code with AI before requesting
 
 ### 6.1 Stage 1: AI review pass (run by the contributor)
 
-A multi-step review that produces a committed review markdown file stored in `docs/ai-and-plans/areas/<area>/iterations/`:
+A multi-step review that produces a committed review markdown file stored in `docs/ai-and-plans/features/<area>/iterations/`:
 
 1. **Initial edge-case review** using a stronger model from one vendor. Every issue gets a severity level. Findings are written to the review markdown file in the PR folder.
 2. **Merge the Copilot reviewer comments.** Pull the GitHub Copilot reviewer's comments from the PR, merge them into the same file, and reassess the severity of each. Keep a link to each reviewer comment so it can be referenced later in follow-up responses.
@@ -346,7 +346,7 @@ For complex problems, or general problems the review discovers, the author is fr
 
 The stages above target code review. UX and workflow review is different: the value comes from actually using the extension and exercising real user journeys, not from reading a diff. The recommended pattern here is a **person paired with an agent on the side**: the person steers, the agent reads the code, checks claims against it, and keeps the running log.
 
-A worked example lives in [`docs/ai-and-plans/areas/kubernetes-discovery/iterations/01-kubernetes-discovery/bugbash-090-ux-review.md`](docs/ai-and-plans/areas/kubernetes-discovery/iterations/01-kubernetes-discovery/bugbash-090-ux-review.md).
+A worked example lives in [`docs/ai-and-plans/features/kubernetes-discovery/iterations/01-kubernetes-discovery/bugbash-090-ux-review.md`](docs/ai-and-plans/features/kubernetes-discovery/iterations/01-kubernetes-discovery/bugbash-090-ux-review.md).
 
 How the pattern works:
 

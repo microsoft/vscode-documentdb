@@ -1068,13 +1068,13 @@ command exclusions it forced, and the icon override. It also fixes a wording bug
 
 The reasoning behind `KubernetesResourceItem` overriding `contextValue` (and the matching
 `!(discovery.kubernetesService)` exclusions in `package.json`) is **not recorded** anywhere in the
-`docs/ai-and-plans/areas/atlas-discovery/…` folder. That made this review materially harder: from the code alone it's
+`docs/ai-and-plans/features/atlas-discovery/…` folder. That made this review materially harder: from the code alone it's
 ambiguous whether the override was a deliberate "ClusterIP commands assume direct reachability, so hide
 them" decision or an accident. We're proceeding on the **assumption it was an intentional guard** (hide
 copy/shell/etc. because a ClusterIP needs a tunnel), but that guess should be confirmed by the author.
 
 > 📌 **Process work item:** going forward, keep a short **decision log / reasoning doc per PR** in
-> `docs/ai-and-plans/areas/atlas-discovery/<pr>/` (as we do for other PRs). It helps human reviewers and code-review agents
+> `docs/ai-and-plans/features/<feature>/iterations/` (as we do for other PRs). It helps human reviewers and code-review agents
 > understand _why_ a non-obvious deviation (like overriding a shared base's context value) was made.
 
 ### 9.1 Problem statement
@@ -1309,7 +1309,7 @@ were extended to T-12 (grouped picker variants: without/with password, kubectl c
   proposes a `FileDecorationProvider` that shows which clusters are connected vs. not across the
   Connections tree in general (more broadly useful than a Kubernetes-only reachability badge). The
   tooltip + description already carry the per-node reachability signal in the meantime.
-- 📌 **Per-PR decision log** (§9.0) — keep reasoning/decision docs in `docs/ai-and-plans/areas/atlas-discovery/<pr>/` so
+- 📌 **Per-PR decision log** (§9.0) — keep reasoning/decision docs in `docs/ai-and-plans/features/<feature>/iterations/` so
   non-obvious deviations (like the original context-value override) are reviewable by humans and agents.
 - ⏳ **Live-verification checklist** (§8.5) — reveal-on-add, drag-and-drop, Windows path display,
   reload-with-active-tunnel, single-modal-on-error.

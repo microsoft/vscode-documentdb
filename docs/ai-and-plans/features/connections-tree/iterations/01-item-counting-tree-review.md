@@ -15,7 +15,7 @@ created: 2026-06-01
 
 ## Scope
 
-Reviewed the local codebase, the PR summary in `docs/ai-and-plans/areas/connections-tree/iterations/01-item-counting-tree.md`, the diff against `origin/main`, and Copilot reviewer feedback fetched from GitHub review threads.
+Reviewed the local codebase, the PR summary in `docs/ai-and-plans/features/connections-tree/iterations/01-item-counting-tree.md`, the diff against `origin/main`, and Copilot reviewer feedback fetched from GitHub review threads.
 
 Focused Jest validation was run with:
 

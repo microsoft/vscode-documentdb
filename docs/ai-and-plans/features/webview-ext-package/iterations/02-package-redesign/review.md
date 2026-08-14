@@ -205,7 +205,7 @@ first pass missed (`R766-N*`), and (3) give every discovery an
 options/pros-cons/recommendation block so a follow-up discussion can be focused
 by ID.
 
-I also read the locked design (`docs/ai-and-plans/areas/webview-ext-package/design.md`,
+I also read the locked design (`docs/ai-and-plans/features/webview-ext-package/design.md`,
 §13 "Decisions summary"). **Bottom line up front: the implementation faithfully
 matches the locked design** — the four subpaths, the `open`/`attach`/`connect`
 verb system, `initWebviewTrpc`, middleware bodies + adapters, and the

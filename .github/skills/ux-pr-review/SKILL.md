@@ -23,7 +23,7 @@ This skill has **two modes**:
 
 > The full document skeleton lives in [references/review-document-template.md](./references/review-document-template.md).
 > The pre-discovery checklist lives in [references/inconsistency-checklist.md](./references/inconsistency-checklist.md).
-> Worked examples: [`docs/ai-and-plans/areas/kubernetes-discovery/iterations/01-kubernetes-discovery/bugbash-090-ux-review.md`](../../../docs/ai-and-plans/areas/kubernetes-discovery/iterations/01-kubernetes-discovery/bugbash-090-ux-review.md) and [`docs/ai-and-plans/areas/index-management/iterations/01-index-dashboard/ux-review-iteration-1-2.md`](../../../docs/ai-and-plans/areas/index-management/iterations/01-index-dashboard/ux-review-iteration-1-2.md).
+> Worked examples: [`docs/ai-and-plans/features/kubernetes-discovery/iterations/01-kubernetes-discovery/bugbash-090-ux-review.md`](../../../docs/ai-and-plans/features/kubernetes-discovery/iterations/01-kubernetes-discovery/bugbash-090-ux-review.md) and [`docs/ai-and-plans/features/index-management/iterations/01-index-dashboard/ux-review-iteration-1-2.md`](../../../docs/ai-and-plans/features/index-management/iterations/01-index-dashboard/ux-review-iteration-1-2.md).
 
 ## When to Use
 
@@ -93,7 +93,7 @@ Seed these as **Flag** items in the document so the operator can confirm them li
 
 ### Step 5 — Seed the review document
 
-Create the file at **`docs/ai-and-plans/areas/{area}/iterations/NN-{slug}.md`** (or
+Create the file at **`docs/ai-and-plans/features/{area}/iterations/NN-{slug}.md`** (or
 `.../iterations/NN-{slug}/ux-review.md` when that iteration already holds several documents).
 Pick the area from the index in
 [`docs/ai-and-plans/README.md`](../../../docs/ai-and-plans/README.md); create a new area folder
