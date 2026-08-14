@@ -815,6 +815,8 @@ afterEach(async () => {
 });
 ```
 
+  <!-- FIXED (C3) in https://github.com/microsoft/vscode-documentdb/commit/9299a23b: Changed the harness cleanup to delete test-added environment keys and Object.assign the original values onto the existing process.env object. Replacing process.env with a plain object can break native environment propagation for later tests in the shared Jest worker; mutating it in place preserves Node's special semantics while restoring full test isolation. The real endpoint harness passes all six cases. -->
+
 An alternative is to reach for a helper library, but adding a dependency for one `afterEach` in one
 harness is not worth it. The loop is self-explanatory and stays local to the file that needs it.
 
