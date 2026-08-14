@@ -288,7 +288,10 @@ export class ShellSessionManager implements vscode.Disposable {
             clientOptions,
             databaseName: this._activeDatabase,
             authMechanism: authMechanism as 'NativeAuth' | 'MicrosoftEntraID' | 'ManagedIdentity' | 'NoAuth',
-            tenantId: credentials.entraIdConfig?.tenantId,
+            tenantId:
+                authMechanism === 'ManagedIdentity'
+                    ? credentials.managedIdentityConfig?.tenantId
+                    : credentials.entraIdConfig?.tenantId,
             managedIdentityClientId: credentials.managedIdentityConfig?.clientId,
             persistent: true,
         };

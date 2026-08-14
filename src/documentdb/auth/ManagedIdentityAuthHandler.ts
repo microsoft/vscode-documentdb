@@ -78,7 +78,11 @@ export class ManagedIdentityAuthHandler implements AuthHandler {
                         throw new Error(describeManagedIdentityError(undefined, clientId));
                     }
 
-                    verifyManagedIdentityTenant(token.token, this.clusterCredentials.entraIdConfig?.tenantId, clientId);
+                    verifyManagedIdentityTenant(
+                        token.token,
+                        this.clusterCredentials.managedIdentityConfig?.tenantId,
+                        clientId,
+                    );
 
                     return {
                         accessToken: token.token,

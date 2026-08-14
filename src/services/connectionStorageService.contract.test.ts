@@ -292,13 +292,17 @@ describe('ConnectionStorageService - Contract Tests', () => {
         it('should preserve a user-assigned managed identity client ID', async () => {
             const original = createCompleteConnectionItem();
             original.properties.selectedAuthMethod = 'ManagedIdentity';
-            original.secrets.managedIdentityAuthConfig = { clientId: '11111111-2222-3333-4444-555555555555' };
+            original.secrets.managedIdentityAuthConfig = {
+                clientId: '11111111-2222-3333-4444-555555555555',
+                tenantId: 'tenant-managed-identity',
+            };
 
             await ConnectionStorageService.save(ConnectionType.Clusters, original);
             const retrieved = await ConnectionStorageService.get(original.id, ConnectionType.Clusters);
 
             expect(retrieved?.secrets.managedIdentityAuthConfig).toEqual({
                 clientId: '11111111-2222-3333-4444-555555555555',
+                tenantId: 'tenant-managed-identity',
             });
         });
 
@@ -307,12 +311,12 @@ describe('ConnectionStorageService - Contract Tests', () => {
             // make the auth method un-inferable after a window reload.
             const systemAssigned = createCompleteConnectionItem();
             systemAssigned.properties.selectedAuthMethod = 'ManagedIdentity';
-            systemAssigned.secrets.managedIdentityAuthConfig = {};
+            systemAssigned.secrets.managedIdentityAuthConfig = { tenantId: 'tenant-system-assigned' };
 
             await ConnectionStorageService.save(ConnectionType.Clusters, systemAssigned);
             const retrieved = await ConnectionStorageService.get(systemAssigned.id, ConnectionType.Clusters);
 
-            expect(retrieved?.secrets.managedIdentityAuthConfig).toEqual({});
+            expect(retrieved?.secrets.managedIdentityAuthConfig).toEqual({ tenantId: 'tenant-system-assigned' });
         });
 
         it('should leave managedIdentityAuthConfig undefined for a native connection', async () => {

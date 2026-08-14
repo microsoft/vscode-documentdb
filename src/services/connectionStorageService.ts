@@ -230,6 +230,7 @@ const enum SecretIndex {
     EntraIdSubscriptionId = 4,
     // Managed identity: the client ID of a user-assigned identity, or the system-assigned sentinel
     ManagedIdentityClientId = 5,
+    ManagedIdentityTenantId = 6,
 }
 
 /**
@@ -241,12 +242,16 @@ const enum SecretIndex {
  */
 const MANAGED_IDENTITY_SYSTEM_ASSIGNED = 'system-assigned';
 
-function reconstructManagedIdentityConfig(storedValue: string | undefined): ManagedIdentityAuthConfig | undefined {
+function reconstructManagedIdentityConfig(
+    storedValue: string | undefined,
+    tenantId: string | undefined,
+): ManagedIdentityAuthConfig | undefined {
     if (!storedValue) {
         return undefined;
     }
 
-    return storedValue === MANAGED_IDENTITY_SYSTEM_ASSIGNED ? {} : { clientId: storedValue };
+    const tenantConfig = tenantId ? { tenantId } : {};
+    return storedValue === MANAGED_IDENTITY_SYSTEM_ASSIGNED ? tenantConfig : { clientId: storedValue, ...tenantConfig };
 }
 
 /**
@@ -1070,6 +1075,9 @@ export class ConnectionStorageService {
         if (item.secrets.managedIdentityAuthConfig) {
             secretsArray[SecretIndex.ManagedIdentityClientId] =
                 item.secrets.managedIdentityAuthConfig.clientId ?? MANAGED_IDENTITY_SYSTEM_ASSIGNED;
+            if (item.secrets.managedIdentityAuthConfig.tenantId) {
+                secretsArray[SecretIndex.ManagedIdentityTenantId] = item.secrets.managedIdentityAuthConfig.tenantId;
+            }
         }
 
         return {
@@ -1123,6 +1131,9 @@ export class ConnectionStorageService {
             if (item.secrets.managedIdentityAuthConfig) {
                 secretsArray[SecretIndex.ManagedIdentityClientId] =
                     item.secrets.managedIdentityAuthConfig.clientId ?? MANAGED_IDENTITY_SYSTEM_ASSIGNED;
+                if (item.secrets.managedIdentityAuthConfig.tenantId) {
+                    secretsArray[SecretIndex.ManagedIdentityTenantId] = item.secrets.managedIdentityAuthConfig.tenantId;
+                }
             }
         }
 
@@ -1208,6 +1219,7 @@ export class ConnectionStorageService {
             entraIdAuthConfig: entraIdAuthConfig,
             managedIdentityAuthConfig: reconstructManagedIdentityConfig(
                 secretsArray[SecretIndex.ManagedIdentityClientId],
+                secretsArray[SecretIndex.ManagedIdentityTenantId],
             ),
         };
 

@@ -117,6 +117,9 @@ export function extractCredentialsFromCluster(
             tenantId: subscription.tenantId,
             subscriptionId: subscription.subscriptionId,
         };
+        credentials.managedIdentityAuthConfig = {
+            tenantId: subscription.tenantId,
+        };
     }
 
     // Add telemetry properties from subscription

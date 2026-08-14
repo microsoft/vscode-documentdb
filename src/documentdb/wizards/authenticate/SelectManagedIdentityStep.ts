@@ -52,8 +52,9 @@ export class SelectManagedIdentityStep<T extends ManagedIdentitySelectionContext
         });
 
         if (selected.choice === 'systemAssigned') {
-            // An empty configuration is meaningful: it selects the system-assigned identity.
-            context.managedIdentityAuthConfig = {};
+            const tenantId = context.managedIdentityAuthConfig?.tenantId;
+            // A config without a client ID selects the system-assigned identity.
+            context.managedIdentityAuthConfig = tenantId ? { tenantId } : {};
             context.telemetry.properties.managedIdentityKind = 'system';
             context.telemetry.properties.managedIdentityClientIdSource = 'none';
             return;
@@ -159,7 +160,7 @@ export class SelectManagedIdentityStep<T extends ManagedIdentitySelectionContext
     }
 
     private applyClientId(context: T, clientId: string, source: 'connectionString' | 'recent' | 'prompt'): void {
-        context.managedIdentityAuthConfig = { clientId };
+        context.managedIdentityAuthConfig = { ...context.managedIdentityAuthConfig, clientId };
         context.valuesToMask.push(clientId);
         context.telemetry.properties.managedIdentityKind = 'user';
         context.telemetry.properties.managedIdentityClientIdSource = source;

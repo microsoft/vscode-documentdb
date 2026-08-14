@@ -285,7 +285,10 @@ export class PlaygroundEvaluator implements vscode.Disposable {
             clientOptions,
             databaseName: connection.databaseName,
             authMechanism: authMechanism as 'NativeAuth' | 'MicrosoftEntraID' | 'ManagedIdentity' | 'NoAuth',
-            tenantId: credentials.entraIdConfig?.tenantId,
+            tenantId:
+                authMechanism === 'ManagedIdentity'
+                    ? credentials.managedIdentityConfig?.tenantId
+                    : credentials.entraIdConfig?.tenantId,
             managedIdentityClientId: credentials.managedIdentityConfig?.clientId,
         };
     }

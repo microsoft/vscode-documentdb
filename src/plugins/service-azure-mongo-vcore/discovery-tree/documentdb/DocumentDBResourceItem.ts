@@ -112,6 +112,7 @@ export class DocumentDBResourceItem extends ClusterItemBase<AzureClusterModel> {
                 adminUserName: credentials.nativeAuthConfig?.connectionUser,
                 resourceName: this.cluster.name,
                 availableAuthMethods: credentials.availableAuthMethods,
+                managedIdentityAuthConfig: credentials.managedIdentityAuthConfig,
             };
 
             // Prompt for credentials

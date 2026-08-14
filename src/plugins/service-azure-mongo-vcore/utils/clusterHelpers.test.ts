@@ -51,6 +51,7 @@ describe('extractCredentialsFromCluster', () => {
 
         expect(credentials.availableAuthMethods).toContain(AuthMethodId.ManagedIdentity);
         expect(credentials.entraIdAuthConfig).toEqual({ tenantId: 'tenant-1', subscriptionId: 'sub-1' });
+        expect(credentials.managedIdentityAuthConfig).toEqual({ tenantId: 'tenant-1' });
     });
 
     it('does not offer managed identity when the cluster does not allow Entra ID', () => {

@@ -126,6 +126,26 @@ describe('ManagedIdentityAuthHandler', () => {
         expect(response.expiresInSeconds).toBeGreaterThan(0);
     });
 
+    it('validates the token against the tenant in managed identity config', async () => {
+        const payload = Buffer.from(JSON.stringify({ tid: 'token-tenant' })).toString('base64url');
+        getToken.mockResolvedValue({
+            token: `header.${payload}.signature`,
+            expiresOnTimestamp: Date.now() + 3600 * 1000,
+        });
+        const handler = new ManagedIdentityAuthHandler(
+            buildCredentials({
+                managedIdentityConfig: { tenantId: 'cluster-tenant' },
+                entraIdConfig: { tenantId: 'token-tenant' },
+            }),
+        );
+
+        const { options } = await handler.configureAuth();
+
+        await expect(invokeOidcCallback(options)).rejects.toThrow(
+            /managed identity cannot authenticate across tenants/i,
+        );
+    });
+
     it('translates a credential failure into a readable message', async () => {
         getToken.mockRejectedValue(new Error('Multiple user assigned identities exist, please specify the clientId'));
         const handler = new ManagedIdentityAuthHandler(buildCredentials());

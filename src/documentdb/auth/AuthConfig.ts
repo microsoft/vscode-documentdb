@@ -58,6 +58,9 @@ export interface ManagedIdentityAuthConfig {
      * service cannot disambiguate on its own.
      */
     readonly clientId?: string;
+
+    /** Tenant that owns the target DocumentDB cluster, used to diagnose cross-tenant tokens. */
+    readonly tenantId?: string;
 }
 
 /**
