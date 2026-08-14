@@ -898,6 +898,8 @@ rather than a completion; F1 grows because option B was chosen.
 Then the standard five: `npm run l10n`, `npm run prettier-fix`, `npm run lint`,
 `npx jest --no-coverage`, `npm run build`.
 
+<!-- VALIDATED at https://github.com/microsoft/vscode-documentdb/commit/583042d1: npm run l10n, npm run prettier-fix, npm run lint, npx jest --no-coverage, and npm run build all pass in the required order. Jest completed 218 suites, 3,502 tests, and 4 snapshots with no failures. The only lint output is the pre-existing ESLint v10 migration warning for webpack.config.views.js. The exact CI packaging command, npm run package, also succeeds and produces the managed-identity preview VSIX. -->
+
 **Follow-up issues to file, not part of this PR:**
 
 - Storage hardening: make the `fromStorageItem` `default` branch distinguish "unversioned v1" from
