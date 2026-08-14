@@ -329,6 +329,8 @@ Agreed, no changes to the recommendation. Do not forget the two documentation to
 it: the amended availability rule in §6 of `managed-identities.md`, and a line in
 `manual-validation-checklist.md` covering a paste against a private-endpoint or custom-domain host.
 
+<!-- FIXED (F3) in https://github.com/microsoft/vscode-documentdb/commit/86e6efe3: Added Managed Identity to availableAuthenticationMethods whenever the pasted string carries a managed identity hint, with duplicate protection for recognized vCore hosts. Explicit driver-native intent now remains internally consistent even behind a private endpoint, CNAME, or custom domain where hostname classification cannot recognize vCore. A focused prompt-step test pins selection plus availability, and the design rule and manual checklist cover the custom-host scenario. -->
+
 ---
 
 ## F4. Transient network failures are reported as a permanent host misconfiguration
