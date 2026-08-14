@@ -523,6 +523,8 @@ targets `release/0.10.0`, so this must go back to `0.10.0` (or whatever the rele
 
 The suffix is an intentional setting for preview builds, not a leftover. **F7 is withdrawn.**
 
+<!-- FIXED (F7) in https://github.com/microsoft/vscode-documentdb/commit/c5b948e2: Kept the intentional 0.10.0-managed-identity suffix and documented its side-loaded preview contract. The exact PR CI command, npm run package, does invoke @vscode/vsce 3.7.1 and was verified to package vscode-documentdb-0.10.0-managed-identity.vsix successfully, so the concern that the suffix must never reach VSCE does not apply to the current toolchain. The Marketplace release process must still restore numeric version 0.10.0 and regenerate the lockfile; no code/version change was made. -->
+
 The reviewer had no way to distinguish an intentional preview marker from the commit message
 `chore version bump for testing`, which reads like a leftover. One line in the PR description saying
 the suffix is deliberate would stop the next reviewer, human or bot, raising it again.
