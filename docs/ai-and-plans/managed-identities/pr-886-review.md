@@ -388,6 +388,8 @@ it is exactly the question that will be asked after release.
 
 Agreed, no changes to the recommendation. Two details worth pinning while implementing:
 
+<!-- FIXED (F4) in https://github.com/microsoft/vscode-documentdb/commit/2672c293: Added endpointUnreachable as a distinct failure reason for timeouts and generic network failures, with retry-oriented user guidance, while keeping explicit endpoint-absence signals under noEndpoint. Transport checks now run before broad identity-not-assigned matching so mixed MSAL messages classify accurately. Table-driven tests pin every transport keyword and precedence, and the real ManagedIdentityCredential endpoint harness confirms the observed network_error shape uses the new telemetry bucket. -->
+
 - Move the network group **above** the `identityNotAssigned` group, or the ordering problem noted in
   the evidence survives the split: a message carrying both "not assigned" and a transport hint still
   resolves to the wrong bucket.
