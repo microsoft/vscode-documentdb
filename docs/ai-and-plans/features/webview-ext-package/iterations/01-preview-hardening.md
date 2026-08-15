@@ -1,5 +1,5 @@
 ---
-area: webview-ext-package
+feature: webview-ext-package
 kind: review
 status: historical
 prs: [676]

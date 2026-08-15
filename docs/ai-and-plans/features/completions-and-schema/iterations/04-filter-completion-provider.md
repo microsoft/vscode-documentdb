@@ -1,5 +1,5 @@
 ---
-area: completions-and-schema
+feature: completions-and-schema
 kind: iteration
 status: historical
 prs: [518]

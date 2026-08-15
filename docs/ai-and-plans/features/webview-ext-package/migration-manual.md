@@ -1,5 +1,5 @@
 ---
-area: practices
+feature: webview-ext-package
 kind: practice
 status: active
 created: 2026-06-30

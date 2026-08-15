@@ -1,5 +1,5 @@
 ---
-area: completions-and-schema
+feature: completions-and-schema
 kind: plan
 status: active
 created: 2026-04-10

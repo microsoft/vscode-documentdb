@@ -1,5 +1,5 @@
 ---
-area: local-quickstart
+feature: local-quickstart
 kind: iteration
 status: historical
 prs: [876]

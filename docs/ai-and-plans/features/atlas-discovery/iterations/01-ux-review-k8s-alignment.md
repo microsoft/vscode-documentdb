@@ -1,5 +1,5 @@
 ---
-area: atlas-discovery
+feature: atlas-discovery
 kind: ux-review
 status: historical
 prs: [733]

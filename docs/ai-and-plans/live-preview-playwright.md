@@ -1,5 +1,4 @@
 ---
-area: practices
 kind: practice
 status: active
 created: 2026-08-04

@@ -1,5 +1,5 @@
 ---
-area: index-management
+feature: index-management
 kind: design
 status: active
 prs: [732]

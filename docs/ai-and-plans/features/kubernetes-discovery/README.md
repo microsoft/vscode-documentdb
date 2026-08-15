@@ -1,5 +1,5 @@
 ---
-area: kubernetes-discovery
+feature: kubernetes-discovery
 kind: notes
 status: active
 prs: [621]

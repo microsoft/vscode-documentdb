@@ -1,5 +1,5 @@
 ---
-area: webview-ext-package
+feature: webview-ext-package
 kind: iteration
 status: historical
 prs: [766, 786]

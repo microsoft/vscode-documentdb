@@ -1,5 +1,5 @@
 ---
-area: kubernetes-discovery
+feature: kubernetes-discovery
 kind: design
 status: active
 prs: [621]

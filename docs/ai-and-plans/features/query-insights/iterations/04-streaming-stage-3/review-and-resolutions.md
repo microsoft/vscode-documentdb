@@ -1,5 +1,5 @@
 ---
-area: query-insights
+feature: query-insights
 kind: review
 status: historical
 prs: [711]

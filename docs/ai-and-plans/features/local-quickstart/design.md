@@ -1,5 +1,5 @@
 ---
-area: local-quickstart
+feature: local-quickstart
 kind: design
 status: active
 created: 2026-06-09

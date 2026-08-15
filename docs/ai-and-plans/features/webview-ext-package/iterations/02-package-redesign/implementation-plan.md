@@ -1,5 +1,5 @@
 ---
-area: webview-ext-package
+feature: webview-ext-package
 kind: iteration
 status: historical
 created: 2026-06-29

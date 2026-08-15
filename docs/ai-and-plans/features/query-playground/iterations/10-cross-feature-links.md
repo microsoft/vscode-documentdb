@@ -1,5 +1,5 @@
 ---
-area: cross-cutting
+feature: query-playground
 kind: iteration
 status: historical
 created: 2026-04-16

@@ -1,5 +1,5 @@
 ---
-area: atlas-discovery
+feature: atlas-discovery
 kind: decisions
 status: active
 prs: [733]

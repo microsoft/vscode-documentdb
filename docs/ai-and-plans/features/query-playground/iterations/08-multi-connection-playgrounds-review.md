@@ -1,5 +1,5 @@
 ---
-area: query-playground
+feature: query-playground
 kind: review
 status: historical
 created: 2026-04-15

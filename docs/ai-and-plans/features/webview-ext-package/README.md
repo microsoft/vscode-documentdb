@@ -1,5 +1,5 @@
 ---
-area: webview-ext-package
+feature: webview-ext-package
 kind: notes
 status: active
 prs: [676, 766, 786, 795]

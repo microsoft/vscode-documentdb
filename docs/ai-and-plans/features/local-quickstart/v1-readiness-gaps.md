@@ -1,5 +1,5 @@
 ---
-area: local-quickstart
+feature: local-quickstart
 kind: checklist
 status: active
 created: 2026-06-26

@@ -1,5 +1,4 @@
 ---
-area: documentation
 kind: plan
 status: active
 created: 2026-08-13
@@ -300,11 +299,12 @@ There is no `misc/`. Anything that does not fit goes into the nearest area.
 
 ### 6.1 Frontmatter
 
-Required: `area`, `kind`, `status`. Everything else optional.
+Required: `feature`, `kind`, `status` for documents under `features/`. Root-level
+documents carry `kind` and `status` only. Everything else optional.
 
 ```yaml
 ---
-area: local-quickstart
+feature: local-quickstart
 kind: design | decisions | iteration | review | ux-review | research | checklist | practice | plan | notes
 status: active | historical | superseded
 prs: [798, 876] # optional, provenance only
@@ -372,7 +372,7 @@ README → design.md → decisions.md
 
 ```markdown
 ---
-area: local-quickstart
+feature: local-quickstart
 kind: decisions
 status: active
 verified: 2026-08-13

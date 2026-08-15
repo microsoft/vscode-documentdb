@@ -1,5 +1,5 @@
 ---
-area: interactive-shell
+feature: interactive-shell
 kind: iteration
 status: historical
 created: 2026-04-14

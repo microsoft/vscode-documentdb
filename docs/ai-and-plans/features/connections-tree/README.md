@@ -1,5 +1,5 @@
 ---
-area: connections-tree
+feature: connections-tree
 kind: notes
 status: active
 prs: [714, 726]

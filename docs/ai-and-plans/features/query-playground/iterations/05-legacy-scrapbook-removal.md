@@ -1,5 +1,5 @@
 ---
-area: query-playground
+feature: query-playground
 kind: iteration
 status: historical
 prs: [533]

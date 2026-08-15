@@ -1,5 +1,5 @@
 ---
-area: completions-and-schema
+feature: completions-and-schema
 kind: notes
 status: active
 prs: [506, 513, 518, 530, 532, 538, 543, 551, 717]

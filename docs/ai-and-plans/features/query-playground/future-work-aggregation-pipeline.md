@@ -1,5 +1,5 @@
 ---
-area: query-playground
+feature: query-playground
 kind: plan
 status: active
 created: 2026-04-10

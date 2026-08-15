@@ -1,5 +1,5 @@
 ---
-area: query-insights
+feature: query-insights
 kind: iteration
 status: historical
 prs: [690, 711]

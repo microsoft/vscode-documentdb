@@ -74,12 +74,13 @@ The rules, in full:
 
 ## Frontmatter
 
-Required: `area`, `kind`, `status`. Optional and worth adding: `prs`, `created`, `verified`,
-`superseded-by`, and `code`.
+Required: `feature`, `kind`, `status` for anything under `features/`. Root-level documents carry
+`kind` and `status` only — there is no `feature: general` value. Optional and worth adding: `prs`,
+`created`, `verified`, `superseded-by`, and `code`.
 
 ```yaml
 ---
-area: local-quickstart
+feature: local-quickstart
 kind: design # design | decisions | iteration | review | ux-review | research | checklist | practice | plan | notes
 status: active # active | historical | superseded
 prs: [798, 876]

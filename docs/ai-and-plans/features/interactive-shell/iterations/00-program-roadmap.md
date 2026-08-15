@@ -1,5 +1,5 @@
 ---
-area: cross-cutting
+feature: interactive-shell
 kind: plan
 status: historical
 prs: [506, 508, 513, 518]

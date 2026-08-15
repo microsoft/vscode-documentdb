@@ -1,5 +1,5 @@
 ---
-area: interactive-shell
+feature: interactive-shell
 kind: plan
 status: active
 created: 2026-04-10

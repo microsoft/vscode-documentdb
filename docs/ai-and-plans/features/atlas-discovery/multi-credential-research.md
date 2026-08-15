@@ -1,5 +1,5 @@
 ---
-area: atlas-discovery
+feature: atlas-discovery
 kind: research
 status: active
 created: 2026-07-24

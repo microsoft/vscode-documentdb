@@ -1,5 +1,5 @@
 ---
-area: query-playground
+feature: query-playground
 kind: notes
 status: active
 prs: [533, 536, 540, 553, 559, 560, 583, 758]

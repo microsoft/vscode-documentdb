@@ -1,5 +1,5 @@
 ---
-area: local-quickstart
+feature: local-quickstart
 kind: review
 status: historical
 prs: [798]

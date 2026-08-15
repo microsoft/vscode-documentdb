@@ -1,5 +1,5 @@
 ---
-area: index-management
+feature: index-management
 kind: notes
 status: active
 prs: [732]

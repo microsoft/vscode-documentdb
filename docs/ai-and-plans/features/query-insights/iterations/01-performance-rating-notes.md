@@ -1,5 +1,5 @@
 ---
-area: query-insights
+feature: query-insights
 kind: iteration
 status: historical
 created: 2026-04-27

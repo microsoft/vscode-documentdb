@@ -1,5 +1,5 @@
 ---
-area: index-management
+feature: index-management
 kind: review
 status: historical
 prs: [732]

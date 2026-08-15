@@ -1,5 +1,5 @@
 ---
-area: no-auth
+feature: no-auth
 kind: iteration
 status: historical
 created: 2026-06-23

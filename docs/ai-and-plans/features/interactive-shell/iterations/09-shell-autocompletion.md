@@ -1,5 +1,5 @@
 ---
-area: interactive-shell
+feature: interactive-shell
 kind: iteration
 status: historical
 prs: [508, 576]

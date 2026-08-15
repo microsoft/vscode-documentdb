@@ -1,5 +1,5 @@
 ---
-area: connections-tree
+feature: connections-tree
 kind: iteration
 status: historical
 prs: [726]

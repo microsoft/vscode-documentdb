@@ -1,5 +1,5 @@
 ---
-area: kubernetes-discovery
+feature: kubernetes-discovery
 kind: ux-review
 status: historical
 prs: [621]

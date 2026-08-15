@@ -1,5 +1,5 @@
 ---
-area: interactive-shell
+feature: interactive-shell
 kind: review
 status: historical
 prs: [580]

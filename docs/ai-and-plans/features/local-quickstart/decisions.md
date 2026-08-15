@@ -1,5 +1,5 @@
 ---
-area: local-quickstart
+feature: local-quickstart
 kind: decisions
 status: active
 verified: 2026-08-14

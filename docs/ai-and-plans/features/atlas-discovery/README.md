@@ -1,5 +1,5 @@
 ---
-area: atlas-discovery
+feature: atlas-discovery
 kind: notes
 status: active
 prs: [733, 765, 834]

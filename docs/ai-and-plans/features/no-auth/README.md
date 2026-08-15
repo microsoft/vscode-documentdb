@@ -1,5 +1,5 @@
 ---
-area: no-auth
+feature: no-auth
 kind: notes
 status: active
 prs: [755]

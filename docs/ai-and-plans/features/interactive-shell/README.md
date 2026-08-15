@@ -1,5 +1,5 @@
 ---
-area: interactive-shell
+feature: interactive-shell
 kind: notes
 status: active
 prs: [508, 561, 576, 580, 631]

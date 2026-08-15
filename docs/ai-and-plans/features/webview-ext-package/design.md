@@ -1,5 +1,5 @@
 ---
-area: webview-ext-package
+feature: webview-ext-package
 kind: design
 status: active
 prs: [766]

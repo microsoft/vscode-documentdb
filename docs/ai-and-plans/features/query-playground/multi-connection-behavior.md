@@ -1,5 +1,5 @@
 ---
-area: cross-cutting
+feature: query-playground
 kind: notes
 status: active
 created: 2026-04-15

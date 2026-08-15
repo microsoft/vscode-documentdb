@@ -1,5 +1,5 @@
 ---
-area: query-insights
+feature: query-insights
 kind: notes
 status: active
 prs: [616, 690, 711]

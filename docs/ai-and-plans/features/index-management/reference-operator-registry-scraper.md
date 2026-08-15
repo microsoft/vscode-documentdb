@@ -1,5 +1,5 @@
 ---
-area: index-management
+feature: index-management
 kind: research
 status: active
 prs: [732]

@@ -1,5 +1,5 @@
 ---
-area: connections-tree
+feature: connections-tree
 kind: review
 status: historical
 prs: [714]

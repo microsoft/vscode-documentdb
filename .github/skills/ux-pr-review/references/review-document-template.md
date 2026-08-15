@@ -6,15 +6,16 @@ documents) and fill the `{{…}}` placeholders during the pre-assessment. Keep t
 order. Sections marked _(seed now)_ are produced during **Prepare**; the P0–P3 item bodies
 are filled during the **Live review**.
 
-The file needs frontmatter, as every document in the knowledge base does:
+The file needs frontmatter, as every document under `features/` does:
 
+<!-- prettier-ignore -->
 ```yaml
 ---
-area: { { area-slug } }
+feature: {{feature-slug}}
 kind: ux-review
 status: historical
-prs: [{ { pr-number } }]
-created: { { date } }
+prs: [{{pr-number}}]
+created: {{date}}
 ---
 ```
 

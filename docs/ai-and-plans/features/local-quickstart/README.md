@@ -1,5 +1,5 @@
 ---
-area: local-quickstart
+feature: local-quickstart
 kind: notes
 status: active
 prs: [653, 798, 876]
