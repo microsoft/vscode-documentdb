@@ -4,7 +4,11 @@ kind: design
 status: active
 created: 2026-07-27
 code:
-    - src/webviews/documentdb/indexView/**
+    - src/webviews/documentdb/collectionView/indexesTab/**
+    - src/commands/index.dropIndex/**
+    - src/commands/index.hideIndex/**
+    - src/commands/index.unhideIndex/**
+    - src/commands/index.shared/**
 verified: 2026-08-14
 ---
 

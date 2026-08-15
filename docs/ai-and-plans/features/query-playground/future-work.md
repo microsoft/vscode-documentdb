@@ -5,7 +5,7 @@ status: active
 created: 2026-04-10
 code:
     - src/documentdb/playground/**
-    - src/services/playground/**
+    - src/commands/playground/**
 verified: 2026-08-14
 ---
 

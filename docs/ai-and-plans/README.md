@@ -88,12 +88,14 @@ prs: [798, 876]
 created: 2026-08-04
 verified: 2026-08-13 # absent means unverified; this is not a promise of currency
 code:
-  - src/commands/localQuickstart/**
+    - src/commands/localQuickStart/**
+    - src/services/localQuickStart/**
 ---
 ```
 
 `code` is the highest-leverage optional field: it is the only route from a source path back to the
-rationale behind it.
+rationale behind it. Every glob must resolve against the repository — one that matches nothing is
+worse than an absent field, because it fails silently and still looks authoritative.
 
 ## Where the boundaries are
 

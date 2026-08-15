@@ -171,6 +171,54 @@ changed file before and after: 56 files changed, and the only word-level
 differences anywhere were the `prettier-ignore` tokens that were deliberately
 removed.
 
+### Post-review corrections (2026-08-15)
+
+An independent review of the finished branch verified the layout against the spec
+and raised five findings. Two were defects worth fixing immediately; both are
+fixed, and both were mistakes of the same kind — **an assertion carried forward
+without being checked against reality.**
+
+**1. §7.4's rebase estimate was wrong, and I repeated it.** The section claimed
+PR #886's conflict surface was "the five documents it owns". Measured against the
+branch it is 39 files: 7 of its own and **32 unrelated documents this restructure
+renamed**. §7.4 is corrected with the real numbers, a verified resolution recipe
+(all 32 of #886's changes are pure Prettier reformatting, so take the rename and
+discard its version), and the two files the target shape never accounted for.
+
+The lesson is sharper than the number. §4.1 says the code wins for behavior and
+that a doc-versus-reality mismatch must be named rather than silently accepted. I
+applied that rule to every feature document and then quoted an unverified figure
+out of the plan into a hand-off summary. **A plan is a document like any other:
+it describes intent, not fact, and its factual claims need the same check.**
+
+**2. Seven documents carried `code:` globs that resolve to nothing.** §6.1 calls
+`code:` the highest-leverage optional field — the only route from a source path
+back to its rationale. Five documents in `index-management` pointed at
+`src/webviews/documentdb/indexView/**` (the real path is
+`collectionView/indexesTab/**`) and two in `query-playground` pointed at
+`src/services/playground/**`, which does not exist.
+
+Cause: the two feature READMEs were written by hand with correct paths, but every
+other root document took its `code:` block from a lookup table in the migration
+script, and that table was never validated against the filesystem. A review that
+spot-checks READMEs cannot catch this, because the READMEs are the correct ones.
+
+Both frontmatter templates — the knowledge-base README and §6.1 — also taught
+invented paths (`src/commands/localQuickstart/**` with the wrong casing, and
+`src/services/localInstance/**`, which never existed). They now use real ones, at
+the indentation the documents on disk actually use.
+
+**All 35 distinct `code:` globs in the knowledge base were then resolved against
+the repository; every one matches.** The README now states the rule that makes
+this checkable: a glob matching nothing is worse than an absent field, because it
+fails silently while still looking authoritative.
+
+Three further findings were accepted as valid but lower value and are not fixed
+here: feature READMEs all carry `kind: notes`, which does not describe an index;
+the knowledge-base README carries no frontmatter although rule 6 requires
+`kind` and `status` on root documents; and the Prettier tooling change rides in
+this branch rather than its own PR.
+
 ---
 
 ## 1. Context
@@ -430,8 +478,8 @@ status: active | historical | superseded
 prs: [798, 876] # optional, provenance only
 created: 2026-08-04 # optional
 code: # optional but high value: reverse index from source to rationale
-  - src/commands/localQuickstart/**
-  - src/services/localInstance/**
+    - src/commands/localQuickStart/**
+    - src/services/localQuickStart/**
 verified: 2026-08-13 # optional. absent = unverified. no promise of currency.
 superseded-by: decisions.md#0003 # optional
 ---
@@ -653,17 +701,59 @@ single decisions file are good enough and a `decisions/` folder is unnecessary.
 What it is missing, and what the follow-up must add: frontmatter, a short
 `README.md` (today the 848-line `managed-identities.md` doubles as index and
 design), and relocation of `implementation-log.md` into `iterations/`.
-
 **It is the first post-migration conformance check.** Handling:
 
 > After the migration lands, rebase PR #886 onto `main` and `git mv` its
 > documents into `features/managed-identities/`, splitting `managed-identities.md`
 > into `README.md` + `design.md` and adding frontmatter, **inside that PR**.
 
-The rebase is cheap: the migration touches only `docs/`, and #886's ~102 files
-are almost entirely `src/`, so the conflict surface is the five documents it
-owns. If slotting it in needs more than a rename plus a README, the layout is
-wrong and should be revisited before the remaining areas move.
+#### The rebase is not as cheap as this section originally claimed
+
+> **Corrected 2026-08-15, measured against the merged restructure.** The text
+> here previously read: _"the migration touches only `docs/`, and #886's ~102
+> files are almost entirely `src/`, so the conflict surface is the five documents
+> it owns."_ That was wrong on both halves and is the kind of unverified estimate
+> the authority model in §4.1 exists to catch.
+
+Measured (`git diff --name-only origin/main...origin/dev/tnaum/managed-identities -- docs/ai-and-plans`):
+
+| Count  | What                                                |
+| ------ | --------------------------------------------------- |
+| **39** | files the branch touches under `docs/ai-and-plans/` |
+| 7      | its own `managed-identities/` documents (not five)  |
+| **32** | **unrelated documents this restructure renamed**    |
+
+The 32 are the real cost. Git's rename detection will follow some of them during
+the rebase; the rest surface as conflicts at either the old or the new path.
+
+**The resolution is uniform: take the rename, discard #886's version.** All 32
+changes on that branch are **pure Prettier markdown reformatting** — table
+realignment and blank-line normalisation from someone running Prettier over
+`docs/` there. This was verified by comparing the word sequence of every one of
+the 32 files between `origin/main` and the branch: **32 of 32 are
+formatting-only**, zero content differences. Commit `4dff187e` on this branch
+already reformatted every one of those files at its new path with the
+repository's own Prettier config, so nothing on #886 is worth keeping.
+
+Do this before starting, and the 32 collapse into one decision instead of
+thirty-two:
+
+```bash
+# from the rebase, for every conflicted path outside managed-identities/
+git checkout --ours -- <path>   # or: git rm <old path> and keep the renamed file
+```
+
+**Two files this section did not account for:**
+
+- `PRs/886-managed-identity/ux-review.md` — created under the **old** PR-keyed
+  convention while it was still in force. It relocates to
+  `features/managed-identities/iterations/`, and it is concrete evidence that the
+  `ux-pr-review` retarget in §8.4 was needed.
+- `managed-identities/pr-886-review.md` — the AI-review artifact the target shape
+  below lists as "still to come". It already exists.
+
+If slotting the branch in needs more than these renames plus a README, the layout
+is wrong and should be revisited before anything else moves.
 
 Target shape:
 
@@ -673,11 +763,12 @@ features/managed-identities/
 ├── design.md                        # ← managed-identities.md
 ├── decisions.md                     # as-is + frontmatter
 ├── research-findings.md             # as-is + frontmatter
-├── manual-validation-checklist.md   # area root: it gets re-run (§4)
+├── manual-validation-checklist.md   # feature root: it gets re-run (§4)
 └── iterations/
     └── 01-initial-implementation/
         ├── implementation-log.md
-        └── code-review.md           # the AI-review artifact, still to come
+        ├── code-review.md           # ← managed-identities/pr-886-review.md
+        └── ux-review.md             # ← PRs/886-managed-identity/ux-review.md
 ```
 
 > **Known breakage:** the #886 description links

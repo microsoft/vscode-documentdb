@@ -5,7 +5,11 @@ status: active
 prs: [732]
 created: 2026-07-17
 code:
-    - src/webviews/documentdb/indexView/**
+    - src/webviews/documentdb/collectionView/indexesTab/**
+    - src/commands/index.dropIndex/**
+    - src/commands/index.hideIndex/**
+    - src/commands/index.unhideIndex/**
+    - src/commands/index.shared/**
 verified: 2026-08-14
 ---
 
