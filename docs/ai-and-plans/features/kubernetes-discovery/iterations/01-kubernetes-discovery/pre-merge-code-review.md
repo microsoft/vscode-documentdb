@@ -311,17 +311,17 @@ call **returns** (success or failure) in a reasonable time.
 
 ## 5. Undocumented / under-documented behavior
 
-| Behavior                                                                                 | Documented?                                                      | Note |
-| ---------------------------------------------------------------------------------------- | ---------------------------------------------------------------- | ---- |
-| **List vs Tree view mode** toggle (global, persisted in `globalState`, no setting)       | ✅ "Switch between list and tree view" section                   | Good |
-| **Rename context (display alias)**, per-source, kubeconfig untouched                     | ✅ "Rename a context (display alias)" section                    | Good |
-| **DKO + generic + known-port** discovery order, opt-in annotation/label                  | ✅ "Discovery rules" section                                     | Good |
-| **Credential secret conventions** (DKO `documentDbCredentialSecret`, generic annotation) | ✅ "Credential secret conventions" section                       | Good |
-| **Port-forward settings** (`localPortStrategy`, `localPortBase`)                         | ✅ in package.json + user manual                                 | Good |
-| **`tlsAllowInvalidCertificates=true`** on every discovered connection string             | ✅ **now documented** (§2.1 — "Connection security (TLS/SSL)")   | Done |
-| **`exec` credential plugins may run local binaries** when expanding a source             | ✅ **now documented** (§2.3 — "Add a kubeconfig source" warning) | Done |
-| **No timeout** on API calls / "tree may spin on an unreachable cluster"                  | 📝 tracked [#741](https://github.com/microsoft/vscode-documentdb/issues/741) (0.9.1)     | Tracked |
-| `DISCOVERY_VIEW_MODE_STATE_KEY` and other ad-hoc `globalState` keys                      | n/a (internal); TODO comment notes a future settings store       | Info |
+| Behavior                                                                                 | Documented?                                                                          | Note    |
+| ---------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------ | ------- |
+| **List vs Tree view mode** toggle (global, persisted in `globalState`, no setting)       | ✅ "Switch between list and tree view" section                                       | Good    |
+| **Rename context (display alias)**, per-source, kubeconfig untouched                     | ✅ "Rename a context (display alias)" section                                        | Good    |
+| **DKO + generic + known-port** discovery order, opt-in annotation/label                  | ✅ "Discovery rules" section                                                         | Good    |
+| **Credential secret conventions** (DKO `documentDbCredentialSecret`, generic annotation) | ✅ "Credential secret conventions" section                                           | Good    |
+| **Port-forward settings** (`localPortStrategy`, `localPortBase`)                         | ✅ in package.json + user manual                                                     | Good    |
+| **`tlsAllowInvalidCertificates=true`** on every discovered connection string             | ✅ **now documented** (§2.1 — "Connection security (TLS/SSL)")                       | Done    |
+| **`exec` credential plugins may run local binaries** when expanding a source             | ✅ **now documented** (§2.3 — "Add a kubeconfig source" warning)                     | Done    |
+| **No timeout** on API calls / "tree may spin on an unreachable cluster"                  | 📝 tracked [#741](https://github.com/microsoft/vscode-documentdb/issues/741) (0.9.1) | Tracked |
+| `DISCOVERY_VIEW_MODE_STATE_KEY` and other ad-hoc `globalState` keys                      | n/a (internal); TODO comment notes a future settings store                           | Info    |
 
 The user manual is **excellent** overall (RBAC matrix, provider-detection table, troubleshooting table,
 endpoint-resolution table). The only documentation gaps are the two **security-relevant defaults** (2.1,

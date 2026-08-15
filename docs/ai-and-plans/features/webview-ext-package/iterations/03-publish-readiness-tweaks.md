@@ -222,10 +222,10 @@ already correct.
 
 ## Files changed
 
-| File                                                                                     | Change                                                                                                                                               |
-| ---------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `packages/vscode-ext-webview/package.json`                                               | Add `"sideEffects": false`.                                                                                                                          |
-| `packages/vscode-ext-webview/README.md`                                                  | Clarify optional peer dependencies in the install prose and the peer-dependency table; correct `WithTelemetry`'s documented entry point to `./host`. |
+| File                                                                 | Change                                                                                                                                               |
+| -------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `packages/vscode-ext-webview/package.json`                           | Add `"sideEffects": false`.                                                                                                                          |
+| `packages/vscode-ext-webview/README.md`                              | Clarify optional peer dependencies in the install prose and the peer-dependency table; correct `WithTelemetry`'s documented entry point to `./host`. |
 | `docs/ai-and-plans/features/webview-ext-package/migration-manual.md` | Correct `WithTelemetry`'s documented entry point to `./host`.                                                                                        |
 
 ## Commits

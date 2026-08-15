@@ -51,12 +51,12 @@ the user waits.
 
 ## Timeline
 
-| Date       | PR   | What changed                                        | Docs                                                                                    |
-| ---------- | ---- | --------------------------------------------------- | --------------------------------------------------------------------------------------- |
-| 2026-04-27 | —    | Performance rating: plan and implementation notes    | [iterations/01-performance-rating.md](./iterations/01-performance-rating.md)             |
-| 2026-04-27 | #616 | AI analysis aligned with the static analysis         | [iterations/02-ai-static-analysis-alignment.md](./iterations/02-ai-static-analysis-alignment.md) |
-| 2026-05-28 | #690 | AI model transparency in the panel                   | [iterations/03-ai-model-transparency.md](./iterations/03-ai-model-transparency.md)       |
-| 2026-06-01 | #711 | Progressive streaming for Stage 3 recommendations    | [iterations/04-streaming-stage-3/](./iterations/04-streaming-stage-3/)                   |
+| Date       | PR   | What changed                                      | Docs                                                                                             |
+| ---------- | ---- | ------------------------------------------------- | ------------------------------------------------------------------------------------------------ |
+| 2026-04-27 | —    | Performance rating: plan and implementation notes | [iterations/01-performance-rating.md](./iterations/01-performance-rating.md)                     |
+| 2026-04-27 | #616 | AI analysis aligned with the static analysis      | [iterations/02-ai-static-analysis-alignment.md](./iterations/02-ai-static-analysis-alignment.md) |
+| 2026-05-28 | #690 | AI model transparency in the panel                | [iterations/03-ai-model-transparency.md](./iterations/03-ai-model-transparency.md)               |
+| 2026-06-01 | #711 | Progressive streaming for Stage 3 recommendations | [iterations/04-streaming-stage-3/](./iterations/04-streaming-stage-3/)                           |
 
 ## Decisions
 

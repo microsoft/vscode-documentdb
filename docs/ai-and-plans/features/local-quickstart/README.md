@@ -64,16 +64,16 @@ regular new-connection wizard instead ([0001](./decisions.md#0001--single-manage
 
 ## Timeline
 
-| Date       | PR   | What changed                            | Docs                                                                          |
-| ---------- | ---- | --------------------------------------- | ----------------------------------------------------------------------------- |
-| 2026-06-15 | #653 | Initial design, benchmarked against the PostgreSQL extension | [iterations/01-initial-design.md](./iterations/01-initial-design.md)           |
-| 2026-06-22 | —    | POC scope, plan, and 5-agent review     | [iterations/02-poc/](./iterations/02-poc/)                                     |
-| 2026-06-25 | —    | Instance model locked to one instance   | [decisions.md#0001](./decisions.md#0001--single-managed-instance-ownership-bounded) |
-| 2026-06-26 | —    | v1 production-readiness gap analysis    | [v1-readiness-gaps.md](./v1-readiness-gaps.md)                                 |
-| 2026-07-06 | —    | Single → multi instance reversal        | [decisions.md#0002](./decisions.md#0002--multiple-managed-instances-in-v1-reconstructed) |
-| 2026-08-02 | —    | Provider-neutral Docker readiness       | [iterations/04-ui-redesign/](./iterations/04-ui-redesign/)                     |
-| 2026-08-04 | #798 | UI redesign shipped (Concept F)         | [iterations/04-ui-redesign/](./iterations/04-ui-redesign/)                     |
-| 2026-08-09 | #876 | State sync + infrastructure error translation | [iterations/05-error-translation.md](./iterations/05-error-translation.md) |
+| Date       | PR   | What changed                                                 | Docs                                                                                     |
+| ---------- | ---- | ------------------------------------------------------------ | ---------------------------------------------------------------------------------------- |
+| 2026-06-15 | #653 | Initial design, benchmarked against the PostgreSQL extension | [iterations/01-initial-design.md](./iterations/01-initial-design.md)                     |
+| 2026-06-22 | —    | POC scope, plan, and 5-agent review                          | [iterations/02-poc/](./iterations/02-poc/)                                               |
+| 2026-06-25 | —    | Instance model locked to one instance                        | [decisions.md#0001](./decisions.md#0001--single-managed-instance-ownership-bounded)      |
+| 2026-06-26 | —    | v1 production-readiness gap analysis                         | [v1-readiness-gaps.md](./v1-readiness-gaps.md)                                           |
+| 2026-07-06 | —    | Single → multi instance reversal                             | [decisions.md#0002](./decisions.md#0002--multiple-managed-instances-in-v1-reconstructed) |
+| 2026-08-02 | —    | Provider-neutral Docker readiness                            | [iterations/04-ui-redesign/](./iterations/04-ui-redesign/)                               |
+| 2026-08-04 | #798 | UI redesign shipped (Concept F)                              | [iterations/04-ui-redesign/](./iterations/04-ui-redesign/)                               |
+| 2026-08-09 | #876 | State sync + infrastructure error translation                | [iterations/05-error-translation.md](./iterations/05-error-translation.md)               |
 
 ## Decisions
 

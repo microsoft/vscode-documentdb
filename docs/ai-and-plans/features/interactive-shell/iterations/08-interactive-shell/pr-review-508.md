@@ -174,11 +174,11 @@ Move the lock deeper, into `ensureWorker()`, so all callers are protected.
 
 ### C3. Resource Leak: Fresh Context Mode Never Cleans Up
 
-| Field         | Value                                                                     |
-| ------------- | ------------------------------------------------------------------------- |
-| **Reporters** | Claude (C3)                                                               |
-| **Severity**  | 🔴 Critical                                                               |
-| **Verified**  | ✅ Confirmed in code                                                      |
+| Field         | Value                                                                        |
+| ------------- | ---------------------------------------------------------------------------- |
+| **Reporters** | Claude (C3)                                                                  |
+| **Severity**  | 🔴 Critical                                                                  |
+| **Verified**  | ✅ Confirmed in code                                                         |
 | **File**      | `packages/documentdb-js-shell-runtime/src/DocumentDBShellRuntime.ts:122-160` |
 
 **Evidence:** `evaluateFresh()` creates `DocumentDBServiceProvider`, `ShellInstanceState`, `ShellEvaluator`, and `vm.Context` — **none are disposed after use**. Each playground run in fresh mode leaks resources.
@@ -357,11 +357,11 @@ Add validation in the Collection View webview before submitting queries.
 
 ### H3. Update Operator Descriptions Point to Wrong Documentation
 
-| Field         | Value                                                  |
-| ------------- | ------------------------------------------------------ |
-| **Reporters** | GPT (Finding 4), Gemini, Copilot PR reviewer (CP4)     |
-| **Severity**  | 🟠 High (UX — Misleading content)                      |
-| **Verified**  | ✅ Confirmed in code                                   |
+| Field         | Value                                                             |
+| ------------- | ----------------------------------------------------------------- |
+| **Reporters** | GPT (Finding 4), Gemini, Copilot PR reviewer (CP4)                |
+| **Severity**  | 🟠 High (UX — Misleading content)                                 |
+| **Verified**  | ✅ Confirmed in code                                              |
 | **File**      | `packages/documentdb-js-operator-registry/src/updateOperators.ts` |
 
 **Evidence:** Multiple update-operator entries have descriptions and links from the wrong category:
@@ -568,9 +568,10 @@ The single-threaded model makes the worst outcomes unlikely. Add TDD tests for t
 **Test gap:** Add a TDD contract: "Ctrl+C during evaluation, then immediately submit another command, must not produce duplicate prompts."
 
 **REVISITED:** The option to revisit after progress animation changes was selected. After reviewing the current code with spinner/progress animation changes, the race condition is now well-mitigated:
+
 - `handleInterrupt()` sets `_interrupted = true` synchronously and kills the worker. The `finally` block in `handleLineInput()` checks `!this._interrupted` and skips duplicate prompt/state cleanup.
 - The spinner is null-checked (`_spinner?.stop()`) so both paths safely stop it.
-- `_evaluating` is set to `false` by the interrupt handler *before* the `finally` block runs, so no conflicting state.
+- `_evaluating` is set to `false` by the interrupt handler _before_ the `finally` block runs, so no conflicting state.
 - The `_interrupted` flag is reset to `false` at the end of `finally`, which is after the old evaluation's cleanup — by then, any new command from re-enabled input processes in a separate async event loop turn.
 
 The theoretical window (stale `finally` interfering with new command state) is prevented by the `_interrupted` guard. The generation-token approach would add defense-in-depth but is not strictly necessary given the current guards. **Leaving as-is; can add generation tokens as a hardening pass if needed.**
@@ -874,11 +875,11 @@ catch (error) {
 
 ### M9. Non-Null Assertion Abuse in Shell Runtime Persistent Mode
 
-| Field         | Value                                                                     |
-| ------------- | ------------------------------------------------------------------------- |
-| **Reporters** | Claude (C5)                                                               |
-| **Severity**  | 🟡 Medium (was Critical, downgraded)                                      |
-| **Verified**  | ✅ Confirmed — `!` assertions used                                        |
+| Field         | Value                                                                        |
+| ------------- | ---------------------------------------------------------------------------- |
+| **Reporters** | Claude (C5)                                                                  |
+| **Severity**  | 🟡 Medium (was Critical, downgraded)                                         |
+| **Verified**  | ✅ Confirmed — `!` assertions used                                           |
 | **File**      | `packages/documentdb-js-shell-runtime/src/DocumentDBShellRuntime.ts:197-226` |
 
 **Evidence:** Multiple `!` assertions on `_persistentInstanceState!`, `_persistentEvaluator!`, `_persistentVmContext!`. If initialization partially fails (e.g., error between assigning `_persistentInstanceState` and setting `_persistentInitialized = true`), retry would use incomplete state.
@@ -1019,11 +1020,11 @@ Replace space check with `/\b/` or common separator set (`.`, `_`, `-`, `(`, `)`
 
 ### L1. `HELP_PATTERN` Regex Matches Multi-line Tagged Templates
 
-| Field         | Value                                                            |
-| ------------- | ---------------------------------------------------------------- |
-| **Reporters** | Claude (M9)                                                      |
-| **Severity**  | 🟢 Low                                                           |
-| **Verified**  | ✅ Confirmed                                                     |
+| Field         | Value                                                               |
+| ------------- | ------------------------------------------------------------------- |
+| **Reporters** | Claude (M9)                                                         |
+| **Severity**  | 🟢 Low                                                              |
+| **Verified**  | ✅ Confirmed                                                        |
 | **File**      | `packages/documentdb-js-shell-runtime/src/CommandInterceptor.ts:24` |
 
 **Analysis:** `` help`\ndb.dropDatabase()` `` would be intercepted as help instead of evaluated. However, this is an extremely unlikely user input pattern. **No action needed** unless reported.

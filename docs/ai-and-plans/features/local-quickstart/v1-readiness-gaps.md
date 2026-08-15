@@ -33,39 +33,39 @@ instance.
 
 ## 🔴 P0 — Correctness & data loss (will bite real users)
 
-| # | Gap | Design | Current | What's needed |
-| - | --- | ------ | ------- | ------------- |
-| P0‑1 | **Persistent data volume** | §8 defaults; §11 | **Ephemeral** (no volume) | Named volume `vscode-documentdb-local-data` mounted at **`/data`** (verified `DATA_PATH=/data`). Make sample-seeding **idempotent** (skip if `sampledb` exists). Align Delete to §11 (keep volume + creds → Missing); recreate reuses both. |
-| P0‑2 | **Port-conflict fallback** | §8.3 | Pre-checks 10260, hard-errors if busy | Try 10260, then up to 10 random ports in `[10260,10360)`; yellow "using 10273 instead" banner; **use the bound port from `docker inspect`** when composing/saving the conn string. Explicit (Advanced) ports are never relocated — error instead. |
-| P0‑3 | **Credential transport via env-file** | §8.2 | Password on `--username/--password` **CLI args** (leaks to `ps`/history) | Pass creds as `USERNAME`/`PASSWORD` via a temp `--env-file` (deleted in `finally`). **Verified the image reads these env vars** (entrypoint `${USERNAME:-}/${PASSWORD:-}`; CLI args only override) — resolves OPEN‑1. |
+| #    | Gap                                   | Design           | Current                                                                  | What's needed                                                                                                                                                                                                                                     |
+| ---- | ------------------------------------- | ---------------- | ------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| P0‑1 | **Persistent data volume**            | §8 defaults; §11 | **Ephemeral** (no volume)                                                | Named volume `vscode-documentdb-local-data` mounted at **`/data`** (verified `DATA_PATH=/data`). Make sample-seeding **idempotent** (skip if `sampledb` exists). Align Delete to §11 (keep volume + creds → Missing); recreate reuses both.       |
+| P0‑2 | **Port-conflict fallback**            | §8.3             | Pre-checks 10260, hard-errors if busy                                    | Try 10260, then up to 10 random ports in `[10260,10360)`; yellow "using 10273 instead" banner; **use the bound port from `docker inspect`** when composing/saving the conn string. Explicit (Advanced) ports are never relocated — error instead. |
+| P0‑3 | **Credential transport via env-file** | §8.2             | Password on `--username/--password` **CLI args** (leaks to `ps`/history) | Pass creds as `USERNAME`/`PASSWORD` via a temp `--env-file` (deleted in `finally`). **Verified the image reads these env vars** (entrypoint `${USERNAME:-}/${PASSWORD:-}`; CLI args only override) — resolves OPEN‑1.                             |
 
 ## 🟠 P1 — First-run UX (where impressions are made)
 
-| # | Gap | Design | Current | What's needed |
-| - | --- | ------ | ------- | ------------- |
-| P1‑1 | **Docker-not-ready diagnosis** | §5.3, §9 | One-line message + Retry | Per-check cards (CLI / daemon / platform), a **"Start Docker Desktop"** action (§13.2), and a Troubleshooting link. Docker-stopped is the most common first-run failure — a dead-end one-liner loses users. |
-| P1‑2 | **Platform-supported check** | §9 | Not implemented | Detect unsupported CPU arch (amd64/arm64 ok); warn otherwise. |
-| P1‑3 | **Success → tree handoff** | §5.5 | Auto-closes, no card buttons | Brief success card with **Open Connection** (reveal + expand the tree node) so the instance doesn't just "disappear". |
-| P1‑4 | **Advanced panel** | §5.2 | ✅ **Done** | Collapsible Advanced panel: custom port (explicit-port branch of P0‑2), custom credentials, image tag, sample-data toggle. On reuse the creds/image fields hide (volume kept). 4-round 5-agent review (security + data-safety). |
+| #    | Gap                            | Design   | Current                      | What's needed                                                                                                                                                                                                                   |
+| ---- | ------------------------------ | -------- | ---------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| P1‑1 | **Docker-not-ready diagnosis** | §5.3, §9 | One-line message + Retry     | Per-check cards (CLI / daemon / platform), a **"Start Docker Desktop"** action (§13.2), and a Troubleshooting link. Docker-stopped is the most common first-run failure — a dead-end one-liner loses users.                     |
+| P1‑2 | **Platform-supported check**   | §9       | Not implemented              | Detect unsupported CPU arch (amd64/arm64 ok); warn otherwise.                                                                                                                                                                   |
+| P1‑3 | **Success → tree handoff**     | §5.5     | Auto-closes, no card buttons | Brief success card with **Open Connection** (reveal + expand the tree node) so the instance doesn't just "disappear".                                                                                                           |
+| P1‑4 | **Advanced panel**             | §5.2     | ✅ **Done**                  | Collapsible Advanced panel: custom port (explicit-port branch of P0‑2), custom credentials, image tag, sample-data toggle. On reuse the creds/image fields hide (volume kept). 4-round 5-agent review (security + data-safety). |
 
 ## 🟡 P2 — Ecosystem integration (upgrade trust)
 
-| # | Gap | Design | Current | What's needed |
-| - | --- | ------ | ------- | ------------- |
-| P2‑0 | **Decouple storage-zone from `isEmulator`** (prerequisite) | §7 | ✅ **Done** | Explicit `storageZone` on the model + `resolveStorageZone`; route all ops by it. Unblocks P2‑1/P2‑2. |
-| P2‑1 | **Legacy emulator migration** | §4 | ✅ **Done** | One-time copy of `Emulators` → "Local Connections (Legacy)" folder (creds/auth/`emulatorConfiguration` preserved), keep Emulators as rollback, toast, retire `LocalEmulatorsItem`. 3-round 5-agent review; create-if-missing + race reconciliation. |
-| P2‑2 | **TLS-exception step in the regular wizard** + connection edit dialog | §7, §7.3 | ✅ **Done** (step); §7.3 edit dialog deferred | The emulator wizard is being removed; this is its replacement. Gated host step defaulting to *Enable TLS*; TLS-allow-invalid now keyed off `disableEmulatorSecurity` alone and host-gated to local/private hosts only. |
-| P2‑3 | **Manual-wizard `10255`→`10260`** | §13.5 | ✅ **Done** | Design: *"must be fixed before Quick Start ships."* DocumentDB-local default is now `10260`; `10255` retained only for the Cosmos Mongo‑RU experience. |
+| #    | Gap                                                                   | Design   | Current                                       | What's needed                                                                                                                                                                                                                                       |
+| ---- | --------------------------------------------------------------------- | -------- | --------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| P2‑0 | **Decouple storage-zone from `isEmulator`** (prerequisite)            | §7       | ✅ **Done**                                   | Explicit `storageZone` on the model + `resolveStorageZone`; route all ops by it. Unblocks P2‑1/P2‑2.                                                                                                                                                |
+| P2‑1 | **Legacy emulator migration**                                         | §4       | ✅ **Done**                                   | One-time copy of `Emulators` → "Local Connections (Legacy)" folder (creds/auth/`emulatorConfiguration` preserved), keep Emulators as rollback, toast, retire `LocalEmulatorsItem`. 3-round 5-agent review; create-if-missing + race reconciliation. |
+| P2‑2 | **TLS-exception step in the regular wizard** + connection edit dialog | §7, §7.3 | ✅ **Done** (step); §7.3 edit dialog deferred | The emulator wizard is being removed; this is its replacement. Gated host step defaulting to _Enable TLS_; TLS-allow-invalid now keyed off `disableEmulatorSecurity` alone and host-gated to local/private hosts only.                              |
+| P2‑3 | **Manual-wizard `10255`→`10260`**                                     | §13.5    | ✅ **Done**                                   | Design: _"must be fixed before Quick Start ships."_ DocumentDB-local default is now `10260`; `10255` retained only for the Cosmos Mongo‑RU experience.                                                                                              |
 
 ## 🔵 P3 — Observability & robustness
 
-| # | Gap | Design | Current | What's needed |
-| - | --- | ------ | ------- | ------------- |
-| P3‑1 | **Telemetry** | §14 | None | Event taxonomy (`quickstart.*`); never send names/ports/creds, only resolved semver. Expected for production. |
-| P3‑2 | **Multi-window coordination** | §12 | Refresh-on-expand only | Destructive actions re-check live state; *"now Stopping from another window"* message. |
-| P3‑3 | **Terminal-first transparency** | §5.4 | OutputChannel stream | Design runs docker as VS Code **terminal tasks** (Tomaz emphasized this). Confirm v1 decision vs. accepting the OutputChannel. |
-| P3‑4 | **Accessibility** | — | ✅ **Done (v1.1)** | Per-field validation, live regions for staged progress + terminal states, list semantics, focus management (committed `8a08c2c3`). |
-| P3‑5 | **Readiness on-timeout actions** | §9.1 | ✅ **Done (v1.1)** | On a readiness timeout the container is KEPT running and the webview offers **Wait longer** (re-probe, no re-pull) / **View logs** / **Start over** (discard; data-safe). Retain-and-resume state machine; 3-round 5-agent review. |
+| #    | Gap                              | Design | Current                | What's needed                                                                                                                                                                                                                      |
+| ---- | -------------------------------- | ------ | ---------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| P3‑1 | **Telemetry**                    | §14    | None                   | Event taxonomy (`quickstart.*`); never send names/ports/creds, only resolved semver. Expected for production.                                                                                                                      |
+| P3‑2 | **Multi-window coordination**    | §12    | Refresh-on-expand only | Destructive actions re-check live state; _"now Stopping from another window"_ message.                                                                                                                                             |
+| P3‑3 | **Terminal-first transparency**  | §5.4   | OutputChannel stream   | Design runs docker as VS Code **terminal tasks** (Tomaz emphasized this). Confirm v1 decision vs. accepting the OutputChannel.                                                                                                     |
+| P3‑4 | **Accessibility**                | —      | ✅ **Done (v1.1)**     | Per-field validation, live regions for staged progress + terminal states, list semantics, focus management (committed `8a08c2c3`).                                                                                                 |
+| P3‑5 | **Readiness on-timeout actions** | §9.1   | ✅ **Done (v1.1)**     | On a readiness timeout the container is KEPT running and the webview offers **Wait longer** (re-probe, no re-pull) / **View logs** / **Start over** (discard; data-safe). Retain-and-resume state machine; 3-round 5-agent review. |
 
 ## Recommended v1 cut line
 
@@ -91,8 +91,8 @@ instance.
 - _2026-06-26_: **P1‑1 + P1‑2 complete (build-verified).**
   - **P1‑2 platform:** `DockerReadiness` gains `arch`/`platformSupported` (host arch x64/arm64).
   - **P1‑1 diagnosis:** Docker-not-ready view rebuilt into per-check cards (CLI / daemon / platform)
-    + **"Start Docker Desktop"** action (`startDockerDesktop`, best-effort per-OS launch) + Install /
-    Troubleshooting links. Review "Data" card corrected to **Persistent volume**.
+    - **"Start Docker Desktop"** action (`startDockerDesktop`, best-effort per-OS launch) + Install /
+      Troubleshooting links. Review "Data" card corrected to **Persistent volume**.
   - Gates green: l10n · prettier · lint · jest (2055/2055) · build · webpack-prod.
 - _Remaining:_ P1‑4 Advanced panel, P2 (migration / TLS wizard / 10255), P3‑4 a11y, P3‑5
   readiness on-timeout actions.
@@ -103,7 +103,7 @@ instance.
     usable. New router mutations `openConnection` / `copyConnectionString`.
   - **P3‑2 multi-window:** `start/stop/restart` now re-check live Docker state via `liveStateGuard`
     immediately before acting; if another window already changed it, the tree refreshes and the user
-    is told *"changed in another window (now …)"* instead of acting on stale state (§12).
+    is told _"changed in another window (now …)"_ instead of acting on stale state (§12).
   - **P3‑1 telemetry:** `documentDB.quickstart.provision` event (result · reused · portFallback ·
     provisionMs); `getDockerStatus` now reports `dockerReadiness` + `platformSupported`; lifecycle
     commands tag `action`. No names/ports/creds sent (§14).
@@ -117,7 +117,7 @@ instance.
     Opus 4.6/4.7 missed it). **Verified directly in code:** `emulatorConfiguration.isEmulator` is
     **overloaded** — it is the **storage-zone selector** in connect/rename/delete/move/
     update-credentials/update-connection-string paths and in `DocumentDBClusterItem`
-    (`isEmulator ? Emulators : Clusters`), *and* `connectToClient.ts:25` **requires**
+    (`isEmulator ? Emulators : Clusters`), _and_ `connectToClient.ts:25` **requires**
     `isEmulator && disableEmulatorSecurity` for local TLS-allow-invalid. So a migrated connection
     living in the `Clusters` zone cannot be made correct: keep `isEmulator=true` → all operations
     look it up in the **wrong zone** (broken connect/delete/rename); set `isEmulator=false` →
@@ -134,7 +134,7 @@ instance.
     the Emulators zone** (weakens the "untouched rollback" guarantee); a snapshot **race** if emulator
     data changes during the migration window; corrupt/folder items skipped by the storage wrapper
     become invisible once the node is gated off.
-  - **Conclusion:** P2‑1 has a hard **prerequisite (P2‑0)** — decouple *storage-zone selection* from
+  - **Conclusion:** P2‑1 has a hard **prerequisite (P2‑0)** — decouple _storage-zone selection_ from
     `emulatorConfiguration.isEmulator` (add an explicit `storageZone`/`connectionType` on the
     connection model and route all operations by it; make TLS-allow-invalid depend on
     `disableEmulatorSecurity` alone). This is essentially the **§7** "move emulator/TLS handling out
@@ -148,8 +148,7 @@ instance.
     sites (`ConnectionsBranchDataProvider`→Clusters, `FolderItem`→`_connectionType`,
     `LocalEmulatorsItem`→Emulators) and routed every zone decision through the helper
     (`DocumentDBClusterItem` ×3, `removeConnection`, `moveItems`, rename/updateCredentials/
-    updateConnectionString wizards). `isEmulator` is kept ONLY for behaviour (TLS/timeouts/icons).
-    +`resolveStorageZone` unit tests.
+    updateConnectionString wizards). `isEmulator` is kept ONLY for behaviour (TLS/timeouts/icons). +`resolveStorageZone` unit tests.
   - **P2‑1 (migration), now correct on the decoupled arch:** copies keep `isEmulator:true` for TLS
     and are rendered by `FolderItem` with `storageZone:Clusters`, so all operations route to Clusters.
   - **3 review rounds (GPT‑5.4/5.5 xhigh, Opus 4.6/4.7/4.8 max):**
@@ -163,7 +162,7 @@ instance.
       completion flag (closes the activation-window race), explicit `overwrite:false` (defense-in-depth),
       an `isFolder` guard on the reused legacy folder, and telemetry refinement.
   - **Known follow-up (pre-existing, documented):** the URI handler's deep-link **reveal** uses a flat
-    tree path, so auto-reveal of a connection *nested in a folder* (incl. a migrated one) can fail; the
+    tree path, so auto-reveal of a connection _nested in a folder_ (incl. a migrated one) can fail; the
     connection is still found and navigable. Fix = folder-aware reveal via `buildFullTreePath` +
     recursive `findNodeById` (tracked, not a regression).
   - Gates green throughout: build · lint · jest (2058/2058, +3 tests) · l10n · prettier.
@@ -204,7 +203,7 @@ instance.
     - R1 → confirmed the decoupling is safe; found a connection-string second-source-of-truth, a
       mixed-seed-list `.some` gap, the EntraID handler missing the flag, and `ClustersClient`/timeouts
       still keyed off `isEmulator`. Fixed via the shared canonicalizer + `.every` gating.
-    - R2/R3 → caught + fixed a **latching BLOCKER** (the flag only ever *upgraded*), the **hostname-bypass**
+    - R2/R3 → caught + fixed a **latching BLOCKER** (the flag only ever _upgraded_), the **hostname-bypass**
       strip gap, and a shell **`isEmulator` mislabel**; both ExecuteSteps now authoritatively host-gate.
     - R4/R5 → caught the **Unicode-dot homograph** classifier bypass (fixed via IDNA normalization) and a
       `rejectUnauthorized` hygiene gap (now stripped). A runtime "force-validate public hosts" attempt was
@@ -252,7 +251,7 @@ instance.
   - **Also:** server-side both-or-neither credential `.refine()` (parity with the client); whitespace
     trim consistent client↔zod↔service; custom port preserved in the success message/conn string via a
     `chosenPort` inspect fallback; telemetry stays booleans-only (`customPort/customCreds/customImage/
-    sampleData`).
+sampleData`).
   - **Review (GPT‑5.4/5.5 xhigh, Opus 4.6/4.7/4.8 max):** R1 → env-file newline + client/server
     validation gaps. R2 → recreate image-tag loss + whitespace divergence + hardcoded review-card port.
     R3 → **the `Escape`→`Strong` seed-quoting fix** (independently reproduced by 3 agents) + durable
@@ -291,7 +290,7 @@ instance.
     late-callback concern was **empirically disproven** (the webview tRPC client unregisters its
     handler synchronously on unsubscribe, `vscodeLink.ts:187-199`) and additionally guarded.
   - **Known limitation (deferred to v1.2, all reviewers non-blocking):** after a window reload,
-    `reconcile()` adopts a *reusing* timed-out container as `Running` without re-probing readiness —
+    `reconcile()` adopts a _reusing_ timed-out container as `Running` without re-probing readiness —
     it could briefly show a not-yet-ready connection as healthy (no data loss; recoverable via
     Restart/Delete). Fix = a bounded `ping` before promoting to `Running`, or a durable pending marker.
   - Gates green: build · lint · jest (2139/2139) · l10n · prettier.
@@ -333,7 +332,7 @@ instance.
       (singletons + `src/__mocks__/vscode.js`); the seam to add is an **injectable `ContainerRuntime` interface**.
       Highest-value: the cleanup matrix + `removeVolume` only-when-`!reusing` guard (`:315-317`), reuse decision
       (`:251-266`), timeout→resume (`:435-443`), `reconcile` no-secret-keeps-volume (`:1041-1053`).
-    - **Never live-run in the *merged* state** (rd-prod C1/I8 + rd-pr B1). POC was live-verified 3× on Windows
+    - **Never live-run in the _merged_ state** (rd-prod C1/I8 + rd-pr B1). POC was live-verified 3× on Windows
       (each caught a real bug tests can't — verbatim args, restart-safety, false-`Running`); since then +305
       commits + 3 conflicts. **macOS/Linux never verified at all**; `startDockerDesktop` Linux path is a guess
       that returns `true` even when it no-ops (`ContainerRuntime.ts:399`).
@@ -354,7 +353,7 @@ instance.
   - **🔵 Reframed — intentional deviations, NOT oversights (reconcile with design owner; do NOT auto-"fix"):**
     - **Delete drops the volume** — documented v1.0 decision (log above) + matches the user's explicit
       delete-while-running data-loss-warning request. Design §11 keeps the volume on Delete (Reset is the
-      destructive v1.2 split). *Needs sign-off, not a code change.*
+      destructive v1.2 split). _Needs sign-off, not a code change._
     - **Success page stays open / no auto-close** and **Open Connection keeps the panel open** — explicit user
       feedback (committed `9342dbff`), deliberately overriding the design's auto-close.
     - **Single instance; recreate reuses volume+creds** — settled decision (`decision-instance-model.md`).
@@ -367,7 +366,7 @@ instance.
   - **What's left for a successful review:**
     1. **Product decisions first (gate everything — for Tomaz):** terminal-first now/defer/renegotiate · PR split
        1-vs-3 · preview flag yes/no.
-    2. **Verification:** live E2E on the *merged* branch, Windows + macOS min (fresh provision → legacy migration
+    2. **Verification:** live E2E on the _merged_ branch, Windows + macOS min (fresh provision → legacy migration
        → stop/start/restart/delete → `reconcile()` after reload → Docker-daemon-absent).
     3. **Tests:** state-machine smoke tests (happy path + timeout→resume + `reconcile` cases) with an injected
        `ContainerRuntime`, **or** maintainer sign-off that live-Docker is the v0.10 acceptance bar.
@@ -393,7 +392,7 @@ instance.
     **correct and regression-free**; Fixes 2 & 3 unanimous with zero findings. Gates: prettier · lint (0 new) ·
     jest 2706/2706 · build.
   - **Tracked follow-up (out of scope for these quick-wins; feature is unreleased → no shipped users affected):**
-    the loopback bind applies only to *newly created* containers — a container created before this fix keeps its
+    the loopback bind applies only to _newly created_ containers — a container created before this fix keeps its
     0.0.0.0 binding through Start/Stop/Restart (Docker fixes port bindings at create time); only a re-provision
     (Delete → Quick Start) re-binds it. **Follow-up:** on `reconcile()`/adopt, detect a non-loopback published
     binding and re-secure via the data-safe recreate (reuse volume + creds), or at minimum a release-note

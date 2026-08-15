@@ -61,13 +61,13 @@ aligned during UX review iteration 1.
 
 ## Timeline
 
-| Date       | PR   | What changed                                              | Docs                                                                                    |
-| ---------- | ---- | --------------------------------------------------------- | ----------------------------------------------------------------------------------------- |
-| 2026-06-15 | #733 | Plugin scaffold, Atlas tree, decisions and work items      | [decisions.md](./decisions.md)                                                           |
-| —          | #733 | UX review 1: alignment with Kubernetes discovery           | [iterations/01-ux-review-k8s-alignment.md](./iterations/01-ux-review-k8s-alignment.md)   |
-| —          | #733 | UX review 2: the cluster item                              | [iterations/02-ux-review-cluster-item.md](./iterations/02-ux-review-cluster-item.md)     |
-| —          | #733 | UX review 3, plus the multi-credential feasibility question | [iterations/03-ux-review.md](./iterations/03-ux-review.md)                               |
-| 2026-07-30 | #765 | Code review (tracked in a folder later numbered #834)      | [iterations/04-code-review-2026-07-30.md](./iterations/04-code-review-2026-07-30.md)     |
+| Date       | PR   | What changed                                                | Docs                                                                                   |
+| ---------- | ---- | ----------------------------------------------------------- | -------------------------------------------------------------------------------------- |
+| 2026-06-15 | #733 | Plugin scaffold, Atlas tree, decisions and work items       | [decisions.md](./decisions.md)                                                         |
+| —          | #733 | UX review 1: alignment with Kubernetes discovery            | [iterations/01-ux-review-k8s-alignment.md](./iterations/01-ux-review-k8s-alignment.md) |
+| —          | #733 | UX review 2: the cluster item                               | [iterations/02-ux-review-cluster-item.md](./iterations/02-ux-review-cluster-item.md)   |
+| —          | #733 | UX review 3, plus the multi-credential feasibility question | [iterations/03-ux-review.md](./iterations/03-ux-review.md)                             |
+| 2026-07-30 | #765 | Code review (tracked in a folder later numbered #834)       | [iterations/04-code-review-2026-07-30.md](./iterations/04-code-review-2026-07-30.md)   |
 
 > **Provenance note:** the folder this last document came from was named for PR #834 while the
 > document itself reviews PR #765. Both numbers are recorded in its frontmatter; the PR number is no

@@ -45,14 +45,14 @@ verified: 2026-08-14
 
 ### Options considered
 
-| Topic                                                 | v1 decision                                                                                                                            | Deferred to |
-| ----------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------- | ----------- |
-| Multiple **managed** instances                        | **No.** One managed instance; the rocket entry hides after setup.                                                                      | v1.2        |
-| Multiple **image versions** side by side              | **No.**                                                                                                                                | v1.2        |
+| Topic                                                 | v1 decision                                                                                                                             | Deferred to |
+| ----------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------- | ----------- |
+| Multiple **managed** instances                        | **No.** One managed instance; the rocket entry hides after setup.                                                                       | v1.2        |
+| Multiple **image versions** side by side              | **No.**                                                                                                                                 | v1.2        |
 | Listing the user's own (unlabelled) containers        | **No.** They connect via the regular new-connection wizard at `localhost:<port>`. Quick Start does not own them.                        | —           |
 | **Adopt-existing-container** flow                     | **No** as a general feature. The only adoption v1 performs is re-recognizing **its own labelled** container after a reload (reconcile). | v1.2        |
 | **Auto-discovery** of unmanaged DocumentDB containers | **No** — and when built, it belongs to the **generic connections** experience, not Quick Start.                                         | v1.2        |
-| **Name / port collision safety**                      | **Yes — required in v1.**                                                                                                              | —           |
+| **Name / port collision safety**                      | **Yes — required in v1.**                                                                                                               | —           |
 
 ### Decision
 

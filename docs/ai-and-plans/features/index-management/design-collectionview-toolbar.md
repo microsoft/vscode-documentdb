@@ -920,10 +920,10 @@ surface tokens for themes that leave the ideal one undefined:
 
 Fluent's `SkeletonItem` chooses its stencil tokens by `appearance`:
 
-| appearance             | tokens                                         | behavior                                                              |
-| ---------------------- | ---------------------------------------------- | -------------------------------------------------------------------- |
-| `opaque` (default)     | solid `colorNeutralStencil1` + `Stencil2`      | Paints an opaque fill over the card → fixed gray, ignores the theme.  |
-| `translucent`          | `colorNeutralStencil1Alpha` (over transparent) | Composites a black/white overlay over the themed card → already adapts. |
+| appearance         | tokens                                         | behavior                                                                |
+| ------------------ | ---------------------------------------------- | ----------------------------------------------------------------------- |
+| `opaque` (default) | solid `colorNeutralStencil1` + `Stencil2`      | Paints an opaque fill over the card → fixed gray, ignores the theme.    |
+| `translucent`      | `colorNeutralStencil1Alpha` (over transparent) | Composites a black/white overlay over the themed card → already adapts. |
 
 The **results grid** ([`LoadingAnimationTable.tsx`](../../../../src/webviews/documentdb/collectionView/components/resultsTab/LoadingAnimationTable.tsx))
 and the **index list** ([`IndexTableSkeleton.tsx`](../../../../src/webviews/documentdb/indexView/components/indexList/IndexTableSkeleton.tsx))

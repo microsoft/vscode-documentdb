@@ -37,41 +37,42 @@ Completion items use `sortText` prefixes so Monaco displays them in the intended
 
 Same as key position. All insertions wrapped with `{ }`.
 
-| Prefix | Content | Example |
-|--------|---------|---------|
-| `0_fieldName` | Schema field names (wrapped) | `{ age: $1 }`, `{ name: $1 }` |
-| `1_$and` | Key-position operators (with braces) | `{ $and: [...] }` |
+| Prefix        | Content                              | Example                       |
+| ------------- | ------------------------------------ | ----------------------------- |
+| `0_fieldName` | Schema field names (wrapped)         | `{ age: $1 }`, `{ name: $1 }` |
+| `1_$and`      | Key-position operators (with braces) | `{ $and: [...] }`             |
 
 ### Value position
 
-| Prefix | Content | Example |
-|--------|---------|---------|
-| `00_00` – `00_99` | Type suggestions | `true` / `false` for boolean fields |
-| `0_$eq` – `2_$op` | Query operators (type-aware) | `{ $eq: … }`, `{ $gt: … }` |
-| `3_ObjectId` | BSON constructors | `ObjectId(…)`, `ISODate(…)` |
-| `4_Date` | JS globals | `Date`, `Math`, `RegExp`, `Infinity` |
+| Prefix            | Content                      | Example                              |
+| ----------------- | ---------------------------- | ------------------------------------ |
+| `00_00` – `00_99` | Type suggestions             | `true` / `false` for boolean fields  |
+| `0_$eq` – `2_$op` | Query operators (type-aware) | `{ $eq: … }`, `{ $gt: … }`           |
+| `3_ObjectId`      | BSON constructors            | `ObjectId(…)`, `ISODate(…)`          |
+| `4_Date`          | JS globals                   | `Date`, `Math`, `RegExp`, `Infinity` |
 
 ### Key position
 
-| Prefix | Content | Example |
-|--------|---------|---------|
-| `0_fieldName` | Schema field names | `age`, `name`, `_id` |
-| `1_$and` | Key-position operators | `$and`, `$or`, `$nor` |
+| Prefix        | Content                | Example               |
+| ------------- | ---------------------- | --------------------- |
+| `0_fieldName` | Schema field names     | `age`, `name`, `_id`  |
+| `1_$and`      | Key-position operators | `$and`, `$or`, `$nor` |
 
 ### Operator position (type-aware)
 
 When the field's BSON type is known, operators are tiered by relevance:
 
-| Prefix | Tier | Meaning |
-|--------|------|---------|
-| `0_` | Type-relevant | Operator's `applicableBsonTypes` matches the field |
-| `1a_` | Comparison (universal) | `$eq`, `$ne`, `$gt`, `$in`, etc. — no type restriction, most commonly used |
-| `1b_` | Other universal | Element/evaluation/geospatial operators with no type restriction |
-| `2_` | Non-matching | Operator has type restrictions that don't match the field |
+| Prefix | Tier                   | Meaning                                                                    |
+| ------ | ---------------------- | -------------------------------------------------------------------------- |
+| `0_`   | Type-relevant          | Operator's `applicableBsonTypes` matches the field                         |
+| `1a_`  | Comparison (universal) | `$eq`, `$ne`, `$gt`, `$in`, etc. — no type restriction, most commonly used |
+| `1b_`  | Other universal        | Element/evaluation/geospatial operators with no type restriction           |
+| `2_`   | Non-matching           | Operator has type restrictions that don't match the field                  |
 
 Within each tier, operators sort alphabetically by name (`$eq` < `$gt` < `$in`).
 
 **Example — boolean field `isActive`:**
+
 - Tier `1a_`: `$eq`, `$gt`, `$gte`, `$in`, `$lt`, `$lte`, `$ne`, `$nin` (comparison)
 - Tier `1b_`: `$exists`, `$type`, `$mod`, `$expr`, `$jsonSchema` (other universal)
 - Tier `2_`: `$regex` (string-only), `$elemMatch` (array-only), `$bitsAllSet` (int/long-only)

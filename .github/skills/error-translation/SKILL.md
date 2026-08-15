@@ -80,10 +80,10 @@ caching results, so a repeat attempt still sees the current state.
 travel past the tree item, so a webview, the shell and the playground cannot read them. Pick
 whichever of these fits your source:
 
-| Approach | Example | When |
-| --- | --- | --- |
-| Look it up in state you already keep | Quick Start reads `listStatuses()` | Your source has a live registry |
-| Inspect the connection string | Atlas checks the `mongodb.net` host suffix | The endpoint identifies the source |
+| Approach                                 | Example                                               | When                                           |
+| ---------------------------------------- | ----------------------------------------------------- | ---------------------------------------------- |
+| Look it up in state you already keep     | Quick Start reads `listStatuses()`                    | Your source has a live registry                |
+| Inspect the connection string            | Atlas checks the `mongodb.net` host suffix            | The endpoint identifies the source             |
 | Record it while preparing the connection | Kubernetes remembers `clusterId` in `ensureReachable` | Only the stored properties identify the source |
 
 The third case is why `ConnectionReachabilityProvider.ensureReachable` takes an optional
@@ -119,14 +119,14 @@ void vscode.window.showErrorMessage(diagnosis?.message ?? l10n.t('Failed to load
 
 Existing call sites:
 
-| Surface | File |
-| --- | --- |
-| Every tree view, below a cluster | [BaseExtendedTreeDataProvider.ts](../../../src/tree/BaseExtendedTreeDataProvider.ts) |
-| Cluster connect and list databases | [ClusterItemBase.ts](../../../src/tree/documentdb/ClusterItemBase.ts) |
-| Shell connect banner | [DocumentDBShellPty.ts](../../../src/documentdb/shell/DocumentDBShellPty.ts) |
-| Query playground | [executePlaygroundCode.ts](../../../src/commands/playground/executePlaygroundCode.ts) |
-| Tree-node commands (create, drop, …) | [commandErrorHandling.ts](../../../src/utils/commandErrorHandling.ts) |
-| Any webview, via `common.explainOperationFailure` | [appRouter.ts](../../../src/webviews/_integration/appRouter.ts) |
+| Surface                                           | File                                                                                  |
+| ------------------------------------------------- | ------------------------------------------------------------------------------------- |
+| Every tree view, below a cluster                  | [BaseExtendedTreeDataProvider.ts](../../../src/tree/BaseExtendedTreeDataProvider.ts)  |
+| Cluster connect and list databases                | [ClusterItemBase.ts](../../../src/tree/documentdb/ClusterItemBase.ts)                 |
+| Shell connect banner                              | [DocumentDBShellPty.ts](../../../src/documentdb/shell/DocumentDBShellPty.ts)          |
+| Query playground                                  | [executePlaygroundCode.ts](../../../src/commands/playground/executePlaygroundCode.ts) |
+| Tree-node commands (create, drop, …)              | [commandErrorHandling.ts](../../../src/utils/commandErrorHandling.ts)                 |
+| Any webview, via `common.explainOperationFailure` | [appRouter.ts](../../../src/webviews/_integration/appRouter.ts)                       |
 
 Tree views need no per-view wiring: `wrapGetChildrenWithErrorAndStateHandling` translates on the way
 out, so any provider built on the base class is covered. Commands registered with
@@ -182,6 +182,6 @@ l10n.t('The container was removed outside VS Code.')
 ## Related
 
 - [connectionDiagnosticsService.ts](../../../src/services/connectionDiagnosticsService.ts)
-- [connectionReachabilityService.ts](../../../src/services/connectionReachabilityService.ts) prepares a connection *before* connecting; this service explains a failure *afterwards*
+- [connectionReachabilityService.ts](../../../src/services/connectionReachabilityService.ts) prepares a connection _before_ connecting; this service explains a failure _afterwards_
 - [tree-cluster-architecture](../tree-cluster-architecture/SKILL.md) for `clusterId` versus `treeId`
 - [telemetry-instrumentation](../telemetry-instrumentation/SKILL.md)

@@ -1320,8 +1320,8 @@ and analyzes the options. **All four items were implemented in this iteration**
 
 ## Overview
 
-| ID       | Source                                                                                                          | Sev. | Title                                                               |
-| -------- | --------------------------------------------------------------------------------------------------------------- | ---- | ------------------------------------------------------------------- |
+| ID       | Source                                                                                                                | Sev. | Title                                                               |
+| -------- | --------------------------------------------------------------------------------------------------------------------- | ---- | ------------------------------------------------------------------- |
 | R766-C01 | [`telemetryMiddlewareBody`](../../../../../../packages/vscode-ext-webview/src/host/middleware/telemetry.ts#L119-L153) | Low  | Telemetry middleware records error details for aborted calls        |
 | R766-C02 | [`documentDbTelemetryRunner`](../../../../../../src/webviews/_integration/trpc.ts#L90-L118)                           | Low  | DocumentDB runner overwrites error fields for canceled ops          |
 | R766-C03 | [`connectTrpc.onReceive`](../../../../../../packages/vscode-ext-webview/src/webview/connectTrpc.ts#L109-L123)         | Low  | Webview `onReceive` guard accepts any `id` (prototype / non-string) |
@@ -1775,7 +1775,7 @@ The old package chose it from a dedicated `isBundled` option that the consumer
 fed from `ext.isBundle` (the webpack `IS_BUNDLE` define). Those are different
 axes: the normal F5 dev flow runs a **webpack bundle** (`IS_BUNDLE=true`) in
 **Development** mode with `DEVSERVER=true`. The webpack dev server (`webpack
-serve`) emits the *bundled* asset name (`views.js`, from `entry: { views }`), so
+serve`) emits the _bundled_ asset name (`views.js`, from `entry: { views }`), so
 keying the layout off the mode picked the `dev` (tsc) file `index.js` and
 requested `http://localhost:18080/index.js`, which the dev server does not serve
 (confirmed: `/views.js` → 200, `/index.js` → 404). The result was a blank
@@ -1785,9 +1785,9 @@ webview with no extension-host output.
 (clean) · `jest` (full suite, 2664 passed / 159 suites) · `tsc` build across all
 workspaces (clean). No user-facing strings changed, so `l10n` was skipped.
 
-| ID       | Commit     | What changed                                                                                                                                             | Why (motivation)                                                                                                                                                                                                            |
-| -------- | ---------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| R766-07  | `2c2e4f30` | `WebviewController` selects the source layout from a **required** `isBundled` option (restored from the old package); `extensionMode` stays CSP-only. The DocumentDB consumer passes `isBundled: !!ext.isBundle`. Docs + 3 regression tests added. | Keying the layout off `extensionMode` 404'd the dev-server script in the standard bundled-development flow. Bundle-ness (which asset name) and production-ness (CSP hardening) are independent; conflating them broke local dev. |
+| ID      | Commit     | What changed                                                                                                                                                                                                                                       | Why (motivation)                                                                                                                                                                                                                 |
+| ------- | ---------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| R766-07 | `2c2e4f30` | `WebviewController` selects the source layout from a **required** `isBundled` option (restored from the old package); `extensionMode` stays CSP-only. The DocumentDB consumer passes `isBundled: !!ext.isBundle`. Docs + 3 regression tests added. | Keying the layout off `extensionMode` 404'd the dev-server script in the standard bundled-development flow. Bundle-ness (which asset name) and production-ness (CSP hardening) are independent; conflating them broke local dev. |
 
 ## Iteration 7 — reference-implementation tidy-up (2026-07-05)
 
@@ -1820,10 +1820,10 @@ workspaces (clean). No user-facing strings changed, so `l10n` was skipped.
 **Post-change validation (all green):** `prettier` · `eslint --quiet` · `jest`
 (full suite) · `tsc` build. No user-facing strings, so `l10n` skipped.
 
-| ID       | What changed                                                                                                                                  | Why (motivation)                                                                                                                          |
-| -------- | --------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
-| R766-I01 | New `_integration/observability/` subfolder holds `rpcConcurrencyLogger` + `reportObserverError` (and tests); imports/importers updated       | A flat folder buried the two cross-cutting sinks among the router/transport wiring; grouping them makes the reference layout easier to scan. |
-| R766-I02 | `_integration/README.md` now lists every file including the observability subfolder; added `observability/README.md`                          | The folder README is the on-ramp for adopters and coding agents; it must describe what each file does, and the newer sinks were missing.   |
+| ID       | What changed                                                                                                                            | Why (motivation)                                                                                                                             |
+| -------- | --------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
+| R766-I01 | New `_integration/observability/` subfolder holds `rpcConcurrencyLogger` + `reportObserverError` (and tests); imports/importers updated | A flat folder buried the two cross-cutting sinks among the router/transport wiring; grouping them makes the reference layout easier to scan. |
+| R766-I02 | `_integration/README.md` now lists every file including the observability subfolder; added `observability/README.md`                    | The folder README is the on-ramp for adopters and coding agents; it must describe what each file does, and the newer sinks were missing.     |
 
 ---
 
@@ -1851,7 +1851,7 @@ PR).
 
 ## Findings
 
-### Load time (opening a webview) — neutral to slightly *better*
+### Load time (opening a webview) — neutral to slightly _better_
 
 - **R766-P01 (improvement) — client is now a per-webview singleton.** The old
   `useTrpcClient` built a **separate** tRPC client per React component (`useMemo`
@@ -1956,17 +1956,17 @@ in-chat discussion accompanying this iteration for full option analysis):
   dev/F5 (no manual wiring while debugging) and dead-code on a shipped build is
   the pragmatic fit. See the [Iteration 9](#iteration-9--console-gate-r766-p05-part-1-2026-07-06) change protocol.
 
-| ID       | Finding                                                                    | Severity     | Disposition                                     |
-| -------- | -------------------------------------------------------------------------- | ------------ | ----------------------------------------------- |
-| R766-P01 | Per-webview singleton client (was per-component)                           | Improvement  | Shipped by PR; no action                        |
-| R766-P02 | `loggerLink` now opt-in (was always-on)                                    | Improvement  | Shipped by PR; no action                        |
-| R766-P03 | Inert JSON block: 3 regex passes + 1 `JSON.parse` at boot                  | Info         | One-time, sub-ms; no action                     |
-| R766-P04 | Controllers class→factory                                                  | Info         | No cost change; no action                       |
-| R766-P05 | Per-op host dispatch logger (`console.log` + `callWithAccumulatingTelemetry`) | Watch     | Part 1 (console) ✅ Iteration 9; Part 2 (accumulate/flush) ✅ Iteration 10 |
-| R766-P06 | Caller factory per op                                                      | Not a regression | Pre-existing; no action                     |
-| R766-P07 | O(N) `window` listener fan-out per message                                 | Not a regression | Pre-existing; measured via R766-S04         |
-| R766-P08 | New structural transport guards                                            | Not a regression | O(1) per message; no action                 |
-| R766-P09 | `eventLink` always-on (replaces always-on `loggerLink`)                    | Not a regression | Net neutral; no action                      |
+| ID       | Finding                                                                       | Severity         | Disposition                                                                |
+| -------- | ----------------------------------------------------------------------------- | ---------------- | -------------------------------------------------------------------------- |
+| R766-P01 | Per-webview singleton client (was per-component)                              | Improvement      | Shipped by PR; no action                                                   |
+| R766-P02 | `loggerLink` now opt-in (was always-on)                                       | Improvement      | Shipped by PR; no action                                                   |
+| R766-P03 | Inert JSON block: 3 regex passes + 1 `JSON.parse` at boot                     | Info             | One-time, sub-ms; no action                                                |
+| R766-P04 | Controllers class→factory                                                     | Info             | No cost change; no action                                                  |
+| R766-P05 | Per-op host dispatch logger (`console.log` + `callWithAccumulatingTelemetry`) | Watch            | Part 1 (console) ✅ Iteration 9; Part 2 (accumulate/flush) ✅ Iteration 10 |
+| R766-P06 | Caller factory per op                                                         | Not a regression | Pre-existing; no action                                                    |
+| R766-P07 | O(N) `window` listener fan-out per message                                    | Not a regression | Pre-existing; measured via R766-S04                                        |
+| R766-P08 | New structural transport guards                                               | Not a regression | O(1) per message; no action                                                |
+| R766-P09 | `eventLink` always-on (replaces always-on `loggerLink`)                       | Not a regression | Net neutral; no action                                                     |
 
 ---
 
@@ -2013,8 +2013,8 @@ never pay for it — matching how telemetry is already an opt-in, separate path.
 `tsc`/type-check (no errors) · `prettier` (unchanged — already formatted). No
 user-facing strings, so `l10n` not required.
 
-| ID        | What changed                                                                                          | Why (motivation)                                                                                                       |
-| --------- | ----------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------- |
+| ID        | What changed                                                                                                            | Why (motivation)                                                                                                                |
+| --------- | ----------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------- |
 | R766-P05a | `rpcConcurrencyLogger` gates `consoleProcedureLogger.log` behind `extensionMode !== Production`; tests cover both paths | The per-op host `console.log` is useful when debugging but dead weight on a shipped build; telemetry gauge stays on everywhere. |
 
 ---
@@ -2107,8 +2107,8 @@ unrelated `require-await` warnings in `DocumentDBShellPty.ts` at lines 226/462) 
 · `prettier` (unchanged — already formatted). No user-facing strings, so `l10n` not
 required.
 
-| ID        | What changed                                                                                                                            | Why (motivation)                                                                                                                    |
-| --------- | --------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
+| ID        | What changed                                                                                                                                                               | Why (motivation)                                                                                                                            |
+| --------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
 | R766-P05b | `callWithAccumulatingTelemetry` split into cheap synchronous accumulate + heavy flush; callback takes a `TelemetrySample` bag (was `IActionContext`); all callers migrated | The per-call `callWithTelemetryAndErrorHandling` wrapper ran on every call and added up on hot paths (per-RPC); now it runs once per flush. |
 
 ---
@@ -2147,16 +2147,16 @@ required.
   needed only the import-path change (the shorthand name is unchanged).
 - **Docs:** all `{@link}` / prose references in the helper updated; the stale
   Iteration-2 file link in this review doc repointed to the renamed path (older
-  change-protocol *bodies* are left intact as an accurate record of the name in
+  change-protocol _bodies_ are left intact as an accurate record of the name in
   force at the time).
 
 ## Why this name (the teachable distinction)
 
 The verb now encodes **whether your callback is executed**:
 
-- `accumulateTelemetry(id, (sample) => …)` — your callback only *fills a sample*; no
+- `accumulateTelemetry(id, (sample) => …)` — your callback only _fills a sample_; no
   work is run in a scope, no `ctx`.
-- a future `runWithAccumulatingTelemetry(id, (sample) => action)` — genuinely *runs*
+- a future `runWithAccumulatingTelemetry(id, (sample) => action)` — genuinely _runs_
   your action, so a `runWith…` name would be honest there (tracked as R766-P07 /
   GitHub enhancement issue, not built in this iteration).
 
@@ -2177,8 +2177,8 @@ Reviewed `.github/skills/telemetry-instrumentation`: it documents
 unrelated `require-await` warnings) · `tsc` (project-wide `--noEmit`, clean) ·
 `npm run build` · `prettier`. No user-facing strings, so `l10n` not required.
 
-| ID       | What changed                                                                                                   | Why (motivation)                                                                                                     |
-| -------- | -------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------- |
+| ID       | What changed                                                                                                                                                                                                                                  | Why (motivation)                                                                                                                              |
+| -------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
 | R766-P06 | Renamed `callWithAccumulatingTelemetry`→`accumulateTelemetry`, `flushAccumulatingTelemetry`→`flushAccumulatedTelemetry`, `AccumulatingTelemetryOptions`→`AccumulateTelemetryOptions`; file → `accumulatingTelemetry.ts`; all callers migrated | The `callWith…` name promised a full-context scoped call the redesigned helper no longer provides; the new names match what it actually does. |
 
 ## Deferred — `runWithAccumulatingTelemetry` (R766-P07, tracked as a GitHub issue)

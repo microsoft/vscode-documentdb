@@ -3,3 +3,14 @@ package-lock.json
 # Prompt template files contain precise formatting (backtick fences, indentation)
 # that prettier mangles — triple backticks get collapsed, blank lines inserted.
 resources/prompts/
+
+# Local scratch space, gitignored and never committed.
+docs/plan/
+docs/analysis/
+
+# Generated from PR descriptions by the release-notes skill.
+CHANGELOG.md
+
+# Generated report artifacts. The scrapers rewrite these in their own format, so
+# formatting them here only creates churn between runs.
+**/resources/scraped/

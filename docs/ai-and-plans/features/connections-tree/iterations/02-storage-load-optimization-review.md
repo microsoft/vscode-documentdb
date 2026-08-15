@@ -101,9 +101,9 @@ VS Code's `SecretStorage` exposes `onDidChange`, which fires when another window
 
 ### Low: Orphan loop deletes invalidate the cache per item
 
-Within the orphan loop, every `delete` invalidates the workspace cache and the next outer-iteration `getAllItems` re-reads from storage. The cache provides no benefit *during* this loop.
+Within the orphan loop, every `delete` invalidates the workspace cache and the next outer-iteration `getAllItems` re-reads from storage. The cache provides no benefit _during_ this loop.
 
-**Resolution — skipped intentionally.** With the bootstrap fix (#High above), no external readers race the orphan loop, so the per-delete invalidation costs nothing in practice — the next iteration *needs* to re-read anyway because deletes have happened. No throughput regression vs. the pre-PR baseline. The original "Low" rating was generous; on reflection there is no real waste to fix.
+**Resolution — skipped intentionally.** With the bootstrap fix (#High above), no external readers race the orphan loop, so the per-delete invalidation costs nothing in practice — the next iteration _needs_ to re-read anyway because deletes have happened. No throughput regression vs. the pre-PR baseline. The original "Low" rating was generous; on reflection there is no real waste to fix.
 
 ### Low: `StorageImpl.delete` clears the cache before deleting secrets
 
@@ -115,25 +115,25 @@ Considered and intentionally left as-is. The current ordering keeps the cache co
 
 ## Copilot Reviewer Thread Status
 
-| Thread | Status | Linked commit |
-| --- | --- | --- |
-| [r3344433030](https://github.com/microsoft/vscode-documentdb/pull/726#discussion_r3344433030) — orphan cleanup gating | **Resolved by code** | [`4b6c8b54`](https://github.com/microsoft/vscode-documentdb/pull/726/commits/4b6c8b54644e345edb5beb7645bb5f95476e2b29) |
-| [r3344433066](https://github.com/microsoft/vscode-documentdb/pull/726#discussion_r3344433066) — `STORAGE_CLEANUP_VERSION` as schema counter | Open (Low, maintainability) | — |
-| [r3344433094](https://github.com/microsoft/vscode-documentdb/pull/726#discussion_r3344433094) — commit-count doc drift | Outdated by subsequent commits | — |
-| [r3344688042](https://github.com/microsoft/vscode-documentdb/pull/726#discussion_r3344688042) — TTL start time | Accepted as-is (Low) | — |
-| [r3344688104](https://github.com/microsoft/vscode-documentdb/pull/726#discussion_r3344688104) — shallow defensive copy | Deferred, see High finding above | — |
+| Thread                                                                                                                                      | Status                           | Linked commit                                                                                                          |
+| ------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------- | ---------------------------------------------------------------------------------------------------------------------- |
+| [r3344433030](https://github.com/microsoft/vscode-documentdb/pull/726#discussion_r3344433030) — orphan cleanup gating                       | **Resolved by code**             | [`4b6c8b54`](https://github.com/microsoft/vscode-documentdb/pull/726/commits/4b6c8b54644e345edb5beb7645bb5f95476e2b29) |
+| [r3344433066](https://github.com/microsoft/vscode-documentdb/pull/726#discussion_r3344433066) — `STORAGE_CLEANUP_VERSION` as schema counter | Open (Low, maintainability)      | —                                                                                                                      |
+| [r3344433094](https://github.com/microsoft/vscode-documentdb/pull/726#discussion_r3344433094) — commit-count doc drift                      | Outdated by subsequent commits   | —                                                                                                                      |
+| [r3344688042](https://github.com/microsoft/vscode-documentdb/pull/726#discussion_r3344688042) — TTL start time                              | Accepted as-is (Low)             | —                                                                                                                      |
+| [r3344688104](https://github.com/microsoft/vscode-documentdb/pull/726#discussion_r3344688104) — shallow defensive copy                      | Deferred, see High finding above | —                                                                                                                      |
 
 ---
 
 ## Summary
 
-| Severity | Finding | Status |
-| --- | --- | --- |
-| High | Orphan cleanup marker race | Fixed ([`4b6c8b54`](https://github.com/microsoft/vscode-documentdb/pull/726/commits/4b6c8b54644e345edb5beb7645bb5f95476e2b29)) |
-| High | `getItems` shallow copy of `properties` | Deferred — no current mutating consumer, documented |
-| High | Concurrent `getStorageService` race | Fixed ([`ea95be18`](https://github.com/microsoft/vscode-documentdb/pull/726/commits/ea95be188e696b1e963432ae19365959ac999f0b)) |
-| Medium | Cleaner-pass invariant implicit | Documented ([`d9dd080b`](https://github.com/microsoft/vscode-documentdb/pull/726/commits/d9dd080b0ba67c89d3121bc5edb4b81940f1cf51)) |
-| Medium | Cross-window SecretStorage changes ignored | Fixed ([`2acace99`](https://github.com/microsoft/vscode-documentdb/pull/726/commits/2acace990eda1c9b09d768c1c3b40482d39f8cdf)) |
-| Low | TTL start time | Accepted as-is |
-| Low | Orphan loop per-delete invalidation | Skipped (no real cost with bootstrap fix) |
-| Low | `delete` cache-clear ordering | No change, deliberate |
+| Severity | Finding                                    | Status                                                                                                                              |
+| -------- | ------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------- |
+| High     | Orphan cleanup marker race                 | Fixed ([`4b6c8b54`](https://github.com/microsoft/vscode-documentdb/pull/726/commits/4b6c8b54644e345edb5beb7645bb5f95476e2b29))      |
+| High     | `getItems` shallow copy of `properties`    | Deferred — no current mutating consumer, documented                                                                                 |
+| High     | Concurrent `getStorageService` race        | Fixed ([`ea95be18`](https://github.com/microsoft/vscode-documentdb/pull/726/commits/ea95be188e696b1e963432ae19365959ac999f0b))      |
+| Medium   | Cleaner-pass invariant implicit            | Documented ([`d9dd080b`](https://github.com/microsoft/vscode-documentdb/pull/726/commits/d9dd080b0ba67c89d3121bc5edb4b81940f1cf51)) |
+| Medium   | Cross-window SecretStorage changes ignored | Fixed ([`2acace99`](https://github.com/microsoft/vscode-documentdb/pull/726/commits/2acace990eda1c9b09d768c1c3b40482d39f8cdf))      |
+| Low      | TTL start time                             | Accepted as-is                                                                                                                      |
+| Low      | Orphan loop per-delete invalidation        | Skipped (no real cost with bootstrap fix)                                                                                           |
+| Low      | `delete` cache-clear ordering              | No change, deliberate                                                                                                               |

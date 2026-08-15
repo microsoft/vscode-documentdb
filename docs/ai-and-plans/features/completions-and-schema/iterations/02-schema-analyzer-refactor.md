@@ -50,7 +50,7 @@ The analyzer was extracted to `packages/documentdb-js-schema-analyzer/` as a zer
 
 | Before                                      | After                                                            |
 | ------------------------------------------- | ---------------------------------------------------------------- |
-| `src/utils/json/mongo/SchemaAnalyzer.ts`    | `packages/documentdb-js-schema-analyzer/src/SchemaAnalyzer.ts`                 |
+| `src/utils/json/mongo/SchemaAnalyzer.ts`    | `packages/documentdb-js-schema-analyzer/src/SchemaAnalyzer.ts`   |
 | `MongoBSONTypes` enum                       | Renamed to `BSONTypes`                                           |
 | `src/utils/json/mongo/` directory           | Renamed to `src/utils/json/data-api/`                            |
 | `FieldEntry` — no type info                 | `FieldEntry` — with `bsonType`, `bsonTypes`, `arrayItemBsonType` |

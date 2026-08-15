@@ -222,6 +222,8 @@ Run Prettier to ensure all files meet the project's formatting standards:
 npm run prettier-fix
 ```
 
+This covers Markdown as well as source, so documentation formatting stays consistent instead of drifting whenever a file is touched. Fenced code blocks are left exactly as authored: they are often partial or illustrative, and formatting them would reindent samples to the Markdown tab width, leaving every example disagreeing with the code it documents.
+
 Commit any files that Prettier reformats.
 
 ### 4.3. Linting

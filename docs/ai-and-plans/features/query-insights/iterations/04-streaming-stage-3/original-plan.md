@@ -90,17 +90,17 @@ Non-goal (explicitly out of scope): ChatGPT-style token-by-token rendering.
 
 ## 3. Verified current architecture (May 2026)
 
-| Concern       | Where                                                                                                                                                                                       | Notes                                                                                                                                                                                                                                                                                                                                           |
-| ------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| LLM call      | `CopilotService.sendToModel` — [src/services/copilotService.ts](../../../../../../src/services/copilotService.ts) (~L339)                                                                               | Already iterates `for await (const fragment of chatResponse.text)` but **buffers** into `fullResponse`. AbortSignal→CancellationToken bridge present. Returns `{text, durationMs, usage}`. For Option A, expose the same loop as an `AsyncIterable<string>` of fragments (WI-2) while still computing usage/`durationMs` for the buffered path. |
-| Public entry  | `CopilotService.sendMessage` + `CopilotMessageOptions`                                                                                                                                      | Options carry `signal`, `preferredFamily`, `fallbackFamilies`, `modelOptions`. Add a streaming variant that returns `AsyncIterable<string>` (Option A; see D12).                                                                                                                                                                                |
-| Orchestration | `optimizeQuery` — [src/commands/llmEnhancedCommands/indexAdvisorCommands.ts](../../../../../../src/commands/llmEnhancedCommands/indexAdvisorCommands.ts) (~L356–650)                                    | Builds 3 user messages, calls `CopilotService.sendMessage`, returns text. Wrapped in its own `callWithTelemetryAndErrorHandling` (carries `copilotDurationMs`, model props, etc. — **keep as-is**).                                                                                                                                             |
-| Parse         | `QueryInsightsAIService.parseAIResponse` — [src/services/ai/QueryInsightsAIService.ts](../../../../../../src/services/ai/QueryInsightsAIService.ts) (~L173)                                             | `JSON.parse` → `AIOptimizationResponse {analysis, improvements[], verification[], educationalContent}`.                                                                                                                                                                                                                                         |
-| Transport     | `getQueryInsightsStage3` — [src/webviews/documentdb/collectionView/collectionViewRouter.ts](../../../../../../src/webviews/documentdb/collectionView/collectionViewRouter.ts) (~L867)                   | A tRPC `.query()`. Records counts + token usage onto `ctx.telemetry` at the end. Returns `QueryInsightsStage3Response`.                                                                                                                                                                                                                         |
-| Transform     | `transformAIResponseForUI` — [src/documentdb/queryInsights/transformations.ts](../../../../../../src/documentdb/queryInsights/transformations.ts) (~L41)                                                | → `analysisCard` + `improvementCards[]` + `educationalContent`.                                                                                                                                                                                                                                                                                 |
-| Webview       | `QueryInsightsTab.tsx` (~L490–600, render ~L693–770)                                                                                                                                        | Calls `.query({requestKey},{signal})`, single `.then()` sets `stage3Data`. Has AbortController (`stage3AbortControllerRef`), requestKey staleness guard, 1s-delayed tips/error card, `transitionToStage` states. Builds `insightCards: AnimatedCardItem[]` in canonical order.                                                                  |
+| Concern       | Where                                                                                                                                                                                             | Notes                                                                                                                                                                                                                                                                                                                                           |
+| ------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| LLM call      | `CopilotService.sendToModel` — [src/services/copilotService.ts](../../../../../../src/services/copilotService.ts) (~L339)                                                                         | Already iterates `for await (const fragment of chatResponse.text)` but **buffers** into `fullResponse`. AbortSignal→CancellationToken bridge present. Returns `{text, durationMs, usage}`. For Option A, expose the same loop as an `AsyncIterable<string>` of fragments (WI-2) while still computing usage/`durationMs` for the buffered path. |
+| Public entry  | `CopilotService.sendMessage` + `CopilotMessageOptions`                                                                                                                                            | Options carry `signal`, `preferredFamily`, `fallbackFamilies`, `modelOptions`. Add a streaming variant that returns `AsyncIterable<string>` (Option A; see D12).                                                                                                                                                                                |
+| Orchestration | `optimizeQuery` — [src/commands/llmEnhancedCommands/indexAdvisorCommands.ts](../../../../../../src/commands/llmEnhancedCommands/indexAdvisorCommands.ts) (~L356–650)                              | Builds 3 user messages, calls `CopilotService.sendMessage`, returns text. Wrapped in its own `callWithTelemetryAndErrorHandling` (carries `copilotDurationMs`, model props, etc. — **keep as-is**).                                                                                                                                             |
+| Parse         | `QueryInsightsAIService.parseAIResponse` — [src/services/ai/QueryInsightsAIService.ts](../../../../../../src/services/ai/QueryInsightsAIService.ts) (~L173)                                       | `JSON.parse` → `AIOptimizationResponse {analysis, improvements[], verification[], educationalContent}`.                                                                                                                                                                                                                                         |
+| Transport     | `getQueryInsightsStage3` — [src/webviews/documentdb/collectionView/collectionViewRouter.ts](../../../../../../src/webviews/documentdb/collectionView/collectionViewRouter.ts) (~L867)             | A tRPC `.query()`. Records counts + token usage onto `ctx.telemetry` at the end. Returns `QueryInsightsStage3Response`.                                                                                                                                                                                                                         |
+| Transform     | `transformAIResponseForUI` — [src/documentdb/queryInsights/transformations.ts](../../../../../../src/documentdb/queryInsights/transformations.ts) (~L41)                                          | → `analysisCard` + `improvementCards[]` + `educationalContent`.                                                                                                                                                                                                                                                                                 |
+| Webview       | `QueryInsightsTab.tsx` (~L490–600, render ~L693–770)                                                                                                                                              | Calls `.query({requestKey},{signal})`, single `.then()` sets `stage3Data`. Has AbortController (`stage3AbortControllerRef`), requestKey staleness guard, 1s-delayed tips/error card, `transitionToStage` states. Builds `insightCards: AnimatedCardItem[]` in canonical order.                                                                  |
 | Card list     | `AnimatedCardList` — [.../animatedCardList/AnimatedCardList.tsx](../../../../src/webviews/documentdb/collectionView/components/queryInsightsTab/components/animatedCardList/AnimatedCardList.tsx) | `AnimatedCardItem = { key, component }`. **No priority field.** Renders in **source-array order**, animates inserts via `CollapseRelaxed`.                                                                                                                                                                                                      |
-| Types         | [.../types/queryInsights.ts](../../../../../../src/webviews/documentdb/collectionView/types/queryInsights.ts)                                                                                           | `AnalysisCard` (L227), `ImprovementCard` (L235), `QueryInsightsStage3Response` (L272).                                                                                                                                                                                                                                                          |
+| Types         | [.../types/queryInsights.ts](../../../../../../src/webviews/documentdb/collectionView/types/queryInsights.ts)                                                                                     | `AnalysisCard` (L227), `ImprovementCard` (L235), `QueryInsightsStage3Response` (L272).                                                                                                                                                                                                                                                          |
 
 ### Critical framework facts
 
@@ -515,7 +515,7 @@ explicit "no data lost" confirmation. If any key cannot be carried, list it and 
     too. Rewrote the subscription `onData` handler to dispatch each structured event into the
     matching slot in `stage3Streaming` (initializing the per-stream object lazily on the first
     structured event), and to synthesize a full-snapshot `stage3Data` from `stage3Streaming +
-    completeEvent` on the terminal `complete` event via a new local `synthesizeStage3Data`
+completeEvent` on the terminal `complete` event via a new local `synthesizeStage3Data`
     helper. `recommendationStarted` extends the recommendations array with a sentinel `null`
     at the right index; `recommendation` fills the same slot. Added a new
     `src/webviews/documentdb/collectionView/utils/createImprovementCard.ts` (webview-side
@@ -556,45 +556,45 @@ explicit "no data lost" confirmation. If any key cannot be carried, list it and 
     `staticAnalysisSummaryError` / `staticAnalysisSummaryErrorKind` from the
     `buildStaticAnalysisSummary` call; `recommendationCount` +
     `actionableRecommendationCount` + `createRecommendationCount` + `dropRecommendationCount`
-    + `modifyRecommendationCount` from the parsed `aiResponse.improvements`;
-    `aiModelDisclosed` / `aiModelFamily` from `aiResponse.model*`;
-    `promptTokens` / `responseTokens` / `totalTokens` / `maxInputTokens` /
-    `promptUtilizationPct` from `aiResponse.usage`). A `flushCompletionEvent()` helper —
-    idempotent, fire-and-forget — wraps `callWithTelemetryAndErrorHandling` with the new
-    event name `documentDB.queryInsights.stage3.completed`, sets
-    `errorHandling.suppressDisplay = true`, copies the accumulator into
-    `context.telemetry.{properties,measurements}`, and adds `durationMs` (wall-clock from
-    request to flush via the existing `elapsed()` helper) + `aborted: 'true'|'false'`. The
-    flush is called from the subscription's `finally`, so it fires exactly once per stream
-    on success, abort (panel dispose / `subscription.stop` / user-clicked Cancel), and the
-    rare throw path. Verified `vscode-documentdb.copilot.streamMessage` and
-    `vscode-documentdb.queryInsights.getOptimizationRecommendationsStreaming` events still
-    fire from their existing `callWithTelemetryAndErrorHandling` wrappers in
-    `copilotService.ts` and `QueryInsightsAIService.ts` respectively (unchanged in WI-10).
-    Old→new key mapping table (for the PR description):
+    - `modifyRecommendationCount` from the parsed `aiResponse.improvements`;
+      `aiModelDisclosed` / `aiModelFamily` from `aiResponse.model*`;
+      `promptTokens` / `responseTokens` / `totalTokens` / `maxInputTokens` /
+      `promptUtilizationPct` from `aiResponse.usage`). A `flushCompletionEvent()` helper —
+      idempotent, fire-and-forget — wraps `callWithTelemetryAndErrorHandling` with the new
+      event name `documentDB.queryInsights.stage3.completed`, sets
+      `errorHandling.suppressDisplay = true`, copies the accumulator into
+      `context.telemetry.{properties,measurements}`, and adds `durationMs` (wall-clock from
+      request to flush via the existing `elapsed()` helper) + `aborted: 'true'|'false'`. The
+      flush is called from the subscription's `finally`, so it fires exactly once per stream
+      on success, abort (panel dispose / `subscription.stop` / user-clicked Cancel), and the
+      rare throw path. Verified `vscode-documentdb.copilot.streamMessage` and
+      `vscode-documentdb.queryInsights.getOptimizationRecommendationsStreaming` events still
+      fire from their existing `callWithTelemetryAndErrorHandling` wrappers in
+      `copilotService.ts` and `QueryInsightsAIService.ts` respectively (unchanged in WI-10).
+      Old→new key mapping table (for the PR description):
 
-    | Old event/key                                                      | New event/key                                                  | Notes                                                       |
-    | ------------------------------------------------------------------ | -------------------------------------------------------------- | ----------------------------------------------------------- |
-    | `documentDB.rpc.query.collectionView.queryInsights.getQueryInsightsStage3` → `properties.platform`                          | `documentDB.queryInsights.stage3.completed` → `properties.platform`                          | Identical population: `clusterMetadata?.domainInfo_api ?? 'unknown'`. |
-    | ↑ `properties.hasStaticAnalysisSummary`                            | ↑ `properties.hasStaticAnalysisSummary`                        | Identical.                                                  |
-    | ↑ `properties.staticAnalysisSummaryError`                          | ↑ `properties.staticAnalysisSummaryError`                      | Identical (only set on the catch branch).                   |
-    | ↑ `properties.staticAnalysisSummaryErrorKind`                      | ↑ `properties.staticAnalysisSummaryErrorKind`                  | Identical.                                                  |
-    | ↑ `properties.hasCachedExecutionPlan`                              | ↑ `properties.hasCachedExecutionPlan`                          | Identical.                                                  |
-    | ↑ `properties.aiModelDisclosed`                                    | ↑ `properties.aiModelDisclosed`                                | Identical (only set when `modelId` is known).               |
-    | ↑ `properties.aiModelFamily`                                       | ↑ `properties.aiModelFamily`                                   | Identical (only set when `modelFamily` is known).           |
-    | ↑ `measurements.staticAnalysisSummaryLength`                       | ↑ `measurements.staticAnalysisSummaryLength`                   | Identical.                                                  |
-    | ↑ `measurements.recommendationCount`                               | ↑ `measurements.recommendationCount`                           | Identical.                                                  |
-    | ↑ `measurements.actionableRecommendationCount`                     | ↑ `measurements.actionableRecommendationCount`                 | Identical.                                                  |
-    | ↑ `measurements.createRecommendationCount`                         | ↑ `measurements.createRecommendationCount`                     | Identical.                                                  |
-    | ↑ `measurements.dropRecommendationCount`                           | ↑ `measurements.dropRecommendationCount`                       | Identical.                                                  |
-    | ↑ `measurements.modifyRecommendationCount`                         | ↑ `measurements.modifyRecommendationCount`                     | Identical.                                                  |
-    | ↑ `measurements.promptTokens`                                      | ↑ `measurements.promptTokens`                                  | Identical.                                                  |
-    | ↑ `measurements.responseTokens`                                    | ↑ `measurements.responseTokens`                                | Identical.                                                  |
-    | ↑ `measurements.totalTokens`                                       | ↑ `measurements.totalTokens`                                   | Identical.                                                  |
-    | ↑ `measurements.maxInputTokens`                                    | ↑ `measurements.maxInputTokens`                                | Identical.                                                  |
-    | ↑ `measurements.promptUtilizationPct`                              | ↑ `measurements.promptUtilizationPct`                          | Identical.                                                  |
-    | _(none)_                                                           | `documentDB.queryInsights.stage3.completed` → `measurements.durationMs` | New: wall-clock subscription duration in ms.       |
-    | _(none)_                                                           | ↑ `properties.aborted` (`'true'`/`'false'`)                    | New: terminal abort state (cancel / dispose).               |
+    | Old event/key                                                                                      | New event/key                                                           | Notes                                                                 |
+    | -------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------- | --------------------------------------------------------------------- |
+    | `documentDB.rpc.query.collectionView.queryInsights.getQueryInsightsStage3` → `properties.platform` | `documentDB.queryInsights.stage3.completed` → `properties.platform`     | Identical population: `clusterMetadata?.domainInfo_api ?? 'unknown'`. |
+    | ↑ `properties.hasStaticAnalysisSummary`                                                            | ↑ `properties.hasStaticAnalysisSummary`                                 | Identical.                                                            |
+    | ↑ `properties.staticAnalysisSummaryError`                                                          | ↑ `properties.staticAnalysisSummaryError`                               | Identical (only set on the catch branch).                             |
+    | ↑ `properties.staticAnalysisSummaryErrorKind`                                                      | ↑ `properties.staticAnalysisSummaryErrorKind`                           | Identical.                                                            |
+    | ↑ `properties.hasCachedExecutionPlan`                                                              | ↑ `properties.hasCachedExecutionPlan`                                   | Identical.                                                            |
+    | ↑ `properties.aiModelDisclosed`                                                                    | ↑ `properties.aiModelDisclosed`                                         | Identical (only set when `modelId` is known).                         |
+    | ↑ `properties.aiModelFamily`                                                                       | ↑ `properties.aiModelFamily`                                            | Identical (only set when `modelFamily` is known).                     |
+    | ↑ `measurements.staticAnalysisSummaryLength`                                                       | ↑ `measurements.staticAnalysisSummaryLength`                            | Identical.                                                            |
+    | ↑ `measurements.recommendationCount`                                                               | ↑ `measurements.recommendationCount`                                    | Identical.                                                            |
+    | ↑ `measurements.actionableRecommendationCount`                                                     | ↑ `measurements.actionableRecommendationCount`                          | Identical.                                                            |
+    | ↑ `measurements.createRecommendationCount`                                                         | ↑ `measurements.createRecommendationCount`                              | Identical.                                                            |
+    | ↑ `measurements.dropRecommendationCount`                                                           | ↑ `measurements.dropRecommendationCount`                                | Identical.                                                            |
+    | ↑ `measurements.modifyRecommendationCount`                                                         | ↑ `measurements.modifyRecommendationCount`                              | Identical.                                                            |
+    | ↑ `measurements.promptTokens`                                                                      | ↑ `measurements.promptTokens`                                           | Identical.                                                            |
+    | ↑ `measurements.responseTokens`                                                                    | ↑ `measurements.responseTokens`                                         | Identical.                                                            |
+    | ↑ `measurements.totalTokens`                                                                       | ↑ `measurements.totalTokens`                                            | Identical.                                                            |
+    | ↑ `measurements.maxInputTokens`                                                                    | ↑ `measurements.maxInputTokens`                                         | Identical.                                                            |
+    | ↑ `measurements.promptUtilizationPct`                                                              | ↑ `measurements.promptUtilizationPct`                                   | Identical.                                                            |
+    | _(none)_                                                                                           | `documentDB.queryInsights.stage3.completed` → `measurements.durationMs` | New: wall-clock subscription duration in ms.                          |
+    | _(none)_                                                                                           | ↑ `properties.aborted` (`'true'`/`'false'`)                             | New: terminal abort state (cancel / dispose).                         |
 
     The auto rpc event `documentDB.rpc.subscription.collectionView.queryInsights.streamStage3`
     still fires for every subscription (unchanged framework behaviour) but \u2014 because
@@ -618,17 +618,16 @@ explicit "no data lost" confirmation. If any key cannot be carried, list it and 
     - `npx jest --no-coverage` → 103 suites / 2014 tests passing
       (incl. the 25 new `streamingResponseParser.test.ts` cases from WI-7).
     - `npm run build` → green (`tsc` across all packages).
-    All WI-1 → WI-10 boxes are ticked with outcome blocks; WI-11 itself is ticked here.
-    Deviation Log holds three entries (WI-7 verification-from-reconcile, WI-7 `\n\n`-only
-    progressive trigger, WI-9 OPEN-1 accept-one-shift). The PR description should include
-    the WI-10 outcome's old→new telemetry mapping table verbatim plus a callout for the
-    rpc-path change introduced in WI-4 (`documentDB.rpc.query.collectionView.*` →
-    `documentDB.rpc.query.collectionView.queryInsights.*` for the four moved procedures,
-    and a new `documentDB.rpc.subscription.collectionView.queryInsights.streamStage3` for
-    the streaming entry).
+      All WI-1 → WI-10 boxes are ticked with outcome blocks; WI-11 itself is ticked here.
+      Deviation Log holds three entries (WI-7 verification-from-reconcile, WI-7 `\n\n`-only
+      progressive trigger, WI-9 OPEN-1 accept-one-shift). The PR description should include
+      the WI-10 outcome's old→new telemetry mapping table verbatim plus a callout for the
+      rpc-path change introduced in WI-4 (`documentDB.rpc.query.collectionView.*` →
+      `documentDB.rpc.query.collectionView.queryInsights.*` for the four moved procedures,
+      and a new `documentDB.rpc.subscription.collectionView.queryInsights.streamStage3` for
+      the streaming entry).
 
     Notes for the PR description / follow-up:
-
     - **Manual verification on a live slow query** (progress < 2s, paragraph reveal,
       shells fill, mid-stream cancel clears partial UI, final state byte-identical to
       `getQueryInsightsStage3`) — **deferred to the reviewer**: it requires a live

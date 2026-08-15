@@ -48,8 +48,8 @@ bar was the prerequisite for adding a second heavyweight tab at all.
 Three durable design documents sit at this area's root. They describe intent; the code is
 authoritative for current behavior.
 
-| Document                                                               | What it covers                                                                                                                                                                                           |
-| ---------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Document                                                               | What it covers                                                                                                                                                                                            |
+| ---------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | [design.md](./design.md)                                               | The consolidated design log: what shipped, the **tried-and-abandoned** decisions, the dev-tooling `ResizeObserver`/CSP discovery, and follow-ups. **Start here.**                                         |
 | [design-collectionview-toolbar.md](./design-collectionview-toolbar.md) | The Collection View chrome redesign: tab strip first, contextual per-tab action bar, layout and responsive plan, and the full-bleed chrome plus SCSS refactor.                                            |
 | [design-vector-index-support.md](./design-vector-index-support.md)     | Wildcard and vector indexes: vector concepts, service algorithms (IVF, HNSW, DiskANN), shared settings, commands, the Vector drawer and typed model, validation rules, and the Atlas Search Index future. |
@@ -57,18 +57,18 @@ authoritative for current behavior.
 Reference material, read on demand:
 
 | Document                                                                           | What it covers                                                                            |
-| ---------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------- |
+| ---------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------- |
 | [reference-supported-indexes.md](./reference-supported-indexes.md)                 | DocumentDB-supported index types and properties, and how they map onto the extension.     |
 | [reference-operator-registry-scraper.md](./reference-operator-registry-scraper.md) | The operator-registry scraper migration and the index metadata it exposes to the webview. |
 
 ## Timeline
 
-| Date       | PR   | What changed                                    | Docs                                                                                                                                                          |
-| ---------- | ---- | ----------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 2026-07-20 | #732 | Code review, first pass                         | [code-review-2026-07-20.md](./iterations/01-index-dashboard/code-review-2026-07-20.md)                                                                         |
-| 2026-07-22 | #732 | UX review, iterations 1–2                       | [ux-review-iteration-1-2.md](./iterations/01-index-dashboard/ux-review-iteration-1-2.md)                                                                       |
-| 2026-07-27 | #732 | UX review, iteration 3 (create-drawer redesign) | [ux-review-iteration-3-create-index-redesign.md](./iterations/01-index-dashboard/ux-review-iteration-3-create-index-redesign.md)                               |
-| 2026-07-27 | #732 | Code review, second pass                        | [code-review-2026-07-27.md](./iterations/01-index-dashboard/code-review-2026-07-27.md)                                                                         |
+| Date       | PR   | What changed                                    | Docs                                                                                                                             |
+| ---------- | ---- | ----------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
+| 2026-07-20 | #732 | Code review, first pass                         | [code-review-2026-07-20.md](./iterations/01-index-dashboard/code-review-2026-07-20.md)                                           |
+| 2026-07-22 | #732 | UX review, iterations 1–2                       | [ux-review-iteration-1-2.md](./iterations/01-index-dashboard/ux-review-iteration-1-2.md)                                         |
+| 2026-07-27 | #732 | UX review, iteration 3 (create-drawer redesign) | [ux-review-iteration-3-create-index-redesign.md](./iterations/01-index-dashboard/ux-review-iteration-3-create-index-redesign.md) |
+| 2026-07-27 | #732 | Code review, second pass                        | [code-review-2026-07-27.md](./iterations/01-index-dashboard/code-review-2026-07-27.md)                                           |
 
 ## Decisions
 

@@ -8,7 +8,6 @@ are filled during the **Live review**.
 
 The file needs frontmatter, as every document under `features/` does:
 
-<!-- prettier-ignore -->
 ```yaml
 ---
 feature: {{feature-slug}}

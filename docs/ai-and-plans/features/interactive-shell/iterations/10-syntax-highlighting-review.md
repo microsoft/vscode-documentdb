@@ -60,6 +60,7 @@ This means the second alternative matches "a special regex control character **f
 **File:** `src/documentdb/shell/highlighting/monarchRules.ts` lines 190–191
 
 The comment says:
+
 ```
 // Inline regex references like `@digits` are resolved in the executor
 // by replacing `@name` with the source of the corresponding pattern.
@@ -68,6 +69,7 @@ The comment says:
 This contradicts the implementation — the DEVIATION note in the plan explicitly states that patterns were **inlined directly** and the executor does NOT perform `@name` resolution. This comment is leftover text that was not updated after the deviation was adopted.
 
 **Fix:** Update the comment to reflect reality, e.g.:
+
 ```
 // All @name references have been inlined directly in the regex patterns below.
 // The executor does not need to resolve @name references.
@@ -85,6 +87,7 @@ let cachedResult: TokenSpan[] | undefined;
 ```
 
 The tokenizer cache is module-level global state. This creates:
+
 1. **Test interference risk** — Tests sharing the same module instance may get cached results from previous test runs. The caching tests verify this intentionally, but it means test execution order matters. A test calling `tokenize('const x = 1', rules)` early would affect later tests calling the same input.
 2. **Multi-shell scenario** — If two shell terminals are open, they share the same cache. Since only one character is cached, this causes unnecessary re-tokenization when switching between shells (cache thrashing). This is not a correctness issue, just a performance miss.
 
@@ -127,6 +130,7 @@ The `resolveCases` function performs `Array.includes()` which is O(n) on every i
 **File:** `src/documentdb/shell/shellHighlighter.test.ts`
 
 The plan's file structure specifies:
+
 ```
 src/documentdb/shell/highlighting/
 └── shellHighlighter.test.ts  # WI-4 integrated tests
@@ -195,6 +199,7 @@ Both prompt-width and cursor-offset calculations use JavaScript string length (`
 **Files:** `src/documentdb/shell/ShellInputHandler.ts` (`insertText()`, `replaceText()`), `src/documentdb/shell/DocumentDBShellPty.ts` (`rewriteCurrentLine()`)
 
 The new highlighting architecture correctly re-renders after typed edits (`insertCharacter`, `handleBackspace`, `handleDelete`, etc.), but PTY-controlled buffer mutations still write raw text directly to the terminal. This affects:
+
 - accepting ghost text,
 - single-candidate Tab completion,
 - replacement completions (quoted field paths / bracket notation),
@@ -213,6 +218,7 @@ Because these flows bypass `reRenderLine()` / `colorize`, the line can temporari
 **Files:** `src/documentdb/shell/shellHighlighter.test.ts`, `src/documentdb/shell/ShellInputHandler.test.ts`, `src/documentdb/shell/DocumentDBShellPty.test.ts`
 
 The automated tests cover the happy path well, but several of the plan's most failure-prone scenarios are still missing from test coverage:
+
 - long wrapped lines from **T-17**,
 - Unicode / wide-character prompts or input,
 - Tab completion and ghost-text acceptance with highlighting still intact,
@@ -251,6 +257,7 @@ Copilot submitted a review with **4 comments** (generated 2026-04-15). Below eac
 > "The `regexpesc` pattern contains an extra literal space after the character class (`[...\\.] |c[A-Z]...`). As written, it requires a space after that escaped character, which will cause valid regex escapes to be mis-tokenized. Remove the stray space so the alternation is `[...]|c[A-Z]|...`."
 
 Copilot provides a suggested fix:
+
 ```typescript
 const regexpesc = /\\(?:[bBdDfnrstvwWn0\\\/]|[(){}\[\]\$\^|\-*+?\.]|c[A-Z]|x[0-9a-fA-F]{2}|u[0-9a-fA-F]{4})/;
 ```
@@ -275,36 +282,35 @@ const regexpesc = /\\(?:[bBdDfnrstvwWn0\\\/]|[(){}\[\]\$\^|\-*+?\.]|c[A-Z]|x[0-9
 
 ## Summary Table
 
-| ID | Severity | File | Issue | Action |
-|----|----------|------|-------|--------|
-| I-01 / C-02 | **HIGH** | `monarchRules.ts:183` | Spurious space in `regexpesc` regex breaks regex escape matching | ✅ Fixed (`eba9286`) |
-| I-02 | LOW | `monarchRules.ts:190-191` | Misleading comment about `@name` resolution (contradicts deviation) | ✅ Fixed (`cad3ae1`) |
-| I-03 / C-01 | MEDIUM | `monarchRunner.ts:29-30` | Module-level cache ignores `rules` param; global state concerns | ✅ Fixed (`af0a427`) |
-| I-04 | LOW | `monarchRunner.ts:237` | `input_indexOf` uses snake_case (should be camelCase) | ✅ Fixed (`6c35419`) |
-| I-05 | LOW | `monarchRunner.ts:195` | Linear array scan for keyword lookup (O(n) per match) | Deferred (not blocking) |
-| I-06 | LOW | `shellHighlighter.test.ts` | Test file location differs from plan (one dir up) | Accept as-is |
-| I-07 | INFO | `colorizeShellInput.ts` | Extra convenience wrapper not in plan | Accept (positive deviation) |
-| I-08 | LOW | `monarchRunner.ts:186-206` | `resolveCases` relies on implicit key insertion order | ✅ Fixed (`50c0173`) |
-| I-09 | INFO | — | No l10n strings needed | Verified |
-| I-10 | **HIGH** | `ShellInputHandler.ts` / `DocumentDBShellPty.ts` | Full-line re-render assumes a single terminal row; wrapped input is not handled | ✅ Fixed (`6c2e7e4`) |
-| I-11 | **HIGH** | `ShellInputHandler.ts` / `DocumentDBShellPty.ts` | Cursor math uses `String.length` instead of terminal display width | ✅ Fixed (`6c2e7e4`) |
-| I-12 | MEDIUM | `ShellInputHandler.ts` / `DocumentDBShellPty.ts` | Completion and ghost-text insertions bypass the colorized re-render path | ✅ Fixed (`63c8f4f`) |
-| I-13 | MEDIUM | shell highlighting tests | Missing coverage for wrapped lines, Unicode width, and completion redraw | Deferred (separate PR) |
-| C-03 | INFO | `DocumentDBShellPty.ts` | `setPromptWidth` must be called for every prompt | Already handled correctly |
+| ID          | Severity | File                                             | Issue                                                                           | Action                      |
+| ----------- | -------- | ------------------------------------------------ | ------------------------------------------------------------------------------- | --------------------------- |
+| I-01 / C-02 | **HIGH** | `monarchRules.ts:183`                            | Spurious space in `regexpesc` regex breaks regex escape matching                | ✅ Fixed (`eba9286`)        |
+| I-02        | LOW      | `monarchRules.ts:190-191`                        | Misleading comment about `@name` resolution (contradicts deviation)             | ✅ Fixed (`cad3ae1`)        |
+| I-03 / C-01 | MEDIUM   | `monarchRunner.ts:29-30`                         | Module-level cache ignores `rules` param; global state concerns                 | ✅ Fixed (`af0a427`)        |
+| I-04        | LOW      | `monarchRunner.ts:237`                           | `input_indexOf` uses snake_case (should be camelCase)                           | ✅ Fixed (`6c35419`)        |
+| I-05        | LOW      | `monarchRunner.ts:195`                           | Linear array scan for keyword lookup (O(n) per match)                           | Deferred (not blocking)     |
+| I-06        | LOW      | `shellHighlighter.test.ts`                       | Test file location differs from plan (one dir up)                               | Accept as-is                |
+| I-07        | INFO     | `colorizeShellInput.ts`                          | Extra convenience wrapper not in plan                                           | Accept (positive deviation) |
+| I-08        | LOW      | `monarchRunner.ts:186-206`                       | `resolveCases` relies on implicit key insertion order                           | ✅ Fixed (`50c0173`)        |
+| I-09        | INFO     | —                                                | No l10n strings needed                                                          | Verified                    |
+| I-10        | **HIGH** | `ShellInputHandler.ts` / `DocumentDBShellPty.ts` | Full-line re-render assumes a single terminal row; wrapped input is not handled | ✅ Fixed (`6c2e7e4`)        |
+| I-11        | **HIGH** | `ShellInputHandler.ts` / `DocumentDBShellPty.ts` | Cursor math uses `String.length` instead of terminal display width              | ✅ Fixed (`6c2e7e4`)        |
+| I-12        | MEDIUM   | `ShellInputHandler.ts` / `DocumentDBShellPty.ts` | Completion and ghost-text insertions bypass the colorized re-render path        | ✅ Fixed (`63c8f4f`)        |
+| I-13        | MEDIUM   | shell highlighting tests                         | Missing coverage for wrapped lines, Unicode width, and completion redraw        | Deferred (separate PR)      |
+| C-03        | INFO     | `DocumentDBShellPty.ts`                          | `setPromptWidth` must be called for every prompt                                | Already handled correctly   |
 
 ---
 
 ## Recommendation
 
 **Address before merge:**
+
 1. **I-01 / C-02** — ✅ Fixed in `eba9286` — Removed the spurious space in `regexpesc`
 2. **I-03 / C-01** — ✅ Fixed in `af0a427` — Added `cachedRules` identity check to tokenizer cache
 3. **I-10** — ✅ Fixed in `6c2e7e4` — `reRenderLine()` is now wrap-aware (moves cursor up to prompt row, uses `\x1b[J`, computes row/column offsets)
 4. **I-11** — ✅ Fixed in `6c2e7e4` — Cursor math uses `terminalDisplayWidth()` (extracted to shared module) instead of `String.length`
 
-**Strongly consider before merge:**
-5. **I-12** — ✅ Fixed in `63c8f4f` — `insertText()`, `replaceText()`, and `rewriteCurrentLine()` now route through `reRenderLine()` / `renderCurrentLine()` so highlighting applies on every buffer mutation
-6. **I-13** — Deferred to a separate PR. Additional regression tests for wrapped lines, Unicode width, and completion redraw.
+**Strongly consider before merge:** 5. **I-12** — ✅ Fixed in `63c8f4f` — `insertText()`, `replaceText()`, and `rewriteCurrentLine()` now route through `reRenderLine()` / `renderCurrentLine()` so highlighting applies on every buffer mutation 6. **I-13** — Deferred to a separate PR. Additional regression tests for wrapped lines, Unicode width, and completion redraw.
 
 ---
 
@@ -312,12 +318,12 @@ const regexpesc = /\\(?:[bBdDfnrstvwWn0\\\/]|[(){}\[\]\$\^|\-*+?\.]|c[A-Z]|x[0-9
 
 All fixes applied 2026-04-15. 398 shell tests pass (12 suites). Prettier and lint clean.
 
-| Commit | Issue(s) | Summary |
-|--------|----------|---------|
-| `eba9286` | I-01, C-02 | Removed spurious space in `regexpesc` regex pattern. The second alternative `[...] |c[A-Z]` required a trailing space after escaped regex control characters, causing valid escapes like `\(` or `\[` to mis-tokenize. |
-| `cad3ae1` | I-02 | Updated misleading comment that stated `@name` references are resolved by the executor. All references were inlined directly per the documented deviation. |
-| `af0a427` | I-03, C-01 | Added `cachedRules` reference check to the tokenizer cache. The cache now requires both `input === cachedInput` and `rules === cachedRules` for a hit, honoring the API contract. |
-| `6c35419` | I-04 | Renamed `input_indexOf` → `inputIndexOf` (camelCase per TypeScript convention). |
-| `50c0173` | I-08 | Added comment documenting that key order in `actionCases` objects determines match priority (Object.entries insertion order). |
+| Commit    | Issue(s)   | Summary                                                                                                                                                                                                                                                                                                                                                                                                            |
+| --------- | ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------ |
+| `eba9286` | I-01, C-02 | Removed spurious space in `regexpesc` regex pattern. The second alternative `[...]                                                                                                                                                                                                                                                                                                                                 | c[A-Z]`required a trailing space after escaped regex control characters, causing valid escapes like`\(`or`\[` to mis-tokenize. |
+| `cad3ae1` | I-02       | Updated misleading comment that stated `@name` references are resolved by the executor. All references were inlined directly per the documented deviation.                                                                                                                                                                                                                                                         |
+| `af0a427` | I-03, C-01 | Added `cachedRules` reference check to the tokenizer cache. The cache now requires both `input === cachedInput` and `rules === cachedRules` for a hit, honoring the API contract.                                                                                                                                                                                                                                  |
+| `6c35419` | I-04       | Renamed `input_indexOf` → `inputIndexOf` (camelCase per TypeScript convention).                                                                                                                                                                                                                                                                                                                                    |
+| `50c0173` | I-08       | Added comment documenting that key order in `actionCases` objects determines match priority (Object.entries insertion order).                                                                                                                                                                                                                                                                                      |
 | `6c2e7e4` | I-10, I-11 | Made `reRenderLine()` wrap-aware: cursor moves up to prompt row before `\r`, uses `\x1b[J` instead of `\x1b[K`, computes row/column cursor repositioning. Extracted `terminalDisplayWidth()` from `ShellGhostText.ts` to shared `terminalDisplayWidth.ts` module. All cursor math now uses display width instead of `String.length`. Added `setColumns()` to `ShellInputHandler`, wired from `DocumentDBShellPty`. |
-| `63c8f4f` | I-12 | `insertText()` and `replaceText()` now call `reRenderLine()` instead of manual ANSI echo. `rewriteCurrentLine()` delegates to `renderCurrentLine()` using the colorize callback. Syntax highlighting now applies on every buffer mutation including completions and ghost text. |
+| `63c8f4f` | I-12       | `insertText()` and `replaceText()` now call `reRenderLine()` instead of manual ANSI echo. `rewriteCurrentLine()` delegates to `renderCurrentLine()` using the colorize callback. Syntax highlighting now applies on every buffer mutation including completions and ghost text.                                                                                                                                    |

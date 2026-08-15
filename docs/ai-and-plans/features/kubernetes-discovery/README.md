@@ -56,11 +56,11 @@ document here, and it is referenced directly from the source. The short version:
 
 ## Timeline
 
-| Date | PR   | What changed                                              | Docs                                                                                                                    |
-| ---- | ---- | --------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------- |
-| —    | #621 | Kubernetes service discovery, pre-merge code review        | [iterations/01-kubernetes-discovery/pre-merge-code-review.md](./iterations/01-kubernetes-discovery/pre-merge-code-review.md) |
-| —    | #621 | 0.9.0 bug-bash UX review, organized by user journey        | [iterations/01-kubernetes-discovery/bugbash-090-ux-review.md](./iterations/01-kubernetes-discovery/bugbash-090-ux-review.md) |
-| —    | #621 | Reachability providers extracted (follow-up)               | [connection-reachability-providers.md](./connection-reachability-providers.md)                                           |
+| Date | PR   | What changed                                        | Docs                                                                                                                         |
+| ---- | ---- | --------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
+| —    | #621 | Kubernetes service discovery, pre-merge code review | [iterations/01-kubernetes-discovery/pre-merge-code-review.md](./iterations/01-kubernetes-discovery/pre-merge-code-review.md) |
+| —    | #621 | 0.9.0 bug-bash UX review, organized by user journey | [iterations/01-kubernetes-discovery/bugbash-090-ux-review.md](./iterations/01-kubernetes-discovery/bugbash-090-ux-review.md) |
+| —    | #621 | Reachability providers extracted (follow-up)        | [connection-reachability-providers.md](./connection-reachability-providers.md)                                               |
 
 ## Decisions
 

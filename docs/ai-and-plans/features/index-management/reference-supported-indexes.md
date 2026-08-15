@@ -98,7 +98,7 @@ modifiers that can be combined with the index types above.
 - **Creatable index types (Create Index dialog):** the drawer offers three
   mutually-exclusive kinds via a tab selector:
   - **Standard** — one or more fields, each `asc / desc / text / 2dsphere /
-    hashed`, plus `unique / sparse / TTL`, partial filter, and collation.
+hashed`, plus `unique / sparse / TTL`, partial filter, and collation.
   - **Wildcard** — a single ascending wildcard key: **All fields** (`$**`) or
     **Fields below a path** (`metadata.$**`, empty path falls back to `$**`),
     with an optional include/exclude **projection** on the all-fields key, plus

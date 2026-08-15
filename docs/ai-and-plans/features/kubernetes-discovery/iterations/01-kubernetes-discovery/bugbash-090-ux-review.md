@@ -525,7 +525,6 @@ defined it), **Decision / Code today** (verified), and any **Flag**.
     now consistent with each other **and** with the Connections view: modal error + output channel, retry
     node only.
 
-
 **#25 — "What does Retry do here?"** ✅ rename / ⚠️ two review asks NOT shipped
 
 - **Verdict — Deviation.** What was done differently: only part of the ask shipped. The **Retry → Reload**
@@ -878,13 +877,13 @@ The **"Others — DocumentDB not detected"** bucket (#5) is confirmed as the rig
 namespaces, which retires the `showEmptyNamespaces` setting. Re-evaluating the original five proposed
 settings against that decision:
 
-| Proposed setting                                              | Verdict                       | Reasoning                                                                                                                                                                                                                                                          |
-| ------------------------------------------------------------- | ----------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `portForward.localPortStrategy` + `portForward.localPortBase` | **Keep (shipped)**            | Genuinely user-specific (port collisions differ per machine); already in `package.json`.                                                                                                                                                                           |
-| `showEmptyNamespaces`                                         | **Drop**                      | Superseded by the "Others" bucket — empty namespaces are reachable but collapsed, so a toggle adds configuration surface with little benefit.                                                                                                                      |
+| Proposed setting                                              | Verdict                       | Reasoning                                                                                                                                                                                                                                                                            |
+| ------------------------------------------------------------- | ----------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `portForward.localPortStrategy` + `portForward.localPortBase` | **Keep (shipped)**            | Genuinely user-specific (port collisions differ per machine); already in `package.json`.                                                                                                                                                                                             |
+| `showEmptyNamespaces`                                         | **Drop**                      | Superseded by the "Others" bucket — empty namespaces are reachable but collapsed, so a toggle adds configuration surface with little benefit.                                                                                                                                        |
 | `namespaceScanConcurrency`                                    | **Drop (keep hardcoded `5`)** | A performance knob most users can't reason about; `5` is a safe default. Revisit only if telemetry shows large-cluster prescan latency. Currently hardcoded in [KubernetesContextItem.ts](../../../../../../src/plugins/service-kubernetes/discovery-tree/KubernetesContextItem.ts). |
-| `additionalPorts` (generic discovery ports)                   | **Defer**                     | Only matters for non-standard service ports; no demand signal yet. Add when a concrete request appears.                                                                                                                                                            |
-| DKO CRD-version escape hatch                                  | **Defer**                     | Operator-version-specific; better handled by detection than a user setting. Revisit if a CRD-version mismatch is reported in the field.                                                                                                                            |
+| `additionalPorts` (generic discovery ports)                   | **Defer**                     | Only matters for non-standard service ports; no demand signal yet. Add when a concrete request appears.                                                                                                                                                                              |
+| DKO CRD-version escape hatch                                  | **Defer**                     | Operator-version-specific; better handled by detection than a user setting. Revisit if a CRD-version mismatch is reported in the field.                                                                                                                                              |
 
 > **Recommendation (iteration 2):** freeze the settings surface at the two `portForward.*` keys for
 > launch. Explicitly **drop** `showEmptyNamespaces` (the "Others" bucket replaces it) and
@@ -1032,9 +1031,9 @@ There were **three** places a kubeconfig surfaced. The in-wizard entry is an **a
 kubeconfig"), not a representation of an existing source, so it should read as an action — corrected to
 the **`add`** (plus) icon, not the source identity icon:
 
-| Surface                                                                                                                          | Icon                                                                   |
-| -------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------- |
-| Tree source nodes (an existing source)                                                                                           | `group-by-ref-type`                                                    |
+| Surface                                                                                                                                            | Icon                                                                   |
+| -------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------- |
+| Tree source nodes (an existing source)                                                                                                             | `group-by-ref-type`                                                    |
 | In-wizard "Add Kubeconfig…" entry ([SelectContextStep.ts](../../../../../../src/plugins/service-kubernetes/discovery-wizard/SelectContextStep.ts)) | `add` ✅ (was `plug`; an action, not a source)                         |
 | Add-Source picker per-type items ([addKubeconfigSource.ts](../../../../../../src/plugins/service-kubernetes/commands/addKubeconfigSource.ts))      | `home` / `folder-opened` / `clippy` (kept — per-type aids recognition) |
 

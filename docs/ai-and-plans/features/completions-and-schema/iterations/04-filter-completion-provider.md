@@ -31,7 +31,7 @@ Replaced the old JSON Schema autocomplete pipeline with a custom Monaco `Complet
 
 | Removed                                       | Replacement                                                |
 | --------------------------------------------- | ---------------------------------------------------------- |
-| `generateMongoFindJsonSchema()` (271 lines)   | `operator-registry` (308 operators)                     |
+| `generateMongoFindJsonSchema()` (271 lines)   | `operator-registry` (308 operators)                        |
 | `basicMongoFindFilterSchema.json` (173 lines) | Not needed — custom language has no JSON service           |
 | `getAutocompletionSchema` tRPC endpoint       | `getFieldCompletionData` returning `FieldCompletionData[]` |
 | `toFilterQuery.ts` (230 lines, regex parser)  | `@mongodb-js/shell-bson-parser` (battle-tested)            |

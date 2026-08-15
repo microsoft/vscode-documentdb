@@ -45,9 +45,9 @@ the connection string's own TLS settings are honored rather than overridden.
 
 ## Timeline
 
-| Date       | PR   | What changed                                        | Docs                                                                                                |
-| ---------- | ---- | --------------------------------------------------- | ----------------------------------------------------------------------------------------------------- |
-| 2026-06-23 | #755 | No Authentication support, TLS hardening, review     | [iterations/01-no-auth-support/](./iterations/01-no-auth-support/)                                   |
+| Date       | PR   | What changed                                     | Docs                                                               |
+| ---------- | ---- | ------------------------------------------------ | ------------------------------------------------------------------ |
+| 2026-06-23 | #755 | No Authentication support, TLS hardening, review | [iterations/01-no-auth-support/](./iterations/01-no-auth-support/) |
 
 ## Decisions
 

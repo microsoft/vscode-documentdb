@@ -37,7 +37,7 @@ VS Code's Terminal Suggest feature (IntelliSense popup in terminals) is stable s
 | `db.`                     | Known collection names                                   | `SchemaStore`                     |
 | `db.<collection>.`        | Method names (`find`, `insertOne`, etc.)                 | Shell API type definitions        |
 | `db.<collection>.find({ ` | Field names from schema                                  | `SchemaStore`                     |
-| Inside `{ $`              | DocumentDB API query operators                           | `operator-registry`            |
+| Inside `{ $`              | DocumentDB API query operators                           | `operator-registry`               |
 
 ### Action When API Finalizes
 

@@ -16,8 +16,8 @@ were written BEFORE the implementation and drive the design.
 
 ## Test Files
 
-| File | What it tests |
-|------|---------------|
+| File                         | What it tests                                                                                   |
+| ---------------------------- | ----------------------------------------------------------------------------------------------- |
 | `completionBehavior.test.ts` | Which completion categories appear at each cursor position, sorting order, and snippet wrapping |
 
 ## Specification

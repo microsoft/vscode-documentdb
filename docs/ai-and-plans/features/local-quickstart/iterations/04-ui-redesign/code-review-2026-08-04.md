@@ -1086,7 +1086,7 @@ extension host is killed between the write and the `finally`, the file survives 
 | **N4** | `runStream`'s `FOLLOW-UP (retry stability)` comment documents an un-awaited unsubscribe race that the service now papers over by buffering terminal events.                                                                                                                        | Worth an explicit handshake (`await` the previous stream's completion) rather than relying on the buffer.                      |
 | **N5** | `resumeReadiness`, `discardTimedOutInstance`, `willReuseExistingInstance` and `isBusy` all hardcode `DEFAULT_ALIAS` while `provision` threads an `alias` variable that is also `DEFAULT_ALIAS`. The mixture makes it hard to see what is and isn't multi-instance ready.           | Either take `alias` consistently or drop the parameter until WI-2e — the half-state is the confusing part.                     |
 | **N6** | `findAvailablePort` consumes an attempt on a duplicate random candidate.                                                                                                                                                                                                           | `i--` on the `continue`, or draw from a shuffled range.                                                                        |
-| **N7** | The `docs/ai-and-plans/features/local-quickstart/iterations/02-poc/` and `653-local-quickstart-design/` folders both carry plan docs for this feature, now joined by `docs/ai-and-plans/features/local-quickstart/`.                                                                                           | Consolidate under one PR folder before merge so the next reader has one entry point.                                           |
+| **N7** | The `docs/ai-and-plans/features/local-quickstart/iterations/02-poc/` and `653-local-quickstart-design/` folders both carry plan docs for this feature, now joined by `docs/ai-and-plans/features/local-quickstart/`.                                                               | Consolidate under one PR folder before merge so the next reader has one entry point.                                           |
 
 **Decisions on the nits (2026-08-05):**
 
@@ -3003,11 +3003,9 @@ explanation on top, choice beneath. The radio group is hidden whenever the guard
 alarming _"container is gone"_ title is gone, and the primary button is a fixed **Start DocumentDB
 Local** again, with the footer note carrying the consequence of the selection.
 
-<!-- prettier-ignore-start -->
 [it3]: #115-iteration-3--opened-2026-08-06-closed-2026-08-06
 [it-post]: #116-post-iteration-fixes-from-manual-testing-2026-08-06
 [b-q1]: #answer--i3-q1
-<!-- prettier-ignore-end -->
 
 <!-- Detail anchors used by the iteration tables. Findings live in §3, design discussions in §9,
      the post-implementation re-assessment in §10, and the answers to this iteration's questions above. -->

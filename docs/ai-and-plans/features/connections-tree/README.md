@@ -35,7 +35,7 @@ its nodes display and how the connection list is loaded from storage.
 ## Architecture (intent — code is authoritative for behavior)
 
 The durable rules for this area live in the `tree-cluster-architecture` skill rather than here, so
-they are loaded when an agent is actually editing tree code. This area holds the *why* behind two
+they are loaded when an agent is actually editing tree code. This area holds the _why_ behind two
 specific behaviors:
 
 - **Item counts on tree nodes** are opt-in and bounded. The UX rationale for where counts appear,
@@ -46,10 +46,10 @@ specific behaviors:
 
 ## Timeline
 
-| Date       | PR   | What changed                                          | Docs                                                                                                                                                     |
-| ---------- | ---- | ----------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 2026-06-01 | #714 | Item counts on tree nodes (indexes, collections)       | [01-item-counting-tree.md](./iterations/01-item-counting-tree.md), [review](./iterations/01-item-counting-tree-review.md)                                 |
-| —          | #726 | Faster connection load; clearer in-memory wrapping     | [02-storage-load-optimization.md](./iterations/02-storage-load-optimization.md), [review](./iterations/02-storage-load-optimization-review.md)            |
+| Date       | PR   | What changed                                       | Docs                                                                                                                                           |
+| ---------- | ---- | -------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
+| 2026-06-01 | #714 | Item counts on tree nodes (indexes, collections)   | [01-item-counting-tree.md](./iterations/01-item-counting-tree.md), [review](./iterations/01-item-counting-tree-review.md)                      |
+| —          | #726 | Faster connection load; clearer in-memory wrapping | [02-storage-load-optimization.md](./iterations/02-storage-load-optimization.md), [review](./iterations/02-storage-load-optimization-review.md) |
 
 ## Decisions
 

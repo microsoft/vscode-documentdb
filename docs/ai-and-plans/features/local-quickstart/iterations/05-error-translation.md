@@ -17,26 +17,26 @@ created: 2026-08-09
 All High and Medium findings were fixed on this branch, one commit each, plus the low items that
 were genuine defects.
 
-| Finding | Status | Commit subject |
-| --- | --- | --- |
-| H1 | Fixed | `fix(quickstart): keep Quick Start reachable when Docker is unavailable` |
-| H2 | Fixed | `fix(diagnostics): never translate a cancellation into an infrastructure failure` |
-| M1 | Fixed | `fix(quickstart): tell a stopped Docker daemon apart from a removed container` |
-| M2 | Fixed | `refactor(quickstart): give diagnostics a genuinely read-only preflight` |
-| M3 | Fixed | `fix(atlas): keep the TLS diagnosis to one paragraph` |
-| M4 | Fixed | `fix(tree): stop dropping the raw error on the non-modal diagnosis path` |
-| M5 | Fixed | `fix(shell): redact cached credentials before logging a connect failure` |
-| M6, M7 | Fixed | `fix(quickstart): answer a failed preflight with tree rows, not a modal` |
-| M8 | Fixed | `perf(diagnostics): budget the whole explain call, not each provider` |
-| L2 | Fixed | folded into the M6/M7 commit (the prompt singleton is gone) |
-| L3, L8 | Fixed | `fix(quickstart): show display labels in the managed-instance tooltip` |
-| L4 | Fixed | `fix(commands): keep argument unwrapping inside the guarded block` |
-| L5 | Fixed | `docs(diagnostics): note that the error is a bare string on the webview path` |
-| L7 | Fixed | `fix(quickstart): show progress during an explicit deep refresh` |
-| M9 | Fixed | `fix(quickstart): stop re-inspecting the container hydration just adopted` |
-| L1 | Open, by choice | Collapsing the root is what makes hydration lazy. Left as a UX decision to confirm, not a defect. |
-| L6 | Open, by choice | Deliberate: the provider's premise is that the error shape does not matter. One `docker inspect` per foreground failure is the accepted cost. |
-| L9 | Verified | The removed `running` / `stopped` strings have no remaining callers. |
+| Finding | Status          | Commit subject                                                                                                                                |
+| ------- | --------------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
+| H1      | Fixed           | `fix(quickstart): keep Quick Start reachable when Docker is unavailable`                                                                      |
+| H2      | Fixed           | `fix(diagnostics): never translate a cancellation into an infrastructure failure`                                                             |
+| M1      | Fixed           | `fix(quickstart): tell a stopped Docker daemon apart from a removed container`                                                                |
+| M2      | Fixed           | `refactor(quickstart): give diagnostics a genuinely read-only preflight`                                                                      |
+| M3      | Fixed           | `fix(atlas): keep the TLS diagnosis to one paragraph`                                                                                         |
+| M4      | Fixed           | `fix(tree): stop dropping the raw error on the non-modal diagnosis path`                                                                      |
+| M5      | Fixed           | `fix(shell): redact cached credentials before logging a connect failure`                                                                      |
+| M6, M7  | Fixed           | `fix(quickstart): answer a failed preflight with tree rows, not a modal`                                                                      |
+| M8      | Fixed           | `perf(diagnostics): budget the whole explain call, not each provider`                                                                         |
+| L2      | Fixed           | folded into the M6/M7 commit (the prompt singleton is gone)                                                                                   |
+| L3, L8  | Fixed           | `fix(quickstart): show display labels in the managed-instance tooltip`                                                                        |
+| L4      | Fixed           | `fix(commands): keep argument unwrapping inside the guarded block`                                                                            |
+| L5      | Fixed           | `docs(diagnostics): note that the error is a bare string on the webview path`                                                                 |
+| L7      | Fixed           | `fix(quickstart): show progress during an explicit deep refresh`                                                                              |
+| M9      | Fixed           | `fix(quickstart): stop re-inspecting the container hydration just adopted`                                                                    |
+| L1      | Open, by choice | Collapsing the root is what makes hydration lazy. Left as a UX decision to confirm, not a defect.                                             |
+| L6      | Open, by choice | Deliberate: the provider's premise is that the error shape does not matter. One `docker inspect` per foreground failure is the accepted cost. |
+| L9      | Verified        | The removed `running` / `stopped` strings have no remaining callers.                                                                          |
 
 The test gaps listed at the end are covered by the commits above, except the ones tied to L1 and L6.
 
@@ -46,7 +46,7 @@ Found while walking the first-run render sequence, after the original review.
 
 `setStatus()` fires the status emitter unconditionally, and the subscriber in
 [ClustersExtension.ts](../../../../../src/documentdb/ClustersExtension.ts) refreshes the whole Connections tree. So
-`adoptContainer()` during hydration queues a tree refresh, which re-enters `getChildren()` *after*
+`adoptContainer()` during hydration queues a tree refresh, which re-enters `getChildren()` _after_
 `hydrated` has flipped to `true`. That call therefore captures `wasHydrated === true` and starts
 `refreshLiveStateInBackground()`. Since `lastBackgroundRefreshAt` was still `0`, the 5 s cooldown
 did not block it.
@@ -56,18 +56,18 @@ Visible effect: on the first expansion the row flashes
 `finally` then fires the emitter unconditionally for a second full-tree refresh.
 
 The `wasHydrated` guard was meant to prevent this, but it only covers the `getChildren()` call that
-*triggered* hydration, not the status-event-driven re-render that follows it.
+_triggered_ hydration, not the status-event-driven re-render that follows it.
 `refreshHydratedState()` already armed the cooldown for exactly this reason (pinned by
 `does not start a background live-state probe immediately after explicit refresh`);
 `ensureHydrated()` now does the same.
 
 First expansion of a running instance, before and after:
 
-| | Before | After |
-| --- | --- | --- |
-| Docker calls to render the row | 4 | 3 |
-| Full-tree refreshes | 2 | 1 |
-| `· Refreshing…` flash | yes | no |
+|                                | Before | After |
+| ------------------------------ | ------ | ----- |
+| Docker calls to render the row | 4      | 3     |
+| Full-tree refreshes            | 2      | 1     |
+| `· Refreshing…` flash          | yes    | no    |
 
 ## Summary
 
@@ -142,7 +142,7 @@ Two providers do not look at the error at all before answering:
   does not matter here").
 - `KubernetesDiagnosticsProvider.explain()` ignores it whenever the tunnel is down.
 
-So: user opens *Create Database* on a Quick Start cluster whose container is stopped, presses Esc →
+So: user opens _Create Database_ on a Quick Start cluster whose container is stopped, presses Esc →
 `UserCancelledError` → **modal** dialog "DocumentDB Local does not appear to be running." The same
 applies to `fetchChildrenWithDiagnostics` in
 [src/tree/BaseExtendedTreeDataProvider.ts](../../../../../src/tree/BaseExtendedTreeDataProvider.ts).
@@ -227,7 +227,7 @@ void vscode.window.showErrorMessage(diagnosis.message, {
 ```
 
 `MessageOptions.detail` is only rendered for modal messages — the repo already documents this in
-[src/webviews/_integration/appRouter.ts](../../../../../src/webviews/_integration/appRouter.ts) ("The content of
+[src/webviews/\_integration/appRouter.ts](../../../../../src/webviews/_integration/appRouter.ts) ("The content of
 the 'detail' field is only shown when modal is true"). Combined with
 `context.errorHandling.suppressDisplay = true`, the raw driver error now disappears from this
 surface entirely, which is the opposite of the PR's "keep the raw text as detail" rule.
@@ -286,17 +286,17 @@ that is on top of the driver's own server-selection timeout.
 
 ## Low / polish
 
-| # | Finding | Where |
-| --- | --- | --- |
-| L1 | Root row changed from `Expanded` to `Collapsed`. Deliberate (it is what makes hydration lazy), but on a fresh install the primary onboarding affordance now sits behind a chevron. Worth a UX sign-off, and worth calling out in the release notes. | [LocalQuickStartItem.ts](../../../../../src/tree/connections-view/LocalQuickStart/LocalQuickStartItem.ts) |
-| L2 | `stoppedInstancePrompt` is a module-level singleton with no alias key, and the Start command takes no alias. Harmless today (single instance), but the file elsewhere is careful about the multi-instance seam. Key it by alias. | same |
-| L3 | Tooltip shows raw identifiers to users: `status.state` (`NotInstalled`, `CredentialsMissing`), `readiness.endpointKind` (`unixSocket`), `readiness.osType` (`linux`). The file already has `dockerProviderLabel` / `executionTargetLabel` for exactly this. | same |
-| L4 | `unwrapArgs()` moved outside the `try`, so a throw from unwrapping now bypasses the `UserFacingError` handling. Keep it inside with a `let`. | [commandErrorHandling.ts](../../../../../src/utils/commandErrorHandling.ts) |
-| L5 | `explainOperationFailure` passes a bare `string` as `error`. Documented, but the parameter is typed `unknown`, so nothing stops a future provider from doing `instanceof` and silently never matching from webviews. Consider a distinct `message` field on the request. | [appRouter.ts](../../../../../src/webviews/_integration/appRouter.ts) |
-| L6 | Because `QuickStartDiagnosticsProvider` ignores the error, **every** webview failure on the Quick Start cluster (including a bad query) triggers a `docker inspect`. Cheap, but it contradicts "answer the cheap question first". | [QuickStartDiagnosticsProvider.ts](../../../../../src/services/localQuickStart/QuickStartDiagnosticsProvider.ts) |
-| L7 | `refreshHydratedState()` runs a full Docker reconciliation from a context-menu click with no progress indication and rethrows into the generic handler. Consider `withProgress` on the tree item. | [LocalQuickStartItem.ts](../../../../../src/tree/connections-view/LocalQuickStart/LocalQuickStartItem.ts) |
-| L8 | `escapeMarkdown` escapes `-` and `.`, so tests assert on `documentdb\-local` and `28\.1\.1`. Narrowing the character class would keep the tests readable. | same |
-| L9 | Removing the "changed in another window" notification for `start()`/`stop()` drift is a good call, but the two removed l10n strings (`running`, `stopped`) suggest checking no other surface still relies on them. | [QuickStartService.ts](../../../../../src/services/localQuickStart/QuickStartService.ts) |
+| #   | Finding                                                                                                                                                                                                                                                                  | Where                                                                                                            |
+| --- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------- |
+| L1  | Root row changed from `Expanded` to `Collapsed`. Deliberate (it is what makes hydration lazy), but on a fresh install the primary onboarding affordance now sits behind a chevron. Worth a UX sign-off, and worth calling out in the release notes.                      | [LocalQuickStartItem.ts](../../../../../src/tree/connections-view/LocalQuickStart/LocalQuickStartItem.ts)        |
+| L2  | `stoppedInstancePrompt` is a module-level singleton with no alias key, and the Start command takes no alias. Harmless today (single instance), but the file elsewhere is careful about the multi-instance seam. Key it by alias.                                         | same                                                                                                             |
+| L3  | Tooltip shows raw identifiers to users: `status.state` (`NotInstalled`, `CredentialsMissing`), `readiness.endpointKind` (`unixSocket`), `readiness.osType` (`linux`). The file already has `dockerProviderLabel` / `executionTargetLabel` for exactly this.              | same                                                                                                             |
+| L4  | `unwrapArgs()` moved outside the `try`, so a throw from unwrapping now bypasses the `UserFacingError` handling. Keep it inside with a `let`.                                                                                                                             | [commandErrorHandling.ts](../../../../../src/utils/commandErrorHandling.ts)                                      |
+| L5  | `explainOperationFailure` passes a bare `string` as `error`. Documented, but the parameter is typed `unknown`, so nothing stops a future provider from doing `instanceof` and silently never matching from webviews. Consider a distinct `message` field on the request. | [appRouter.ts](../../../../../src/webviews/_integration/appRouter.ts)                                            |
+| L6  | Because `QuickStartDiagnosticsProvider` ignores the error, **every** webview failure on the Quick Start cluster (including a bad query) triggers a `docker inspect`. Cheap, but it contradicts "answer the cheap question first".                                        | [QuickStartDiagnosticsProvider.ts](../../../../../src/services/localQuickStart/QuickStartDiagnosticsProvider.ts) |
+| L7  | `refreshHydratedState()` runs a full Docker reconciliation from a context-menu click with no progress indication and rethrows into the generic handler. Consider `withProgress` on the tree item.                                                                        | [LocalQuickStartItem.ts](../../../../../src/tree/connections-view/LocalQuickStart/LocalQuickStartItem.ts)        |
+| L8  | `escapeMarkdown` escapes `-` and `.`, so tests assert on `documentdb\-local` and `28\.1\.1`. Narrowing the character class would keep the tests readable.                                                                                                                | same                                                                                                             |
+| L9  | Removing the "changed in another window" notification for `start()`/`stop()` drift is a good call, but the two removed l10n strings (`running`, `stopped`) suggest checking no other surface still relies on them.                                                       | [QuickStartService.ts](../../../../../src/services/localQuickStart/QuickStartService.ts)                         |
 
 ---
 
