@@ -739,8 +739,15 @@ Do this before starting, and the 32 collapse into one decision instead of
 thirty-two:
 
 ```bash
-# from the rebase, for every conflicted path outside managed-identities/
-git checkout --ours -- <path>   # or: git rm <old path> and keep the renamed file
+# During the rebase, for every conflicted path outside managed-identities/.
+# Most conflicts are modify/delete: the restructure moved the file, #886 only
+# reformatted it in place. Drop the old path and keep the renamed file.
+git rm <old path>
+
+# Where git detected the rename instead, the file conflicts at its new path.
+# Take the restructured side. Note that during a rebase --ours is the branch
+# being rebased ONTO, i.e. the restructure — the opposite of merge semantics.
+git checkout --ours -- <new path>
 ```
 
 **Two files this section did not account for:**

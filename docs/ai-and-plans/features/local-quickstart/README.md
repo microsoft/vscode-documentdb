@@ -9,7 +9,6 @@ code:
     - src/services/localQuickStart/**
     - src/tree/connections-view/LocalQuickStart/**
     - src/webviews/documentdb/localQuickStart/**
-    - src/webviews/documentdb/localQuickStartView/**
 ---
 
 # Local Quick Start
@@ -33,7 +32,7 @@ regular new-connection wizard instead ([0001](./decisions.md#0001--single-manage
   probes and classification, provisioning state machine, credentials, output masking
 - `src/commands/localQuickStart/**` — commands and contributions
 - `src/tree/connections-view/LocalQuickStart/**` — the tree node and its lifecycle actions
-- `src/webviews/documentdb/localQuickStart/**`, `.../localQuickStartView/**` — the setup wizard
+- `src/webviews/documentdb/localQuickStart/**` — the setup wizard
 
 ## User docs
 
