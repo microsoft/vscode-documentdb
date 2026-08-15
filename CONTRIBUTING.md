@@ -352,20 +352,11 @@ For complex problems, or general problems the review discovers, the author is fr
 
 > **Status:** This is a **recommendation**, not a hard rule. The workflow is currently in use and being evaluated, so treat it as a pattern to try and give feedback on rather than a fixed process.
 
-The stages above target code review. UX and workflow review is different: the value comes from actually using the extension and exercising real user journeys, not from reading a diff. The recommended pattern here is a **person paired with an agent on the side**: the person steers, the agent reads the code, checks claims against it, and keeps the running log.
+The stages above target code review. UX and workflow review is different: the value comes from actually using the extension and walking real user journeys, not from reading a diff. The pattern is a **person paired with an agent** — you steer and report what you see, the agent verifies each claim against the code and keeps the log.
 
-A worked example lives in [`docs/ai-and-plans/features/kubernetes-discovery/iterations/01-kubernetes-discovery/bugbash-090-ux-review.md`](docs/ai-and-plans/features/kubernetes-discovery/iterations/01-kubernetes-discovery/bugbash-090-ux-review.md).
+**Use the [`ux-pr-review`](.github/skills/ux-pr-review/SKILL.md) skill.** Ask an agent to "prepare a UX review for PR #NNN". It owns the procedure, the document template, the status legend, and the worked examples. None of that is repeated here, so there is only one copy to keep correct.
 
-How the pattern works:
-
-- **The person drives the UX.** You try the extension, walk the flows, and share what you find with the agent. The agent does the reading, verifies behavior against the current code, drafts wording, and records decisions.
-- **Split the work into phases by user journey**, not by issue number. For example: first-run and empty states, adding a source, tree presentation, connectivity and tooltips, and so on. Discuss, decide, and implement one phase, then **close it out before moving to the next**.
-- **Why phase it:** the agent's working context stays lean, because only the slice of code and discussion relevant to the current phase is loaded at any time, which keeps the analysis accurate instead of sprawling. The reviewer's attention also stays on one coherent area at a time.
-- **Keep a running log** in the feature's `iterations/` folder under `docs/ai-and-plans/`. Each iteration records the feedback that came in, the reasoning, the decision, and what was actually implemented, so a future reader, human or agent, can pick up any single phase cold and understand both what was decided and why.
-- **Ask the agent for tests** as discoveries land, so behavior agreed during the review is locked in rather than re-derived later.
-- **Use scannable status markers** (for example Done, Partial or Deferred, Flag, Won't fix) so the state of each item is visible at a glance.
-- **Extract out-of-scope findings into issues.** A UX review often surfaces things that are beyond the PR's scope, or that would risk delaying the merge if pulled in now. When that happens, ask the agent to file an issue on the repo summarizing the finding and link it from the log. This keeps the current PR focused and mergeable while making sure nothing discovered is lost.
-- **Reconcile after merge.** A running log goes stale the moment behavior changes. Once the work merges, stamp the log with a short note pointing to the current source of truth (the user manual and the pre-merge code review), so nobody mistakes an old iteration for current behavior.
+The gist, and the part that is yours rather than the agent's: **a UX review is worth what gets written down.** Every discovery, the decision taken on it, and the **reason** for that decision go into a running log committed to the feature's `iterations/` folder under `docs/ai-and-plans/`. Phase the work by user journey and close each phase out before starting the next, so the log stays readable and the agent's context stays lean. A decision recorded without its rationale gets re-litigated later by someone reading the code and wondering why.
 
 ## 7. Release Process
 
