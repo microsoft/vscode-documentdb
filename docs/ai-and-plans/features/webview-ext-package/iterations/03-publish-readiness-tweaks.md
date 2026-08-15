@@ -189,7 +189,7 @@ were imprecise.
 
 ### What
 
-`docs/ai-and-plans/practices/webview-ext-migration-manual.md`
+`docs/ai-and-plans/features/webview-ext-package/migration-manual.md`
 listed `WithTelemetry<T, TTelemetry>` under the `.` (shared) entry point in the
 "New primitives that had no old equivalent" table. That is wrong — it is
 exported from `./host`. Also added `WithTelemetry` to the `./host` row of the
@@ -226,7 +226,7 @@ already correct.
 | ---------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `packages/vscode-ext-webview/package.json`                                               | Add `"sideEffects": false`.                                                                                                                          |
 | `packages/vscode-ext-webview/README.md`                                                  | Clarify optional peer dependencies in the install prose and the peer-dependency table; correct `WithTelemetry`'s documented entry point to `./host`. |
-| `docs/ai-and-plans/practices/webview-ext-migration-manual.md` | Correct `WithTelemetry`'s documented entry point to `./host`.                                                                                        |
+| `docs/ai-and-plans/features/webview-ext-package/migration-manual.md` | Correct `WithTelemetry`'s documented entry point to `./host`.                                                                                        |
 
 ## Commits
 

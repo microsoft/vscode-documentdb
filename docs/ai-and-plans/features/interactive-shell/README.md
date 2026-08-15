@@ -24,7 +24,7 @@ helpers (`show dbs`, `use db`, `it`, `help`, `exit`), keep variables across comm
 history with the arrow keys.
 
 It is one of three query surfaces built on a shared foundation. See
-[cross-cutting/query-surfaces-roadmap.md](../../cross-cutting/query-surfaces-roadmap.md) for the
+[iterations/00-program-roadmap.md](./iterations/00-program-roadmap.md) for the
 program-level narrative, and the sibling areas
 [query-playground](../query-playground/README.md) and
 [completions-and-schema](../completions-and-schema/README.md).
@@ -44,7 +44,7 @@ program-level narrative, and the sibling areas
 
 - **Each shell terminal owns a dedicated worker thread.** That is what makes infinite loops
   survivable and keeps clients isolated. See
-  [cross-cutting/multi-connection-behavior.md](../../cross-cutting/multi-connection-behavior.md)
+  [query-playground/multi-connection-behavior.md](../query-playground/multi-connection-behavior.md)
   for the user-visible consequences of that model.
 - **Highlighting reuses the Monarch tokenizer** extracted for the query editors rather than a
   second grammar, so the input line and the result formatter colorize the same way.
@@ -82,5 +82,5 @@ a three-model consolidated review with each finding verified against the source.
 ## Reading order for newcomers
 
 1. This README
-2. [cross-cutting/query-surfaces-roadmap.md](../../cross-cutting/query-surfaces-roadmap.md)
+2. [iterations/00-program-roadmap.md](./iterations/00-program-roadmap.md)
 3. [iterations/08-interactive-shell/plan.md](./iterations/08-interactive-shell/plan.md)

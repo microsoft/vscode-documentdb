@@ -31,11 +31,12 @@ middleware seams around them. This extension consumes it through `src/webviews/_
 - [.github/skills/webview-trpc-messaging](../../../../.github/skills/webview-trpc-messaging/SKILL.md)
 - [.github/skills/react-webview-architecture](../../../../.github/skills/react-webview-architecture/SKILL.md)
 
-## Practices
+## Migration manual
 
-- [practices/webview-ext-migration-manual.md](../../practices/webview-ext-migration-manual.md) —
-  the old-to-new rename map (package, folders, subpaths, symbols) for migrating a consumer onto the
-  package. It is a procedure, not this area's history, which is why it lives under `practices/`.
+- [migration-manual.md](./migration-manual.md) — the old-to-new rename map
+  (package, folders, subpaths, symbols) for migrating a consumer onto the package. It records
+  this package's own rename and doubles as the template for the parallel vscode-cosmosdb
+  adoption.
 
 ## Architecture (intent — code is authoritative for behavior)
 
@@ -73,5 +74,5 @@ Recorded in the package's own `README.md` and `ADVANCED.md`, and in the publish-
 
 1. This README
 2. [design.md](./design.md)
-3. [practices/webview-ext-migration-manual.md](../../practices/webview-ext-migration-manual.md) if
+3. [migration-manual.md](./migration-manual.md) if
    you are moving a consumer onto the package

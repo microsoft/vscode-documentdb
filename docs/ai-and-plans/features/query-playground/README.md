@@ -22,7 +22,7 @@ created for, so several can be open at once against different servers, each with
 thread and result panel.
 
 It is one of three query surfaces built on a shared foundation. See
-[cross-cutting/query-surfaces-roadmap.md](../../cross-cutting/query-surfaces-roadmap.md), and the
+[the query-surfaces roadmap](../interactive-shell/iterations/00-program-roadmap.md), and the
 sibling areas [interactive-shell](../interactive-shell/README.md) and
 [completions-and-schema](../completions-and-schema/README.md).
 

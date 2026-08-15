@@ -25,7 +25,7 @@ Playground, and the Interactive Shell.
 
 Sibling areas: [query-playground](../query-playground/README.md),
 [interactive-shell](../interactive-shell/README.md). Program narrative:
-[cross-cutting/query-surfaces-roadmap.md](../../cross-cutting/query-surfaces-roadmap.md).
+[the query-surfaces roadmap](../interactive-shell/iterations/00-program-roadmap.md).
 
 ## Code map
 
