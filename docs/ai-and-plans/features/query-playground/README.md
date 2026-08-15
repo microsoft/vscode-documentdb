@@ -5,8 +5,8 @@ status: active
 prs: [533, 536, 540, 553, 559, 560, 583, 758]
 verified: 2026-08-14
 code:
-    - src/documentdb/playground/**
-    - src/commands/playground/**
+  - src/documentdb/playground/**
+  - src/commands/playground/**
 ---
 
 # Query Playground
@@ -35,7 +35,9 @@ sibling areas [interactive-shell](../interactive-shell/README.md) and
 ## User docs
 
 - [docs/user-manual/query-playground.md](../../../user-manual/query-playground.md)
-- [docs/user-manual/query-runtime.md](../../../user-manual/query-runtime.md)
+- [docs/user-manual/query-runtime.md](../../../user-manual/query-runtime.md) — including
+  "Running Several Sessions at Once", which is the source of truth for the per-cluster worker
+  behavior that [multi-connection-behavior.md](./multi-connection-behavior.md) used to hold
 
 ## Architecture (intent — code is authoritative for behavior)
 
@@ -52,16 +54,16 @@ sibling areas [interactive-shell](../interactive-shell/README.md) and
 
 ## Timeline
 
-| Step   | PR   | What changed                                          | Docs                                                                                          |
-| ------ | ---- | ----------------------------------------------------- | ----------------------------------------------------------------------------------------------- |
-| 5      | #533 | Legacy scrapbook removed (ANTLR, LSP, child process)   | [iterations/05-legacy-scrapbook-removal.md](./iterations/05-legacy-scrapbook-removal.md)          |
-| 6      | #536 | The Query Playground itself                            | [iterations/06-query-playground.md](./iterations/06-query-playground.md)                          |
-| 6.2    | #540 | Persistent worker evaluation                           | [iterations/06.2-persistent-worker-eval.md](./iterations/06.2-persistent-worker-eval.md)          |
-| 7.1.5  | #553 | Name unification                                       | [iterations/07.1.5-name-unification.md](./iterations/07.1.5-name-unification.md)                  |
-| 7.1.6  | #559 | Console logging and result display                     | [iterations/07.1.6-console-logging.md](./iterations/07.1.6-console-logging.md)                    |
-| 7.2    | #560 | Pre-shell hardening                                    | [iterations/07.2-pre-shell-critical.md](./iterations/07.2-pre-shell-critical.md)                  |
-| 8      | #583 | Multi-connection playgrounds                           | [iterations/08-multi-connection-playgrounds.md](./iterations/08-multi-connection-playgrounds.md)  |
-| 9      | #758 | Connections survive save and reopen; Connect picker    | [iterations/09-query-playground-connections.md](./iterations/09-query-playground-connections.md)  |
+| Step  | PR   | What changed                                         | Docs                                                                                             |
+| ----- | ---- | ---------------------------------------------------- | ------------------------------------------------------------------------------------------------ |
+| 5     | #533 | Legacy scrapbook removed (ANTLR, LSP, child process) | [iterations/05-legacy-scrapbook-removal.md](./iterations/05-legacy-scrapbook-removal.md)         |
+| 6     | #536 | The Query Playground itself                          | [iterations/06-query-playground.md](./iterations/06-query-playground.md)                         |
+| 6.2   | #540 | Persistent worker evaluation                         | [iterations/06.2-persistent-worker-eval.md](./iterations/06.2-persistent-worker-eval.md)         |
+| 7.1.5 | #553 | Name unification                                     | [iterations/07.1.5-name-unification.md](./iterations/07.1.5-name-unification.md)                 |
+| 7.1.6 | #559 | Console logging and result display                   | [iterations/07.1.6-console-logging.md](./iterations/07.1.6-console-logging.md)                   |
+| 7.2   | #560 | Pre-shell hardening                                  | [iterations/07.2-pre-shell-critical.md](./iterations/07.2-pre-shell-critical.md)                 |
+| 8     | #583 | Multi-connection playgrounds                         | [iterations/08-multi-connection-playgrounds.md](./iterations/08-multi-connection-playgrounds.md) |
+| 9     | #758 | Connections survive save and reopen; Connect picker  | [iterations/09-query-playground-connections.md](./iterations/09-query-playground-connections.md) |
 
 Iteration numbers are the original step numbers of the shell-integration program where one existed.
 

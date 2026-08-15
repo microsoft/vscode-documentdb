@@ -5,8 +5,8 @@ status: active
 prs: [676, 766, 786, 795]
 verified: 2026-08-14
 code:
-    - packages/vscode-ext-webview/**
-    - src/webviews/_integration/**
+  - packages/vscode-ext-webview/**
+  - src/webviews/_integration/**
 ---
 
 # `@microsoft/vscode-ext-webview`
@@ -53,11 +53,11 @@ middleware seams around them. This extension consumes it through `src/webviews/_
 
 ## Timeline
 
-| Date       | PR   | What changed                                          | Docs                                                                                    |
-| ---------- | ---- | ----------------------------------------------------- | ----------------------------------------------------------------------------------------- |
-| 2026-05-22 | #676 | Preview hardening and consumer reshape                 | [iterations/01-preview-hardening.md](./iterations/01-preview-hardening.md)               |
-| 2026-06-24 | #766 | Package redesign: design, plan, and review             | [iterations/02-package-redesign/](./iterations/02-package-redesign/)                     |
-| 2026-07-06 | #786 | Publish-readiness tweaks                               | [iterations/03-publish-readiness-tweaks.md](./iterations/03-publish-readiness-tweaks.md) |
+| Date       | PR   | What changed                                            | Docs                                                                                     |
+| ---------- | ---- | ------------------------------------------------------- | ---------------------------------------------------------------------------------------- |
+| 2026-05-22 | #676 | Preview hardening and consumer reshape                  | [iterations/01-preview-hardening.md](./iterations/01-preview-hardening.md)               |
+| 2026-06-24 | #766 | Package redesign: design, plan, and review              | [iterations/02-package-redesign/](./iterations/02-package-redesign/)                     |
+| 2026-07-06 | #786 | Publish-readiness tweaks                                | [iterations/03-publish-readiness-tweaks.md](./iterations/03-publish-readiness-tweaks.md) |
 | 2026-07-14 | #795 | Thin telemetry middleware and a generic TelemetryRunner | [iterations/04-thin-telemetry-review.md](./iterations/04-thin-telemetry-review.md)       |
 
 ## Decisions

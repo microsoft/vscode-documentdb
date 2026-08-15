@@ -39,6 +39,25 @@ When you run a query in the Query Playground or Interactive Shell, the extension
 
 The Query Playground uses **fresh context** mode by default: each execution starts with a clean slate. The Interactive Shell uses **persistent context** mode: variables, functions, and state carry over between commands within a session.
 
+## Running Several Sessions at Once
+
+You can keep multiple playgrounds and shells open at the same time. How they share worker threads differs between the two surfaces, and that difference is visible when one of them is busy.
+
+**Interactive Shell: one worker per terminal.**
+
+- Each shell terminal gets its own dedicated worker thread. Opening two shells against the same cluster creates two independent workers.
+- A slow operation in one shell does not block another shell.
+- Each shell keeps its own session state, including the current database and any variables you defined.
+
+**Query Playground: one worker per cluster.**
+
+- Playground workers are shared per cluster, so opening several playground tabs against the same server reuses one worker.
+- A slow operation in one playground will hold up other playgrounds connected to the same cluster until it finishes. Requests are queued and run one after another, so results are never mixed between tabs.
+- Playgrounds connected to different clusters run fully independently, because each cluster gets its own worker.
+- Each playground document stays bound to the cluster and database it was created for. There is no reconnect or change-connection action.
+
+The shell uses per-terminal workers because each session carries independent state that must not leak between terminals. Playground executions always name their target database explicitly and keep no state between runs, so sharing one worker per cluster is safe and avoids the cost of an extra thread per tab.
+
 ## How Autocompletion Works
 
 Autocompletion across all query surfaces (Collection View, Query Playground, Interactive Shell) is powered by two data sources:

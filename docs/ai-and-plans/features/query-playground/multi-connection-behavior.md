@@ -1,12 +1,19 @@
 ---
 feature: query-playground
 kind: notes
-status: active
+status: superseded
 created: 2026-04-15
-verified: 2026-08-14
+verified: 2026-08-15
+superseded-by: docs/user-manual/query-runtime.md
 ---
 
 # Multi-Connection Behavior — User-Facing Facts
+
+> **Superseded 2026-08-15.** These facts were promoted into
+> [docs/user-manual/query-runtime.md](../../../user-manual/query-runtime.md),
+> section "Running Several Sessions at Once", which is now the source of truth
+> for them. This document is kept for the rationale in "Why the Difference?" and
+> "Future Consideration", which are design notes rather than user-facing facts.
 
 > Pre-seed for user documentation. These facts describe the runtime behavior
 > when multiple playgrounds and/or interactive shells are open simultaneously.
@@ -32,11 +39,11 @@ verified: 2026-08-14
 
 ## Why the Difference?
 
-| Aspect              | Interactive Shell        | Query Playground           |
-| ------------------- | ------------------------ | -------------------------- |
-| Worker granularity   | Per terminal             | Per cluster                |
-| Isolation            | Full                     | Per cluster (shared queue) |
-| Resource cost        | Higher (one thread each) | Lower (shared per server)  |
+| Aspect             | Interactive Shell        | Query Playground           |
+| ------------------ | ------------------------ | -------------------------- |
+| Worker granularity | Per terminal             | Per cluster                |
+| Isolation          | Full                     | Per cluster (shared queue) |
+| Resource cost      | Higher (one thread each) | Lower (shared per server)  |
 
 The shell uses per-terminal workers because each session can have independent
 state (`use <db>`, variables, cursor position). Playgrounds are stateless

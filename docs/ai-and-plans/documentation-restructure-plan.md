@@ -44,7 +44,7 @@ by earlier source refactors, from before this work.
 | §7.1      | Per-area `future-work.md` replaces the central `future-work/` folder                | `query-playground` and `completions-and-schema` each keep two: `future-work.md` and `future-work-<topic>.md`                                                                                           | Both areas inherited two distinct future-work lists. Folding them into one file needed heading surgery that would have broken existing anchors, for no navigational gain: both areas stay well under the ~6-root-file threshold in rule 5.                                                    |
 | §9.2      | Three commits; link repairs cover intra-document links                              | Four commits, and the link-repair commit also updates three `@see` comments in `src/`                                                                                                                  | Those comments were the only reverse index from code back to design rationale, which §6.1 calls the highest-value optional metadata. Leaving them broken would have defeated the point. The fourth commit separates the pilot from the remaining areas.                                       |
 | §9.1      | Do not start until 0.10.0 is merged                                                 | Executed on a branch off `main` at 0.10.0                                                                                                                                                              | Operator instruction.                                                                                                                                                                                                                                                                         |
-| §7.4      | Rebase PR #886 and relocate `managed-identities/` into `features/`                     | Not done                                                                                                                                                                                               | Operator instruction: open PRs update themselves to the new structure after this lands.                                                                                                                                                                                                       |
+| §7.4      | Rebase PR #886 and relocate `managed-identities/` into `features/`                  | Not done                                                                                                                                                                                               | Operator instruction: open PRs update themselves to the new structure after this lands.                                                                                                                                                                                                       |
 | §8A       | Skills work                                                                         | Not done                                                                                                                                                                                               | The plan marks §8A "OPEN FOR DISCUSSION" and says not to implement without confirming.                                                                                                                                                                                                        |
 
 **One bonus repair**, outside the plan's scope but made while the link paths were
@@ -62,9 +62,79 @@ the name. It was outweighed by `features/` being the word a contributor reaches
 for first. §5.1 is annotated rather than rewritten, so the argument the reversal
 had to answer stays on the record.
 
+### Post-migration change: the secondary buckets dissolved (2026-08-15)
+
+`cross-cutting/` and `practices/` are gone. The knowledge base is now exactly
+`README.md`, this plan, `live-preview-playwright.md`, and `features/`.
+
+**Why.** The migration was the experiment §5.2 needed. Of the five documents in
+the two buckets, **one** was genuinely feature-independent. Two were misfiled the
+same way `cross-feature-links.md` was: a document that _touches_ several features
+was filed as "not a feature", even though its own title named its home. That is
+precisely the failure §11 predicted when it rejected a `shared/` tier — an
+unpredictable "is this shared?" judgment made at creation time — and `cross-cutting/`
+was that tier under another name. Two folders, five files, one of them correctly
+placed, is not a structure.
+
+**`general/` was considered and rejected.** Merging both buckets into one would
+have removed the _choice between_ buckets, but a folder named for the absence of
+a property still asks "does this belong to a feature?" and then offers a
+comfortable place to answer "not sure". Dissolving removes the question instead
+of renaming it. The replacement rule is in §5.2: everything belongs to a feature;
+anything that genuinely does not is a single file at the knowledge-base root,
+where it is visible on `ls` and therefore self-policing.
+
+**What moved:**
+
+| From                                         | To                                                               | Why                                                                                                                              |
+| -------------------------------------------- | ---------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
+| `cross-cutting/query-surfaces-roadmap.md`    | `features/interactive-shell/iterations/00-program-roadmap.md`    | Its own title is "Interactive Shell Integration — High-Level Plan". It is that feature's origin story, not a governing document. |
+| `cross-cutting/cross-feature-links.md`       | `features/query-playground/iterations/10-cross-feature-links.md` | A 646-line implementation log with commit hashes. `kind: iteration`.                                                             |
+| `cross-cutting/multi-connection-behavior.md` | `features/query-playground/multi-connection-behavior.md`         | Superseded in place; see below.                                                                                                  |
+| `practices/webview-ext-migration-manual.md`  | `features/webview-ext-package/migration-manual.md`               | Records one specific package rename plus the vscode-cosmosdb adoption template. It belongs to that feature.                      |
+| `practices/live-preview-playwright.md`       | `live-preview-playwright.md` (root)                              | The only genuinely feature-independent document in either bucket.                                                                |
+
+**The multi-connection facts were promoted.** `docs/user-manual/query-runtime.md`
+covered worker _isolation_ but not per-cluster worker sharing, one worker per
+shell terminal, or playgrounds on the same cluster queueing behind each other.
+Those are user-facing facts and had been sitting in an internal folder since
+2026-04-15, in a document whose own header called itself a "pre-seed for user
+documentation". They now live in a "Running Several Sessions at Once" section of
+the user manual. The source document is kept at `status: superseded` with
+`superseded-by:` pointing at the manual, because its "Why the Difference?" and
+"Future Consideration" chapters are design rationale rather than user-facing
+facts, and would be lost by deleting it.
+
+**The flat-pair convention is now the rule, not a deviation.** Rule 2 previously
+said "one file per iteration" and told you to merge; it now states that two
+documents for one iteration share the iteration number and are told apart by a
+genre suffix. §7.1's `connections-tree` row, which said "2 files, merged into one
+iteration", is corrected. Nothing was retrofitted — the convention describes what
+is already on disk.
+
+**Frontmatter.** `area:` became `feature:` across 101 documents, with the value
+taken from the owning folder rather than the old field, which also corrected four
+files still claiming `area: cross-cutting` or `area: practices` after the moves.
+The two root documents that carried the field lost it: there is no
+`feature: general` value, because a root-level document is by definition one that
+belongs to no feature. Rule 6 and §6.1 are amended accordingly.
+
+**Verification.** Link check: zero breakage caused by these moves. The remaining
+findings are the same pre-existing dead `src/` paths from earlier refactors, plus
+four intentional historical references (`PRs/` in the old-links note, and
+`managed-identities/` from the unmerged PR #886). Full checklist green: `l10n`,
+`prettier-fix`, `lint`, `jest`, `build`.
+
+**No open questions arose.** Two judgment calls were made inside the latitude the
+task allowed, and are recorded here rather than raised: the `multi-connection-behavior.md`
+supersession note names the specific user-manual section rather than the file
+alone, and the frontmatter templates in §6.1, §6.3, the knowledge-base README and
+the `ux-pr-review` skill were updated to `feature:` so that no `area:` example
+survives anywhere.
+
 **Still open:** all of §8A, and the `04.6-collection-view-ux-improvements.md`
 placement in §12 (filed under `completions-and-schema` as the plan provisionally
-directed; noted as such in that area's README).
+directed; noted as such in that feature's README).
 
 ---
 
@@ -183,14 +253,17 @@ This is the complete rule set. If a situation is not covered, prefer fewer files
 and fewer folders.
 
 ```
-1. An area folder is the unit. PRs are iterations inside it.
-2. One file per iteration. Make it a folder only when it gets unwieldy
-   (~3+ documents, or a merge that would exceed ~1000 lines).
-3. One decisions.md per area. Append entries; update status in place.
-4. Durable docs sit flat at the area root. iterations/ is the only subfolder.
-5. More than ~6 root files is a smell — consider splitting the area.
+1. A feature folder is the unit. PRs are iterations inside it.
+2. One file per iteration. Two documents for one iteration share the iteration
+   number and are told apart by a genre suffix (`01-item-counting-tree.md` +
+   `01-item-counting-tree-review.md`); they sort adjacently and need no folder.
+   Promote to a folder only at three or more documents.
+3. One decisions.md per feature. Append entries; update status in place.
+4. Durable docs sit flat at the feature root. iterations/ is the only subfolder.
+5. More than ~6 root files is a smell — consider splitting the feature.
    It is a prompt to review the boundary, not an automatic split.
-6. Frontmatter: area, kind, status required. Everything else optional.
+6. Frontmatter: feature, kind, status required for documents under features/.
+   Root-level documents carry kind and status only.
 7. Code wins for behavior. Active docs win for intent. iterations/ is
    evidence only.
 8. Agents: start at the README; pull history only for specific provenance.
@@ -285,13 +358,25 @@ docs/ai-and-plans/
   the three areas it splits into (see §7.3), so the sequence is retained at zero
   cost.
 
-### 5.2 Classification tests for the secondary buckets
+### 5.2 Where a document goes
 
-- **Area** — owns product behavior or architecture.
-- **Cross-cutting** — one document genuinely governs several areas. Rare.
-- **Practice** — a reusable contributor procedure, not area history.
+> **Revised 2026-08-15.** This section originally defined classification tests for
+> two secondary buckets, `cross-cutting/` and `practices/`. Both were dissolved
+> — see §0. The test below replaces them.
 
-There is no `misc/`. Anything that does not fit goes into the nearest area.
+**Everything belongs to a feature.** A document goes in the folder of the feature
+whose behavior or architecture it describes. A document that _touches_ several
+features still belongs to one of them: file it under the feature it is the origin
+story or the implementation log of, and cross-link the siblings.
+
+**If something genuinely belongs to no feature, it is a single file at the root of
+`docs/ai-and-plans/`.** No bucket folder. Root files are self-policing: there are
+three today, and a fourth is visible immediately on `ls`. If they ever multiply
+enough to need grouping, that is the moment to group them — with evidence about
+what they actually have in common, rather than a category predicted in advance.
+
+There is no `misc/` and no `general/`. A bucket named for the absence of a
+property invites exactly the judgment call this structure exists to remove.
 
 ---
 
@@ -466,7 +551,7 @@ area-root research file referenced from a short decision entry.
 | `atlas-discovery`        | `PRs/733-…/*` (4), `PRs/834-…` (fix the 834/765 mismatch in frontmatter)                                                                                                                                                                |
 | `kubernetes-discovery`   | `PRs/621-…/*` (3)                                                                                                                                                                                                                       |
 | `webview-ext-package`    | `PRs/676-…`, `PRs/766-…/*` minus the migration manual, `PRs/786-…`, `PRs/795-…`                                                                                                                                                         |
-| `connections-tree`       | `PRs/726-…/*` (2), `PRs/714-…` (2 files, merged into one iteration)                                                                                                                                                                     |
+| `connections-tree`       | `PRs/726-…/*` (2), `PRs/714-…` (2 files, kept as a flat pair sharing iteration number 01)                                                                                                                                               |
 | `no-auth`                | `PRs/755-…/*` (3)                                                                                                                                                                                                                       |
 | `cross-cutting/`         | `10-cross-feature-links.md`, `interactive-shell/0-high-level-plan.md` (as the query-surfaces program roadmap), `interactive-shell/multi-connection-behavior.md`                                                                         |
 | `practices/`             | `live-preview-playwright-future-work.md`, `PRs/766-…/webview-ext-migration-manual.md`                                                                                                                                                   |

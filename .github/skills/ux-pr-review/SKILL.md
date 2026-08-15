@@ -93,10 +93,10 @@ Seed these as **Flag** items in the document so the operator can confirm them li
 
 ### Step 5 — Seed the review document
 
-Create the file at **`docs/ai-and-plans/features/{area}/iterations/NN-{slug}.md`** (or
+Create the file at **`docs/ai-and-plans/features/{feature}/iterations/NN-{slug}.md`** (or
 `.../iterations/NN-{slug}/ux-review.md` when that iteration already holds several documents).
-Pick the area from the index in
-[`docs/ai-and-plans/README.md`](../../../docs/ai-and-plans/README.md); create a new area folder
+Pick the feature from the index in
+[`docs/ai-and-plans/README.md`](../../../docs/ai-and-plans/README.md); create a new feature folder
 with a README if none fits. Use the full skeleton in
 [references/review-document-template.md](./references/review-document-template.md):
 header block, "How this review was run", the **Legend** (Priority + Status + Markers), the

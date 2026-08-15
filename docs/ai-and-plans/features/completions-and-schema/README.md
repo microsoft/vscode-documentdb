@@ -5,10 +5,10 @@ status: active
 prs: [506, 513, 518, 530, 532, 538, 543, 551, 717]
 verified: 2026-08-14
 code:
-    - src/documentdb/query-language/**
-    - src/documentdb/SchemaStore.ts
-    - packages/documentdb-js-operator-registry/**
-    - packages/documentdb-js-schema-analyzer/**
+  - src/documentdb/query-language/**
+  - src/documentdb/SchemaStore.ts
+  - packages/documentdb-js-operator-registry/**
+  - packages/documentdb-js-schema-analyzer/**
 ---
 
 # Completions and Schema
@@ -58,18 +58,18 @@ Sibling areas: [query-playground](../query-playground/README.md),
 
 ## Timeline
 
-| Step  | PR   | What changed                                       | Docs                                                                                                    |
-| ----- | ---- | -------------------------------------------------- | --------------------------------------------------------------------------------------------------------- |
-| 2     | #506 | `SchemaAnalyzer` extracted into a package           | [iterations/02-schema-analyzer-refactor.md](./iterations/02-schema-analyzer-refactor.md)                     |
-| 3     | #513 | `operator-registry` package                         | [iterations/03-documentdb-constants.md](./iterations/03-documentdb-constants.md)                             |
-| 3.5   | —    | Monaco language architecture decision (Option E)    | [iterations/03.5-monaco-language-architecture.md](./iterations/03.5-monaco-language-architecture.md)         |
-| 4     | #518 | Filter `CompletionItemProvider` and hover provider  | [iterations/04-filter-completion-provider.md](./iterations/04-filter-completion-provider.md)                 |
-| 4.5   | #530 | Context-sensitive completions                       | [iterations/04.5-context-sensitive-completions.md](./iterations/04.5-context-sensitive-completions.md)       |
-| 4.6   | #532 | Collection View and autocompletion UX fixes         | [iterations/04.6-collection-view-ux-improvements.md](./iterations/04.6-collection-view-ux-improvements.md)   |
-| 6.1   | #538 | Shared schema cache (`SchemaStore`)                 | [iterations/06.1-shared-schema-cache.md](./iterations/06.1-shared-schema-cache.md)                           |
-| 7     | #543 | Playground `CompletionItemProvider`                 | [iterations/07-playground-completion-provider.md](./iterations/07-playground-completion-provider.md)         |
-| 7.1   | #551 | Shared completion code moved out of `webviews/`     | [iterations/07.1-shared-completion-migration.md](./iterations/07.1-shared-completion-migration.md)           |
-| 8     | #717 | Correct aggregation references for unsafe field names | [iterations/08-referenceText-unsafe-field-names.md](./iterations/08-referenceText-unsafe-field-names.md)   |
+| Step | PR   | What changed                                          | Docs                                                                                                       |
+| ---- | ---- | ----------------------------------------------------- | ---------------------------------------------------------------------------------------------------------- |
+| 2    | #506 | `SchemaAnalyzer` extracted into a package             | [iterations/02-schema-analyzer-refactor.md](./iterations/02-schema-analyzer-refactor.md)                   |
+| 3    | #513 | `operator-registry` package                           | [iterations/03-documentdb-constants.md](./iterations/03-documentdb-constants.md)                           |
+| 3.5  | —    | Monaco language architecture decision (Option E)      | [iterations/03.5-monaco-language-architecture.md](./iterations/03.5-monaco-language-architecture.md)       |
+| 4    | #518 | Filter `CompletionItemProvider` and hover provider    | [iterations/04-filter-completion-provider.md](./iterations/04-filter-completion-provider.md)               |
+| 4.5  | #530 | Context-sensitive completions                         | [iterations/04.5-context-sensitive-completions.md](./iterations/04.5-context-sensitive-completions.md)     |
+| 4.6  | #532 | Collection View and autocompletion UX fixes           | [iterations/04.6-collection-view-ux-improvements.md](./iterations/04.6-collection-view-ux-improvements.md) |
+| 6.1  | #538 | Shared schema cache (`SchemaStore`)                   | [iterations/06.1-shared-schema-cache.md](./iterations/06.1-shared-schema-cache.md)                         |
+| 7    | #543 | Playground `CompletionItemProvider`                   | [iterations/07-playground-completion-provider.md](./iterations/07-playground-completion-provider.md)       |
+| 7.1  | #551 | Shared completion code moved out of `webviews/`       | [iterations/07.1-shared-completion-migration.md](./iterations/07.1-shared-completion-migration.md)         |
+| 8    | #717 | Correct aggregation references for unsafe field names | [iterations/08-referenceText-unsafe-field-names.md](./iterations/08-referenceText-unsafe-field-names.md)   |
 
 Iteration numbers are the original step numbers of the shell-integration program where one existed.
 

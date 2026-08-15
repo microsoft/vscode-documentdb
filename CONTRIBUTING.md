@@ -29,7 +29,7 @@ See [1.6 Force-push policy](#16-force-push-policy) for the rules behind the forc
 
 CI runs automatically on:
 
-- **Push to `main` or `release/**`** — full build, tests, and packaging; build sizes cached for PR comparisons.
+- **Push to `main` or `release/**`\*\* — full build, tests, and packaging; build sizes cached for PR comparisons.
 - **Pull requests targeting `main`, `release/**`, or `feature/**`** — full build, tests, packaging, and a code-quality report posted as a PR comment.
 - **Manual dispatch** — use `workflow_dispatch` with `enforce_full_run` to run the full pipeline on any branch.
 
@@ -266,20 +266,22 @@ This step catches webpack bundling issues and missing assets that unit tests alo
 
 This section is for new contributors, code maintainers, and AI agents. It describes where documentation about work done with AI lives so that decisions and reasoning stay discoverable long after a PR merges.
 
-The canonical location is `docs/ai-and-plans/`. Start at [`docs/ai-and-plans/README.md`](docs/ai-and-plans/README.md), which carries the area index and the full layout rules.
+The canonical location is `docs/ai-and-plans/`. Start at [`docs/ai-and-plans/README.md`](docs/ai-and-plans/README.md), which carries the feature index and the full layout rules.
 
-Durable knowledge belongs to the area that owns it. Iteration files preserve the plans, reviews, and implementation history of one round of work. Decisions that remain relevant across iterations are recorded in the area's `decisions.md`. PR and commit links are kept as provenance; the PR number is no longer the navigation key.
+Durable knowledge belongs to the feature that owns it. Iteration files preserve the plans, reviews, and implementation history of one round of work. Decisions that remain relevant across iterations are recorded in the feature's `decisions.md`. PR and commit links are kept as provenance; the PR number is no longer the navigation key.
 
 ### 5.1 Where a document goes
 
-- **An existing area** — `docs/ai-and-plans/features/<area>/`. Durable documents (`design.md`, `decisions.md`, references, `future-work.md`) sit flat at the area root. The history of one round of work goes in `iterations/NN-slug.md`, or `iterations/NN-slug/` once it grows past roughly three documents.
-- **A new area** — create `docs/ai-and-plans/features/<slug>/` with a `README.md`. Pick a slug a contributor who has never seen the repo would guess; never an abbreviation or an invented umbrella term. Add it to the area index in the knowledge-base README.
-- **Genuinely cross-cutting** — `docs/ai-and-plans/cross-cutting/`. Rare: one document must actually govern several areas.
-- **A reusable contributor procedure** — `docs/ai-and-plans/practices/`.
+**Everything belongs to a feature.**
 
-There is no `misc/`. Anything that does not fit goes into the nearest area.
+- **An existing feature** — `docs/ai-and-plans/features/<feature>/`. Durable documents (`design.md`, `decisions.md`, references, `future-work.md`) sit flat at the feature root. The history of one round of work goes in `iterations/NN-slug.md`, or `iterations/NN-slug/` once it grows past roughly three documents. Two documents for one iteration share the number and are told apart by a genre suffix, for example `01-item-counting-tree.md` and `01-item-counting-tree-review.md`.
+- **A new feature** — create `docs/ai-and-plans/features/<slug>/` with a `README.md`. Pick a slug a contributor who has never seen the repo would guess; never an abbreviation or an invented umbrella term. Add it to the feature index in the knowledge-base README.
+- **A document that touches several features** still belongs to one of them. File it under the feature it is the origin story or the implementation log of, and cross-link the siblings.
+- **A document that genuinely belongs to no feature** is a single file at the root of `docs/ai-and-plans/`.
 
-Every document carries frontmatter with at least `area`, `kind`, and `status`. `code:` globs on durable documents are the only route from a source path back to its rationale; add them where you can.
+There is no `misc/`, no `general/`, and no bucket folder for "the rest". A folder named for the absence of a property invites exactly the judgment call this layout exists to remove.
+
+Every document under `features/` carries frontmatter with at least `feature`, `kind`, and `status`; root-level documents carry `kind` and `status` only. `code:` globs on durable documents are the only route from a source path back to its rationale; add them where you can.
 
 ### 5.2 What a decision record must contain
 
@@ -291,21 +293,21 @@ Entries in `decisions.md` are semantically immutable. Append new entries rather 
 
 Work that is still in progress must be opened as a **draft** pull request. This prevents the automatic GitHub Copilot review from kicking in before it is wanted.
 
-Documents do not wait for a PR number. The area slug exists before the PR does, so write into the area folder from the start.
+Documents do not wait for a PR number. The feature slug exists before the PR does, so write into the feature folder from the start.
 
-### 5.4 Keep the area docs current
+### 5.4 Keep the feature docs current
 
-If a PR changes behavior described in an area's current documents, update `features/<area>/README.md` (and `design.md` if applicable) in the same PR.
+If a PR changes behavior described in a feature's current documents, update `features/<feature>/README.md` (and `design.md` if applicable) in the same PR.
 
 ## 6. AI-Assisted Review Workflow
 
-Contributors are expected to pre-review their own code with AI before requesting human review. The goal is to shorten the human PR-review loop by catching issues earlier. This is the repo maintainer's expectation, not optional polish. The stages below produce a structured review file that is committed into the relevant area's `iterations/` folder under `docs/ai-and-plans/`.
+Contributors are expected to pre-review their own code with AI before requesting human review. The goal is to shorten the human PR-review loop by catching issues earlier. This is the repo maintainer's expectation, not optional polish. The stages below produce a structured review file that is committed into the relevant feature's `iterations/` folder under `docs/ai-and-plans/`.
 
 > **Note:** Some of these prompts will be turned into skills in the near future. They are recorded here now for transparency and to help current contributors.
 
 ### 6.1 Stage 1: AI review pass (run by the contributor)
 
-A multi-step review that produces a committed review markdown file stored in `docs/ai-and-plans/features/<area>/iterations/`:
+A multi-step review that produces a committed review markdown file stored in `docs/ai-and-plans/features/<feature>/iterations/`:
 
 1. **Initial edge-case review** using a stronger model from one vendor. Every issue gets a severity level. Findings are written to the review markdown file in the PR folder.
 2. **Merge the Copilot reviewer comments.** Pull the GitHub Copilot reviewer's comments from the PR, merge them into the same file, and reassess the severity of each. Keep a link to each reviewer comment so it can be referenced later in follow-up responses.
@@ -353,7 +355,7 @@ How the pattern works:
 - **The person drives the UX.** You try the extension, walk the flows, and share what you find with the agent. The agent does the reading, verifies behavior against the current code, drafts wording, and records decisions.
 - **Split the work into phases by user journey**, not by issue number. For example: first-run and empty states, adding a source, tree presentation, connectivity and tooltips, and so on. Discuss, decide, and implement one phase, then **close it out before moving to the next**.
 - **Why phase it:** the agent's working context stays lean, because only the slice of code and discussion relevant to the current phase is loaded at any time, which keeps the analysis accurate instead of sprawling. The reviewer's attention also stays on one coherent area at a time.
-- **Keep a running log** in the area's `iterations/` folder under `docs/ai-and-plans/`. Each iteration records the feedback that came in, the reasoning, the decision, and what was actually implemented, so a future reader, human or agent, can pick up any single phase cold and understand both what was decided and why.
+- **Keep a running log** in the feature's `iterations/` folder under `docs/ai-and-plans/`. Each iteration records the feedback that came in, the reasoning, the decision, and what was actually implemented, so a future reader, human or agent, can pick up any single phase cold and understand both what was decided and why.
 - **Ask the agent for tests** as discoveries land, so behavior agreed during the review is locked in rather than re-derived later.
 - **Use scannable status markers** (for example Done, Partial or Deferred, Flag, Won't fix) so the state of each item is visible at a glance.
 - **Extract out-of-scope findings into issues.** A UX review often surfaces things that are beyond the PR's scope, or that would risk delaying the merge if pulled in now. When that happens, ask the agent to file an issue on the repo summarizing the finding and link it from the log. This keeps the current PR focused and mergeable while making sure nothing discovered is lost.
