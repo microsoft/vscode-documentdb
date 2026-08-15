@@ -13,33 +13,65 @@ VS Code Extension for Azure Cosmos DB and the MongoDB API. TypeScript (strict mo
 
 > ⚠️ **NEVER use `npm run compile`** - always use `npm run build` to build the project.
 
-## PR Completion Checklist
+## Verification: what to run, and when
 
-Before finishing work on a PR, agents **must** run the following steps in order:
+**Do not run the full suite on every commit or push.** Most of it is slow and only
+matters at hand-over. A task with many commits should run the fast loop many times
+and the hand-over checks once.
 
-1. **Localization** — If any user-facing strings were added, modified, or removed, run:
+### While working — the fast loop
+
+| Command                         | Why                                                     |
+| ------------------------------- | ------------------------------------------------------- |
+| `npm run build`                 | Quick, catches type errors. Run it as often as you like |
+| `npx jest --no-coverage <path>` | Only the tests covering what you touched                |
+
+That is the whole loop. Do **not** run `l10n`, `prettier-fix`, `lint`, or `package`
+here — they cost minutes each and say nothing about whether the change is correct.
+
+### Before hand-over — opening a PR, marking it ready, or reporting the work done
+
+Run all of these, in order:
+
+1. **Localization** — if any `vscode.l10n.t()` string was added, changed, or removed:
    ```bash
    npm run l10n
    ```
-2. **Formatting** — Run Prettier to ensure all files meet formatting standards:
+2. **Formatting**:
    ```bash
    npm run prettier-fix
    ```
-3. **Linting** — Run ESLint to confirm there are no linting errors:
+3. **Linting**:
    ```bash
    npm run lint
    ```
-4. **Tests** — Run the full Jest test suite to confirm no regressions:
+4. **Tests** — the full suite this time:
    ```bash
    npx jest --no-coverage
    ```
-5. **Build** — Run the TypeScript build to confirm there are no type errors:
+5. **Build**:
    ```bash
    npm run build
    ```
-6. **Feature docs** — If this PR changes behavior described in a feature's current docs, update `docs/ai-and-plans/features/<name>/README.md` (and `design.md` if applicable) in the same PR.
+6. **Package** — catches bundling and missing-asset failures that tests do not:
+   ```bash
+   npm run package
+   ```
+7. **Feature docs** — if this PR changes behavior described in a feature's current docs, update `docs/ai-and-plans/features/<name>/README.md` (and `design.md` if applicable) in the same PR.
 
-> ⚠️ **An agent must not finish or terminate until all five steps above have been run and pass successfully.** Skipping these steps leads to CI failures.
+> ⚠️ **Do not report the work as finished until every step above has been run and passes.** Skipping them leads to CI failures.
+
+### `l10n/bundle.l10n.json` conflicts
+
+Never hand-merge a conflict in `l10n/bundle.l10n.json`. It is generated. Take either
+side, or delete the file, then run `npm run l10n` and commit the result. Resolving it
+by hand is slower and produces a bundle that does not match the source.
+
+## Git Safety
+
+- **Never use `git add -f`** to force-add files. If `git add` refuses a file, it is likely in `.gitignore` for a reason (e.g., `docs/plan/`, `docs/analysis/`, build outputs). Do NOT override this with `-f`.
+- When `git add` warns that a path is ignored, **stop and inform the user** instead of force-adding.
+- Files in `docs/plan/` and `docs/analysis/` are **local planning documents** that must not be committed to the repository.
 
 ## Feature Knowledge Base
 
@@ -50,8 +82,6 @@ Before finishing work on a PR, agents **must** run the following steps in order:
 - `features/<name>/iterations/**` is **history**. Read only the specific iteration needed to resolve provenance, rationale, or a regression. Never bulk-load it. Plans and reviews there are evidence of past reasoning, not a description of the product today.
 - **On conflict, the code wins for behavior; active docs win for intent.** If they disagree, do not silently pick one — name the doc and the code, and offer to correct the doc.
 - Never treat `status: historical` or `status: superseded` as current.
-- When `git add` warns that a path is ignored, **stop and inform the user** instead of force-adding.
-- Files in `docs/plan/` and `docs/analysis/` are **local planning documents** that must not be committed to the repository.
 
 ## Project Structure
 

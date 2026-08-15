@@ -29,7 +29,7 @@ See [1.6 Force-push policy](#16-force-push-policy) for the rules behind the forc
 
 CI runs automatically on:
 
-- **Push to `main` or `release/**`\*\* — full build, tests, and packaging; build sizes cached for PR comparisons.
+- **Push to `main` or a release branch** (`release/**`) — full build, tests, and packaging; build sizes cached for PR comparisons.
 - **Pull requests targeting `main`, `release/**`, or `feature/**`** — full build, tests, packaging, and a code-quality report posted as a PR comment.
 - **Manual dispatch** — use `workflow_dispatch` with `enforce_full_run` to run the full pipeline on any branch.
 
@@ -204,6 +204,8 @@ code .
 
 Before opening or marking a pull request as ready for review, **all of the following steps must pass locally**. The same checks run in CI, so catching failures locally saves time.
 
+These are **hand-over checks, not per-commit ones**. Most of them take minutes and tell you nothing about whether the change is correct, so running them on every commit or push during a long task is wasted time. While working, `npm run build` plus the tests covering what you touched is enough; run the list below once, when you are done.
+
 ### 4.1. Localization
 
 If you added, changed, or removed any user-facing string (anything passed to `vscode.l10n.t()`), regenerate the localization bundle:
@@ -213,6 +215,8 @@ npm run l10n
 ```
 
 Commit any changes to the `l10n/` folder together with your code changes.
+
+> **Conflicts in `l10n/bundle.l10n.json`:** never resolve them by hand. The file is generated. Take either side, or delete it, then run `npm run l10n` and commit the result. Hand-merging is slower and produces a bundle that does not match the source.
 
 ### 4.2. Formatting
 
