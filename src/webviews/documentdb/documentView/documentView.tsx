@@ -65,7 +65,9 @@ export const DocumentView = (): JSX.Element => {
     // responses beat Monaco's async module load), so we stash the value here and flush it
     // in handleMonacoEditorMount instead of silently dropping it.
     const pendingContentRef = useRef<string | null>(null);
-    const getCurrentContent = () => editorRef.current?.getValue() || '';
+    // Falls back to pending/initial content if called before Monaco has mounted,
+    // so callers (e.g. Save) never operate on an empty string.
+    const getCurrentContent = () => editorRef.current?.getValue() ?? pendingContentRef.current ?? editorContent;
     const setContent = (newValue: string) => {
         if (editorRef.current) {
             editorRef.current.setValue(newValue);
@@ -291,7 +293,8 @@ export const DocumentView = (): JSX.Element => {
             <div className="toolbarContainer">
                 {isLoading && <ProgressBar thickness="large" shape="square" className="progressBar" />}
                 <ToolbarDocuments
-                    disableSaveButton={configuration.mode === 'view' || !isDirty}
+                    disableSaveButton={configuration.mode === 'view' || !isDirty || isLoading}
+                    disableRefreshButton={isLoading}
                     onSaveRequest={handleOnSaveRequest}
                     onValidateRequest={handleOnValidateRequest}
                     onRefreshRequest={handleOnRefreshRequest}
