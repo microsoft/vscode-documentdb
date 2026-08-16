@@ -1,0 +1,22 @@
+{
+  // ESM-readiness probe. NOT part of any build - `npm run esm:check` runs it.
+  //
+  // Bundlers (esbuild/Rollup, and Vite by extension) transpile one file at a time,
+  // so they cannot inline `const enum` values across a module boundary. Turning on
+  // `isolatedModules` rejects exactly the constructs that only `tsc`'s whole-program
+  // emit can support, which makes it a cheap, precise measure of how far the source
+  // is from being bundler-portable.
+  //
+  // It lives in its own file, rather than in tsconfig.json, because switching it on
+  // repo-wide is a decision for the modernization review (PR #880) - it would apply
+  // to every contributor and every open PR. This file lets that decision be made
+  // from a number instead of an estimate: run the script and read the error count.
+  //
+  // If the review adopts it, the change is to move `isolatedModules` into
+  // tsconfig.json and delete this file.
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "isolatedModules": true,
+    "noEmit": true
+  }
+}

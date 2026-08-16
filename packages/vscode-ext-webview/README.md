@@ -375,7 +375,7 @@ router context type so procedures read it without a telemetry-specific cast — 
 
 ## Entry points
 
-The package has four entry points so bundlers do not drag Node / VS Code APIs
+The package has five entry points so bundlers do not drag Node / VS Code APIs
 into the webview bundle, and so a non-React consumer never pulls React in.
 
 | Subpath     | Side                             | Imports                | Key exports                                                                                                                    |
@@ -384,6 +384,7 @@ into the webview bundle, and so a non-React consumer never pulls React in.
 | `./host`    | extension host (Node.js)         | `fs`, `path`, `vscode` | `openWebview`, `WebviewController`, `attachTrpc`, `telemetryMiddlewareBody`, `loggingMiddlewareBody`, `consoleProcedureLogger` |
 | `./webview` | webview (browser), any framework | no React               | `connectTrpc`, `createEventChannel`, `vscodeLink`, `errorLink`                                                                 |
 | `./react`   | webview (browser), React         | React                  | `useTrpcClient`, `useRpcEvents`, `useConfiguration`, `WithWebviewContext`                                                      |
+| `./testing` | tests and harnesses              | no `vscode`, no React  | `createFakeTransport`, `Scenario`, `ProcedurePath`, `ProcedureOutput`                                                         |
 
 ```ts
 // Shared. Safe to import from either side.
@@ -397,7 +398,44 @@ import { connectTrpc, createEventChannel, vscodeLink } from '@microsoft/vscode-e
 
 // Webview, React hooks.
 import { useTrpcClient, useConfiguration, WithWebviewContext } from '@microsoft/vscode-ext-webview/react';
+
+// Tests and harnesses. Never import this from a production webview.
+import { createFakeTransport, type Scenario } from '@microsoft/vscode-ext-webview/testing';
 ```
+
+### `./testing` — driving a webview without an extension host
+
+`connectTrpc` accepts anything with a compatible `postMessage`, so a component can
+run against canned answers instead of a live host. `createFakeTransport` supplies
+those answers from a **scenario**, and the scenario is typed against your router:
+an unknown procedure path, or a `result` that no longer matches the procedure's
+return type, is a compile error rather than a fixture quietly describing a state
+your product can no longer produce.
+
+```ts
+import { connectTrpc } from '@microsoft/vscode-ext-webview/webview';
+import { createFakeTransport, type Scenario } from '@microsoft/vscode-ext-webview/testing';
+import type { AppRouter } from './appRouter';
+
+const scenario: Scenario<AppRouter> = {
+    'common.openUrl': { result: true },
+    // `stream` drives a subscription; `error` drives a failure state.
+    'quickStart.start': { stream: [{ stage: 'checking', status: 'done' }] },
+    'docker.check': { error: { message: 'daemon unreachable' } },
+};
+
+const transport = createFakeTransport<AppRouter>({ scenario });
+const { client } = connectTrpc<AppRouter>(transport);
+
+await client.common.openUrl.mutate({ url: 'https://example.com' });
+
+// Assert what the UI *tried to do*, at the boundary it tried to cross.
+expect(transport.callsTo('common.openUrl')).toHaveLength(1);
+```
+
+Responses default to `window.postMessage`; pass `deliver` in a non-DOM test
+environment. Failure and empty states cost one line each here, which is what makes
+this cheaper than reaching the same states against a real backend.
 
 ## What's inside
 
@@ -470,7 +508,7 @@ extensions are working examples of that layout against this package.
 
 ## Status
 
-`0.10.1`. APIs are subject to change while the package is in preview. See
+`0.11.0`. APIs are subject to change while the package is in preview. See
 [ADVANCED.md](./ADVANCED.md) for the full set of primitives and patterns.
 
 ## Contributors
