@@ -61,8 +61,18 @@ export const DocumentView = (): JSX.Element => {
     const saveButtonRef = useRef<HTMLButtonElement>(null);
 
     const editorRef = useRef<monacoEditor.editor.IStandaloneCodeEditor | null>(null);
+    // Monaco can mount after the initial document fetch resolves (e.g. fast local emulator
+    // responses beat Monaco's async module load), so we stash the value here and flush it
+    // in handleMonacoEditorMount instead of silently dropping it.
+    const pendingContentRef = useRef<string | null>(null);
     const getCurrentContent = () => editorRef.current?.getValue() || '';
-    const setContent = (newValue: string) => editorRef.current?.setValue(newValue);
+    const setContent = (newValue: string) => {
+        if (editorRef.current) {
+            editorRef.current.setValue(newValue);
+        } else {
+            pendingContentRef.current = newValue;
+        }
+    };
 
     useSelectiveContextMenuPrevention();
 
@@ -106,6 +116,12 @@ export const DocumentView = (): JSX.Element => {
     ) => {
         // Store the editor instance in ref
         editorRef.current = editor;
+
+        // Flush any content that arrived before the editor finished mounting
+        if (pendingContentRef.current !== null) {
+            editor.setValue(pendingContentRef.current);
+            pendingContentRef.current = null;
+        }
 
         handleResize();
 
