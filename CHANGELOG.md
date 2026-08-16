@@ -20,6 +20,7 @@
 ### Fixes
 
 - **Collection View Import and Export**: Fixes import and export resolution for Atlas Discovery and DocumentDB Local collections, reports resolution failures with a Show Output action, and replaces the destructive credentials-missing tree action with a guided review step. [#871](https://github.com/microsoft/vscode-documentdb/pull/871)
+- **Single-Click Collection View**: Based on user requests, restores opening the Collection View with one click on the Documents tree item. [#889](https://github.com/microsoft/vscode-documentdb/pull/889)
 
 ### Security
 
