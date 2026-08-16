@@ -11,6 +11,7 @@ import { ToolbarDividerTransparent } from '../../collectionView/components/toolb
 
 interface ToolbarDocumentsProps {
     disableSaveButton: boolean;
+    disableRefreshButton: boolean;
     onValidateRequest: () => void;
     onRefreshRequest: () => void;
     onSaveRequest: () => void;
@@ -21,6 +22,7 @@ interface ToolbarDocumentsProps {
 
 export const ToolbarDocuments = ({
     disableSaveButton,
+    disableRefreshButton,
     onValidateRequest,
     onRefreshRequest,
     onSaveRequest,
@@ -59,6 +61,7 @@ export const ToolbarDocuments = ({
                     onClick={onRefreshRequest}
                     aria-label={l10n.t('Reload document from the database')}
                     icon={<ArrowClockwiseRegular />}
+                    disabled={disableRefreshButton}
                 >
                     {l10n.t('Reload')}
                 </ToolbarButton>
