@@ -103,6 +103,20 @@ runs, and it runs once.**
 Attach the milestone for the release this is intended for. The release process gathers
 material by milestone, so an unmilestoned PR is invisible to it.
 
+`gh pr edit --milestone` does **not** work against this repository. It fails with a
+Projects-classic deprecation error from GitHub's GraphQL API, which has nothing to do with
+the milestone. Use the REST issues endpoint instead — pull requests are issues for this
+purpose:
+
+```bash
+# find the milestone id (--paginate: the list is longer than one page)
+gh api repos/microsoft/vscode-documentdb/milestones --paginate \
+  --jq '.[] | "\(.number)  \(.title)"'
+
+gh api repos/microsoft/vscode-documentdb/issues/<pr-number> -X PATCH \
+  -F milestone=<milestone-id> --jq '.milestone.title'
+```
+
 Use `Closes #NNN` for issues this resolves, so they close on merge and appear in the same
 release gathering.
 
