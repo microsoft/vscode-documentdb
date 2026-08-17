@@ -62,6 +62,7 @@ import { newConnection } from '../commands/newConnection/newConnection';
 import { newLocalConnection } from '../commands/newLocalConnection/newLocalConnection';
 import { openCollectionView, openCollectionViewInternal } from '../commands/openCollectionView/openCollectionView';
 import { openDocumentView } from '../commands/openDocument/openDocument';
+import { openIndexManagementView } from '../commands/openIndexManagementView/openIndexManagementView';
 import {
     openInteractiveShell,
     openInteractiveShellWithInput,
@@ -86,7 +87,6 @@ import { showSchemaStoreStats } from '../commands/schemaStore/showSchemaStoreSta
 import { showWorkerStats } from '../commands/showWorkerStats/showWorkerStats';
 import { updateConnectionString } from '../commands/updateConnectionString/updateConnectionString';
 import { updateCredentials } from '../commands/updateCredentials/updateCredentials';
-import { doubleClickDebounceDelay } from '../constants';
 import { isVCoreAndRURolloutEnabled } from '../extension';
 import { ext } from '../extensionVariables';
 import { AtlasDiagnosticsProvider } from '../plugins/service-atlas-mongodb/AtlasDiagnosticsProvider';
@@ -138,7 +138,6 @@ import {
     registerCommandWithTreeNodeUnwrappingAndModalErrors,
 } from '../utils/commandErrorHandling';
 import { withCommandCorrelation, withTreeNodeCommandCorrelation } from '../utils/commandTelemetry';
-import { registerDoubleClickCommand } from '../utils/registerDoubleClickCommand';
 import { PLAYGROUND_FILE_EXTENSION, PLAYGROUND_LANGUAGE_ID, PlaygroundCommandIds } from './playground/constants';
 import { PlaygroundBlockHighlighter } from './playground/PlaygroundBlockHighlighter';
 import { PlaygroundCodeLensProvider } from './playground/PlaygroundCodeLensProvider';
@@ -943,10 +942,9 @@ export class ClustersExtension implements vscode.Disposable {
                     'vscode-documentdb.command.internal.containerView.open',
                     withCommandCorrelation(openCollectionViewInternal),
                 );
-                registerDoubleClickCommand(
+                registerCommand(
                     'vscode-documentdb.command.internal.containerView.openFromTree',
                     withCommandCorrelation(openCollectionViewInternal),
-                    doubleClickDebounceDelay,
                 );
                 registerCommandWithTreeNodeUnwrapping(
                     'vscode-documentdb.command.containerView.open',
@@ -960,6 +958,12 @@ export class ClustersExtension implements vscode.Disposable {
                         context.telemetry.properties.activationSource = 'treeNodeInline';
                         return openCollectionView(context, node as CollectionItem);
                     }),
+                );
+
+                // Context menu command for the Indexes node and individual index nodes
+                registerCommandWithTreeNodeUnwrapping(
+                    'vscode-documentdb.command.indexesView.open',
+                    withTreeNodeCommandCorrelation(openIndexManagementView),
                 );
 
                 registerCommand(
