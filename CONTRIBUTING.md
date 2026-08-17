@@ -377,44 +377,75 @@ Ask the agent to deduplicate and merge the two lists: a single change is often r
 
 Review the generated files and edit for accuracy before continuing.
 
-### 7.2 Commit the notes
+### 7.2 Add screenshots
 
-Commit the generated `CHANGELOG.md` and `docs/release-notes/X.Y.md`.
+Release notes carry screenshots; the changelog does not. Take the screenshots by hand — only a person can drive the extension to the right state — then hand them to the agent and ask it to place them. Save them under `docs/release-notes/images/` named `X.Y.Z_feature_name.png`.
 
-### 7.3 Bump the version
+The `writing-release-notes` skill owns the exact markup and the width conventions (full-width versus dialog crops); see its `RELEASE-NOTES-FORMAT.md`. Do not hand-write the `<img>` tags.
+
+### 7.3 Commit the notes
+
+Commit the generated `CHANGELOG.md`, `docs/release-notes/X.Y.md`, and any images added in the previous step.
+
+### 7.4 Bump the version
 
 1. Update the `version` field in `package.json` to `X.Y.Z`.
 2. Run `npm install` so the lock file (`package-lock.json`) is regenerated with the new version.
 
 Running `npm install` here is required: bumping `package.json` alone leaves the lock file out of sync.
 
-### 7.4 Create the announcement discussion
+### 7.5 Create the announcement discussion
 
 Based on the `docs/release-notes/X.Y.md` file, create a new discussion under **Discussions** on the GitHub repo. This is the user-facing announcement for the release.
 
-If this is **more than a patch release** (a new minor or major, `X.Y.0`), copy the link to that discussion into the `releaseNotesUrl` field in `package.json` so users see the announcement from inside the extension. For a plain patch release, leave `releaseNotesUrl` pointing at the current minor's announcement.
+An agent can create it for you. GitHub's REST API has no endpoint for discussions, so this goes through GraphQL. First look up the repository ID and the category you want:
 
-### 7.5 Commit the version bump
+```bash
+gh api graphql -f query='
+{
+  repository(owner: "microsoft", name: "vscode-documentdb") {
+    id
+    discussionCategories(first: 20) { nodes { id name } }
+  }
+}'
+```
+
+Then create the discussion, using the release-notes body:
+
+```bash
+gh api graphql -f query='
+mutation($repo: ID!, $cat: ID!, $title: String!, $body: String!) {
+  createDiscussion(input: {repositoryId: $repo, categoryId: $cat, title: $title, body: $body}) {
+    discussion { url }
+  }
+}' -f repo=<repository id> -f cat=<category id> -f title="vX.Y.Z" -f body="$(cat docs/release-notes/X.Y.md)" \
+  --jq '.data.createDiscussion.discussion.url'
+```
+
+The mutation returns the discussion URL, which is what the next paragraph needs.
+
+If this is **more than a patch release** (a new minor or major, `X.Y.0`), copy that URL into the `releaseNotesUrl` field in `package.json` so users see the announcement from inside the extension. For a plain patch release, leave `releaseNotesUrl` pointing at the current minor's announcement.
+
+### 7.6 Commit the version bump
 
 Commit `package.json`, the updated `package-lock.json`, and any `releaseNotesUrl` change together.
 
-### 7.6 Build the official artifact
+### 7.7 Build the signed artifact
 
-1. Run the Azure DevOps (ADO) pipeline to build the release.
-2. Download the official, verified build (the `.vsix`) produced by that pipeline.
+Run the internal Azure DevOps **build** pipeline. It produces a **signed** `.vsix`. Download that artifact.
 
-Always ship the artifact from the ADO pipeline, not a locally packaged build.
+Always ship the signed artifact from the pipeline. A locally packaged `.vsix` is unsigned and must never be published or attached to a release.
 
-### 7.7 Create the GitHub release
+### 7.8 Create the GitHub release
 
-1. Create a release on GitHub for tag `vX.Y.Z`.
-2. Use the changelog content for this version as the release body.
-3. Attach the `.vsix` downloaded from the ADO pipeline.
+1. Create a release on GitHub with a new tag `vX.Y.Z`, pointing at the release commit on `main`.
+2. Use this version's section of `CHANGELOG.md` as the release body.
+3. Attach the **signed** `.vsix` downloaded in the previous step.
 4. Save the release.
 
-### 7.8 Publish to the Marketplace
+### 7.9 Publish to the Marketplace
 
-In parallel with creating the GitHub release, use the internal release pipeline to publish the verified build to the Visual Studio Marketplace.
+Run the second internal Azure DevOps pipeline, the **release** pipeline, which publishes from `main` to the Visual Studio Marketplace. This is a separate pipeline from the build in §7.7: one produces and signs the artifact, the other ships it.
 
 ## You're Ready to Contribute! 🎉
 
