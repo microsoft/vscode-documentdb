@@ -94,14 +94,14 @@ After increment 1:
 
 ## Timeline
 
-| Date       | PR   | What changed                                                                                     | Docs                                                                                       |
-| ---------- | ---- | ------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------ |
-| 2026-08-18 | —    | Design and decisions settled; increment 1 planned                                                | [iterations/01-theme-and-first-component.md](./iterations/01-theme-and-first-component.md) |
-| 2026-08-18 | #895 | Increment 1 implemented: package on disk, theming layer and `WizardBreadcrumb` moved, no publish | [iterations/01-theme-and-first-component.md](./iterations/01-theme-and-first-component.md) |
+| Date       | PR   | What changed                                                                                                           | Docs                                                                                       |
+| ---------- | ---- | ---------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------ |
+| 2026-08-18 | —    | Design and decisions settled; increment 1 planned                                                                      | [iterations/01-theme-and-first-component.md](./iterations/01-theme-and-first-component.md) |
+| 2026-08-18 | #895 | Increment 1 implemented and visually verified: package on disk, theming layer and `WizardBreadcrumb` moved, no publish | [iterations/01-theme-and-first-component.md](./iterations/01-theme-and-first-component.md) |
 
 ## Decisions
 
-[decisions.md](./decisions.md) — sixteen entries covering scope, layering, module format, styling
+[decisions.md](./decisions.md) — twenty entries covering scope, layering, module format, styling
 delivery, and public naming.
 
 The highest-signal ones, because they reverse what was originally proposed:
@@ -110,11 +110,24 @@ The highest-signal ones, because they reverse what was originally proposed:
 - **0010** — the stylesheet is injected at module scope rather than imported by the consumer
 - **0012** — no public CSS custom properties ship in v1
 
+And the four that only implementation could have produced:
+
+- **0017** — `moduleResolution: bundler` emits ESM that no bundler will load
+- **0018** — a context-backed hook cannot serve the composable tier it exists for
+- **0019** — adapt Fluent by re-pointing its tokens, never by out-specifying its classes
+- **0020** — opaque stencils must stay opaque; `translucent` is what consumers should use
+
 ## Open gaps
 
 - **Fluent internals coupling.** The overrides key off `fui-*` class names, which are Fluent
   implementation details rather than public API. A narrow peer range and the
-  `fluentOverrides` test suite are the only tripwires.
+  `fluentOverrides` test suite are the only tripwires. Increment 1 widened that suite: it now also
+  asserts that every selector is `:where()`-wrapped, and that Fluent's indeterminate ProgressBar
+  recipe still reads the three tokens the adaptation re-points (0019).
+- **Theme coverage is still incomplete.** [#811](https://github.com/microsoft/vscode-documentdb/issues/811)
+  keeps four items after increment 1 mapped `colorNeutralBackground3`: the tertiary foregrounds, the
+  global neutral strokes, `colorSubtleBackgroundSelected`, and high-contrast theme kinds, which
+  bypass the generator entirely and fall back to the static Teams themes.
 - **Type-checking resolves built output, not source** (0016). The package must be built before the
   root `tsc` runs — already guaranteed by the `prebuild` fan-out, and true of the other five
   workspace packages too. Modernising resolution repo-wide is filed as future work.

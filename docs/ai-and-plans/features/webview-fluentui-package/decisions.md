@@ -9,24 +9,27 @@ created: 2026-08-18
 
 > What was decided while designing the UI package extraction, and what was rejected on the way.
 
-| #    | Decision                                                      | Status              | Changed from the proposal?                                      | Date       | PR  |
-| ---- | ------------------------------------------------------------- | ------------------- | --------------------------------------------------------------- | ---------- | --- |
-| 0001 | Extract the UX layer as a second package, behind a scope gate | Accepted            | Accepted as proposed                                            | 2026-08-18 | —   |
-| 0002 | Name: `@microsoft/vscode-ext-webview-fluentui`                | Accepted (modified) | `-ui` rejected as too general once the scope proved Fluent-only | 2026-08-18 | —   |
-| 0003 | No dependency between the two packages, in either direction   | Accepted            | Accepted as proposed                                            | 2026-08-18 | —   |
-| 0004 | Three invariants: provider independence, layering, facade     | Accepted            | Accepted as proposed                                            | 2026-08-18 | —   |
-| 0005 | ESM-only, despite the sibling being CommonJS                  | Accepted (modified) | `typesVersions` reinstated when 0016 was corrected              | 2026-08-18 | —   |
-| 0006 | Tests stay CommonJS, transformed by `@swc/jest`               | Accepted            | Accepted as proposed                                            | 2026-08-18 | —   |
-| 0007 | v1 public entries are `.` and `./components`                  | Accepted (modified) | `./styles.css` dropped after 0010                               | 2026-08-18 | —   |
-| 0008 | The token list and palette math stay internal                 | Accepted (modified) | Proposal left it open; evidence closed it                       | 2026-08-18 | —   |
-| 0009 | The `adaptive` flag is deleted, not defaulted                 | Accepted (modified) | Proposal was to flip the default to `true`                      | 2026-08-18 | —   |
-| 0010 | The stylesheet injects itself at module scope                 | Accepted (modified) | Proposal was a consumer-side `styles.css` import                | 2026-08-18 | —   |
-| 0011 | No opt-out from the Fluent overrides                          | Accepted            | Operator-originated; not in the proposal                        | 2026-08-18 | —   |
-| 0012 | No public CSS custom properties in v1                         | Accepted (modified) | Proposal was a neutral or configurable prefix                   | 2026-08-18 | —   |
-| 0013 | Monaco theming stays in the extension                         | Deferred            | Proposal left it open                                           | 2026-08-18 | —   |
-| 0014 | Public naming vocabulary is locked before publish             | Accepted (modified) | `useVSCodeTheme` → `useActiveVSCodeTheme` after operator review | 2026-08-18 | —   |
-| 0015 | The generated CSS module is committed, not gitignored         | Accepted (modified) | Reverses the recommendation made during design                  | 2026-08-18 | —   |
-| 0016 | The package follows the repo's existing resolution pattern    | Accepted            | Replaces the proposal's webview-scoped tsconfig                 | 2026-08-18 | —   |
+| #    | Decision                                                       | Status              | Changed from the proposal?                                      | Date       | PR   |
+| ---- | -------------------------------------------------------------- | ------------------- | --------------------------------------------------------------- | ---------- | ---- | --- | ---- | ------------------------------------------------------- | -------- | --------------------------------------------- | ---------- | ---- |
+| 0001 | Extract the UX layer as a second package, behind a scope gate  | Accepted            | Accepted as proposed                                            | 2026-08-18 | —    |
+| 0002 | Name: `@microsoft/vscode-ext-webview-fluentui`                 | Accepted (modified) | `-ui` rejected as too general once the scope proved Fluent-only | 2026-08-18 | —    |
+| 0003 | No dependency between the two packages, in either direction    | Accepted            | Accepted as proposed                                            | 2026-08-18 | —    |
+| 0004 | Three invariants: provider independence, layering, facade      | Accepted            | Accepted as proposed                                            | 2026-08-18 | —    |
+| 0005 | ESM-only, despite the sibling being CommonJS                   | Accepted (modified) | `typesVersions` reinstated when 0016 was corrected              | 2026-08-18 | —    |
+| 0006 | Tests stay CommonJS, transformed by `@swc/jest`                | Accepted            | Accepted as proposed                                            | 2026-08-18 | —    |
+| 0007 | v1 public entries are `.` and `./components`                   | Accepted (modified) | `./styles.css` dropped after 0010                               | 2026-08-18 | —    |
+| 0008 | The token list and palette math stay internal                  | Accepted (modified) | Proposal left it open; evidence closed it                       | 2026-08-18 | —    |
+| 0009 | The `adaptive` flag is deleted, not defaulted                  | Accepted (modified) | Proposal was to flip the default to `true`                      | 2026-08-18 | —    |
+| 0010 | The stylesheet injects itself at module scope                  | Accepted (modified) | Proposal was a consumer-side `styles.css` import                | 2026-08-18 | —    |
+| 0011 | No opt-out from the Fluent overrides                           | Accepted            | Operator-originated; not in the proposal                        | 2026-08-18 | —    |
+| 0012 | No public CSS custom properties in v1                          | Accepted (modified) | Proposal was a neutral or configurable prefix                   | 2026-08-18 | —    |
+| 0013 | Monaco theming stays in the extension                          | Deferred            | Proposal left it open                                           | 2026-08-18 | —    |
+| 0014 | Public naming vocabulary is locked before publish              | Accepted (modified) | `useVSCodeTheme` → `useActiveVSCodeTheme` after operator review | 2026-08-18 | —    |
+| 0015 | The generated CSS module is committed, not gitignored          | Accepted (modified) | Reverses the recommendation made during design                  | 2026-08-18 | —    |
+| 0016 | The package follows the repo's existing resolution pattern     | Accepted            | Replaces the proposal's webview-scoped tsconfig                 | 2026-08-18 | —    |     | 0017 | Relative imports inside the package are fully specified | Accepted | Corrects a gap in 0005, found at first bundle | 2026-08-18 | #895 |
+| 0018 | The theme hooks are standalone, not context-backed             | Accepted (modified) | The extracted code was context-backed; I3 required otherwise    | 2026-08-18 | #895 |
+| 0019 | Adapt Fluent by re-pointing tokens, never by out-specifying    | Accepted            | Forced by the zero-specificity rule in 0010                     | 2026-08-18 | #895 |
+| 0020 | Opaque stencils stay opaque; `translucent` is what we document | Accepted            | Reverses the alpha-overlay approach the code arrived with       | 2026-08-18 | #895 |
 
 > Entries below are **semantically** immutable: append new entries rather than
 > rewriting old ones, and record reversals as a new entry plus a status change
@@ -646,3 +649,172 @@ The issue to file: _the root `tsconfig.json` is `module: commonjs` with no `modu
 `exports` is ignored and every workspace package needs `typesVersions` to expose subpaths. Move
 `src/webviews/**` onto bundler resolution, drop the `typesVersions` shims, and reconsider `paths` →
 `src` for the inner loop._ That is where the rejected alternative earns a second hearing.
+
+---
+
+## 0017 — Relative imports inside the package are fully specified
+
+**Status:** Accepted · **Date:** 2026-08-18 · **PR:** #895
+
+### Question
+
+0005 settled `"module": "esnext"` with `"moduleResolution": "bundler"`. TypeScript then accepts
+extensionless relative specifiers — `from './theme'` — and emits them into the ESM output verbatim.
+Is that shippable?
+
+### Decision
+
+No. Every relative import in `src/` carries an explicit `.js` extension, including directory
+barrels: `from './theme/index.js'`. Jest maps the extension back off, because it resolves the
+TypeScript sources where no such file exists.
+
+### Why
+
+`bundler` resolution is a statement about how the **consumer's** bundler resolves, and the
+assumption is wrong for the one that matters. ESM specifiers must be fully specified, and webpack
+enforces it inside a `"type": "module"` package — it refused the package outright on the first
+import, with `BREAKING CHANGE: The request './theme' failed to resolve only because it was resolved
+as fully specified`.
+
+Every consumer would have hit this on their first import, so it is not a local build quirk. It cost
+nothing to fix and is invisible once done, but it is worth recording because the tsconfig looks
+correct and does not warn: nothing between `tsc` and the consumer's bundler will tell you.
+
+### Scope
+
+The config in 0005 is unchanged. This constrains import **style** only, and applies to any future
+ESM package in this repository.
+
+---
+
+## 0018 — The theme hooks are standalone, not context-backed
+
+**Status:** Accepted (modified) · **Date:** 2026-08-18 · **PR:** #895
+
+### Question
+
+The extracted code kept the active theme in a React context: one `MutationObserver` at the top of
+the tree, `useThemeState()` reading the context below it. Keep that shape behind the new names?
+
+### Decision
+
+No. `useActiveVSCodeThemeKind` and `useActiveVSCodeTheme` each observe
+`data-vscode-theme-kind` on the body element directly. There is no context, no provider requirement,
+and no `ThemeContext` export. `VSCodeFluentProvider` is a hook plus a `FluentProvider`.
+
+### Why
+
+Invariant I3 says the facade must be assemblable by hand from the public tiers. A tier-2 consumer —
+the one that motivates the whole composable path — **owns their own `FluentProvider` and will not
+have mounted ours**, so a context-backed hook would return the default state, or throw, for exactly
+the audience it exists to serve. The context was load-bearing only while the provider was the sole
+entry point.
+
+### Cost, and what it forced
+
+One `MutationObserver` per hook call rather than one per tree. Observers on a single body attribute
+are cheap and fire only on a theme change, so that part is immaterial.
+
+The part that was **not** immaterial: it also un-shared the derivation each consumer performs. In
+the extension, `MonacoEditor` turns the theme kind into a Monaco theme with ~815 `getPropertyValue`
+lookups, and the Collection View mounts up to five editors — so a theme switch went from ~815
+lookups to several thousand, and expanding the enhanced query row cost ~815 per editor. Restored by
+caching on the theme kind in the extension, where the document is shared anyway.
+
+Worth generalising: removing a context does not only move the subscription, it multiplies whatever
+the subscribers compute.
+
+---
+
+## 0019 — Adapt Fluent by re-pointing tokens, never by out-specifying its classes
+
+**Status:** Accepted · **Date:** 2026-08-18 · **PR:** #895
+
+### Question
+
+0010 requires every rule in the injected stylesheet to be wrapped in `:where()`, so a consumer can
+override it. The ProgressBar adaptation, as inherited, declared a `background-image` on
+`.fui-ProgressBar__bar`. Wrapping it drops it to zero specificity — where Fluent's own Griffel class
+beats it. How is the rule expressed instead?
+
+### Decision
+
+Adapt Fluent by **re-pointing the tokens its own recipe reads**, not by declaring the property.
+
+Fluent's indeterminate bar paints `background-color: colorCompoundBrandBackground` under
+`linear-gradient(to right, colorNeutralBackground6 0%, colorTransparentBackground 50%,
+colorNeutralBackground6 100%)`. Clearing the first two and pointing the midpoint at
+`--vscode-progressBar-background` produces the identical rendering with no property declaration at
+all.
+
+### Why
+
+A property declaration has to win a specificity contest against Griffel to apply — and anything that
+beats Griffel also beats the consumer, which contradicts 0010. Custom properties have no such
+problem: a declaration on the element always beats an inherited one from the `FluentProvider`
+ancestor, whatever the selector's specificity. So the token route is the only one that is both
+effective and overridable.
+
+This generalises to a rule for the whole stylesheet, and it is the reason the file can honestly
+claim zero specificity throughout. `fluentOverrides.test.ts` now asserts both halves: that every
+selector is `:where()`-wrapped, and that the upstream recipe still reads the three tokens the
+adaptation re-points.
+
+### The risk it accepts
+
+Re-pointing a token is only safe where that token has no other consumer in the subtree. Verified for
+`colorTransparentBackground` inside `.fui-ProgressBar`, where the gradient is its only use — but
+this is a per-case audit, not a free move, and the test is the tripwire if Fluent restructures.
+
+---
+
+## 0020 — Opaque skeleton stencils stay opaque; `translucent` is what we document
+
+**Status:** Accepted (modified) · **Date:** 2026-08-18 · **PR:** #895
+
+### Question
+
+The extracted generator mapped `colorNeutralStencil1/2` to faint **alpha overlays**
+(`rgba(0,0,0,0.07)` / `0.1`), reasoning that they would composite over the themed card the way
+`translucent` skeletons do. The visual pass showed a hard vertical edge sweeping across every opaque
+skeleton. Keep, retune, or remove?
+
+### Decision
+
+Keep the tokens mapped, but make them **opaque** — `color-mix(in srgb, var(--vscode-foreground) N%,
+var(--vscode-editor-background))` — and document `appearance="translucent"` as the appearance
+consumers should use.
+
+### Why the alpha version could not work
+
+Fluent's wave recipe is not a tint, it is a **replacement**. The resting fill is
+`background-color: Stencil1`; an `::after` of the same size slides across it carrying
+`Stencil1 → Stencil2 → Stencil1`. The sweep is seamless at its own edges only because `Stencil1`
+there paints over an identical fill. Give the tokens an alpha and the sweep _adds_ to the base —
+7% over 7% inside the overlay, 7% outside — so its leading edge becomes a visible step.
+
+That is also why translucent skeletons looked correct throughout: their recipe is built for alpha,
+running `transparent → Stencil1Alpha → transparent`, and has no edge to give away.
+
+Second defect in the same two lines: the ratios were reversed. Fluent ships `#e6e6e6` / `#fafafa` in
+light, so `Stencil2` is the **weaker** band that dips back toward the surface. The map had it
+stronger, inverting the shimmer.
+
+### Why not simply delete the map
+
+Deleting does not make `opaque` correct, it returns it to Fluent's fixed Teams gray on every theme.
+The `color-mix` value is right on the default surface and no worse than the alternative anywhere
+else, for two lines and no public surface area.
+
+### The limit, stated rather than hidden
+
+An opaque fill must be mixed against the card it sits on, and a theme token cannot know what that
+is. Any value is a visible rectangle on some surface. This is not an unfixed bug — it is what
+`opaque` means, and it is why the package README tells consumers to pass `translucent`, whose
+`*Alpha` tokens come from Fluent's own light/dark themes and are already theme-kind correct without
+this package touching them.
+
+The extension reached the same conclusion independently a year earlier: issue #811 and the
+collection-view toolbar design record five call sites being moved to `translucent` "to unify the
+look". No skeleton in this product renders `opaque` today, which is precisely why the defect
+survived unseen until a probe rendered one.

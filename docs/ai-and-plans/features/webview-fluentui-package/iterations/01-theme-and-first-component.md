@@ -134,3 +134,77 @@ what changed, and hand over — do not mark the increment complete on the streng
   `npm run l10n`, commit the result.
 - **`TDD:` test suites are behavior contracts.** If one fails after a change, stop and ask rather
   than fixing the test.
+
+---
+
+# Outcome
+
+> Written after the plan was executed and the operator completed the visual check. The plan above is
+> left as written; this section records what actually happened, including where reality disagreed.
+
+**Acceptance is met.** The commands passed, and the operator verified the webviews against a spread
+of themes on a local machine — the extraction is visually clean, and the theming defects the pass
+surfaced are fixed below.
+
+## Where the plan was wrong
+
+Three facts were flagged as load-bearing and worth re-verifying. Two held exactly: the
+`WizardBreadcrumb` call sites at lines 46/469 and 78/2578, and the theme layer's importers
+(`index.tsx` and `MonacoEditor.tsx`).
+
+The third did not. Step 3 asked to _"re-base the on-disk SCSS paths in `fluentOverrides.test.ts`"_ —
+there were none. That test resolves `@fluentui/react-progress` through `require.resolve` and never
+referenced a repo-relative SCSS path, so there was nothing to re-base. It gained a new assertion
+that reads the compiled stylesheet instead.
+
+## What the plan did not anticipate
+
+| Discovery                                                                    | Recorded as |
+| ---------------------------------------------------------------------------- | ----------- |
+| `moduleResolution: bundler` emits ESM that no bundler will load              | 0017        |
+| A context-backed hook cannot serve the tier-2 consumer it exists for         | 0018        |
+| `:where()` normalisation breaks any rule that has to out-specify Griffel     | 0019        |
+| The opaque skeleton stencils were alpha values in slots that require opacity | 0020        |
+
+0019 and 0020 are the two that matter, because both compile cleanly and look broken — exactly the
+failure mode the acceptance criterion was written to catch. Neither would have been found by any
+command in Step 6.
+
+## Theming fixes made along the way
+
+All pre-existing, none caused by the extraction. The visual pass is what surfaced them.
+
+| Fix                                                                                  | Why it was needed                                                                                    |
+| ------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------- |
+| Indeterminate `ProgressBar` re-points tokens instead of declaring `background-image` | required by the `:where()` normalisation the plan asked for; a declaration would have gone blank     |
+| Determinate `ProgressBar` gained a themed track                                      | only the fill was adapted; the rail stayed Teams gray on every theme                                 |
+| Field hover stroke blends 45% toward the foreground                                  | the flat value _lowered_ contrast on any theme defining `--vscode-checkbox-border` (0012's open bug) |
+| Opaque skeleton stencils made opaque, ratios un-reversed                             | hard-edged sweep and inverted shimmer                                                                |
+| `colorNeutralBackground3` mapped to `--vscode-textCodeBlock-background`              | last unmapped surface; markdown code blocks read as a near-black hole on dark themes (#811)          |
+| `getMonacoTheme` cached on the theme kind                                            | 0018 un-shared a ~815-lookup derivation across up to five editors                                    |
+| `getBrandTokensFromPalette` guards its key colour                                    | planned in 0009; an absent `--vscode-button-background` threw on a NaN hue                           |
+
+Each carries a regression test where one is possible, because none of them fail loudly.
+
+## Tooling the increment added
+
+- An ESLint `no-restricted-imports` rule enforcing invariant I1, verified to fire rather than
+  assumed to.
+- `react-hooks` lint extended to the package's `.ts` files — the repo scopes it to `.tsx`, and the
+  package's hooks carry no JSX.
+- `**/jest.config.cjs` added to the ESLint ignore list, alongside the existing `.js` entry.
+- A throwaway `ThemeProbe` on a temporary branch, rendering the affected controls on every wizard
+  step. Deleted after the check. It is what found 0020, and it is the technique to reach for again:
+  the defects were in components the extension renders rarely, or in an appearance it never renders
+  at all.
+
+## Not done, deliberately
+
+- The four remaining tokens in #811 — `colorNeutralForeground3`/`Foreground4`,
+  `colorNeutralStroke1`/`Stroke3`/`StrokeAccessible`, `colorSubtleBackgroundSelected`, and
+  high-contrast kinds bypassing the generator. A partial coverage pass inside an extraction is worse
+  than a clean deferral.
+- `ProgressBar color="error" | "warning" | "success"` still uses Fluent's static palette. Nothing
+  renders them, and those tokens are shared with badges and message bars, so remapping is a wider
+  decision.
+- No publish. The package stays `"private": true` and is consumed through the npm workspace.
