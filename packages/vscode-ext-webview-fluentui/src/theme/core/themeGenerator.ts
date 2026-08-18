@@ -89,7 +89,6 @@ export function getBrandTokensFromPalette(keyColor: string, options: Options = {
  *
  * NOTE — neutral tokens still on the fixed Fluent ramp (candidates for a future
  * pass; see the "theme color coverage" tracking issue):
- *   - colorNeutralBackground3           (markdown cards, feedback dialog, query-plan blocks)
  *   - colorNeutralForeground3 / Foreground4 / colorNeutralStroke1 / StrokeAccessible
  *     — globally, that is; fluentOverrides.scss remaps them inside field controls only,
  *     because these aliases also drive Switch indicators and Tab hover bars
@@ -137,6 +136,19 @@ const adaptiveNeutralSurfaces = {
         'var(--vscode-toolbar-activeBackground, var(--vscode-list-hoverBackground, var(--vscode-sideBar-background)))',
     colorNeutralBackground2Selected:
         'var(--vscode-list-inactiveSelectionBackground, var(--vscode-list-hoverBackground, var(--vscode-sideBar-background)))',
+    // Tertiary neutral surface: recessed *content blocks* rather than chrome —
+    // markdown `code`/`pre`, the feedback dialog panel, ratio-bar tracks. Fluent's
+    // fixed value is #f5f5f5 light / #141414 dark; the dark one sits well below
+    // every common editor background, so a code block reads as a near-black hole
+    // on any dark theme and as flat gray on any tinted light one.
+    //
+    // Prefer VS Code's own token for that role — theme authors tune it deliberately
+    // and it is usually translucent, which is a feature here: it composites over
+    // whatever card the block sits on instead of assuming the editor surface.
+    // Where it is absent, synthesize a consistent step away from the editor
+    // background rather than falling back to Fluent's ramp.
+    colorNeutralBackground3:
+        'var(--vscode-textCodeBlock-background, color-mix(in srgb, var(--vscode-foreground) 6%, var(--vscode-editor-background)))',
     // Subtle separators: tab-band bottom border, section rules.
     colorNeutralStroke2: 'var(--vscode-panel-border, var(--vscode-widget-border, var(--vscode-editorWidget-border)))',
 } satisfies Partial<Theme>;

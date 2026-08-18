@@ -46,6 +46,15 @@ describe('adaptive neutral surface states', () => {
             'var(--vscode-list-inactiveSelectionForeground, var(--vscode-editor-foreground))',
         );
     });
+
+    // Fluent's fixed #141414 sits well below every common dark editor background, so an unmapped
+    // Background3 renders markdown code blocks as a near-black hole.
+    test.each([
+        ['light', generateAdaptiveLightTheme],
+        ['dark', generateAdaptiveDarkTheme],
+    ])('%s theme maps the tertiary surface off the fixed Fluent ramp', (_, generateTheme) => {
+        expect(generateTheme().colorNeutralBackground3).toContain('var(--vscode-textCodeBlock-background');
+    });
 });
 
 describe('opaque skeleton stencils', () => {
