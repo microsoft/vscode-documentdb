@@ -94,9 +94,9 @@ After increment 1:
 
 ## Timeline
 
-| Date       | PR   | What changed                                                                                       | Docs                                                                                       |
-| ---------- | ---- | -------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------ |
-| 2026-08-18 | —    | Design and decisions settled; increment 1 planned                                                  | [iterations/01-theme-and-first-component.md](./iterations/01-theme-and-first-component.md) |
+| Date       | PR   | What changed                                                                                     | Docs                                                                                       |
+| ---------- | ---- | ------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------ |
+| 2026-08-18 | —    | Design and decisions settled; increment 1 planned                                                | [iterations/01-theme-and-first-component.md](./iterations/01-theme-and-first-component.md) |
 | 2026-08-18 | #895 | Increment 1 implemented: package on disk, theming layer and `WizardBreadcrumb` moved, no publish | [iterations/01-theme-and-first-component.md](./iterations/01-theme-and-first-component.md) |
 
 ## Decisions

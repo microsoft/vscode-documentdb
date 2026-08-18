@@ -275,6 +275,14 @@ export default ts.config(
             'mocha/no-async-suite': 'off',
         },
     },
+    // The fluentui package keeps its hooks in .ts files — they contain no JSX — so the repo's
+    // react-hooks scope, which is keyed on .tsx, does not reach them. Restore it here rather than
+    // leave a hooks file unlinted.
+    {
+        files: ['packages/vscode-ext-webview-fluentui/src/**/*.ts'],
+
+        extends: [reactHooks.configs.flat['recommended-latest']],
+    },
     // Invariant I1 of @microsoft/vscode-ext-webview-fluentui: a component must not require the
     // package's own theming. Components style themselves from Fluent `tokens.*`, which resolve
     // against whatever FluentProvider is above them, so a consumer can adopt one component

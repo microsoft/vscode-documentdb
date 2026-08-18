@@ -32,6 +32,6 @@ exist?" is answerable.
 
 ## Contents
 
-| Component          | Problem it solves                                                                     |
-| ------------------ | ------------------------------------------------------------------------------------- |
+| Component          | Problem it solves                                                                             |
+| ------------------ | --------------------------------------------------------------------------------------------- |
 | `WizardBreadcrumb` | a wizard step indicator that collapses into an overflow menu and never hides the current step |

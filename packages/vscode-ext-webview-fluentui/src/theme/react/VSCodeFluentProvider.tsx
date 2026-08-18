@@ -22,4 +22,3 @@ export const VSCodeFluentProvider = ({ children }: PropsWithChildren): JSX.Eleme
 
     return <FluentProvider theme={theme}>{children}</FluentProvider>;
 };
-

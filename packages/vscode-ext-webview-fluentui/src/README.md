@@ -29,10 +29,10 @@ Two rules make this worth keeping:
 
 ## Folders
 
-| Folder        | Contents                                                                    |
-| ------------- | --------------------------------------------------------------------------- |
-| `palette/`    | LCH/LAB colour math that turns a key colour into a 16-stop brand ramp        |
-| `theme/core/` | Fluent `Theme` generators; no React                                          |
-| `theme/react/`| the hooks that track the active VS Code theme, and the provider facade       |
-| `styles/`     | the SCSS escapes, the module generated from them, and the injector          |
-| `components/` | components, each usable under any `FluentProvider`                          |
+| Folder         | Contents                                                               |
+| -------------- | ---------------------------------------------------------------------- |
+| `palette/`     | LCH/LAB colour math that turns a key colour into a 16-stop brand ramp  |
+| `theme/core/`  | Fluent `Theme` generators; no React                                    |
+| `theme/react/` | the hooks that track the active VS Code theme, and the provider facade |
+| `styles/`      | the SCSS escapes, the module generated from them, and the injector     |
+| `components/`  | components, each usable under any `FluentProvider`                     |

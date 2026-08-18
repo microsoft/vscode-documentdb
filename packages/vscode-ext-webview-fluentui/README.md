@@ -104,7 +104,7 @@ here could never be translated by a consumer.
 injects the overrides. There is no import to forget, no ordering to get right, and no flag to
 disable them. If you want unadapted Fluent, use Fluent directly — it costs you nothing.
 
-**The overrides are document-global.** They apply to *every* Fluent component in your webview,
+**The overrides are document-global.** They apply to _every_ Fluent component in your webview,
 including ones you rendered without thinking about this package, and including portaled surfaces
 such as dialogs, menus and tooltips. That reach is deliberate: portals are exactly why the escapes
 are class-based rather than provider-scoped.
@@ -119,10 +119,10 @@ what Fluent already required of you.
 
 ## Public surface
 
-| Entry          | Exports                                                                                                                                          |
-| -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Entry          | Exports                                                                                                                                    |
+| -------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
 | `.`            | `VSCodeFluentProvider`, `useActiveVSCodeTheme`, `useActiveVSCodeThemeKind`, `createVSCodeFluentTheme`, `generateAdaptive{Light,Dark}Theme` |
-| `./components` | `WizardBreadcrumb`, `WizardBreadcrumbProps`, `WizardStepMeta`                                                                                    |
+| `./components` | `WizardBreadcrumb`, `WizardBreadcrumbProps`, `WizardStepMeta`                                                                              |
 
 The palette math and the VS Code theme token list are internal. Monaco theming is not part of this
 package — Monaco is not Fluent, and a 5 MB peer has no business in a theming package.

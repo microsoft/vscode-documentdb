@@ -37,9 +37,9 @@ import {
     PersonAccountsRegular,
     WarningRegular,
 } from '@fluentui/react-icons';
+import { WizardBreadcrumb, type WizardStepMeta } from '@microsoft/vscode-ext-webview-fluentui/components';
 import { useConfiguration } from '@microsoft/vscode-ext-webview/react';
 import * as l10n from '@vscode/l10n';
-import { WizardBreadcrumb, type WizardStepMeta } from '@microsoft/vscode-ext-webview-fluentui/components';
 import { Fragment, type JSX, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { type AtlasAuthMethod } from '../../../plugins/service-atlas-mongodb/auth/AtlasSession';
 import { useTrpcClient } from '../../_integration/useTrpcClient';
