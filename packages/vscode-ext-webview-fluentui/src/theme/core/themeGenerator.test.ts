@@ -98,7 +98,8 @@ describe('opaque skeleton stencils', () => {
     });
 });
 
-describe('brand ramp key color', () => {    let originalGetComputedStyle: typeof getComputedStyle;
+describe('brand ramp key color', () => {
+    let originalGetComputedStyle: typeof getComputedStyle;
 
     beforeEach(() => {
         originalGetComputedStyle = globalThis.getComputedStyle;
