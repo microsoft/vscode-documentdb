@@ -48,8 +48,48 @@ describe('adaptive neutral surface states', () => {
     });
 });
 
-describe('brand ramp key color', () => {
+describe('opaque skeleton stencils', () => {
     let originalGetComputedStyle: typeof getComputedStyle;
+
+    beforeEach(() => {
+        originalGetComputedStyle = globalThis.getComputedStyle;
+        stubButtonBackground('#0078d4');
+    });
+
+    afterEach(() => {
+        globalThis.getComputedStyle = originalGetComputedStyle;
+    });
+
+    // Fluent's wave recipe slides an ::after over a resting fill of the same colour. The sweep is
+    // seamless only because Stencil1 at its edges *replaces* an identical fill; an alpha stencil
+    // composites instead and the sweep gets a hard vertical edge. An earlier version of this map
+    // used rgba() and looked broken.
+    test.each([
+        ['light', generateAdaptiveLightTheme],
+        ['dark', generateAdaptiveDarkTheme],
+    ])('%s theme keeps the stencils opaque', (_, generateTheme) => {
+        const theme = generateTheme();
+
+        [theme.colorNeutralStencil1, theme.colorNeutralStencil2].forEach((stencil) => {
+            expect(stencil).not.toMatch(/rgba|hsla|transparent/);
+            expect(stencil).toContain('color-mix(in srgb');
+        });
+    });
+
+    // Stencil2 is the sweep band and dips back *toward* the surface, so it must be the weaker of
+    // the two. Reversing them inverts the shimmer.
+    test.each([
+        ['light', generateAdaptiveLightTheme],
+        ['dark', generateAdaptiveDarkTheme],
+    ])('%s theme keeps Stencil2 weaker than Stencil1', (_, generateTheme) => {
+        const theme = generateTheme();
+        const percentage = (value: string | undefined): number => Number(/(\d+)%/.exec(value ?? '')?.[1]);
+
+        expect(percentage(theme.colorNeutralStencil2)).toBeLessThan(percentage(theme.colorNeutralStencil1));
+    });
+});
+
+describe('brand ramp key color', () => {    let originalGetComputedStyle: typeof getComputedStyle;
 
     beforeEach(() => {
         originalGetComputedStyle = globalThis.getComputedStyle;

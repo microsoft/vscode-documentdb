@@ -142,30 +142,40 @@ const adaptiveNeutralSurfaces = {
 } satisfies Partial<Theme>;
 
 // Opaque skeleton/shimmer stencils. Fluent's defaults are fixed grays on the
-// neutral ramp, so `opaque` skeletons (metrics, query-insights) render as a flat
-// gray block that ignores the theme. We can't reuse solid VS Code tokens here:
-// structural surfaces (editor-widget / side-bar background) can be far darker than
-// the card, and hover/selection overlays can resolve to a saturated accent — both
-// overshoot the gentle look we want. Instead we mimic what the `translucent`
-// appearance does and paint faint *alpha overlays* that composite over whatever
-// card sits behind the skeleton, so the block reads as a low-contrast tint of the
-// surface (which already carries the theme hue). The direction follows the theme
-// kind — darken on light, lighten on dark — matching Fluent's own translucent
-// `*Alpha` scale. Stencil1 is the resting base; Stencil2 is the slightly stronger
-// sweep band. Kept low on purpose: the opaque appearance layers a base fill under
-// the animated sweep, so the two compose.
+// neutral ramp, so `opaque` skeletons render as a flat gray block that ignores
+// the theme.
+//
+// These must stay **opaque**, and that is not a stylistic preference. Fluent's
+// wave recipe paints the resting fill as `background-color: Stencil1` and then
+// slides an `::after` of the same size across it, whose gradient runs
+// Stencil1 → Stencil2 → Stencil1. The sweep is invisible at its own edges only
+// because Stencil1 there *replaces* an identical resting fill. Give the tokens
+// an alpha and the sweep composites on top of the base instead, so its leading
+// and trailing edges become a hard vertical step — which is exactly how a
+// translucent stencil renders, and why an earlier alpha-overlay version of this
+// map looked broken.
+//
+// `color-mix` gets the theme-adaptiveness without the alpha: both operands are
+// opaque, so the result is too, and because the tint is keyed on the foreground
+// the direction follows the theme by itself — darken on light, lighten on dark —
+// with no light/dark split needed here.
+//
+// The ratios mirror Fluent's own: Stencil1 is the stronger resting fill,
+// Stencil2 the *weaker* sweep band that dips back toward the surface. (Fluent
+// light is #e6e6e6 / #fafafa on white — 10% and ~2%.) Getting that order
+// backwards inverts the shimmer.
+//
+// Note the inherent limit of `opaque`: the fill is mixed against the editor
+// background, so on a card painted with some other surface it is a visible
+// rectangle. That is what `opaque` means; `translucent` is the appearance that
+// composites over its card, and it is what every skeleton in this extension
+// uses.
 //
 // (The translucent `*Alpha` variants are left at Fluent's defaults — that path
-// already composites correctly and drives the results-grid / index-list
-// `appearance="translucent"` skeletons.)
-const lightSkeletonStencils = {
-    colorNeutralStencil1: 'rgba(0, 0, 0, 0.07)',
-    colorNeutralStencil2: 'rgba(0, 0, 0, 0.1)',
-} satisfies Partial<Theme>;
-
-const darkSkeletonStencils = {
-    colorNeutralStencil1: 'rgba(255, 255, 255, 0.07)',
-    colorNeutralStencil2: 'rgba(255, 255, 255, 0.1)',
+// already composites correctly.)
+const adaptiveSkeletonStencils = {
+    colorNeutralStencil1: 'color-mix(in srgb, var(--vscode-foreground) 10%, var(--vscode-editor-background))',
+    colorNeutralStencil2: 'color-mix(in srgb, var(--vscode-foreground) 3%, var(--vscode-editor-background))',
 } satisfies Partial<Theme>;
 
 // https://react.fluentui.dev/?path=/docs/concepts-developer-theming--page#overriding-existing-tokens
@@ -192,10 +202,9 @@ export const generateAdaptiveLightTheme = (): Theme => {
             // separators track the active theme instead of Fluent's fixed gray.
             ...adaptiveNeutralSurfaces,
 
-            // Faint theme-direction alpha stencils so `opaque` skeletons read as a
-            // gentle tint of the card (see lightSkeletonStencils), close to the
-            // `translucent` appearance instead of a flat gray block.
-            ...lightSkeletonStencils,
+            // Opaque skeletons read as a gentle tint of the editor background rather
+            // than a flat gray block (see adaptiveSkeletonStencils).
+            ...adaptiveSkeletonStencils,
         },
     };
 };
@@ -227,10 +236,9 @@ export const generateAdaptiveDarkTheme = (): Theme => {
             // separators track the active theme instead of Fluent's fixed gray.
             ...adaptiveNeutralSurfaces,
 
-            // Faint theme-direction alpha stencils so `opaque` skeletons read as a
-            // gentle tint of the card (see darkSkeletonStencils), close to the
-            // `translucent` appearance instead of a flat gray block.
-            ...darkSkeletonStencils,
+            // Opaque skeletons read as a gentle tint of the editor background rather
+            // than a flat gray block (see adaptiveSkeletonStencils).
+            ...adaptiveSkeletonStencils,
         },
     };
 };
