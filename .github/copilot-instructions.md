@@ -29,7 +29,12 @@ and the hand-over checks once.
 That is the whole loop. Do **not** run `l10n`, `prettier-fix`, `lint`, or `package`
 here — they cost minutes each and say nothing about whether the change is correct.
 
-### Before hand-over — opening a PR, marking it ready, or reporting the work done
+**Opening a draft PR is still "while working".** A draft exists to hold commits, CI and
+discussion; it is not a hand-over. Do not run the list below just because a PR is being
+opened, or on every push to an open draft. The fast loop is enough until the PR is
+marked ready for review.
+
+### Before hand-over — marking a PR ready for review, or reporting the work done
 
 Run all of these, in order:
 

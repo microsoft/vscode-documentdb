@@ -17,9 +17,9 @@ code:
 > connection.
 
 A Query Playground is a `.documentdb` file where the user writes and runs DocumentDB API queries in
-JavaScript syntax. Each playground document is permanently bound to the cluster and database it was
-created for, so several can be open at once against different servers, each with its own worker
-thread and result panel.
+JavaScript syntax. Each playground document is bound to one cluster and database at a time — the
+binding travels with the document and can be changed from the connection indicator — so several can
+be open at once against different servers, each with its own worker thread and result panel.
 
 It is one of three query surfaces built on a shared foundation. See
 [the query-surfaces roadmap](../interactive-shell/iterations/00-program-roadmap.md), and the

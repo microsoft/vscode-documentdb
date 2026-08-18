@@ -37,14 +37,16 @@ CI runs automatically on:
 
 Releases are tags-first. Normally there are no release branches at all:
 
-1. When the team is ready to release, a maintainer tags a chosen `main` commit, for example `v0.9.0`, and publishes from that tag. Every release has a tag.
+1. When the team is ready to release, a maintainer tags a chosen `main` commit, for example `v0.9.0`. Every release has a tag.
 2. Later patch releases (`v0.9.1`, `v0.9.2`, and so on) normally tag later commits on `main` in the same way.
+
+The tag is the immutable marker of what shipped, not the publication source: the Marketplace pipeline builds and publishes from the branch (see [§7.9](#79-publish-to-the-marketplace)). Tag the commit you intend to release, and release from that commit.
 
 A `release/<X.Y>` branch is created for one scenario only: a quick patch release must ship while `main` is not yet in a releasable state. In that case:
 
 1. Branch `release/<X.Y>` off the relevant release tag, for example off `v0.9.0`.
 2. Apply the patch on that branch and open it as a PR to `release/<X.Y>`.
-3. Tag the patch release (`v0.9.1`) on that branch and publish from the tag.
+3. Tag the patch release (`v0.9.1`) on that branch and run the release pipeline against it.
 4. Forward-merge the fix back into `main` so `main` stays up to date.
 5. Delete the release branch. The tag preserves the release permanently, so deleting the branch is safe and loses nothing. If another patch is needed later, re-branch from the tag.
 
@@ -202,9 +204,11 @@ code .
 
 ## 4. PR Submission Checklist
 
-Before opening or marking a pull request as ready for review, **all of the following steps must pass locally**. The same checks run in CI, so catching failures locally saves time.
+Before marking a pull request as **ready for review**, **all of the following steps must pass locally**. The same checks run in CI, so catching failures locally saves time.
 
 These are **hand-over checks, not per-commit ones**. Most of them take minutes and tell you nothing about whether the change is correct, so running them on every commit or push during a long task is wasted time. While working, `npm run build` plus the tests covering what you touched is enough; run the list below once, when you are done.
+
+Opening a draft PR is not a hand-over. A draft holds commits, CI and discussion while the work is still moving, so keep to the fast loop until you mark it ready for review.
 
 ### 4.1. Localization
 
@@ -258,7 +262,7 @@ This step catches webpack bundling issues and missing assets that unit tests alo
 
 ---
 
-> **Summary — run these five commands before every PR:**
+> **Summary — run these five commands before marking a PR ready for review:**
 >
 > ```bash
 > npm run l10n
@@ -278,7 +282,7 @@ Durable knowledge belongs to the feature that owns it. Iteration files preserve 
 
 ### 5.1 Where a document goes
 
-**Everything belongs to a feature.**
+**Almost everything belongs to a feature.**
 
 - **An existing feature** — `docs/ai-and-plans/features/<feature>/`. Durable documents (`design.md`, `decisions.md`, references, `future-work.md`) sit flat at the feature root. The history of one round of work goes in `iterations/NN-slug.md`, or `iterations/NN-slug/` once it grows past roughly three documents. Two documents for one iteration share the number and are told apart by a genre suffix, for example `01-item-counting-tree.md` and `01-item-counting-tree-review.md`.
 - **A new feature** — create `docs/ai-and-plans/features/<slug>/` with a `README.md`. Pick a slug a contributor who has never seen the repo would guess; never an abbreviation or an invented umbrella term. Add it to the feature index in the knowledge-base README.

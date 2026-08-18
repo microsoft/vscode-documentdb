@@ -8,7 +8,7 @@ verified: 2026-08-14
 
 # Webview-ext migration manual (internal)
 
-Status: internal working note. Not linked from any index, README, or design doc.
+Status: internal working note, linked from this feature's README.
 It records the before/after of moving `@microsoft/vscode-ext-react-webview` to
 `@microsoft/vscode-ext-webview`, both as a record for our team and as a template
 for the parallel vscode-cosmosdb adoption PR.

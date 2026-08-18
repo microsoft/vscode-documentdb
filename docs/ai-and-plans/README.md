@@ -36,7 +36,7 @@ treat `status: historical` or `status: superseded` as current.
 | [connections-tree](./features/connections-tree/README.md)             | The Connections view: node item counts, connection load performance            | shipped           |
 | [no-auth](./features/no-auth/README.md)                               | Credential-free connections and connection-string TLS handling                 | shipped           |
 
-Everything else is a single file at this root. There is one today:
+Everything else is a single file at this root, such as:
 
 - **[live-preview-playwright.md](./live-preview-playwright.md)** — how to render a production
   webview in a plain browser and drive it with Playwright, asserting layout, accessibility, and
@@ -112,7 +112,7 @@ frequently.
 ## A note on old links
 
 The 2026-08 restructure replaced PR-keyed folders (`docs/ai-and-plans/PRs/<pr-number>-slug/`) with
-area folders. **Deep links from existing GitHub PR comments into the old paths are broken.**
+feature folders. **Deep links from existing GitHub PR comments into the old paths are broken.**
 Compatibility stubs were considered and rejected as worse than the breakage. To find the documents
 for a given PR, use the timeline table in the relevant feature README, `git log --follow`, or GitHub
 search. PR numbers remain recorded in each document's `prs` frontmatter as provenance; they are no

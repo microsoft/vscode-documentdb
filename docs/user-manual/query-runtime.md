@@ -52,9 +52,9 @@ You can keep multiple playgrounds and shells open at the same time. How they sha
 **Query Playground: one worker per cluster.**
 
 - Playground workers are shared per cluster, so opening several playground tabs against the same server reuses one worker.
-- A slow operation in one playground will hold up other playgrounds connected to the same cluster until it finishes. Requests are queued and run one after another, so results are never mixed between tabs.
+- Only one run at a time is allowed per cluster. Runs are **not** queued: if a playground is already running against that cluster, the extension tells you _"A playground is already running on this cluster. Wait for it to finish."_ and does nothing. Wait for the first run to finish, then run again.
 - Playgrounds connected to different clusters run fully independently, because each cluster gets its own worker.
-- Each playground document stays bound to the cluster and database it was created for. There is no reconnect or change-connection action.
+- A playground document is bound to one cluster and database at a time. You can rebind it: select the connection indicator (the CodeLens at the top of the file, or the status bar entry) and choose **Connect to a different database…**.
 
 The shell uses per-terminal workers because each session carries independent state that must not leak between terminals. Playground executions always name their target database explicitly and keep no state between runs, so sharing one worker per cluster is safe and avoids the cost of an extra thread per tab.
 
