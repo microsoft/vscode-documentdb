@@ -3,5 +3,5 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-export { createVSCodeFluentTheme } from './createVSCodeFluentTheme';
-export { generateAdaptiveDarkTheme, generateAdaptiveLightTheme } from './themeGenerator';
+export { createVSCodeFluentTheme } from './createVSCodeFluentTheme.js';
+export { generateAdaptiveDarkTheme, generateAdaptiveLightTheme } from './themeGenerator.js';

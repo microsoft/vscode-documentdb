@@ -4,7 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { teamsHighContrastTheme, teamsLightTheme, type Theme } from '@fluentui/react-components';
-import { generateAdaptiveDarkTheme, generateAdaptiveLightTheme } from './themeGenerator';
+import { generateAdaptiveDarkTheme, generateAdaptiveLightTheme } from './themeGenerator.js';
 
 /**
  * Builds the Fluent theme for a VS Code theme kind, as read from the `data-vscode-theme-kind`

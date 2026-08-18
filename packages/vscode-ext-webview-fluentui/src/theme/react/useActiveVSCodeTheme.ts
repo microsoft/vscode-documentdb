@@ -5,7 +5,7 @@
 
 import { type Theme } from '@fluentui/react-components';
 import { useEffect, useMemo, useState } from 'react';
-import { createVSCodeFluentTheme } from '../core/createVSCodeFluentTheme';
+import { createVSCodeFluentTheme } from '../core/createVSCodeFluentTheme.js';
 
 const DEFAULT_THEME_KIND = 'vscode-light';
 

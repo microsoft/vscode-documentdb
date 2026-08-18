@@ -4,7 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { afterEach, describe, expect, test } from '@jest/globals';
-import { injectStyles, STYLE_ELEMENT_ID } from './injectStyles';
+import { injectStyles, STYLE_ELEMENT_ID } from './injectStyles.js';
 
 describe('injectStyles', () => {
     afterEach(() => {

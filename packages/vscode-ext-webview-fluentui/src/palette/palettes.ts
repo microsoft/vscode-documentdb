@@ -3,10 +3,10 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { Lab_to_LCH, LAB_to_sRGB, LCH_to_Lab, snap_into_gamut, sRGB_to_LCH } from './csswg';
-import { getPointsOnCurvePath } from './geometry';
-import { hexToHue, hueToSnappingPointsMap } from './hueMap';
-import { type CurvedHelixPath, type Palette, type Vec3 } from './types';
+import { Lab_to_LCH, LAB_to_sRGB, LCH_to_Lab, snap_into_gamut, sRGB_to_LCH } from './csswg.js';
+import { getPointsOnCurvePath } from './geometry.js';
+import { hexToHue, hueToSnappingPointsMap } from './hueMap.js';
+import { type CurvedHelixPath, type Palette, type Vec3 } from './types.js';
 
 /**
  * When distributing output shades along the curve, for each shade’s lightness a

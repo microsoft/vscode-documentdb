@@ -5,7 +5,7 @@
 
 import { FluentProvider } from '@fluentui/react-components';
 import { type JSX, type PropsWithChildren } from 'react';
-import { useActiveVSCodeTheme } from './useActiveVSCodeTheme';
+import { useActiveVSCodeTheme } from './useActiveVSCodeTheme.js';
 
 /**
  * A `FluentProvider` whose theme tracks the user's active VS Code color theme.

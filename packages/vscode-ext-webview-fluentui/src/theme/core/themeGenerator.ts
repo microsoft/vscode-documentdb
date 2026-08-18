@@ -4,7 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { type BrandVariants, createDarkTheme, createLightTheme, type Theme } from '@fluentui/react-components';
-import { hex_to_LCH, hexColorsFromPalette, type Palette, RGBAToHexA } from '../../palette';
+import { hex_to_LCH, hexColorsFromPalette, type Palette, RGBAToHexA } from '../../palette/index.js';
 
 type Options = {
     darkCp?: number;

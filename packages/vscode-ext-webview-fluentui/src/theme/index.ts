@@ -3,5 +3,5 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-export * from './core';
-export * from './react';
+export * from './core/index.js';
+export * from './react/index.js';

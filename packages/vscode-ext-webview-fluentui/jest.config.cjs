@@ -15,6 +15,11 @@ module.exports = {
     // injection test needs a real `document.head`.
     testEnvironment: 'jsdom',
     testMatch: ['<rootDir>/src/**/*.test.ts', '<rootDir>/src/**/*.test.tsx'],
+    // The package is ESM, so its relative imports carry the `.js` extension a spec-compliant
+    // consumer requires. Jest resolves against the TypeScript sources, where no such file exists.
+    moduleNameMapper: {
+        '^(\\.{1,2}/.*)\\.js$': '$1',
+    },
     // SWC, not ts-jest: it is already a devDependency, it is the same engine as the
     // views webpack `swc-loader`, and it does not type-check — type safety comes from
     // `tsc -p .` in `npm run build` (decision 0006).

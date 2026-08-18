@@ -10,4 +10,4 @@
  * package's theming, and importing this entry must not inject a stylesheet (invariant I1).
  */
 
-export * from './components/index';
+export * from './components/index.js';

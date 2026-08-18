@@ -3,4 +3,4 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-export { WizardBreadcrumb, type WizardBreadcrumbProps, type WizardStepMeta } from './wizard/WizardBreadcrumb';
+export { WizardBreadcrumb, type WizardBreadcrumbProps, type WizardStepMeta } from './wizard/WizardBreadcrumb.js';

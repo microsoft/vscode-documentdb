@@ -3,7 +3,7 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { fluentOverridesCss } from './generated';
+import { fluentOverridesCss } from './generated.js';
 
 export const STYLE_ELEMENT_ID = 'vscode-ext-webview-fluentui-overrides';
 

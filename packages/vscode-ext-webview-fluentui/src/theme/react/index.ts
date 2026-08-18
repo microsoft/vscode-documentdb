@@ -3,5 +3,5 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-export { useActiveVSCodeTheme, useActiveVSCodeThemeKind, type VSCodeThemeState } from './useActiveVSCodeTheme';
-export { VSCodeFluentProvider } from './VSCodeFluentProvider';
+export { useActiveVSCodeTheme, useActiveVSCodeThemeKind, type VSCodeThemeState } from './useActiveVSCodeTheme.js';
+export { VSCodeFluentProvider } from './VSCodeFluentProvider.js';

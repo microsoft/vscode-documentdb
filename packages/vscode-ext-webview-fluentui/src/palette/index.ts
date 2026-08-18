@@ -3,7 +3,7 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-export * from './csswg';
-export * from './geometry';
-export * from './palettes';
-export * from './types';
+export * from './csswg.js';
+export * from './geometry.js';
+export * from './palettes.js';
+export * from './types.js';

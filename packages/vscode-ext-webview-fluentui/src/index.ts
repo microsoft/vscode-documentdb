@@ -10,7 +10,7 @@
  * stylesheet import for a consumer to forget, and no opt-out. See decisions 0010 and 0011.
  */
 
-import { injectStyles } from './styles/injectStyles';
+import { injectStyles } from './styles/injectStyles.js';
 
 injectStyles();
 
@@ -22,4 +22,4 @@ export {
     useActiveVSCodeThemeKind,
     VSCodeFluentProvider,
     type VSCodeThemeState,
-} from './theme';
+} from './theme/index.js';

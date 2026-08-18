@@ -5,7 +5,7 @@
 
 import { afterEach, beforeEach, describe, expect, test } from '@jest/globals';
 
-import { generateAdaptiveDarkTheme, generateAdaptiveLightTheme, getBrandTokensFromPalette } from './themeGenerator';
+import { generateAdaptiveDarkTheme, generateAdaptiveLightTheme, getBrandTokensFromPalette } from './themeGenerator.js';
 
 /** Stands in for VS Code's `--vscode-button-background`, which jsdom does not define. */
 function stubButtonBackground(value: string): void {
