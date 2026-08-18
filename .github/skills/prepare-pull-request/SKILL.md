@@ -5,42 +5,36 @@ description: Get a branch ready to open as a draft pull request, or ready to mov
 
 # Prepare a Pull Request
 
-## Two moments, two different amounts of work
+## Two cases, two different amounts of work
 
-Most of the cost in this skill belongs to **one** of them. Establish which one you are in
-before doing anything.
+These are the same two cases as in `.github/copilot-instructions.md`. Establish which one
+you are in before doing anything.
 
-| Moment                           | What it is                                                                    | Verification             |
-| -------------------------------- | ----------------------------------------------------------------------------- | ------------------------ |
-| **A — Opening a draft PR**       | Work is still in progress. The PR exists to hold commits, CI, and discussion. | **None.** Fast loop only |
-| **B — Draft → ready for review** | Handing the work to a human. This is the gate.                                | Full hand-over list      |
+| Case                                  | What it is                                                                    | Verification |
+| ------------------------------------- | ----------------------------------------------------------------------------- | ------------ |
+| **Case 1 — opening a draft PR**       | Work is still in progress. The PR exists to hold commits, CI, and discussion. | Fast loop    |
+| **Case 2 — draft → ready for review** | Handing the work to a human. This is the gate.                                | Full list    |
 
-> ⚠️ **Do not run the verification suite when opening a draft.** `l10n`,
-> `prettier-fix`, `lint`, the full Jest suite and `package` cost minutes each and say
-> nothing about work that is still moving. A branch that opens a draft early and pushes
-> twenty times would otherwise pay that twenty times over. While the PR is a draft, the
-> loop is `npm run build` plus the tests covering what was touched — nothing else.
-
-The verification commands themselves are **not** repeated here. They live in the
-"Verification: what to run, and when" section of `.github/copilot-instructions.md`, which
-is already in your context. This skill covers what that section does not.
+The commands are **not** repeated here. They are in the "Verification: two cases" section
+of `.github/copilot-instructions.md`, which is already in your context. This skill covers
+what that section does not.
 
 ## When to Use
 
-- The operator asks to open a draft PR → **moment A**.
-- The operator asks to finalize, mark ready, or asks what is still missing → **moment B**.
-- The operator asks to "prepare a PR" without saying which → ask. Assuming B when they
-  meant A wastes several minutes of checks.
+- The operator asks to open a draft PR → **Case 1**.
+- The operator asks to finalize, mark ready, or asks what is still missing → **Case 2**.
+- The operator asks to "prepare a PR" without saying which → ask. Assuming Case 2 when
+  they meant Case 1 wastes several minutes of checks.
 
-Do **not** run this after every commit. Both moments are hand-over steps.
+Do **not** run this after every commit. Both cases are hand-over steps.
 
 ---
 
-# Moment A — Opening a draft PR
+# Case 1 — Opening a draft PR
 
 Four steps, none of them expensive.
 
-## A1. Base branch
+## 1.1 Base branch
 
 All PRs target `main`. The exceptions, per `CONTRIBUTING.md` §1.1:
 
@@ -53,7 +47,7 @@ All PRs target `main`. The exceptions, per `CONTRIBUTING.md` §1.1:
 If the branch was cut from something other than its intended base, say so and stop.
 Do not rebase a shared branch without asking.
 
-## A2. Open it as a draft
+## 1.2 Open it as a draft
 
 Always open as a **draft**. This keeps the automatic Copilot review from running before it
 is wanted, and it is what signals that the verification suite is not due yet.
@@ -61,14 +55,14 @@ is wanted, and it is what signals that the verification suite is not due yet.
 A draft PR is cheap and worth opening early: it gives CI somewhere to run and the operator
 somewhere to comment. Do not wait for the work to be finished.
 
-## A3. The description is load-bearing
+## 1.3 The description is load-bearing
 
 Release notes are generated from merged PR descriptions and closed issues
 (`CONTRIBUTING.md` §7.1). A thin description produces a thin release note and forces a
 maintainer to rewrite it by hand months later, without the context you have now.
 
-At **moment A** a skeleton is enough: what this is for, and what is not done yet. Fill it
-in properly at moment B, when the scope has stopped moving.
+In **Case 1** a skeleton is enough: what this is for, and what is not done yet. Fill it in
+properly in Case 2, when the scope has stopped moving.
 
 There is no PR template in this repository, so write:
 
@@ -82,7 +76,7 @@ There is no PR template in this repository, so write:
 
 Ask the operator for anything you cannot derive from the branch. Never invent a rationale.
 
-## A4. Commit hygiene
+## 1.4 Commit hygiene
 
 - One commit per work item. No mass commits.
 - Commit messages say **why**, not just what. The diff already says what.
@@ -93,12 +87,12 @@ Ask the operator for anything you cannot derive from the branch. Never invent a 
 
 ---
 
-# Moment B — Draft → ready for review
+# Case 2 — Draft → ready for review
 
 Everything above still applies, plus the following. **This is where the verification suite
 runs, and it runs once.**
 
-## B1. Milestone and issue links
+## 2.1 Milestone and issue links
 
 Attach the milestone for the release this is intended for. The release process gathers
 material by milestone, so an unmilestoned PR is invisible to it.
@@ -120,7 +114,7 @@ gh api repos/microsoft/vscode-documentdb/issues/<pr-number> -X PATCH \
 Use `Closes #NNN` for issues this resolves, so they close on merge and appear in the same
 release gathering.
 
-## B2. Feature documentation
+## 2.2 Feature documentation
 
 Per `CONTRIBUTING.md` §5, durable knowledge belongs to the feature that owns it.
 
@@ -138,11 +132,10 @@ Per `CONTRIBUTING.md` §5, durable knowledge belongs to the feature that owns it
 Check `code:` globs in any frontmatter you touched actually resolve against the
 repository. A glob that matches nothing fails silently and still looks authoritative.
 
-## B3. Hand-over
+## 2.3 Hand-over
 
-**Now** run the hand-over verification list from `.github/copilot-instructions.md` —
-localization, formatting, linting, the full test suite, build, package. Once, here, not
-earlier. Then report:
+**Now** run Case 2 from `.github/copilot-instructions.md`. Once, here, not earlier.
+Then report:
 
 - What is done and what remains.
 - Anything you could not verify, and why.
@@ -152,7 +145,7 @@ Do not mark the PR ready, or report the work as finished, with a failing or unru
 
 ## Related
 
-- `.github/copilot-instructions.md` — the verification commands and when to run them
+- `.github/copilot-instructions.md` — the two verification cases and their commands
 - [CONTRIBUTING.md](../../../CONTRIBUTING.md) §4 (checklist), §5 (documenting work), §6 (AI review workflow)
 - [ux-pr-review](../ux-pr-review/SKILL.md) — hands-on UX and workflow review
 - [review-external-pr](../review-external-pr/SKILL.md) — triaging a community contribution

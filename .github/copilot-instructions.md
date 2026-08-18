@@ -13,58 +13,38 @@ VS Code Extension for Azure Cosmos DB and the MongoDB API. TypeScript (strict mo
 
 > ⚠️ **NEVER use `npm run compile`** - always use `npm run build` to build the project.
 
-## Verification: what to run, and when
+## Verification: two cases
 
-**Do not run the full suite on every commit or push.** Most of it is slow and only
-matters at hand-over. A task with many commits should run the fast loop many times
-and the hand-over checks once.
+There are exactly two cases. Work out which one you are in, then run **only** that list.
 
-### While working — the fast loop
+### Case 1 — still working
 
-| Command                         | Why                                                     |
-| ------------------------------- | ------------------------------------------------------- |
-| `npm run build`                 | Quick, catches type errors. Run it as often as you like |
-| `npx jest --no-coverage <path>` | Only the tests covering what you touched                |
+Any commit, any push, opening or updating a **draft** PR.
 
-That is the whole loop. Do **not** run `l10n`, `prettier-fix`, `lint`, or `package`
-here — they cost minutes each and say nothing about whether the change is correct.
+```bash
+npm run build                     # catches type errors
+npx jest --no-coverage <path>     # only the tests covering what you touched
+```
 
-**Opening a draft PR is still "while working".** A draft exists to hold commits, CI and
-discussion; it is not a hand-over. Do not run the list below just because a PR is being
-opened, or on every push to an open draft. The fast loop is enough until the PR is
-marked ready for review.
+Nothing else. Do **not** run `l10n`, `prettier-fix`, `lint`, or `package` here.
 
-### Before hand-over — marking a PR ready for review, or reporting the work done
+### Case 2 — handing over
 
-Run all of these, in order:
+Marking a PR **ready for review**, or reporting the work as done.
 
-1. **Localization** — if any `vscode.l10n.t()` string was added, changed, or removed:
-   ```bash
-   npm run l10n
-   ```
-2. **Formatting**:
-   ```bash
-   npm run prettier-fix
-   ```
-3. **Linting**:
-   ```bash
-   npm run lint
-   ```
-4. **Tests** — the full suite this time:
-   ```bash
-   npx jest --no-coverage
-   ```
-5. **Build**:
-   ```bash
-   npm run build
-   ```
-6. **Package** — catches bundling and missing-asset failures that tests do not:
-   ```bash
-   npm run package
-   ```
-7. **Feature docs** — if this PR changes behavior described in a feature's current docs, update `docs/ai-and-plans/features/<name>/README.md` (and `design.md` if applicable) in the same PR.
+```bash
+npm run l10n            # only if a vscode.l10n.t() string was added, changed, or removed
+npm run prettier-fix
+npm run lint
+npx jest --no-coverage  # full suite
+npm run build
+npm run package         # catches bundling and missing-asset failures
+```
 
-> ⚠️ **Do not report the work as finished until every step above has been run and passes.** Skipping them leads to CI failures.
+Also update `docs/ai-and-plans/features/<name>/README.md` (and `design.md`) in the same
+PR if the change contradicts what those docs describe.
+
+> ⚠️ **Do not report the work as finished until every Case 2 command has run and passed.**
 
 ### `l10n/bundle.l10n.json` conflicts
 

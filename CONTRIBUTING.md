@@ -204,73 +204,44 @@ code .
 
 ## 4. PR Submission Checklist
 
-Before marking a pull request as **ready for review**, **all of the following steps must pass locally**. The same checks run in CI, so catching failures locally saves time.
+There are two cases. Work out which one you are in, then run **only** that list.
 
-These are **hand-over checks, not per-commit ones**. Most of them take minutes and tell you nothing about whether the change is correct, so running them on every commit or push during a long task is wasted time. While working, `npm run build` plus the tests covering what you touched is enough; run the list below once, when you are done.
+| Case                                                                                | Run                                                             |
+| ----------------------------------------------------------------------------------- | --------------------------------------------------------------- |
+| **Case 1 — still working** — any commit, any push, opening or updating a draft PR   | The fast loop ([§4.1](#41-case-1--still-working-the-fast-loop)) |
+| **Case 2 — handing over** — marking a PR ready for review, or calling the work done | The full list ([§4.2](#42-case-2--handing-over-the-full-list))  |
 
-Opening a draft PR is not a hand-over. A draft holds commits, CI and discussion while the work is still moving, so keep to the fast loop until you mark it ready for review.
+A draft PR is **not** a hand-over. It exists to hold commits, CI, and discussion while the work is still moving, so stay on the fast loop until you mark the PR ready for review.
 
-### 4.1. Localization
-
-If you added, changed, or removed any user-facing string (anything passed to `vscode.l10n.t()`), regenerate the localization bundle:
+### 4.1. Case 1 — still working: the fast loop
 
 ```bash
-npm run l10n
+npm run build                     # catches type errors
+npx jest --no-coverage <path>     # only the tests covering what you touched
 ```
 
-Commit any changes to the `l10n/` folder together with your code changes.
+Nothing else. `l10n`, `prettier-fix`, `lint`, and `package` each cost minutes and say nothing about whether the change is correct.
 
-> **Conflicts in `l10n/bundle.l10n.json`:** never resolve them by hand. The file is generated. Take either side, or delete it, then run `npm run l10n` and commit the result. Hand-merging is slower and produces a bundle that does not match the source.
+### 4.2. Case 2 — handing over: the full list
 
-### 4.2. Formatting
-
-Run Prettier to ensure all files meet the project's formatting standards:
+All of these must pass locally. The same checks run in CI, so catching failures here saves time.
 
 ```bash
+npm run l10n            # only if a vscode.l10n.t() string was added, changed, or removed
 npm run prettier-fix
-```
-
-This covers Markdown as well as source, so documentation formatting stays consistent instead of drifting whenever a file is touched. Fenced code blocks are left exactly as authored: they are often partial or illustrative, and formatting them would reindent samples to the Markdown tab width, leaving every example disagreeing with the code it documents.
-
-Commit any files that Prettier reformats.
-
-### 4.3. Linting
-
-Run ESLint and fix all reported issues before submitting:
-
-```bash
 npm run lint
+npx jest --no-coverage  # full suite
+npm run build
+npm run package         # catches bundling and missing-asset failures
 ```
 
-### 4.4. Tests
+Commit whatever these change, including regenerated files under `l10n/` and anything Prettier reformats.
 
-Run the Jest test suite and make sure it passes:
+### 4.3. Notes on individual steps
 
-```bash
-npm run jesttest
-```
-
-### 4.5. Package Verification
-
-Verify the extension can be packaged successfully without errors:
-
-```bash
-npm run package
-```
-
-This step catches webpack bundling issues and missing assets that unit tests alone won't surface.
-
----
-
-> **Summary — run these five commands before marking a PR ready for review:**
->
-> ```bash
-> npm run l10n
-> npm run prettier-fix
-> npm run lint
-> npm run jesttest
-> npm run package
-> ```
+- **`npm run l10n`** regenerates the localization bundle from the strings passed to `vscode.l10n.t()`. **Never resolve a conflict in `l10n/bundle.l10n.json` by hand** — the file is generated. Take either side, or delete it, then re-run `npm run l10n` and commit the result.
+- **`npm run prettier-fix`** covers Markdown as well as source, so documentation formatting does not drift whenever a file is touched. Fenced code blocks are left exactly as authored: they are often partial or illustrative, and reformatting them to the Markdown tab width would leave every example disagreeing with the code it documents.
+- **`npm run package`** catches webpack bundling issues and missing assets that unit tests alone will not surface.
 
 ## 5. Documenting Work with AI
 
