@@ -1,0 +1,56 @@
+{
+  "name": "@microsoft/vscode-ext-webview-fluentui",
+  "version": "0.1.0-preview",
+  "private": true,
+  "description": "Makes Fluent UI look native inside a VS Code webview: a React theming layer that tracks the user's active workbench theme, plus a small set of provider-agnostic components.",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "sideEffects": [
+    "./dist/index.js"
+  ],
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./components": {
+      "types": "./dist/components.d.ts",
+      "default": "./dist/components.js"
+    }
+  },
+  "typesVersions": {
+    "*": {
+      "components": [
+        "./dist/components.d.ts"
+      ]
+    }
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "prebuild": "node scripts/build-styles.mjs",
+    "build": "tsc -p .",
+    "clean": "rimraf dist tsconfig.tsbuildinfo",
+    "test": "jest --config jest.config.cjs",
+    "prettier-fix": "prettier -w \"src/**/*.@(js|ts|jsx|tsx|json|md)\" \"./*.@(js|ts|jsx|tsx|json|md)\""
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/microsoft/vscode-documentdb",
+    "directory": "packages/vscode-ext-webview-fluentui"
+  },
+  "license": "MIT",
+  "peerDependencies": {
+    "@fluentui/react-components": "~9.74",
+    "@fluentui/react-icons": "~2.0",
+    "react": ">=19"
+  },
+  "devDependencies": {
+    "@fluentui/react-progress": "~9.5.3",
+    "sass": "~1.98.0"
+  }
+}

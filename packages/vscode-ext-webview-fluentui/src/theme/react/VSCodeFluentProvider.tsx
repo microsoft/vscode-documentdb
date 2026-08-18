@@ -4,29 +4,22 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { FluentProvider } from '@fluentui/react-components';
-import { type PropsWithChildren, type ReactNode } from 'react';
-import { useThemeState, WithTheme } from './state/ThemeContext';
-// Side-effect import: every webview renders through this provider, and they all share one
-// bundle, so this is what puts the global Fluent adaptations on the page.
-import './fluentOverrides.scss';
+import { type JSX, type PropsWithChildren } from 'react';
+import { useActiveVSCodeTheme } from './useActiveVSCodeTheme';
 
-export type DynamicThemeProviderProps = {
-    useAdaptive?: boolean;
+/**
+ * A `FluentProvider` whose theme tracks the user's active VS Code color theme.
+ *
+ * Wrap a webview's tree in this and Fluent's neutral ramp stops being Teams gray: surfaces,
+ * strokes and the brand ramp all follow the workbench theme, including community themes.
+ *
+ * Built only from the package's own public API — `useActiveVSCodeTheme`, itself
+ * `useActiveVSCodeThemeKind` + `createVSCodeFluentTheme` — so a consumer who has to own their
+ * `FluentProvider` can assemble an identical result by hand.
+ */
+export const VSCodeFluentProvider = ({ children }: PropsWithChildren): JSX.Element => {
+    const { theme } = useActiveVSCodeTheme();
+
+    return <FluentProvider theme={theme}>{children}</FluentProvider>;
 };
 
-const FluentUiProvider = ({ children }: { children: ReactNode }) => {
-    const themeState = useThemeState();
-
-    return <FluentProvider theme={themeState.fluentUI.theme}>{children}</FluentProvider>;
-};
-
-export const DynamicThemeProvider = ({
-    children,
-    useAdaptive = false,
-}: PropsWithChildren<DynamicThemeProviderProps>) => {
-    return (
-        <WithTheme useAdaptive={useAdaptive}>
-            <FluentUiProvider>{children}</FluentUiProvider>
-        </WithTheme>
-    );
-};

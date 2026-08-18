@@ -4,15 +4,40 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { type BrandVariants, createDarkTheme, createLightTheme, type Theme } from '@fluentui/react-components';
-import { type MonacoBuiltinTheme, type MonacoColors, type MonacoThemeData } from './state/ThemeState';
-import { hex_to_LCH, hexColorsFromPalette, type Palette, RGBAToHexA } from './utils';
-import { vscodeThemeTokens, vscodeThemeTokenToCSSVar } from './vscodeThemeTokens';
+import { hex_to_LCH, hexColorsFromPalette, type Palette, RGBAToHexA } from '../../palette';
 
 type Options = {
     darkCp?: number;
     lightCp?: number;
     hueTorsion?: number;
 };
+
+/**
+ * Used when the key color cannot be parsed. `--vscode-button-background` is absent outside a
+ * VS Code webview — in jsdom, Storybook or a browser preview `getPropertyValue` returns `''` —
+ * and the palette math has no guards of its own: `hexToHue('')` yields NaN, which poisons the
+ * whole sixteen-stop ramp and then throws on the snapping-point lookup. This is VS Code's own
+ * default accent, so the fallback ramp still looks like VS Code.
+ */
+const FALLBACK_KEY_COLOR = '#0078d4';
+
+const SIX_DIGIT_HEX = /^#[0-9a-f]{6}$/i;
+
+/** Normalises whatever `getPropertyValue` returned into a six-digit hex the palette math accepts. */
+function toKeyColorHex(keyColor: string): string {
+    const trimmed = keyColor.trim();
+
+    if (SIX_DIGIT_HEX.test(trimmed)) {
+        return trimmed;
+    }
+
+    if (trimmed.startsWith('rgb')) {
+        const converted = RGBAToHexA(trimmed, true);
+        return SIX_DIGIT_HEX.test(converted) ? converted : FALLBACK_KEY_COLOR;
+    }
+
+    return FALLBACK_KEY_COLOR;
+}
 
 /**
  * A palette is represented as a continuous curve through LAB space, made of two quadratic bezier curves that start at
@@ -32,21 +57,15 @@ type Options = {
 export function getBrandTokensFromPalette(keyColor: string, options: Options = {}) {
     const { darkCp = 2 / 3, lightCp = 1 / 3, hueTorsion = 0 } = options;
 
-    if (!keyColor.startsWith('#')) {
-        if (keyColor.startsWith('rgb')) {
-            keyColor = RGBAToHexA(keyColor);
-        }
-
-        // TODO: If the color is not a hex value
-    }
+    const resolvedKeyColor = toKeyColorHex(keyColor);
 
     const brandPalette: Palette = {
-        keyColor: hex_to_LCH(keyColor),
+        keyColor: hex_to_LCH(resolvedKeyColor),
         darkCp,
         lightCp,
         hueTorsion,
     };
-    const hexColors = hexColorsFromPalette(keyColor, brandPalette, 16, 1);
+    const hexColors = hexColorsFromPalette(resolvedKeyColor, brandPalette, 16, 1);
     return hexColors.reduce((acc: Record<string, string>, hexColor, h) => {
         acc[`${(h + 1) * 10}`] = hexColor;
         return acc;
@@ -77,9 +96,9 @@ export function getBrandTokensFromPalette(keyColor: string, options: Options = {
  *   - colorNeutralStroke3
  *   - colorSubtleBackgroundSelected
  *   - High-contrast theme kinds bypass this generator entirely and fall back to
- *     the static Teams themes (see getFluentUiTheme in state/ThemeContext.tsx),
- *     so none of these token mappings apply there. The CSS in fluentOverrides.scss
- *     is not theme-kind aware and does apply — pending a visual pass.
+ *     the static Teams themes (see createVSCodeFluentTheme), so none of these token
+ *     mappings apply there. The CSS in fluentOverrides.scss is not theme-kind aware
+ *     and does apply — pending a visual pass.
  */
 const adaptiveNeutralSurfaces = {
     // Fluent's Card interaction recipe and the Card/Button disabled recipes use
@@ -213,27 +232,5 @@ export const generateAdaptiveDarkTheme = (): Theme => {
             // `translucent` appearance instead of a flat gray block.
             ...darkSkeletonStencils,
         },
-    };
-};
-
-export const generateMonacoTheme = (baseTheme: MonacoBuiltinTheme): MonacoThemeData => {
-    const style = getComputedStyle(document.documentElement);
-    const colors = vscodeThemeTokens
-        .map((token) => {
-            let color = style.getPropertyValue(vscodeThemeTokenToCSSVar(token));
-            if (!color.startsWith('#')) {
-                if (color.startsWith('rgb')) {
-                    color = RGBAToHexA(color);
-                }
-            }
-            return [token, color];
-        })
-        .filter(([_, color]) => color !== '');
-
-    return {
-        base: baseTheme,
-        inherit: true,
-        rules: [],
-        colors: Object.fromEntries(colors) as MonacoColors,
     };
 };

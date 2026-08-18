@@ -5,28 +5,25 @@
 
 import { afterEach, beforeEach, describe, expect, test } from '@jest/globals';
 
-import { generateAdaptiveDarkTheme, generateAdaptiveLightTheme } from './themeGenerator';
+import { generateAdaptiveDarkTheme, generateAdaptiveLightTheme, getBrandTokensFromPalette } from './themeGenerator';
+
+/** Stands in for VS Code's `--vscode-button-background`, which jsdom does not define. */
+function stubButtonBackground(value: string): void {
+    globalThis.getComputedStyle = (() =>
+        ({
+            getPropertyValue: () => value,
+        }) as unknown as CSSStyleDeclaration) as typeof getComputedStyle;
+}
 
 describe('adaptive neutral surface states', () => {
-    let originalDocument: Document | undefined;
     let originalGetComputedStyle: typeof getComputedStyle;
 
     beforeEach(() => {
-        originalDocument = globalThis.document;
         originalGetComputedStyle = globalThis.getComputedStyle;
-        globalThis.document = { documentElement: {} } as unknown as Document;
-        globalThis.getComputedStyle = (() =>
-            ({
-                getPropertyValue: () => '#0078d4',
-            }) as unknown as CSSStyleDeclaration) as typeof getComputedStyle;
+        stubButtonBackground('#0078d4');
     });
 
     afterEach(() => {
-        if (originalDocument) {
-            globalThis.document = originalDocument;
-        } else {
-            delete (globalThis as { document?: Document }).document;
-        }
         globalThis.getComputedStyle = originalGetComputedStyle;
     });
 
@@ -48,5 +45,43 @@ describe('adaptive neutral surface states', () => {
         expect(theme.colorNeutralForeground2Selected).toBe(
             'var(--vscode-list-inactiveSelectionForeground, var(--vscode-editor-foreground))',
         );
+    });
+});
+
+describe('brand ramp key color', () => {
+    let originalGetComputedStyle: typeof getComputedStyle;
+
+    beforeEach(() => {
+        originalGetComputedStyle = globalThis.getComputedStyle;
+    });
+
+    afterEach(() => {
+        globalThis.getComputedStyle = originalGetComputedStyle;
+    });
+
+    // Outside a VS Code webview `--vscode-button-background` is absent and getPropertyValue
+    // returns ''. The palette math has no guards of its own, so an unguarded generator produced
+    // a NaN-poisoned ramp and then threw. See decision 0009.
+    test.each([
+        ['an empty value', ''],
+        ['whitespace', '   '],
+        ['a named color', 'rebeccapurple'],
+        ['an unparseable rgb() value', 'rgb(not a color)'],
+    ])('degrades to a usable ramp on %s', (_, keyColor) => {
+        const brand = getBrandTokensFromPalette(keyColor);
+
+        expect(Object.keys(brand)).toHaveLength(16);
+        Object.values(brand).forEach((shade) => expect(shade).toMatch(/^#[0-9a-f]{6}$/i));
+    });
+
+    test('accepts an rgb() key color', () => {
+        expect(getBrandTokensFromPalette('rgb(0, 120, 212)')).toEqual(getBrandTokensFromPalette('#0078d4'));
+    });
+
+    test('an absent theme variable still yields a complete theme', () => {
+        stubButtonBackground('');
+
+        expect(() => generateAdaptiveLightTheme()).not.toThrow();
+        expect(() => generateAdaptiveDarkTheme()).not.toThrow();
     });
 });

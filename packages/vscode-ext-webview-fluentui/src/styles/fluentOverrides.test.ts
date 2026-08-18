@@ -40,4 +40,15 @@ describe('Fluent ProgressBar override contract', () => {
             `),
         );
     });
+
+    test('the override re-points every stop the Fluent recipe reads', () => {
+        const scss = fs.readFileSync(path.join(__dirname, 'fluentOverrides.scss'), 'utf8');
+
+        // The adaptation works by retargeting the three tokens above rather than by declaring a
+        // background-image, which is what lets the rule stay at zero specificity. Drop one and
+        // the indeterminate bar goes blank instead of failing loudly.
+        expect(scss).toContain('--colorNeutralBackground6: transparent;');
+        expect(scss).toContain('--colorCompoundBrandBackground: transparent;');
+        expect(scss).toContain('--colorTransparentBackground: var(--vscode-progressBar-background');
+    });
 });

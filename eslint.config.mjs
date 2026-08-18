@@ -28,6 +28,7 @@ export default ts.config(
             '**/__mocks__/**/*',
             '**/*.d.ts',
             '**/jest.config.js',
+            '**/jest.config.cjs',
             '**/main.js',
         ],
     },
@@ -272,6 +273,28 @@ export default ts.config(
             'mocha/no-identical-title': 'off',
             'mocha/no-exports': 'off',
             'mocha/no-async-suite': 'off',
+        },
+    },
+    // Invariant I1 of @microsoft/vscode-ext-webview-fluentui: a component must not require the
+    // package's own theming. Components style themselves from Fluent `tokens.*`, which resolve
+    // against whatever FluentProvider is above them, so a consumer can adopt one component
+    // without adopting a visual philosophy. See the package's decisions 0004 and 0010.
+    {
+        files: ['packages/vscode-ext-webview-fluentui/src/components/**/*.{ts,tsx}'],
+
+        rules: {
+            'no-restricted-imports': [
+                'error',
+                {
+                    patterns: [
+                        {
+                            group: ['**/theme', '**/theme/**', '**/styles', '**/styles/**'],
+                            message:
+                                'Invariant I1: components/ must not import theme/ or styles/. Style components from Fluent `tokens.*` instead.',
+                        },
+                    ],
+                },
+            ],
         },
     },
 );

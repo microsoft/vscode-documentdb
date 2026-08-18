@@ -29,10 +29,15 @@ import {
     MoreHorizontalFilled,
     MoreHorizontalRegular,
 } from '@fluentui/react-icons';
-import * as l10n from '@vscode/l10n';
 import { Fragment, type JSX } from 'react';
 
 const MoreHorizontal = bundleIcon(MoreHorizontalFilled, MoreHorizontalRegular);
+
+/**
+ * The package ships no localization: `npm run l10n` extractors do not scan `node_modules`, so a
+ * string owned here would silently never be translated in any consumer.
+ */
+const defaultOverflowAriaLabel = (count: number): string => `${count} more steps`;
 
 /** A wizard step's derived breadcrumb state, shared by the inline items and the overflow menu. */
 export interface WizardStepMeta {
@@ -77,9 +82,11 @@ const StepOverflowMenuItem = ({
 const StepOverflowMenu = ({
     steps,
     onNavigate,
+    overflowAriaLabel,
 }: {
     readonly steps: readonly WizardStepMeta[];
     readonly onNavigate: (id: string) => void;
+    readonly overflowAriaLabel: (count: number) => string;
 }): JSX.Element | null => {
     const { ref, isOverflowing, overflowCount } = useOverflowMenu<HTMLButtonElement>();
     if (!isOverflowing) {
@@ -93,7 +100,7 @@ const StepOverflowMenu = ({
                         appearance="subtle"
                         ref={ref}
                         icon={<MoreHorizontal />}
-                        aria-label={l10n.t('{0} more steps', String(overflowCount))}
+                        aria-label={overflowAriaLabel(overflowCount)}
                     />
                 </MenuTrigger>
                 <MenuPopover>
@@ -115,6 +122,11 @@ export interface WizardBreadcrumbProps {
     readonly ariaLabel: string;
     /** Invoked when a reachable step is activated, inline or from the overflow menu. */
     readonly onNavigate: (id: string) => void;
+    /**
+     * Accessible name of the "…" overflow button, given the number of hidden steps. Defaults to
+     * English; pass a localized builder if the consumer ships translations.
+     */
+    readonly overflowAriaLabel?: (count: number) => string;
 }
 
 /**
@@ -122,7 +134,12 @@ export interface WizardBreadcrumbProps {
  * menu; the current step is given the highest priority so it is the last item overflow ever
  * removes — it never hides.
  */
-export const WizardBreadcrumb = ({ steps, ariaLabel, onNavigate }: WizardBreadcrumbProps): JSX.Element => {
+export const WizardBreadcrumb = ({
+    steps,
+    ariaLabel,
+    onNavigate,
+    overflowAriaLabel = defaultOverflowAriaLabel,
+}: WizardBreadcrumbProps): JSX.Element => {
     const styles = useStyles();
     return (
         <Overflow minimumVisible={1}>
@@ -156,7 +173,7 @@ export const WizardBreadcrumb = ({ steps, ariaLabel, onNavigate }: WizardBreadcr
                         )}
                     </Fragment>
                 ))}
-                <StepOverflowMenu steps={steps} onNavigate={onNavigate} />
+                <StepOverflowMenu steps={steps} onNavigate={onNavigate} overflowAriaLabel={overflowAriaLabel} />
             </Breadcrumb>
         </Overflow>
     );
