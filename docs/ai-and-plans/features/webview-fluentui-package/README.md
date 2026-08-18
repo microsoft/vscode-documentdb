@@ -4,8 +4,8 @@ kind: notes
 status: active
 created: 2026-08-18
 code:
-  - src/webviews/theme/**
-  - src/webviews/components/wizard/WizardBreadcrumb.tsx
+  - packages/vscode-ext-webview-fluentui/**
+  - src/webviews/index.tsx
 ---
 
 # `@microsoft/vscode-ext-webview-fluentui`
@@ -67,17 +67,16 @@ peer ranges in design.md §7 are chosen to satisfy both repositories at once.
 
 ## Code map
 
-Today, before extraction:
-
-- `src/webviews/theme/**` — the theming layer being extracted
-- `src/webviews/components/wizard/WizardBreadcrumb.tsx` — the first component being extracted
-- `src/webviews/index.tsx` — the consumer wiring
-- `src/webviews/components/MonacoEditor.tsx` — the one other consumer of the theme context
-
-Planned:
+After increment 1:
 
 - `packages/vscode-ext-webview-fluentui/**` — the package
-- `src/webviews/theme/monaco.ts` — the Monaco derivation, which stays behind (decision 0013)
+- `src/webviews/index.tsx` — the consumer wiring, now rendering through `VSCodeFluentProvider`
+- `src/webviews/components/monacoTheme.ts` and `vscodeThemeTokens.ts` — the Monaco derivation and
+  its token list, which stayed behind (decisions 0008, 0013), beside their only consumer
+- `src/webviews/index.scss` — the `--documentdb-*` field stroke aliases, kept extension-side (0012)
+- `src/webviews/slickgrid.scss` — product-specific, moved out of the dissolved `theme/` folder
+
+`src/webviews/theme/` no longer exists.
 
 ## Architecture (intent — code is authoritative for behavior)
 
@@ -95,13 +94,14 @@ Planned:
 
 ## Timeline
 
-| Date       | PR  | What changed                                                              | Docs                                                                                       |
-| ---------- | --- | ------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------ |
-| 2026-08-18 | —   | Design and decisions settled; increment 1 planned but not yet implemented | [iterations/01-theme-and-first-component.md](./iterations/01-theme-and-first-component.md) |
+| Date       | PR   | What changed                                                                                       | Docs                                                                                       |
+| ---------- | ---- | -------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------ |
+| 2026-08-18 | —    | Design and decisions settled; increment 1 planned                                                  | [iterations/01-theme-and-first-component.md](./iterations/01-theme-and-first-component.md) |
+| 2026-08-18 | #895 | Increment 1 implemented: package on disk, theming layer and `WizardBreadcrumb` moved, no publish | [iterations/01-theme-and-first-component.md](./iterations/01-theme-and-first-component.md) |
 
 ## Decisions
 
-[decisions.md](./decisions.md) — fifteen entries covering scope, layering, module format, styling
+[decisions.md](./decisions.md) — sixteen entries covering scope, layering, module format, styling
 delivery, and public naming.
 
 The highest-signal ones, because they reverse what was originally proposed:
@@ -115,8 +115,6 @@ The highest-signal ones, because they reverse what was originally proposed:
 - **Fluent internals coupling.** The overrides key off `fui-*` class names, which are Fluent
   implementation details rather than public API. A narrow peer range and the
   `fluentOverrides` test suite are the only tripwires.
-- **The palette generator is unguarded.** An absent `--vscode-button-background` produces a
-  NaN-poisoned brand ramp. Fixed in increment 1; see decision 0009.
 - **Type-checking resolves built output, not source** (0016). The package must be built before the
   root `tsc` runs — already guaranteed by the `prebuild` fan-out, and true of the other five
   workspace packages too. Modernising resolution repo-wide is filed as future work.

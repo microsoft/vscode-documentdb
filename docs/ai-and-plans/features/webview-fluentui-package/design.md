@@ -4,8 +4,8 @@ kind: design
 status: active
 created: 2026-08-18
 code:
-  - src/webviews/theme/**
-  - src/webviews/components/wizard/WizardBreadcrumb.tsx
+  - packages/vscode-ext-webview-fluentui/**
+  - src/webviews/index.tsx
 ---
 
 # `@microsoft/vscode-ext-webview-fluentui` — Design
