@@ -38,6 +38,20 @@ $field-stroke: var(
  */
 $field-stroke-hover: color-mix(in srgb, var(--vscode-foreground) 45%, #{$field-stroke});
 
+/* The one colour VS Code publishes for progress. Fluent needs it in three places. */
+$progress-fill: var(--vscode-progressBar-background, var(--colorBrandStroke1));
+
+/*
+ * VS Code publishes no progress *track* colour, because its own bars are trackless. Fluent's
+ * determinate bar needs one, and left alone it is a fixed neutral gray that ignores the theme.
+ *
+ * A faint foreground tint solves it without the stylesheet having to know which theme kind is
+ * active: it is translucent, so it composites over whatever surface the bar sits on, and it is
+ * keyed on the foreground, so it darkens on light themes and lightens on dark ones by itself.
+ * Same trick as the field stroke above.
+ */
+$progress-track: color-mix(in srgb, var(--vscode-foreground) 15%, transparent);
+
 :where(.fui-Input, .fui-SearchBox, .fui-Combobox, .fui-Dropdown, .fui-Select, .fui-SpinButton, .fui-Textarea) {
     --colorNeutralForeground3: var(--vscode-descriptionForeground, var(--vscode-foreground));
     --colorNeutralForeground4: var(
@@ -53,7 +67,10 @@ $field-stroke-hover: color-mix(in srgb, var(--vscode-foreground) 45%, #{$field-s
 }
 
 :where(.fui-ProgressBar) {
-    --colorCompoundBrandBackground: var(--vscode-progressBar-background, var(--colorBrandStroke1));
+    // Fill (determinate) and rail. The indeterminate rule below re-points both; it wins on source
+    // order, since every rule here carries zero specificity.
+    --colorCompoundBrandBackground: #{$progress-fill};
+    --colorNeutralBackground6: #{$progress-track};
 }
 
 // Fluent's indeterminate bar has no aria-valuenow, so this selector matches only that variant.
@@ -83,5 +100,5 @@ $field-stroke-hover: color-mix(in srgb, var(--vscode-foreground) 45%, #{$field-s
     // that test fails instead of the bar silently going blank.
     --colorNeutralBackground6: transparent;
     --colorCompoundBrandBackground: transparent;
-    --colorTransparentBackground: var(--vscode-progressBar-background, var(--colorBrandStroke1));
+    --colorTransparentBackground: #{$progress-fill};
 }
