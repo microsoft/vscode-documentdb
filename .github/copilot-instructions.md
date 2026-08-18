@@ -30,7 +30,8 @@ Nothing else. Do **not** run `l10n`, `prettier-fix`, `lint`, or `package` here.
 
 ### Case 2 — handing over
 
-Marking a PR **ready for review**, or reporting the work as done.
+Marking a PR **ready for review** — including when you finish autonomous work and are
+about to mark it ready. If there is no PR, stay on Case 1.
 
 ```bash
 npm run l10n            # only if a vscode.l10n.t() string was added, changed, or removed
@@ -41,10 +42,14 @@ npm run build
 npm run package         # catches bundling and missing-asset failures
 ```
 
-Also update `docs/ai-and-plans/features/<name>/README.md` (and `design.md`) in the same
-PR if the change contradicts what those docs describe.
+Also confirm the AI pre-review (CONTRIBUTING.md §6) has run and its review file is
+committed under `docs/ai-and-plans/features/<name>/iterations/`.
 
-> ⚠️ **Do not report the work as finished until every Case 2 command has run and passed.**
+Update `docs/ai-and-plans/features/<name>/README.md` (and `design.md`) in the same PR
+when a decision, constraint, or intended design changed, or when you already know a
+current document has become materially misleading. This is not a drift sweep.
+
+> ⚠️ **Do not mark a PR ready for review until every Case 2 command has run and passed.**
 
 ### `l10n/bundle.l10n.json` conflicts
 
@@ -83,8 +88,8 @@ by hand is slower and produces a bundle that does not match the source.
 
 ## Branching
 
-- **`main`**: Default branch; all PRs target it.
-- **`release/<X.Y>`**: Short-lived stabilization branches cut from `main` at freeze; release tags (`vX.Y.0`, `vX.Y.1`, …) live here.
+- **`main`**: Default branch; all PRs target it. Normal releases are tagged on `main` and published from `main`.
+- **`release/<X.Y>`**: Created only when a patch must ship while `main` is not releasable. Branched off a release tag, published from, then deleted.
 
 ## TypeScript Guidelines
 

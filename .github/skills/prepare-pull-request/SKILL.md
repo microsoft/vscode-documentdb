@@ -1,6 +1,6 @@
 ---
 name: prepare-pull-request
-description: Get a branch ready to open as a draft pull request, or ready to move from draft to review. Use when the operator says "prepare a PR", "open a draft PR", "I'm ready to open a PR", "check my branch before I push", "is this ready for review", or asks what is still missing before requesting review. Covers base branch, draft status, description quality, milestone, feature documentation, and commit hygiene. The full verification suite runs only at ready-for-review, never when opening a draft. Does NOT cover the AI code review itself (see CONTRIBUTING.md §6.1-6.5), UX review (see ux-pr-review), or cutting a release (see CONTRIBUTING.md §7).
+description: Get a branch ready to open as a draft pull request, or ready to move from draft to review. Use when the operator says "prepare a PR", "open a draft PR", "I'm ready to open a PR", "check my branch before I push", "is this ready for review", or asks what is still missing before requesting review. Covers base branch, draft status, description quality, milestone, feature documentation, and commit hygiene. The full verification suite runs only at ready-for-review, never when opening a draft. Does NOT perform the AI code review itself (see CONTRIBUTING.md §6.1-6.5) — but does check that it has run — nor UX review (see ux-pr-review) or cutting a release (see CONTRIBUTING.md §7).
 ---
 
 # Prepare a Pull Request
@@ -26,7 +26,8 @@ what that section does not.
 - The operator asks to "prepare a PR" without saying which → ask. Assuming Case 2 when
   they meant Case 1 wastes several minutes of checks.
 
-Do **not** run this after every commit. Both cases are hand-over steps.
+Do **not** run this after every commit. Run it when you are opening a PR, or moving one
+to review. Only Case 2 is a hand-over.
 
 ---
 
@@ -118,21 +119,41 @@ release gathering.
 
 Per `CONTRIBUTING.md` §5, durable knowledge belongs to the feature that owns it.
 
-- If this PR changed behavior described in a feature's current documents, update
-  `docs/ai-and-plans/features/<feature>/README.md` (and `design.md` if applicable) **in
-  this PR**.
+- If this PR changed a **decision, constraint, or intended design** recorded in a
+  feature's current documents — or if you already know one of them has become materially
+  misleading — update `docs/ai-and-plans/features/<feature>/README.md` (and `design.md`
+  if applicable) **in this PR**. These documents record intent, not exact behavior, so do
+  not sweep them for drift.
 - If a design choice was made that a future reader would question, add it to that
   feature's `decisions.md` — with the reasoning, and with the "changed from the proposal?"
-  column filled in when the operator overrode a proposal.
+  column filled in when the operator overrode a proposal. Deviations from the plan belong
+  here; minor choices made along the way do not.
 - Plans, reviews, and logs for this round of work go in
   `features/<feature>/iterations/NN-slug.md`.
 - If no feature fits, create one. Pick a slug a newcomer would guess, add a `README.md`,
-  and list it in the index at `docs/ai-and-plans/README.md`.
+  and list it in the index at `docs/ai-and-plans/README.md`. The narrow exception is a
+  document that genuinely belongs to no feature: that is a single file at the root of
+  `docs/ai-and-plans/`. Do not invent a feature to hold it.
 
 Check `code:` globs in any frontmatter you touched actually resolve against the
 repository. A glob that matches nothing fails silently and still looks authoritative.
 
-## 2.3 Hand-over
+## 2.3 The AI pre-review must have happened
+
+`CONTRIBUTING.md` §6 makes the AI pre-review a condition of requesting human review, not
+optional polish. This skill does not run it — it checks that it was run.
+
+Confirm both:
+
+- A review file for this round of work is committed under
+  `docs/ai-and-plans/features/<feature>/iterations/`.
+- The author's decisions on the findings are recorded in it (§6.2), not just the findings.
+
+If either is missing, **stop and tell the operator §6 is outstanding.** Do not mark the PR
+ready to "unblock" it, and do not write the author's decisions on their behalf — §6.2 is
+the part that only the author can do.
+
+## 2.4 Hand-over
 
 **Now** run Case 2 from `.github/copilot-instructions.md`. Once, here, not earlier.
 Then report:
@@ -141,7 +162,7 @@ Then report:
 - Anything you could not verify, and why.
 - Any question you had to answer by assumption, so the operator can correct it.
 
-Do not mark the PR ready, or report the work as finished, with a failing or unrun step.
+Do not mark the PR ready for review with a failing or unrun step.
 
 ## Related
 

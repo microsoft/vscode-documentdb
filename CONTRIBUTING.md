@@ -40,7 +40,7 @@ Releases are tags-first. Normally there are no release branches at all:
 1. When the team is ready to release, a maintainer tags a chosen `main` commit, for example `v0.9.0`. Every release has a tag.
 2. Later patch releases (`v0.9.1`, `v0.9.2`, and so on) normally tag later commits on `main` in the same way.
 
-The tag is the immutable marker of what shipped, not the publication source: the Marketplace pipeline builds and publishes from the branch (see [§7.9](#79-publish-to-the-marketplace)). Tag the commit you intend to release, and release from that commit.
+The tag is the immutable marker of what shipped, not the publication source: the Marketplace pipeline builds and publishes from a branch — normally `main`, or the `release/<X.Y>` branch when one had to be cut (see [§7.9](#79-publish-to-the-marketplace)). Tag the commit you intend to release, and release from that commit.
 
 A `release/<X.Y>` branch is created for one scenario only: a quick patch release must ship while `main` is not yet in a releasable state. In that case:
 
@@ -206,12 +206,12 @@ code .
 
 There are two cases. Work out which one you are in, then run **only** that list.
 
-| Case                                                                                | Run                                                             |
-| ----------------------------------------------------------------------------------- | --------------------------------------------------------------- |
-| **Case 1 — still working** — any commit, any push, opening or updating a draft PR   | The fast loop ([§4.1](#41-case-1--still-working-the-fast-loop)) |
-| **Case 2 — handing over** — marking a PR ready for review, or calling the work done | The full list ([§4.2](#42-case-2--handing-over-the-full-list))  |
+| Case                                                                              | Run                                                             |
+| --------------------------------------------------------------------------------- | --------------------------------------------------------------- |
+| **Case 1 — still working** — any commit, any push, opening or updating a draft PR | The fast loop ([§4.1](#41-case-1--still-working-the-fast-loop)) |
+| **Case 2 — handing over** — marking a PR ready for review                         | The full list ([§4.2](#42-case-2--handing-over-the-full-list))  |
 
-A draft PR is **not** a hand-over. It exists to hold commits, CI, and discussion while the work is still moving, so stay on the fast loop until you mark the PR ready for review.
+A draft PR is **not** a hand-over. It exists to hold commits, CI, and discussion while the work is still moving, so stay on the fast loop until you mark the PR ready for review. If there is no PR at all, the fast loop is the whole list.
 
 ### 4.1. Case 1 — still working: the fast loop
 
@@ -236,6 +236,8 @@ npm run package         # catches bundling and missing-asset failures
 ```
 
 Commit whatever these change, including regenerated files under `l10n/` and anything Prettier reformats.
+
+Case 2 is also where the AI pre-review in [§6](#6-ai-assisted-review-workflow) is due. Do not mark a PR ready for human review until that pass has run and its review file is committed under the feature's `iterations/` folder.
 
 ### 4.3. Notes on individual steps
 
@@ -278,7 +280,9 @@ Documents do not wait for a PR number. The feature slug exists before the PR doe
 
 ### 5.4 Keep the feature docs current
 
-If a PR changes behavior described in a feature's current documents, update `features/<feature>/README.md` (and `design.md` if applicable) in the same PR.
+Update `features/<feature>/README.md` (and `design.md` if applicable) in the same PR when a **decision, constraint, or intended design** changed, or when you already know a current document has become materially misleading. These documents record intent, not exact behavior, so a behavior change on its own is not a trigger.
+
+This is deliberately not mechanical. The usual shape is: a plan is written and records the decisions behind it; the work is done; if it deviates from the plan, the deviation and its reasoning are recorded. Minor choices made along the way do not each need an entry, and no PR needs a proactive sweep for drift.
 
 ## 6. AI-Assisted Review Workflow
 
@@ -290,7 +294,7 @@ Contributors are expected to pre-review their own code with AI before requesting
 
 A multi-step review that produces a committed review markdown file stored in `docs/ai-and-plans/features/<feature>/iterations/`:
 
-1. **Initial edge-case review** using a stronger model from one vendor. Every issue gets a severity level. Findings are written to the review markdown file in the PR folder.
+1. **Initial edge-case review** using a stronger model from one vendor. Every issue gets a severity level. Findings are written to the review markdown file in the feature's `iterations/` folder.
 2. **Merge the Copilot reviewer comments.** Pull the GitHub Copilot reviewer's comments from the PR, merge them into the same file, and reassess the severity of each. Keep a link to each reviewer comment so it can be referenced later in follow-up responses.
 3. **Validation gate** using a stronger model from a different vendor than the first, at standard context. A 1M or extended context window is not needed here because everything is already scoped at this point, so the standard context window is sufficient. This gate verifies each finding against the codebase to confirm valid vs false positive, reassesses severity, and for each issue proposes one or more solutions with pros and cons and a recommended option. It filters out false assumptions made by the earlier passes.
 4. **Independent sweep:** the model looks beyond the captured issues for additional risks not identified earlier, and proposes solutions for them too.
@@ -420,7 +424,7 @@ Always ship the signed artifact from the pipeline. A locally packaged `.vsix` is
 
 ### 7.9 Publish to the Marketplace
 
-Run the second internal Azure DevOps pipeline, the **release** pipeline, which publishes from `main` to the Visual Studio Marketplace. This is a separate pipeline from the build in §7.7: one produces and signs the artifact, the other ships it.
+Run the second internal Azure DevOps pipeline, the **release** pipeline, which publishes to the Visual Studio Marketplace from whichever branch holds the release commit — `main` for a normal release, or the `release/<X.Y>` branch when a patch was cut off a tag ([§1.3](#13-releases)). This is a separate pipeline from the build in §7.7: one produces and signs the artifact, the other ships it.
 
 ## You're Ready to Contribute! 🎉
 
