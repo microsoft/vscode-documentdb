@@ -12,7 +12,8 @@ created: 2026-08-13
 >
 > **Status:** **executed 2026-08-14.** §1–§8 and §10 have landed; see the
 > execution record below for what was done and where the execution deviated.
-> §8A (skills) is still open.
+> §8A (skills) is partly open. **Start at [§13](#13-closing-what-this-document-is-now-and-when-it-retires)**
+> for what is still outstanding and what this document counts for today.
 >
 > **How to use this document:** read §1–§4 to understand _why_, §5–§7 for the
 > target shape and templates, §8–§10 to execute. §11 lists what was explicitly
@@ -1028,3 +1029,71 @@ Recorded so they are not re-opened without new evidence.
    — decide during migration, or when a `collection-view` area emerges.
 3. Whether `CONTRIBUTING.md` §6 becomes a skill in this PR or later
    (recommendation: later, separate PR — tracked in §8A.5).
+
+> **Superseded by §13.** All three were resolved or reclassified after this
+> section was written. Read §13 for the current state; the list above is kept
+> because it records what was genuinely undecided at the time.
+
+---
+
+## 13. Closing: what this document is now, and when it retires
+
+### 13.1 Where the plan actually landed
+
+| Section        | State                     | Note                                                                                                                     |
+| -------------- | ------------------------- | ------------------------------------------------------------------------------------------------------------------------ |
+| §1–§7, §9, §10 | Executed                  | See §0 for the execution record and the seven deviations.                                                                |
+| §8.1–§8.4      | Executed, then amended    | The literal text quoted in §8.1 and §8.3 is **no longer what the files say** — see §13.3.                                |
+| §8A.3          | Executed                  | The `prepare-pull-request` skill exists.                                                                                 |
+| §8A.4          | Resolved differently      | No `self-review-pr` skill. §6 stays prose in `CONTRIBUTING.md`; `prepare-pull-request` §2.3 enforces it as a gate.       |
+| §8A.1, §8A.2   | **Still open**            | `review-external-pr` still has no knowledge-base references, and no architecture skill back-links to its feature.        |
+| §7.4           | **Still open**            | PR #886 has not been rebased; `features/managed-identities/` does not exist yet.                                         |
+| §12 item 2     | Resolved during migration | Landed at `features/completions-and-schema/iterations/04.6-collection-view-ux-improvements.md`, not `interactive-shell`. |
+
+§8A.2's mapping table is partly stale regardless: it routes
+`telemetry-instrumentation` to `cross-cutting/`, a folder that no longer exists.
+Whoever picks that item up needs to choose a real feature or leave that skill
+unlinked.
+
+### 13.2 What this document is for now
+
+It is **not** a to-do list, and it is not the rules. The living rule set is:
+
+- [`README.md`](README.md) — the layout rules and the feature index.
+- `CONTRIBUTING.md` §5 — where a document goes, and what a decision record contains.
+- `.github/copilot-instructions.md`, "Feature Knowledge Base" — the always-loaded short form.
+
+**On conflict, those three win.** This document is evidence: it records what the
+corpus looked like before the move, which alternatives were rejected and on what
+grounds (§11), and where execution departed from the design and why (§0). That is
+its whole remaining value. Do not treat a passage here as current policy because
+it is more detailed than the rule that replaced it.
+
+### 13.3 Amendments after execution
+
+Post-execution changes are recorded in §0 as they happen, rather than by
+rewriting the section that proposed the original. Two rounds so far:
+
+1. **2026-08-14 / 08-15** — `areas/` → `features/`, and the dissolution of
+   `cross-cutting/` and `practices/`. Both are written up in §0.
+2. **2026-08-18** — a review of PR #892 found seven contradictions between
+   `CONTRIBUTING.md`, `.github/copilot-instructions.md`, and the
+   `prepare-pull-request` skill, several of them introduced by §8.1–§8.3. The
+   feature-document trigger in §8.3 ("changes behavior described in an area's
+   current docs") was the substantive one: it contradicts this structure's own
+   claim that feature documents record **intent, not behavior**. It now reads
+   "a decision, constraint, or intended design changed, or a current document
+   became materially misleading", and explicitly rules out drift sweeps. The
+   same round added the AI-review gate that closes §8A.4.
+
+### 13.4 When this document retires
+
+Set `status: historical` when §8A.1, §8A.2, and §7.4 are closed or formally
+dropped. At that point nothing here is actionable, and the migration is far
+enough back that no one is checking whether it went as designed.
+
+Do not delete it then. §11 is the reason: every rejected alternative on that list
+is one a future contributor will propose again in good faith, and the cost of
+re-litigating them is exactly what the table exists to avoid. A historical
+document that answers "we tried that, here is what happened" is cheaper than the
+second attempt.
