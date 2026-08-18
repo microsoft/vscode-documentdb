@@ -39,11 +39,11 @@ import {
 } from '@fluentui/react-icons';
 import { useConfiguration } from '@microsoft/vscode-ext-webview/react';
 import * as l10n from '@vscode/l10n';
+import { WizardBreadcrumb, type WizardStepMeta } from '@microsoft/vscode-ext-webview-fluentui/components';
 import { Fragment, type JSX, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { type AtlasAuthMethod } from '../../../plugins/service-atlas-mongodb/auth/AtlasSession';
 import { useTrpcClient } from '../../_integration/useTrpcClient';
 import { Announcer } from '../../components/accessibility/Announcer';
-import { WizardBreadcrumb, type WizardStepMeta } from '../../components/wizard/WizardBreadcrumb';
 import './atlasCredentials.scss';
 import { type AtlasCredentialsWebviewConfig } from './atlasCredentialsController';
 import { type CredentialSubmitError } from './atlasCredentialsRouter';
@@ -466,7 +466,12 @@ export const AtlasCredentialsView = (): JSX.Element => {
     // Responsive breadcrumb: when it doesn't fit, steps collapse into a "…" menu. The current step is
     // given the highest priority so it is the last item overflow ever removes - it never hides.
     const progress = (
-        <WizardBreadcrumb steps={stepItems} ariaLabel={l10n.t('Credential setup progress')} onNavigate={goToStep} />
+        <WizardBreadcrumb
+            steps={stepItems}
+            ariaLabel={l10n.t('Credential setup progress')}
+            onNavigate={goToStep}
+            overflowAriaLabel={(count) => l10n.t('{0} more steps', String(count))}
+        />
     );
 
     const methodCard = (

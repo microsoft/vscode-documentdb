@@ -73,9 +73,9 @@ import {
     QUICK_START_PORT,
     type StageEvent,
 } from '../../../services/localQuickStart/quickStartTypes';
+import { WizardBreadcrumb, type WizardStepMeta } from '@microsoft/vscode-ext-webview-fluentui/components';
 import { useTrpcClient } from '../../_integration/useTrpcClient';
 import { Announcer } from '../../components/accessibility/Announcer';
-import { WizardBreadcrumb, type WizardStepMeta } from '../../components/wizard/WizardBreadcrumb';
 import { pollDockerReadiness } from './dockerReadinessPolling';
 import {
     type DockerDetailFailureKey,
@@ -2575,7 +2575,12 @@ export const LocalQuickStart = (): JSX.Element => {
                         {isProvisioning ? provisioningStatusMessage : ''}
                     </div>
                     {hero}
-                    <WizardBreadcrumb steps={stepItems} ariaLabel={l10n.t('Setup steps')} onNavigate={goToStep} />
+                    <WizardBreadcrumb
+                        steps={stepItems}
+                        ariaLabel={l10n.t('Setup steps')}
+                        onNavigate={goToStep}
+                        overflowAriaLabel={(count) => l10n.t('{0} more steps', String(count))}
+                    />
                     {phase === 'introduction' && introduction}
                     {phase === 'configure' && configure}
                     {(isProvisioning || phase === 'failed') && setup}
