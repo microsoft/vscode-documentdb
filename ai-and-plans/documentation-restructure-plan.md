@@ -1,5 +1,4 @@
 ---
-area: documentation
 kind: plan
 status: active
 created: 2026-08-13
@@ -11,12 +10,215 @@ created: 2026-08-13
 > memory of the discussion that produced it. Everything needed to execute the
 > migration is in this document.
 >
-> **Status:** analysis complete, decisions locked, **nothing migrated yet**.
-> Execution is deliberately deferred until 0.10.0 is merged (see §9).
+> **Status:** **executed 2026-08-14.** §1–§8 and §10 have landed; see the
+> execution record below for what was done and where the execution deviated.
+> §8A (skills) is partly open. **Start at [§13](#13-closing-what-this-document-is-now-and-when-it-retires)**
+> for what is still outstanding and what this document counts for today.
 >
 > **How to use this document:** read §1–§4 to understand _why_, §5–§7 for the
 > target shape and templates, §8–§10 to execute. §11 lists what was explicitly
 > rejected — do not re-open those without new evidence.
+
+---
+
+## 0. Execution record (2026-08-14)
+
+The migration landed in four commits: a pure-rename commit, a link-repair commit,
+a frontmatter-plus-pilot commit, and a READMEs commit, followed by the policy
+updates in §8.1–§8.4.
+
+**Result:** 92 documents moved into 11 areas plus `cross-cutting/` and
+`practices/`; every document carries frontmatter; every area has a README; the
+pilot acceptance test in §10 passes (all seven questions answerable from
+`features/local-quickstart/README.md`, and zero broken links or anchors inside that
+area). Repo-wide, broken links in `docs/ai-and-plans/` fell from 322 to 219, and
+**zero** of the remainder were caused by the migration — they are dead paths left
+by earlier source refactors, from before this work.
+
+**Deviations from the plan, and why:**
+
+| §         | Plan said                                                                           | What was done                                                                                                                                                                                          | Why                                                                                                                                                                                                                                                                                           |
+| --------- | ----------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| §4 rule 2 | "One file per iteration"; folder only at ~3+ documents or a >1000-line merge        | An iteration with exactly two documents (a plan and its review) keeps both as adjacent flat files, `NN-slug.md` + `NN-slug-review.md`. Folders are still used at 3+ documents or >1000 combined lines. | Merging would have rewritten content in a commit meant to be mechanical, destroyed `git log --follow` for the second document, and gained nothing: two adjacent flat files sort together and produce no mostly-empty directory, which is what rule 2 exists to prevent. Affects 5 iterations. |
+| §7.1      | `PRs/714-…` "(2 files, merged into one iteration)"                                  | Kept as a flat pair, like the other two-document iterations                                                                                                                                            | Consistency with the rule above. It was the only explicit merge instruction in the plan.                                                                                                                                                                                                      |
+| §5        | `cross-cutting/decisions.md` for extension-wide calls (dual-ID scheme, terminology) | Not created                                                                                                                                                                                            | No source document for those decisions exists in the corpus. Writing entries with no recorded options or rationale would have manufactured evidence. Create it when a real extension-wide decision needs recording.                                                                           |
+| §7.1      | Per-area `future-work.md` replaces the central `future-work/` folder                | `query-playground` and `completions-and-schema` each keep two: `future-work.md` and `future-work-<topic>.md`                                                                                           | Both areas inherited two distinct future-work lists. Folding them into one file needed heading surgery that would have broken existing anchors, for no navigational gain: both areas stay well under the ~6-root-file threshold in rule 5.                                                    |
+| §9.2      | Three commits; link repairs cover intra-document links                              | Four commits, and the link-repair commit also updates three `@see` comments in `src/`                                                                                                                  | Those comments were the only reverse index from code back to design rationale, which §6.1 calls the highest-value optional metadata. Leaving them broken would have defeated the point. The fourth commit separates the pilot from the remaining areas.                                       |
+| §9.1      | Do not start until 0.10.0 is merged                                                 | Executed on a branch off `main` at 0.10.0                                                                                                                                                              | Operator instruction.                                                                                                                                                                                                                                                                         |
+| §7.4      | Rebase PR #886 and relocate `managed-identities/` into `features/`                  | Not done                                                                                                                                                                                               | Operator instruction: open PRs update themselves to the new structure after this lands.                                                                                                                                                                                                       |
+| §8A       | Skills work                                                                         | Not done                                                                                                                                                                                               | The plan marks §8A "OPEN FOR DISCUSSION" and says not to implement without confirming.                                                                                                                                                                                                        |
+
+**One bonus repair**, outside the plan's scope but made while the link paths were
+already being touched: 102 markdown links written root-relative (`src/foo/Bar.ts`
+rather than `../../../src/foo/Bar.ts`) never resolved from their own directory,
+before or after the move. They now resolve.
+
+### Post-migration change: `areas/` → `features/` (2026-08-14)
+
+The directory level §5.1 named `areas/` was renamed to `features/` on operator
+decision, immediately after the migration landed. §5.1's original reasoning —
+that not everything under it is a user-facing feature, `webview-ext-package`
+being the example — is still true and is still the strongest argument against
+the name. It was outweighed by `features/` being the word a contributor reaches
+for first. §5.1 is annotated rather than rewritten, so the argument the reversal
+had to answer stays on the record.
+
+### Post-migration change: the secondary buckets dissolved (2026-08-15)
+
+`cross-cutting/` and `practices/` are gone. The knowledge base is now exactly
+`README.md`, this plan, `live-preview-playwright.md`, and `features/`.
+
+**Why.** The migration was the experiment §5.2 needed. Of the five documents in
+the two buckets, **one** was genuinely feature-independent. Two were misfiled the
+same way `cross-feature-links.md` was: a document that _touches_ several features
+was filed as "not a feature", even though its own title named its home. That is
+precisely the failure §11 predicted when it rejected a `shared/` tier — an
+unpredictable "is this shared?" judgment made at creation time — and `cross-cutting/`
+was that tier under another name. Two folders, five files, one of them correctly
+placed, is not a structure.
+
+**`general/` was considered and rejected.** Merging both buckets into one would
+have removed the _choice between_ buckets, but a folder named for the absence of
+a property still asks "does this belong to a feature?" and then offers a
+comfortable place to answer "not sure". Dissolving removes the question instead
+of renaming it. The replacement rule is in §5.2: everything belongs to a feature;
+anything that genuinely does not is a single file at the knowledge-base root,
+where it is visible on `ls` and therefore self-policing.
+
+**What moved:**
+
+| From                                         | To                                                               | Why                                                                                                                              |
+| -------------------------------------------- | ---------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
+| `cross-cutting/query-surfaces-roadmap.md`    | `features/interactive-shell/iterations/00-program-roadmap.md`    | Its own title is "Interactive Shell Integration — High-Level Plan". It is that feature's origin story, not a governing document. |
+| `cross-cutting/cross-feature-links.md`       | `features/query-playground/iterations/10-cross-feature-links.md` | A 646-line implementation log with commit hashes. `kind: iteration`.                                                             |
+| `cross-cutting/multi-connection-behavior.md` | `features/query-playground/multi-connection-behavior.md`         | Superseded in place; see below.                                                                                                  |
+| `practices/webview-ext-migration-manual.md`  | `features/webview-ext-package/migration-manual.md`               | Records one specific package rename plus the vscode-cosmosdb adoption template. It belongs to that feature.                      |
+| `practices/live-preview-playwright.md`       | `live-preview-playwright.md` (root)                              | The only genuinely feature-independent document in either bucket.                                                                |
+
+**The multi-connection facts were promoted.** `docs/user-manual/query-runtime.md`
+covered worker _isolation_ but not per-cluster worker sharing, one worker per
+shell terminal, or playgrounds on the same cluster queueing behind each other.
+Those are user-facing facts and had been sitting in an internal folder since
+2026-04-15, in a document whose own header called itself a "pre-seed for user
+documentation". They now live in a "Running Several Sessions at Once" section of
+the user manual. The source document is kept at `status: superseded` with
+`superseded-by:` pointing at the manual, because its "Why the Difference?" and
+"Future Consideration" chapters are design rationale rather than user-facing
+facts, and would be lost by deleting it.
+
+**The flat-pair convention is now the rule, not a deviation.** Rule 2 previously
+said "one file per iteration" and told you to merge; it now states that two
+documents for one iteration share the iteration number and are told apart by a
+genre suffix. §7.1's `connections-tree` row, which said "2 files, merged into one
+iteration", is corrected. Nothing was retrofitted — the convention describes what
+is already on disk.
+
+**Frontmatter.** `area:` became `feature:` across 101 documents, with the value
+taken from the owning folder rather than the old field, which also corrected four
+files still claiming `area: cross-cutting` or `area: practices` after the moves.
+The two root documents that carried the field lost it: there is no
+`feature: general` value, because a root-level document is by definition one that
+belongs to no feature. Rule 6 and §6.1 are amended accordingly.
+
+**Verification.** Link check: zero breakage caused by these moves. The remaining
+findings are the same pre-existing dead `src/` paths from earlier refactors, plus
+four intentional historical references (`PRs/` in the old-links note, and
+`managed-identities/` from the unmerged PR #886). Full checklist green: `l10n`,
+`prettier-fix`, `lint`, `jest`, `build`.
+
+**No open questions arose.** Two judgment calls were made inside the latitude the
+task allowed, and are recorded here rather than raised: the `multi-connection-behavior.md`
+supersession note names the specific user-manual section rather than the file
+alone, and the frontmatter templates in §6.1, §6.3, the knowledge-base README and
+the `ux-pr-review` skill were updated to `feature:` so that no `area:` example
+survives anywhere.
+
+**Still open:** all of §8A, and the `04.6-collection-view-ux-improvements.md`
+placement in §12 (filed under `completions-and-schema` as the plan provisionally
+directed; noted as such in that feature's README).
+
+### Post-migration change: Prettier now formats Markdown (2026-08-15)
+
+Three times during this work, running Prettier over Markdown reflowed dozens of
+untouched documents and the churn had to be reverted by hand, because
+`npm run prettier-fix` covered only `js|ts|jsx|tsx|json`. Markdown formatting was
+therefore whatever each author happened to type, and any agent that ran Prettier
+broadly produced an unreviewable diff.
+
+`prettier` and `prettier-fix` now include `md`, and also cover `.github/**/*.md`.
+The whole repository was reformatted once, in its own commit, so the baseline is
+clean and future docs changes show only their own diff.
+
+Two configuration decisions made this safe:
+
+- **`embeddedLanguageFormatting: 'off'` for `*.md`.** The first attempt reindented
+  every fenced TypeScript sample from four spaces to two, because the Markdown
+  override sets `tabWidth: 2`. That would have left every code example in the
+  skills and the knowledge base disagreeing with the codebase it documents.
+  Fenced code is now left exactly as authored, which is also correct for the many
+  blocks that are partial or illustrative rather than compilable.
+- **`.prettierignore` additions.** `docs/plan/` and `docs/analysis/` are gitignored
+  scratch space; `CHANGELOG.md` is generated by the release-notes skill; and
+  `**/resources/scraped/` holds scraper output that the scrapers rewrite in their
+  own format, so formatting it would only create churn between runs.
+
+No `prettier-ignore` comments remain in the repository. The one added earlier in
+this work to protect a `{{…}}` placeholder block became unnecessary once embedded
+formatting was disabled, and a pre-existing pair around link-reference definitions
+in an iteration document was verified redundant before removal.
+
+The reformat was checked for content loss by comparing the word sequence of every
+changed file before and after: 56 files changed, and the only word-level
+differences anywhere were the `prettier-ignore` tokens that were deliberately
+removed.
+
+### Post-review corrections (2026-08-15)
+
+An independent review of the finished branch verified the layout against the spec
+and raised five findings. Two were defects worth fixing immediately; both are
+fixed, and both were mistakes of the same kind — **an assertion carried forward
+without being checked against reality.**
+
+**1. §7.4's rebase estimate was wrong, and I repeated it.** The section claimed
+PR #886's conflict surface was "the five documents it owns". Measured against the
+branch it is 39 files: 7 of its own and **32 unrelated documents this restructure
+renamed**. §7.4 is corrected with the real numbers, a verified resolution recipe
+(all 32 of #886's changes are pure Prettier reformatting, so take the rename and
+discard its version), and the two files the target shape never accounted for.
+
+The lesson is sharper than the number. §4.1 says the code wins for behavior and
+that a doc-versus-reality mismatch must be named rather than silently accepted. I
+applied that rule to every feature document and then quoted an unverified figure
+out of the plan into a hand-off summary. **A plan is a document like any other:
+it describes intent, not fact, and its factual claims need the same check.**
+
+**2. Seven documents carried `code:` globs that resolve to nothing.** §6.1 calls
+`code:` the highest-leverage optional field — the only route from a source path
+back to its rationale. Five documents in `index-management` pointed at
+`src/webviews/documentdb/indexView/**` (the real path is
+`collectionView/indexesTab/**`) and two in `query-playground` pointed at
+`src/services/playground/**`, which does not exist.
+
+Cause: the two feature READMEs were written by hand with correct paths, but every
+other root document took its `code:` block from a lookup table in the migration
+script, and that table was never validated against the filesystem. A review that
+spot-checks READMEs cannot catch this, because the READMEs are the correct ones.
+
+Both frontmatter templates — the knowledge-base README and §6.1 — also taught
+invented paths (`src/commands/localQuickstart/**` with the wrong casing, and
+`src/services/localInstance/**`, which never existed). They now use real ones, at
+the indentation the documents on disk actually use.
+
+**All 35 distinct `code:` globs in the knowledge base were then resolved against
+the repository; every one matches.** The README now states the rule that makes
+this checkable: a glob matching nothing is worse than an absent field, because it
+fails silently while still looking authoritative.
+
+Three further findings were accepted as valid but lower value and are not fixed
+here: feature READMEs all carry `kind: notes`, which does not describe an index;
+the knowledge-base README carries no frontmatter although rule 6 requires
+`kind` and `status` on root documents; and the Prettier tooling change rides in
+this branch rather than its own PR.
 
 ---
 
@@ -135,14 +337,17 @@ This is the complete rule set. If a situation is not covered, prefer fewer files
 and fewer folders.
 
 ```
-1. An area folder is the unit. PRs are iterations inside it.
-2. One file per iteration. Make it a folder only when it gets unwieldy
-   (~3+ documents, or a merge that would exceed ~1000 lines).
-3. One decisions.md per area. Append entries; update status in place.
-4. Durable docs sit flat at the area root. iterations/ is the only subfolder.
-5. More than ~6 root files is a smell — consider splitting the area.
+1. A feature folder is the unit. PRs are iterations inside it.
+2. One file per iteration. Two documents for one iteration share the iteration
+   number and are told apart by a genre suffix (`01-item-counting-tree.md` +
+   `01-item-counting-tree-review.md`); they sort adjacently and need no folder.
+   Promote to a folder only at three or more documents.
+3. One decisions.md per feature. Append entries; update status in place.
+4. Durable docs sit flat at the feature root. iterations/ is the only subfolder.
+5. More than ~6 root files is a smell — consider splitting the feature.
    It is a prompt to review the boundary, not an automatic split.
-6. Frontmatter: area, kind, status required. Everything else optional.
+6. Frontmatter: feature, kind, status required for documents under features/.
+   Root-level documents carry kind and status only.
 7. Code wins for behavior. Active docs win for intent. iterations/ is
    evidence only.
 8. Agents: start at the README; pull history only for specific provenance.
@@ -199,7 +404,7 @@ docs/ai-and-plans/
 ├── practices/                         # reusable contributor procedure, not area history
 │   ├── live-preview-playwright.md
 │   └── webview-ext-migration-manual.md
-└── areas/
+└── features/
     └── local-quickstart/
         ├── README.md                  # purpose, status, code map, timeline, decision index, reading order
         ├── decisions.md               # status table + append-only entries
@@ -217,6 +422,11 @@ docs/ai-and-plans/
 
 ### 5.1 Naming
 
+> **Reversed after the migration (2026-08-14).** The directory level is now
+> `features/`, not `areas/` — see the execution record in §0. The paragraph
+> below is the original reasoning, kept because it is the argument the reversal
+> had to answer.
+
 - **Directory level is `areas/`**, matching the required `area:` frontmatter
   field. Chosen over `features/` because not everything is a user-facing feature
   (`webview-ext-package` is a published package).
@@ -232,13 +442,25 @@ docs/ai-and-plans/
   the three areas it splits into (see §7.3), so the sequence is retained at zero
   cost.
 
-### 5.2 Classification tests for the secondary buckets
+### 5.2 Where a document goes
 
-- **Area** — owns product behavior or architecture.
-- **Cross-cutting** — one document genuinely governs several areas. Rare.
-- **Practice** — a reusable contributor procedure, not area history.
+> **Revised 2026-08-15.** This section originally defined classification tests for
+> two secondary buckets, `cross-cutting/` and `practices/`. Both were dissolved
+> — see §0. The test below replaces them.
 
-There is no `misc/`. Anything that does not fit goes into the nearest area.
+**Everything belongs to a feature.** A document goes in the folder of the feature
+whose behavior or architecture it describes. A document that _touches_ several
+features still belongs to one of them: file it under the feature it is the origin
+story or the implementation log of, and cross-link the siblings.
+
+**If something genuinely belongs to no feature, it is a single file at the root of
+`docs/ai-and-plans/`.** No bucket folder. Root files are self-policing: there are
+three today, and a fourth is visible immediately on `ls`. If they ever multiply
+enough to need grouping, that is the moment to group them — with evidence about
+what they actually have in common, rather than a category predicted in advance.
+
+There is no `misc/` and no `general/`. A bucket named for the absence of a
+property invites exactly the judgment call this structure exists to remove.
 
 ---
 
@@ -246,18 +468,19 @@ There is no `misc/`. Anything that does not fit goes into the nearest area.
 
 ### 6.1 Frontmatter
 
-Required: `area`, `kind`, `status`. Everything else optional.
+Required: `feature`, `kind`, `status` for documents under `features/`. Root-level
+documents carry `kind` and `status` only. Everything else optional.
 
 ```yaml
 ---
-area: local-quickstart
+feature: local-quickstart
 kind: design | decisions | iteration | review | ux-review | research | checklist | practice | plan | notes
 status: active | historical | superseded
 prs: [798, 876] # optional, provenance only
 created: 2026-08-04 # optional
 code: # optional but high value: reverse index from source to rationale
-  - src/commands/localQuickstart/**
-  - src/services/localInstance/**
+    - src/commands/localQuickStart/**
+    - src/services/localQuickStart/**
 verified: 2026-08-13 # optional. absent = unverified. no promise of currency.
 superseded-by: decisions.md#0003 # optional
 ---
@@ -318,7 +541,7 @@ README → design.md → decisions.md
 
 ```markdown
 ---
-area: local-quickstart
+feature: local-quickstart
 kind: decisions
 status: active
 verified: 2026-08-13
@@ -412,7 +635,7 @@ area-root research file referenced from a short decision entry.
 | `atlas-discovery`        | `PRs/733-…/*` (4), `PRs/834-…` (fix the 834/765 mismatch in frontmatter)                                                                                                                                                                |
 | `kubernetes-discovery`   | `PRs/621-…/*` (3)                                                                                                                                                                                                                       |
 | `webview-ext-package`    | `PRs/676-…`, `PRs/766-…/*` minus the migration manual, `PRs/786-…`, `PRs/795-…`                                                                                                                                                         |
-| `connections-tree`       | `PRs/726-…/*` (2), `PRs/714-…` (2 files, merged into one iteration)                                                                                                                                                                     |
+| `connections-tree`       | `PRs/726-…/*` (2), `PRs/714-…` (2 files, kept as a flat pair sharing iteration number 01)                                                                                                                                               |
 | `no-auth`                | `PRs/755-…/*` (3)                                                                                                                                                                                                                       |
 | `cross-cutting/`         | `10-cross-feature-links.md`, `interactive-shell/0-high-level-plan.md` (as the query-surfaces program roadmap), `interactive-shell/multi-connection-behavior.md`                                                                         |
 | `practices/`             | `live-preview-playwright-future-work.md`, `PRs/766-…/webview-ext-migration-manual.md`                                                                                                                                                   |
@@ -479,31 +702,81 @@ single decisions file are good enough and a `decisions/` folder is unnecessary.
 What it is missing, and what the follow-up must add: frontmatter, a short
 `README.md` (today the 848-line `managed-identities.md` doubles as index and
 design), and relocation of `implementation-log.md` into `iterations/`.
-
 **It is the first post-migration conformance check.** Handling:
 
 > After the migration lands, rebase PR #886 onto `main` and `git mv` its
-> documents into `areas/managed-identities/`, splitting `managed-identities.md`
+> documents into `features/managed-identities/`, splitting `managed-identities.md`
 > into `README.md` + `design.md` and adding frontmatter, **inside that PR**.
 
-The rebase is cheap: the migration touches only `docs/`, and #886's ~102 files
-are almost entirely `src/`, so the conflict surface is the five documents it
-owns. If slotting it in needs more than a rename plus a README, the layout is
-wrong and should be revisited before the remaining areas move.
+#### The rebase is not as cheap as this section originally claimed
+
+> **Corrected 2026-08-15, measured against the merged restructure.** The text
+> here previously read: _"the migration touches only `docs/`, and #886's ~102
+> files are almost entirely `src/`, so the conflict surface is the five documents
+> it owns."_ That was wrong on both halves and is the kind of unverified estimate
+> the authority model in §4.1 exists to catch.
+
+Measured (`git diff --name-only origin/main...origin/dev/tnaum/managed-identities -- docs/ai-and-plans`):
+
+| Count  | What                                                |
+| ------ | --------------------------------------------------- |
+| **39** | files the branch touches under `docs/ai-and-plans/` |
+| 7      | its own `managed-identities/` documents (not five)  |
+| **32** | **unrelated documents this restructure renamed**    |
+
+The 32 are the real cost. Git's rename detection will follow some of them during
+the rebase; the rest surface as conflicts at either the old or the new path.
+
+**The resolution is uniform: take the rename, discard #886's version.** All 32
+changes on that branch are **pure Prettier markdown reformatting** — table
+realignment and blank-line normalisation from someone running Prettier over
+`docs/` there. This was verified by comparing the word sequence of every one of
+the 32 files between `origin/main` and the branch: **32 of 32 are
+formatting-only**, zero content differences. Commit `4dff187e` on this branch
+already reformatted every one of those files at its new path with the
+repository's own Prettier config, so nothing on #886 is worth keeping.
+
+Do this before starting, and the 32 collapse into one decision instead of
+thirty-two:
+
+```bash
+# During the rebase, for every conflicted path outside managed-identities/.
+# Most conflicts are modify/delete: the restructure moved the file, #886 only
+# reformatted it in place. Drop the old path and keep the renamed file.
+git rm <old path>
+
+# Where git detected the rename instead, the file conflicts at its new path.
+# Take the restructured side. Note that during a rebase --ours is the branch
+# being rebased ONTO, i.e. the restructure — the opposite of merge semantics.
+git checkout --ours -- <new path>
+```
+
+**Two files this section did not account for:**
+
+- `PRs/886-managed-identity/ux-review.md` — created under the **old** PR-keyed
+  convention while it was still in force. It relocates to
+  `features/managed-identities/iterations/`, and it is concrete evidence that the
+  `ux-pr-review` retarget in §8.4 was needed.
+- `managed-identities/pr-886-review.md` — the AI-review artifact the target shape
+  below lists as "still to come". It already exists.
+
+If slotting the branch in needs more than these renames plus a README, the layout
+is wrong and should be revisited before anything else moves.
 
 Target shape:
 
 ```
-areas/managed-identities/
+features/managed-identities/
 ├── README.md                        # new
 ├── design.md                        # ← managed-identities.md
 ├── decisions.md                     # as-is + frontmatter
 ├── research-findings.md             # as-is + frontmatter
-├── manual-validation-checklist.md   # area root: it gets re-run (§4)
+├── manual-validation-checklist.md   # feature root: it gets re-run (§4)
 └── iterations/
     └── 01-initial-implementation/
         ├── implementation-log.md
-        └── code-review.md           # the AI-review artifact, still to come
+        ├── code-review.md           # ← managed-identities/pr-886-review.md
+        └── ux-review.md             # ← PRs/886-managed-identity/ux-review.md
 ```
 
 > **Known breakage:** the #886 description links
@@ -525,10 +798,10 @@ operator decisions and their reasoning.
 
 - `docs/ai-and-plans/README.md` — area index. Short and maintained. Read it
   when a task touches an area.
-- `areas/<name>/README.md` and the flat files beside it are the **best
+- `features/<name>/README.md` and the flat files beside it are the **best
   available account** of an area's design and intent. They are maintained, but
   they describe intent, not guaranteed current behavior.
-- `areas/<name>/iterations/**` is **history**. Read only the specific iteration
+- `features/<name>/iterations/**` is **history**. Read only the specific iteration
   needed to resolve provenance, rationale, or a regression. Never bulk-load it.
   Plans and reviews there are evidence of past reasoning, not a description of
   the product today.
@@ -556,7 +829,7 @@ operator decisions and their reasoning.
 Next to `npm run l10n` in `.github/copilot-instructions.md`:
 
 > If this PR changes behavior described in an area's current docs, update
-> `areas/<name>/README.md` (and `design.md` if applicable) in the same PR.
+> `features/<name>/README.md` (and `design.md` if applicable) in the same PR.
 
 ### 8.4 Fix the broken `ux-pr-review` references
 
@@ -570,7 +843,7 @@ Four references across two files, all pointing at
 | `.github/skills/ux-pr-review/SKILL.md`                               | 96   | where to create the file                     |
 | `.github/skills/ux-pr-review/SKILL.md`                               | 104  | "`PRs/` is tracked" guidance                 |
 
-Retarget to `docs/ai-and-plans/areas/<area>/iterations/NN-<slug>.md` (or
+Retarget to `docs/ai-and-plans/features/<area>/iterations/NN-<slug>.md` (or
 `.../ux-review.md` when the iteration is a folder). Replace the dead example on
 line 26 with a real one. Line 175 also cross-references `CONTRIBUTING.md` §6.3,
 which moves if §8.8 goes ahead.
@@ -634,7 +907,7 @@ currently one-directional. Concrete mapping now that §7.1 exists:
   Copilot reviewer threads → validation gate (different vendor, standard
   context) → independent sweep; then author decisions, per-work-item commits,
   author final review, plus the file-an-issue escape hatch.
-- **Writes to:** `areas/<area>/iterations/NN-<slug>/code-review.md`.
+- **Writes to:** `features/<area>/iterations/NN-<slug>/code-review.md`.
 
 ### 8A.5 Open questions for this section
 
@@ -700,7 +973,7 @@ retrieval problem appears.
 5. Update `CONTRIBUTING.md`, `.github/copilot-instructions.md`, and the
    `ux-pr-review` skill paths (§8.1–§8.4).
 6. **After the migration lands:** rebase PR #886 and relocate its documents into
-   `areas/managed-identities/` inside that PR (§7.4). This doubles as the first
+   `features/managed-identities/` inside that PR (§7.4). This doubles as the first
    conformance check on work authored before the rules existed.
 7. Revisit §8A (skills) with the maintainer — still open.
 
@@ -756,3 +1029,71 @@ Recorded so they are not re-opened without new evidence.
    — decide during migration, or when a `collection-view` area emerges.
 3. Whether `CONTRIBUTING.md` §6 becomes a skill in this PR or later
    (recommendation: later, separate PR — tracked in §8A.5).
+
+> **Superseded by §13.** All three were resolved or reclassified after this
+> section was written. Read §13 for the current state; the list above is kept
+> because it records what was genuinely undecided at the time.
+
+---
+
+## 13. Closing: what this document is now, and when it retires
+
+### 13.1 Where the plan actually landed
+
+| Section        | State                     | Note                                                                                                                     |
+| -------------- | ------------------------- | ------------------------------------------------------------------------------------------------------------------------ |
+| §1–§7, §9, §10 | Executed                  | See §0 for the execution record and the seven deviations.                                                                |
+| §8.1–§8.4      | Executed, then amended    | The literal text quoted in §8.1 and §8.3 is **no longer what the files say** — see §13.3.                                |
+| §8A.3          | Executed                  | The `prepare-pull-request` skill exists.                                                                                 |
+| §8A.4          | Resolved differently      | No `self-review-pr` skill. §6 stays prose in `CONTRIBUTING.md`; `prepare-pull-request` §2.3 enforces it as a gate.       |
+| §8A.1, §8A.2   | **Still open**            | `review-external-pr` still has no knowledge-base references, and no architecture skill back-links to its feature.        |
+| §7.4           | **Still open**            | PR #886 has not been rebased; `features/managed-identities/` does not exist yet.                                         |
+| §12 item 2     | Resolved during migration | Landed at `features/completions-and-schema/iterations/04.6-collection-view-ux-improvements.md`, not `interactive-shell`. |
+
+§8A.2's mapping table is partly stale regardless: it routes
+`telemetry-instrumentation` to `cross-cutting/`, a folder that no longer exists.
+Whoever picks that item up needs to choose a real feature or leave that skill
+unlinked.
+
+### 13.2 What this document is for now
+
+It is **not** a to-do list, and it is not the rules. The living rule set is:
+
+- [`README.md`](README.md) — the layout rules and the feature index.
+- `CONTRIBUTING.md` §5 — where a document goes, and what a decision record contains.
+- `.github/copilot-instructions.md`, "Feature Knowledge Base" — the always-loaded short form.
+
+**On conflict, those three win.** This document is evidence: it records what the
+corpus looked like before the move, which alternatives were rejected and on what
+grounds (§11), and where execution departed from the design and why (§0). That is
+its whole remaining value. Do not treat a passage here as current policy because
+it is more detailed than the rule that replaced it.
+
+### 13.3 Amendments after execution
+
+Post-execution changes are recorded in §0 as they happen, rather than by
+rewriting the section that proposed the original. Two rounds so far:
+
+1. **2026-08-14 / 08-15** — `areas/` → `features/`, and the dissolution of
+   `cross-cutting/` and `practices/`. Both are written up in §0.
+2. **2026-08-18** — a review of PR #892 found seven contradictions between
+   `CONTRIBUTING.md`, `.github/copilot-instructions.md`, and the
+   `prepare-pull-request` skill, several of them introduced by §8.1–§8.3. The
+   feature-document trigger in §8.3 ("changes behavior described in an area's
+   current docs") was the substantive one: it contradicts this structure's own
+   claim that feature documents record **intent, not behavior**. It now reads
+   "a decision, constraint, or intended design changed, or a current document
+   became materially misleading", and explicitly rules out drift sweeps. The
+   same round added the AI-review gate that closes §8A.4.
+
+### 13.4 When this document retires
+
+Set `status: historical` when §8A.1, §8A.2, and §7.4 are closed or formally
+dropped. At that point nothing here is actionable, and the migration is far
+enough back that no one is checking whether it went as designed.
+
+Do not delete it then. §11 is the reason: every rejected alternative on that list
+is one a future contributor will propose again in good faith, and the cost of
+re-litigating them is exactly what the table exists to avoid. A historical
+document that answers "we tried that, here is what happened" is cheaper than the
+second attempt.
