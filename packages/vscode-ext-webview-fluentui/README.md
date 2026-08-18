@@ -117,6 +117,45 @@ first.
 runtime, and so does this package. Your webview CSP needs `style-src 'unsafe-inline'`, which is
 what Fluent already required of you.
 
+## Component guidance
+
+Things the theming cannot decide for you, where the choice of Fluent prop determines whether the
+result tracks the theme at all.
+
+### Skeleton — always pass `appearance="translucent"`
+
+Fluent's `Skeleton` and `SkeletonItem` default to `appearance="opaque"`. Pass `translucent`
+instead, on the `<Skeleton>` wrapper or on a bare `<SkeletonItem>`:
+
+```tsx
+<Skeleton appearance="translucent">
+    <SkeletonItem size={24} />
+</Skeleton>
+```
+
+The two appearances are not two visual styles — they are two different compositing models, and
+only one of them can work on an unknown surface:
+
+| Appearance    | Resting fill                      | Sweep                                       | Composites over the card? |
+| ------------- | --------------------------------- | ------------------------------------------- | ------------------------- |
+| `opaque`      | solid `colorNeutralStencil1`      | `Stencil1 → Stencil2 → Stencil1`, opaque    | no — it paints over it    |
+| `translucent` | alpha `colorNeutralStencil1Alpha` | `transparent → Stencil1Alpha → transparent` | yes                       |
+
+An opaque skeleton has to be mixed against the colour of whatever card it sits on. A theme token
+cannot know that, so any value is wrong on some surface — this package mixes against
+`--vscode-editor-background`, which is right for the default surface and visible as a rectangle on
+any other. Translucent has no such problem: it is an alpha overlay, so it picks up the card's own
+colour and hue for free, on every theme.
+
+Two consequences worth knowing:
+
+- The sweep runs in **opposite directions**. Opaque peaks at `Stencil2`, which sits closer to the
+  surface, so the band reads lighter on a light theme. Translucent adds `Stencil1Alpha` to its own
+  base, so its band can only read darker. Mixing the two appearances in one view looks like a bug.
+- Translucent needs nothing from this package. Its `*Alpha` tokens come from Fluent's own
+  light/dark themes and are already theme-kind correct, which is why it is the appearance that
+  survives contact with community themes.
+
 ## Public surface
 
 | Entry          | Exports                                                                                                                                    |
