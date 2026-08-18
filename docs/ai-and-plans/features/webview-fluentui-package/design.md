@@ -71,7 +71,7 @@ packages/vscode-ext-webview-fluentui/
 ├── package.json                    # type: module, two exports, sideEffects: ["./dist/index.js"]
 ├── tsconfig.json                   # esnext + bundler resolution, jsx react-jsx, declaration
 ├── jest.config.cjs                 # .cjs — "type": "module" would break module.exports
-├── README.md  ADVANCED.md  MIGRATION.md  LICENSE
+├── README.md  LICENSE               # no ADVANCED.md or MIGRATION.md in v1 — nothing to migrate from yet
 ├── scripts/
 │   └── build-styles.mjs            # scss → src/styles/generated.ts
 └── src/
@@ -136,8 +136,17 @@ This is the first real divergence from the sibling package, whose entire build i
 
 ## 7. Dependencies
 
-`peerDependencies`: `react`, `@fluentui/react-components` at a **narrow** range (`~9.74`), and
-`@fluentui/react-icons`.
+`peerDependencies`, chosen to satisfy both known consumers simultaneously:
+
+| Peer                         | Range   | This extension | vscode-cosmosdb |
+| ---------------------------- | ------- | -------------- | --------------- |
+| `react`                      | `>=19`  | `~19.2.4`      | `~19.2.1`       |
+| `@fluentui/react-components` | `~9.74` | `~9.74.4`      | `~9.74.1`       |
+| `@fluentui/react-icons`      | `~2.0`  | `~2.0.320`     | `~2.0.313`      |
+
+`devDependencies`: `sass` (the style build) and `@fluentui/react-progress` — the latter because
+`fluentOverrides.test.ts` does `require.resolve('@fluentui/react-progress')` and currently works only
+by npm hoisting. In the package it must be declared.
 
 The narrow Fluent range is load-bearing rather than cautious. The overrides key off `fui-*` class
 names and, in one case, the absence of an `aria-valuenow` attribute — Fluent implementation details,
@@ -147,6 +156,10 @@ applying, with no build error. The `fluentOverrides` test suite is the tripwire.
 **No `@vscode/l10n`.** `WizardBreadcrumb`'s single internal string becomes an optional prop
 defaulting to English. This is not merely tidier: the repo's `npm run l10n` extractor does not scan
 `node_modules`, so a package-internal string would silently never be translated in any consumer.
+
+`version` is `0.1.0-preview` and `"private": true` until the first publish — increment 1 consumes the
+package through the npm workspace only, and `private` is the one thing that makes an accidental
+`npm publish` impossible.
 
 ## 8. Testing
 
@@ -165,22 +178,47 @@ Tests that are new:
 - Importing `./components` injects no stylesheet (invariant I1).
 - `getBrandTokensFromPalette` degrades sanely on an unparseable key color (0009).
 
-## 9. Prerequisite: webview-scoped tsconfig
+`WizardBreadcrumb` has no tests today and gains none here. It carries no logic worth asserting, and
+the one new behavior — the overflow-label prop — is a defaulted string.
 
-The root `tsconfig.json` is `"module": "commonjs"` with **no** `moduleResolution`, which means node10
-resolution and a silently ignored `exports` field. The sibling package works around this with a
-`typesVersions` block; an ESM-only package with subpath exports cannot be shimmed that way.
+## 9. How consumers resolve the package (0016)
 
-A tsconfig covering `src/webviews/**` with `"moduleResolution": "bundler"` is therefore a
-prerequisite, not a cleanup. It is arguably overdue regardless: `src/webviews/**` and `src/**` are
-two different runtimes type-checked under one config today.
+`npm run build` is plain `tsc` against the root `tsconfig.json`, which is `"module": "commonjs"` with
+no `moduleResolution` — node10 resolution, so the `exports` field is ignored. Left alone, the first
+webview importing the package breaks the build.
+
+The resolution is two `paths` entries in the root tsconfig, mapping the package to its **source**:
+
+```jsonc
+"paths": {
+    "@microsoft/vscode-ext-webview-fluentui": ["packages/vscode-ext-webview-fluentui/src/index.ts"],
+    "@microsoft/vscode-ext-webview-fluentui/components": ["packages/vscode-ext-webview-fluentui/src/components.ts"],
+    "*": ["node_modules/@types/*", "*"]
+}
+```
+
+This is `vscode-cosmosdb`'s documented convention for its own workspace packages, and this repo is
+converging on that setup. Reasoning and the rejected alternatives are in decision 0016.
 
 ## 10. What stays behind in the extension
 
-- Monaco theme derivation and the VS Code token list (0013)
-- `slickgrid.scss` — product-specific
-- `--documentdb-colorInputStroke` and its hover variant (0012)
-- All localized strings, including the `WizardBreadcrumb` overflow label
+`src/webviews/theme/` is **dissolved** — a folder for two leftovers is not worth keeping. Its
+survivors move to where they are used:
+
+| What                                              | Goes to                                           | Why it stays (0013, 0012)         |
+| ------------------------------------------------- | ------------------------------------------------- | --------------------------------- |
+| Monaco theme derivation + the VS Code token list  | beside `src/webviews/components/MonacoEditor.tsx` | Monaco is not Fluent              |
+| `slickgrid.scss`                                  | `src/webviews/`                                   | product-specific                  |
+| `--documentdb-colorInputStroke` and hover variant | `src/webviews/index.scss`                         | no public custom properties in v1 |
+
+All localized strings stay in the extension, including the `WizardBreadcrumb` overflow label.
+
+## 11. Acceptance
+
+A green build and a passing suite prove very little here — a wrong token mapping compiles cleanly and
+looks broken. **Increment 1 is not done until the operator has visually verified the webviews.** The
+implementing agent runs the verification commands, then stops and hands over for that check rather
+than declaring completion.
 
 ## 11. Increments
 

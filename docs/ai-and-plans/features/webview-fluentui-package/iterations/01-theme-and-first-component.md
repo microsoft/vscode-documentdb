@@ -13,19 +13,32 @@ created: 2026-08-18
 Decisions are settled in [decisions.md](./decisions.md). Where this plan and a decision disagree, the
 decision wins — stop and flag the conflict rather than reconciling silently.
 
-## Step 1 — Webview-scoped tsconfig (prerequisite)
+## Step 1 — Make the package resolvable (prerequisite)
 
-Add a tsconfig covering `src/webviews/**` with `"moduleResolution": "bundler"`, separate from the
-host-side config, and wire the new package into the root `references` array. Nothing else can be
-type-checked correctly until this exists; see design.md §9.
+`npm run build` is plain `tsc` against the root `tsconfig.json`, which uses node10 resolution and
+ignores `exports`. Add two `paths` entries so the package resolves to its source (0016):
+
+```jsonc
+"paths": {
+    "@microsoft/vscode-ext-webview-fluentui": ["packages/vscode-ext-webview-fluentui/src/index.ts"],
+    "@microsoft/vscode-ext-webview-fluentui/components": ["packages/vscode-ext-webview-fluentui/src/components.ts"],
+    "*": ["node_modules/@types/*", "*"]
+}
+```
+
+Keep the existing `"*"` entry — more specific patterns are matched first. Also add the package to
+the root `references` array, matching the other workspace packages.
 
 Everything below depends on this step.
 
 ## Step 2 — Package skeleton
 
-Create `packages/vscode-ext-webview-fluentui/` per design.md §4. Then:
+Create `packages/vscode-ext-webview-fluentui/` per design.md §4, with `version: "0.1.0-preview"` and
+`"private": true` — nothing is published in this increment, and `private` is what makes an
+accidental publish impossible. Peer and dev dependency ranges are in design.md §7. Then:
 
-- register the package's jest project in the root `jest.config.js` `projects` array
+- register the package's jest project in the root `jest.config.js` `projects` array, as
+  `'<rootDir>/packages/vscode-ext-webview-fluentui'` alongside the existing entries
 - add `"@microsoft/vscode-ext-webview-fluentui": "*"` to the root `dependencies`, beside the existing
   `"@microsoft/vscode-ext-webview": "*"`
 - add `jest-environment-jsdom` to root `devDependencies` — jest 28 split it out and it is not
@@ -50,21 +63,24 @@ and the two SCSS files, applying:
 - **Rename** per 0014.
 - **Re-base** the on-disk SCSS paths in `fluentOverrides.test.ts` to the package root.
 
-Then update the extension:
+Then update the extension, dissolving `src/webviews/theme/` entirely (design.md §10):
 
 - `src/webviews/index.tsx` — import `VSCodeFluentProvider` from the package; drop `useAdaptive`
 - `src/webviews/components/MonacoEditor.tsx` — derive the Monaco theme locally from
-  `useActiveVSCodeThemeKind()`
+  `useActiveVSCodeThemeKind()`; the Monaco derivation and the VS Code token list move to sit beside
+  it
 - `src/webviews/index.scss` — keep the `--documentdb-*` declarations, now defined extension-side,
   with a comment pointing at the package as the source of truth (0012)
-- delete the moved files
+- `slickgrid.scss` — move to `src/webviews/`
+- delete the moved files and the now-empty `theme/` folder
 
 ## Step 4 — Move `WizardBreadcrumb`
 
 Move the file into `src/components/wizard/`. One change: replace the internal
 `l10n.t('{0} more steps', …)` with an optional prop — suggested
 `overflowAriaLabel?: (count: number) => string` — defaulting to English. With that the package takes
-no `@vscode/l10n` dependency at all (design.md §7).
+no `@vscode/l10n` dependency at all (design.md §7). The component has no tests today and gains none
+here.
 
 Update both call sites to import from `@microsoft/vscode-ext-webview-fluentui/components` and pass a
 localized label:
@@ -79,8 +95,9 @@ localized label:
   the document-global reach of the overrides, and the CSP note: Griffel injects `<style>` at runtime
   and needs `style-src 'unsafe-inline'`, which is already true for these webviews but is now a
   documented package requirement.
-- `ADVANCED.md`, `MIGRATION.md`, and a `README.md` in `src/` and in each folder, following the
-  sibling package.
+- A `README.md` in `src/` and in each folder, following the sibling package. **No `ADVANCED.md` and
+  no `MIGRATION.md`** — there is nothing to migrate from yet, and the design rationale lives in this
+  feature folder rather than in the package.
 - Update the two documents that reference `DynamicThemeProvider` by name:
   `.github/skills/react-webview-architecture/SKILL.md` and its
   `references/REACT_ARCHITECTURE_GUIDELINES.md`.
@@ -93,6 +110,12 @@ Fast loop while working: `npm run build`, then `npx jest --no-coverage <path>`.
 Before hand-over, in order: `npm run l10n` → `npm run prettier-fix` → `npm run lint` →
 `npx jest --no-coverage` → `npm run build` → `npm run package`. The `l10n` step is required because
 strings change at the two `WizardBreadcrumb` call sites.
+
+### Acceptance — read this before declaring the work done
+
+Green commands prove very little here. A wrong token mapping compiles cleanly, passes every test,
+and looks broken. **The operator performs the visual check.** When the commands pass, stop, report
+what changed, and hand over — do not mark the increment complete on the strength of a green build.
 
 ## Gotchas
 

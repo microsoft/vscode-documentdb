@@ -50,6 +50,21 @@ The theming layer fixes that in two moves:
 Plus a stylesheet of component-scoped escapes for the cases where a Fluent recipe cannot be reached
 through tokens at all.
 
+## The second consumer already exists, as a fork
+
+The scope gate in decision 0001 asks whether a thing plausibly has two consumers. For the theming
+layer this is not a projection: `microsoft/vscode-cosmosdb` carries a near-identical **copy** of it —
+`src/webviews/theme/DynamicThemeProvider.tsx`, `state/ThemeContext.tsx`, `state/ThemeState.tsx` with
+the same `monaco-editor` type import, `themeGenerator.ts`, and the same `utils/csswg.ts` palette
+math.
+
+The two copies have already drifted — their context exports `getVSCodeTheme` where this one exports
+`getVSCodeThemeKind`, and their `WithTheme` takes a defaulted optional prop where this one takes a
+required one. Every fix to one of them is invisible to the other.
+
+So this extraction is not speculative reuse. It converges an existing fork, which is also why the
+peer ranges in design.md §7 are chosen to satisfy both repositories at once.
+
 ## Code map
 
 Today, before extraction:
@@ -97,14 +112,14 @@ The highest-signal ones, because they reverse what was originally proposed:
 
 ## Open gaps
 
-- **Root `tsconfig.json` resolution.** The root config is `module: commonjs` with no
-  `moduleResolution`, which means node10 resolution and a silently ignored `exports` field. A
-  webview-scoped tsconfig with `moduleResolution: bundler` is a prerequisite for increment 1.
 - **Fluent internals coupling.** The overrides key off `fui-*` class names, which are Fluent
   implementation details rather than public API. A narrow peer range and the
   `fluentOverrides` test suite are the only tripwires.
 - **The palette generator is unguarded.** An absent `--vscode-button-background` produces a
   NaN-poisoned brand ramp. Fixed in increment 1; see decision 0009.
+- **Type-checking resolves package source, not build output** (0016). A malformed `exports` map is
+  caught by `npm run package`, not by `npm run build`. The root config is due to be modernised,
+  at which point the cleaner split becomes available.
 - **Increment 2 is undecided.** The two remaining shortlisted components are the focusable badge
   (net-new code — today it is a stylesheet plus a markdown instruction) and the metrics cards
   (a larger style-extraction job).

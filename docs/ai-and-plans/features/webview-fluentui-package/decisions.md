@@ -26,6 +26,7 @@ created: 2026-08-18
 | 0013 | Monaco theming stays in the extension                         | Deferred            | Proposal left it open                                           | 2026-08-18 | —   |
 | 0014 | Public naming vocabulary is locked before publish             | Accepted (modified) | `useVSCodeTheme` → `useActiveVSCodeTheme` after operator review | 2026-08-18 | —   |
 | 0015 | The generated CSS module is committed, not gitignored         | Accepted (modified) | Reverses the recommendation made during design                  | 2026-08-18 | —   |
+| 0016 | Consumers resolve the package through tsconfig `paths`        | Accepted            | Replaces the proposal's webview-scoped tsconfig                 | 2026-08-18 | —   |
 
 > Entries below are **semantically** immutable: append new entries rather than
 > rewriting old ones, and record reversals as a new entry plus a status change
@@ -188,9 +189,11 @@ build-time extraction, and it leaves no `import`/`require` condition split to ev
 CommonJS consumers remain fine: bundlers import ESM without issue, and `require(esm)` is unflagged in
 Node ≥ 22.12 / ≥ 20.19.
 
-The sibling carries `typesVersions` as a shim for legacy node10 resolution. An ESM-only package with
-subpath exports cannot be shimmed that way, which is why the webview-scoped tsconfig is a
-prerequisite rather than a nicety.
+The sibling carries `typesVersions` as a shim so that consumers on legacy node10 resolution can
+still resolve types for its subpaths. This package deliberately does **not**, and the reason is
+taste rather than necessity: `typesVersions` is a type-resolution-only mechanism and would work fine
+alongside an ESM-only runtime, but it is a legacy affordance and the local resolution problem it
+would paper over is better solved where the problem actually is (0016).
 
 ---
 
@@ -558,3 +561,51 @@ the package's tests would fail for a reason with no obvious connection to the fa
 
 The cost is diff noise on a generated artifact. The header comment marks it generated, and it
 changes only when the stylesheet does.
+
+---
+
+## 0016 — Consumers resolve the package through tsconfig `paths`
+
+**Status:** Accepted · **Date:** 2026-08-18
+
+### Question
+
+`npm run build` is plain `tsc` against the root `tsconfig.json`, which is `"module": "commonjs"` with
+no `moduleResolution` — node10 resolution, so the `exports` field is ignored entirely. The first
+webview that imports the package breaks the build. How is that fixed?
+
+### Options considered
+
+| Option | Approach                                                                                     | Cost                           | Gives up                                          |
+| ------ | -------------------------------------------------------------------------------------------- | ------------------------------ | ------------------------------------------------- |
+| A      | Exclude `src/webviews/**` from the root config; add `tsconfig.webviews.json`; two-step build | new config + build script edit | nothing, but more moving parts                    |
+| B      | Root tsconfig `paths` mapping the package name to its `src`                                  | two lines                      | type-checks source rather than built output       |
+| C      | Ship `typesVersions`, mirroring the sibling                                                  | one block                      | puts a legacy shim into the **published** package |
+
+### Decision
+
+**B.** Two `paths` entries in the root `tsconfig.json`, mapping `.` and `./components` to
+`packages/vscode-ext-webview-fluentui/src/*.ts`.
+
+### Why
+
+It is `vscode-cosmosdb`'s documented convention for its own workspace packages — their
+`packages/README.md` instructs contributors to _"add path aliases to `tsconfig.base.json` (`paths`)
+so `tsc` resolves the package to its `src/`"_, with matching `resolve.alias` entries in the Vite
+configs. This repo is converging on that setup, so matching it costs nothing now and avoids a
+migration later.
+
+C was rejected on principle rather than mechanics: it works, but it would bake a workaround for
+**our** stale root config into an artifact every consumer downloads. A local build limitation should
+not shape published API.
+
+A is the most correct and stays on the table for whenever the root config is modernised. It was not
+chosen now because the operator's instruction was to take the simplest route on the explicit
+grounds that this whole area is due to be reworked.
+
+### The gap this leaves, and why it is small
+
+B type-checks the package **source**, so `tsc` alone will not catch a malformed `exports` map or a
+broken build output. That gap is covered in practice: webpack resolves the real package through
+`node_modules` and honours `exports`, so `npm run webpack-prod` and `npm run package` — both in the
+hand-over checklist — exercise the published shape.
