@@ -13,38 +13,65 @@ VS Code Extension for Azure Cosmos DB and the MongoDB API. TypeScript (strict mo
 
 > ⚠️ **NEVER use `npm run compile`** - always use `npm run build` to build the project.
 
-## PR Completion Checklist
+## Verification: two cases
 
-Before finishing work on a PR, agents **must** run the following steps in order:
+There are exactly two cases. Work out which one you are in, then run **only** that list.
 
-1. **Localization** — If any user-facing strings were added, modified, or removed, run:
-   ```bash
-   npm run l10n
-   ```
-2. **Formatting** — Run Prettier to ensure all files meet formatting standards:
-   ```bash
-   npm run prettier-fix
-   ```
-3. **Linting** — Run ESLint to confirm there are no linting errors:
-   ```bash
-   npm run lint
-   ```
-4. **Tests** — Run the full Jest test suite to confirm no regressions:
-   ```bash
-   npx jest --no-coverage
-   ```
-5. **Build** — Run the TypeScript build to confirm there are no type errors:
-   ```bash
-   npm run build
-   ```
+### Case 1 — still working
 
-> ⚠️ **An agent must not finish or terminate until all five steps above have been run and pass successfully.** Skipping these steps leads to CI failures.
+Any commit, any push, opening or updating a **draft** PR.
+
+```bash
+npm run build                     # catches type errors
+npx jest --no-coverage <path>     # only the tests covering what you touched
+```
+
+Nothing else. Do **not** run `l10n`, `prettier-fix`, `lint`, or `package` here.
+
+### Case 2 — handing over
+
+Marking a PR **ready for review** — including when you finish autonomous work and are
+about to mark it ready. If there is no PR, stay on Case 1.
+
+```bash
+npm run l10n            # only if a vscode.l10n.t() string was added, changed, or removed
+npm run prettier-fix
+npm run lint
+npx jest --no-coverage  # full suite
+npm run build
+npm run package         # catches bundling and missing-asset failures
+```
+
+Also confirm the AI pre-review (CONTRIBUTING.md §6) has run and its review file is
+committed under `docs/ai-and-plans/features/<name>/iterations/`.
+
+Update `docs/ai-and-plans/features/<name>/README.md` (and `design.md`) in the same PR
+when a decision, constraint, or intended design changed, or when you already know a
+current document has become materially misleading. This is not a drift sweep.
+
+> ⚠️ **Do not mark a PR ready for review until every Case 2 command has run and passed.**
+
+### `l10n/bundle.l10n.json` conflicts
+
+Never hand-merge a conflict in `l10n/bundle.l10n.json`. It is generated. Take either
+side, or delete the file, then run `npm run l10n` and commit the result. Resolving it
+by hand is slower and produces a bundle that does not match the source.
 
 ## Git Safety
 
 - **Never use `git add -f`** to force-add files. If `git add` refuses a file, it is likely in `.gitignore` for a reason (e.g., `docs/plan/`, `docs/analysis/`, build outputs). Do NOT override this with `-f`.
 - When `git add` warns that a path is ignored, **stop and inform the user** instead of force-adding.
 - Files in `docs/plan/` and `docs/analysis/` are **local planning documents** that must not be committed to the repository.
+
+## Feature Knowledge Base
+
+`docs/ai-and-plans/` records how features were designed and **why**. Much of it is AI-written under human supervision; the durable value is the recorded operator decisions and their reasoning.
+
+- `docs/ai-and-plans/README.md` — feature index. Short and maintained. Read it when a task touches a feature.
+- `features/<name>/README.md` and the flat files beside it are the **best available account** of a feature's design and intent. They are maintained, but they describe intent, not guaranteed current behavior.
+- `features/<name>/iterations/**` is **history**. Read only the specific iteration needed to resolve provenance, rationale, or a regression. Never bulk-load it. Plans and reviews there are evidence of past reasoning, not a description of the product today.
+- **On conflict, the code wins for behavior; active docs win for intent.** If they disagree, do not silently pick one — name the doc and the code, and offer to correct the doc.
+- Never treat `status: historical` or `status: superseded` as current.
 
 ## Project Structure
 
@@ -61,8 +88,8 @@ Before finishing work on a PR, agents **must** run the following steps in order:
 
 ## Branching
 
-- **`main`**: Default branch; all PRs target it.
-- **`release/<X.Y>`**: Short-lived stabilization branches cut from `main` at freeze; release tags (`vX.Y.0`, `vX.Y.1`, …) live here.
+- **`main`**: Default branch; all PRs target it. Normal releases are tagged on `main` and published from `main`.
+- **`release/<X.Y>`**: Created only when a patch must ship while `main` is not releasable. Branched off a release tag, published from, then deleted.
 
 ## TypeScript Guidelines
 
