@@ -43,8 +43,9 @@ function rgbaToHex(rgba: string): string {
  * Reads every VS Code theme color off the document and hands them to Monaco, so the editor is
  * painted by the user's workbench theme rather than by Monaco's built-in approximation of it.
  *
- * Note for whoever picks this up next: this performs ~815 `getPropertyValue` lookups on every
- * theme change. Acceptable today, worth a second look before it grows any further.
+ * Note for whoever picks this up next: this performs ~815 `getPropertyValue` lookups. Acceptable
+ * once per theme change, which is what the cache below guarantees, but worth a second look before
+ * it grows any further.
  */
 export const generateMonacoTheme = (baseTheme: MonacoBuiltinTheme): MonacoThemeData => {
     const style = getComputedStyle(document.documentElement);
@@ -68,8 +69,19 @@ export const generateMonacoTheme = (baseTheme: MonacoBuiltinTheme): MonacoThemeD
     };
 };
 
+/**
+ * Every editor in a webview reads the same document, so the derivation is shared rather than
+ * repeated per instance — which is what the theme context used to do for us before it was
+ * dissolved. Without this, mounting the enhanced query row costs ~815 lookups per editor.
+ */
+let cached: { themeKind: string; theme: MonacoTheme } | undefined;
+
 /** Derives the Monaco theme for a VS Code theme kind, as reported by `useActiveVSCodeThemeKind()`. */
 export const getMonacoTheme = (themeKind: string): MonacoTheme => {
+    if (cached?.themeKind === themeKind) {
+        return cached.theme;
+    }
+
     const monacoBaseTheme: MonacoBuiltinTheme =
         themeKind === 'vscode-dark'
             ? 'vs-dark'
@@ -79,8 +91,12 @@ export const getMonacoTheme = (themeKind: string): MonacoTheme => {
                 ? 'hc-light'
                 : 'vs';
 
-    return {
+    const theme: MonacoTheme = {
         themeName: 'adaptive',
         theme: generateMonacoTheme(monacoBaseTheme),
     };
+
+    cached = { themeKind, theme };
+
+    return theme;
 };
