@@ -117,9 +117,9 @@ The highest-signal ones, because they reverse what was originally proposed:
   `fluentOverrides` test suite are the only tripwires.
 - **The palette generator is unguarded.** An absent `--vscode-button-background` produces a
   NaN-poisoned brand ramp. Fixed in increment 1; see decision 0009.
-- **Type-checking resolves package source, not build output** (0016). A malformed `exports` map is
-  caught by `npm run package`, not by `npm run build`. The root config is due to be modernised,
-  at which point the cleaner split becomes available.
+- **Type-checking resolves built output, not source** (0016). The package must be built before the
+  root `tsc` runs — already guaranteed by the `prebuild` fan-out, and true of the other five
+  workspace packages too. Modernising resolution repo-wide is filed as future work.
 - **Increment 2 is undecided.** The two remaining shortlisted components are the focusable badge
   (net-new code — today it is a stylesheet plus a markdown instruction) and the metrics cards
   (a larger style-extraction job).

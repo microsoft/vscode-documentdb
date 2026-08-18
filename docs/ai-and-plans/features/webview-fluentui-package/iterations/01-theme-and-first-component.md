@@ -16,20 +16,22 @@ decision wins — stop and flag the conflict rather than reconciling silently.
 ## Step 1 — Make the package resolvable (prerequisite)
 
 `npm run build` is plain `tsc` against the root `tsconfig.json`, which uses node10 resolution and
-ignores `exports`. Add two `paths` entries so the package resolves to its source (0016):
+ignores `exports`. Resolve it the way the other five workspace packages do — in the package's own
+`package.json`, with **no root tsconfig change** (0016):
 
 ```jsonc
-"paths": {
-    "@microsoft/vscode-ext-webview-fluentui": ["packages/vscode-ext-webview-fluentui/src/index.ts"],
-    "@microsoft/vscode-ext-webview-fluentui/components": ["packages/vscode-ext-webview-fluentui/src/components.ts"],
-    "*": ["node_modules/@types/*", "*"]
+"types": "./dist/index.d.ts",
+"typesVersions": {
+    "*": {
+        "components": ["./dist/components.d.ts"]
+    }
 }
 ```
 
-Keep the existing `"*"` entry — more specific patterns are matched first. Also add the package to
-the root `references` array, matching the other workspace packages.
+Also add the package to the root `references` array, matching the other workspace packages.
 
-Everything below depends on this step.
+This is part of Step 2's `package.json` rather than a separate edit — it is listed first because
+everything below depends on the package being resolvable.
 
 ## Step 2 — Package skeleton
 

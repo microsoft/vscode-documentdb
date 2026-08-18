@@ -131,8 +131,9 @@ The root `prebuild` already fans out with `npm run build --workspaces --if-prese
 works with no root-level change.
 
 This is the first real divergence from the sibling package, whose entire build is `tsc -p .`. The
-`package.json` consequences — a `prebuild` step, `sideEffects: ["./dist/index.js"]` rather than
-`false`, and no `typesVersions` — are deliberate and are argued in decisions 0005 and 0010.
+`package.json` consequences — a `prebuild` step, and `sideEffects: ["./dist/index.js"]` rather than
+`false` — are deliberate and are argued in decisions 0005 and 0010. Everything else about the
+`package.json`, including `types` and `typesVersions`, mirrors the sibling exactly (0016).
 
 ## 7. Dependencies
 
@@ -187,18 +188,22 @@ the one new behavior — the overflow-label prop — is a defaulted string.
 no `moduleResolution` — node10 resolution, so the `exports` field is ignored. Left alone, the first
 webview importing the package breaks the build.
 
-The resolution is two `paths` entries in the root tsconfig, mapping the package to its **source**:
+The package resolves the way all five existing workspace packages do: npm workspaces symlinks it
+into `node_modules`, the root `tsc` reads `types` from its `package.json`, and the one subpath —
+which node10 cannot resolve on its own — is covered by `typesVersions`.
 
 ```jsonc
-"paths": {
-    "@microsoft/vscode-ext-webview-fluentui": ["packages/vscode-ext-webview-fluentui/src/index.ts"],
-    "@microsoft/vscode-ext-webview-fluentui/components": ["packages/vscode-ext-webview-fluentui/src/components.ts"],
-    "*": ["node_modules/@types/*", "*"]
+"types": "./dist/index.d.ts",
+"typesVersions": {
+    "*": {
+        "components": ["./dist/components.d.ts"]
+    }
 }
 ```
 
-This is `vscode-cosmosdb`'s documented convention for its own workspace packages, and this repo is
-converging on that setup. Reasoning and the rejected alternatives are in decision 0016.
+**No change to the root `tsconfig.json`.** Because resolution lands on `dist/`, the package must be
+built before the root `tsc` runs — which `prebuild: npm run build --workspaces --if-present` already
+guarantees, exactly as it does for the other five.
 
 ## 10. What stays behind in the extension
 

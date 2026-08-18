@@ -15,7 +15,7 @@ created: 2026-08-18
 | 0002 | Name: `@microsoft/vscode-ext-webview-fluentui`                | Accepted (modified) | `-ui` rejected as too general once the scope proved Fluent-only | 2026-08-18 | —   |
 | 0003 | No dependency between the two packages, in either direction   | Accepted            | Accepted as proposed                                            | 2026-08-18 | —   |
 | 0004 | Three invariants: provider independence, layering, facade     | Accepted            | Accepted as proposed                                            | 2026-08-18 | —   |
-| 0005 | ESM-only, despite the sibling being CommonJS                  | Accepted            | Accepted as proposed                                            | 2026-08-18 | —   |
+| 0005 | ESM-only, despite the sibling being CommonJS                  | Accepted (modified) | `typesVersions` reinstated when 0016 was corrected              | 2026-08-18 | —   |
 | 0006 | Tests stay CommonJS, transformed by `@swc/jest`               | Accepted            | Accepted as proposed                                            | 2026-08-18 | —   |
 | 0007 | v1 public entries are `.` and `./components`                  | Accepted (modified) | `./styles.css` dropped after 0010                               | 2026-08-18 | —   |
 | 0008 | The token list and palette math stay internal                 | Accepted (modified) | Proposal left it open; evidence closed it                       | 2026-08-18 | —   |
@@ -26,7 +26,7 @@ created: 2026-08-18
 | 0013 | Monaco theming stays in the extension                         | Deferred            | Proposal left it open                                           | 2026-08-18 | —   |
 | 0014 | Public naming vocabulary is locked before publish             | Accepted (modified) | `useVSCodeTheme` → `useActiveVSCodeTheme` after operator review | 2026-08-18 | —   |
 | 0015 | The generated CSS module is committed, not gitignored         | Accepted (modified) | Reverses the recommendation made during design                  | 2026-08-18 | —   |
-| 0016 | Consumers resolve the package through tsconfig `paths`        | Accepted            | Replaces the proposal's webview-scoped tsconfig                 | 2026-08-18 | —   |
+| 0016 | The package follows the repo's existing resolution pattern    | Accepted            | Replaces the proposal's webview-scoped tsconfig                 | 2026-08-18 | —   |
 
 > Entries below are **semantically** immutable: append new entries rather than
 > rewriting old ones, and record reversals as a new entry plus a status change
@@ -165,12 +165,12 @@ test asserting that importing `./components` injects no stylesheet.
 
 ## 0005 — ESM-only, despite the sibling being CommonJS
 
-**Status:** Accepted · **Date:** 2026-08-18
+**Status:** Accepted (modified) · **Date:** 2026-08-18
 
 ### Decision
 
-`"type": "module"`, `"module": "esnext"`, `"moduleResolution": "bundler"`, real `exports`
-conditions, and **no `typesVersions`** block.
+`"type": "module"`, `"module": "esnext"`, `"moduleResolution": "bundler"`, and real `exports`
+conditions. A `typesVersions` block ships alongside them — see 0016.
 
 ### Why
 
@@ -189,11 +189,14 @@ build-time extraction, and it leaves no `import`/`require` condition split to ev
 CommonJS consumers remain fine: bundlers import ESM without issue, and `require(esm)` is unflagged in
 Node ≥ 22.12 / ≥ 20.19.
 
-The sibling carries `typesVersions` as a shim so that consumers on legacy node10 resolution can
-still resolve types for its subpaths. This package deliberately does **not**, and the reason is
-taste rather than necessity: `typesVersions` is a type-resolution-only mechanism and would work fine
-alongside an ESM-only runtime, but it is a legacy affordance and the local resolution problem it
-would paper over is better solved where the problem actually is (0016).
+### Changed from the proposal
+
+The proposal, and the first version of this entry, also said **no `typesVersions`** — on the reasoning
+that it is a legacy affordance an ESM-only package should not need. Two corrections killed that.
+First, `typesVersions` is a **type-resolution-only** mechanism; it has no effect at runtime and
+coexists with ESM-only output perfectly well, so "ESM-only" never implied its absence. Second, it is
+how every other package in this repository exposes subpaths (0016). The ESM decision stands
+unchanged; only the `typesVersions` clause was wrong.
 
 ---
 
@@ -564,7 +567,7 @@ changes only when the stylesheet does.
 
 ---
 
-## 0016 — Consumers resolve the package through tsconfig `paths`
+## 0016 — The package follows the repo's existing resolution pattern
 
 **Status:** Accepted · **Date:** 2026-08-18
 
@@ -574,38 +577,72 @@ changes only when the stylesheet does.
 no `moduleResolution` — node10 resolution, so the `exports` field is ignored entirely. The first
 webview that imports the package breaks the build. How is that fixed?
 
-### Options considered
+### What the repo already does
 
-| Option | Approach                                                                                     | Cost                           | Gives up                                          |
-| ------ | -------------------------------------------------------------------------------------------- | ------------------------------ | ------------------------------------------------- |
-| A      | Exclude `src/webviews/**` from the root config; add `tsconfig.webviews.json`; two-step build | new config + build script edit | nothing, but more moving parts                    |
-| B      | Root tsconfig `paths` mapping the package name to its `src`                                  | two lines                      | type-checks source rather than built output       |
-| C      | Ship `typesVersions`, mirroring the sibling                                                  | one block                      | puts a legacy shim into the **published** package |
+Not a new question. All five existing workspace packages resolve the same way, and the root
+`tsconfig.json` contains **no** per-package `paths`:
+
+| Package                            | `main`          | `types`           | `exports`  | `typesVersions` |
+| ---------------------------------- | --------------- | ----------------- | ---------- | --------------- |
+| `@documentdb-js/operator-registry` | `dist/index.js` | `dist/index.d.ts` | —          | —               |
+| `@documentdb-js/schema-analyzer`   | `dist/index.js` | `dist/index.d.ts` | —          | —               |
+| `@documentdb-js/shell-api-types`   | `dist/index.js` | `dist/index.d.ts` | —          | —               |
+| `@documentdb-js/shell-runtime`     | `dist/index.js` | `dist/index.d.ts` | —          | —               |
+| `@microsoft/vscode-ext-webview`    | `dist/index.js` | `dist/index.d.ts` | 4 subpaths | **yes**         |
+
+npm workspaces symlinks `node_modules/<name>` to the package folder; the root `tsc` reads `types`
+from its `package.json` and lands on `dist/index.d.ts`. Subpaths, which node10 cannot resolve on its
+own, are covered by `typesVersions` — which is exactly why the sibling has one and the four
+single-entry packages do not. `prebuild: npm run build --workspaces --if-present` guarantees `dist/`
+exists first.
 
 ### Decision
 
-**B.** Two `paths` entries in the root `tsconfig.json`, mapping `.` and `./components` to
-`packages/vscode-ext-webview-fluentui/src/*.ts`.
+Do the same. Two fields in the package's own `package.json`, and **no change to the root
+tsconfig**:
+
+```jsonc
+"types": "./dist/index.d.ts",
+"typesVersions": {
+    "*": {
+        "components": ["./dist/components.d.ts"]
+    }
+}
+```
 
 ### Why
 
-It is `vscode-cosmosdb`'s documented convention for its own workspace packages — their
-`packages/README.md` instructs contributors to _"add path aliases to `tsconfig.base.json` (`paths`)
-so `tsc` resolves the package to its `src/`"_, with matching `resolve.alias` entries in the Vite
-configs. This repo is converging on that setup, so matching it costs nothing now and avoids a
-migration later.
+There is no third pattern to invent. The question is only whether this package resolves like its
+five siblings or introduces a second way of doing things for one package, and nothing about it is
+special enough to justify the divergence.
 
-C was rejected on principle rather than mechanics: it works, but it would bake a workaround for
-**our** stale root config into an artifact every consumer downloads. A local build limitation should
-not shape published API.
+Keeping it in the package also puts the workaround where the constraint is felt, and leaves the root
+config untouched — so the eventual modernisation is a single repo-wide change rather than a cleanup
+that has to reconcile two patterns.
 
-A is the most correct and stays on the table for whenever the root config is modernised. It was not
-chosen now because the operator's instruction was to take the simplest route on the explicit
-grounds that this whole area is due to be reworked.
+### The alternative, and what it would have bought
 
-### The gap this leaves, and why it is small
+Root `tsconfig` `paths` mapping the package name to its `src/` was considered and rejected. It is a
+mainstream monorepo technique and it buys two real things: edits to the package are visible to the
+extension without a rebuild, and go-to-definition lands in source rather than a `.d.ts`.
 
-B type-checks the package **source**, so `tsc` alone will not catch a malformed `exports` map or a
-broken build output. That gap is covered in practice: webpack resolves the real package through
-`node_modules` and honours `exports`, so `npm run webpack-prod` and `npm run package` — both in the
-hand-over checklist — exercise the published shape.
+Both are genuine. Neither is a reason to adopt it here, because **all five existing packages already
+pay those costs.** Applying the fix to one package would not remove friction from the repo — it
+would make the ergonomics inconsistent, which is harder to reason about than uniform friction. It
+would also type-check package _source_ rather than the shipped artifact, so a malformed `exports`
+map would surface at `npm run package` instead of `npm run build`, and the extra root-config lines
+would become dead weight the moment the config is modernised.
+
+An earlier version of this entry justified `paths` by citing `vscode-cosmosdb`'s documented
+convention for its own packages. That was withdrawn: this repository has not committed to adopting
+that setup, so it was a projection standing in for a rationale.
+
+### Future work, at the right scope
+
+Modernising resolution is a repository-wide change, not a package-scoped one. Doing it here would
+leave one package in the new world and five in the old, with nothing forcing the rest to follow.
+
+The issue to file: _the root `tsconfig.json` is `module: commonjs` with no `moduleResolution`, so
+`exports` is ignored and every workspace package needs `typesVersions` to expose subpaths. Move
+`src/webviews/**` onto bundler resolution, drop the `typesVersions` shims, and reconsider `paths` →
+`src` for the inner loop._ That is where the rejected alternative earns a second hearing.
