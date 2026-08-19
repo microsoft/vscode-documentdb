@@ -1,4 +1,8 @@
-# @microsoft/vscode-ext-webview-fluentui
+# @microsoft/vscode-ext-webview-fluentui (Preview)
+
+> **Preview release.** This package is published in preview while the API
+> surface stabilises. Breaking changes may land between minor versions until
+> a `1.0.0` release.
 
 Makes [Fluent UI React v9](https://react.fluentui.dev/) look native inside a VS Code webview.
 
