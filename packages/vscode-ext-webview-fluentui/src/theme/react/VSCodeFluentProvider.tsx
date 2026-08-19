@@ -13,8 +13,8 @@ import { useActiveVSCodeTheme } from './useActiveVSCodeTheme.js';
  * Wrap a webview's tree in this and Fluent's neutral ramp stops being Teams gray: surfaces,
  * strokes and the brand ramp all follow the workbench theme, including community themes.
  *
- * Built only from the package's own public API — `useActiveVSCodeTheme`, itself
- * `useActiveVSCodeThemeKind` + `createVSCodeFluentTheme` — so a consumer who has to own their
+ * Built only from the package's own public API: `useActiveVSCodeTheme`, itself
+ * `useActiveVSCodeThemeKind` + `createVSCodeFluentTheme`. A consumer who has to own their
  * `FluentProvider` can assemble an identical result by hand.
  */
 export const VSCodeFluentProvider = ({ children }: PropsWithChildren): JSX.Element => {

@@ -6,7 +6,7 @@
 import { describe, expect, test } from '@jest/globals';
 import { STYLE_ELEMENT_ID } from './styles/injectStyles.js';
 
-describe('invariant I1 — components do not require the package theming', () => {
+describe('invariant I1: components do not require the package theming', () => {
     test('importing ./components injects no stylesheet', async () => {
         const components = await import('./components.js');
 

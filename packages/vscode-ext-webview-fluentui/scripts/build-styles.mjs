@@ -28,7 +28,7 @@ const contents = `/*------------------------------------------------------------
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-// GENERATED FILE — do not edit.
+// GENERATED FILE. Do not edit.
 // Produced from src/styles/fluentOverrides.scss by scripts/build-styles.mjs.
 
 export const fluentOverridesCss = ${JSON.stringify(css)};

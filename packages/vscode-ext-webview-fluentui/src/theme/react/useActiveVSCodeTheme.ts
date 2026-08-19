@@ -13,7 +13,7 @@ const DEFAULT_THEME_KIND = 'vscode-light';
 export interface VSCodeThemeState {
     /** The raw `data-vscode-theme-kind` value, e.g. `vscode-dark`. */
     readonly themeKind: string;
-    /** `undefined` for an unrecognised kind — `FluentProvider` treats that as "use the default". */
+    /** `undefined` for an unrecognised kind, which `FluentProvider` treats as "use the default". */
     readonly theme: Theme | undefined;
 }
 
@@ -25,7 +25,7 @@ const readVSCodeThemeKind = (): string => document.body.getAttribute('data-vscod
  *
  * VS Code re-writes `data-vscode-theme-kind` on the webview's body element on every theme change;
  * there is no message to subscribe to, so this observes the attribute directly. Standalone by
- * design — a consumer using their own `FluentProvider` needs this without mounting ours.
+ * design, because a consumer using their own `FluentProvider` needs this without mounting ours.
  */
 export function useActiveVSCodeThemeKind(): string {
     const [themeKind, setThemeKind] = useState(readVSCodeThemeKind);

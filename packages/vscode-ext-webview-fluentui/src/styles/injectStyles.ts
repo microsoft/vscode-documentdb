@@ -10,9 +10,9 @@ export const STYLE_ELEMENT_ID = 'vscode-ext-webview-fluentui-overrides';
 /**
  * Puts the Fluent adaptations on the page.
  *
- * Called at module scope from the package entry rather than from `VSCodeFluentProvider`, so
- * there is no import for a consumer to forget and no tier that silently misses the sheet —
- * including consumers who take only the hooks and wire their own `FluentProvider`.
+ * Called at module scope from the package entry rather than from `VSCodeFluentProvider`, so there
+ * is no import for a consumer to forget, and no way to miss the sheet by taking only the hooks and
+ * wiring your own `FluentProvider`.
  *
  * Safe to call repeatedly, and a no-op without a DOM so node-environment tests can import the
  * entry.

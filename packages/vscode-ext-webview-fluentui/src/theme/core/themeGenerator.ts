@@ -14,8 +14,8 @@ type Options = {
 
 /**
  * Used when the key color cannot be parsed. `--vscode-button-background` is absent outside a
- * VS Code webview — in jsdom, Storybook or a browser preview `getPropertyValue` returns `''` —
- * and the palette math has no guards of its own: `hexToHue('')` yields NaN, which poisons the
+ * VS Code webview, and in jsdom, Storybook or a browser preview `getPropertyValue` returns `''`.
+ * The palette math has no guards of its own: `hexToHue('')` yields NaN, which poisons the
  * whole sixteen-stop ramp and then throws on the snapping-point lookup. This is VS Code's own
  * default accent, so the fallback ramp still looks like VS Code.
  */
@@ -87,17 +87,17 @@ export function getBrandTokensFromPalette(keyColor: string, options: Options = {
  * theme-appropriate, so the exact same expressions work for both the light and
  * dark adaptive themes.
  *
- * NOTE — neutral tokens still on the fixed Fluent ramp (candidates for a future
+ * NOTE: neutral tokens still on the fixed Fluent ramp (candidates for a future
  * pass; see the "theme color coverage" tracking issue):
- *   - colorNeutralForeground3 / Foreground4 / colorNeutralStroke1 / StrokeAccessible
- *     — globally, that is; fluentOverrides.scss remaps them inside field controls only,
+ *   - colorNeutralForeground3 / Foreground4 / colorNeutralStroke1 / StrokeAccessible,
+ *     globally that is; fluentOverrides.scss remaps them inside field controls only,
  *     because these aliases also drive Switch indicators and Tab hover bars
  *   - colorNeutralStroke3
  *   - colorSubtleBackgroundSelected
  *   - High-contrast theme kinds bypass this generator entirely and fall back to
  *     the static Teams themes (see createVSCodeFluentTheme), so none of these token
  *     mappings apply there. The CSS in fluentOverrides.scss is not theme-kind aware
- *     and does apply — pending a visual pass.
+ *     and does apply, pending a visual pass.
  */
 const adaptiveNeutralSurfaces = {
     // Fluent's Card interaction recipe and the Card/Button disabled recipes use
@@ -136,13 +136,13 @@ const adaptiveNeutralSurfaces = {
         'var(--vscode-toolbar-activeBackground, var(--vscode-list-hoverBackground, var(--vscode-sideBar-background)))',
     colorNeutralBackground2Selected:
         'var(--vscode-list-inactiveSelectionBackground, var(--vscode-list-hoverBackground, var(--vscode-sideBar-background)))',
-    // Tertiary neutral surface: recessed *content blocks* rather than chrome —
+    // Tertiary neutral surface: recessed *content blocks* rather than chrome,
     // markdown `code`/`pre`, the feedback dialog panel, ratio-bar tracks. Fluent's
     // fixed value is #f5f5f5 light / #141414 dark; the dark one sits well below
     // every common editor background, so a code block reads as a near-black hole
     // on any dark theme and as flat gray on any tinted light one.
     //
-    // Prefer VS Code's own token for that role — theme authors tune it deliberately
+    // Prefer VS Code's own token for that role: theme authors tune it deliberately
     // and it is usually translucent, which is a feature here: it composites over
     // whatever card the block sits on instead of assuming the editor surface.
     // Where it is absent, synthesize a consistent step away from the editor
@@ -163,18 +163,18 @@ const adaptiveNeutralSurfaces = {
 // Stencil1 → Stencil2 → Stencil1. The sweep is invisible at its own edges only
 // because Stencil1 there *replaces* an identical resting fill. Give the tokens
 // an alpha and the sweep composites on top of the base instead, so its leading
-// and trailing edges become a hard vertical step — which is exactly how a
+// and trailing edges become a hard vertical step, which is exactly how a
 // translucent stencil renders, and why an earlier alpha-overlay version of this
 // map looked broken.
 //
 // `color-mix` gets the theme-adaptiveness without the alpha: both operands are
 // opaque, so the result is too, and because the tint is keyed on the foreground
-// the direction follows the theme by itself — darken on light, lighten on dark —
-// with no light/dark split needed here.
+// the direction follows the theme by itself, darkening on light and lightening
+// on dark, with no light/dark split needed here.
 //
 // The ratios mirror Fluent's own: Stencil1 is the stronger resting fill,
 // Stencil2 the *weaker* sweep band that dips back toward the surface. (Fluent
-// light is #e6e6e6 / #fafafa on white — 10% and ~2%.) Getting that order
+// light is #e6e6e6 / #fafafa on white, 10% and ~2%.) Getting that order
 // backwards inverts the shimmer.
 //
 // Note the inherent limit of `opaque`: the fill is mixed against the editor
@@ -183,7 +183,7 @@ const adaptiveNeutralSurfaces = {
 // composites over its card, and it is what every skeleton in this extension
 // uses.
 //
-// (The translucent `*Alpha` variants are left at Fluent's defaults — that path
+// (The translucent `*Alpha` variants are left at Fluent's defaults; that path
 // already composites correctly.)
 const adaptiveSkeletonStencils = {
     colorNeutralStencil1: 'color-mix(in srgb, var(--vscode-foreground) 10%, var(--vscode-editor-background))',

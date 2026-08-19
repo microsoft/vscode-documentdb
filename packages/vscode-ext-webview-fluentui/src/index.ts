@@ -4,7 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 /**
- * Entry point `.` — theming.
+ * Entry point `.`: theming.
  *
  * Importing anything from here injects the Fluent adaptations. That is the point: there is no
  * stylesheet import for a consumer to forget, and no opt-out. See decisions 0010 and 0011.

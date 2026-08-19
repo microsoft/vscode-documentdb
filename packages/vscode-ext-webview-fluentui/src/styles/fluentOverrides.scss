@@ -19,7 +19,7 @@
  */
 
 /*
- * Not a design token — a named shared subexpression, so a long fallback chain is
+ * Not a design token, but a named shared subexpression, so a long fallback chain is
  * not pasted into eight places. Many community themes define only a subset of
  * VS Code's colors, hence the chain; the color-mix is an alpha multiply (sRGB
  * mixing is premultiplied), which composites correctly on light and dark alike.
@@ -87,14 +87,14 @@ $progress-track: color-mix(in srgb, var(--vscode-foreground) 15%, transparent);
     // edges, and make the *midpoint* the progress color. The recipe then draws
     // exactly one progress-colored segment that fades at its edges. Doing it
     // through tokens rather than a background-image declaration is what lets the
-    // rule stay at zero specificity — a declaration would have to out-specify
+    // rule stay at zero specificity: a declaration would have to out-specify
     // Fluent's own Griffel class to win, and then no consumer could override it.
     //
     // Retargeting colorTransparentBackground is safe here because it is scoped to
     // the ProgressBar subtree, where this gradient is its only use.
     //
     // colorNeutralBackground6 is also the bar's rail, so clearing it leaves the
-    // indeterminate variant trackless — intentional, and how VS Code draws its own.
+    // indeterminate variant trackless. That is intentional, and how VS Code draws its own.
     //
     // fluentOverrides.test.ts pins the upstream recipe: if Fluent restructures it,
     // that test fails instead of the bar silently going blank.

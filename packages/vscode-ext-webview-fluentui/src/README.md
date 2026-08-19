@@ -2,10 +2,10 @@
 
 Entry map and import direction.
 
-| File            | Entry point    | What it is                                                              |
-| --------------- | -------------- | ----------------------------------------------------------------------- |
-| `index.ts`      | `.`            | theming, plus the `injectStyles()` call at module scope                 |
-| `components.ts` | `./components` | components only — imports neither `theme/` nor `styles/` (invariant I1) |
+| File            | Entry point    | What it is                                                             |
+| --------------- | -------------- | ---------------------------------------------------------------------- |
+| `index.ts`      | `.`            | theming, plus the `injectStyles()` call at module scope                |
+| `components.ts` | `./components` | components only; imports neither `theme/` nor `styles/` (invariant I1) |
 
 ## Layering
 
@@ -21,7 +21,7 @@ components  ──┐   React + Fluent, provider-agnostic
 Two rules make this worth keeping:
 
 - **`components/` may not import `theme/` or `styles/`.** A component must not require the
-  package's provider — that is what lets a consumer adopt a component without adopting a visual
+  package's provider. That is what lets a consumer adopt a component without adopting a visual
   philosophy. Enforced by a `no-restricted-imports` rule in the repo's ESLint config, and by
   `components.test.ts`.
 - **The bottom is React-free and Fluent-free.** `palette/` is plain colour math, `theme/core` adds

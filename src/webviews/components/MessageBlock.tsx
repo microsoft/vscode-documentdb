@@ -37,7 +37,7 @@ export interface MessageBlockProps {
  * A `MessageBar` used as a block element inside the content flow, rather than as a slim strip
  * above it: the title takes its own line, and the body stacks whatever it is given.
  *
- * That shape follows from how this product uses `MessageBar` — inside a wizard step, where it is
+ * That shape follows from how this product uses `MessageBar`: inside a wizard step, where it is
  * not competing for vertical space, so a stacked title costs nothing. It is house style, which is
  * why it lives here and not in `@microsoft/vscode-ext-webview-fluentui` (decision 0022). Staying
  * local is also what lets it take `vscode.l10n.t()` strings, which nothing in the package may do.
