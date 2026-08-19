@@ -1,25 +1,34 @@
 # `Container`
 
-## What it is
+A container lays out a surface that fills its window: a header and content that scroll, above an
+action bar pinned to the bottom. The action bar gains a border and a shadow while there is more
+content below the fold, and loses them again when there is not.
 
-The shell of a full-window surface, as a small family of components you compose: a header and
-content that scroll, over an action bar that stays pinned to the bottom.
+A container is composed from its family. `Container` is the root, `ContainerBody` is the scroll
+region and the content column inside it, `ContainerHeader`, `ContainerNav` and `ContainerMain` are
+the three regions the body holds, `ContainerSection` is a titled block of content, and
+`ContainerFooter` is the action bar.
 
-`Container` is the root. `ContainerBody` is the scroll region and the content column inside it.
-`ContainerHeader`, `ContainerNav` and `ContainerMain` are the three regions that go in the body,
-and `ContainerSection` is a titled block of content. `ContainerFooter` is the pinned action bar.
+Use a container when the surface is the whole window. For content layered above an existing page,
+use Fluent's `Dialog` or `Drawer` instead.
 
-## Why it exists
+## Best practices
 
-Fluent's surface components all assume an overlay above existing application chrome: `Dialog` sits
-on top of a page, `Drawer` slides in beside one. Fluent ships nothing for a surface that **is** the
-window.
+### Do
 
-So every consumer that needs one rebuilds the same skeleton: a full-height column, exactly one
-scroll region, a content column with a maximum width, and a footer that stays put and grows an edge
-only when there is more content below the fold. Along with it come two refs, a `ResizeObserver`, a
-scroll handler and a focus rule. This family is that skeleton, with those four things handled for
-you.
+- Give `ContainerBody` all three regions, or override `grid-template-areas` through `className`.
+- Keep every scrolling concern inside `ContainerBody`. It is the only scroll container.
+- Pass `focusOnMount` on the section a step change mounts, and give it a `key` that changes with
+  the step.
+- Use `className` when a surface needs a different content width. None of the metrics are public
+  API yet.
+
+### Don't
+
+- Nest a second scroll container inside the body. The action bar measures the outer one.
+- Rely on a region you did not render. Each declared region reserves its grid row, so omitting one
+  leaves that row's gap behind.
+- Add `aria-label` to `ContainerMain`. It is the `main` landmark, and the surface has one.
 
 ## Anatomy
 
@@ -77,24 +86,6 @@ land in the `main` area and overlap.
 
 Each region being one grid item is what makes it its own column and lets it hold any number of
 children.
-
-## Do / Don't
-
-**Do**
-
-- give `ContainerBody` all three regions, or override `grid-template-areas` through `className`;
-- put every scrolling concern inside `ContainerBody`. It is the only scroll container;
-- pass `focusOnMount` on the section a step change mounts, and give it a `key` that changes with the
-  step;
-- reach for `className` when a surface needs a different content width. Nothing about the metrics is
-  public API yet.
-
-**Don't**
-
-- nest a second scroll container inside the body; the footer's elevation measures the outer one;
-- rely on a region you did not render. Each declared region reserves its grid row, so omitting one
-  leaves that row's gap behind;
-- add `aria-label` to `ContainerMain`. It is the `main` landmark, and the surface has one.
 
 ## Accessibility
 

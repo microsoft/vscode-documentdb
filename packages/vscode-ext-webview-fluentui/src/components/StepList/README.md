@@ -1,22 +1,31 @@
 # `StepList`
 
-## What it is
+A step list shows the steps of a multi-step flow and marks the one the user is on. Each step reads
+as completed, current, or still ahead, and steps the user may return to are activatable.
 
-A step indicator for a multi-step flow: a horizontal row of steps, each showing whether it is done,
-current or still ahead. Declare the steps as `StepListItem` children and tell it which one is
-selected.
+When the row runs out of width, steps collapse into an overflow menu. The current step is the last
+one to collapse, so it stays visible at any width.
 
-When the row runs out of width, steps collapse into a "..." menu. The current step carries the
-highest priority, so it is the last thing overflow ever removes and never hides.
+A step list describes a sequence with a position in it. For content views the user may move between
+freely, use Fluent's `TabList` instead.
 
-## Why it exists
+## Best practices
 
-Fluent has no step indicator. `TabList` is the closest thing and is the wrong semantics: tabs are
-peers you can move between freely, steps are a sequence with a position in it, and a step's state is
-richer than selected or not.
+### Do
 
-The API is `TabList`'s all the same, because that is the shape people already know:
-`selectedValue`, `onStepSelect`, and children that declare the sequence.
+- Mark completed steps `completed`, including any that open already satisfied.
+- Mark a step `navigable` only when returning to it is safe.
+- Give `StepList` a parent with `min-width: 0`. `ContainerNav` already does; elsewhere the overflow
+  behaviour will not engage without it.
+- Let `Wizard` derive `completed` and `navigable` for you when it fits, and override per step when
+  it does not.
+
+### Don't
+
+- Render anything but `StepListItem` inside it. Other children are dropped silently, so a
+  `{condition && …}` guard is safe.
+- Expect `vertical` to do anything yet. The prop is accepted and reserved; the vertical rendering
+  arrives in a later release.
 
 ## Anatomy
 
@@ -40,27 +49,12 @@ duplicate module instances or a fast refresh.
 
 ## Controlled only
 
-There is no uncontrolled mode. A wizard always drives its own navigation, usually off a phase that
-is richer than the step list itself, so an internal "selected" state would only ever be a second
-copy of something the consumer already owns.
+A step list is always controlled. `onStepSelect` reports that a step was activated; nothing moves
+until you change `selectedValue`.
 
-`onStepSelect` fires; nothing moves until the consumer changes `selectedValue`.
-
-## Do / Don't
-
-**Do**
-
-- mark completed steps `completed`, including any that open pre-satisfied;
-- mark a step `navigable` only when going back to it is safe. `Wizard` derives both by default;
-- give `StepList` a `min-width: 0` parent. `ContainerNav` already does; anywhere else it is on you,
-  and without it the overflow behaviour never engages.
-
-**Don't**
-
-- render anything but `StepListItem` inside it. Other children are dropped, deliberately and
-  silently, so a `{condition && …}` guard is safe;
-- expect `vertical` to do anything yet. The prop and the surrounding layout accept it; the vertical
-  rendering is a later iteration, and shipping the prop now is what keeps that iteration additive.
+There is no uncontrolled mode, because the thing that decides which step is current is almost never
+the step list. It is the state of the work the flow is doing, and an internal "selected" value
+would only ever be a second copy of it.
 
 ## Accessibility
 

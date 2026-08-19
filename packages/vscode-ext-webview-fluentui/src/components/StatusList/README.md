@@ -1,18 +1,31 @@
 # `StatusList`
 
-## What it is
+A status list shows the stages of a multi-step operation and how each one ended. Each row has a
+status icon, a label, and an optional line of detail beneath it.
 
-A bordered list of things that are happening, or have happened: one row per stage, each with a
-status glyph, a label, and an optional line of evidence under it.
+Detail stays on screen after a stage settles, so a finished list still records what was observed,
+and a failure stays readable beside the stage that produced it.
 
-## Why it exists
+Use a status list when an operation has several stages worth naming. For a single wait with no
+stages, use Fluent's `Spinner`, or `ProgressBar` when the progress is measurable.
 
-Any operation with more than one step needs to show where it got to, and a spinner with a caption
-cannot: it shows one moment, then forgets it. A list of stages shows the shape of the whole
-operation up front, then which parts are done, which is running, and exactly which one failed.
+## Best practices
 
-So it is a receipt, not a log. Evidence stays after a stage settles, so the finished list still says
-_what was actually observed_, and a failure is still readable next to the stage that produced it.
+### Do
+
+- Give the list an `ariaLabel` naming what the stages belong to.
+- Pass localized `statusLabels` if your application ships translations. Unlisted statuses keep
+  their English default.
+- Keep the labels stable for the whole run. The list is most useful when it shows the shape of the
+  operation before it starts.
+- Own any live narration yourself. A flow that streams progress should have one `role="status"`
+  region for the whole flow.
+
+### Don't
+
+- Wrap it in a `Card` for the border. The border belongs to the component.
+- Expect an `aria-live` region here. There is none, deliberately; see Accessibility.
+- Expect a custom icon slot. The fixed status vocabulary is what makes a list readable at a glance.
 
 ## Anatomy
 
@@ -71,23 +84,6 @@ while the user is looking at something else.
 Named after `TabList.reserveSelectedTabSpace`, which solves the same problem in the same shape. It
 renders an `aria-hidden` non-breaking space; the `aria-hidden` half is why it is a boolean rather
 than "pass a space yourself".
-
-## Do / Don't
-
-**Do**
-
-- give the list an `ariaLabel` that says what the stages belong to;
-- pass localized `statusLabels` if the consumer ships translations. Unlisted statuses keep their
-  English default;
-- own the narration yourself. A flow that streams progress should have one `role="status"` region
-  for the whole flow.
-
-**Don't**
-
-- wrap it in a `Card` for the border. The border belongs to the component, and a wrapper would let
-  the two drift apart;
-- expect an `aria-live` region here. There is none, on purpose. See below;
-- expect a custom icon slot. A fixed status vocabulary is the point.
 
 ## Accessibility
 

@@ -24,7 +24,7 @@ import { defaultCompleted, defaultNavigable } from './wizardStepState.js';
  *
  * ```tsx
  * <Wizard
- *     activeStep={stepForPhase(phase)}
+ *     activeStep={currentStep}
  *     onStepChange={goToStep}
  *     stepsAriaLabel="Setup steps"
  *     header={<ContainerHeader media={<RocketRegular />} title="DocumentDB Local" />}
@@ -35,9 +35,9 @@ import { defaultCompleted, defaultNavigable } from './wizardStepState.js';
  * </Wizard>
  * ```
  *
- * It is controlled and owns no navigation logic. Mapping a consumer's own phases onto steps stays
- * consumer-side, which is what lets two steps share a phase, or a mode drop a step entirely by not
- * rendering its `WizardStep`.
+ * Controlled, and it owns no navigation logic. `activeStep` is a string the consumer computes, and
+ * how they arrive at it is never visible here: two situations may share one step and branch inside
+ * its children, and a step that does not apply is simply not rendered.
  *
  * Only the active step is mounted, so a heavy step body does not stay resident, and
  * focus-on-mount falls out of mounting rather than needing a rule of its own.

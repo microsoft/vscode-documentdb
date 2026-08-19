@@ -1,33 +1,39 @@
 # `Wizard`
 
-## What it is
+A wizard presents a task as a sequence of steps and shows one of them at a time, with a header, a
+step indicator and an action bar around it. Steps are declared as `WizardStep` children.
 
-A complete wizard surface in one component: an identifying header, a step indicator, the current
-step's content, and a pinned action bar. You declare the steps as children and tell it which one is
-active; it renders the whole window.
+A wizard is controlled. You pass `activeStep`, and it renders the step with that value. Activating
+another step in the indicator raises `onStepChange` and changes nothing until you say so.
 
-## Why it exists
+A wizard is a `Container` and a `StepList` assembled for you, and it uses nothing from them that
+you cannot use directly. Compose those yourself when you need a layout a wizard does not offer.
 
-A wizard has two lists that must agree: the labels in the step indicator, and the bodies that get
-shown one at a time. Kept apart, they drift. The usual shape is a `steps` array of ids and labels
-beside a ladder of `{step === 'x' && ...}` conditions, with the completed and reachable state of
-each step derived in a third place.
+## Best practices
 
-`Wizard` collapses that. A step's label lives beside its content, switching steps is one prop, and
-the completed and reachable rules are applied once, for every step, with a per-step override when a
-flow disagrees.
+### Do
 
-Behind the scenes it is `Container` and `StepList` assembled for you, and it uses nothing from them
-that you could not use yourself. If you outgrow it, take those same components and build the
-surface by hand; nothing is hidden that you would need.
+- Pass `stepsLocked` while work is in flight, or once the outcome is committed.
+- Give a step a `title` when its heading should differ from its label in the indicator. It defaults
+  to the label.
+- Show one step for one place in the task, even when your application distinguishes several
+  situations there. See below.
+- Keep expensive work out of an inactive step's children. They are not rendered, but you still
+  construct them.
+
+### Don't
+
+- Wrap steps in a fragment. A fragment has no props to read, so its steps are ignored.
+- Expect an inactive step to keep state. Only the active step is mounted.
+- Inject content between the header and the step indicator. There is no slot for it.
 
 ## Anatomy
 
 ```tsx
 <Wizard
-    activeStep={stepForPhase(phase)}
+    activeStep={currentStep}
     onStepChange={goToStep}
-    stepsLocked={isProvisioning}
+    stepsLocked={isRunning}
     stepsAriaLabel={l10n.t('Setup steps')}
     header={<ContainerHeader media={<RocketRegular />} title="DocumentDB Local" subtitle="…" />}
     footer={
@@ -43,7 +49,7 @@ surface by hand; nothing is hidden that you would need.
         …
     </WizardStep>
     <WizardStep value="setup" label={l10n.t('Set up')}>
-        {isProvisioning ? provisioningBody : failureBody}
+        {isRunning ? progressBody : failureBody}
     </WizardStep>
 </Wizard>
 ```
@@ -61,18 +67,45 @@ that is not a branded `WizardStep` is skipped rather than rendered.
 That is the cost of declaring a label beside its content, and it is the one thing about this
 component that will surprise someone.
 
-## What stays with the consumer
+## Choosing `activeStep`
 
-`Wizard` is controlled and owns no navigation logic. In particular it never sees phases, only
-steps. That mapping stays consumer-side, which is exactly what makes two very different flows fit:
+`activeStep` is a string you compute. A wizard never sees how you arrived at it, which is what lets
+your own state be a different shape from your step list.
 
-- a flow whose five phases collapse onto four steps passes the same `activeStep` for two of them,
-  and branches **inside** that step's children;
-- a mode that drops a step simply does not render its `WizardStep`.
+Two consequences are worth knowing, because both look like missing features until you try them.
 
-Button labels, disabled states and focus across a mid-step button swap also stay with the consumer.
-No shared abstraction exists there, and inventing one would be the moment this component stopped
-being a template and started being a framework.
+**Several situations can share one step.** An operation that is running and the same operation
+after it failed are the same place in the task, so they are one step. Pass the same `activeStep`
+for both and let the step's own content tell them apart:
+
+```tsx
+<WizardStep
+    value="setup"
+    label="Set up"
+    title={isRunning ? 'Setting up' : 'Setup did not finish'}
+>
+    {isRunning ? <Progress /> : <Failure onRetry={retry} />}
+</WizardStep>
+```
+
+The indicator stays put, and a failure is reported where it happened instead of moving the user.
+
+**A step that does not apply is simply not rendered.** `false` and `null` children are dropped, so
+the indicator shows three steps instead of four and the derived state follows:
+
+```tsx
+{!isEditing && (
+    <WizardStep value="choose" label="Choose method">
+        …
+    </WizardStep>
+)}
+```
+
+## What a wizard does not do
+
+It owns no navigation logic, no button labels, no disabled rules, and no focus handling across a
+button that swaps mid-step. Those differ between flows enough that any shared version would be a
+list of predicates you supply anyway.
 
 ## Derived state, and when to override it
 
@@ -81,26 +114,8 @@ completed = index === 0 || index < activeIndex || (index === last && index === a
 navigable = index < activeIndex && !stepsLocked;
 ```
 
-Both defaults were extracted from two consumers that arrived at them independently. Override either
-per step when a flow disagrees: a mode that drops the pre-satisfied first step, or one that allows
-going back to only some earlier steps.
-
-## Do / Don't
-
-**Do**
-
-- pass `stepsLocked` while work is in flight or the outcome is committed;
-- give a step a `title` when the heading should differ from the step's label. It defaults to the
-  label;
-- keep heavy work out of an inactive step's children. They are not rendered, but they are still
-  constructed by the consumer.
-
-**Don't**
-
-- wrap steps in a fragment;
-- expect an inactive step to keep state. Only the active step is mounted, which is what makes
-  focus-on-mount fall out of mounting and stops a heavy body staying resident;
-- inject anything between the header and the step indicator. There is no slot for it.
+Override either per step when a flow disagrees: a mode whose first step is not already satisfied,
+or one that allows returning to only some earlier steps.
 
 ## Accessibility
 
