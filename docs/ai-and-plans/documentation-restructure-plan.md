@@ -644,6 +644,10 @@ area-root research file referenced from a short decision entry.
 iteration file goes and that it is evidence rather than truth, but never what
 belongs inside one. Added 2026-08-19, after the gap surfaced (see §0).
 
+> **Draft.** The placement rule below (progress recorded inline, against each
+> work item) is settled and is what the knowledge-base README states. The rest of
+> this section is a first pass and the operator intends to refine it.
+
 ```
 ---
 feature: <slug>
@@ -657,11 +661,14 @@ created: YYYY-MM-DD
 <the plan itself: whatever the work needs. Work items, open questions, the
  shape being built. Written before the work starts.>
 
----
+## <a work item>
 
-# Work log
+<the plan for it, written first>
 
-<one entry per work item, written when that item is committed>
+**Done.** `<commit>` <subject>. What landed, and why.
+
+**Deviation.** What changed from the plan, the alternatives considered, and why
+each was rejected.
 
 ---
 
@@ -678,32 +685,33 @@ created: YYYY-MM-DD
 
 The rules that make it worth writing:
 
-- **The work log is written as the work proceeds**, one entry at the moment that
-  item is committed. Not reconstructed at the end. Reconstruction only works
-  while the session that did the work is still open, which is luck rather than
-  method.
-- **Each entry carries the commit hash and subject**, what landed, and why.
+- **Progress is recorded inline, against the work item it belongs to.** Not a
+  work-log chapter, and not a deviations table at the end. A reader following
+  the plan meets what happened to an item where the item is defined, rather than
+  carrying every item in their head until the last page.
+- **The note is written the moment that item is committed.** Not reconstructed at
+  the end. Reconstruction only works while the session that did the work is still
+  open, which is luck rather than method.
+- **Each note carries the commit hash and subject**, what landed, and why.
   Without the hash a reader has to rebuild the mapping from `git log` and guess.
 - **A deviation from the plan records the alternatives considered and why each
   was rejected.** This is the load-bearing rule. The option that shipped is
-  already in the code; the two that were turned down exist nowhere else. "This
+  already in the code; the ones that were turned down exist nowhere else. "This
   value renders an empty window in the only host we have" is worth more to the
   next reader than the line that shipped.
-- **The plan body is left as written.** Corrections belong in the work log or
-  the outcome, so a reader can still see what was believed before the work
-  started. Editing the plan to match reality destroys the only record that the
-  two ever differed.
-- **A summary table of deviations is an index**, with a work-item column
-  pointing into the log. Never a second explanation, which drifts.
+- **The plan is added to, never rewritten to match what happened.** Editing it
+  destroys the only record that plan and reality ever differed.
 - **The outcome says plainly what was not verified.** Green commands are
   persuasive well past what they actually prove.
 
 This is also what makes rule 7 worth anything. `iterations/` is evidence only,
 but evidence of the reasoning is far more useful than evidence of the outcome,
-and only the work log carries it.
+and only these notes carry it.
 
-Reference implementation:
-[`features/webview-fluentui-package/iterations/02-wizard-shell-and-components.md`](./features/webview-fluentui-package/iterations/02-wizard-shell-and-components.md).
+`features/webview-fluentui-package/iterations/02-wizard-shell-and-components.md`
+is the case that prompted this section, and it is **not** a model for placement:
+it was written before the inline rule was settled and collects its record into a
+trailing chapter. Read it for the content of an entry, not the position.
 
 ---
 

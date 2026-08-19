@@ -76,28 +76,23 @@ The rules, in full:
 
 ## What goes inside an iteration document
 
-An iteration file is written before the work, and **kept up to date during it**. Reading order:
+An iteration file is written before the work, and **kept up to date during it**.
 
-```
-# <the plan>      written first, and left as written afterwards
-# Work log        one entry per work item, added when that item is committed
-# Outcome         written at hand-over: what was verified, and what was not
-# Lessons         optional, and only when something generalises past this feature
-```
+- **Record progress inline, against the work item it belongs to.** Not in a work-log chapter and
+  not in a summary table at the end. Someone reading the plan should meet what happened to an item
+  at the point that item is defined, without holding it in their head until the last page.
+- **Write the note when the item is committed**, not at the end. Name the commit that carries it,
+  what landed, and why. Reconstructing later only works while the session that did the work is
+  still open.
+- **A deviation records the alternatives considered and why each was rejected.** The option that
+  shipped is already in the code; the rejected ones exist nowhere else.
+- **Do not rewrite the plan to match what happened.** Add to it. That the plan and reality differed
+  is the part worth keeping.
+- **An `# Outcome` chapter at hand-over** states what was verified and, just as plainly, what was
+  not.
 
-Three rules carry the value:
-
-- **Write the work log as you go**, not at the end. Each entry names the commit that carries the
-  item, what landed, and why. Reconstructing it later only works while the session that did the
-  work is still open.
-- **A deviation from the plan records the alternatives considered and why each was rejected.** The
-  option that shipped is already in the code; the rejected ones exist nowhere else.
-- **Do not edit the plan to match what happened.** Corrections belong in the work log or the
-  outcome, so a reader can still see what was believed before the work started.
-
-Template and reasoning: [documentation-restructure-plan.md §6.5](./documentation-restructure-plan.md).
-Reference implementation:
-[webview-fluentui-package/iterations/02-wizard-shell-and-components.md](./features/webview-fluentui-package/iterations/02-wizard-shell-and-components.md).
+Template and reasoning:
+[documentation-restructure-plan.md §6.5](./documentation-restructure-plan.md).
 
 ## Frontmatter
 
