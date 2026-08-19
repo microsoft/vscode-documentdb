@@ -39,7 +39,7 @@ describe('wizard step defaults', () => {
     });
 
     test('Atlas edit mode drops the pre-satisfied first step, which is what the per-step override is for', () => {
-        // Edit mode opens on the form, so "Choose method" is not in the list at all — and the step
+        // Edit mode opens on the form, so "Choose method" is not in the list at all, and the step
         // that takes index 0 is NOT pre-satisfied. The default cannot know that; the consumer says so.
         const editSteps = ['form', 'checking', 'success'] as const;
         expect(defaultCompleted(0, 0, editSteps.length)).toBe(true);

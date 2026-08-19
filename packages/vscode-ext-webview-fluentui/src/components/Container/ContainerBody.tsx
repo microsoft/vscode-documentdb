@@ -41,7 +41,7 @@ const useStyles = makeStyles({
  * because it is a child of this element; only the footer is pinned. A consumer who wants a pinned
  * header puts `ContainerHeader` directly under `Container` instead.
  *
- * Regions are placed by name, so the markup is identical in both orientations — only
+ * Regions are placed by name, so the markup is identical in both orientations: only
  * {@link ContainerBodyProps.navPosition} changes. Every declared region reserves its row, so a
  * surface that omits one leaves that row's gap behind; supply all three, or set `className` to
  * override the template.

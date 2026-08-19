@@ -25,7 +25,7 @@ const useStyles = makeStyles({
 /**
  * Root of a full-window surface: a header and content that scroll, over a footer that does not.
  *
- * Fluent's own surfaces — `Dialog`, `Drawer` — all assume an overlay above existing application
+ * Fluent's own surfaces, `Dialog` and `Drawer`, all assume an overlay above existing application
  * chrome. This is the shape for a surface that *is* the window.
  *
  * ```tsx
@@ -42,7 +42,7 @@ const useStyles = makeStyles({
  * ```
  *
  * A direct child other than `ContainerBody` or `ContainerFooter` becomes another row of the
- * column — which is how a consumer pins the header: place `ContainerHeader` here instead of
+ * column, which is how a consumer pins the header: place `ContainerHeader` here instead of
  * inside the body.
  */
 export const Container = ({ children, className, ...rest }: ContainerProps): JSX.Element => {

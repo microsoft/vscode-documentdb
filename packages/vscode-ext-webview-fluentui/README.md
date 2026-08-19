@@ -4,8 +4,8 @@ Makes [Fluent UI React v9](https://react.fluentui.dev/) look native inside a VS 
 
 Out of the box, Fluent looks like Microsoft Teams: its neutral ramp is a fixed gray produced by
 `createLightTheme`/`createDarkTheme`, and it ignores the user's workbench theme entirely. This
-package fixes that, and then — separately and optionally — offers a small set of components that
-solve VS Code integration problems.
+package fixes that, and then, separately and optionally, offers a small set of reusable components
+that Fluent itself does not ship.
 
 **Theming is the reason to adopt this package. The components are a bonus you can ignore**; they
 never require this package's provider.
@@ -18,7 +18,7 @@ transport (tRPC over `postMessage`). Neither package depends on the other, in ei
 1. Reads the user's accent color off the DOM and synthesizes a Fluent brand ramp from it through
    LCH/LAB palette math.
 2. Remaps roughly fifty Fluent neutral tokens onto `var(--vscode-*)` with fallback chains, so
-   surfaces track the active theme — including community themes that leave the ideal token
+   surfaces track the active theme, including community themes that leave the ideal token
    undefined.
 3. Injects a stylesheet of component-scoped escapes for the cases a Fluent recipe cannot be
    reached through tokens at all.
@@ -41,8 +41,8 @@ Peer dependencies, which you already have if you are using Fluent:
 | `@fluentui/react-icons`      | `~2.0`  |
 
 The Fluent range is narrow on purpose. The stylesheet keys off `fui-*` class names and, in one
-case, the absence of an `aria-valuenow` attribute — Fluent implementation details rather than
-public API. A minor Fluent release can restructure them, and the overrides would then silently
+case, the absence of an `aria-valuenow` attribute. Those are Fluent implementation details rather
+than public API. A minor Fluent release can restructure them, and the overrides would then silently
 stop applying.
 
 ## Usage
@@ -87,22 +87,30 @@ objects, for consumers who want to override individual tokens on top.
 ### Components
 
 ```tsx
-import { WizardBreadcrumb } from '@microsoft/vscode-ext-webview-fluentui/components';
+import { Wizard, WizardStep, ContainerHeader, ContainerFooter } from '@microsoft/vscode-ext-webview-fluentui/components';
 ```
+
+Four things ship today. `Container` is the shell of a full-window surface: scrolling header and
+content, over a footer pinned to the bottom. `StepList` is a step indicator that collapses into an
+overflow menu and never hides the current step. `StatusList` is a bordered list of stages, each
+with a status glyph and a line of evidence. `Wizard` is all three of those assembled into a
+complete wizard surface, for the common case where you do not want to wire them yourself.
+
+See [`src/components/README.md`](./src/components/README.md) for the full set and how they compose.
 
 Components style themselves from Fluent `tokens.*`, which resolve against whatever
 `FluentProvider` is above them. They work without this package's theming, and importing
 `./components` injects no stylesheet.
 
-`WizardBreadcrumb` carries no localized strings: its accessible names are props. The package ships
-no translations at all, because string extractors do not scan `node_modules`, so a string owned
-here could never be translated by a consumer.
+None of them carry localized strings: every user-visible string is a prop with an English default.
+The package ships no translations at all, because string extractors do not scan `node_modules`, so
+a string owned here could never be translated by a consumer.
 
 ## Things to know before you adopt it
 
 **The stylesheet ships itself, and there is no opt-out.** Importing anything from the main entry
 injects the overrides. There is no import to forget, no ordering to get right, and no flag to
-disable them. If you want unadapted Fluent, use Fluent directly — it costs you nothing.
+disable them. If you want unadapted Fluent, use Fluent directly; it costs you nothing.
 
 **The overrides are document-global.** They apply to _every_ Fluent component in your webview,
 including ones you rendered without thinking about this package, and including portaled surfaces
@@ -113,7 +121,7 @@ are class-based rather than provider-scoped.
 specificity. Your own plain `.fui-Input { … }` wins regardless of which `<style>` element came
 first.
 
-**Content Security Policy.** Griffel — Fluent's own styling engine — injects `<style>` elements at
+**Content Security Policy.** Griffel, Fluent's own styling engine, injects `<style>` elements at
 runtime, and so does this package. Your webview CSP needs `style-src 'unsafe-inline'`, which is
 what Fluent already required of you.
 
@@ -122,7 +130,7 @@ what Fluent already required of you.
 Things the theming cannot decide for you, where the choice of Fluent prop determines whether the
 result tracks the theme at all.
 
-### Skeleton — always pass `appearance="translucent"`
+### Skeleton: always pass `appearance="translucent"`
 
 Fluent's `Skeleton` and `SkeletonItem` default to `appearance="opaque"`. Pass `translucent`
 instead, on the `<Skeleton>` wrapper or on a bare `<SkeletonItem>`:
@@ -133,16 +141,16 @@ instead, on the `<Skeleton>` wrapper or on a bare `<SkeletonItem>`:
 </Skeleton>
 ```
 
-The two appearances are not two visual styles — they are two different compositing models, and
+The two appearances are not two visual styles. They are two different compositing models, and
 only one of them can work on an unknown surface:
 
 | Appearance    | Resting fill                      | Sweep                                       | Composites over the card? |
 | ------------- | --------------------------------- | ------------------------------------------- | ------------------------- |
-| `opaque`      | solid `colorNeutralStencil1`      | `Stencil1 → Stencil2 → Stencil1`, opaque    | no — it paints over it    |
+| `opaque`      | solid `colorNeutralStencil1`      | `Stencil1 → Stencil2 → Stencil1`, opaque    | no, it paints over it     |
 | `translucent` | alpha `colorNeutralStencil1Alpha` | `transparent → Stencil1Alpha → transparent` | yes                       |
 
 An opaque skeleton has to be mixed against the colour of whatever card it sits on. A theme token
-cannot know that, so any value is wrong on some surface — this package mixes against
+cannot know that, so any value is wrong on some surface. This package mixes against
 `--vscode-editor-background`, which is right for the default surface and visible as a rectangle on
 any other. Translucent has no such problem: it is an alpha overlay, so it picks up the card's own
 colour and hue for free, on every theme.
@@ -161,10 +169,10 @@ Two consequences worth knowing:
 | Entry          | Exports                                                                                                                                    |
 | -------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
 | `.`            | `VSCodeFluentProvider`, `useActiveVSCodeTheme`, `useActiveVSCodeThemeKind`, `createVSCodeFluentTheme`, `generateAdaptive{Light,Dark}Theme` |
-| `./components` | `WizardBreadcrumb`, `WizardBreadcrumbProps`, `WizardStepMeta`                                                                              |
+| `./components` | `Container` and its family, `StepList`, `StatusList`, `Wizard`, and their prop types                                                       |
 
 The palette math and the VS Code theme token list are internal. Monaco theming is not part of this
-package — Monaco is not Fluent, and a 5 MB peer has no business in a theming package.
+package: Monaco is not Fluent, and a 5 MB peer has no business in a theming package.
 
 ## License
 

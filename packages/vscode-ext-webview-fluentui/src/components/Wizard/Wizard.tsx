@@ -19,8 +19,8 @@ import { defaultCompleted, defaultNavigable } from './wizardStepState.js';
 /**
  * A whole wizard surface: header, step indicator, the active step's content, and a pinned footer.
  *
- * Built entirely on the public `Container` and `StepList` API, so a consumer who outgrows it gets
- * a step down rather than a cliff — take the same pieces and assemble them by hand.
+ * Built entirely on the public `Container` and `StepList` API, so a consumer who outgrows it can
+ * take those same pieces and assemble the surface by hand. There is a step down, not a cliff.
  *
  * ```tsx
  * <Wizard

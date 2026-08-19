@@ -9,8 +9,8 @@ import { type StatusListItemStatus } from '../StatusList/StatusList.types.js';
 /**
  * The word a screen reader hears after a status row's label.
  *
- * The package ships no localization — `npm run l10n` extractors do not scan `node_modules`, so a
- * string owned here would silently never be translated in any consumer. English defaults, and a
+ * The package ships no localization. The `npm run l10n` extractors do not scan `node_modules`, so
+ * a string owned here would silently never be translated in any consumer. English defaults, and a
  * `StatusList` prop to replace them.
  */
 export const defaultStatusLabels: Readonly<Record<StatusListItemStatus, string>> = {

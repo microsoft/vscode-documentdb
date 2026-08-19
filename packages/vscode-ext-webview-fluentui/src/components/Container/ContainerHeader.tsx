@@ -31,7 +31,7 @@ const useStyles = makeStyles({
  * The identifying block at the top of a {@link Container}: media, title, subtitle, and an
  * end-aligned action.
  *
- * Structurally Fluent's `CardHeader` — `image` / `header` / `description` / `action` — at surface
+ * Structurally Fluent's `CardHeader` (`image` / `header` / `description` / `action`) at surface
  * scale.
  */
 export const ContainerHeader = ({

@@ -23,7 +23,7 @@ export interface WizardProps {
     readonly header?: ReactNode;
     /** A `ContainerFooter`. Pinned, and elevates itself while the content overflows. */
     readonly footer?: ReactNode;
-    /** `WizardStep` children, in order. Anything else — including a fragment of them — is ignored. */
+    /** `WizardStep` children, in order. Anything else, a fragment of them included, is ignored. */
     readonly children: ReactNode;
 }
 

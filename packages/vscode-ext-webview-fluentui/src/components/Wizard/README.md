@@ -1,12 +1,25 @@
 # `Wizard`
 
-A whole wizard surface in one component: header, step indicator, the active step's content, and a
-pinned footer.
+## What it is
 
-It is tier 2. Everything it does, it does through the public `Container` and `StepList` API — that
-is invariant I3, and it is what stops the facade growing private escape hatches. A consumer who
-outgrows `Wizard` takes the same pieces and assembles them by hand; there is a step down rather
-than a cliff.
+A complete wizard surface in one component: an identifying header, a step indicator, the current
+step's content, and a pinned action bar. You declare the steps as children and tell it which one is
+active; it renders the whole window.
+
+## Why it exists
+
+A wizard has two lists that must agree: the labels in the step indicator, and the bodies that get
+shown one at a time. Kept apart, they drift. The usual shape is a `steps` array of ids and labels
+beside a ladder of `{step === 'x' && ...}` conditions, with the completed and reachable state of
+each step derived in a third place.
+
+`Wizard` collapses that. A step's label lives beside its content, switching steps is one prop, and
+the completed and reachable rules are applied once, for every step, with a per-step override when a
+flow disagrees.
+
+Behind the scenes it is `Container` and `StepList` assembled for you, and it uses nothing from them
+that you could not use yourself. If you outgrow it, take those same components and build the
+surface by hand; nothing is hidden that you would need.
 
 ## Anatomy
 
@@ -42,7 +55,7 @@ own code.
 ## Children must be `WizardStep`
 
 `Wizard` reads its children's props. `false` and `null` are dropped, so `{isEdit && <WizardStep …>}`
-is safe — but **a fragment of steps is ignored**, because a fragment has no props to read. Anything
+is safe. But **a fragment of steps is ignored**, because a fragment has no props to read. Anything
 that is not a branded `WizardStep` is skipped rather than rendered.
 
 That is the cost of declaring a label beside its content, and it is the one thing about this
@@ -50,7 +63,7 @@ component that will surprise someone.
 
 ## What stays with the consumer
 
-`Wizard` is controlled and owns no navigation logic. In particular it never sees phases — only
+`Wizard` is controlled and owns no navigation logic. In particular it never sees phases, only
 steps. That mapping stays consumer-side, which is exactly what makes two very different flows fit:
 
 - a flow whose five phases collapse onto four steps passes the same `activeStep` for two of them,
@@ -69,7 +82,7 @@ navigable = index < activeIndex && !stepsLocked;
 ```
 
 Both defaults were extracted from two consumers that arrived at them independently. Override either
-per step when a flow disagrees — a mode that drops the pre-satisfied first step, or one that allows
+per step when a flow disagrees: a mode that drops the pre-satisfied first step, or one that allows
 going back to only some earlier steps.
 
 ## Do / Don't
@@ -79,7 +92,7 @@ going back to only some earlier steps.
 - pass `stepsLocked` while work is in flight or the outcome is committed;
 - give a step a `title` when the heading should differ from the step's label. It defaults to the
   label;
-- keep heavy work out of an inactive step's children — they are not rendered, but they are still
+- keep heavy work out of an inactive step's children. They are not rendered, but they are still
   constructed by the consumer.
 
 **Don't**

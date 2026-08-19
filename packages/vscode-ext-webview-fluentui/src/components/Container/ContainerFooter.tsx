@@ -43,9 +43,9 @@ const useStyles = makeStyles({
 /**
  * The pinned action bar of a {@link Container}: an optional note above a row of buttons.
  *
- * It elevates itself — a top border and a shadow — only while the body still has content below the
- * fold, so a short surface keeps a flat, quiet footer. That is read from the `Container` context;
- * the consumer wires nothing.
+ * It elevates itself with a top border and a shadow, but only while the body still has content
+ * below the fold, so a short surface keeps a flat, quiet footer. That is read from the `Container`
+ * context; the consumer wires nothing.
  */
 export const ContainerFooter = ({
     note,

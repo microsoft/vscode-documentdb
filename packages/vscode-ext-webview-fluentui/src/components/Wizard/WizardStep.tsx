@@ -11,7 +11,7 @@ export const wizardStepBrand: unique symbol = Symbol.for('vscode-ext-webview-flu
 /**
  * One step of a {@link Wizard}: its label, its heading and its content, declared together.
  *
- * A declarative marker — it renders nothing on its own. `Wizard` reads its props, because the step
+ * A declarative marker: it renders nothing on its own. `Wizard` reads its props, because the step
  * indicator needs every step while only one step's content is rendered.
  */
 export const WizardStep: ((props: WizardStepProps) => null) & MarkerComponent = Object.assign(

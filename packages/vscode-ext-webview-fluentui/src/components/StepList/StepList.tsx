@@ -126,7 +126,7 @@ const StepOverflowMenu = ({
  * `onStepSelect`, and `StepListItem` children that describe the sequence.
  *
  * When the row does not fit, steps collapse into a "…" menu. The current step carries the highest
- * overflow priority, so it is the last item overflow ever removes — it never hides.
+ * overflow priority, so it is the last item overflow ever removes: it never hides.
  *
  * ```tsx
  * <StepList selectedValue={step} onStepSelect={(_e, d) => goTo(d.value)} ariaLabel="Setup steps">

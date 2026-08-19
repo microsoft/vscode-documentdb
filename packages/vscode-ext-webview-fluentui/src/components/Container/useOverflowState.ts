@@ -19,8 +19,8 @@ export interface OverflowState {
  *
  * Three triggers, because no single one covers the cases: the user scrolls, the region or its
  * content resizes, and the content changes without changing size. The last is why the measurement
- * also runs after every render — cheap, and it is what makes a step change re-measure without the
- * caller having to name a dependency.
+ * also runs after every render. That is cheap, and it is what makes a step change re-measure
+ * without the caller having to name a dependency.
  *
  * The `- 1` absorbs the sub-pixel difference a fractional device pixel ratio leaves behind, which
  * would otherwise report a fully-scrolled region as still overflowing.

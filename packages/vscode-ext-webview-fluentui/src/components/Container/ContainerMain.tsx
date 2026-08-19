@@ -12,7 +12,7 @@ const useStyles = makeStyles({
 });
 
 /**
- * The `main` landmark: the current step's content. Holds any number of children — that is the
+ * The `main` landmark: the current step's content. Holds any number of children, which is the
  * whole reason the regions are components rather than grid areas carried by the content itself.
  */
 export const ContainerMain = ({ children, className, ...rest }: ContainerMainProps): JSX.Element => {

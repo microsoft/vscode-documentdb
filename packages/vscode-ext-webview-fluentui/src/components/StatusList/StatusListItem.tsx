@@ -40,7 +40,7 @@ const useStyles = makeStyles({
  *
  * The row carries no `aria-label`. The status is a visually-hidden word appended to the label
  * instead, because a row-level label would make anything interactive inside {@link
- * StatusListItemProps.detail} unreachable — and `detail` takes arbitrary content, so that is a
+ * StatusListItemProps.detail} unreachable, and `detail` takes arbitrary content, so that is a
  * guarantee rather than an observation.
  */
 export const StatusListItem = ({

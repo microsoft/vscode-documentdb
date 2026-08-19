@@ -9,8 +9,8 @@
  */
 
 /**
- * The first step opens pre-satisfied — there is nothing on it to complete — and the last step
- * shows as completed while it is the one being shown, because reaching it *is* the completion.
+ * The first step opens pre-satisfied, because there is nothing on it to complete, and the last
+ * step shows as completed while it is the one being shown, because reaching it *is* the completion.
  */
 export const defaultCompleted = (index: number, activeIndex: number, count: number): boolean =>
     index === 0 || index < activeIndex || (index === count - 1 && index === activeIndex);

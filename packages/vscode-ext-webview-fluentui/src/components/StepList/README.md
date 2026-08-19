@@ -1,11 +1,22 @@
 # `StepList`
 
-A responsive wizard step indicator. When the row does not fit, steps collapse into a "…" menu — and
-the current step is the last thing overflow ever removes, so it never hides.
+## What it is
 
-Modelled on Fluent's `TabList`: `selectedValue`, `onStepSelect`, and children that declare the
-sequence. Fluent ships the selector but not the surrounding layout; this goes one step further, and
-`Container` supplies the layout.
+A step indicator for a multi-step flow: a horizontal row of steps, each showing whether it is done,
+current or still ahead. Declare the steps as `StepListItem` children and tell it which one is
+selected.
+
+When the row runs out of width, steps collapse into a "..." menu. The current step carries the
+highest priority, so it is the last thing overflow ever removes and never hides.
+
+## Why it exists
+
+Fluent has no step indicator. `TabList` is the closest thing and is the wrong semantics: tabs are
+peers you can move between freely, steps are a sequence with a position in it, and a step's state is
+richer than selected or not.
+
+The API is `TabList`'s all the same, because that is the shape people already know:
+`selectedValue`, `onStepSelect`, and children that declare the sequence.
 
 ## Anatomy
 
@@ -29,8 +40,8 @@ duplicate module instances or a fast refresh.
 
 ## Controlled only
 
-There is no uncontrolled mode. A wizard always drives its own navigation — usually off a phase that
-is richer than the step list itself — so an internal "selected" state would only ever be a second
+There is no uncontrolled mode. A wizard always drives its own navigation, usually off a phase that
+is richer than the step list itself, so an internal "selected" state would only ever be a second
 copy of something the consumer already owns.
 
 `onStepSelect` fires; nothing moves until the consumer changes `selectedValue`.

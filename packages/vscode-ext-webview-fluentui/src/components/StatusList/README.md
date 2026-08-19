@@ -1,10 +1,18 @@
 # `StatusList`
 
+## What it is
+
 A bordered list of things that are happening, or have happened: one row per stage, each with a
 status glyph, a label, and an optional line of evidence under it.
 
-It is a receipt, not a log. Evidence stays after a stage settles, so the finished list still says
-_what was actually observed_.
+## Why it exists
+
+Any operation with more than one step needs to show where it got to, and a spinner with a caption
+cannot: it shows one moment, then forgets it. A list of stages shows the shape of the whole
+operation up front, then which parts are done, which is running, and exactly which one failed.
+
+So it is a receipt, not a log. Evidence stays after a stage settles, so the finished list still says
+_what was actually observed_, and a failure is still readable next to the stage that produced it.
 
 ## Anatomy
 
@@ -47,8 +55,8 @@ detail={
 }
 ```
 
-That is deliberate. Separate `meta` and `action` props would have put the "·" joiner — and its
-localization — inside a package that ships no strings. Composition puts both back where they belong.
+That is deliberate. Separate `meta` and `action` props would have put the "·" joiner, and its
+localization, inside a package that ships no strings. Composition puts both back where they belong.
 
 Inline controls are normalised to the detail line's type scale by element (`a`, `button`, `label`),
 never by a Fluent class name. `Link` renders a `<button>` when given `onClick` without `href`, which
@@ -56,8 +64,8 @@ is why the rule covers both.
 
 ## `reserveDetailSpace`
 
-Holds the detail line's height before it has content, so the row does not grow — and shift
-everything below it — when the detail lands. Use it on a row whose evidence arrives asynchronously
+Holds the detail line's height before it has content, so the row does not grow, and shift
+everything below it, when the detail lands. Use it on a row whose evidence arrives asynchronously
 while the user is looking at something else.
 
 Named after `TabList.reserveSelectedTabSpace`, which solves the same problem in the same shape. It
@@ -78,14 +86,14 @@ than "pass a space yourself".
 
 - wrap it in a `Card` for the border. The border belongs to the component, and a wrapper would let
   the two drift apart;
-- expect an `aria-live` region here. There is none, on purpose — see below;
+- expect an `aria-live` region here. There is none, on purpose. See below;
 - expect a custom icon slot. A fixed status vocabulary is the point.
 
 ## Accessibility
 
 - The list is `role="list"`, each row `role="listitem"`.
 - **A row carries no `aria-label`.** The status is a visually-hidden word appended to the label
-  instead. A row-level label would make anything interactive inside `detail` unreachable — and
+  instead. A row-level label would make anything interactive inside `detail` unreachable, and
   `detail` takes arbitrary content, so that is a guarantee rather than an observation.
 - **No `aria-live`.** A surface that streams progress already owns a `role="status"` region; live
   semantics here would double-announce every change.

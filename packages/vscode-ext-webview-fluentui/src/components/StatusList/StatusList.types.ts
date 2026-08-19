@@ -32,8 +32,8 @@ export interface StatusListItemProps extends ComponentPropsWithoutRef<'div'> {
      */
     readonly detail?: ReactNode;
     /**
-     * Hold the detail line's height before it has content, so the row does not grow — and shift
-     * everything below it — when the detail arrives. Named after `TabList.reserveSelectedTabSpace`,
+     * Hold the detail line's height before it has content, so the row does not grow, and shift
+     * everything below it, when the detail arrives. Named after `TabList.reserveSelectedTabSpace`,
      * which solves the same problem in the same shape.
      */
     readonly reserveDetailSpace?: boolean;

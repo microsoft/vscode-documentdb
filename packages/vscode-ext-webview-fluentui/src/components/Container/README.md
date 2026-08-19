@@ -1,11 +1,25 @@
 # `Container`
 
-The header / scroll / pinned-footer shell of a surface that **is** the window.
+## What it is
 
-Fluent's own surface components — `Dialog`, `Drawer` — all assume an overlay above existing
-application chrome. Fluent ships nothing for a page-scale surface, so every consumer that needs one
-rebuilds the same skeleton: a full-height column, one scroll region, a content column with a
-maximum width, and a footer that stays put and gains an edge only when there is more below.
+The shell of a full-window surface, as a small family of components you compose: a header and
+content that scroll, over an action bar that stays pinned to the bottom.
+
+`Container` is the root. `ContainerBody` is the scroll region and the content column inside it.
+`ContainerHeader`, `ContainerNav` and `ContainerMain` are the three regions that go in the body,
+and `ContainerSection` is a titled block of content. `ContainerFooter` is the pinned action bar.
+
+## Why it exists
+
+Fluent's surface components all assume an overlay above existing application chrome: `Dialog` sits
+on top of a page, `Drawer` slides in beside one. Fluent ships nothing for a surface that **is** the
+window.
+
+So every consumer that needs one rebuilds the same skeleton: a full-height column, exactly one
+scroll region, a content column with a maximum width, and a footer that stays put and grows an edge
+only when there is more content below the fold. Along with it come two refs, a `ResizeObserver`, a
+scroll handler and a focus rule. This family is that skeleton, with those four things handled for
+you.
 
 ## Anatomy
 
@@ -57,8 +71,8 @@ A consumer who wants a pinned header puts `ContainerHeader` directly under `Cont
 ## Regions, not grid areas on the content
 
 `ContainerNav` and `ContainerMain` look like one nesting level too many until you try the
-alternative. Carrying `grid-area` on the content itself — which is what Fluent's own `MessageBar`
-does — works only while each region holds exactly one element. Give a step two sections and both
+alternative. Carrying `grid-area` on the content itself, which is what Fluent's own `MessageBar`
+does, works only while each region holds exactly one element. Give a step two sections and both
 land in the `main` area and overlap.
 
 Each region being one grid item is what makes it its own column and lets it hold any number of
@@ -69,7 +83,7 @@ children.
 **Do**
 
 - give `ContainerBody` all three regions, or override `grid-template-areas` through `className`;
-- put every scrolling concern inside `ContainerBody` — it is the only scroll container;
+- put every scrolling concern inside `ContainerBody`. It is the only scroll container;
 - pass `focusOnMount` on the section a step change mounts, and give it a `key` that changes with the
   step;
 - reach for `className` when a surface needs a different content width. Nothing about the metrics is
@@ -90,7 +104,7 @@ children.
 - `focusOnMount` gives the heading `tabIndex = -1` and focuses it, which is WCAG 2.4.3 for a step
   change. It is suppressed on the container's first render: arriving at a surface is not a
   navigation, and stealing focus there fights whatever the consumer focused deliberately.
-- Fluent's own `Drawer` guidance applies to `ContainerBody` too — a scroll region with no focusable
+- Fluent's own `Drawer` guidance applies to `ContainerBody` too: a scroll region with no focusable
   content needs `tabIndex={0}` for keyboard scroll access.
 
 ## Props
