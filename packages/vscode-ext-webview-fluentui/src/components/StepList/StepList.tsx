@@ -29,7 +29,10 @@ import {
     MoreHorizontalFilled,
     MoreHorizontalRegular,
 } from '@fluentui/react-icons';
-import { Fragment, type JSX } from 'react';
+import { Fragment, type JSX, type ReactNode, type SyntheticEvent } from 'react';
+import { collectMarkerChildren } from '../utils/markerChildren.js';
+import { type StepListItemProps, type StepListItemSelectData, type StepListProps } from './StepList.types.js';
+import { stepListItemBrand } from './StepListItem.js';
 
 const MoreHorizontal = bundleIcon(MoreHorizontalFilled, MoreHorizontalRegular);
 
@@ -39,10 +42,10 @@ const MoreHorizontal = bundleIcon(MoreHorizontalFilled, MoreHorizontalRegular);
  */
 const defaultOverflowAriaLabel = (count: number): string => `${count} more steps`;
 
-/** A wizard step's derived breadcrumb state, shared by the inline items and the overflow menu. */
-export interface WizardStepMeta {
-    readonly id: string;
-    readonly label: string;
+/** A step, with the state `StepList` derived for it. */
+interface ResolvedStep {
+    readonly value: string;
+    readonly label: ReactNode;
     readonly isCurrent: boolean;
     readonly isCompleted: boolean;
     readonly canNavigate: boolean;
@@ -62,30 +65,33 @@ const useStyles = makeStyles({
 /** Renders a hidden (overflowed) step as a menu item; visible steps render nothing here. */
 const StepOverflowMenuItem = ({
     step,
-    onNavigate,
+    onStepSelect,
 }: {
-    readonly step: WizardStepMeta;
-    readonly onNavigate: (id: string) => void;
+    readonly step: ResolvedStep;
+    readonly onStepSelect: (event: SyntheticEvent, data: StepListItemSelectData) => void;
 }): JSX.Element | null => {
-    const isVisible = useIsOverflowItemVisible(step.id);
+    const isVisible = useIsOverflowItemVisible(step.value);
     if (isVisible) {
         return null;
     }
     return (
-        <MenuItem disabled={!step.canNavigate} onClick={step.canNavigate ? () => onNavigate(step.id) : undefined}>
+        <MenuItem
+            disabled={!step.canNavigate}
+            onClick={step.canNavigate ? (event) => onStepSelect(event, { value: step.value }) : undefined}
+        >
             {step.label}
         </MenuItem>
     );
 };
 
-/** The "…" breadcrumb entry that collects steps hidden by overflow. Renders nothing until overflow. */
+/** The "…" entry that collects steps hidden by overflow. Renders nothing until there is overflow. */
 const StepOverflowMenu = ({
     steps,
-    onNavigate,
+    onStepSelect,
     overflowAriaLabel,
 }: {
-    readonly steps: readonly WizardStepMeta[];
-    readonly onNavigate: (id: string) => void;
+    readonly steps: readonly ResolvedStep[];
+    readonly onStepSelect: (event: SyntheticEvent, data: StepListItemSelectData) => void;
     readonly overflowAriaLabel: (count: number) => string;
 }): JSX.Element | null => {
     const { ref, isOverflowing, overflowCount } = useOverflowMenu<HTMLButtonElement>();
@@ -106,7 +112,7 @@ const StepOverflowMenu = ({
                 <MenuPopover>
                     <MenuList>
                         {steps.map((step) => (
-                            <StepOverflowMenuItem key={step.id} step={step} onNavigate={onNavigate} />
+                            <StepOverflowMenuItem key={step.value} step={step} onStepSelect={onStepSelect} />
                         ))}
                     </MenuList>
                 </MenuPopover>
@@ -115,38 +121,50 @@ const StepOverflowMenu = ({
     );
 };
 
-export interface WizardBreadcrumbProps {
-    /** Steps in wizard order, with their completed / current / reachable state already derived. */
-    readonly steps: readonly WizardStepMeta[];
-    /** Accessible name of the breadcrumb navigation landmark. */
-    readonly ariaLabel: string;
-    /** Invoked when a reachable step is activated, inline or from the overflow menu. */
-    readonly onNavigate: (id: string) => void;
-    /**
-     * Accessible name of the "…" overflow button, given the number of hidden steps. Defaults to
-     * English; pass a localized builder if the consumer ships translations.
-     */
-    readonly overflowAriaLabel?: (count: number) => string;
-}
-
 /**
- * Responsive wizard step indicator. When the breadcrumb doesn't fit, steps collapse into a "…"
- * menu; the current step is given the highest priority so it is the last item overflow ever
- * removes — it never hides.
+ * Responsive wizard step indicator, in the shape of Fluent's `TabList`: `selectedValue`,
+ * `onStepSelect`, and `StepListItem` children that describe the sequence.
+ *
+ * When the row does not fit, steps collapse into a "…" menu. The current step carries the highest
+ * overflow priority, so it is the last item overflow ever removes — it never hides.
+ *
+ * ```tsx
+ * <StepList selectedValue={step} onStepSelect={(_e, d) => goTo(d.value)} ariaLabel="Setup steps">
+ *     <StepListItem value="introduction" completed>Introduction</StepListItem>
+ *     <StepListItem value="configure" completed navigable>Configure</StepListItem>
+ *     <StepListItem value="setup">Set up</StepListItem>
+ * </StepList>
+ * ```
  */
-export const WizardBreadcrumb = ({
-    steps,
+export const StepList = ({
+    selectedValue,
+    onStepSelect,
     ariaLabel,
-    onNavigate,
     overflowAriaLabel = defaultOverflowAriaLabel,
-}: WizardBreadcrumbProps): JSX.Element => {
+    children,
+}: StepListProps): JSX.Element => {
     const styles = useStyles();
+
+    const steps: readonly ResolvedStep[] = collectMarkerChildren<StepListItemProps>(children, stepListItemBrand).map(
+        (child) => ({
+            value: child.props.value,
+            label: child.props.children,
+            isCurrent: child.props.value === selectedValue,
+            isCompleted: child.props.completed === true,
+            canNavigate: child.props.navigable === true,
+        }),
+    );
+
     return (
         <Overflow minimumVisible={1}>
             <Breadcrumb aria-label={ariaLabel} className={styles.breadcrumb}>
                 {steps.map((step, index) => (
-                    <Fragment key={step.id}>
-                        <OverflowItem id={step.id} groupId={step.id} priority={step.isCurrent ? steps.length + 1 : 0}>
+                    <Fragment key={step.value}>
+                        <OverflowItem
+                            id={step.value}
+                            groupId={step.value}
+                            priority={step.isCurrent ? steps.length + 1 : 0}
+                        >
                             <BreadcrumbItem>
                                 <BreadcrumbButton
                                     current={step.isCurrent}
@@ -160,20 +178,24 @@ export const WizardBreadcrumb = ({
                                             <CircleHintFilled aria-hidden className={styles.pending} />
                                         )
                                     }
-                                    onClick={step.canNavigate ? () => onNavigate(step.id) : undefined}
+                                    onClick={
+                                        step.canNavigate
+                                            ? (event) => onStepSelect(event, { value: step.value })
+                                            : undefined
+                                    }
                                 >
                                     {step.label}
                                 </BreadcrumbButton>
                             </BreadcrumbItem>
                         </OverflowItem>
                         {index < steps.length - 1 && (
-                            <OverflowDivider groupId={step.id}>
+                            <OverflowDivider groupId={step.value}>
                                 <BreadcrumbDivider />
                             </OverflowDivider>
                         )}
                     </Fragment>
                 ))}
-                <StepOverflowMenu steps={steps} onNavigate={onNavigate} overflowAriaLabel={overflowAriaLabel} />
+                <StepOverflowMenu steps={steps} onStepSelect={onStepSelect} overflowAriaLabel={overflowAriaLabel} />
             </Breadcrumb>
         </Overflow>
     );

@@ -37,7 +37,7 @@ import {
     PersonAccountsRegular,
     WarningRegular,
 } from '@fluentui/react-icons';
-import { WizardBreadcrumb, type WizardStepMeta } from '@microsoft/vscode-ext-webview-fluentui/components';
+import { StepList, StepListItem } from '@microsoft/vscode-ext-webview-fluentui/components';
 import { useConfiguration } from '@microsoft/vscode-ext-webview/react';
 import * as l10n from '@vscode/l10n';
 import { Fragment, type JSX, useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -206,9 +206,6 @@ const StageRow = ({ label, status }: StageRowProps): JSX.Element => {
         </div>
     );
 };
-
-// A step's derived breadcrumb state, shared by the inline items and the overflow menu.
-type StepMeta = WizardStepMeta & { readonly id: Phase };
 
 export const AtlasCredentialsView = (): JSX.Element => {
     const configuration = useConfiguration<AtlasCredentialsWebviewConfig>();
@@ -453,25 +450,34 @@ export const AtlasCredentialsView = (): JSX.Element => {
     );
 
     // Keep earlier steps locked while verification is active or after the credential is saved.
-    // A failed check unlocks them so the user can return through either breadcrumb.
+    // A failed check unlocks them so the user can return through either step.
     const stepsLocked = phase === 'success' || (phase === 'checking' && submitError === undefined);
-    const stepItems: StepMeta[] = steps.map((step, index) => {
-        const isCurrent = index === currentStepIndex;
-        // "Choose method" opens pre-satisfied (a default method is always selected), so it carries a
-        // check from the start - an exception unique to the first step.
-        const isCompleted = step.id === 'choose' || index < currentStepIndex || (step.id === 'success' && isCurrent);
-        const canNavigate = index < currentStepIndex && !stepsLocked && (step.id === 'choose' || step.id === 'form');
-        return { id: step.id, label: step.label, isCurrent, isCompleted, canNavigate };
-    });
-    // Responsive breadcrumb: when it doesn't fit, steps collapse into a "…" menu. The current step is
-    // given the highest priority so it is the last item overflow ever removes - it never hides.
+    // Responsive step indicator: when it doesn't fit, steps collapse into a "…" menu. The current
+    // step is given the highest priority so it is the last item overflow ever removes.
     const progress = (
-        <WizardBreadcrumb
-            steps={stepItems}
+        <StepList
+            selectedValue={phase}
+            onStepSelect={(_event, data) => goToStep(data.value)}
             ariaLabel={l10n.t('Credential setup progress')}
-            onNavigate={goToStep}
             overflowAriaLabel={(count) => l10n.t('{0} more steps', String(count))}
-        />
+        >
+            {steps.map((step, index) => (
+                <StepListItem
+                    key={step.id}
+                    value={step.id}
+                    // "Choose method" opens pre-satisfied (a default method is always selected), so
+                    // it carries a check from the start - an exception unique to the first step.
+                    completed={
+                        step.id === 'choose' ||
+                        index < currentStepIndex ||
+                        (step.id === 'success' && index === currentStepIndex)
+                    }
+                    navigable={index < currentStepIndex && !stepsLocked && (step.id === 'choose' || step.id === 'form')}
+                >
+                    {step.label}
+                </StepListItem>
+            ))}
+        </StepList>
     );
 
     const methodCard = (

@@ -32,6 +32,7 @@ exist?" is answerable.
 
 ## Contents
 
-| Component          | Problem it solves                                                                             |
-| ------------------ | --------------------------------------------------------------------------------------------- |
-| `WizardBreadcrumb` | a wizard step indicator that collapses into an overflow menu and never hides the current step |
+| Component            | Problem it solves                                                                             |
+| -------------------- | --------------------------------------------------------------------------------------------- |
+| `Container` family   | the header / scroll / pinned-footer shell of a surface that *is* the window                   |
+| `StepList`           | a wizard step indicator that collapses into an overflow menu and never hides the current step |

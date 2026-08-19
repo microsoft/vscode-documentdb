@@ -45,7 +45,7 @@ import {
     WarningRegular,
 } from '@fluentui/react-icons';
 import { Collapse } from '@fluentui/react-motion-components-preview';
-import { WizardBreadcrumb, type WizardStepMeta } from '@microsoft/vscode-ext-webview-fluentui/components';
+import { StepList, StepListItem } from '@microsoft/vscode-ext-webview-fluentui/components';
 import * as l10n from '@vscode/l10n';
 import { Fragment, type JSX, type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { formatQuickStartMessage } from '../../../services/localQuickStart/quickStartMessages';
@@ -1761,18 +1761,31 @@ export const LocalQuickStart = (): JSX.Element => {
     // Locked while work is in flight and once the connection is saved; a failure unlocks the
     // earlier steps so the user can change a setting and try again.
     const stepsLocked = isProvisioning || phase === 'success';
-    const stepItems: readonly WizardStepMeta[] = steps.map((entry, index) => ({
-        id: entry.id,
-        label: entry.label,
-        isCurrent: index === currentStepIndex,
-        // "Introduction" opens pre-satisfied — there is nothing on it to complete — so it carries a
-        // check from the start, mirroring the Atlas view's first step.
-        isCompleted:
-            entry.id === 'introduction' ||
-            index < currentStepIndex ||
-            (entry.id === 'done' && index === currentStepIndex),
-        canNavigate: index < currentStepIndex && !stepsLocked,
-    }));
+    const progress = (
+        <StepList
+            selectedValue={step}
+            onStepSelect={(_event, data) => goToStep(data.value)}
+            ariaLabel={l10n.t('Setup steps')}
+            overflowAriaLabel={(count) => l10n.t('{0} more steps', String(count))}
+        >
+            {steps.map((entry, index) => (
+                <StepListItem
+                    key={entry.id}
+                    value={entry.id}
+                    // "Introduction" opens pre-satisfied — there is nothing on it to complete — so it
+                    // carries a check from the start, mirroring the Atlas view's first step.
+                    completed={
+                        entry.id === 'introduction' ||
+                        index < currentStepIndex ||
+                        (entry.id === 'done' && index === currentStepIndex)
+                    }
+                    navigable={index < currentStepIndex && !stepsLocked}
+                >
+                    {entry.label}
+                </StepListItem>
+            ))}
+        </StepList>
+    );
 
     // ---- pages ----------------------------------------------------------------------------
 
@@ -2575,12 +2588,7 @@ export const LocalQuickStart = (): JSX.Element => {
                         {isProvisioning ? provisioningStatusMessage : ''}
                     </div>
                     {hero}
-                    <WizardBreadcrumb
-                        steps={stepItems}
-                        ariaLabel={l10n.t('Setup steps')}
-                        onNavigate={goToStep}
-                        overflowAriaLabel={(count) => l10n.t('{0} more steps', String(count))}
-                    />
+                    {progress}
                     {phase === 'introduction' && introduction}
                     {phase === 'configure' && configure}
                     {(isProvisioning || phase === 'failed') && setup}
