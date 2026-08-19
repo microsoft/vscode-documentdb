@@ -4,19 +4,32 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { act, type ReactNode } from 'react';
-import { createRoot } from 'react-dom/client'; // eslint-disable-line import/no-internal-modules
+import { createRoot, type Root } from 'react-dom/client'; // eslint-disable-line import/no-internal-modules
 import { MessageBlock } from './MessageBlock';
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
+const mounted: { host: HTMLElement; root: Root }[] = [];
+
 const render = async (node: ReactNode): Promise<HTMLElement> => {
     const host = document.createElement('div');
     document.body.appendChild(host);
+    const root = createRoot(host);
+    mounted.push({ host, root });
     await act(async () => {
-        createRoot(host).render(node);
+        root.render(node);
     });
     return host;
 };
+
+afterEach(async () => {
+    for (const { host, root } of mounted.splice(0)) {
+        await act(async () => {
+            root.unmount();
+        });
+        host.remove();
+    }
+});
 
 /**
  * Found by content rather than by a `fui-*` class name: Fluent's class names are implementation
