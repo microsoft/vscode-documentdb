@@ -11,7 +11,7 @@ created: 2026-08-18
 
 | #    | Decision                                                       | Status              | Changed from the proposal?                                      | Date       | PR   |
 | ---- | -------------------------------------------------------------- | ------------------- | --------------------------------------------------------------- | ---------- | ---- | --- | ---- | ------------------------------------------------------- | -------- | --------------------------------------------- | ---------- | ---- |
-| 0001 | Extract the UX layer as a second package, behind a scope gate  | Accepted            | Accepted as proposed                                            | 2026-08-18 | —    |
+| 0001 | Extract the UX layer as a second package, behind a scope gate  | Accepted (amended)  | Accepted as proposed; condition 1 relaxed by 0021               | 2026-08-18 | —    |
 | 0002 | Name: `@microsoft/vscode-ext-webview-fluentui`                 | Accepted (modified) | `-ui` rejected as too general once the scope proved Fluent-only | 2026-08-18 | —    |
 | 0003 | No dependency between the two packages, in either direction    | Accepted            | Accepted as proposed                                            | 2026-08-18 | —    |
 | 0004 | Three invariants: provider independence, layering, facade      | Accepted            | Accepted as proposed                                            | 2026-08-18 | —    |
@@ -30,6 +30,8 @@ created: 2026-08-18
 | 0018 | The theme hooks are standalone, not context-backed             | Accepted (modified) | The extracted code was context-backed; I3 required otherwise    | 2026-08-18 | #895 |
 | 0019 | Adapt Fluent by re-pointing tokens, never by out-specifying    | Accepted            | Forced by the zero-specificity rule in 0010                     | 2026-08-18 | #895 |
 | 0020 | Opaque stencils stay opaque; `translucent` is what we document | Accepted            | Reverses the alpha-overlay approach the code arrived with       | 2026-08-18 | #895 |
+| 0021 | The scope gate widens to reusable components                   | Accepted            | Relaxes condition 1 of 0001; operator-originated                | 2026-08-19 | —    |
+| 0022 | `MessageBlock` stays in the extension                          | Accepted            | Proposal was to ship it from the package                        | 2026-08-19 | —    |
 
 > Entries below are **semantically** immutable: append new entries rather than
 > rewriting old ones, and record reversals as a new entry plus a status change
@@ -45,7 +47,7 @@ created: 2026-08-18
 
 ## 0001 — Extract the UX layer as a second package, behind a scope gate
 
-**Status:** Accepted · **Date:** 2026-08-18
+**Status:** Accepted (amended by [0021](#0021--the-scope-gate-widens-to-reusable-components-not-only-vs-code-adapters)) · **Date:** 2026-08-18
 
 ### Question
 
@@ -818,3 +820,114 @@ The extension reached the same conclusion independently a year earlier: issue #8
 collection-view toolbar design record five call sites being moved to `translucent` "to unify the
 look". No skeleton in this product renders `opaque` today, which is precisely why the defect
 survived unseen until a probe rendered one.
+
+---
+
+## 0021 — The scope gate widens to reusable components, not only VS Code adapters
+
+**Status:** Accepted · **Date:** 2026-08-19 · **PR:** —
+
+### Question
+
+Increment 2 proposes a wizard surface: a header / scroll / pinned-footer shell plus a step
+indicator, extracted from two webviews that carry it as a code copy. Condition 1 of the gate in 0001
+admits a thing only if it "solves a VS Code **integration** problem, not a product problem", and
+0002 sharpens that into the question people actually ask at the moment of adding something: _does
+this exist because Fluent does not behave correctly inside a VS Code webview?_
+
+A wizard surface fails that as literally worded. Fluent behaves fine. It simply ships no such
+component. Does the gate hold, or is it too narrow?
+
+### Decision
+
+Too narrow. Condition 1 is relaxed.
+
+> The package ships **reusable components useful to other Fluent UI consumers** — other products and
+> other extensions — not only adapters that patch Fluent's behaviour inside a webview.
+
+A wizard surface belongs on exactly that basis. Fluent's own surface components, `Dialog` and
+`Drawer`, all assume an overlay above existing application chrome; Fluent ships no surface for a
+wizard that **is** the window — its Dialog guidance points at building "a multi-step wizard within a
+single dialog" instead. Every consumer needing one otherwise rebuilds the same shell.
+
+Conditions 2, 3 and 4 are unchanged:
+
+2. it takes no product strings and emits no product-prefixed tokens;
+3. it plausibly has two consumers;
+4. it imports no transport, no telemetry, and no `vscode` module.
+
+### What this costs
+
+Condition 1 was the strictest of the four and did most of the visible filtering. With it widened,
+**conditions 2, 3 and 4 now carry the whole gate**, and condition 3 becomes the load-bearing one.
+That was already true in practice — 0001 said so, and 0008 and 0012 were both settled by it — but it
+was previously the second line of defence. It is now the first.
+
+The test to ask is therefore no longer "is this a VS Code integration problem?" but **"who is the
+second consumer?"** The first question is always answerable by argument; the second is answerable by
+name or not at all.
+
+Two things still hold the line. The name chosen in 0002 keeps naming the boundary rather than the
+contents, so a Monaco wrapper is still rejected on sight (0013). And 0022, decided the same day, is
+the first application of the narrowed gate: it keeps something out that the widened condition 1
+would have let through.
+
+### Rejected alternative
+
+Leaving the gate as written and deduplicating the wizard chrome locally in
+`src/webviews/components/`. That is a real option — it costs nothing and breaks nothing — and it was
+named explicitly so the widening could not happen by drift. It was rejected because the duplication
+is not local: `microsoft/vscode-cosmosdb` is a known second consumer of this package, and the
+webview stack it forked from this one has the same shell problem.
+
+---
+
+## 0022 — `MessageBlock` stays in the extension
+
+**Status:** Accepted · **Date:** 2026-08-19 · **PR:** —
+
+### Question
+
+Both wizard webviews stack a `MessageBar`'s title onto its own line, using the same three-declaration
+Griffel workaround under two different names across eight call sites. Fluent's `layout` prop
+(`auto` / `singleline` / `multiline`) controls whether the **actions** wrap; it offers no way to give
+the **title** its own line. Where should the component that fixes this live?
+
+### Decision
+
+Make it a component — `MessageBlock` — but keep it in the **extension**, at
+`src/webviews/components/MessageBlock.tsx`. It does not enter the package.
+
+### Why not the package
+
+The framing that would have carried it into the package is that Fluent has no block-level message
+component and a webview needs one. The honest framing is narrower: its shape follows from how _this
+product_ uses `MessageBar` — as a full-fledged block element inside the content flow rather than a
+slim strip above it, so it is not competing for vertical space and a stacked title costs nothing.
+That is house style.
+
+0021 widened the gate to admit reusable components. It did not widen it to admit house style, and
+condition 3 has no answer here: there is no second consumer for this.
+
+This is the first thing tested against the gate after 0021 relaxed it, and it is excluded by the
+conditions that remain rather than by the one that was removed. That is the intended shape of the
+gate working.
+
+### What staying local buys
+
+It can use `vscode.l10n.t()` freely, which nothing in the package may do — the repo's extractor does
+not scan `node_modules`, so a package-owned string would silently never be translated in any
+consumer. Its name is also cheap to revisit: `Notice` remains an alternative, and `MessageBox` was
+rejected for carrying the Win32 modal-dialog association.
+
+### Not a stylesheet override
+
+Worth recording since it is the obvious shortcut: this could not have been an entry in
+`fluentOverrides.scss`. 0019 permits adapting Fluent by re-pointing tokens and forbids
+out-specifying its classes, and stacking the title is a layout change, not a token. It had to be a
+component wherever it lived.
+
+### If a second consumer appears
+
+Promoting it later is a smaller decision than demoting it would have been, and the JSDoc and tests
+written now carry over unchanged.
