@@ -54,6 +54,7 @@ parameters:
       default: vscode-ext-webview
       values:
           - vscode-ext-webview
+            - vscode-ext-webview-fluentui
 
     # The expected version - must match the version in the package's package.json
     - name: publishVersion

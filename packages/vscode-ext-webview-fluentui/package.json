@@ -1,7 +1,6 @@
 {
   "name": "@microsoft/vscode-ext-webview-fluentui",
   "version": "0.1.0-preview",
-  "private": true,
   "description": "Makes Fluent UI look native inside a VS Code webview: a React theming layer that tracks the user's active workbench theme, plus a small set of provider-agnostic components.",
   "type": "module",
   "main": "dist/index.js",

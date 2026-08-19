@@ -2,8 +2,8 @@
 # Produces .tgz archives that can be published via the npm release pipeline.
 #
 # Scope: only packages in $publishablePackages (below) are packed and shipped
-# as release artifacts. Today this is just packages/vscode-ext-webview
-# (which publishes to the @microsoft scope on npm). The other workspace
+# as release artifacts. Today this includes the @microsoft-scoped webview
+# packages. The other workspace
 # packages are still built and tested by 'npm run build/test --workspaces'
 # so the monorepo stays healthy, but they are NOT packed - they are local-
 # only deps and not released through this pipeline.
@@ -145,5 +145,6 @@ extends:
                           inputs:
                               Contents: |
                                   packages/vscode-ext-webview/package.json
+                                    packages/vscode-ext-webview-fluentui/package.json
                                   !**/node_modules/**
                               TargetFolder: $(ob_outputDirectory)
