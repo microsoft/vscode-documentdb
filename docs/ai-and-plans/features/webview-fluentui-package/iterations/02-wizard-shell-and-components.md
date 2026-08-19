@@ -1110,3 +1110,83 @@ Tests this increment must add:
 Green commands prove very little here. A chrome regression compiles cleanly, passes every test, and
 looks wrong. **The operator performs the visual check**, on both webviews, at a narrow panel width
 and a wide editor width. When the commands pass, stop, report what changed, and hand over.
+
+---
+
+# Outcome
+
+> Written after the plan was executed. The plan above is left as written; this section records what
+> actually happened. **The operator's visual check is still outstanding** — see the last subsection.
+
+**Implemented in nine commits** — one for each of work items 1–5 and 7–9, plus item 11's l10n
+regeneration. Item 6 produced none by design, and item 10 was not taken. The §11 ladder ran in
+order and passed: `l10n` (one key lost, exactly as expected), `prettier-fix`, `lint`, 3559 tests
+across 7 jest projects, `build`, `package`. The mock was removed and the tree is clean.
+
+## The pre/post-migration comparison was performed
+
+The acceptance criterion says a chrome regression compiles cleanly and looks wrong. That is true of
+a screenshot too, so the comparison was done by **measurement**, through the live preview harness
+([live-preview-playwright.md](../../../live-preview-playwright.md)) rather than the mock-plus-command
+route in §10.2. Screenshots answered only colour and weight.
+
+Three passes:
+
+1. **Mock vs. the un-migrated view** (work item 6). A mock DocumentDB Local surface built purely
+   from the new components, measured against the real view before it was touched.
+2. **Migrated Local vs. its own recorded baseline** (after work item 8).
+3. **Migrated Atlas** (after work item 9).
+
+Every chrome element was compared by `getBoundingClientRect()` and `getComputedStyle()`, element by
+element. At an effective width of 880 px the migrated Local view lands on the **same rectangles to
+the pixel** as the baseline taken before migration:
+
+| Element           | Rect (x, y, w × h) |
+| ----------------- | ------------------ |
+| `Container` root  | 0, 0, 880 × 720    |
+| scroll region     | 0, 0, 880 × 628    |
+| content column    | 0, 0, 808 × 573    |
+| `ContainerHeader` | 24, 24, 760 × 56   |
+| `ContainerNav`    | 24, 100, 760 × 32  |
+| `ContainerMain`   | 24, 152, 760 × 397 |
+| `ContainerFooter` | 0, 628, 880 × 92   |
+
+Computed values matched the §1.2 baseline too — content `gap 20` / `padding 24` / `maxWidth 760`
+(measuring 808 because `box-sizing` is `content-box`), footer column `gap 12` / `padding 16px 24px`,
+elevation absent while `scrollHeight === clientHeight`. `StatusList` was checked against the §4.5
+table: `gap 12` / `padding 16` / `borderRadius 4px`, rows `flex-start` / `gap 10` / `minHeight 20`,
+icon box `18 × 20`, copy column `gap 1`.
+
+Behaviour verified alongside the geometry: focus lands on the new step's `h2` after every step
+change in both views (`document.activeElement` asserted, not inferred); no horizontal overflow at
+336 px; the step list collapses into its overflow menu at that width while keeping the current step
+visible; and the Atlas form step's header gap is now 4, closing the §7.3 drift.
+
+**What this does not cover**, and why the operator's check still stands: light theme only, in a
+browser, with a faked host. Dark and high-contrast are untested, as are the real webview host, the
+Configure step's editors, and the live provisioning and failure states. Two differences are
+deliberate and will be visible — the Docker failure title now takes its own line, and Atlas's form
+header gap drops from 8 to 4.
+
+## Where the plan needed changing
+
+| Change                                                                          | Why                                                                                                |
+| ------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------- |
+| `Container` uses `height: 100vh`, not §4.1's `height: 100%`                     | §8 Q3 is open and nothing gives `html`/`body` a height, so `100%` collapses the surface            |
+| `ContainerBody` renders two elements (scroll region › content grid), not one    | one element that is both scroll container and 760 px column puts the scrollbar at 760 px           |
+| `MessageBlockProps.icon` is Fluent's `MessageBarProps['icon']`, not `ReactNode` | `Slot<'div'>` does not accept arbitrary `ReactNode`; §4.6's signature does not compile             |
+| Work item 4 added an `extension-webview` jest project                           | `src/**/*.test.ts` never matched a `.tsx` file, so §5.8's test would silently never run            |
+| `failedStage` treats an in-flight Docker re-check as still failed               | §7.2 as written collapses the remediation block mid-re-check, because `checking` leaves `'error'`  |
+| Work item 10 (API Extractor) not taken                                          | conditional in the plan; `api/` is outside the workspaces so it needs a real lockfile regeneration |
+
+## What §8 looks like now
+
+- **Q3 (root height) became the urgent one.** A choice was made to keep the baseline; it wants
+  ratifying or reversing.
+- **Q4 (body metrics as API)** resolved by omission: nothing is exposed, `className` only.
+- **Q5 (`Announcer`)** deferred, and the implementation made its position awkward — §4.4 leaves no
+  slot between header and step list, so both views now render announcers as siblings of `Wizard`,
+  outside the surface entirely.
+- **Q2 (`body { padding: 0 }`)** untouched, so both SCSS files stay.
+- **New:** each declared grid region reserves its row, so a surface omitting one leaves that row's
+  gap behind. Documented in `Container/README.md`.
