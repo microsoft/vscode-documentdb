@@ -34,3 +34,4 @@ export {
     type StepListItemSelectData,
     type StepListProps,
 } from './StepList/index.js';
+export { Wizard, WizardStep, type WizardProps, type WizardStepProps } from './Wizard/index.js';
