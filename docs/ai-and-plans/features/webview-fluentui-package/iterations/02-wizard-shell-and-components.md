@@ -1113,12 +1113,224 @@ and a wide editor width. When the commands pass, stop, report what changed, and 
 
 ---
 
+# Work log
+
+> One entry per work item in §10.1, recorded as the work was done: what landed, why, the commit
+> that carries it, and any deviation from the plan with the alternatives that were weighed against
+> it. The summary table under "Where the plan needed changing" indexes the deviations; the
+> reasoning for each is here.
+
+## Item 1: the `Container` family
+
+**Commit:** `3717a4f6` feat(webview-fluentui): add the Container family, the wizard surface shell
+
+All seven components, `contexts/container.ts`, `useOverflowState`, `utils/srOnly.ts`,
+`utils/useIsFirstRender.ts` and the family's tests. Package only; nothing consumed it yet.
+
+The shared context is what earns the family: `ContainerBody` measures its own overflow and
+publishes it, `ContainerFooter` reads it and elevates itself, and `Container` records its own first
+paint so `ContainerSection focusOnMount` can skip it. That removes two refs, a `ResizeObserver`, a
+scroll handler and a WCAG rule from every consumer.
+
+**Deviation: `height: 100vh`, not §4.1's `height: 100%`.** Nothing in the webview host gives
+`html`/`body` a height, so `100%` collapses the surface to nothing.
+
+| Option                                    | Verdict                                                                                                                                     |
+| ----------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
+| `height: 100%` as §4.1 specifies          | Rejected. Renders an empty window in the one host that exists today.                                                                        |
+| `100%` plus a documented host requirement | Rejected for now. It is the more honest contract for a hosted component, but it changes setup for both consumers while §8 Q3 is still open. |
+| `height: 100vh`, the §1.2 baseline        | **Chosen.** Preserves rendering exactly, and leaves Q3 reversible in either direction.                                                      |
+
+**Deviation: `ContainerBody` renders two elements**, a scroll region wrapping a content grid,
+rather than one element that is both.
+
+| Option                                               | Verdict                                                                                                                     |
+| ---------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------- |
+| One element, both scroll container and 760 px column | Rejected. `max-width` on the scroll container moves the scrollbar from the panel edge to 760 px, which is a visible change. |
+| Two elements, matching §1.1's skeleton               | **Chosen.** Also what the `ResizeObserver` needs: it observes both, as the original code did.                               |
+
+**Deviation considered and declined: flex for `navPosition="top"`, grid only for `start`.** Grid
+declares all three rows whether or not a region is rendered, so a surface omitting one keeps that
+row's gap. Flex for the default orientation would avoid it. Rejected to keep one code path and
+§4.2's promise that the markup does not change between orientations; both consumers always render
+all three regions. The cost is documented in `Container/README.md`.
+
+**Small addition not in §5.2:** `components/testing/renderSurface.tsx`, excluded from the build in
+`tsconfig.json`. The alternative was duplicating a thirty-line React harness into each of four test
+files. Decision 0007 already records the precedent for a `testing/` folder that ships no runtime
+code.
+
+## Item 2: `StepList` / `StepListItem`, and deleting `WizardBreadcrumb`
+
+**Commit:** `3cb26f9e` feat(webview-fluentui): replace WizardBreadcrumb with StepList / StepListItem
+
+The same `Overflow` + `Breadcrumb` implementation, reshaped after `TabList`, plus
+`utils/markerChildren.ts`. Both call sites, `components.test.ts` and the contents table moved in
+the **same commit**, because the deletion breaks them otherwise.
+
+**Design choice worth recording: `StepListItem` is a marker, not a self-rendering component.**
+
+| Option                                          | Verdict                                                                                                                  |
+| ----------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------ |
+| `StepListItem` renders its own `BreadcrumbItem` | Rejected. Dividers depend on the item's index and on which item is last, and the overflow menu needs the whole sequence. |
+| Marker that renders `null`, parent reads props  | **Chosen.** Identified by a `Symbol.for` brand, per §5.4.                                                                |
+
+§5.4 specified the brand for `WizardStep` only. It applies here for the same reason, so the helper
+was written once and shared rather than duplicated in item 5.
+
+## Item 3: `StatusList` / `StatusListItem`
+
+**Commit:** `b66033ac` feat(webview-fluentui): add StatusList / StatusListItem
+
+No deviations. Built to §4.5 and the §6 reconciliation, including Atlas's `warning` status in the
+shared vocabulary. `meta` and `action` folded into `detail` as specified, which is what keeps the
+`·` joiner and its localization in the consumer.
+
+## Item 4: `MessageBlock`, extension-local
+
+**Commit:** `e149a890` feat(webviews): add MessageBlock, a block-level message bar
+
+Built at `src/webviews/components/MessageBlock.tsx` per decision 0022, with tests. Extension only.
+
+**Deviation: `icon` is typed `MessageBarProps['icon']`, not §4.6's `ReactNode`.** Fluent's slot type
+is `Slot<'div'>`, which does not accept arbitrary `ReactNode`; the specified signature does not
+compile. Casting was the alternative and was rejected as hiding the real contract from callers.
+
+**Deviation: an `extension-webview` jest project was added.**
+
+| Option                                        | Verdict                                                                                                      |
+| --------------------------------------------- | ------------------------------------------------------------------------------------------------------------ |
+| Skip the test file (§5.8's parenthetical)     | Rejected. A component with no test is weak, and the plan does ask for one.                                   |
+| Write `MessageBlock.test.tsx` as-is           | Rejected, and this is the trap: `src/**/*.test.ts` does not match a `.tsx` file, so it would never have run. |
+| Switch the extension project to jsdom         | Rejected. Changes the environment under every existing host-side test.                                       |
+| A second project, jsdom, matching `.test.tsx` | **Chosen.** Twelve lines, additive, existing projects untouched.                                             |
+
+## Item 5: the `Wizard` / `WizardStep` facade
+
+**Commit:** `402a57d5` feat(webview-fluentui): add the Wizard / WizardStep facade
+
+Built to §3.3 and §4.4 on public `Container` and `StepList` API only, with `wizardStepState.ts`
+holding the two derivation rules as pure, tested functions. No deviations.
+
+The `wizardStepState` tests replay each consumer's own pre-extraction expression and assert the
+extracted default agrees, which is what turns "both consumers arrived at these independently" from
+a claim into a check.
+
+## Item 6: the mock, for visual comparison
+
+**Commit:** none, by design. Built, used, and removed in item 11.
+
+**Deviation: the live preview harness was used instead of §10.2's registry key plus command.**
+§10.2 explicitly prefers this if it works, and it did.
+
+| Option                                                    | Verdict                                                                                      |
+| --------------------------------------------------------- | -------------------------------------------------------------------------------------------- |
+| Registry key + `contributes.commands` + command + factory | Rejected. Four tracked-file edits to make and then revert, for a throwaway.                  |
+| Registry key + a static page under `src/webviews/static/` | **Chosen.** One tracked-file edit, and a browser window at any width with no extension host. |
+
+What the comparison found is in the Outcome chapter. What it cost is in the Lessons chapter: a
+second worktree at the pre-migration commit would have been a truer control and needed no wiring at
+all.
+
+## Item 7: documentation
+
+**Commit:** `34fe880c` docs(webview-fluentui): document the component families, JSDoc-first
+
+The §5.6 markdown set, one README per family, plus the rewritten `components/README.md` carrying
+the scope gate as decision 0021 left it. Option **a** from §5.7: JSDoc-first, no props tables.
+
+**Revised after hand-over.** The structure written here followed §5.6 item 1 literally, with
+explicit "What it is" and "Why it exists" headings. The operator rejected that format, and it was
+rewritten in `e7057c1a` to follow how Fluent introduces its own components. See the Lessons chapter;
+this is the single largest thing the plan got wrong about documentation.
+
+## Item 8: migrating `LocalQuickStart.tsx`
+
+**Commit:** `a1195fa2` refactor(localQuickStart): build the view on the shared wizard surface
+
+Chrome, hero, footer, elevation effect, focus effect, step derivation, local `StageRow` and roughly
+120 lines of style declarations all removed in favour of the package components, plus the §7.2 and
+§7.3 changes.
+
+**Deviation: `failedStage` treats an in-flight Docker re-check as still failed.** §7.2 as written
+sets the check stage to `'active'`, which makes `failedStage` undefined, which collapses the whole
+remediation block mid-re-check and reopens it if the re-check fails again.
+
+| Option                                    | Verdict                                                                                        |
+| ----------------------------------------- | ---------------------------------------------------------------------------------------------- |
+| §7.2 literally                            | Rejected. The remediation block animates closed and open again on every attempt.               |
+| A separate `wasCheckFailure` flag         | Rejected. A second piece of state that has to be kept in step with the first.                  |
+| Fold it into the `failedStage` derivation | **Chosen.** One expression: an in-flight re-check counts as the failed stage it is re-testing. |
+
+**Small judgement call:** `stageMetaFor` now suppresses "Last checked N minutes ago" while the
+stage is `active`, because it contradicts "Checking…" on the same line. The alternative was leaving
+it, which reads as stale by definition.
+
+**Announcers moved outside `Wizard`.** §4.4 accepts that nothing can be injected between header and
+step list, so the announcers and the `role="status"` region became siblings of `<Wizard>` inside a
+fragment. They are absolutely positioned, so this is invisible; the alternative, putting them inside
+a step's children, would remount them on every step change and lose the `false` to `true` transition
+they listen for.
+
+## Item 9: migrating `AtlasCredentialsView.tsx`
+
+**Commit:** `c6b07fd4` refactor(atlasCredentials): build the view on the shared wizard surface
+
+The same migration on the older copy, resolving every §6 tie in favour of DocumentDB Local, plus the
+§7.3 `formHeader` fix.
+
+**Not a deviation, but the item that justified the API:** Atlas's edit mode drops its first step, so
+"index 0 opens pre-satisfied" is false there. Both rules are therefore passed explicitly per step
+rather than taken from the defaults. This is exactly what §4.4's per-step `completed` and
+`navigable` overrides exist for, and it is the first evidence that they had to exist.
+
+## Item 10: the API Extractor report
+
+**Commit:** none. **Not taken.**
+
+§10.1 makes it conditional ("if §5.7 option b is taken") and §5.7 marks it recommended rather than
+decided.
+
+| Option                                      | Verdict                                                                                                                                                    |
+| ------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Add `@microsoft/api-extractor` and a script | Deferred. It is not installed anywhere in this tree: `api/` is outside the `packages/*` workspaces, so this needs a real `package-lock.json` regeneration. |
+| Defer to a separate, deliberate change      | **Chosen.** Repo memory records that regenerating the lockfile under the wrong npm version breaks CI, which is not a risk worth taking as a side effect.   |
+
+Worth taking soon regardless: it would have caught the stale `WizardBreadcrumb` entries in the
+package README mechanically. See the Lessons chapter.
+
+## Item 11: verification and mock removal
+
+**Commit:** `1259eec8` chore: regenerate the l10n bundle and unmount roots in the MessageBlock test
+
+The §11 ladder ran in order and passed. The l10n bundle lost exactly one key, `", {0}"`, the status
+joiner the local `StageRow` owned. The mock component, both harness pages and the `WebviewRegistry`
+edit were removed, and `git status` and `git diff` confirmed clean.
+
+One extra fix in the same commit: the `MessageBlock` test left three React roots mounted, which an
+intermittent "worker process failed to exit gracefully" was pointing at.
+
+## After hand-over
+
+Work done at the operator's request once the increment itself was complete.
+
+| Commit     | What                                                                                                          |
+| ---------- | ------------------------------------------------------------------------------------------------------------- |
+| `f24002a6` | Three live preview harness traps recorded in `live-preview-playwright.md`, and its future-work item corrected |
+| `143b92fb` | The Outcome chapter below, including the pre/post-migration comparison                                        |
+| `c9cdc93f` | Component READMEs reintroduced without the "tier" vocabulary; stale `WizardBreadcrumb` entries fixed          |
+| `1fea2ca6` | Em and en dashes removed from the rest of the package's docs, JSDoc and comments                              |
+| `e7057c1a` | READMEs rewritten in Fluent's component-page voice; the consumer's word "phase" removed                       |
+| `4959451e` | The Lessons chapter at the end of this file                                                                   |
+
+---
+
 # Outcome
 
 > Written after the plan was executed. The plan above is left as written; this section records what
-> actually happened. **The operator's visual check is still outstanding** — see the last subsection.
+> actually happened. **The operator's visual check is still outstanding**, see the last subsection.
 
-**Implemented in nine commits** — one for each of work items 1–5 and 7–9, plus item 11's l10n
+**Implemented in nine commits**, one for each of work items 1 to 5 and 7 to 9, plus item 11's l10n
 regeneration. Item 6 produced none by design, and item 10 was not taken. The §11 ladder ran in
 order and passed: `l10n` (one key lost, exactly as expected), `prettier-fix`, `lint`, 3559 tests
 across 7 jest projects, `build`, `package`. The mock was removed and the tree is clean.
@@ -1151,7 +1363,7 @@ the pixel** as the baseline taken before migration:
 | `ContainerMain`   | 24, 152, 760 × 397 |
 | `ContainerFooter` | 0, 628, 880 × 92   |
 
-Computed values matched the §1.2 baseline too — content `gap 20` / `padding 24` / `maxWidth 760`
+Computed values matched the §1.2 baseline too: content `gap 20` / `padding 24` / `maxWidth 760`
 (measuring 808 because `box-sizing` is `content-box`), footer column `gap 12` / `padding 16px 24px`,
 elevation absent while `scrollHeight === clientHeight`. `StatusList` was checked against the §4.5
 table: `gap 12` / `padding 16` / `borderRadius 4px`, rows `flex-start` / `gap 10` / `minHeight 20`,
@@ -1165,26 +1377,30 @@ visible; and the Atlas form step's header gap is now 4, closing the §7.3 drift.
 **What this does not cover**, and why the operator's check still stands: light theme only, in a
 browser, with a faked host. Dark and high-contrast are untested, as are the real webview host, the
 Configure step's editors, and the live provisioning and failure states. Two differences are
-deliberate and will be visible — the Docker failure title now takes its own line, and Atlas's form
+deliberate and will be visible: the Docker failure title now takes its own line, and Atlas's form
 header gap drops from 8 to 4.
 
 ## Where the plan needed changing
 
-| Change                                                                          | Why                                                                                                |
-| ------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------- |
-| `Container` uses `height: 100vh`, not §4.1's `height: 100%`                     | §8 Q3 is open and nothing gives `html`/`body` a height, so `100%` collapses the surface            |
-| `ContainerBody` renders two elements (scroll region › content grid), not one    | one element that is both scroll container and 760 px column puts the scrollbar at 760 px           |
-| `MessageBlockProps.icon` is Fluent's `MessageBarProps['icon']`, not `ReactNode` | `Slot<'div'>` does not accept arbitrary `ReactNode`; §4.6's signature does not compile             |
-| Work item 4 added an `extension-webview` jest project                           | `src/**/*.test.ts` never matched a `.tsx` file, so §5.8's test would silently never run            |
-| `failedStage` treats an in-flight Docker re-check as still failed               | §7.2 as written collapses the remediation block mid-re-check, because `checking` leaves `'error'`  |
-| Work item 10 (API Extractor) not taken                                          | conditional in the plan; `api/` is outside the workspaces so it needs a real lockfile regeneration |
+An index. Each row is expanded in the Work log above, with the options that were weighed against it.
+
+| Change                                                                          | Why                                                                                                    | Item |
+| ------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------ | ---- |
+| `Container` uses `height: 100vh`, not §4.1's `height: 100%`                     | §8 Q3 is open and nothing gives `html`/`body` a height, so `100%` collapses the surface                | 1    |
+| `ContainerBody` renders two elements (scroll region › content grid), not one    | one element that is both scroll container and 760 px column puts the scrollbar at 760 px               | 1    |
+| `MessageBlockProps.icon` is Fluent's `MessageBarProps['icon']`, not `ReactNode` | `Slot<'div'>` does not accept arbitrary `ReactNode`; §4.6's signature does not compile                 | 4    |
+| Work item 4 added an `extension-webview` jest project                           | `src/**/*.test.ts` never matched a `.tsx` file, so §5.8's test would silently never run                | 4    |
+| The mock was wired through the preview harness, not a command                   | §10.2 prefers it; one tracked-file edit to revert instead of four                                      | 6    |
+| README structure rewritten after hand-over                                      | §5.6's "What it is / Why it exists" headings were rejected by the operator in favour of Fluent's voice | 7    |
+| `failedStage` treats an in-flight Docker re-check as still failed               | §7.2 as written collapses the remediation block mid-re-check, because `checking` leaves `'error'`      | 8    |
+| Work item 10 (API Extractor) not taken                                          | conditional in the plan; `api/` is outside the workspaces so it needs a real lockfile regeneration     | 10   |
 
 ## What §8 looks like now
 
 - **Q3 (root height) became the urgent one.** A choice was made to keep the baseline; it wants
   ratifying or reversing.
 - **Q4 (body metrics as API)** resolved by omission: nothing is exposed, `className` only.
-- **Q5 (`Announcer`)** deferred, and the implementation made its position awkward — §4.4 leaves no
+- **Q5 (`Announcer`)** deferred, and the implementation made its position awkward. §4.4 leaves no
   slot between header and step list, so both views now render announcers as siblings of `Wizard`,
   outside the surface entirely.
 - **Q2 (`body { padding: 0 }`)** untouched, so both SCSS files stay.
@@ -1197,6 +1413,20 @@ header gap drops from 8 to 4.
 
 > Written after increment 2, for whoever extracts the next component. These are the things that
 > would have changed how this increment was run, not a summary of what it did.
+
+## Keep the work log in the plan, as you go
+
+The Work log above was reconstructed after the fact, from commits and from a conversation that
+happened to still be open. That is luck, not method: a week later the alternatives that were weighed
+and rejected would have been gone, and only the option that shipped would have survived.
+
+Write the entry when the item is committed, not at the end. It costs a few lines per commit and it
+is the only place a rejected option is ever recorded. "`height: 100%` renders an empty window in
+this host" is worth more to the next reader than the line of CSS that shipped, because the CSS is
+already in the file and the reasoning is not.
+
+The commit message is not a substitute. It explains one change to a reviewer; the plan explains the
+sequence to someone deciding whether to follow it.
 
 ## Write the documentation from outside the package
 
