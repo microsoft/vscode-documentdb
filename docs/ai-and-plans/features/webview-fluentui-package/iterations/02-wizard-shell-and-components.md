@@ -1190,3 +1190,119 @@ header gap drops from 8 to 4.
 - **Q2 (`body { padding: 0 }`)** untouched, so both SCSS files stay.
 - **New:** each declared grid region reserves its row, so a surface omitting one leaves that row's
   gap behind. Documented in `Container/README.md`.
+
+---
+
+# Lessons for the next extraction
+
+> Written after increment 2, for whoever extracts the next component. These are the things that
+> would have changed how this increment was run, not a summary of what it did.
+
+## Write the documentation from outside the package
+
+Two rounds of review were spent on documentation that was written from the inside out, and both
+defects had the same cause: after days in the design, the author's vocabulary is not the reader's.
+
+- **"Tier 1" and "tier 2"** are how the layering was reasoned about. They reached the consumer
+  READMEs, where `Wizard` introduced itself by announcing that it was tier 2.
+- **"Phase"** is the name of a `useState` variable in the two views that consume this package. It
+  appears nowhere in the API or the implementation, and the `Wizard` README used it as if the
+  reader already knew it, in prose and in its own code sample.
+
+Two cheap checks catch both:
+
+1. **Every noun in the opening paragraph must be defined by the component's own API.** If a word
+   is not in `X.types.ts`, either define it or delete it.
+2. **Open the way Fluent opens.** One or two sentences of plain description, present tense, then
+   the component to reach for instead ("for content layered above an existing page, use `Dialog`"),
+   then Best practices as Do / Don't. Design rationale goes further down, where someone choosing
+   between options will find it, rather than between the reader and the first example.
+
+The second check is not a style preference. "Why it exists" invites an essay about the author's
+problem; "what it does" and "what to use instead" answer the reader's.
+
+## Record the baseline before you touch anything
+
+Acceptance for a chrome extraction is that it "compiles cleanly, passes every test, and looks
+wrong". A screenshot has exactly the same weakness, so screenshots cannot be the verification.
+
+What actually verified this increment was comparing `getBoundingClientRect()` and
+`getComputedStyle()` element by element against numbers recorded from the **un-migrated** view.
+That baseline existed only because the mock comparison happened to need it first. Take it
+deliberately next time, before the first line changes, and keep it in the iteration doc.
+
+A second worktree at the pre-migration commit is a cheaper and truer control than a mock, and it
+needs no registry key, no static page and no removal step. Build a mock only when the point is to
+prove the _new_ components in isolation; use a worktree when the point is to prove nothing changed.
+
+## Migrate the awkward consumer second
+
+The first consumer will fit whatever API you designed, because you designed it while looking at
+that consumer. The second one is the test.
+
+Atlas is where `defaultCompleted` broke: its edit mode drops the first step, so "index 0 opens
+pre-satisfied" is wrong there. That is what justified the per-step `completed` and `navigable`
+overrides. Had Atlas been migrated first, the same seam would have been discovered by Local
+instead. Had there been only one consumer, the override would not exist and the API would be quietly
+wrong for its second adopter.
+
+## The reconciliation table is where the latent bugs are
+
+Deduplicating two copies means diffing them field by field, and §6 was that diff. It is worth
+writing even when the resolution is obvious, because the rows where the two copies disagree for no
+reason are latent defects:
+
+- Atlas's `formHeader` used `gap: 8` where its own `sectionHeader` used `4`. Drift, not a decision.
+- Local faked an in-flight signal with a `Spinner` inside a detail line, which left the stage
+  reading "failed" to a screen reader for the whole re-check.
+- A leftover `{' '}` after `</MessageBarTitle>` from an earlier inline layout.
+
+None of these were found by looking at either file on its own. Budget for them: the reconciliation
+turns up product bugs, and each one needs a deliberate decision about whether it is fixed in the
+same PR.
+
+## Decide which open questions block implementation
+
+§8 listed six open questions. One of them, Q3 (root height), could not be left open: the component
+cannot be written without choosing a value, and §4.1 already specified `height: 100%` while §8 was
+still asking. The implementation resolved it by keeping the baseline, which is a decision made by
+whoever typed it rather than by the operator.
+
+Before implementation, split open questions into **blocking** (the code cannot be written without an
+answer) and **non-blocking** (a later, additive change). Where a specification section already
+answers a question §8 lists as open, one of the two is wrong.
+
+## Deleting public API is one commit, with every call site
+
+Work item 2 deleted `WizardBreadcrumb` and updated both consumers in the same commit, which is what
+kept the tree building at every boundary. Everything else in the increment was additive and could be
+its own commit.
+
+The general rule: additive work can be split as finely as you like, but a rename or a deletion is
+atomic with its call sites. This is also the only kind of commit where "the tests pass" is not
+enough on its own, because a stale _document_ still compiles.
+
+## Nothing tells you the package README has gone stale
+
+`WizardBreadcrumb` remained in the package README's export table **and** its usage example for the
+whole increment after it was deleted. No compiler, linter or test looks at a README, and it is the
+first thing a consumer reads.
+
+Grep the package README for any identifier you rename or remove, in the same commit that removes it.
+Work item 10 (the committed API Extractor report) would have caught this mechanically, and this is
+the strongest argument yet for taking it.
+
+## Verify that a new test actually ran
+
+`src/**/*.test.ts` does not match a `.test.tsx` file. The first React component test in the
+extension would have been written, committed, and never executed.
+
+After adding the first test of a new file type, or in a new folder, check that the reported test
+count actually moved. A test that never runs is worse than no test, because it is believed.
+
+## Harness traps are recorded elsewhere
+
+Three ways the live preview harness makes itself look like a defect in the code under test, most
+importantly a remote-workspace URL rewrite that silently renders the same view on every page, are
+recorded in [live-preview-playwright.md](../../../live-preview-playwright.md) under Gotchas. Read
+them before using the harness to compare anything.
