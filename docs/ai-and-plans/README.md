@@ -74,6 +74,31 @@ The rules, in full:
 
 `archive` is a **status**, not a location — supersede a document in place rather than moving it.
 
+## What goes inside an iteration document
+
+An iteration file is written before the work, and **kept up to date during it**. Reading order:
+
+```
+# <the plan>      written first, and left as written afterwards
+# Work log        one entry per work item, added when that item is committed
+# Outcome         written at hand-over: what was verified, and what was not
+# Lessons         optional, and only when something generalises past this feature
+```
+
+Three rules carry the value:
+
+- **Write the work log as you go**, not at the end. Each entry names the commit that carries the
+  item, what landed, and why. Reconstructing it later only works while the session that did the
+  work is still open.
+- **A deviation from the plan records the alternatives considered and why each was rejected.** The
+  option that shipped is already in the code; the rejected ones exist nowhere else.
+- **Do not edit the plan to match what happened.** Corrections belong in the work log or the
+  outcome, so a reader can still see what was believed before the work started.
+
+Template and reasoning: [documentation-restructure-plan.md §6.5](./documentation-restructure-plan.md).
+Reference implementation:
+[webview-fluentui-package/iterations/02-wizard-shell-and-components.md](./features/webview-fluentui-package/iterations/02-wizard-shell-and-components.md).
+
 ## Frontmatter
 
 Required: `feature`, `kind`, `status` for anything under `features/`. Root-level documents carry
