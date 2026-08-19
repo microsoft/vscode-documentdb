@@ -21,6 +21,13 @@ export {
     type ContainerSectionProps,
 } from './Container/index.js';
 export {
+    StatusList,
+    StatusListItem,
+    type StatusListItemProps,
+    type StatusListItemStatus,
+    type StatusListProps,
+} from './StatusList/index.js';
+export {
     StepList,
     StepListItem,
     type StepListItemProps,
