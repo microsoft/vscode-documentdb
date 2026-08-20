@@ -10,7 +10,7 @@ created: 2026-08-18
 > What was decided while designing the UI package extraction, and what was rejected on the way.
 
 | #    | Decision                                                       | Status              | Changed from the proposal?                                      | Date       | PR   |
-| ---- | -------------------------------------------------------------- | ------------------- | --------------------------------------------------------------- | ---------- | ---- | --- | ---- | ------------------------------------------------------- | -------- | --------------------------------------------- | ---------- | ---- |
+| ---- | -------------------------------------------------------------- | ------------------- | --------------------------------------------------------------- | ---------- | ---- | --- | ---- | ------------------------------------------------------------ | ------------------- | --------------------------------------------- | ---------- | ---- |
 | 0001 | Extract the UX layer as a second package, behind a scope gate  | Accepted (amended)  | Accepted as proposed; condition 1 relaxed by 0021               | 2026-08-18 | —    |
 | 0002 | Name: `@microsoft/vscode-ext-webview-fluentui`                 | Accepted (modified) | `-ui` rejected as too general once the scope proved Fluent-only | 2026-08-18 | —    |
 | 0003 | No dependency between the two packages, in either direction    | Accepted            | Accepted as proposed                                            | 2026-08-18 | —    |
@@ -26,12 +26,12 @@ created: 2026-08-18
 | 0013 | Monaco theming stays in the extension                          | Deferred            | Proposal left it open                                           | 2026-08-18 | —    |
 | 0014 | Public naming vocabulary is locked before publish              | Accepted (modified) | `useVSCodeTheme` → `useActiveVSCodeTheme` after operator review | 2026-08-18 | —    |
 | 0015 | The generated CSS module is committed, not gitignored          | Accepted (modified) | Reverses the recommendation made during design                  | 2026-08-18 | —    |
-| 0016 | The package follows the repo's existing resolution pattern     | Accepted            | Replaces the proposal's webview-scoped tsconfig                 | 2026-08-18 | —    |     | 0017 | Relative imports inside the package are fully specified | Accepted | Corrects a gap in 0005, found at first bundle | 2026-08-18 | #895 |
+| 0016 | The package follows the repo's existing resolution pattern     | Accepted            | Replaces the proposal's webview-scoped tsconfig                 | 2026-08-18 | —    |     | 0017 | Relative imports inside the package are fully specified      | Accepted            | Corrects a gap in 0005, found at first bundle | 2026-08-18 | #895 |
 | 0018 | The theme hooks are standalone, not context-backed             | Accepted (modified) | The extracted code was context-backed; I3 required otherwise    | 2026-08-18 | #895 |
 | 0019 | Adapt Fluent by re-pointing tokens, never by out-specifying    | Accepted            | Forced by the zero-specificity rule in 0010                     | 2026-08-18 | #895 |
 | 0020 | Opaque stencils stay opaque; `translucent` is what we document | Accepted            | Reverses the alpha-overlay approach the code arrived with       | 2026-08-18 | #895 |
 | 0021 | The scope gate widens to reusable components                   | Accepted            | Relaxes condition 1 of 0001; operator-originated                | 2026-08-19 | —    |
-| 0022 | `MessageBlock` stays in the extension                          | Accepted            | Proposal was to ship it from the package                        | 2026-08-19 | —    |
+| 0022 | `MessageBlock` stays in the extension                          | Accepted            | Proposal was to ship it from the package                        | 2026-08-19 | —    |     | 0023 | The README presents theming and components as equal, mixable | Accepted (modified) | Reverses §1 of design.md; operator-originated | 2026-08-20 | —    |
 
 > Entries below are **semantically** immutable: append new entries rather than
 > rewriting old ones, and record reversals as a new entry plus a status change
@@ -931,3 +931,41 @@ component wherever it lived.
 
 Promoting it later is a smaller decision than demoting it would have been, and the JSDoc and tests
 written now carry over unchanged.
+
+---
+
+## 0023 — The README presents theming and components as equal, mixable
+
+**Status:** Accepted (modified) · **Date:** 2026-08-20
+
+### Question
+
+Design.md §1 mandated a specific framing: "theming for Fluent-based webviews first, additional
+optional components second," with theming named as the reason to adopt the package and components
+as a bonus a consumer may ignore. Does the README still lead that way once the package has a real
+component catalog (`Container`, `StepList`, `StatusList`, `Wizard`) behind the widened gate of 0021?
+
+### Decision
+
+No. The README now opens with both halves stated as equally weighted and independently adoptable:
+a theming layer and a set of reusable components, usable alone or mixed. Each gets a short,
+high-level subsection with a link to its own detail, so the entry point stays easy to grasp while
+the technical depth is one link away rather than removed.
+
+Nothing about invariant I1 changes: components still may not import the theming, and still work
+with no `FluentProvider` from this package. Only the narrative framing in the README changes.
+
+### Why
+
+The original framing was written when the package shipped one component (`WizardBreadcrumb`) as a
+stated bonus. It no longer matches what ships today: a full component family that composes into a
+complete wizard surface is not a bonus by any reasonable reading, and describing it as one under-
+sells a path a consumer may specifically be adopting the package for.
+
+### Changed from the proposal
+
+Design.md §1's framing instruction is reversed by this decision; design.md is updated in the same
+change to match. Decisions are the record that wins on conflict, per this package's own README
+note at the top of design.md.
+
+---

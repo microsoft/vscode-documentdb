@@ -18,10 +18,10 @@ code:
 A React theming layer that makes Fluent UI track the user's active VS Code theme, plus a small,
 deliberately slow-growing set of components that solve VS Code integration problems.
 
-The package README must lead with that framing, in that order: **theming for Fluent-based webviews
-first, additional optional components second.** Theming is the reason to adopt the package;
-components are a bonus a consumer may ignore entirely, and invariant I1 exists precisely so they
-can.
+The package README presents both as equally weighted, independently adoptable pieces (decision
+0023): a short, high-level section for each, with the technical depth one link away rather than
+folded into the same paragraph. Theming and components can be used alone or mixed; neither requires
+the other, per invariant I1.
 
 Every addition passes the four-condition scope gate in decision 0001.
 

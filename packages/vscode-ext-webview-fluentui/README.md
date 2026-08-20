@@ -4,31 +4,38 @@
 > surface stabilises. Breaking changes may land between minor versions until
 > a `1.0.0` release.
 
-Makes [Fluent UI React v9](https://react.fluentui.dev/) look native inside a VS Code webview.
-
-Out of the box, Fluent looks like Microsoft Teams: its neutral ramp is a fixed gray produced by
-`createLightTheme`/`createDarkTheme`, and it ignores the user's workbench theme entirely. This
-package fixes that, and then, separately and optionally, offers a small set of reusable components
-that Fluent itself does not ship.
-
-**Theming is the reason to adopt this package. The components are a bonus you can ignore**; they
-never require this package's provider.
+Two things for building [Fluent UI React v9](https://react.fluentui.dev/) webviews inside VS Code,
+usable on their own or mixed together: a **theming layer** that makes Fluent track the user's
+active VS Code theme, and a small set of **reusable components** that Fluent itself does not ship.
 
 Its sibling, [`@microsoft/vscode-ext-webview`](../vscode-ext-webview/README.md), carries the
-transport (tRPC over `postMessage`). Neither package depends on the other, in either direction.
+transport (tRPC over `postMessage`). Neither package in this pairing depends on the other.
 
-## What the theming does
+## The two things this package does
 
-1. Reads the user's accent color off the DOM and synthesizes a Fluent brand ramp from it through
-   LCH/LAB palette math.
-2. Remaps roughly fifty Fluent neutral tokens onto `var(--vscode-*)` with fallback chains, so
-   surfaces track the active theme, including community themes that leave the ideal token
-   undefined.
-3. Injects a stylesheet of component-scoped escapes for the cases a Fluent recipe cannot be
-   reached through tokens at all.
+### Theming
 
-It follows the user live: VS Code rewrites `data-vscode-theme-kind` on the webview body when the
-theme changes, and the hooks observe that attribute.
+Out of the box, Fluent looks like Microsoft Teams: its neutral ramp is a fixed gray produced by
+`createLightTheme`/`createDarkTheme`, and it ignores the user's workbench theme entirely.
+`VSCodeFluentProvider` synthesizes a Fluent theme from the user's live VS Code theme and keeps every
+Fluent component under it in sync as the user switches themes.
+
+See [Quick start: theming](#quick-start-theming) for the common path, and
+[Theming in detail](#theming-in-detail) for the mechanism, the CSP requirement, and edge cases such
+as which `Skeleton` appearance to use.
+
+### Components
+
+`Container`, `StepList`, `StatusList`, and `Wizard` are reusable layout and navigation components.
+They style themselves from Fluent `tokens.*`, so they work with or without this package's theming,
+and importing them injects no stylesheet of their own.
+
+See [Quick start: components](#quick-start-components) for the common path, and
+[`src/components/README.md`](./src/components/README.md) for the full catalog, how the components
+compose, and how to build a wizard-like surface from `Container` and `StepList` directly.
+
+Both halves are independent: adopting the theming does not require the components, and using a
+component does not require this package's provider.
 
 ## Install
 
@@ -49,9 +56,7 @@ case, the absence of an `aria-valuenow` attribute. Those are Fluent implementati
 than public API. A minor Fluent release can restructure them, and the overrides would then silently
 stop applying.
 
-## Usage
-
-### Greenfield: use the provider
+## Quick start: theming
 
 ```tsx
 import { VSCodeFluentProvider } from '@microsoft/vscode-ext-webview-fluentui';
@@ -63,10 +68,11 @@ createRoot(container).render(
 );
 ```
 
-### You already own a `FluentProvider`
+That covers most consumers: every Fluent component rendered under `VSCodeFluentProvider` now tracks
+the active VS Code theme, including a theme switch while the webview stays open.
 
-Compose the same result yourself. The provider above is built from exactly these two calls and
-nothing private, so this is not a downgraded path.
+Already own a `FluentProvider`? Compose the same result yourself; the provider above is built from
+exactly these two calls and nothing private, so this is not a downgraded path.
 
 ```tsx
 import { createVSCodeFluentTheme, useActiveVSCodeThemeKind } from '@microsoft/vscode-ext-webview-fluentui';
@@ -83,12 +89,10 @@ return (
 
 `useActiveVSCodeTheme()` returns `{ themeKind, theme }` if you want both in one call.
 
-### Post-process the generated theme
+Post-processing the generated theme, and everything else about the theming, is covered in
+[Theming in detail](#theming-in-detail) below.
 
-`generateAdaptiveLightTheme()` and `generateAdaptiveDarkTheme()` return the raw Fluent `Theme`
-objects, for consumers who want to override individual tokens on top.
-
-### Components
+## Quick start: components
 
 ```tsx
 import { Wizard, WizardStep, ContainerHeader, ContainerFooter } from '@microsoft/vscode-ext-webview-fluentui/components';
@@ -100,8 +104,6 @@ overflow menu and never hides the current step. `StatusList` is a bordered list 
 with a status glyph and a line of evidence. `Wizard` is all three of those assembled into a
 complete wizard surface, for the common case where you do not want to wire them yourself.
 
-See [`src/components/README.md`](./src/components/README.md) for the full set and how they compose.
-
 Components style themselves from Fluent `tokens.*`, which resolve against whatever
 `FluentProvider` is above them. They work without this package's theming, and importing
 `./components` injects no stylesheet.
@@ -110,7 +112,34 @@ None of them carry localized strings: every user-visible string is a prop with a
 The package ships no translations at all, because string extractors do not scan `node_modules`, so
 a string owned here could never be translated by a consumer.
 
-## Things to know before you adopt it
+See [`src/components/README.md`](./src/components/README.md) for the full catalog, how the
+components compose, and how to decompose `Wizard` into `Container` and `StepList` when you need a
+layout it does not offer.
+
+## Theming in detail
+
+Everything past the quick start: the mechanism, the things that surprise people, and the one place
+a Fluent prop choice decides whether the theming can even apply.
+
+### What it does, mechanically
+
+1. Reads the user's accent color off the DOM and synthesizes a Fluent brand ramp from it through
+   LCH/LAB palette math.
+2. Remaps roughly fifty Fluent neutral tokens onto `var(--vscode-*)` with fallback chains, so
+   surfaces track the active theme, including community themes that leave the ideal token
+   undefined.
+3. Injects a stylesheet of component-scoped escapes for the cases a Fluent recipe cannot be
+   reached through tokens at all.
+
+It follows the user live: VS Code rewrites `data-vscode-theme-kind` on the webview body when the
+theme changes, and the hooks observe that attribute.
+
+### Post-process the generated theme
+
+`generateAdaptiveLightTheme()` and `generateAdaptiveDarkTheme()` return the raw Fluent `Theme`
+objects, for consumers who want to override individual tokens on top.
+
+### Things to know before you adopt it
 
 **The stylesheet ships itself, and there is no opt-out.** Importing anything from the main entry
 injects the overrides. There is no import to forget, no ordering to get right, and no flag to
@@ -129,12 +158,10 @@ first.
 runtime, and so does this package. Your webview CSP needs `style-src 'unsafe-inline'`, which is
 what Fluent already required of you.
 
-## Component guidance
+### Component guidance: Skeleton
 
-Things the theming cannot decide for you, where the choice of Fluent prop determines whether the
-result tracks the theme at all.
-
-### Skeleton: always pass `appearance="translucent"`
+The one place the theming cannot decide for you, where the choice of Fluent prop determines
+whether the result tracks the theme at all.
 
 Fluent's `Skeleton` and `SkeletonItem` default to `appearance="opaque"`. Pass `translucent`
 instead, on the `<Skeleton>` wrapper or on a bare `<SkeletonItem>`:

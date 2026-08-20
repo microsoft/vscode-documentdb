@@ -22,20 +22,20 @@ treat `status: historical` or `status: superseded` as current.
 
 ## Features
 
-| Feature                                                                   | What it covers                                                                                  | Status            |
-| ------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------- | ----------------- |
-| [local-quickstart](./features/local-quickstart/README.md)                 | Run DocumentDB locally in one click: Docker provisioning, readiness, lifecycle                  | shipped 0.10.0    |
-| [query-insights](./features/query-insights/README.md)                     | Query performance rating, static analysis, and streaming AI recommendations                     | shipped           |
-| [interactive-shell](./features/interactive-shell/README.md)               | The in-terminal REPL, its runtime, completions, and highlighting                                | shipped           |
-| [query-playground](./features/query-playground/README.md)                 | `.documentdb` files, persistent worker evaluation, per-document connections                     | shipped           |
-| [completions-and-schema](./features/completions-and-schema/README.md)     | Operator registry, schema analyzer, and the shared completion layer                             | shipped           |
-| [index-management](./features/index-management/README.md)                 | The Indexes tab, the create drawer, and the Collection View chrome redesign                     | shipped           |
-| [atlas-discovery](./features/atlas-discovery/README.md)                   | MongoDB Atlas discovery: Admin API auth, discovery tree, credentials                            | shipped           |
-| [kubernetes-discovery](./features/kubernetes-discovery/README.md)         | Kubernetes service discovery and connect-time reachability providers                            | shipped           |
-| [webview-ext-package](./features/webview-ext-package/README.md)           | `@microsoft/vscode-ext-webview`: the extracted webview transport package                        | published preview |
-| [webview-fluentui-package](./features/webview-fluentui-package/README.md) | `@microsoft/vscode-ext-webview-fluentui`: Fluent theming for webviews, plus optional components | workspace-only    |
-| [connections-tree](./features/connections-tree/README.md)                 | The Connections view: node item counts, connection load performance                             | shipped           |
-| [no-auth](./features/no-auth/README.md)                                   | Credential-free connections and connection-string TLS handling                                  | shipped           |
+| Feature                                                                   | What it covers                                                                                | Status            |
+| ------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------- | ----------------- |
+| [local-quickstart](./features/local-quickstart/README.md)                 | Run DocumentDB locally in one click: Docker provisioning, readiness, lifecycle                | shipped 0.10.0    |
+| [query-insights](./features/query-insights/README.md)                     | Query performance rating, static analysis, and streaming AI recommendations                   | shipped           |
+| [interactive-shell](./features/interactive-shell/README.md)               | The in-terminal REPL, its runtime, completions, and highlighting                              | shipped           |
+| [query-playground](./features/query-playground/README.md)                 | `.documentdb` files, persistent worker evaluation, per-document connections                   | shipped           |
+| [completions-and-schema](./features/completions-and-schema/README.md)     | Operator registry, schema analyzer, and the shared completion layer                           | shipped           |
+| [index-management](./features/index-management/README.md)                 | The Indexes tab, the create drawer, and the Collection View chrome redesign                   | shipped           |
+| [atlas-discovery](./features/atlas-discovery/README.md)                   | MongoDB Atlas discovery: Admin API auth, discovery tree, credentials                          | shipped           |
+| [kubernetes-discovery](./features/kubernetes-discovery/README.md)         | Kubernetes service discovery and connect-time reachability providers                          | shipped           |
+| [webview-ext-package](./features/webview-ext-package/README.md)           | `@microsoft/vscode-ext-webview`: the extracted webview transport package                      | published preview |
+| [webview-fluentui-package](./features/webview-fluentui-package/README.md) | `@microsoft/vscode-ext-webview-fluentui`: Fluent theming and reusable components for webviews | workspace-only    |
+| [connections-tree](./features/connections-tree/README.md)                 | The Connections view: node item counts, connection load performance                           | shipped           |
+| [no-auth](./features/no-auth/README.md)                                   | Credential-free connections and connection-string TLS handling                                | shipped           |
 
 Everything else is a single file at this root, such as:
 
