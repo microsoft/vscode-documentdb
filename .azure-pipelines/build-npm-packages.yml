@@ -145,6 +145,6 @@ extends:
                           inputs:
                               Contents: |
                                   packages/vscode-ext-webview/package.json
-                                    packages/vscode-ext-webview-fluentui/package.json
+                                  packages/vscode-ext-webview-fluentui/package.json
                                   !**/node_modules/**
                               TargetFolder: $(ob_outputDirectory)
