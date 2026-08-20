@@ -569,44 +569,54 @@ export const AtlasCredentialsView = (): JSX.Element => {
     let backDisabled: boolean;
     let onBack: () => void = handleBack;
 
-    if (phase === 'choose') {
-        primaryLabel = l10n.t('Continue');
-        primaryDisabled = !pendingMethod;
-        onPrimary = () => {
-            if (pendingMethod) {
-                setChosenMethod(pendingMethod);
-                setPhase('form');
-            }
-        };
-        secondaryLabel = l10n.t('Cancel');
-        backDisabled = false;
-        onBack = handleCancel;
-    } else if (phase === 'form') {
-        primaryLabel = l10n.t('Verify & Save');
-        primaryDisabled = !canSubmit;
-        onPrimary = () => void handleSubmit();
-        backDisabled = isEdit;
-    } else if (phase === 'checking') {
-        // Primary stays "Verify & Save" (disabled) whether verifying or failed, so its width is
-        // constant and Back does not shift. Retry lives in the error MessageBar, next to the details.
-        primaryLabel = l10n.t('Verify & Save');
-        primaryDisabled = true;
-        onPrimary = () => undefined;
-        if (checkFailed) {
-            backDisabled = false;
-            onBack = () => {
-                setSubmitError(undefined);
-                setFailedStage(undefined);
-                setPhase('form');
+    // This switches on `phase` throughout; `'checking'` alone splits further, on `checkFailed`.
+    switch (phase) {
+        case 'choose': {
+            primaryLabel = l10n.t('Continue');
+            primaryDisabled = !pendingMethod;
+            onPrimary = () => {
+                if (pendingMethod) {
+                    setChosenMethod(pendingMethod);
+                    setPhase('form');
+                }
             };
-        } else {
-            backDisabled = true;
+            secondaryLabel = l10n.t('Cancel');
+            backDisabled = false;
+            onBack = handleCancel;
+            break;
         }
-    } else {
-        primaryLabel = isCompleting ? l10n.t('Closing…') : l10n.t('Close');
-        primaryDisabled = isCompleting;
-        onPrimary = () => void handleDone();
-        backDisabled = true;
+        case 'form': {
+            primaryLabel = l10n.t('Verify & Save');
+            primaryDisabled = !canSubmit;
+            onPrimary = () => void handleSubmit();
+            backDisabled = isEdit;
+            break;
+        }
+        case 'checking': {
+            // Primary stays "Verify & Save" (disabled) whether verifying or failed, so its width is
+            // constant and Back does not shift. Retry lives in the error MessageBar, next to the details.
+            primaryLabel = l10n.t('Verify & Save');
+            primaryDisabled = true;
+            onPrimary = () => undefined;
+            if (checkFailed) {
+                backDisabled = false;
+                onBack = () => {
+                    setSubmitError(undefined);
+                    setFailedStage(undefined);
+                    setPhase('form');
+                };
+            } else {
+                backDisabled = true;
+            }
+            break;
+        }
+        case 'success': {
+            primaryLabel = isCompleting ? l10n.t('Closing…') : l10n.t('Close');
+            primaryDisabled = isCompleting;
+            onPrimary = () => void handleDone();
+            backDisabled = true;
+            break;
+        }
     }
 
     const footer = (

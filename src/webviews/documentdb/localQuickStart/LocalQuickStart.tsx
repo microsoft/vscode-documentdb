@@ -2223,88 +2223,103 @@ export const LocalQuickStart = (): JSX.Element => {
     // Sits directly above the primary action and states what pressing it does to the machine.
     let footerNote: string | undefined;
 
-    if (phase === 'introduction') {
-        primaryLabel = l10n.t('Continue');
-        onPrimary = () => setPhase('configure');
-        footerNote = l10n.t(
-            'Nothing is downloaded or created on your machine until you choose to start in the Configure step.',
-        );
-        secondaryActions = (
-            <Button appearance="secondary" onClick={handleClose}>
-                {l10n.t('Cancel')}
-            </Button>
-        );
-    } else if (phase === 'configure') {
-        // The label stays fixed; the note below it is what follows the choice. "Nothing else on your
-        // machine is changed" is true only for a genuinely fresh install and must not render for
-        // either recreate path (review M4 / §10.6).
-        primaryLabel = forcedFresh ? l10n.t('Start fresh') : l10n.t('Start DocumentDB Local');
-        primaryDisabled = advError !== undefined || startBlockedByGuard;
-        primaryIcon = <RocketRegular />;
-        onPrimary = handleStart;
-        footerNote = isRecreate
-            ? l10n.t(
-                  'Recreating replaces the container named {0} and keeps its data volume, so your documents, credentials and image version are preserved.',
-                  QUICK_START_CONTAINER_NAME,
-              )
-            : startFresh
-              ? l10n.t(
-                    'This deletes the container named {0} and its data volume, then creates a new one. Everything stored in DocumentDB Local is erased.',
-                    QUICK_START_CONTAINER_NAME,
-                )
-              : l10n.t(
-                    'Starting downloads the official image if needed, then creates and starts one container named {0}. Nothing else on your machine is changed.',
-                    QUICK_START_CONTAINER_NAME,
+    // `isProvisioning` is just `phase === 'provisioning'`, so this switches on `phase` throughout;
+    // `'failed'` alone has two footers, split on `timedOut` inside its case.
+    switch (phase) {
+        case 'introduction': {
+            primaryLabel = l10n.t('Continue');
+            onPrimary = () => setPhase('configure');
+            footerNote = l10n.t(
+                'Nothing is downloaded or created on your machine until you choose to start in the Configure step.',
+            );
+            secondaryActions = (
+                <Button appearance="secondary" onClick={handleClose}>
+                    {l10n.t('Cancel')}
+                </Button>
+            );
+            break;
+        }
+        case 'configure': {
+            // The label stays fixed; the note below it is what follows the choice. "Nothing else on your
+            // machine is changed" is true only for a genuinely fresh install and must not render for
+            // either recreate path (review M4 / §10.6).
+            primaryLabel = forcedFresh ? l10n.t('Start fresh') : l10n.t('Start DocumentDB Local');
+            primaryDisabled = advError !== undefined || startBlockedByGuard;
+            primaryIcon = <RocketRegular />;
+            onPrimary = handleStart;
+            footerNote = isRecreate
+                ? l10n.t(
+                      'Recreating replaces the container named {0} and keeps its data volume, so your documents, credentials and image version are preserved.',
+                      QUICK_START_CONTAINER_NAME,
+                  )
+                : startFresh
+                  ? l10n.t(
+                        'This deletes the container named {0} and its data volume, then creates a new one. Everything stored in DocumentDB Local is erased.',
+                        QUICK_START_CONTAINER_NAME,
+                    )
+                  : l10n.t(
+                        'Starting downloads the official image if needed, then creates and starts one container named {0}. Nothing else on your machine is changed.',
+                        QUICK_START_CONTAINER_NAME,
+                    );
+            secondaryActions = (
+                <Button appearance="secondary" onClick={() => setPhase('introduction')}>
+                    {l10n.t('Back')}
+                </Button>
+            );
+            break;
+        }
+        case 'provisioning': {
+            primaryLabel = l10n.t('Setting up…');
+            primaryDisabled = true;
+            onPrimary = () => undefined;
+            secondaryActions = (
+                <Button appearance="secondary" ref={cancelButtonRef} onClick={handleCancel}>
+                    {l10n.t('Cancel')}
+                </Button>
+            );
+            break;
+        }
+        case 'failed': {
+            if (timedOut) {
+                primaryLabel = l10n.t('Wait longer');
+                primaryIcon = <ArrowClockwiseRegular />;
+                onPrimary = handleWaitLonger;
+                secondaryActions = (
+                    <Button appearance="secondary" onClick={handleStartOver}>
+                        {l10n.t('Start over')}
+                    </Button>
                 );
-        secondaryActions = (
-            <Button appearance="secondary" onClick={() => setPhase('introduction')}>
-                {l10n.t('Back')}
-            </Button>
-        );
-    } else if (isProvisioning) {
-        primaryLabel = l10n.t('Setting up…');
-        primaryDisabled = true;
-        onPrimary = () => undefined;
-        secondaryActions = (
-            <Button appearance="secondary" ref={cancelButtonRef} onClick={handleCancel}>
-                {l10n.t('Cancel')}
-            </Button>
-        );
-    } else if (phase === 'failed' && timedOut) {
-        primaryLabel = l10n.t('Wait longer');
-        primaryIcon = <ArrowClockwiseRegular />;
-        onPrimary = handleWaitLonger;
-        secondaryActions = (
-            <Button appearance="secondary" onClick={handleStartOver}>
-                {l10n.t('Start over')}
-            </Button>
-        );
-    } else if (phase === 'failed') {
-        primaryLabel = canContinueSetup ? l10n.t('Continue setup') : l10n.t('Retry setup');
-        primaryIcon = canContinueSetup ? <RocketRegular /> : <ArrowClockwiseRegular />;
-        primaryDisabled = startingDocker || checkingDockerAgain;
-        onPrimary = handleStart;
-        footerNote = canContinueSetup
-            ? l10n.t(
-                  'Continuing runs every setup step from the beginning, starting with the Docker check. Nothing has been created on your machine yet.',
-              )
-            : l10n.t('Retrying runs every setup step again from the beginning, starting with the Docker check.');
-        secondaryActions = (
-            <Button appearance="secondary" onClick={handleBackToConfigure}>
-                {l10n.t('Back')}
-            </Button>
-        );
-    } else {
-        primaryLabel = l10n.t('Open Connection');
-        onPrimary = handleOpenConnection;
-        footerNote = l10n.t(
-            'The connection already exists in the Connections view. Opening it selects and expands it there.',
-        );
-        secondaryActions = (
-            <Button appearance="secondary" onClick={handleClose}>
-                {l10n.t('Close')}
-            </Button>
-        );
+            } else {
+                primaryLabel = canContinueSetup ? l10n.t('Continue setup') : l10n.t('Retry setup');
+                primaryIcon = canContinueSetup ? <RocketRegular /> : <ArrowClockwiseRegular />;
+                primaryDisabled = startingDocker || checkingDockerAgain;
+                onPrimary = handleStart;
+                footerNote = canContinueSetup
+                    ? l10n.t(
+                          'Continuing runs every setup step from the beginning, starting with the Docker check. Nothing has been created on your machine yet.',
+                      )
+                    : l10n.t('Retrying runs every setup step again from the beginning, starting with the Docker check.');
+                secondaryActions = (
+                    <Button appearance="secondary" onClick={handleBackToConfigure}>
+                        {l10n.t('Back')}
+                    </Button>
+                );
+            }
+            break;
+        }
+        case 'success': {
+            primaryLabel = l10n.t('Open Connection');
+            onPrimary = handleOpenConnection;
+            footerNote = l10n.t(
+                'The connection already exists in the Connections view. Opening it selects and expands it there.',
+            );
+            secondaryActions = (
+                <Button appearance="secondary" onClick={handleClose}>
+                    {l10n.t('Close')}
+                </Button>
+            );
+            break;
+        }
     }
 
     return (
