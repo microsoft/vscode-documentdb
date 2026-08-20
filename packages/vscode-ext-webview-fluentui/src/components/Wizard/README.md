@@ -9,6 +9,8 @@ another step in the indicator raises `onStepChange` and changes nothing until yo
 A wizard is a `Container` and a `StepList` assembled for you, and it uses nothing from them that
 you cannot use directly. Compose those yourself when you need a layout a wizard does not offer.
 
+![A Wizard showing a configured local database setup with step navigation and footer actions](./screenshot.png)
+
 ## Best practices
 
 ### Do

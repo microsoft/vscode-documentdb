@@ -9,6 +9,8 @@ one to collapse, so it stays visible at any width.
 A step list describes a sequence with a position in it. For content views the user may move between
 freely, use Fluent's `TabList` instead.
 
+![A StepList showing completed steps, the current step and an overflow menu](./screenshot.png)
+
 ## Best practices
 
 ### Do

@@ -9,6 +9,8 @@ and a failure stays readable beside the stage that produced it.
 Use a status list when an operation has several stages worth naming. For a single wait with no
 stages, use Fluent's `Spinner`, or `ProgressBar` when the progress is measurable.
 
+![A StatusList showing completed, active, pending, warning and failed stages](./screenshot.png)
+
 ## Best practices
 
 ### Do
