@@ -175,6 +175,9 @@ drift into shapes the component never actually receives.
 3. `run_playwright_code` to resize, click through states, and measure.
 4. `screenshot_page` only for questions the tree cannot answer: colour, spacing, weight.
 
+Steps 3 and 4 do not compose. Resizing is for measuring; a screenshot taken after a resize is of a
+layout that no longer matches what the DOM reports. See Gotchas.
+
 ### Assertions worth running
 
 ```js
@@ -203,8 +206,45 @@ Run at a normal width and at roughly 312 px of content width.
 ## Gotchas
 
 **The integrated browser's default viewport is ~548 px.** Wide enough to trip `max-width: 560px`
-media queries, so a "desktop" screenshot may silently be the narrow layout. Call `setViewportSize`
-explicitly and assert `window.innerWidth` before trusting a screenshot.
+media queries, so a "desktop" measurement may silently be the narrow layout. Call `setViewportSize`
+explicitly and assert `window.innerWidth` before trusting **a measurement**.
+
+Do **not** carry that advice over to a screenshot. See the next entry: for a screenshot it is not
+merely useless, it is the cause.
+
+**`setViewportSize` moves the DOM but not the compositor, and screenshots come from the compositor.**
+This one cost most of a session, so it is worth stating exactly.
+
+After `setViewportSize` (or CDP `Emulation.setDeviceMetricsOverride`), `window.innerWidth`,
+`getBoundingClientRect()` and `getComputedStyle()` all report the **emulated** viewport, and media
+queries evaluate against it. The surface that is actually rasterised keeps the **real** window size
+and scale. So the page can report `innerWidth: 880` and `grid-template-columns: 176px 176px 176px
+176px` while the captured image contains a two-column layout.
+
+Two things follow, and the second is the trap:
+
+- Every DOM-side check agrees with itself. `window.innerWidth` is the emulated number, so asserting
+  it proves the emulation took, not that the capture matches.
+- `locator.screenshot()` computes its clip rect from DOM pixels and the surface paints at a
+  different scale, so content silently falls **outside** the rect. A four-card row loses its fourth
+  card, with no error and no visible seam.
+
+The recipe that works:
+
+1. **Do not set a viewport at all** before capturing. Let the DOM and the compositor agree on the
+   real window. Fix the layout by giving the harness element a hardcoded CSS `width` instead, which
+   is a property of the page rather than of the emulation.
+2. **Capture the whole viewport** with `page.screenshot()`, never a clip or a locator, because a
+   full-viewport capture cannot exclude something that is on screen.
+3. **Crop afterwards** by finding the content's bounds in the image itself, for example the
+   bounding box of every pixel that is not the background colour.
+4. **Verify the image, not the DOM.** Decode the PNG onto a `<canvas>` and count the ink clusters,
+   or whatever the shot is supposed to contain. This is the only check that can fail when the
+   capture is wrong.
+
+Viewport-driven media queries are the case with no clean answer: the breakpoint reads the viewport,
+and the viewport is the thing you must not touch. Either arrange for the real window to already sit
+in the band you want, or accept the band it gives you and say so in the caption.
 
 **`box-sizing` is `content-box`.** A `maxWidth: '760px'` element with `padding: '24px'` measures
 808 px. Match a footer or banner to the content column by giving it the same `maxWidth`, not the

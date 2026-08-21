@@ -1156,6 +1156,30 @@ Stated plainly, because these renders are persuasive well beyond what they verif
 `WebviewRegistry.ts` restored with `git checkout`. `git status` and `git diff` confirmed clean apart
 from this plan file. Nothing was ever staged with `git add -A` or `git add -f`.
 
+### A harness defect found afterwards, and why it does not touch any of the above
+
+While taking the README screenshots after hand-over, the harness turned out to have a trap that
+[live-preview-playwright.md](../../../live-preview-playwright.md) did not merely omit but **advised
+walking into**: its Gotchas told the reader to "call `setViewportSize` explicitly and assert
+`window.innerWidth` before trusting a screenshot". Both halves are wrong for a screenshot.
+`setViewportSize` moves the DOM only: `innerWidth`, `getBoundingClientRect`, `getComputedStyle` and
+media queries all report the emulated viewport, while the rasterised surface keeps the real window
+size. So a page can report `innerWidth: 880` and four grid tracks while the captured image holds a
+two-column layout, and `window.innerWidth` is precisely the value that cannot detect it.
+
+**None of the measurements in this work log are affected, and the reason is worth stating rather
+than asserting.** Every number here came from `getComputedStyle` and `getBoundingClientRect`, which
+are DOM-side. The emulated viewport really does drive layout as the DOM computes it, so "at
+`innerWidth` 288 the grid has one track" is a true statement about the layout engine, and the
+before-and-after diff applied the same method under the same sequence of viewports on both sides.
+The defect only corrupts **images**, and no image was used as evidence for anything in §13.2 or in
+item 6. The screenshots taken during the increment were used to look, never to conclude.
+
+The document is corrected in the same change, together with the recipe that does work: set no
+viewport, hardcode a CSS width on the harness element, capture the whole viewport rather than a
+locator, crop afterwards by the content's own bounds in the image, and verify the image rather than
+the DOM.
+
 ---
 
 ## For the operator
