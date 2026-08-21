@@ -7,6 +7,13 @@ Use them for a dashboard strip that answers "how did this go" at a glance. For a
 no caption, use Fluent's `Text` at a type ramp size. For a value that needs a control beside it, use
 `Card` directly, since a metric card is deliberately not interactive beyond being focusable.
 
+![A MetricGrid of four cards: a resolved value, a value with an explanation glyph, one still loading, and one unavailable](./screenshot.png)
+
+At `appearance="subtle"` and `size="small"` the card drops its own surface and its type scale, for a
+cell inside a card that already has one:
+
+![Four subtle, small metric cards in a two column grid inside a Fluent Card](./screenshot-subtle.png)
+
 ## Best practices
 
 ### Do
