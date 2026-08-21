@@ -131,9 +131,11 @@ And the four that only implementation could have produced:
 - **Type-checking resolves built output, not source** (0016). The package must be built before the
   root `tsc` runs — already guaranteed by the `prebuild` fan-out, and true of the other five
   workspace packages too. Modernising resolution repo-wide is filed as future work.
-- **Increment 2 is undecided.** The two remaining shortlisted components are the focusable badge
-  (net-new code — today it is a stylesheet plus a markdown instruction) and the metrics cards
-  (a larger style-extraction job).
+- **The two originally shortlisted components are still unbuilt.** Increment 2 took the wizard
+  surface instead. The metric card is planned in
+  [iterations/03-metric-card.md](./iterations/03-metric-card.md), which also closes increment 2's
+  `Announcer` question; the focusable badge and the accessible-name question it raises are
+  [iterations/04-focusable-badge-and-accessible-names.md](./iterations/04-focusable-badge-and-accessible-names.md).
 
 ## Reading order for newcomers
 
