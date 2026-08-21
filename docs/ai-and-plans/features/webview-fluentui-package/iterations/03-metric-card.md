@@ -1019,14 +1019,14 @@ No code. Commit: _pending_, this work log only.
 
 Run once, in order, all green:
 
-| Step                     | Result                                                             |
-| ------------------------ | ------------------------------------------------------------------ |
+| Step                     | Result                                                              |
+| ------------------------ | ------------------------------------------------------------------- |
 | `npm run l10n`           | 2281 strings extracted, 2392 keys, **`bundle.l10n.json` unchanged** |
-| `npm run prettier-fix`   | reformatted this plan file only                                    |
-| `npm run lint`           | clean                                                              |
-| `npx jest --no-coverage` | 228 suites, **3570 tests**, all passing                            |
-| `npm run build`          | clean                                                              |
-| `npm run package`        | packaged, 124 files, 9.06 MB                                       |
+| `npm run prettier-fix`   | reformatted this plan file only                                     |
+| `npm run lint`           | clean                                                               |
+| `npx jest --no-coverage` | 228 suites, **3570 tests**, all passing                             |
+| `npm run build`          | clean                                                               |
+| `npm run package`        | packaged, 124 files, 9.06 MB                                        |
 
 The l10n bundle not moving is the expected result rather than a miss: items 3 and 4 wrapped four
 existing `'N/A'` defaults in `l10n.t()`, and `N/A` was already a key.
@@ -1050,13 +1050,13 @@ until you know.
 
 ### The diff, element by element
 
-**69 differences across 51 measured elements at three widths, in exactly two categories. Nothing
-else moved.**
+**69 differences across 20 elements measured at each of three widths, in exactly two categories.
+Nothing else moved.**
 
-| Category | Count | What                                             |
-| -------- | ----- | ------------------------------------------------ |
+| Category | Count | What                                                  |
+| -------- | ----- | ----------------------------------------------------- |
 | 1        | 60    | label colour, `rgb(113,113,113)` → `rgb(112,112,112)` |
-| 2        | 9     | three summary cells gained `tabindex="0"`        |
+| 2        | 9     | three summary cells gained `tabindex="0"`             |
 
 Everything below was compared and is **byte-identical** before and after:
 
@@ -1108,10 +1108,10 @@ All 16 metric cards: unchanged. No `outline`; Fluent's `::after` ring, `1px soli
 
 The summary cells **did** change, as item 4 said they would:
 
-|        | Before                                                              | After                                       |
-| ------ | ------------------------------------------------------------------- | ------------------------------------------- |
-| ring   | `outline: 1px solid rgb(0,95,184)`, `outline-offset: 1px`           | Fluent `::after`, `1px solid`, inset `-2px` |
-| source | hand-written `--vscode-focusBorder` rule in `SummaryCard.scss`      | `createFocusOutlineStyle()`                 |
+|        | Before                                                         | After                                       |
+| ------ | -------------------------------------------------------------- | ------------------------------------------- |
+| ring   | `outline: 1px solid rgb(0,95,184)`, `outline-offset: 1px`      | Fluent `::after`, `1px solid`, inset `-2px` |
+| source | hand-written `--vscode-focusBorder` rule in `SummaryCard.scss` | `createFocusOutlineStyle()`                 |
 
 Same 1px ring, sitting 2px outside the box instead of 1px, and taking its colour from Fluent's focus
 token rather than from VS Code's directly. **This is the first thing to check by keyboard**, and it
