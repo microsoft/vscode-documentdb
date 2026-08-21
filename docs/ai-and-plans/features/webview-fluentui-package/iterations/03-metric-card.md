@@ -996,7 +996,7 @@ Three sections earn their place by covering what the types cannot:
   thing a reader will get wrong, and a prop table cannot say it.
 - **Formatting is not here, and will not be**, because "why can it not take a number" is the first
   question anyone asks, and the answer is a boundary rather than an omission.
-- **Accessibility**, which states the case *against* `ariaLabel` alongside the case for it, and says
+- **Accessibility**, which states the case _against_ `ariaLabel` alongside the case for it, and says
   plainly that the component takes no position. That is §2 written for a consumer instead of for a
   reviewer.
 
@@ -1008,3 +1008,168 @@ design, because they are one.
 `npm run prettier-fix` reformatted three lines of `LocalQuickStart.tsx`, which had drifted before
 this increment started. It is included rather than reverted: the formatter produces it on any run,
 so reverting it only moves it to whoever runs prettier next. It is unrelated to the metric card.
+
+---
+
+## Item 6: verification, and the post-migration measurement
+
+No code. Commit: _pending_, this work log only.
+
+### The §14 ladder
+
+Run once, in order, all green:
+
+| Step                     | Result                                                             |
+| ------------------------ | ------------------------------------------------------------------ |
+| `npm run l10n`           | 2281 strings extracted, 2392 keys, **`bundle.l10n.json` unchanged** |
+| `npm run prettier-fix`   | reformatted this plan file only                                    |
+| `npm run lint`           | clean                                                              |
+| `npx jest --no-coverage` | 228 suites, **3570 tests**, all passing                            |
+| `npm run build`          | clean                                                              |
+| `npm run package`        | packaged, 124 files, 9.06 MB                                       |
+
+The l10n bundle not moving is the expected result rather than a miss: items 3 and 4 wrapped four
+existing `'N/A'` defaults in `l10n.t()`, and `N/A` was already a key.
+
+### How the after-measurement was taken
+
+The harness from item 0, restored, with `MetricsRow` swapped for `MetricGrid`, which is the only
+edit it needed. Same static page, same three viewport sizes, same `window.innerWidth` of 288 / 480 /
+800, `iframe` asserted absent on every sample.
+
+One difference in method has to be stated. The item 0 script selected elements by class name
+(`.metricCard`, `.dataHeader`, `.cellValueSlot`); those classes no longer exist, so the after-script
+selects **structurally**: the grid's element children, and each card's first and second child. The
+two select the same elements, because the DOM shape is unchanged: grid, then card, then label and
+value slot. Where the numbers are equal, they are equal for the same elements.
+
+**Fluent's `Tooltip` renders an empty `<span>` next to its trigger**, and that span is a grid item.
+It was there before the migration too, which is why the card positions match, but it is worth
+recording because a grid of four cards can report six or eight children and that looks like a defect
+until you know.
+
+### The diff, element by element
+
+**69 differences across 51 measured elements at three widths, in exactly two categories. Nothing
+else moved.**
+
+| Category | Count | What                                             |
+| -------- | ----- | ------------------------------------------------ |
+| 1        | 60    | label colour, `rgb(113,113,113)` → `rgb(112,112,112)` |
+| 2        | 9     | three summary cells gained `tabindex="0"`        |
+
+Everything below was compared and is **byte-identical** before and after:
+
+- **Grid tracks and gap**, for all four grids at all three widths: `275.733px` / `232px 232px` /
+  `188px 188px 188px 188px`, `gap: 16px`. One, two and four columns, unchanged. No horizontal
+  overflow at any width.
+- **Card boxes.** Every card, every width. `188 x 88` at the widest, at x offsets 0, 204, 408, 612.
+- **Card paint and layout.** `padding: 12px`, `gap: 12px`, `display: flex`, `flex-direction: column`,
+  `align-items: flex-start`, `border-radius: 4px`, `background: rgb(255,255,255)`. This is decision
+  0024's "declare neither" working: the values are still Fluent `Card`'s.
+- **`tabindex` on all 16 metric cards.** Unchanged at `0`.
+- **Label box and type**, apart from the colour: `12px` / `600` / line-height `20px`, and
+  `display: block` without a description, `flex` with one.
+- **Value slot box and type.** `28px` / `600` / `32px` / `min-height: 32px` for `large`, and
+  **`14px` / `600` / `20px` / `min-height: 20px`** for `small`, which is finding B carried through
+  correctly.
+- **The loading state.** Skeleton height `28px` for `large` and `16px` for `small`, in a slot whose
+  box is identical to the resolved state's. The reservation still holds.
+- **The unavailable state.** `opacity: 0.5`, `color: rgb(161,161,161)`, same box.
+- **The info glyph.** Same box, `12px`, `opacity: 0.6`, `margin-left: 4px`.
+- **Summary grid and cells.** Two tracks, `gap: 16px`, cell boxes, label boxes, slot boxes and
+  `min-height: 20px` all identical.
+
+#### Category 1: the label colour
+
+`#717171` to `#707070`, on every metric card header and every summary cell label, at every width.
+This is decision 0024 landing exactly as designed and measured: `--vscode-descriptionForeground` is
+`#717171` in this palette and `tokens.colorNeutralForeground4` is `#707070`.
+
+One unit per channel. Had §5 been followed as written it would have been `#424242`, which is the
+change this measurement existed to prevent.
+
+#### Category 2: three summary cells became tab stops
+
+In **the harness**, cells 0, 2 and 3 have no tooltip and were not tab stops; they are now. Cell 1
+has a tooltip and was already one.
+
+**In the product this does not occur.** All four `GenericCell`s in `QueryInsightsTab` pass a
+`tooltipExplanation`, so all four already satisfied `CellBase`'s conditional rule. The harness
+includes tooltip-less cells deliberately, to measure what the API change does rather than only what
+this product's current call sites happen to exercise. Both numbers are worth having: the product is
+unchanged today, and the component's contract did change for anyone who adds a cell without a
+tooltip tomorrow.
+
+### Focus indicators
+
+All 16 metric cards: unchanged. No `outline`; Fluent's `::after` ring, `1px solid`, `border-radius:
+4px`, inset `0`, with `data-fui-focus-visible` present on the focused element.
+
+The summary cells **did** change, as item 4 said they would:
+
+|        | Before                                                              | After                                       |
+| ------ | ------------------------------------------------------------------- | ------------------------------------------- |
+| ring   | `outline: 1px solid rgb(0,95,184)`, `outline-offset: 1px`           | Fluent `::after`, `1px solid`, inset `-2px` |
+| source | hand-written `--vscode-focusBorder` rule in `SummaryCard.scss`      | `createFocusOutlineStyle()`                 |
+
+Same 1px ring, sitting 2px outside the box instead of 1px, and taking its colour from Fluent's focus
+token rather than from VS Code's directly. **This is the first thing to check by keyboard**, and it
+is the only visible chrome change in the increment beyond the label colour.
+
+### Accessible names and descriptions: identical
+
+The check the hand-over instructions single out. All 16 metric cards, compared string by string
+against the item 0 capture:
+
+- name still from `aria-label`, not superseded, no other source present;
+- name string identical, including the `": "` and `". "` joins and the empty-value case;
+- description string identical, including the value repeated at the end, which is what
+  `tooltipRepeatsValue` exists to preserve.
+
+Summary cells: still **no accessible name**. The tooltip-wrapped one still carries only a
+description, `"Index Used The index the planner selected for this query"`, unchanged.
+
+So increment 4's question is untouched and its evidence still stands: the label, the explanation and
+the value each appear twice, once in the name and once in the description.
+
+### What this does not prove
+
+Stated plainly, because these renders are persuasive well beyond what they verify.
+
+- **Light theme only**, one hardcoded palette. Dark and high contrast are untested, and dark is
+  where the label colour behaves differently: `colorNeutralForeground2` is re-pointed to
+  `--vscode-foreground` there, and `colorNeutralForeground4` is not re-pointed at all.
+- **A browser, not the VS Code webview host.** No real theme variables, no CSP, no panel chrome, no
+  host messaging, no resize behaviour of a real panel.
+- **A faked host**, so nothing about data arrival, cancellation or error paths is exercised. The
+  loading and unavailable states were rendered by passing `undefined` and `null` directly.
+- **No real assistive technology.** Names, descriptions and roles come from the accessibility tree.
+  What a screen reader actually says, and in what order, is inferred.
+- **Not the real tabs.** The harness mounts the same components with the same props, not
+  `QueryInsightsTab` and `IndexesTab` themselves, so it verifies the components and not the
+  surrounding layout.
+
+### Harness removed
+
+`src/webviews/__preview__/` and `src/webviews/static/metricPreview.html` deleted;
+`WebviewRegistry.ts` restored with `git checkout`. `git status` and `git diff` confirmed clean apart
+from this plan file. Nothing was ever staged with `git add -A` or `git add -f`.
+
+---
+
+## For the operator
+
+Four things, in the order worth checking.
+
+1. **The focus ring on the four summary cells in Query Efficiency Analysis.** Tab into them. It moved
+   from a VS Code focus-border outline 1px outside the box to Fluent's ring 2px outside it. This is
+   the only chrome change the measurement could not call cosmetic.
+2. **The metric labels are one shade lighter**, `#717171` to `#707070`, and the reasoning for
+   choosing that over §5's much darker `#424242` is decision 0024. Worth a glance in a dark theme
+   too, which the harness does not cover.
+3. **Three decisions were delegated**, not deferred: the label token, the card padding, and item 4's
+   scope. All three are recorded with their rejected alternatives, and all three are cheap to
+   reverse while the package is `private: true`.
+4. **The accessible names and descriptions did not change**, deliberately. The double announcement
+   is measured, recorded, and still there. It is increment 4's to fix.
