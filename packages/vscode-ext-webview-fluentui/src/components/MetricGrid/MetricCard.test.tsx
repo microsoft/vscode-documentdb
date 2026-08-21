@@ -62,9 +62,7 @@ describe('MetricCard value states', () => {
 
     test('large and small reserve different heights', async () => {
         const { root: large } = await renderSurface(<MetricCard label="Execution time" value="2.33 ms" />);
-        const { root: small } = await renderSurface(
-            <MetricCard label="Execution time" value="2.33 ms" size="small" />,
-        );
+        const { root: small } = await renderSurface(<MetricCard label="Execution time" value="2.33 ms" size="small" />);
         expect(slots(large).value.className).not.toBe(slots(small).value.className);
     });
 });

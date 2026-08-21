@@ -26,9 +26,9 @@ as which `Skeleton` appearance to use.
 
 ### Components
 
-`Container`, `StepList`, `StatusList`, and `Wizard` are reusable layout and navigation components.
-They style themselves from Fluent `tokens.*`, so they work with or without this package's theming,
-and importing them injects no stylesheet of their own.
+`Container`, `MetricGrid`, `StepList`, `StatusList`, and `Wizard` are reusable layout, navigation
+and data-display components. They style themselves from Fluent `tokens.*`, so they work with or
+without this package's theming, and importing them injects no stylesheet of their own.
 
 See [Quick start: components](#quick-start-components) for the common path, and
 [`src/components/README.md`](./src/components/README.md) for the full catalog, how the components
@@ -98,11 +98,13 @@ Post-processing the generated theme, and everything else about the theming, is c
 import { Wizard, WizardStep, ContainerHeader, ContainerFooter } from '@microsoft/vscode-ext-webview-fluentui/components';
 ```
 
-Four things ship today. `Container` is the shell of a full-window surface: scrolling header and
+Five things ship today. `Container` is the shell of a full-window surface: scrolling header and
 content, over a footer pinned to the bottom. `StepList` is a step indicator that collapses into an
 overflow menu and never hides the current step. `StatusList` is a bordered list of stages, each
 with a status glyph and a line of evidence. `Wizard` is all three of those assembled into a
 complete wizard surface, for the common case where you do not want to wire them yourself.
+`MetricGrid` and `MetricCard` are a dashboard strip: one measurement per card, told apart from
+"loading" and "unavailable" without the layout moving, in a grid that goes from one column to four.
 
 Components style themselves from Fluent `tokens.*`, which resolve against whatever
 `FluentProvider` is above them. They work without this package's theming, and importing
@@ -200,7 +202,7 @@ Two consequences worth knowing:
 | Entry          | Exports                                                                                                                                    |
 | -------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
 | `.`            | `VSCodeFluentProvider`, `useActiveVSCodeTheme`, `useActiveVSCodeThemeKind`, `createVSCodeFluentTheme`, `generateAdaptive{Light,Dark}Theme` |
-| `./components` | `Container` and its family, `StepList`, `StatusList`, `Wizard`, and their prop types                                                       |
+| `./components` | `Container` and its family, `MetricGrid`, `MetricCard`, `StepList`, `StatusList`, `Wizard`, and their prop types                           |
 
 The palette math and the VS Code theme token list are internal. Monaco theming is not part of this
 package: Monaco is not Fluent, and a 5 MB peer has no business in a theming package.

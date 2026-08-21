@@ -570,11 +570,11 @@ mistaken for layout.
 Identical for all four grids on the page (`QueryInsightsTab`'s row, and `IndexMetricsRow` in both
 states), so one table covers them:
 
-| `window.innerWidth` | `grid-template-columns`         | `gap`  | horizontal overflow |
-| ------------------- | ------------------------------- | ------ | ------------------- |
-| 288                 | `275.733px`                     | `16px` | no                  |
-| 480                 | `232px 232px`                   | `16px` | no                  |
-| 800                 | `188px 188px 188px 188px`       | `16px` | no                  |
+| `window.innerWidth` | `grid-template-columns`   | `gap`  | horizontal overflow |
+| ------------------- | ------------------------- | ------ | ------------------- |
+| 288                 | `275.733px`               | `16px` | no                  |
+| 480                 | `232px 232px`             | `16px` | no                  |
+| 800                 | `188px 188px 188px 188px` | `16px` | no                  |
 
 One, two and four tracks. That is the contract to preserve.
 
@@ -582,14 +582,14 @@ One, two and four tracks. That is the contract to preserve.
 
 `.metricCard`, first card of the Query Insights row, at `innerWidth` 800:
 
-| Element         | Measurement                                                                                                       |
-| --------------- | ----------------------------------------------------------------------------------------------------------------- |
-| card box        | `188 x 88`                                                                                                        |
-| card computed   | `padding: 12px`, `gap: 12px`, `display: flex`, `flex-direction: column`, `align-items: flex-start`, `border-radius: 4px`, `background: rgb(255,255,255)` |
-| `tabindex`      | `0`                                                                                                               |
-| `.dataHeader`   | box `164 x 20` at `(12, 12)`; `12px` / `600` / line-height `20px` / `rgb(113,113,113)`; `overflow: hidden`, `text-overflow: ellipsis`, `white-space: nowrap` |
-| `.dataValue`    | box `164 x 32` at `(12, 44)`; `28px` / `600` / line-height `32px` / `rgb(31,31,31)`; `min-height: 32px`, `display: flex`, `align-items: center` |
-| `.tooltipInfoIcon` | `12 x 12`; `font-size: 12px`, `opacity: 0.6`, `margin-left: 4px`                                                |
+| Element            | Measurement                                                                                                                                                  |
+| ------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| card box           | `188 x 88`                                                                                                                                                   |
+| card computed      | `padding: 12px`, `gap: 12px`, `display: flex`, `flex-direction: column`, `align-items: flex-start`, `border-radius: 4px`, `background: rgb(255,255,255)`     |
+| `tabindex`         | `0`                                                                                                                                                          |
+| `.dataHeader`      | box `164 x 20` at `(12, 12)`; `12px` / `600` / line-height `20px` / `rgb(113,113,113)`; `overflow: hidden`, `text-overflow: ellipsis`, `white-space: nowrap` |
+| `.dataValue`       | box `164 x 32` at `(12, 44)`; `28px` / `600` / line-height `32px` / `rgb(31,31,31)`; `min-height: 32px`, `display: flex`, `align-items: center`              |
+| `.tooltipInfoIcon` | `12 x 12`; `font-size: 12px`, `opacity: 0.6`, `margin-left: 4px`                                                                                             |
 
 Card height is `88` at every width: `12 + 20 + 12 + 32 + 12`.
 
@@ -615,15 +615,15 @@ means either not setting them at all for `filled`, or setting them to `12px` / `
 
 `.summaryGrid` is two equal tracks at every width, `gap: 16px`.
 
-| Element                        | Measurement                                                                              |
-| ------------------------------ | ---------------------------------------------------------------------------------------- |
+| Element                        | Measurement                                                                                |
+| ------------------------------ | ------------------------------------------------------------------------------------------ |
 | `.summaryCell`                 | `display: flex`, `gap: 4px`, `align-items: flex-start`, `grid-column: span 1`, height `44` |
-| `.summaryCell` `border-radius` | `0px` normally, `4px` on the tooltip-wrapped cell                                        |
-| `.cellLabel`                   | `12px` / `600` / `20px` / `rgb(113,113,113)`; `display: block`, or `flex` with a tooltip  |
-| `.cellValueSlot`               | `min-height: 20px`, `display: flex`, `align-items: center`                               |
-| `.cellValue`                   | **`14px`** / `600` / line-height `20px` / `rgb(31,31,31)`                                |
-| loading skeleton               | `16px` tall inside the `20px` slot                                                       |
-| `.nullValue`                   | `opacity: 0.5`, `color: rgb(161,161,161)` — byte-identical to the metric card's          |
+| `.summaryCell` `border-radius` | `0px` normally, `4px` on the tooltip-wrapped cell                                          |
+| `.cellLabel`                   | `12px` / `600` / `20px` / `rgb(113,113,113)`; `display: block`, or `flex` with a tooltip   |
+| `.cellValueSlot`               | `min-height: 20px`, `display: flex`, `align-items: center`                                 |
+| `.cellValue`                   | **`14px`** / `600` / line-height `20px` / `rgb(31,31,31)`                                  |
+| loading skeleton               | `16px` tall inside the `20px` slot                                                         |
+| `.nullValue`                   | `opacity: 0.5`, `color: rgb(161,161,161)` — byte-identical to the metric card's            |
 
 **Finding B. §3 row 2 has the small value size wrong.** It says `CellBase` renders its value at
 `16px`; the measured font size is **`14px`**, from the `font-size: 14px` override in
@@ -634,10 +634,10 @@ variant built from §3 row 2 as written would enlarge every summary cell value.
 
 At `innerWidth` 800, tabbing from `<body>`, 17 stops before the cycle repeats:
 
-| Stops | Elements                                                   |
-| ----- | ---------------------------------------------------------- |
-| 1-16  | every `.metricCard`, in DOM order, across all four grids   |
-| 17    | **one** `.summaryCell` — the only one with a tooltip       |
+| Stops | Elements                                                 |
+| ----- | -------------------------------------------------------- |
+| 1-16  | every `.metricCard`, in DOM order, across all four grids |
+| 17    | **one** `.summaryCell` — the only one with a tooltip     |
 
 Every metric card is a tab stop whether or not it has a tooltip, and whether or not its value has
 resolved. Exactly one of the four summary cells is.
@@ -678,13 +678,13 @@ This is increment 4's evidence. It is recorded here and is not acted on.
 `--vscode-descriptionForeground`. §5 maps it to `tokens.colorNeutralForeground2`. Measured under
 `VSCodeFluentProvider` in the light adaptive theme:
 
-| Token                              | Resolves to | vs. today's `#717171` |
-| ---------------------------------- | ----------- | --------------------- |
-| `colorNeutralForeground1`          | `#1f1f1f`   | far darker            |
-| `colorNeutralForeground2`          | `#424242`   | **clearly darker**    |
-| `colorNeutralForeground3`          | `#616161`   | darker                |
-| `colorNeutralForeground4`          | `#707070`   | one unit off          |
-| `colorNeutralForegroundDisabled`   | `#a1a1a1`   | —                     |
+| Token                            | Resolves to | vs. today's `#717171` |
+| -------------------------------- | ----------- | --------------------- |
+| `colorNeutralForeground1`        | `#1f1f1f`   | far darker            |
+| `colorNeutralForeground2`        | `#424242`   | **clearly darker**    |
+| `colorNeutralForeground3`        | `#616161`   | darker                |
+| `colorNeutralForeground4`        | `#707070`   | one unit off          |
+| `colorNeutralForegroundDisabled` | `#a1a1a1`   | —                     |
 
 §5 predicted "inside this extension it should be visually identical". For the header it is not:
 `themeGenerator.ts` re-points `colorNeutralForeground2` to `--vscode-foreground` **only in the dark
@@ -732,11 +732,11 @@ baseline**, on the reasoning that an extraction whose acceptance criterion is "n
 the wrong vehicle for a visual decision, and that every one of these remains cheap to reverse while
 the package is `private: true`.
 
-| Question                    | Decided                                    | Rejected                                          |
-| --------------------------- | ------------------------------------------ | ------------------------------------------------- |
-| Label colour token          | `colorNeutralForeground4` (`#707070`)      | `colorNeutralForeground2` per §5 (`#424242`)      |
-| `filled` padding and gap    | declare neither; inherit `Card`'s 12 / 12  | declare 16 / 8 as `MetricsRow.scss` intended      |
-| Summary cells in item 4     | in scope; the grid ships as `MetricGrid`   | deferring them, and shipping `filled`/`large` only |
+| Question                 | Decided                                   | Rejected                                           |
+| ------------------------ | ----------------------------------------- | -------------------------------------------------- |
+| Label colour token       | `colorNeutralForeground4` (`#707070`)     | `colorNeutralForeground2` per §5 (`#424242`)       |
+| `filled` padding and gap | declare neither; inherit `Card`'s 12 / 12 | declare 16 / 8 as `MetricsRow.scss` intended       |
+| Summary cells in item 4  | in scope; the grid ships as `MetricGrid`  | deferring them, and shipping `filled`/`large` only |
 
 The full argument for the first two, including what is genuinely lost by not following §5, is in
 0024's "Changed from the proposal". They are not repeated here.
@@ -963,3 +963,48 @@ still true, now for two stylesheets instead of three.
 `.cardPadding` and `.cardPaddingLarge` are dead too, and are **left alone**. They were already dead
 before this increment, so removing them here would mix an unrelated cleanup into a commit whose
 value is that everything in it is traceable to the migration.
+
+---
+
+## Item 5: documentation
+
+Package only, plus one incidental formatter fix. Commit: _pending_.
+
+`src/components/MetricGrid/README.md` is new. The family is added to the `components/README.md`
+contents table and its composition diagram, to the package README's two component paragraphs, and to
+the public surface table. Prop documentation stays in JSDoc on the types, where the editor shows it,
+and the README never restates it.
+
+Grepped both READMEs for `MetricsRow`, `MetricBase`, `CellBase` and `WizardBreadcrumb` before
+committing. Nothing stale, which is the check increment 2 learned the hard way when
+`WizardBreadcrumb` outlived its own deletion in the export table for a whole increment.
+
+### Written from outside the package, per increment 2's second lesson
+
+The two checks that lesson prescribes, applied:
+
+- **Every noun in the opening paragraph is defined by the component's own API.** "Caption", "value",
+  "explanation", "grid". No "variant", no "slot" in the opening, and nothing about tiers.
+- **It opens the way Fluent opens**: what it does, then what to reach for instead ("for a single
+  figure with no caption, use `Text`"), then Do and Don't. The design rationale, which is the part
+  that took the longest to work out, is further down where somebody choosing between options will
+  find it, rather than between the reader and the first example.
+
+Three sections earn their place by covering what the types cannot:
+
+- **The three states of `value`**, because `0` and `''` being values rather than absences is the
+  thing a reader will get wrong, and a prop table cannot say it.
+- **Formatting is not here, and will not be**, because "why can it not take a number" is the first
+  question anyone asks, and the answer is a boundary rather than an omission.
+- **Accessibility**, which states the case *against* `ariaLabel` alongside the case for it, and says
+  plainly that the component takes no position. That is §2 written for a consumer instead of for a
+  reviewer.
+
+The grid's viewport breakpoints are documented as a known limitation rather than presented as a
+design, because they are one.
+
+### The incidental change
+
+`npm run prettier-fix` reformatted three lines of `LocalQuickStart.tsx`, which had drifted before
+this increment started. It is included rather than reverted: the formatter produces it on any run,
+so reverting it only moves it to whoever runs prettier next. It is unrelated to the metric card.

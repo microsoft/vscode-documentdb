@@ -2298,7 +2298,9 @@ export const LocalQuickStart = (): JSX.Element => {
                     ? l10n.t(
                           'Continuing runs every setup step from the beginning, starting with the Docker check. Nothing has been created on your machine yet.',
                       )
-                    : l10n.t('Retrying runs every setup step again from the beginning, starting with the Docker check.');
+                    : l10n.t(
+                          'Retrying runs every setup step again from the beginning, starting with the Docker check.',
+                      );
                 secondaryActions = (
                     <Button appearance="secondary" onClick={handleBackToConfigure}>
                         {l10n.t('Back')}

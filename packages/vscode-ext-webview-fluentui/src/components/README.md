@@ -46,6 +46,7 @@ actually house style, with no second consumer. It lives in the extension
 | Component                              | What it is                                                                             |
 | -------------------------------------- | -------------------------------------------------------------------------------------- |
 | [`Container`](./Container/README.md)   | the shell of a full-window surface: scrolling header and content, over a pinned footer |
+| [`MetricGrid`](./MetricGrid/README.md) | one measurement per card, in a grid that goes from one column to four                  |
 | [`StepList`](./StepList/README.md)     | a step indicator that collapses into an overflow menu and never hides the current step |
 | [`StatusList`](./StatusList/README.md) | a bordered list of stages, each with a status glyph and a line of evidence             |
 | [`Wizard`](./Wizard/README.md)         | a complete wizard surface in one component                                             |
@@ -56,7 +57,8 @@ actually house style, with no second consumer. It lives in the extension
 together. It uses nothing from them that a consumer could not use directly, which is what lets
 anyone who outgrows `Wizard` drop to those components and lose nothing.
 
-`StatusList` is independent and goes inside any content area.
+`StatusList` is independent and goes inside any content area. `MetricGrid` is independent too, and
+is a plain grid: `MetricCard` is the expected child but not a required one.
 
 ```
 Wizard ──> Container ─┬─ ContainerBody ─┬─ ContainerHeader
@@ -65,6 +67,8 @@ Wizard ──> Container ─┬─ ContainerBody ─┬─ ContainerHeader
                       └─ ContainerFooter
 
 StatusList ──> StatusListItem
+
+MetricGrid ──> MetricCard
 ```
 
 ## Documentation
