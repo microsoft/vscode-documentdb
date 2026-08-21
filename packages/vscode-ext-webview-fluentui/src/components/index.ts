@@ -20,6 +20,7 @@ export {
     type ContainerProps,
     type ContainerSectionProps,
 } from './Container/index.js';
+export { MetricCard, MetricGrid, type MetricCardProps, type MetricGridProps } from './MetricGrid/index.js';
 export {
     StatusList,
     StatusListItem,

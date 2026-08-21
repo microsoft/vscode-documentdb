@@ -767,3 +767,74 @@ row 9 already puts span with the consumer and §12 already names `PerformanceRat
 this is those two read together. The alternative considered was a `span` prop on `MetricCard`, which
 was rejected because it would put a grid property on the cell and would carry the slot-suppression
 rule into the package for exactly one consumer.
+
+---
+
+## Item 2: `MetricGrid` and `MetricCard` in the package
+
+Package only. Commit: _pending_.
+
+`src/components/MetricGrid/` with `MetricGrid.tsx`, `MetricCard.tsx`, `MetricGrid.types.ts`,
+`index.ts` and `MetricCard.test.tsx`, exported from `components/index.ts`. Nothing under `theme/`,
+`styles/`, `palette/` or the `"."` entry was touched. No new dependency, no lockfile change.
+
+11 tests, and the folder's reported count moved from nothing to 11, which is the check for a
+`.test.tsx` that no jest project matches. The package suite is 60 tests across 10 files, including
+`components.test.ts`, which still passes: a family's worth of Griffel injects no stylesheet.
+
+### The props that are not in §4
+
+Two, both with a reason that only appeared once the code was written.
+
+**`tooltipRepeatsValue`, defaulting to `false`.** §7 recommended dropping the tooltip's value row
+outright. Dropping it **changes the accessible description**: today a metric card's description
+reads `"Execution Time Total time taken … 2.33 ms"`, and without the row it loses the value. §13.2
+point 6 and the hand-over instructions both say the descriptions must not change in this increment,
+because they are increment 4's question. So the row survives, behind a prop that the metric wrappers
+opt into and the summary cells leave alone, which is also exactly the difference between the two
+forks in §3 row 8.
+
+Alternatives weighed: dropping it and accepting the description change (rejected, it answers
+increment 4's question by accident); tying the row to `size === 'large'` (rejected, an invisible
+coupling between a type scale and a tooltip's contents); making the glyph a slot (rejected as more
+surface than open question 3 is worth while it is still open).
+
+**No `focusable` prop**, as settled. `tabIndex={0}` is unconditional and is asserted across five
+configurations, including `subtle`, `small`, and with no tooltip, because that is the line most
+likely to be removed by someone tidying up.
+
+### Deviation: `createFocusOutlineStyle`, not `createCustomFocusIndicatorStyle`
+
+§3 row 5, §4 and §13.4 all name `createCustomFocusIndicatorStyle` for the `subtle` variant's focus
+ring. The code calls **`createFocusOutlineStyle()`** instead. Both are public re-exports from
+`@fluentui/react-components`, both emit the `[data-fui-focus-visible]` selector Fluent's own focus
+system drives, and neither hand-writes it, so decision 0019 is satisfied either way.
+
+`createFocusOutlineStyle` is the better fit for two reasons. It produces the same `::after` ring
+that Fluent's `Card` already draws, which the item 0 capture measured on every metric card, so the
+converged component has one focus appearance rather than two. And it removes the browser's default
+outline, which `createCustomFocusIndicatorStyle` explicitly does not — its own doc comment says
+that is the caller's job — so the alternative would have needed a hand-written `outlineStyle: 'none'`
+beside it to avoid drawing two rings.
+
+It requires `position: relative` on the element it decorates, which is declared, and which `Card`
+already sets for itself.
+
+### Where the baseline changed the code
+
+- **`filled` declares neither `padding` nor `gap`.** Per 0024. The class contributes only
+  `alignItems: 'flex-start'`, which is the one declaration in `.metricCard` that Fluent's `Card`
+  does not already set and that the measurement showed applying.
+- **The label uses `colorNeutralForeground4`.** Per 0024.
+- **The label declares no `line-height`.** Item 0 found the `20px` is inherited from Fluent's
+  `body1`, not declared. Declaring it would preserve the pixel and lose the inheritance, which is
+  the worse trade for a component whose consumer may set a different type ramp.
+- **`size="small"` puts `14px` on the value slot itself**, rather than expecting the consumer to
+  wrap the value in a styled span the way `GenericCell` does today. Same rendered geometry, one
+  fewer element, and it means the `N/A` placeholder inherits the right size without a second rule.
+
+### The one thing the tests cannot assert
+
+Jsdom computes no layout, so "the value slot has the same height loading and resolved" is asserted
+as **the same class**, not the same measured height. The height itself is item 6's problem, and item
+0 recorded it: `32px` in both states for `large`, `20px` for `small`.
