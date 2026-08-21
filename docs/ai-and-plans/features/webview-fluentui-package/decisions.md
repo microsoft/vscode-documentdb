@@ -32,6 +32,8 @@ created: 2026-08-18
 | 0020 | Opaque stencils stay opaque; `translucent` is what we document | Accepted            | Reverses the alpha-overlay approach the code arrived with       | 2026-08-18 | #895 |
 | 0021 | The scope gate widens to reusable components                   | Accepted            | Relaxes condition 1 of 0001; operator-originated                | 2026-08-19 | —    |
 | 0022 | `MessageBlock` stays in the extension                          | Accepted            | Proposal was to ship it from the package                        | 2026-08-19 | —    |     | 0023 | The README presents theming and components as equal, mixable | Accepted (modified) | Reverses §1 of design.md; operator-originated | 2026-08-20 | —    |
+| 0024 | The metric card enters, and converges its fork                 | Accepted (modified) | Three token and geometry mappings corrected by measurement      | 2026-08-21 | #895 |
+| 0025 | `Announcer` is out of scope for this package                   | Accepted            | Accepted as proposed                                            | 2026-08-21 | #895 |
 
 > Entries below are **semantically** immutable: append new entries rather than
 > rewriting old ones, and record reversals as a new entry plus a status change
@@ -967,5 +969,158 @@ sells a path a consumer may specifically be adopting the package for.
 Design.md §1's framing instruction is reversed by this decision; design.md is updated in the same
 change to match. Decisions are the record that wins on conflict, per this package's own README
 note at the top of design.md.
+
+---
+
+## 0024 — The metric card enters, and converges its fork
+
+**Status:** Accepted (modified) · **Date:** 2026-08-21 · **PR:** #895
+
+### Question
+
+`MetricBase` in the Query Insights tab and `CellBase` in the same feature's summary card are two
+independent solutions to one problem, written from the same prop list and disagreeing on ten points
+without a reason on the record. Does the card enter the package, and if so which of the two wins
+each disagreement?
+
+### Decision
+
+It enters. `MetricCard` and `MetricGrid` ship from `./components`; `MetricBase` and `CellBase` both
+dissolve into them. `MetricGrid` also replaces `MetricsRow`, whose name has not described a row since
+it grew media queries.
+
+The ten disagreements resolve as `appearance="filled" | "subtle"` and `size="large" | "small"`, plus
+a `tooltipPositioning` prop. Two sub-choices, settled by the operator at review on 2026-08-21 and
+both provisional under the package's Preview status:
+
+- **`ariaLabel` is an optional pass-through.** The package takes no position on whether a metric
+  card should compose its own accessible name. Supplying the prop hides the children from assistive
+  technology; omitting it lets the content name the element. Both of today's behaviours are
+  expressible and the migration changes neither.
+- **Every card is a tab stop.** `tabIndex={0}` unconditionally, no `focusable` prop.
+
+All formatting stays in the extension. `TimeMetric`, `CountMetric`, `RatioMetric`, `GenericMetric`
+and `GenericCell` become thin wrappers that format a value and hand it over. No unit string, no
+`toLocaleString`, no percentage rule crosses the boundary.
+
+### Changed from the proposal
+
+Three of the proposal's mappings were wrong, and the item 0 baseline is what found them. Each is
+recorded because the wrong value was plausible and would not have been noticed by review.
+
+**The label colour is `colorNeutralForeground4`, not `colorNeutralForeground2`.** The plan's §5
+mapped the label to `colorNeutralForeground2` and predicted the result would be "visually identical"
+inside this extension. Measured under `VSCodeFluentProvider` in the light adaptive theme, it is not:
+today's `--vscode-descriptionForeground` is `#717171`, and `colorNeutralForeground2` resolves to
+`#424242`. `themeGenerator.ts` re-points that token to `--vscode-foreground` **only in the dark
+theme**, and the `fluentOverrides.scss` rules that do point `colorNeutralForeground3` and `4` at
+`--vscode-descriptionForeground` are scoped to `:where(.fui-Input, .fui-SearchBox, …)`, which no
+card matches. `colorNeutralForeground4` measures `#707070`, one unit from the value it replaces, and
+is the token that delivers what §5 intended.
+
+The rejected alternative is following §5 as written. It has a real argument: `Container` and
+`StatusList` already use `colorNeutralForeground2` for the secondary-text role, so consistency inside
+the package favours it. It was rejected because this increment's acceptance criterion is that
+nothing visibly changed, and darkening every metric label in every light theme fails that on the one
+element a reader looks at first. If the package later wants one secondary-text token everywhere,
+that is a deliberate visual change with its own before-and-after, not a side effect of an extraction.
+
+**The `filled` card sets no padding and no gap.** `MetricsRow.scss` declares `padding: 16px` and
+`gap: 8px` on `.metricCard`; the measured values are `12px` and `12px`, which are Fluent `Card`'s.
+Griffel's rules win, so those two declarations have never once been painted. The migration inverts
+that — a Griffel rule in the package merged onto `Card` would win — so writing `16 / 8` into the
+package would paint them for the first time and grow every card from 88px to 92px.
+
+The rejected alternative is shipping `16 / 8` on the grounds that it is what the author wrote and
+presumably wanted. Rejected: the design that has shipped for the product's whole life is the 12/12
+one, nobody has reported it, and an extraction is the wrong place to decide that a spacing was meant
+to be different. `filled` therefore declares neither and inherits `Card`'s; `subtle` declares
+`gap: 4px` and no padding, which is what the bare-`div` sibling renders.
+
+**The `small` value size is `14px`, not `16px`.** §3 row 2 reads `CellBase`'s value as `16px`;
+`GenericCell.scss` overrides it to `14px` and the measurement confirms `14px`. `16` is the
+`SkeletonItem size={16}`, which is a different number that happens to sit next to it.
+
+### Why the fork is the argument for extracting, not against it
+
+design.md §11 shortlisted this candidate as "not self-contained" and stopped. What the shortlist
+missed is that the duplication already exists inside one feature: two files, two stylesheets, two
+byte-identical `.nullValue` rules. Deduplicating them requires choosing a single shape whatever the
+destination, and once that shape exists it satisfies the gate on its own terms — it is layout,
+loading and unavailable states, and a tooltip contract, with no product string and no opinion about
+numbers.
+
+Condition 3 is answered the same way 0021 requires: the second consumer is
+`microsoft/vscode-cosmosdb`, which forked this webview stack and has the same two copies.
+
+### The accessible-name question is deferred, deliberately
+
+Increment 4 owns it. The evidence is captured in increment 3's item 0 work log rather than argued
+here: every metric card today has an `aria-label`-derived name **and** a tooltip-derived description,
+and the label, explanation and value each appear in both. The pass-through prop is what lets that be
+fixed at the call sites later without the package changing shape, and it is what makes this
+extraction behaviour-preserving in the meantime.
+
+If increment 4 concludes that no consumer should ever pass `ariaLabel`, the prop is removed while
+the package is still `private: true`. That is the cheap direction to be wrong in.
+
+### What did not move
+
+`PerformanceRatingCell` keeps its own full-span markup in the extension. §3 row 9 puts column
+spanning with the consumer, and the full-span layout is not a variant of a metric card: it drops the
+fixed-height value slot, stretches its children, and hosts a rating dot with diagnostic badges. It is
+product logic that happens to render inside a cell, which §12 already named as a non-goal.
+
+`RatioMetric`'s inline bar chart also stays, as a node passed to `value`. That is what the prop is
+for.
+
+---
+
+## 0025 — `Announcer` is out of scope for this package
+
+**Status:** Accepted · **Date:** 2026-08-21 · **PR:** #895
+
+### Question
+
+Increment 2 left `Announcer` open. It passes all four gate conditions: it is not a product concern,
+it takes no product strings, both wizard views use it, and it imports nothing forbidden. Does it
+enter?
+
+### Decision
+
+No. It stays in the extension at `src/webviews/components/accessibility/Announcer.tsx`.
+
+### Why
+
+**It is not a Fluent component.** 0002 put `fluentui` in the name so that the admission question has
+an answer rather than an argument, and that name has already earned itself once by rejecting a
+Monaco wrapper on sight (0013). `Announcer` is `useState`, `useEffect` and a visually hidden `div`
+with `aria-live`. It imports nothing from Fluent and would behave identically in a product with no
+design system at all. Admitting it turns `fluentui` into a category name, which is the failure mode
+0002 exists to prevent.
+
+**Fluent already defines the contract.** `@fluentui/react-components` exports `useAnnounce` and
+`AnnounceProvider`. `useAnnounce()` returns `{ announce }`, and with no provider above it that
+`announce` is a **no-op**, because Fluent ships its live region inside `Toaster`, which this
+extension does not use. So the Fluent-shaped answer is not "move this component here", it is
+"implement Fluent's announce contract for consumers with no `Toaster`". That is a different and
+better component, and it would pass the name test this one fails.
+
+### Consequences
+
+A `VSCodeAnnouncer` providing `AnnounceProvider` is a legitimate future candidate. It would belong
+to the `"."` entry beside the other providers, not to `./components`, and it needs a named second
+consumer before it is proposed. It must not arrive as a convenience inside some other increment.
+
+The awkwardness increment 2 recorded is not fixed by any of this. Both wizard views render their
+announcer as a sibling of `<Wizard>` because `Wizard` has no slot between header and step list. That
+is a `Wizard` API question, not an `Announcer` packaging one.
+
+### Why it is recorded now rather than when someone acts on it
+
+An open question that resolves to no work should not wait for an increment to carry it. Left open it
+would be re-argued from scratch every time the component list is reviewed, and the argument is not
+cheap: the gate conditions genuinely all pass, so the reason for exclusion has to be written down or
+it will not survive contact with the next reader.
 
 ---

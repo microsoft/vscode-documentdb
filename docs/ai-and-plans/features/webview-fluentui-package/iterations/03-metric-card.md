@@ -538,4 +538,232 @@ When the commands pass and the numbers are reported, stop and hand over.
 
 ## Item 0: the baseline
 
-_Not yet taken. The measurements from §13.2 belong here, verbatim, before item 1 begins._
+Taken 2026-08-21, before any code changed. No commit, as specified.
+
+### How it was taken
+
+Not a mock and not a worktree, in the end. A worktree would have needed its own dev server on a
+second port and its own copy of the harness wiring, and the thing being compared is the same
+workspace at two points in time rather than two trees at once, so the same page is simply
+re-measured after the migration.
+
+What was wired up, all of it **untracked or reverted at item 6**:
+
+- `src/webviews/__preview__/MetricPreview.tsx` — untracked. Mounts the real consumers:
+  `MetricsRow` with `TimeMetric` / `CountMetric` / `RatioMetric` exactly as `QueryInsightsTab`
+  composes them, the real `IndexMetricsRow` in both its resolved and its loading state, and a
+  `SummaryCard` of `GenericCell`s covering resolved, tooltip, loading and unavailable.
+- `src/webviews/static/metricPreview.html` — untracked. One static page, view name hardcoded, no
+  query string, per the remote-workspace gotcha.
+- One import and one line in `WebviewRegistry.ts` — the only tracked file touched, reverted
+  immediately after the capture and restored only to re-measure at item 6.
+
+Measured at three viewport sizes. **The integrated browser scales the viewport by 0.8**, so
+`setViewportSize(360 / 600 / 1000)` produced `window.innerWidth` of **288 / 480 / 800**. That
+happens to land one sample in each of the grid's three bands, with the widest sitting exactly on the
+`min-width: 800px` boundary. `window.innerWidth` was asserted on every sample rather than trusted,
+and `document.querySelector('iframe')` was asserted absent so the dev-server overlay could not be
+mistaken for layout.
+
+### 1. Grid breakpoints
+
+Identical for all four grids on the page (`QueryInsightsTab`'s row, and `IndexMetricsRow` in both
+states), so one table covers them:
+
+| `window.innerWidth` | `grid-template-columns`         | `gap`  | horizontal overflow |
+| ------------------- | ------------------------------- | ------ | ------------------- |
+| 288                 | `275.733px`                     | `16px` | no                  |
+| 480                 | `232px 232px`                   | `16px` | no                  |
+| 800                 | `188px 188px 188px 188px`       | `16px` | no                  |
+
+One, two and four tracks. That is the contract to preserve.
+
+### 2. Card geometry
+
+`.metricCard`, first card of the Query Insights row, at `innerWidth` 800:
+
+| Element         | Measurement                                                                                                       |
+| --------------- | ----------------------------------------------------------------------------------------------------------------- |
+| card box        | `188 x 88`                                                                                                        |
+| card computed   | `padding: 12px`, `gap: 12px`, `display: flex`, `flex-direction: column`, `align-items: flex-start`, `border-radius: 4px`, `background: rgb(255,255,255)` |
+| `tabindex`      | `0`                                                                                                               |
+| `.dataHeader`   | box `164 x 20` at `(12, 12)`; `12px` / `600` / line-height `20px` / `rgb(113,113,113)`; `overflow: hidden`, `text-overflow: ellipsis`, `white-space: nowrap` |
+| `.dataValue`    | box `164 x 32` at `(12, 44)`; `28px` / `600` / line-height `32px` / `rgb(31,31,31)`; `min-height: 32px`, `display: flex`, `align-items: center` |
+| `.tooltipInfoIcon` | `12 x 12`; `font-size: 12px`, `opacity: 0.6`, `margin-left: 4px`                                                |
+
+Card height is `88` at every width: `12 + 20 + 12 + 32 + 12`.
+
+**Finding A. `.metricCard`'s declared padding and gap are dead CSS.** `MetricsRow.scss` declares
+`padding: 16px` and `gap: 8px`; the computed values are **`12px` and `12px`**, which are Fluent
+`Card`'s own. Griffel's rules win, so the SCSS has never applied. §3 row 1 describes the card as
+"`padding 16`, `gap 8`" and that is the source, not the rendering.
+
+This matters for the migration in the opposite direction from the obvious one. A package component
+that sets `padding: 16px` / `gap: 8px` in Griffel and merges its class onto `Card` **would** win,
+and would therefore be the first time those values have ever been painted. Preserving the baseline
+means either not setting them at all for `filled`, or setting them to `12px` / `12px`.
+
+### 3. Loading and unavailable states
+
+- **Loading.** `.dataValue` box is `164 x 32` with `min-height: 32px` — **identical to the resolved
+  state**, which is the reservation working. The `SkeletonItem` inside it is `28px` tall, centred in
+  the 32px slot.
+- **Unavailable.** `.nullValue` computes to `opacity: 0.5`, `color: rgb(161,161,161)`, inside an
+  unchanged `32px` slot.
+
+### 4. Summary cells, for the item 4 comparison
+
+`.summaryGrid` is two equal tracks at every width, `gap: 16px`.
+
+| Element                        | Measurement                                                                              |
+| ------------------------------ | ---------------------------------------------------------------------------------------- |
+| `.summaryCell`                 | `display: flex`, `gap: 4px`, `align-items: flex-start`, `grid-column: span 1`, height `44` |
+| `.summaryCell` `border-radius` | `0px` normally, `4px` on the tooltip-wrapped cell                                        |
+| `.cellLabel`                   | `12px` / `600` / `20px` / `rgb(113,113,113)`; `display: block`, or `flex` with a tooltip  |
+| `.cellValueSlot`               | `min-height: 20px`, `display: flex`, `align-items: center`                               |
+| `.cellValue`                   | **`14px`** / `600` / line-height `20px` / `rgb(31,31,31)`                                |
+| loading skeleton               | `16px` tall inside the `20px` slot                                                       |
+| `.nullValue`                   | `opacity: 0.5`, `color: rgb(161,161,161)` — byte-identical to the metric card's          |
+
+**Finding B. §3 row 2 has the small value size wrong.** It says `CellBase` renders its value at
+`16px`; the measured font size is **`14px`**, from the `font-size: 14px` override in
+`GenericCell.scss`. `16` is the `SkeletonItem size={16}`, which is a different number. A `small`
+variant built from §3 row 2 as written would enlarge every summary cell value.
+
+### 5. Tab order and the focus indicator
+
+At `innerWidth` 800, tabbing from `<body>`, 17 stops before the cycle repeats:
+
+| Stops | Elements                                                   |
+| ----- | ---------------------------------------------------------- |
+| 1-16  | every `.metricCard`, in DOM order, across all four grids   |
+| 17    | **one** `.summaryCell` — the only one with a tooltip       |
+
+Every metric card is a tab stop whether or not it has a tooltip, and whether or not its value has
+resolved. Exactly one of the four summary cells is.
+
+Focus indicators differ, which is §3 row 5:
+
+- `.metricCard` — no `outline`; Fluent's `::after` indicator, `1px solid` at inset `0`, with
+  `data-fui-focus-visible` present on the focused element.
+- `.summaryCell.cellWithTooltip` — `outline: 1px solid rgb(0,95,184)` at `outline-offset: 1px`.
+  `rgb(0,95,184)` is `--vscode-focusBorder`. No `::after`.
+
+### 6. Accessible names and descriptions
+
+From `Accessibility.getFullAXTree` over CDP, which also reports which name source won.
+
+Metric cards, every one of them: `role="group"`, **name from `aria-label`, not superseded**, no
+other name source present. A card whose value has resolved and which has a tooltip carries **both**:
+
+```
+name:        "Execution Time: 2.33 ms. Total time taken to execute the query on the server"
+description: "Execution Time Total time taken to execute the query on the server 2.33 ms"
+```
+
+The description is the tooltip content, reached through the `aria-describedby` that Fluent's
+`Tooltip` sets for `relationship="description"`. **The label, the explanation and the value each
+appear twice**, once in the name and once in the description. That is the double announcement §2
+suspected, now measured rather than argued. A card with no tooltip has a name and no description.
+
+Summary cells: **no accessible name at all**. The tooltip-wrapped one has a description only —
+`"Index Used The index the planner selected for this query"` — and is focusable; the other three are
+neither named nor focusable.
+
+This is increment 4's evidence. It is recorded here and is not acted on.
+
+### 7. Two findings that block item 2, and one that does not
+
+**Blocking — the header colour.** `.baseDataHeader` renders at `rgb(113,113,113)`, which is
+`--vscode-descriptionForeground`. §5 maps it to `tokens.colorNeutralForeground2`. Measured under
+`VSCodeFluentProvider` in the light adaptive theme:
+
+| Token                              | Resolves to | vs. today's `#717171` |
+| ---------------------------------- | ----------- | --------------------- |
+| `colorNeutralForeground1`          | `#1f1f1f`   | far darker            |
+| `colorNeutralForeground2`          | `#424242`   | **clearly darker**    |
+| `colorNeutralForeground3`          | `#616161`   | darker                |
+| `colorNeutralForeground4`          | `#707070`   | one unit off          |
+| `colorNeutralForegroundDisabled`   | `#a1a1a1`   | —                     |
+
+§5 predicted "inside this extension it should be visually identical". For the header it is not:
+`themeGenerator.ts` re-points `colorNeutralForeground2` to `--vscode-foreground` **only in the dark
+theme**, so in light it keeps Fluent's `#424242`. `colorNeutralForeground3` and `4` are re-pointed
+to `--vscode-descriptionForeground` only inside `fluentOverrides.scss`, which is scoped to
+`:where(.fui-Input, .fui-SearchBox, …)` and does not reach a card. Adopting §5 as written darkens
+every metric label and every summary cell label in every light theme.
+
+Escalated to the operator together with finding A and open question 1. **The operator was not
+available and delegated the three decisions.** They are resolved in decision 0024, with the rejected
+alternative and its argument recorded there rather than here, and every one of them is a visual
+change the operator's own check should confirm.
+
+**Non-blocking — `.nullValue` maps exactly.** `colorNeutralForegroundDisabled` resolves to `#a1a1a1`,
+identical to today's `--vscode-disabledForeground`, because `adaptiveNeutralSurfaces` does re-point
+that one. §5's mapping for `.nullValue` is correct as written.
+
+**Non-blocking — line-height is inherited.** `.baseDataHeader` declares no `line-height`; the `20px`
+comes from Fluent's `body1` on the surrounding provider. A Griffel rule that declares `20px`
+explicitly preserves the pixel and loses the inheritance; one that declares nothing preserves both.
+Preferring the second.
+
+### What this does not prove
+
+Light theme only, one hardcoded palette. Not the VS Code webview host: no real theme variables, no
+CSP, no panel chrome, no host messaging. Dark and high-contrast are untested, and the dark theme is
+exactly where finding B's token question behaves differently. Screen-reader behaviour is inferred
+from the accessibility tree, not heard.
+
+---
+
+## Item 1: decisions 0024 and 0025
+
+Docs only. Commit: _pending_.
+
+0024 and 0025 transcribed into [decisions.md](../decisions.md) in the form 0021 to 0023 use, plus
+their two rows in the summary table. 0024 is filed as **Accepted (modified)** rather than
+**Accepted**, because three of the proposal's mappings did not survive the item 0 measurement.
+
+### The three questions the operator delegated
+
+Raised together after item 0, since all three block item 2 and one also blocks item 4. The operator
+was unavailable and delegated them. Each is decided below toward **preserving the measured
+baseline**, on the reasoning that an extraction whose acceptance criterion is "nothing changed" is
+the wrong vehicle for a visual decision, and that every one of these remains cheap to reverse while
+the package is `private: true`.
+
+| Question                    | Decided                                    | Rejected                                          |
+| --------------------------- | ------------------------------------------ | ------------------------------------------------- |
+| Label colour token          | `colorNeutralForeground4` (`#707070`)      | `colorNeutralForeground2` per §5 (`#424242`)      |
+| `filled` padding and gap    | declare neither; inherit `Card`'s 12 / 12  | declare 16 / 8 as `MetricsRow.scss` intended      |
+| Summary cells in item 4     | in scope; the grid ships as `MetricGrid`   | deferring them, and shipping `filled`/`large` only |
+
+The full argument for the first two, including what is genuinely lost by not following §5, is in
+0024's "Changed from the proposal". They are not repeated here.
+
+### What made the third one safe to decide alone
+
+§11 flagged the tab-order change as the consequence to watch: converging `CellBase` makes every
+summary cell a tab stop, which it is not today. Reading the only call site closes that:
+
+**All four `GenericCell`s in `QueryInsightsTab` already pass a `tooltipExplanation`**, so all four
+are already tab stops under `CellBase`'s conditional rule. The fifth cell is
+`PerformanceRatingCell`, which is `span="full"` and stays in the extension, so it is unaffected. The
+tab order through the summary card therefore does **not** change, and the item 0 capture is what
+proves it rather than an argument that it probably would not.
+
+The change that does remain is the focus **indicator** on those four cells: today a hand-written
+`outline: 1px solid var(--vscode-focusBorder)` at `outline-offset: 1px`, and after the migration
+Fluent's own indicator via `createCustomFocusIndicatorStyle`. That is decision 0019 applied, it is
+visible, and it is what the operator's keyboard check should look at first.
+
+### Deviation from §10 worth naming
+
+§10 lists `CellBase.tsx` as deleted and says both copies dissolve into `MetricCard`. Only the
+single-span path dissolves. `PerformanceRatingCell` keeps the full-span markup, inlined into itself,
+because that layout drops the fixed-height value slot, stretches its children and moves the label
+onto its own line — it is a different component that shared a file, not a variant of a card. §3
+row 9 already puts span with the consumer and §12 already names `PerformanceRatingCell` a non-goal;
+this is those two read together. The alternative considered was a `span` prop on `MetricCard`, which
+was rejected because it would put a grid property on the cell and would carry the slot-suppression
+rule into the package for exactly one consumer.
