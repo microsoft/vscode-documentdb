@@ -3,72 +3,29 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import type * as React from 'react';
-import { CellBase } from './CellBase';
-import './GenericCell.scss';
+import { MetricCard } from '@microsoft/vscode-ext-webview-fluentui/components';
+import * as l10n from '@vscode/l10n';
+import { type JSX } from 'react';
 
 /**
- * Generic cell for simple string/number values in a SummaryCard.
+ * A single label-and-value cell inside a {@link SummaryCard}.
  *
- * Value handling:
- * - undefined: Shows loading skeleton (data is being fetched)
- * - null: Shows N/A or custom nullValuePlaceholder (data unavailable/error)
- * - string/number: Displays the formatted value
+ * It is a `MetricCard` at the smaller of its two sizes and without a surface of its own, because
+ * the summary card already provides one.
  *
- * Example usage:
  * ```tsx
- * <GenericCell
- *   label={l10n.t('Execution Strategy')}
- *   value="COLLSCAN"
- * />
- *
- * <GenericCell
- *   label={l10n.t('Index Used')}
- *   value={isLoading ? undefined : data?.indexUsed ?? null}
- * />
- *
- * // Custom null placeholder for error states
- * <GenericCell
- *   label={l10n.t('Execution Strategy')}
- *   value={hasError ? null : data?.strategy}
- *   nullValuePlaceholder={l10n.t('Not available')}
- * />
+ * <GenericCell label={l10n.t('Execution Strategy')} value="COLLSCAN" />
+ * <GenericCell label={l10n.t('Index Used')} value={isLoading ? undefined : (data?.indexUsed ?? null)} />
  * ```
  *
- * To create custom cells with special formatting or components:
- * 1. Import CellBase from './CellBase'
- * 2. Format your value or create a custom React node
- * 3. Pass it to CellBase as the value prop
- * 4. Set span='full' if you want the cell to span 2 columns
- *
- * Example of a custom cell:
- * ```tsx
- * export const MyCustomCell: React.FC<Props> = ({ label, data }) => {
- *   const customContent = (
- *     <div style={{ display: 'flex', gap: '8px' }}>
- *       <Icon />
- *       <Text>{formatData(data)}</Text>
- *     </div>
- *   );
- *
- *   return (
- *     <CellBase
- *       label={label}
- *       value={customContent}
- *       span="full"  // Span 2 columns
- *     />
- *   );
- * };
- * ```
- *
- * See custom/PerformanceRatingCell.tsx for a complete example.
+ * For a cell that spans the grid and hosts a block of its own, do not reach for this: build the
+ * markup where it is used, the way `custom/PerformanceRatingCell.tsx` does.
  */
-
 export interface GenericCellProps {
     /** The label displayed at the top of the cell */
     label: string;
 
-    /** The value to display (will be converted to string)
+    /** The value to display
      * - undefined: Data is loading
      * - null: Data is unavailable
      * - string/number: Value to display
@@ -85,28 +42,23 @@ export interface GenericCellProps {
     tooltipExplanation?: string;
 }
 
-export const GenericCell: React.FC<GenericCellProps> = ({
+export const GenericCell = ({
     label,
     value,
     loadingPlaceholder = 'skeleton',
-    nullValuePlaceholder = 'N/A',
+    nullValuePlaceholder = l10n.t('N/A'),
     tooltipExplanation,
-}) => {
-    // Preserve null vs undefined distinction
-    // - null → passes null to CellBase (shows nullValuePlaceholder)
-    // - undefined → passes undefined to CellBase (shows skeleton)
-    // - string/number → wraps in span and passes to CellBase
-    const displayValue =
-        value === null ? null : value !== undefined ? <span className="cellValue">{String(value)}</span> : undefined;
-
-    return (
-        <CellBase
-            label={label}
-            value={displayValue}
-            loadingPlaceholder={loadingPlaceholder}
-            nullValuePlaceholder={nullValuePlaceholder}
-            tooltipExplanation={tooltipExplanation}
-            span="single"
-        />
-    );
-};
+}: GenericCellProps): JSX.Element => (
+    // No `ariaLabel`: a cell is named by its visible content, which is what it has always done.
+    // The metric cards compose one instead, and increment 4 decides which of the two is right.
+    <MetricCard
+        label={label}
+        value={value}
+        description={tooltipExplanation}
+        appearance="subtle"
+        size="small"
+        loadingPlaceholder={loadingPlaceholder}
+        nullValuePlaceholder={nullValuePlaceholder}
+        tooltipPositioning="above-start"
+    />
+);

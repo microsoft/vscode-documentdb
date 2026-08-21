@@ -901,3 +901,65 @@ nothing visible.
 `StageDetailCard.scss` and `GenericCell.scss` all `@extend` them. `.headerWithInfoIcon`,
 `.tooltipInfoIcon` and the four `.tooltip*` rules are now used only by `CellBase`, so they come out
 in item 4 rather than here.
+
+---
+
+## Item 4: the summary cells converge
+
+Extension only. Commit: _pending_.
+
+`GenericCell` is now `MetricCard appearance="subtle" size="small" tooltipPositioning="above-start"`.
+`CellBase.tsx` and `GenericCell.scss` are deleted, `SummaryCard.scss` shrinks to the grid and the
+full-span cell, and seven rules come out of `queryInsights.scss`.
+
+### The awkward consumer, migrated second, as instructed
+
+It did not fit, and that is the useful result. `PerformanceRatingCell` passes `span="full"`, which in
+`CellBase` means three things at once: no fixed-height value slot, `align-items: stretch`, and the
+label on its own line with a bottom margin. None of them is a variant of a metric card, and the
+component inside is a rating dot with a row of diagnostic badges, which §12 already named a non-goal.
+
+So `CellBase` dissolves in two directions rather than one. The single-span path becomes
+`MetricCard`; the full-span path is inlined into its only consumer, which now renders eight lines of
+its own markup against classes that stayed in `SummaryCard.scss`.
+
+The alternative was a `span` prop on `MetricCard`. Rejected on two counts: §3 row 9 already puts
+column spanning with the consumer, since it is a property of the grid rather than of the cell; and
+the prop would have had to carry the slot-suppression rule into the package for exactly one consumer
+in one product. Learning this in item 4 rather than after publish is the whole point of migrating the
+awkward consumer second.
+
+### The tab-order change §11 warned about did not happen
+
+§11 flagged it as the first thing to check by keyboard: every summary cell becomes a tab stop, which
+it is not today. In practice **all four** `GenericCell`s in `QueryInsightsTab` already pass a
+`tooltipExplanation`, so all four already satisfied `CellBase`'s conditional rule and were already
+tab stops. The fifth cell is the full-span one, which did not move. Tab order through the summary
+card is unchanged, and item 0's capture is what shows it.
+
+**What did change is the focus indicator on those four cells.** It was
+`outline: 1px solid var(--vscode-focusBorder)` at `outline-offset: 1px`, hand-written in
+`SummaryCard.scss`. It is now Fluent's own indicator, which is what decision 0019 requires and what
+makes a cell and a card look the same when focused. This is the thing to check by keyboard.
+
+### Also changed, deliberately
+
+- **`PerformanceRatingCell`'s `nullValuePlaceholder` now defaults to `l10n.t('N/A')`** rather than
+  the bare string. Same English, same §7 bug as the four metrics.
+- **The cell value is no longer wrapped in a `.cellValue` span.** `size="small"` puts the type scale
+  on the value slot itself, so the placeholder inherits it too. Item 0 measured that span at `14px`,
+  not the `16px` §3 row 2 claims.
+
+### Dead CSS removed, and one lot left alone
+
+Out of `queryInsights.scss`: `.baseDataValue`, `.headerWithInfoIcon`, `.tooltipInfoIcon`,
+`.tooltipContainer`, `.tooltipTitle`, `.tooltipBody`, `.tooltipValue`. All seven were used only by
+the two files this increment deleted.
+
+`.baseDataHeader` stays: `SummaryCard.scss` and `StageDetailCard.scss` still `@extend` it, so its
+values are duplicated between the product stylesheet and the package. §5 predicted this and it is
+still true, now for two stylesheets instead of three.
+
+`.cardPadding` and `.cardPaddingLarge` are dead too, and are **left alone**. They were already dead
+before this increment, so removing them here would mix an unrelated cleanup into a commit whose
+value is that everything in it is traceable to the migration.

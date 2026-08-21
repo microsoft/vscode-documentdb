@@ -15,5 +15,5 @@ export type { GenericCellProps } from './GenericCell';
 export { PerformanceRatingCell } from './custom/PerformanceRatingCell';
 export type { PerformanceRating, PerformanceRatingCellProps } from './custom/PerformanceRatingCell';
 
-// Note: CellBase is intentionally not exported
-// Users should use GenericCell or create custom cells that wrap CellBase
+// Note: a cell is `MetricCard` from `@microsoft/vscode-ext-webview-fluentui/components`, at
+// appearance="subtle" size="small". Build a custom cell from that, not from `GenericCell`.
