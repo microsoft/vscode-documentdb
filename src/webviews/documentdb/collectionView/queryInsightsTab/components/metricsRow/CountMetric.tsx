@@ -3,9 +3,11 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import type * as React from 'react';
+import { MetricCard } from '@microsoft/vscode-ext-webview-fluentui/components';
+import * as l10n from '@vscode/l10n';
+import { type JSX } from 'react';
 import { formatCount } from './formatUtils';
-import { MetricBase, type MetricBaseProps } from './MetricBase';
+import { composeMetricAriaLabel, type MetricProps } from './metricProps';
 
 /**
  * Specialized metric component for displaying count/integer values.
@@ -43,7 +45,7 @@ import { MetricBase, type MetricBaseProps } from './MetricBase';
  *     nullValuePlaceholder={l10n.t('Not available')}
  * />
  */
-export interface CountMetricProps extends Omit<MetricBaseProps, 'value'> {
+export interface CountMetricProps extends MetricProps {
     /** The count value
      * - undefined: Data is loading
      * - null: Data is unavailable
@@ -61,34 +63,33 @@ export interface CountMetricProps extends Omit<MetricBaseProps, 'value'> {
     compactThreshold?: number;
 }
 
-export const CountMetric: React.FC<CountMetricProps> = ({
+export const CountMetric = ({
     label,
     value,
     useGrouping = true,
     compact = false,
     compactThreshold = 1000000,
     loadingPlaceholder = 'skeleton',
-    nullValuePlaceholder = 'N/A',
+    nullValuePlaceholder = l10n.t('N/A'),
     tooltipExplanation,
-}) => {
-    // Preserve null vs undefined distinction
-    // - null → passes null to MetricBase (shows nullValuePlaceholder)
-    // - undefined → passes undefined to MetricBase (shows skeleton)
-    // - number → formats and passes string to MetricBase
-    const formattedValue =
+}: CountMetricProps): JSX.Element => {
+    // null and undefined have to survive formatting: they select the card's two placeholder states.
+    const formatted =
         value === null
             ? null
-            : value !== undefined
-              ? formatCount(value, { useGrouping, compact, threshold: compactThreshold })
-              : undefined;
+            : value === undefined
+              ? undefined
+              : formatCount(value, { useGrouping, compact, threshold: compactThreshold });
 
     return (
-        <MetricBase
+        <MetricCard
             label={label}
-            value={formattedValue}
+            value={formatted}
+            description={tooltipExplanation}
             loadingPlaceholder={loadingPlaceholder}
             nullValuePlaceholder={nullValuePlaceholder}
-            tooltipExplanation={tooltipExplanation}
+            tooltipRepeatsValue
+            ariaLabel={composeMetricAriaLabel(label, formatted, tooltipExplanation)}
         />
     );
 };

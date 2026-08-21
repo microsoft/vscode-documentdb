@@ -3,11 +3,12 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+import { MetricGrid } from '@microsoft/vscode-ext-webview-fluentui/components';
 import * as l10n from '@vscode/l10n';
 import { type JSX } from 'react';
-// Reuse the Query Insights metric-card kit so the Index dashboard shares the
+// Reuse the Query Insights metric kit so the Index dashboard shares the
 // exact same look, spacing, and responsive 1/2/4-column behaviour.
-import { CountMetric, GenericMetric, MetricsRow } from '../../queryInsightsTab/components/metricsRow';
+import { CountMetric, GenericMetric } from '../../queryInsightsTab/components/metricsRow';
 import { type IndexRow } from '../types';
 import { formatBytes, formatOps } from '../utils/format';
 
@@ -32,7 +33,7 @@ export const IndexMetricsRow = ({ indexes }: IndexMetricsRowProps): JSX.Element 
     const unusedCount = indexes?.filter((idx) => !idx.isDefault && idx.usageOps === 0).length;
 
     return (
-        <MetricsRow>
+        <MetricGrid>
             <CountMetric
                 label={l10n.t('Total Indexes')}
                 value={indexes?.length}
@@ -57,6 +58,6 @@ export const IndexMetricsRow = ({ indexes }: IndexMetricsRowProps): JSX.Element 
                     'Non-default indexes with zero recorded usage since the server started tracking. Consider reviewing them. Unused indexes consume storage and slow writes.',
                 )}
             />
-        </MetricsRow>
+        </MetricGrid>
     );
 };

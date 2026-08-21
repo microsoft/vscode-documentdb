@@ -838,3 +838,66 @@ already sets for itself.
 Jsdom computes no layout, so "the value slot has the same height loading and resolved" is asserted
 as **the same class**, not the same measured height. The height itself is item 6's problem, and item
 0 recorded it: `32px` in both states for `large`, `20px` for `small`.
+
+---
+
+## Item 3: the metric wrappers move onto `MetricCard`
+
+Extension only. Commit: _pending_.
+
+`MetricBase.tsx`, `MetricsRow.tsx` and `MetricsRow.scss` deleted, and both call sites updated in the
+same commit, per increment 2's rule that a deletion is atomic with its call sites. `TimeMetric`,
+`CountMetric`, `RatioMetric` and `GenericMetric` now format a value and hand it to `MetricCard`;
+`QueryInsightsTab` and `IndexMetricsRow` import `MetricGrid` from the package directly.
+
+`npm run build` passes, the webview test projects pass at 510 tests, and both affected tabs compile.
+
+### `metricProps.ts` is new, and is not `MetricBase` under another name
+
+Two things were genuinely shared and neither is a component:
+
+- **`MetricProps`** — the four props every metric takes beside its own value shape. It replaces
+  `Omit<MetricBaseProps, 'value'>`, which is how all four wrappers used to spell it, so no call site
+  changed.
+- **`composeMetricAriaLabel`** — the accessible name, reproduced character for character from
+  `MetricBase`, including the rule that a node-valued metric contributes no value text. This is what
+  §2 option D costs at the call sites, and it is deliberately one function so increment 4 has one
+  place to change rather than four.
+
+The alternative was a local `Metric` component wrapping `MetricCard` with the extension's
+conventions. Rejected: that is `MetricBase` again, one indirection further out, and it would hide the
+`ariaLabel` pass-through that increment 4 needs to be able to see.
+
+### Two latent bugs the diff turned up
+
+Both are §7's "small existing bug" category, fixed here rather than filed, exactly as increment 2
+handled the `formHeader` gap it found the same way.
+
+- **`nullValuePlaceholder` shipped English to every locale.** It defaulted to the untranslated
+  string `'N/A'` in `MetricBase` and in three of the four wrappers. All four now default to
+  `l10n.t('N/A')`. The English rendering is unchanged, so the baseline holds.
+- **`GenericMetric` accepted `nullValuePlaceholder` and never forwarded it.** Its props extended
+  `MetricBaseProps`, so the prop was in the signature and type-checked at every call site, and was
+  then dropped on the floor. It is forwarded now. No current call site passes it, which is why
+  nobody noticed.
+
+### Preserved on purpose, though it looks wrong
+
+`RatioMetric` renders the **loading** placeholder when its ratio is `null`, not the unavailable one:
+it collapses `null` into `undefined` before it reaches the card. Every other metric distinguishes
+them. It is preserved verbatim, with a comment saying so, because a ratio that is unavailable
+showing a permanent skeleton is a product decision about a specific screen, not a fact about the
+component, and this increment is not the place to change what a user sees.
+
+### Naming left alone
+
+`IndexMetricsRow` keeps its name. It is the extension's own composition for the index dashboard, not
+the deleted container, and renaming it would be churn in a commit whose value is that it changes
+nothing visible.
+
+### Still duplicated, as §5 predicted
+
+`.baseDataHeader` and `.baseDataValue` stay in `queryInsights.scss`, because `SummaryCard.scss`,
+`StageDetailCard.scss` and `GenericCell.scss` all `@extend` them. `.headerWithInfoIcon`,
+`.tooltipInfoIcon` and the four `.tooltip*` rules are now used only by `CellBase`, so they come out
+in item 4 rather than here.
