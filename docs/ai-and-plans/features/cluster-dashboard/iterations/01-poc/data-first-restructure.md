@@ -1,3 +1,11 @@
+---
+feature: cluster-dashboard
+kind: iteration
+status: historical
+prs: [823]
+created: 2026-07-28
+---
+
 # Cluster Dashboard — Restructure Plan (data-first)
 
 Status: **proposal**, responding to review feedback on the POC.
@@ -8,14 +16,14 @@ Status: **proposal**, responding to review feedback on the POC.
 This document tests that feedback against how comparable products present a database portal,
 then proposes a concrete restructure. Short version: the feedback is supported by both the
 competitive evidence and the platform's real capabilities, and it happens to move the page
-*towards* what Azure DocumentDB (vCore) can actually answer.
+_towards_ what Azure DocumentDB (vCore) can actually answer.
 
 ---
 
 ## 0. Design thesis
 
 The tactical reading of the feedback is "reorder the tabs." The structural reading is that
-the POC built the wrong *kind* of page, and the restructure should fix the identity, not the
+the POC built the wrong _kind_ of page, and the restructure should fix the identity, not the
 ordering. Three commitments:
 
 **1. This page is a place, not a feed.** A monitoring dashboard treats the server as a
@@ -34,15 +42,15 @@ it decides every future "should this auto-refresh?" question in advance.
 
 **3. The dashboard is the top of the map, and every row leads down.** The extension already
 has per-collection surfaces: Collection View, the Indexes tab (PR #732), shell, playgrounds.
-What no surface shows is the *whole cluster at once*. That aggregation is this page's entire
+What no surface shows is the _whole cluster at once_. That aggregation is this page's entire
 reason to exist — so it must never duplicate a leaf feature, only rank, summarize, and route
 into them. Cluster → database → collection is the product's natural hierarchy; the dashboard
 is its first level, not a separate genre of page bolted onto the side.
 
-Two consequences worth naming. *Family coherence*: we are not "vscode-pgsql minus the eight
+Two consequences worth naming. _Family coherence_: we are not "vscode-pgsql minus the eight
 metric groups vCore can't answer" — a document database's center of gravity is its
 collections, so a collection-ranked inventory is the DocumentDB-native counterpart of
-pgsql's performance dashboard, not a diminished copy. *Agent-readiness*: a ranked, static,
+pgsql's performance dashboard, not a diminished copy. _Agent-readiness_: a ranked, static,
 table-shaped inventory is also the artifact an AI agent can consume and cite, which keeps
 this restructure aligned with the Ask-Copilot direction rather than in tension with it.
 
@@ -55,13 +63,13 @@ this restructure aligned with the Ask-Copilot direction rather than in tension w
 Every product surveyed falls into one of two genres. They answer different questions and
 they are not interchangeable.
 
-| | **A. Performance dashboard** | **B. Data inventory / content browser** |
-|---|---|---|
-| Question | "Is the server healthy *right now*?" | "What is in this database, and what does it cost?" |
-| Content | Time-series charts, sessions, waits, locks | Sorted tables: objects, sizes, counts |
-| Motion | Live polling, animated charts, crosshairs | Static until refreshed |
-| Audience | DBA / on-call operator | Developer working with the data |
-| Examples | pgAdmin Dashboard, vscode-pgsql, Atlas RTPP | Compass, Studio 3T, SSMS reports, Supabase |
+|          | **A. Performance dashboard**                | **B. Data inventory / content browser**            |
+| -------- | ------------------------------------------- | -------------------------------------------------- |
+| Question | "Is the server healthy _right now_?"        | "What is in this database, and what does it cost?" |
+| Content  | Time-series charts, sessions, waits, locks  | Sorted tables: objects, sizes, counts              |
+| Motion   | Live polling, animated charts, crosshairs   | Static until refreshed                             |
+| Audience | DBA / on-call operator                      | Developer working with the data                    |
+| Examples | pgAdmin Dashboard, vscode-pgsql, Atlas RTPP | Compass, Studio 3T, SSMS reports, Supabase         |
 
 **The POC built genre A.** Our users are developers inside an editor, opening a cluster they
 are building against. That is a genre B audience.
@@ -77,7 +85,7 @@ crosshairs, zoom, timezone and 1 h–30 d window selectors.
 
 Two observations that matter for us:
 
-- It is explicitly named a **Performance Dashboard**, and Storage is *one of nine* metric
+- It is explicitly named a **Performance Dashboard**, and Storage is _one of nine_ metric
   groups — not the headline. That is a defensible choice for Postgres, where the server
   exposes deep runtime statistics.
 - **We cannot build this on vCore even if we wanted to.** Verified against a live M10:
@@ -87,7 +95,7 @@ Two observations that matter for us:
 
 **pgAdmin 4** — Dashboard tab with graphs (server/database sessions, transactions per
 second, tuples in, tuples out, block I/O) plus a Server activity panel (sessions, locks,
-prepared transactions). Notably, pgAdmin *also* ships a per-object **Statistics** tab —
+prepared transactions). Notably, pgAdmin _also_ ships a per-object **Statistics** tab —
 static, tabular, no animation — which is where object sizes actually live. The live graphs
 and the object inventory are deliberately separate surfaces.
 
@@ -98,11 +106,11 @@ for, and it has survived two decades essentially unchanged — evidence that the
 
 **MongoDB Compass** — navigation is data-first: a Databases list, then a Collections list
 per database, each row carrying general information about the object, then documents.
-Real-time performance is a *separate* surface, not the landing view.
+Real-time performance is a _separate_ surface, not the landing view.
 
 **MongoDB Atlas** — "Namespace Insights" ranks the **top 20 collections** by latency. The
 unit of analysis is the collection, not the server. We cannot copy the metric
-(`latencyStats` is unsupported on vCore) but the *shape* — a ranked list of collections —
+(`latencyStats` is unsupported on vCore) but the _shape_ — a ranked list of collections —
 is exactly right, and we can rank by size instead.
 
 **Studio 3T** — Collection Statistics per collection: total storage size plus the size of
@@ -124,7 +132,7 @@ because conflating them confuses people about what they are paying for.
 A systematic review of 75 studies found **information overload is the most prevalent
 dashboard problem, affecting 46.7% of users**, driven by excessive data density, poor visual
 hierarchy, and lack of contextual filtering — and that most dashboards overwhelm because
-they are *built to display raw data rather than support decisions*.
+they are _built to display raw data rather than support decisions_.
 
 The prescribed remedies map directly onto the feedback:
 
@@ -137,8 +145,8 @@ The prescribed remedies map directly onto the feedback:
 1. **The feedback is correct and evidence-backed.** Storage-first matches genre B, matches
    our audience, matches the UX guidance, and matches what vCore can actually answer.
 2. **Our differentiator is not live charts.** Azure Portal beats us on history; Compass beats
-   us on polish. What neither has: *in-editor, one keystroke from the code, with actions that
-   lead into the collection you were already working on*.
+   us on polish. What neither has: _in-editor, one keystroke from the code, with actions that
+   lead into the collection you were already working on_.
 3. **The unit of analysis should be the collection, not the server.** Atlas, Studio 3T, SSMS
    and Compass all converge on this. Our Storage tab currently stops at the database.
 4. **Operations stays — it just isn't the front page.** It is genuinely useful and genuinely
@@ -174,14 +182,14 @@ The prescribed remedies map directly onto the feedback:
 
 **Changes from today:**
 
-| | Now | Proposed |
-|---|---|---|
-| Default tab | Overview (charts) | **Storage** |
-| Tab order | Overview, Operations, Storage | **Storage, Operations, Activity** |
-| Status tiles | Latency, Active ops, Storage, DBs/Colls | **Storage, Documents, Databases/Collections, Indexes** |
-| Storage depth | per database | **per database → expand → per collection** |
-| Sparklines | on 2 tiles + 2 large charts | large charts only, on the demoted Activity tab |
-| Poll cadence | everything at 5 s | Storage on open + manual; Operations 5 s only while its tab is active |
+|               | Now                                     | Proposed                                                              |
+| ------------- | --------------------------------------- | --------------------------------------------------------------------- |
+| Default tab   | Overview (charts)                       | **Storage**                                                           |
+| Tab order     | Overview, Operations, Storage           | **Storage, Operations, Activity**                                     |
+| Status tiles  | Latency, Active ops, Storage, DBs/Colls | **Storage, Documents, Databases/Collections, Indexes**                |
+| Storage depth | per database                            | **per database → expand → per collection**                            |
+| Sparklines    | on 2 tiles + 2 large charts             | large charts only, on the demoted Activity tab                        |
+| Poll cadence  | everything at 5 s                       | Storage on open + manual; Operations 5 s only while its tab is active |
 
 ---
 
@@ -192,34 +200,34 @@ follow-on.
 
 **WI-1 — Make the inventory the landing view.** `ClusterDashboard.tsx`: default tab becomes
 the inventory, tab order becomes **Data, Operations, Activity**. Rename Storage → **Data**:
-storage size is one *column* of the inventory (alongside documents, collections, indexes),
+storage size is one _column_ of the inventory (alongside documents, collections, indexes),
 not the concept — the tab is the map of the cluster, and its name should say so. Rename
-Overview → Activity. *Effort: minutes. This alone delivers most of the feedback.*
+Overview → Activity. _Effort: minutes. This alone delivers most of the feedback._
 
 **WI-2 — Data-first status strip.** Replace Latency and Active Operations tiles with
 Documents and Indexes; keep Storage and Databases/Collections. Latency moves to the Activity
 tab. Requires summing `objects` and index sizes already present in `ClusterStorageStats`,
-plus adding an index count. *Effort: small. Removes two animated sparklines from above the
-fold, directly addressing "too many dynamic components".*
+plus adding an index count. _Effort: small. Removes two animated sparklines from above the
+fold, directly addressing "too many dynamic components"._
 
 **WI-3 — Collection-level drill-down.** Extend `getStorageStats` to fetch
 `$collStats {storageStats}` per collection for an expanded database (lazily, on expand — not
 for every database on load). Verified working on vCore: returns `count`, `size`,
 `storageSize`, `totalIndexSize`, `avgObjSize`, `nindexes`. Render as an expandable row group,
 sortable by size. Row actions: **Open Collection**, **Manage indexes** (deep link into PR
-#732's Indexes tab). *Effort: medium. This is the substance of "focus on the database
-itself", and the convergent pattern across Atlas, Studio 3T, SSMS and Compass.*
+#732's Indexes tab). _Effort: medium. This is the substance of "focus on the database
+itself", and the convergent pattern across Atlas, Studio 3T, SSMS and Compass._
 
 **WI-4 — Calm the refresh model.** Storage refreshes on open and on explicit Refresh only.
 Operations polls only while its tab is selected. Health sampling continues (the connection
-badge depends on it) but at a slower default. *Effort: small–medium. Also fixes the deferred
-review findings about hidden-panel polling.*
+badge depends on it) but at a slower default. _Effort: small–medium. Also fixes the deferred
+review findings about hidden-panel polling._
 
 **WI-5 — Total vs. on-disk honesty.** Adopt Supabase's distinction: label what we sum as
-data + index size, and note that it is not the provisioned disk. *Effort: small.*
+data + index size, and note that it is not the provisioned disk. _Effort: small._
 
 **WI-6 — Empty/first-run state.** A cluster with no user databases currently shows a bare
-sentence. Make it the moment to offer "Create Database" / "Open Shell". *Effort: small.*
+sentence. Make it the moment to offer "Create Database" / "Open Shell". _Effort: small._
 
 **WI-7 (later) — Azure storage percentage.** The one genuinely useful gauge the data plane
 cannot provide: used vs. provisioned disk, from Azure Monitor. Belongs to the existing
@@ -236,10 +244,10 @@ Phase-2 Azure work, not this restructure.
 
 ## 4. Trade-offs to state out loud
 
-- **The live demo gets quieter.** The kill loop is the most compelling thing to *watch*;
+- **The live demo gets quieter.** The kill loop is the most compelling thing to _watch_;
   moving it off the landing tab means the first screen is a table. That is the correct
   trade for daily use and a small loss for a five-minute demo. Mitigation: the demo can still
-  open on Storage and *navigate* to Operations, which is a better narrative anyway ("here is
+  open on Storage and _navigate_ to Operations, which is a better narrative anyway ("here is
   your data… and here is what is happening to it right now").
 - **We diverge from vscode-pgsql.** Worth being deliberate: we diverge because our server
   cannot answer eight of their nine metric groups, not because we disagree with their design.
@@ -259,7 +267,7 @@ Taken from the design thesis rather than left open:
    the emulator (where `serverStatus` works) get the Activity tab with real opcounters;
    vCore does not get the tab at all, and latency lives beside the connection badge in the
    header. This is stronger than "hide the broken chart": it means the dashboard's shape is
-   *grown from the capability probe*, which is the degradation model the design doc promised
+   _grown from the capability probe_, which is the degradation model the design doc promised
    all along.
 2. **Sort: size descending** (the SSMS model). The landing view answers "what is big?" with
    zero input. Sortable columns cover every other ordering.

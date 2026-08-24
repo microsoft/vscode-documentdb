@@ -1,7 +1,15 @@
+---
+feature: cluster-dashboard
+kind: iteration
+status: historical
+prs: [823]
+created: 2026-07-28
+---
+
 # Cluster Dashboard — POC Implementation Plan
 
 Goal: a working proof-of-concept of the Cluster Dashboard webview to demo to management.
-This is **not** the full design (see `cluster-dashboard-design.md` — still pending PM review);
+This is **not** the full design (see [`../../design.md`](../../design.md) — still pending PM review);
 it is the smallest slice that demos well and proves the architecture.
 
 Audience: an implementing agent. Every referenced API below was verified against the code
@@ -20,8 +28,8 @@ implementation to imitate throughout is **Collection View**
    - **Header card**: cluster name, green "Connected" dot, engine + version, uptime, host.
    - **Status strip**: 4 live metric tiles with sparklines — Latency (ms), Active
      Operations, Storage Used, Databases/Collections — refreshing every 5 s.
-   - **Tabs**: *Overview* (latency + activity sparkline charts), *Operations* (live
-     `currentOp` table with a working **Kill Operation** button), *Storage* (per-database
+   - **Tabs**: _Overview_ (latency + activity sparkline charts), _Operations_ (live
+     `currentOp` table with a working **Kill Operation** button), _Storage_ (per-database
      size table + top collections by size).
 3. Run a long query from the Interactive Shell / playground → it appears in the Operations
    tab → kill it from the dashboard.
@@ -291,7 +299,7 @@ registerCommandWithTreeNodeUnwrapping(
 (`src/commands/registerCommands.ts` is a no-op stub — do not touch it.)
 
 **`package.json`** — three additions, each copying the comment-key/format conventions of
-the *Open Interactive Shell* entries verbatim:
+the _Open Interactive Shell_ entries verbatim:
 
 1. `contributes.commands` (near the shell entry, ~line 605):
    `command: "vscode-documentdb.command.clusterDashboard.open"`,
@@ -362,7 +370,7 @@ imports host types the same way — e.g. `TableDataEntry` from `ClusterSession`)
   `../collectionView/components/queryInsightsTab/components/metricsRow` (exported:
   `MetricsRow`, `CountMetric`, `TimeMetric`, `GenericMetric`, `formatCount`, `formatTime`).
   Importing across view folders is acceptable for the POC — add a `// TODO(dashboard):
-  promote metricsRow to src/webviews/components/` note. Each tile pairs a metric with a
+promote metricsRow to src/webviews/components/` note. Each tile pairs a metric with a
   `<Sparkline data={...}/>`. Null values render "—" with a tooltip
   `l10n.t('Not available on this server')`.
 - **Sparkline.tsx**: pure SVG, ~40 lines: props `{ data: (number|null)[]; width?; height? }`,
@@ -406,17 +414,17 @@ imports host types the same way — e.g. `TableDataEntry` from `ClusterSession`)
 
 ## 4. Riskiest assumptions (check these first if something misbehaves)
 
-| Assumption | If wrong |
-|---|---|
-| `$currentOp` aggregation works on vCore with the connected user's role | Fall back to `command({currentOp:1})`; if both fail, Operations tab shows an empty-state explaining the permission need |
-| `killOp` accepts the vCore opid format | Demo kill against the local emulator instead; keep the button but disable with tooltip when the opid isn't parseable |
-| `dbStats` is fast enough to run per-database serially | Parallelize with `Promise.allSettled`, keep the 20-db cap |
-| Type-only cross-boundary imports don't drag host code into the webview bundle | Move shared types into a `types.ts` inside the clusterDashboard folder |
+| Assumption                                                                    | If wrong                                                                                                                |
+| ----------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------- |
+| `$currentOp` aggregation works on vCore with the connected user's role        | Fall back to `command({currentOp:1})`; if both fail, Operations tab shows an empty-state explaining the permission need |
+| `killOp` accepts the vCore opid format                                        | Demo kill against the local emulator instead; keep the button but disable with tooltip when the opid isn't parseable    |
+| `dbStats` is fast enough to run per-database serially                         | Parallelize with `Promise.allSettled`, keep the 20-db cap                                                               |
+| Type-only cross-boundary imports don't drag host code into the webview bundle | Move shared types into a `types.ts` inside the clusterDashboard folder                                                  |
 
 ## 5. Explicitly deferred to post-POC
 
 Subscription-based streaming + ring buffer, pause/scrub, Azure Monitor metrics + header
 enrichment (`AzureClusterModel`), capability probe caching, settings
 (`documentDB.clusterDashboard.*`), Logs tab, metricsRow promotion to shared components,
-localization bundle regeneration, full test coverage. See `cluster-dashboard-design.md`
+localization bundle regeneration, full test coverage. See [`../../design.md`](../../design.md)
 for the target end-state.

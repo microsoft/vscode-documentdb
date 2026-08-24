@@ -1,3 +1,11 @@
+---
+feature: cluster-dashboard
+kind: iteration
+status: historical
+prs: [823]
+created: 2026-07-27
+---
+
 # Reviewer handoff — Cluster Dashboard POC
 
 > Companion to [`summary.md`](./summary.md), which records _what_ was built and _why_.
@@ -44,7 +52,7 @@ Then in the Extension Development Host: **Connections view → New Connection �
      `admin.$cmd.aggregate` row in the Operations tab, the self-op filter has regressed.
 3. **Overview** tab — latency and active-ops charts, plus an ops/sec breakdown when the
    server supports `serverStatus`. Before the second sample arrives this reads
-   "Collecting…", *not* the vCore message.
+   "Collecting…", _not_ the vCore message.
 4. **Operations** tab — start a long-running query (below), watch it appear, click
    **Kill** → confirmation prompt appears in the VS Code UI (host-side, honoring the
    configured confirmation style) → the row disappears on the next poll.
@@ -69,17 +77,17 @@ db.getCollection('items').find({ $where: 'var t=Date.now(); while(Date.now()-t<2
 
 Each commit compiles on its own, so they can be reviewed in sequence.
 
-| # | Commit | Focus |
-|---|--------|-------|
-| 1 | `78f1de27` | `src/documentdb/utils/getClusterHealth.ts` — **start here.** All server interaction is in this one file; everything else is plumbing. |
-| 2 | `96f5bae1` | tRPC router + `appRouter` registration |
-| 3 | `66ddd46e` | Controller / panel de-duplication |
-| 4 | `8f4cbb18` | Command + `package.json` wiring |
-| 5 | `90fecb02` | Webview UI |
-| 6 | `9e5a32c0` | l10n bundle (generated — skim only) |
-| 7 | `9015de8d` | `currentOp` background-thread fix |
-| 8 | `ede37fc0` | This PR record (docs only) |
-| 9 | `3396eaa6` | **Review-round fixes** — the largest behavioural commit; read it against `summary.md`'s findings table |
+| #   | Commit     | Focus                                                                                                                                 |
+| --- | ---------- | ------------------------------------------------------------------------------------------------------------------------------------- |
+| 1   | `78f1de27` | `src/documentdb/utils/getClusterHealth.ts` — **start here.** All server interaction is in this one file; everything else is plumbing. |
+| 2   | `96f5bae1` | tRPC router + `appRouter` registration                                                                                                |
+| 3   | `66ddd46e` | Controller / panel de-duplication                                                                                                     |
+| 4   | `8f4cbb18` | Command + `package.json` wiring                                                                                                       |
+| 5   | `90fecb02` | Webview UI                                                                                                                            |
+| 6   | `9e5a32c0` | l10n bundle (generated — skim only)                                                                                                   |
+| 7   | `9015de8d` | `currentOp` background-thread fix                                                                                                     |
+| 8   | `ede37fc0` | This PR record (docs only)                                                                                                            |
+| 9   | `3396eaa6` | **Review-round fixes** — the largest behavioural commit; read it against `summary.md`'s findings table                                |
 
 If you are re-reviewing rather than reading cold, start at `3396eaa6` — it is where the
 kill path, the pollers, and every "the UI says something untrue" defect were fixed.
@@ -93,13 +101,13 @@ Ordered by how likely it is to matter.
    `$currentOp` → `currentOp` → permissions-empty-state chain is implemented and
    unit-tested but never run against real vCore. **Try this before demoing to anyone on
    Azure.** Two vCore-specific behaviours now hinge on this: the `opidIsNumeric` flag
-   (vCore reports *string* opids, and killing with the wrong type silently no-ops), and
+   (vCore reports _string_ opids, and killing with the wrong type silently no-ops), and
    the `$match`-inside-`$currentOp` stage. Failures now carry their reason in
    `sample.errors`, so a vCore run is diagnosable from the Operations/Storage messages.
 2. **Two known-broken paths were deferred, not fixed** (details in `summary.md`):
    - **Kubernetes clusters will not connect.** The router calls `ClustersClient.getClient`
      directly, bypassing `ClusterItemBase.beforeCachedClientConnect()`, so port-forward
-     setup never runs — while the tree connects fine. The menu item *is* shown for k8s
+     setup never runs — while the tree connects fine. The menu item _is_ shown for k8s
      nodes.
    - **Deleting a connection does not stop its dashboard.** `removeConnection` clears
      credentials but never calls `deleteClient`, so the cached client survives and the
@@ -108,7 +116,7 @@ Ordered by how likely it is to matter.
 3. **Visual layout has never been seen rendered.** Types and SCSS compile; appearance,
    spacing, two-panels-side-by-side, and light↔dark re-theming are unobserved. Expect to
    want CSS tweaks on the first run. The `Sparkline` gap/segment rendering is new in the
-   review round and has *only* been reasoned about, never looked at.
+   review round and has _only_ been reasoned about, never looked at.
 4. **The background-thread and self-op filters** (`isUserOperation` /
    `isSelfInspectionQuery`) — are they too aggressive for other server types? Without
    them the Active Operations tile read non-zero on an idle cluster and the Kill button

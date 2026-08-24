@@ -1,3 +1,15 @@
+---
+feature: cluster-dashboard
+kind: design
+status: active
+prs: [823]
+created: 2026-07-28
+code:
+    - src/commands/openClusterDashboard/**
+    - src/documentdb/utils/getClusterHealth.ts
+    - src/webviews/documentdb/clusterDashboard/**
+---
+
 # Cluster Dashboard — Design
 
 Feature: a webview page showing cluster health, performance, resource utilization, and status
@@ -17,7 +29,7 @@ proven VS Code-native pattern:
 
 - Page skeleton: **server details card → action toolbar → tabbed investigation area**.
 - **Dual data-source model**: every chart is badged either "System" (live, computed from
-  queryable system state — works on *any* server) or "Azure" (historical, Azure Monitor —
+  queryable system state — works on _any_ server) or "Azure" (historical, Azure Monitor —
   only for Azure resources with fetched metadata). Time-window selector (1h…30d) applies to
   Azure metrics only; live charts are fixed rolling windows.
 - **Graceful degradation is a first-class feature**: groups with no data are hidden; explicit
@@ -37,7 +49,7 @@ Docs: https://learn.microsoft.com/en-us/azure/postgresql/development/vs-code-ext
   Kill Op action).
 - The standout interaction: **Pause freezes the display only** (sampling continues into a
   ring buffer); while paused, hovering a chart scrubs a shared time cursor and the tables
-  re-render to show state *at that instant*.
+  re-render to show state _at that instant_.
 - Atlas RTPP adds a top strip of stat tiles (Connections, Network, CPU, Disk IOPS, Memory)
   and the **Query Targeting** ratio (scanned : returned) — the single best "are my indexes
   working" signal — plus a table-view fallback (accessibility / low bandwidth).
@@ -52,19 +64,19 @@ We should not build a widget-composition system.
 
 From the compatibility matrix (learn.microsoft.com/en-us/azure/cosmos-db/mongodb/vcore/compatibility):
 
-| Command | vCore status | Consequence |
-|---|---|---|
-| `serverStatus` | ❌ **Not supported** | Compass-style opcounter/memory/queue charts are impossible on vCore via the driver |
-| `top` | ❌ Not supported | No "hottest collections by op time" |
-| `replSetGetStatus` | ❌ Unreliable (platform-managed topology) | HA state must come from ARM |
-| profiler | ❌ Platform-managed | No profiler tab |
-| `ping`, `hello`, `buildInfo`, `connectionStatus` | ✅ | Liveness, latency, version, topology, privileges |
-| `hostInfo` | ⚠️ **Answers, but empty** | `{system: {memSizeMB: 0}, os: {name: '', type: ''}}` — no hostname. The header's Host row can never populate on vCore |
-| `dbStats`, `collStats` / `$collStats {storageStats}` | ✅ (size fields approximate for docs < 2 KB) | Storage breakdown, top-N collections |
-| `$collStats {latencyStats}` | ❌ **Not supported** (`code 115 — collStats with latencyStats not supported yet`) | No per-collection ops/sec or latency histogram; removes the obvious fallback for the Activity group |
-| `currentOp` / `$currentOp`, `killOp` | ✅ | Active/slowest operations table + kill action |
-| `getLog` | ⚠️ **Answers, but empty** | Returns `{totalLinesWritten: 0, log: []}`. A Logs tab would render an empty panel on vCore |
-| `explain`, `$indexStats` | ✅ | Index-usage / query-efficiency signals — **already consumed by PR #732's Index Management tab**, not by this dashboard |
+| Command                                              | vCore status                                                                      | Consequence                                                                                                            |
+| ---------------------------------------------------- | --------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------- |
+| `serverStatus`                                       | ❌ **Not supported**                                                              | Compass-style opcounter/memory/queue charts are impossible on vCore via the driver                                     |
+| `top`                                                | ❌ Not supported                                                                  | No "hottest collections by op time"                                                                                    |
+| `replSetGetStatus`                                   | ❌ Unreliable (platform-managed topology)                                         | HA state must come from ARM                                                                                            |
+| profiler                                             | ❌ Platform-managed                                                               | No profiler tab                                                                                                        |
+| `ping`, `hello`, `buildInfo`, `connectionStatus`     | ✅                                                                                | Liveness, latency, version, topology, privileges                                                                       |
+| `hostInfo`                                           | ⚠️ **Answers, but empty**                                                         | `{system: {memSizeMB: 0}, os: {name: '', type: ''}}` — no hostname. The header's Host row can never populate on vCore  |
+| `dbStats`, `collStats` / `$collStats {storageStats}` | ✅ (size fields approximate for docs < 2 KB)                                      | Storage breakdown, top-N collections                                                                                   |
+| `$collStats {latencyStats}`                          | ❌ **Not supported** (`code 115 — collStats with latencyStats not supported yet`) | No per-collection ops/sec or latency histogram; removes the obvious fallback for the Activity group                    |
+| `currentOp` / `$currentOp`, `killOp`                 | ✅                                                                                | Active/slowest operations table + kill action                                                                          |
+| `getLog`                                             | ⚠️ **Answers, but empty**                                                         | Returns `{totalLinesWritten: 0, log: []}`. A Logs tab would render an empty panel on vCore                             |
+| `explain`, `$indexStats`                             | ✅                                                                                | Index-usage / query-efficiency signals — **already consumed by PR #732's Index Management tab**, not by this dashboard |
 
 > **Verified against a live vCore cluster** (M10, server 8.0, July 2026), not only the
 > published matrix. Two rows above were previously marked ✅ purely on documentation.
@@ -167,7 +179,7 @@ a tooltip explaining why — it never disappears mid-session.
 **Overview** (default) — collapsible chart groups, rendered only if the capability probe
 found data:
 
-- *Activity* — live strip chart of operation counts. On servers with `serverStatus`
+- _Activity_ — live strip chart of operation counts. On servers with `serverStatus`
   (local/generic MongoDB): true opcounters/sec split by insert/query/update/delete/command
   (Compass model). On vCore: sampled `currentOp` counts by op type + queue depth
   (approximation, labeled as such).
@@ -178,11 +190,11 @@ found data:
   > most 4 concurrently visible ops per sample. Either pair it with an observed-operation
   > ring buffer, label the approximation far more explicitly, or lean on Azure Monitor for
   > this group.
-- *Connections & Network* — `serverStatus.connections` where available; otherwise hidden.
-- *Resources (Azure)* — CPU % / Memory % / Storage % / IOPS per node from Azure Monitor,
+- _Connections & Network_ — `serverStatus.connections` where available; otherwise hidden.
+- _Resources (Azure)_ — CPU % / Memory % / Storage % / IOPS per node from Azure Monitor,
   with time-window selector (1h/6h/24h/7d) — Phase 2; until then this group shows a
   "Connect Azure metrics" teaser only for Azure clusters.
-- *Storage growth* — total data + index size sampled per refresh (delta over session).
+- _Storage growth_ — total data + index size sampled per refresh (delta over session).
 
 **Operations** — the actionability tab (all vCore-supported):
 
@@ -229,15 +241,15 @@ beyond the in-session ring buffer (Azure Monitor covers history for Azure cluste
 
 ### 3.5 Degradation matrix
 
-| Scenario | Behavior |
-|---|---|
-| vCore (no `serverStatus`) | Activity group shows currentOp-derived approximation, labeled; Connections group hidden |
-| Local emulator / generic MongoDB | Full Compass-style Activity + Connections; Azure groups absent |
-| RU cluster | Probe decides per command; Storage tab and header always work |
-| Azure node but no ARM metadata fetched | Header shows data-plane facts; "Fetch Azure details" affordance (pgsql model) |
-| Insufficient Azure RBAC (Phase 2) | Resources group shows "View required permissions" state |
-| Single command fails mid-session | That tile/group shows stale-badge + last good sample; error logged once, not toasted repeatedly |
-| Disconnected / auth expired | Full-page state with Retry (reuses tree retry/auth-recovery flow) |
+| Scenario                               | Behavior                                                                                        |
+| -------------------------------------- | ----------------------------------------------------------------------------------------------- |
+| vCore (no `serverStatus`)              | Activity group shows currentOp-derived approximation, labeled; Connections group hidden         |
+| Local emulator / generic MongoDB       | Full Compass-style Activity + Connections; Azure groups absent                                  |
+| RU cluster                             | Probe decides per command; Storage tab and header always work                                   |
+| Azure node but no ARM metadata fetched | Header shows data-plane facts; "Fetch Azure details" affordance (pgsql model)                   |
+| Insufficient Azure RBAC (Phase 2)      | Resources group shows "View required permissions" state                                         |
+| Single command fails mid-session       | That tile/group shows stale-badge + last good sample; error logged once, not toasted repeatedly |
+| Disconnected / auth expired            | Full-page state with Retry (reuses tree retry/auth-recovery flow)                               |
 
 ---
 
@@ -270,7 +282,7 @@ Registration touch-points: `WebviewRegistry.ts`, `appRouter.ts`
 (`clusterDashboard: clusterDashboardRouter`), `ClustersExtension.activateClustersSupport()`
 (`registerCommandWithTreeNodeUnwrapping('vscode-documentdb.command.clusterDashboard.open', …)`),
 `package.json` (`contributes.commands` with `"icon": "$(pulse)"`, `view/item/context` menu
-group `5@2` next to *Open Interactive Shell*, gated on
+group `5@2` next to _Open Interactive Shell_, gated on
 `viewItem =~ /\btreeitem_documentdbcluster\b/i && !listMultiSelection`), and
 `ext.settingsKeys` + `contributes.configuration` for
 `documentDB.clusterDashboard.refreshInterval` (+ `documentDB.experimental.clusterDashboard`
