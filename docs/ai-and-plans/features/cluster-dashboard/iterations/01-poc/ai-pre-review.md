@@ -48,7 +48,7 @@ asked, and that the two vendors should be run cold and in parallel.
 
 Severity is the reviewer's; **Verdict** is the cross-check against the code.
 
-### Fixed in this round — commit `a13674ad`
+### Fixed in this round — commits `a13674ad`, `668994ad`
 
 | ID                 | Finding                                                                                                                                                                                                                   | Sev          | Verdict                                                                                                                                                                     |
 | ------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -143,8 +143,8 @@ Recorded so a later round does not re-litigate them:
    behaviour just added? This is the highest-severity deferred item.
 3. **The polling coordinator (F3, F4, S5 rest, S6, F8).** Five findings share one fix. Is that this
    PR's scope or the next iteration's?
-4. **Whether F5/S8 blocks the POC** — headline tiles currently label a capped, partial sum as a
-   total.
+4. ~~Whether F5/S8 blocks the POC.~~ **Answered: yes.** Fixed in `668994ad`, along with S9, ahead
+   of the maintainer demo.
 
 Once those are recorded here with their reasoning, §6.2 is satisfied and the Case 2 gate in
 `prepare-pull-request` §2.3 is met.
