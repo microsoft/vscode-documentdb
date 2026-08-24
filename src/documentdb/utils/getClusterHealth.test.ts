@@ -6,6 +6,7 @@
 import { type Document, type MongoClient } from 'mongodb';
 
 import {
+    CURRENT_OP_SHARE_WINDOW_MS,
     getClusterPrivileges,
     getClusterTopology,
     getDatabaseCollections,
@@ -96,6 +97,59 @@ function createFakeClient(options: FakeClientOptions): {
 
     return { client, adminCommands };
 }
+
+describe('listCurrentOperations — round-trip discipline', () => {
+    it('starts from the form that worked last time instead of re-walking the chain', async () => {
+        const attempted: string[] = [];
+        const { client } = createFakeClient({
+            aggregate: (pipeline) => {
+                const stage = (pipeline?.[0] ?? {}) as { $currentOp?: { allUsers?: boolean } };
+                attempted.push(stage.$currentOp?.allUsers === true ? 'all' : 'own');
+                if (stage.$currentOp?.allUsers === true) {
+                    throw new Error('Unauthorized');
+                }
+                return [{ opid: 1, op: 'query', ns: 'db.coll', active: true }];
+            },
+            adminCommand: () => {
+                attempted.push('currentOp');
+                throw new Error('Unauthorized');
+            },
+        });
+
+        await listCurrentOperations(client);
+        const firstPass = attempted.length;
+        attempted.length = 0;
+
+        await listCurrentOperations(client);
+
+        // A least-privileged connection would otherwise pay for every failing authorized form
+        // on every poll, for as long as the dashboard stays open.
+        expect(attempted.length).toBeLessThan(firstPass);
+        expect(attempted[0]).toBe('own');
+    });
+
+    it('shares one answer between callers inside the window, and never for an uncached caller', async () => {
+        let aggregateCalls = 0;
+        const { client } = createFakeClient({
+            aggregate: () => {
+                aggregateCalls += 1;
+                return [{ opid: 1, op: 'query', ns: 'db.coll', active: true }];
+            },
+        });
+
+        await listCurrentOperations(client, CURRENT_OP_SHARE_WINDOW_MS);
+        await listCurrentOperations(client, CURRENT_OP_SHARE_WINDOW_MS);
+
+        // The health sample and the Operations tab poll on the same cadence; the second one in
+        // a tick reuses the first one's answer rather than paying for its own.
+        expect(aggregateCalls).toBe(1);
+
+        // The pre-kill re-check asks for a fresh view, because acting on a cached one is how a
+        // finished operation gets killed by opid.
+        await listCurrentOperations(client);
+        expect(aggregateCalls).toBe(2);
+    });
+});
 
 describe('sampleClusterHealth', () => {
     it('still returns a latency reading when serverStatus is unsupported', async () => {
@@ -928,6 +982,57 @@ describe('getDatabaseCollections', () => {
 
         expect(result.collections).toEqual([]);
         expect(result.errors.map(getFailedCommandName)).toEqual(['listCollections']);
+    });
+});
+
+describe('statistics concurrency budget', () => {
+    it('caps concurrent collStats across simultaneous invocations, not just within one', async () => {
+        let inFlight = 0;
+        let peak = 0;
+        const release: Array<() => void> = [];
+
+        const { client } = createFakeClient({
+            listCollections: () =>
+                Array.from({ length: 12 }, (_unused, index) => ({ name: `c${index}`, type: 'collection' })),
+            dbCommand: () => {
+                inFlight += 1;
+                peak = Math.max(peak, inFlight);
+
+                return new Promise<unknown>((resolve) => {
+                    release.push(() => {
+                        inFlight -= 1;
+                        resolve({});
+                    });
+                });
+            },
+        });
+
+        // Two expanded database panels on the same connection. A limit applied per call would
+        // let each take its own eight; the dashboard allows twenty panels at once, which is how
+        // eight became a hundred and sixty.
+        const passes = Promise.all([getDatabaseCollections(client, 'alpha'), getDatabaseCollections(client, 'beta')]);
+
+        // Let every queued item reach the budget before measuring: only the ones it admits
+        // ever call the driver, so the peak is the budget's answer, not a race.
+        await new Promise<void>((resolve) => setTimeout(resolve, 0));
+        const peakWhileSaturated = peak;
+
+        let settled = false;
+        void passes.then(() => {
+            settled = true;
+        });
+
+        while (!settled) {
+            while (release.length > 0) {
+                release.shift()?.();
+            }
+            await new Promise<void>((resolve) => setTimeout(resolve, 0));
+        }
+
+        await passes;
+
+        expect(peakWhileSaturated).toBeGreaterThan(0);
+        expect(peakWhileSaturated).toBeLessThanOrEqual(8);
     });
 });
 

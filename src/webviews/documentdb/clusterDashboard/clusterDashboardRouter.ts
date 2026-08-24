@@ -13,6 +13,7 @@ import { ClustersClient } from '../../../documentdb/ClustersClient';
 import { ShellCommandIds } from '../../../documentdb/shell/constants';
 import { getHostsFromConnectionString } from '../../../documentdb/utils/connectionStringHelpers';
 import {
+    CURRENT_OP_SHARE_WINDOW_MS,
     getClusterPrivileges,
     getClusterTopology,
     getDatabaseCollections,
@@ -150,7 +151,9 @@ export const clusterDashboardRouter = router({
 
             const client = await ClustersClient.getClient(myCtx.clusterId);
 
-            return getDatabaseCollections(client.getMongoClient(), input.databaseName);
+            // Expanding a row can fan out to 100 `collStats`; the panel is often collapsed or the
+            // dashboard closed long before they finish.
+            return getDatabaseCollections(client.getMongoClient(), input.databaseName, myCtx.signal);
         }),
 
     /** Live health sample. Polled by the webview, so telemetry is suppressed. */
@@ -181,7 +184,7 @@ export const clusterDashboardRouter = router({
 
         const client = await ClustersClient.getClient(myCtx.clusterId);
 
-        return getStorageStats(client.getMongoClient());
+        return getStorageStats(client.getMongoClient(), myCtx.signal);
     }),
 
     /** In-flight operations for the Operations tab. Polled, so telemetry is suppressed. */
@@ -190,7 +193,9 @@ export const clusterDashboardRouter = router({
         myCtx.actionContext.telemetry.suppressAll = true;
 
         const client = await ClustersClient.getClient(myCtx.clusterId);
-        const result = await listCurrentOperations(client.getMongoClient());
+        // May share the health sample's answer when both land in the same tick; the pre-kill
+        // re-check below deliberately does not.
+        const result = await listCurrentOperations(client.getMongoClient(), CURRENT_OP_SHARE_WINDOW_MS);
 
         // Every poll feeds the history, so the tab can answer "what has run" and not only
         // "what is running". Recorded here rather than in the webview so it survives a tab

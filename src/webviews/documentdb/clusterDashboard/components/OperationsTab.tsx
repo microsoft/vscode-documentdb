@@ -239,11 +239,28 @@ export const OperationsTab = ({ refreshIntervalMs }: OperationsTabProps): JSX.El
         disposedRef.current = false;
         void loadOperations();
 
-        const intervalId = setInterval(() => void loadOperations(), refreshIntervalMs);
+        // The webview keeps running while the panel is hidden (`retainContextWhenHidden`), so
+        // without this an unattended dashboard polls `$currentOp` for the rest of the session.
+        // A reveal refreshes immediately rather than waiting out the interval.
+        const tick = (): void => {
+            if (document.visibilityState !== 'hidden') {
+                void loadOperations();
+            }
+        };
+
+        const onVisibilityChange = (): void => {
+            if (document.visibilityState !== 'hidden') {
+                void loadOperations();
+            }
+        };
+
+        const intervalId = setInterval(tick, refreshIntervalMs);
+        document.addEventListener('visibilitychange', onVisibilityChange);
 
         return () => {
             disposedRef.current = true;
             clearInterval(intervalId);
+            document.removeEventListener('visibilitychange', onVisibilityChange);
         };
     }, [loadOperations, refreshIntervalMs]);
 

@@ -155,10 +155,40 @@ export const ClusterDashboard = (): JSX.Element => {
         };
     }, [loadStorageStats, trpcClient]);
 
+    /**
+     * Whether the panel is on screen.
+     *
+     * The webview is created with `retainContextWhenHidden`, so React keeps running when the
+     * dashboard is not the active tab — a dashboard opened once and forgotten would otherwise
+     * poll a production cluster every five seconds for the rest of the session with nobody
+     * looking at it. Polling resumes with an immediate tick rather than waiting out the
+     * interval, so a revealed panel is never showing stale numbers.
+     */
+    const isVisibleRef = useRef(typeof document === 'undefined' || document.visibilityState !== 'hidden');
+    const [visibilityGeneration, setVisibilityGeneration] = useState(0);
+
+    useEffect(() => {
+        const onVisibilityChange = (): void => {
+            const nowVisible = document.visibilityState !== 'hidden';
+            const wasVisible = isVisibleRef.current;
+            isVisibleRef.current = nowVisible;
+
+            // Only a hidden-to-visible transition needs a refresh; re-running the effects on
+            // the way out would start the very work being suspended.
+            if (nowVisible && !wasVisible) {
+                setVisibilityGeneration((generation) => generation + 1);
+            }
+        };
+
+        document.addEventListener('visibilitychange', onVisibilityChange);
+
+        return () => document.removeEventListener('visibilitychange', onVisibilityChange);
+    }, []);
+
     // Health polling loop. Failures are absorbed so a transient error does not clear the charts.
     useEffect(() => {
         const tick = (): void => {
-            if (sampleInFlightRef.current) {
+            if (sampleInFlightRef.current || !isVisibleRef.current) {
                 return;
             }
             sampleInFlightRef.current = true;
@@ -198,16 +228,17 @@ export const ClusterDashboard = (): JSX.Element => {
         const intervalId = setInterval(tick, configuration.refreshIntervalMs);
 
         return () => clearInterval(intervalId);
-    }, [configuration.refreshIntervalMs, trpcClient]);
+    }, [configuration.refreshIntervalMs, trpcClient, visibilityGeneration]);
 
     // Storage refreshes on a much slower cadence than the health sample: `dbStats` per
     // database is far heavier than a ping, but leaving it to a single load would freeze
     // two tiles that sit in the live strip looking identical to the 5 s ones.
     useEffect(() => {
-        const intervalId = setInterval(
-            () => void loadStorageStats(),
-            configuration.refreshIntervalMs * STORAGE_REFRESH_MULTIPLIER,
-        );
+        const intervalId = setInterval(() => {
+            if (isVisibleRef.current) {
+                void loadStorageStats();
+            }
+        }, configuration.refreshIntervalMs * STORAGE_REFRESH_MULTIPLIER);
 
         return () => clearInterval(intervalId);
     }, [configuration.refreshIntervalMs, loadStorageStats]);

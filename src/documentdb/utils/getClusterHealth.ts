@@ -20,6 +20,14 @@ import { type Document, type MongoClient } from 'mongodb';
 /** Maximum number of `currentOp` entries returned to a caller. */
 const CURRENT_OP_LIMIT = 100;
 
+/**
+ * How long two callers may share one `currentOp` answer.
+ *
+ * Well under the dashboard's refresh cadence, so it only ever collapses the health sample and
+ * the Operations tab asking within the same tick — never two genuinely separate polls.
+ */
+export const CURRENT_OP_SHARE_WINDOW_MS = 1_000;
+
 /** Maximum number of databases inspected by {@link getStorageStats}. */
 const DATABASE_STATS_LIMIT = 20;
 
@@ -44,29 +52,83 @@ const COLLECTION_STATS_LIMIT = 100;
 const STATS_CONCURRENCY = 8;
 
 /**
- * `Promise.all`-shaped map with a ceiling on how many run at once.
+ * A ceiling on concurrent work, shared by everyone who holds the same instance.
+ *
+ * A limit applied per call is not a limit on the cluster: the dashboard can have one storage
+ * pass and a `CollectionsPanel` per expanded database all running at once, and a per-call
+ * ceiling of eight multiplied by however many of those exist. Holding the budget outside the
+ * call makes the number mean what it says.
+ */
+class ConcurrencyBudget {
+    private inFlight = 0;
+    private readonly waiting: Array<() => void> = [];
+
+    public constructor(private readonly limit: number) {}
+
+    public async run<R>(task: () => Promise<R>): Promise<R> {
+        if (this.inFlight >= this.limit) {
+            await new Promise<void>((resolve) => this.waiting.push(resolve));
+        }
+
+        this.inFlight += 1;
+        try {
+            return await task();
+        } finally {
+            this.inFlight -= 1;
+            this.waiting.shift()?.();
+        }
+    }
+}
+
+/**
+ * One statistics budget per connection, shared by every collector using it.
+ *
+ * Keyed on the client rather than the cluster id so it cannot outlive the connection, and so
+ * a reconnect starts with a clean budget rather than inheriting a stalled one.
+ */
+const statsBudgets = new WeakMap<MongoClient, ConcurrencyBudget>();
+
+function statsBudgetFor(client: MongoClient): ConcurrencyBudget {
+    let budget = statsBudgets.get(client);
+
+    if (budget === undefined) {
+        budget = new ConcurrencyBudget(STATS_CONCURRENCY);
+        statsBudgets.set(client, budget);
+    }
+
+    return budget;
+}
+
+/**
+ * `Promise.all`-shaped map that draws from a shared budget and stops doing work once the
+ * caller has gone away.
  *
  * Results keep the input order (workers write by index), and a rejection propagates exactly
  * as `Promise.all` would — both call sites catch per item, so a single failure never takes
  * the batch down.
+ *
+ * `map` is told whether the work was abandoned rather than being skipped, so each collector
+ * returns its own "nothing to report" shape instead of leaving a hole in the results. An
+ * abandoned item never takes a slot in the budget.
  */
 async function mapWithConcurrency<T, R>(
     items: readonly T[],
-    limit: number,
-    map: (item: T) => Promise<R>,
+    budget: ConcurrencyBudget,
+    map: (item: T, abandoned: boolean) => Promise<R>,
+    signal?: AbortSignal,
 ): Promise<R[]> {
-    const results = new Array<R>(items.length);
-    let nextIndex = 0;
+    // The budget is claimed per item, not per worker: a worker that held its slot for the whole
+    // pass would let one invocation take the entire budget and starve every other collector
+    // until it finished, which is the problem this exists to prevent rather than a fix for it.
+    return Promise.all(
+        items.map(async (item) => {
+            if (signal?.aborted === true) {
+                return map(item, true);
+            }
 
-    const runWorker = async (): Promise<void> => {
-        for (let index = nextIndex++; index < items.length; index = nextIndex++) {
-            results[index] = await map(items[index]);
-        }
-    };
-
-    await Promise.all(Array.from({ length: Math.min(limit, items.length) }, runWorker));
-
-    return results;
+            return budget.run(() => map(item, signal?.aborted === true));
+        }),
+    );
 }
 
 /** Maximum length of the serialized command preview attached to a {@link CurrentOpEntry}. */
@@ -533,7 +595,7 @@ export async function sampleClusterHealth(client: MongoClient): Promise<ClusterH
                 return describeCommandFailure('serverStatus', error);
             }
         })(),
-        listCurrentOperations(client),
+        listCurrentOperations(client, CURRENT_OP_SHARE_WINDOW_MS),
     ]);
 
     // Collected after the fact so `errors` keeps a stable ping/serverStatus/currentOp order
@@ -790,12 +852,80 @@ const CURRENT_OP_ATTEMPTS: CurrentOpAttempt[] = [
  * @returns The mapped operations and the breadth they cover, or an empty list plus the
  *          failed command names in `errors`.
  */
-export async function listCurrentOperations(client: MongoClient): Promise<CurrentOperationsResult> {
+const workingCurrentOpAttempt = new WeakMap<MongoClient, (typeof CURRENT_OP_ATTEMPTS)[number]>();
+
+/** A recent `currentOp` answer, and the request that is still fetching one. */
+const currentOpCache = new WeakMap<MongoClient, { atMs: number; result: CurrentOperationsResult }>();
+const currentOpInFlight = new WeakMap<MongoClient, Promise<CurrentOperationsResult>>();
+
+/**
+ * Lists the operations running on a cluster.
+ *
+ * @param client - The connection to ask.
+ * @param maxAgeMs - How stale an answer the caller will accept. The dashboard's health sample
+ *        and its Operations tab both want this list on the same cadence, and neither needs its
+ *        own round trip: a small window lets the second caller in a tick reuse the first
+ *        caller's answer, and concurrent callers share one request outright. Defaults to `0`,
+ *        which always asks the server — the pre-kill re-check must never act on a cached view
+ *        of what is running.
+ */
+export async function listCurrentOperations(
+    client: MongoClient,
+    maxAgeMs: number = 0,
+): Promise<CurrentOperationsResult> {
+    if (maxAgeMs > 0) {
+        const cached = currentOpCache.get(client);
+        if (cached !== undefined && Date.now() - cached.atMs <= maxAgeMs) {
+            return cached.result;
+        }
+
+        const inFlight = currentOpInFlight.get(client);
+        if (inFlight !== undefined) {
+            return inFlight;
+        }
+    }
+
+    const request = runCurrentOpAttempts(client);
+
+    if (maxAgeMs > 0) {
+        currentOpInFlight.set(client, request);
+    }
+
+    try {
+        const result = await request;
+
+        if (maxAgeMs > 0) {
+            currentOpCache.set(client, { atMs: Date.now(), result });
+        }
+
+        return result;
+    } finally {
+        if (currentOpInFlight.get(client) === request) {
+            currentOpInFlight.delete(client);
+        }
+    }
+}
+
+async function runCurrentOpAttempts(client: MongoClient): Promise<CurrentOperationsResult> {
     const errors: string[] = [];
 
-    for (const attempt of CURRENT_OP_ATTEMPTS) {
+    // Start from whichever form worked last time. Re-walking the chain from the top on every
+    // poll means a least-privileged connection issues the same known-to-fail authorized
+    // commands every few seconds for as long as the dashboard is open — wasted round trips,
+    // and a steady drip of authorization failures into the server's audit log that can look
+    // like an intrusion attempt. The memo is dropped as soon as the remembered form fails, so
+    // a permission or topology change re-discovers the right one.
+    const remembered = workingCurrentOpAttempt.get(client);
+    const attempts =
+        remembered === undefined
+            ? CURRENT_OP_ATTEMPTS
+            : [remembered, ...CURRENT_OP_ATTEMPTS.filter((attempt) => attempt !== remembered)];
+
+    for (const attempt of attempts) {
         try {
             const documents = await attempt.run(client);
+
+            workingCurrentOpAttempt.set(client, attempt);
 
             return {
                 // Filtered client-side as well as in the pipeline: the `$match` stage is the
@@ -813,6 +943,11 @@ export async function listCurrentOperations(client: MongoClient): Promise<Curren
                 errors: [],
             };
         } catch (error) {
+            // Whatever worked before does not any more, so stop preferring it.
+            if (workingCurrentOpAttempt.get(client) === attempt) {
+                workingCurrentOpAttempt.delete(client);
+            }
+
             const description = describeCommandFailure(attempt.commandName, error);
             if (!errors.includes(description)) {
                 errors.push(description);
@@ -858,7 +993,7 @@ export async function killOperation(client: MongoClient, opid: string, opidIsNum
  * @param client - A connected MongoClient.
  * @returns The per-database figures; databases whose `dbStats` failed keep `null` fields.
  */
-export async function getStorageStats(client: MongoClient): Promise<ClusterStorageStats> {
+export async function getStorageStats(client: MongoClient, signal?: AbortSignal): Promise<ClusterStorageStats> {
     const errors: string[] = [];
     const adminDb = client.db().admin();
 
@@ -883,8 +1018,8 @@ export async function getStorageStats(client: MongoClient): Promise<ClusterStora
 
     const databases = await mapWithConcurrency(
         entries,
-        STATS_CONCURRENCY,
-        async (entry): Promise<ClusterDatabaseStorage> => {
+        statsBudgetFor(client),
+        async (entry, abandoned): Promise<ClusterDatabaseStorage> => {
             const name = entry.name as string;
             const database: ClusterDatabaseStorage = {
                 name,
@@ -895,6 +1030,12 @@ export async function getStorageStats(client: MongoClient): Promise<ClusterStora
                 objects: null,
                 indexes: null,
             };
+
+            // The caller has gone: return the same "did not report" shape a refused command
+            // produces, so the result is complete in shape and simply carries nothing.
+            if (abandoned) {
+                return database;
+            }
 
             try {
                 const stats = await client.db(name).command({ dbStats: 1 });
@@ -912,6 +1053,7 @@ export async function getStorageStats(client: MongoClient): Promise<ClusterStora
 
             return database;
         },
+        signal,
     );
 
     // Deliberately NOT `listed.totalSize`: that counts admin/local/config and any database
@@ -941,6 +1083,7 @@ export async function getStorageStats(client: MongoClient): Promise<ClusterStora
 export async function getDatabaseCollections(
     client: MongoClient,
     databaseName: string,
+    signal?: AbortSignal,
 ): Promise<DatabaseCollectionsResult> {
     const errors: string[] = [];
     const db = client.db(databaseName);
@@ -963,8 +1106,8 @@ export async function getDatabaseCollections(
 
     const collections = await mapWithConcurrency(
         entries,
-        STATS_CONCURRENCY,
-        async (entry): Promise<ClusterCollectionStorage> => {
+        statsBudgetFor(client),
+        async (entry, abandoned): Promise<ClusterCollectionStorage> => {
             const name = entry.name as string;
             const collection: ClusterCollectionStorage = {
                 name,
@@ -978,7 +1121,7 @@ export async function getDatabaseCollections(
 
             // A view has no storage of its own and `collStats` reports on the underlying
             // pipeline source, which would attribute another collection's bytes to it.
-            if (collection.type === 'view') {
+            if (collection.type === 'view' || abandoned) {
                 return collection;
             }
 
@@ -995,6 +1138,7 @@ export async function getDatabaseCollections(
 
             return collection;
         },
+        signal,
     );
 
     return { databaseName, collections, omittedCollectionCount, errors };
