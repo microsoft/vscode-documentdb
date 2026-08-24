@@ -456,3 +456,44 @@ That is gone.
   screen; a differently-redacted copy is a third representation to keep consistent.
 - **Defer entirely.** Rejected: the export exists to be shared, so the gap is realised the first
   time anyone uses it as intended.
+
+---
+
+## 0013 — #753 is abandoned; this is the only cluster dashboard
+
+**Status:** Accepted · **Date:** 2026-08-24 · **Raised by:** Guanzhou Song (guanzhousongmicrosoft)
+**Evidence:** Supersedes [0009](#0009--converge-with-pr-753-on-a-shared-feature-branch)
+
+### Question
+
+[0009](#0009--converge-with-pr-753-on-a-shared-feature-branch) proposed converging this work with
+PR [#753](https://github.com/microsoft/vscode-documentdb/pull/753) on a shared `feature/` branch,
+because the two registered colliding context-menu commands and neither was a superset of the other.
+#753 has since been abandoned. What happens to the convergence?
+
+### Decision
+
+It does not apply. #753 is out of scope entirely. This PR targets `main` directly, the
+`feature/cluster-dashboard` branch created to hold the convergence is deleted, and the cluster
+dashboard is a single surface with a single command.
+
+### Reasoning
+
+0009 was not wrong — given two live PRs it was the right structure, and CONTRIBUTING §1.4 describes
+exactly that shape. It is simply moot: a feature branch exists to let several PRs be reviewed into
+one surface before it reaches `main`, and with one PR it adds a hop and nothing else.
+
+Recording this as a reversal rather than editing 0009 is deliberate. 0009's reasoning — that the
+two PRs were complementary, that neither superseded the other, and that the command collision had
+to be settled before either shipped — remains the correct analysis of the situation as it stood.
+A future reader finding two overlapping dashboards again should get that analysis, not a silence.
+
+### Consequences
+
+- **`Build & Package` runs again.** It is a required check on this repository, and its job condition
+  admits only `main` and `release/**` base refs, so it was skipped for the whole time this PR
+  targeted a feature branch. Retargeting restores packaging verification.
+- **The command name is uncontested.** `vscode-documentdb.command.clusterDashboard.open` no longer
+  competes with `clusterView.open`; the open question about a single public name is closed by there
+  being only one.
+- **Nothing in the code changes.** The convergence was never implemented, only proposed.

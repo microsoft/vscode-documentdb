@@ -86,30 +86,29 @@ See [decisions.md](./decisions.md). The two that constrain everything else:
   the page is a **data inventory**, not a performance dashboard. This **reverses the model in
   [design.md](./design.md) §1.1**, which has not been rewritten. Read `design.md` with this entry
   in hand.
-- [0009](./decisions.md#0009--converge-with-pr-753-on-a-shared-feature-branch) — how this
-  converges with PR [#753](https://github.com/microsoft/vscode-documentdb/pull/753). **Still
-  `Proposed`** and blocking: both PRs currently register colliding cluster-node context-menu
-  commands.
+- [0010](./decisions.md#0010--an-opid-is-not-an-identity-occurrences-are) — an `opid` is not an
+  identity. Anything that must still refer to the same operation a moment later keys on the
+  occurrence instead, because servers reissue ids the moment an operation ends.
 
 ## Open gaps
 
-The [AI pre-review](./iterations/01-poc/ai-pre-review.md) is the authoritative list; the four
-questions in its _Outstanding author decisions_ section are what stand between this and a
-ready-for-review PR. The gaps below predate it.
+The [AI pre-review](./iterations/01-poc/ai-pre-review.md) is the authoritative list, and its
+[author decisions](./iterations/01-poc/ai-pre-review.md#author-decisions-62) record what was fixed
+and what was deliberately left. The gaps below remain.
 
 - **`design.md` is stale in its framing.** It predates
   [0006](./decisions.md#0006--the-page-is-a-data-inventory-not-a-performance-dashboard-reconstructed)
   and still takes the vscode-pgsql Server Dashboard as its template. Its research, technical
   design and vCore corrections remain useful; its genre framing does not. It has not been
   re-verified against the code.
-- **The #753 convergence is unagreed.** See
-  [0009](./decisions.md#0009--converge-with-pr-753-on-a-shared-feature-branch).
 - **Refresh interval is fixed at 5 s**, not user-configurable.
 - **Command previews still carry query literals.** Redaction removes credentials, not application
   data; export warns rather than redacting
   ([0012](./decisions.md#0012--warn-at-the-sharing-boundary-rather-than-redact-the-preview)).
-- **No collection-level drill-down** — that surface belongs to
-  [#753](https://github.com/microsoft/vscode-documentdb/pull/753).
+- **No collection-level drill-in, search, or create flows.** The Storage tab expands to list a
+  database's collections, but there is no navigation below that. PR #753 would have covered it and
+  was abandoned ([0013](./decisions.md#0013--753-is-abandoned-this-is-the-only-cluster-dashboard)),
+  so the surface now has no owner and is the largest functional gap in the feature.
 - **No used-vs-provisioned storage figure**, because there is no Azure Monitor integration.
 - **`Uptime` is a placeholder on vCore**, where `serverStatus` is unavailable.
 - **No user-manual page.**

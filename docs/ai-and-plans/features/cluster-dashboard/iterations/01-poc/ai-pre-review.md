@@ -187,6 +187,13 @@ discredits every other number on the page.
 
 **Covers:** F5, S8.
 
+### Note on the #753 convergence
+
+Several dispositions above were written while PR #753 was live. It has since been abandoned
+([0013](../../decisions.md#0013--753-is-abandoned-this-is-the-only-cluster-dashboard)), so the
+command collision it created is gone and this PR targets `main` directly. No finding's verdict
+changes; only the sequencing does.
+
 ### Still deferred after these decisions
 
 Everything in the deferred table above except the items D2 and D3 promoted, plus the structural
