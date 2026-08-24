@@ -6,6 +6,7 @@
 import { callWithTelemetryAndErrorHandling, type IActionContext } from '@microsoft/vscode-azext-utils';
 import * as l10n from '@vscode/l10n';
 import * as vscode from 'vscode';
+import { openLocalQuickStart } from './commands/localQuickStart/openLocalQuickStart';
 import { openCollectionViewInternal } from './commands/openCollectionView/openCollectionView';
 import { DocumentDBConnectionString } from './documentdb/utils/DocumentDBConnectionString';
 import { canonicalizeTlsException, stripTlsBypassParams } from './documentdb/utils/tlsException';
@@ -42,6 +43,41 @@ interface UriParams {
     collection?: string;
 }
 
+/**
+ * The actions a deep link is allowed to name.
+ *
+ * **This list is the security boundary, and it is hand-written on purpose.**
+ *
+ * A "command switch" is tempting to implement by mapping the URL's verb onto a VS Code command
+ * id, because the extension already has a command for everything a link might want. That would
+ * also expose `localQuickStart.delete` and `localQuickStart.copyPassword` to any web page able to
+ * produce a link — one deletes a container, the other puts a password on the clipboard. A URL
+ * arriving from outside VS Code is untrusted input, so the set of things it can reach is
+ * enumerated here rather than derived from the command registry.
+ *
+ * Adding a verb is therefore a deliberate act: it means deciding that the action is safe to
+ * trigger from a link on a web page belonging to someone else.
+ */
+const DEEP_LINK_VERBS = ['connect', 'local'] as const;
+
+type DeepLinkVerb = (typeof DEEP_LINK_VERBS)[number];
+
+/**
+ * The verb assumed when a link names none.
+ *
+ * Every link published before verbs existed has an empty path and a connection string in the
+ * query, so "no verb" has to keep meaning `connect` for as long as those links exist — which is
+ * forever, since a link in a blog post cannot be recalled.
+ */
+const DEFAULT_VERB: DeepLinkVerb = 'connect';
+
+/** A deep link's route: what it asks for, and any path segments qualifying it. */
+interface DeepLinkRoute {
+    verb: DeepLinkVerb;
+    /** Segments after the verb, e.g. the provider id in `/discovery/<provider>`. */
+    qualifiers: string[];
+}
+
 // #endregion
 
 // #region Main Handler Functions
@@ -49,9 +85,25 @@ interface UriParams {
 /**
  * Global URI handler for processing external URIs routed to this extension.
  *
- * This function handles URIs that contain a set of parameters:
- * - the default is a connection string to a DocumentDB / MongoDB resource
- * - other modes will be added in the future, these will be handled by our discoverability plugins
+ * A link names an action in its **path** and supplies that action's arguments in its **query**:
+ *
+ * ```text
+ * vscode://ms-azuretools.vscode-documentdb/connect?connectionString=…&database=…&collection=…
+ * vscode://ms-azuretools.vscode-documentdb/local
+ * vscode://ms-azuretools.vscode-documentdb?connectionString=…              (legacy, means /connect)
+ * ```
+ *
+ * **Why the path and not another query parameter.** The query describes *how* to perform an
+ * action; putting *which* action in the same bag means every future reader has to know which keys
+ * are the verb and which are its arguments. It also leaves nowhere to namespace the discovery
+ * plugins, which will each want their own sub-routes.
+ *
+ * **Why this is safe to add.** The handler dispatched on `uri.query` alone until now and never
+ * read `uri.path`, so every link already in circulation has an empty path. Empty path therefore
+ * means {@link DEFAULT_VERB} and those links keep working unchanged.
+ *
+ * The set of reachable actions is {@link DEEP_LINK_VERBS}, which is a hand-written allow-list
+ * rather than a lookup into the command registry — see the note there.
  *
  * **URL Parameter Encoding:**
  * Input URLs should have double-encoded parameters as documented in how-to-construct-url.md.
@@ -72,14 +124,40 @@ export async function globalUriHandler(uri: vscode.Uri): Promise<void> {
         context.telemetry.properties.uriQueryLength = String((uri.query ?? '').length);
 
         try {
-            // Extract and validate parameters
-            // Note: uri.query is already decoded once by VS Code when creating the vscode.Uri object
-            context.telemetry.properties.failureStage = 'extractParams';
-            const params = extractAndValidateParams(context, uri.query);
+            context.telemetry.properties.failureStage = 'parseRoute';
+            const route = parseDeepLinkRoute(uri.path);
 
-            // Process the URI with user confirmation
-            context.telemetry.properties.failureStage = 'handleRequest';
-            await handleConnectionStringRequest(context, params);
+            // Recorded before the route is validated so an unrecognized verb is measurable:
+            // a link format someone published against a future version shows up here rather
+            // than as an anonymous parse failure.
+            context.telemetry.properties.deepLinkVerb = route?.verb ?? 'unrecognized';
+            context.telemetry.properties.deepLinkQualifierCount = String(route?.qualifiers.length ?? 0);
+
+            if (route === undefined) {
+                throw new Error(
+                    l10n.t(
+                        'This DocumentDB link asks for an action the extension does not recognize. It may have been written for a newer version — check for an update, or verify the link.',
+                    ),
+                );
+            }
+
+            switch (route.verb) {
+                case 'connect': {
+                    context.telemetry.properties.failureStage = 'extractParams';
+                    // Note: uri.query is already decoded once by VS Code when creating the vscode.Uri object
+                    const params = extractAndValidateParams(context, uri.query);
+
+                    context.telemetry.properties.failureStage = 'handleRequest';
+                    await handleConnectionStringRequest(context, params);
+                    break;
+                }
+
+                case 'local': {
+                    context.telemetry.properties.failureStage = 'openLocalQuickStart';
+                    await handleLocalQuickStartRequest(context);
+                    break;
+                }
+            }
         } catch (error) {
             const errMsg = error instanceof Error ? error.message : String(error);
             if (!context.telemetry.properties.failureStage) {
@@ -91,6 +169,47 @@ export async function globalUriHandler(uri: vscode.Uri): Promise<void> {
             throw new Error(l10n.t('Failed to process URI: {0}', errMsg));
         }
     });
+}
+
+/**
+ * Reads the action out of a link's path.
+ *
+ * @param path - `uri.path`, which VS Code has already decoded once.
+ * @returns The route, or `undefined` when the path names something not in
+ *          {@link DEEP_LINK_VERBS}. An empty path is not unrecognized — it is
+ *          {@link DEFAULT_VERB}, which is what keeps already-published links working.
+ */
+function parseDeepLinkRoute(path: string): DeepLinkRoute | undefined {
+    const segments = path.split('/').filter((segment) => segment.trim() !== '');
+
+    if (segments.length === 0) {
+        return { verb: DEFAULT_VERB, qualifiers: [] };
+    }
+
+    // Case-insensitive because links are typed by hand and pasted through systems that
+    // helpfully "correct" capitalization; the verb is a keyword, not user data.
+    const candidate = segments[0].toLowerCase();
+    const verb = DEEP_LINK_VERBS.find((known) => known === candidate);
+
+    if (verb === undefined) {
+        return undefined;
+    }
+
+    return { verb, qualifiers: segments.slice(1) };
+}
+
+/**
+ * Opens the DocumentDB Local setup wizard.
+ *
+ * **Why this does not raise a confirmation, when `connect` does.** The `connect` confirmations
+ * exist because that path stores a connection and its secret before the user sees any UI — the
+ * modal is the only place to decline. The wizard is itself that place: it opens on an
+ * introduction step, provisions nothing until the user walks it, and can be closed. Adding a
+ * modal in front of it would put two consecutive prompts between a website's "Open in VS Code"
+ * button and the thing it promised, which is the friction this link exists to remove.
+ */
+async function handleLocalQuickStartRequest(context: IActionContext): Promise<void> {
+    await openLocalQuickStart(context);
 }
 
 /**
