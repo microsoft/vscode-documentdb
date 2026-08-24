@@ -3,9 +3,11 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+import { AtlasCredentialsView } from '../documentdb/atlasCredentials/AtlasCredentialsView';
 import { ClusterDashboard } from '../documentdb/clusterDashboard/ClusterDashboard';
 import { CollectionView } from '../documentdb/collectionView/CollectionView';
 import { DocumentView } from '../documentdb/documentView/documentView';
+import { LocalQuickStart } from '../documentdb/localQuickStart/LocalQuickStart';
 
 /**
  * Maps each webview name to the React component mounted for it.
@@ -39,6 +41,8 @@ export const WebviewRegistry = {
     clusterDashboard: ClusterDashboard,
     collectionView: CollectionView,
     documentView: DocumentView,
+    localQuickStart: LocalQuickStart,
+    atlasCredentials: AtlasCredentialsView,
 } as const;
 
 /**

@@ -10,12 +10,19 @@ import type * as React from 'react';
 import { createRoot } from 'react-dom/client'; // eslint-disable-line import/no-internal-modules
 import { type WebviewApi } from 'vscode-webview';
 import { reportObserverError } from './_integration/observability/reportObserverError';
+import { installResizeObserverLoopDetector } from './_integration/observability/resizeObserverLoopDetector';
 import { type WebviewName, WebviewRegistry } from './_integration/WebviewRegistry';
 import { DynamicThemeProvider } from './theme/DynamicThemeProvider';
 
 export type ViewKey = WebviewName;
 
 export function render<V extends ViewKey>(key: V, vscodeApi: WebviewApi<WebviewState>, rootId = 'root'): void {
+    // Dev-only: flag a *sustained* ResizeObserver loop (the benign one-shot is
+    // filtered from the dev-server overlay). Stripped from production builds by
+    // dead-code elimination via the `process.env.NODE_ENV` guard.
+    if (process.env.NODE_ENV !== 'production') {
+        installResizeObserverLoopDetector();
+    }
     l10n.config({
         contents: (globalThis.l10n_bundle as l10nJsonFormat) ?? {},
     });

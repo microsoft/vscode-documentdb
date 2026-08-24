@@ -5,6 +5,11 @@
 
 /* Define standard variables and values for this extension to be shared with all webviews */
 
+/*
+ * The --documentdb-* aliases used below live in theme/fluentAliases.scss, pulled in by
+ * theme/fluentOverrides.scss, which DynamicThemeProvider imports for every webview.
+ */
+
 .selectionDisabled {
     user-select: none;
 }
@@ -18,7 +23,8 @@ $media-breakpoint-query-control-area: 1024px;
  * for consistency across custom components like MonacoAutoHeight.
  *
  * Uses Fluent UI design tokens:
- * - Border: --colorNeutralStroke1, --borderRadiusMedium
+ * - Border: --documentdb-colorInputStroke, --borderRadiusMedium
+ * - Border (hover): --documentdb-colorInputStrokeHover
  * - Background: --colorNeutralBackground1
  * - Spacing: --spacingVerticalS, --spacingHorizontalS
  * - Animation: --durationFast, --curveEasyEase
@@ -29,7 +35,7 @@ $media-breakpoint-query-control-area: 1024px;
  * Base border styling for input-like components
  */
 @mixin input-border {
-    border: 1px solid var(--vscode-checkbox-border); // TODO: find the style name of a fluent input field var(--colorNeutralStroke1) doesn't work well, maybe we failed with style adatpation on this one.
+    border: 1px solid var(--documentdb-colorInputStroke);
     border-radius: var(--borderRadiusMedium);
 }
 
@@ -73,7 +79,7 @@ $media-breakpoint-query-control-area: 1024px;
  */
 @mixin input-hover {
     &:hover:not(:focus-within) {
-        border-color: var(--colorNeutralStroke1Hover);
+        border-color: var(--documentdb-colorInputStrokeHover);
     }
 }
 

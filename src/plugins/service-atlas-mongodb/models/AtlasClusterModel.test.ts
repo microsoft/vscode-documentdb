@@ -1,0 +1,76 @@
+/*---------------------------------------------------------------------------------------------
+ *  Copyright (c) Microsoft Corporation. All rights reserved.
+ *  Licensed under the MIT License. See License.txt in the project root for license information.
+ *--------------------------------------------------------------------------------------------*/
+
+import { DocumentDBExperience } from '../../../DocumentDBExperiences';
+import { createAtlasClusterModel, createAtlasClusterStableSuffix } from './AtlasClusterModel';
+import { type AtlasCluster } from './AtlasProjectModel';
+
+function baseCluster(overrides: Partial<AtlasCluster> = {}): AtlasCluster {
+    return {
+        id: 'c1',
+        name: 'Cluster0',
+        groupId: 'g1',
+        mongoDBVersion: '7.0',
+        connectionStrings: { standardSrv: 'mongodb+srv://cluster0.example.invalid' },
+        stateName: 'IDLE',
+        clusterType: 'REPLICASET',
+        providerSettings: { providerName: 'AWS', regionName: 'US_EAST_1', instanceSizeName: 'M10' },
+        ...overrides,
+    };
+}
+
+describe('createAtlasClusterModel (NEW-7 boundary guards)', () => {
+    it('uses the unprefixed stable suffix in the provider-prefixed cluster ID', () => {
+        const model = createAtlasClusterModel('p1', 'Project 0', baseCluster(), DocumentDBExperience);
+
+        expect(createAtlasClusterStableSuffix('p1', 'Cluster0')).toBe('p1_Cluster0');
+        expect(model.clusterId).toBe('atlas-mongodb-discovery_p1_Cluster0');
+    });
+
+    it('does not throw when Atlas omits connectionStrings, leaving the connection string undefined', () => {
+        const cluster = baseCluster({ connectionStrings: undefined });
+
+        const model = createAtlasClusterModel('p1', 'Project 0', cluster, DocumentDBExperience);
+
+        expect(model.connectionString).toBeUndefined();
+    });
+
+    it('prefers standardSrv, then standard', () => {
+        const model = createAtlasClusterModel(
+            'p1',
+            'Project 0',
+            baseCluster({ connectionStrings: { standard: 'mongodb://cluster0.example.invalid' } }),
+            DocumentDBExperience,
+        );
+
+        expect(model.connectionString).toBe('mongodb://cluster0.example.invalid');
+    });
+
+    it('normalizes an unrecognized cluster state to UNKNOWN', () => {
+        const cluster = baseCluster({ stateName: 'PAUSED' as AtlasCluster['stateName'] });
+
+        const model = createAtlasClusterModel('p1', 'Project 0', cluster, DocumentDBExperience);
+
+        expect(model.stateName).toBe('UNKNOWN');
+    });
+
+    it('keeps a recognized cluster state', () => {
+        const model = createAtlasClusterModel('p1', 'Project 0', baseCluster(), DocumentDBExperience);
+
+        expect(model.stateName).toBe('IDLE');
+    });
+
+    it('preserves paused independently of the control-plane state', () => {
+        const model = createAtlasClusterModel(
+            'p1',
+            'Project 0',
+            baseCluster({ paused: true, stateName: 'IDLE' }),
+            DocumentDBExperience,
+        );
+
+        expect(model.paused).toBe(true);
+        expect(model.stateName).toBe('IDLE');
+    });
+});

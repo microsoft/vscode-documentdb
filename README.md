@@ -72,10 +72,51 @@ Connect to any database that speaks the MongoDB API wire protocol.
 
 - **Connection strings**: Paste a connection string and connect instantly
 - **Azure Service Discovery**: Browse and connect to Azure DocumentDB, Azure Cosmos DB for MongoDB (RU), and DocumentDB on Azure VMs directly from the sidebar
-- **MongoDB Atlas**: Connect using your Atlas connection string
 - **Entra ID authentication**: Multi-account, multi-tenant support for Azure-hosted databases
-- **Local instances and emulators**: Connect to DocumentDB Local, Azure Cosmos DB Emulator, or any local MongoDB API instance
 - **Folder organization**: Group your connections into folders and subfolders
+
+### DocumentDB Local
+
+Set up a local [DocumentDB](https://documentdb.io) instance from the Connections view. The extension pulls the official image, creates a persistent Docker volume, waits until the database accepts connections, and saves the connection for you.
+
+<p align="center"><img src="resources/readme/documentdb-local.png" alt="DocumentDB Local setup view on the Introduction step, with Set up DocumentDB Local highlighted under Your own DocumentDB in the Connections view" width="750" style="max-width:100%;height:auto;"></p>
+
+- Guided setup with generated credentials, an available port, and optional sample data
+- Docker readiness diagnostics that explain what to fix for local, WSL, SSH, dev container, and Codespaces environments
+- Start, stop, restart, and delete the instance from the tree, with state kept in sync with Docker
+- Works with Docker Engine or Docker Desktop; the extension never installs Docker or elevates privileges
+
+You can also connect to the Azure Cosmos DB Emulator and other local MongoDB API instances. See [Set up DocumentDB Local](https://microsoft.github.io/vscode-documentdb/user-manual/local-quick-start) for details.
+
+### MongoDB Atlas Service Discovery
+
+Browse your Atlas organizations, projects, and clusters from the sidebar, then save any cluster as a regular connection without copying endpoints by hand.
+
+<p align="center"><img src="resources/readme/mongodb-atlas-discovery.png" alt="Add a MongoDB Atlas connection view offering Service Account and API Key authentication, next to the MongoDB Atlas item in the Service Discovery view" width="750" style="max-width:100%;height:auto;"></p>
+
+- Sign in with an Atlas **API Key** or **Service Account**, verified before it is stored
+- Add a credential per organization and browse them all in one combined view
+- Switch between a hierarchical tree and a flat cluster list
+- Paused, creating, and updating clusters are labeled instead of failing with a connection timeout
+- **Open in MongoDB Atlas** deep-links any discovered cluster to its Atlas page
+
+Atlas discovery credentials are used only to find resources. Database access still uses your Atlas database username and password.
+
+See [MongoDB Atlas Service Discovery](https://microsoft.github.io/vscode-documentdb/user-manual/service-discovery-mongodb-atlas) for the full guide.
+
+### Kubernetes Service Discovery
+
+Find DocumentDB clusters running in any Kubernetes environment, from AKS, EKS, and GKE to kind, minikube, and Docker Desktop, without writing connection strings or running `kubectl port-forward` by hand.
+
+<p align="center"><img src="resources/readme/kubernetes-discovery.png" alt="Kubernetes Service Discovery tree showing kubeconfig sources expanded into contexts, namespaces, and discovered DocumentDB targets with connectivity indicators" width="300" style="max-width:100%;height:auto;"></p>
+
+- Register several kubeconfig sources side by side: the default file, a file from disk, or pasted YAML
+- DocumentDB Kubernetes Operator managed clusters are recognized first, with a fallback for annotated or well-known services
+- ClusterIP services are reached through a port-forward tunnel that is established and restored automatically
+- Connectivity labels state plainly whether a connection string is portable or only works on this machine
+- Rename opaque cloud-generated context names, and switch between list and tree layouts
+
+See [Kubernetes Service Discovery](https://microsoft.github.io/vscode-documentdb/user-manual/service-discovery-kubernetes) for the full guide.
 
 ## Browse and Manage Data
 
@@ -83,7 +124,21 @@ Connect to any database that speaks the MongoDB API wire protocol.
 - **Document management**: Create, edit, and delete documents directly from VS Code
 - **Import and export**: Import JSON files or export documents, query results, or entire collections
 - **Collection copy-and-paste**: Copy a collection and paste it into another database or server, with conflict resolution strategies
-- **Index management**: View, create, hide, unhide, and drop indexes from the tree view
+
+## Manage Indexes
+
+An **Indexes** tab in Collection View puts index work next to the queries it affects. Review what exists, create what is missing, and remove what is not earning its keep.
+
+<p align="center"><img src="resources/readme/index-management.png" alt="Indexes tab in Collection View showing index count, size, and usage metrics above a filterable table with type badges, size bars, and per-row actions" width="750" style="max-width:100%;height:auto;"></p>
+
+- Collection-level metrics for index count, total size, and total usage
+- Sortable, filterable table with server-reported size and usage per index, plus quick **Hidden** and **Unused** filters
+- Create **Standard**, **Wildcard**, and **Vector** indexes through a guided drawer with **Preview as JSON**
+- Hide an index to test whether your queries need it before you delete it
+- Hand the generated command off to a Query Playground or the Interactive Shell instead of creating it directly
+- The same actions are available from the index tree items in the sidebar
+
+See [Manage Indexes in Collection View](https://microsoft.github.io/vscode-documentdb/user-manual/collection-view-index-management) for the full guide.
 
 ## Query Insights
 

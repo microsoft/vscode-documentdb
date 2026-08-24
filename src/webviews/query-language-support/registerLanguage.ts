@@ -32,7 +32,7 @@ import { getCompletionContext } from './completionStore';
 import { createCompletionItems } from './documentdbQueryCompletionProvider';
 import { getHoverContent } from './documentdbQueryHoverProvider';
 import { isCursorInsideString } from './isCursorInsideString';
-import { LANGUAGE_ID, parseEditorUri } from './languageConfig';
+import { EditorType, LANGUAGE_ID, parseEditorUri } from './languageConfig';
 
 /** Coalesces concurrent registrations into a single promise. */
 let registrationPromise: Promise<void> | undefined;
@@ -123,6 +123,12 @@ async function doRegisterLanguage(monaco: typeof monacoEditor): Promise<void> {
             const uriString = model.uri.toString();
             const parsed = parseEditorUri(uriString);
 
+            // Plain-JSON editors deliberately offer no completions — they share
+            // the language only for relaxed-JSON highlighting and bracket handling.
+            if (parsed?.editorType === EditorType.Json) {
+                return { suggestions: [] };
+            }
+
             // Get the word at the current position for range calculation
             const wordInfo = model.getWordUntilPosition(position);
             let range: monacoEditor.IRange = {
@@ -196,6 +202,11 @@ async function doRegisterLanguage(monaco: typeof monacoEditor): Promise<void> {
             // Build field lookup from completion store for field hover info
             const uriString = model.uri.toString();
             const parsedUri = parseEditorUri(uriString);
+
+            // Plain-JSON editors deliberately offer no hover docs.
+            if (parsedUri?.editorType === EditorType.Json) {
+                return null;
+            }
             const hoverFieldLookup = parsedUri?.sessionId
                 ? (word: string) => {
                       const ctx = getCompletionContext(parsedUri.sessionId);

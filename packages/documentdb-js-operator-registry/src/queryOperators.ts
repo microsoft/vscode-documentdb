@@ -320,7 +320,7 @@ const arrayQueryOperators: readonly OperatorEntry[] = [
         value: '$elemMatch',
         meta: META_QUERY_ARRAY,
         description:
-            'The $elemmatch operator returns complete array, qualifying criteria with at least one matching array element.',
+            'The $elemMatch operator returns complete array, qualifying criteria with at least one matching array element.',
         snippet: '{ $elemMatch: { ${1:query} } }',
         link: getDocLink('$elemMatch', META_QUERY_ARRAY),
         applicableBsonTypes: ['array'],
@@ -388,23 +388,29 @@ const projectionOperators: readonly OperatorEntry[] = [
         meta: META_QUERY_PROJECTION,
         description:
             'The $ positional operator identifies an element in an array to update without explicitly specifying the position of the element in the array.',
-        link: 'https://learn.microsoft.com/en-us/azure/documentdb/operators/array-update/$', // inferred from another category
+        link: 'https://learn.microsoft.com/en-us/documentdb/query/operators/array-update/$', // inferred from another category
         standalone: false,
     },
     {
         value: '$elemMatch',
         meta: META_QUERY_PROJECTION,
         description:
-            'The $elemmatch operator returns complete array, qualifying criteria with at least one matching array element.',
+            'The $elemMatch operator returns complete array, qualifying criteria with at least one matching array element.',
         snippet: '{ $elemMatch: { ${1:query} } }',
-        link: 'https://learn.microsoft.com/en-us/azure/documentdb/operators/array-query/$elemmatch', // inferred from another category
+        link: 'https://learn.microsoft.com/en-us/documentdb/query/operators/array-query/$elemmatch', // inferred from another category
+    },
+    {
+        value: '$meta',
+        meta: META_QUERY_PROJECTION,
+        description: 'The $meta operator returns a calculated metadata column with returned dataset.',
+        link: getDocLink('$meta', META_QUERY_PROJECTION),
     },
     {
         value: '$slice',
         meta: META_QUERY_PROJECTION,
         description: 'The $slice operator returns a subset of an array from any element onwards in the array.',
         snippet: '{ $slice: ${1:number} }',
-        link: 'https://learn.microsoft.com/en-us/azure/documentdb/operators/array-expression/$slice', // inferred from another category
+        link: 'https://learn.microsoft.com/en-us/documentdb/query/operators/array-expression/$slice', // inferred from another category
     },
 ];
 

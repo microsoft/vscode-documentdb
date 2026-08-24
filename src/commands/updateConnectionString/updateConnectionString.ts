@@ -8,8 +8,9 @@ import * as l10n from '@vscode/l10n';
 import { maskSensitiveValuesInTelemetry } from '../../documentdb/utils/connectionStringHelpers';
 import { DocumentDBConnectionString } from '../../documentdb/utils/DocumentDBConnectionString';
 import { Views } from '../../documentdb/Views';
-import { ConnectionStorageService, ConnectionType } from '../../services/connectionStorageService';
+import { ConnectionStorageService } from '../../services/connectionStorageService';
 import { type DocumentDBClusterItem } from '../../tree/connections-view/DocumentDBClusterItem';
+import { resolveStorageZone } from '../../tree/connections-view/models/ConnectionClusterModel';
 import { refreshView } from '../refreshView/refreshView';
 import { ConnectionStringStep } from './ConnectionStringStep';
 import { ExecuteStep } from './ExecuteStep';
@@ -39,9 +40,7 @@ export async function updateConnectionString(context: IActionContext, node: Docu
     // as the object is cached in the tree view, and in the 'retry/error' nodes
     // that's why we need to get the fresh one each time.
 
-    const resourceType = node.cluster.emulatorConfiguration?.isEmulator
-        ? ConnectionType.Emulators
-        : ConnectionType.Clusters;
+    const resourceType = resolveStorageZone(node.cluster);
     const connection = await ConnectionStorageService.get(node.storageId, resourceType);
     const connectionString = connection?.secrets?.connectionString || '';
 
@@ -57,6 +56,7 @@ export async function updateConnectionString(context: IActionContext, node: Docu
         ...context,
         originalConnectionString: parsedCS.toString(),
         isEmulator: Boolean(node.cluster.emulatorConfiguration?.isEmulator),
+        storageZone: resolveStorageZone(node.cluster),
         storageId: node.storageId,
     };
 

@@ -8,6 +8,7 @@ import * as l10n from '@vscode/l10n';
 import * as vscode from 'vscode';
 import { openCollectionViewInternal } from './commands/openCollectionView/openCollectionView';
 import { DocumentDBConnectionString } from './documentdb/utils/DocumentDBConnectionString';
+import { canonicalizeTlsException, stripTlsBypassParams } from './documentdb/utils/tlsException';
 import { Views } from './documentdb/Views';
 import { API } from './DocumentDBExperiences';
 import { ext } from './extensionVariables';
@@ -17,6 +18,7 @@ import {
     ItemType,
     type ConnectionItem,
 } from './services/connectionStorageService';
+import { isLegacyEmulatorMigrationComplete } from './services/legacyEmulatorMigration';
 import {
     buildConnectionsViewTreePath,
     revealInConnectionsView,
@@ -132,15 +134,27 @@ async function handleConnectionStringRequest(
 
     // Determine if this is an emulator connection
     const isEmulator = isEmulatorConnection(parsedCS);
-    const disableEmulatorSecurity = parsedCS.searchParams.get('tlsAllowInvalidCertificates') === 'true';
+    // TLS exception (§7): only honor allow-invalid when EVERY host is local/private, and strip the
+    // bypass param from the parsed CS so every downstream use (storageId, stored secret, reveal)
+    // uses the canonical form — a public deep link can't silently disable certificate validation,
+    // and emulatorConfiguration is the single source of truth.
+    const disableEmulatorSecurity = canonicalizeTlsException(parsedCS.toString()).disableEmulatorSecurity;
+    stripTlsBypassParams(parsedCS);
+
+    // Pick the storage zone for this (possibly emulator) connection. The dedicated
+    // Emulators zone is being retired (design §4): once the one-time migration has run,
+    // the legacy emulator tree node is hidden, so new local connections must go into the
+    // regular Clusters zone (otherwise they would be saved but never shown). Emulator TLS
+    // behaviour is preserved via `emulatorConfiguration`, independent of the zone.
+    const targetZone =
+        isEmulator && !isLegacyEmulatorMigrationComplete() ? ConnectionType.Emulators : ConnectionType.Clusters;
+    const isInEmulatorZone = targetZone === ConnectionType.Emulators;
 
     // Create a label for the new connection
     let newConnectionLabel = createConnectionLabel(parsedCS, joinedHosts);
 
     // Check for existing connections with the same parameters
-    const existingConnections = await ConnectionStorageService.getAll(
-        isEmulator ? ConnectionType.Emulators : ConnectionType.Clusters,
-    );
+    const existingConnections = await ConnectionStorageService.getAll(targetZone);
     const existingDuplicateConnection = findDuplicateConnection(existingConnections, parsedCS, joinedHosts);
 
     // Check if URL handling confirmations are enabled
@@ -194,17 +208,18 @@ async function handleConnectionStringRequest(
             properties: {
                 type: ItemType.Connection,
                 api: API.DocumentDB,
-                emulatorConfiguration: { isEmulator, disableEmulatorSecurity: !!disableEmulatorSecurity },
+                // Match the wizard's shape: only carry an emulatorConfiguration when at least one
+                // flag is set, otherwise leave it undefined (a public deep link is a plain Cluster).
+                emulatorConfiguration:
+                    isEmulator || disableEmulatorSecurity
+                        ? { isEmulator, disableEmulatorSecurity: !!disableEmulatorSecurity }
+                        : undefined,
                 availableAuthMethods: [],
             },
             secrets: { connectionString: parsedCS.toString() },
         };
 
-        await ConnectionStorageService.save(
-            isEmulator ? ConnectionType.Emulators : ConnectionType.Clusters,
-            storageItem,
-            true,
-        );
+        await ConnectionStorageService.save(targetZone, storageItem, true);
 
         ext.connectionsBranchDataProvider.refresh();
 
@@ -246,6 +261,14 @@ async function handleConnectionStringRequest(
     // For future code maintainers:
     // This is a little trick: the first withProgress shows the notification with a user-friendly message,
     // while the second withProgress (via withConnectionsViewProgress) is used to show the 'loading animation' in the Connections View.
+    //
+    // Known limitation (pre-existing, follow-up): `revealInConnectionsView` /
+    // `buildConnectionsViewTreePath` build a FLAT path (`connectionsView/<id>`), which is
+    // correct for a root-level connection but not for one nested in a folder. A deep-link that
+    // de-dups onto a connection inside a folder (e.g. a connection migrated into "Local
+    // Connections (Legacy)") therefore may not auto-reveal. The connection is still found and
+    // navigable manually. A folder-aware reveal (via `buildFullTreePath(storageId, zone)` plus
+    // recursive `findNodeById`) is tracked as a follow-up.
     await vscode.window.withProgress(
         {
             location: vscode.ProgressLocation.Notification,
@@ -254,7 +277,13 @@ async function handleConnectionStringRequest(
         },
         async () => {
             await withConnectionsViewProgress(async () => {
-                await revealInConnectionsView(context, storageId, isEmulator, selectedDatabase, params.collection);
+                await revealInConnectionsView(
+                    context,
+                    storageId,
+                    isInEmulatorZone,
+                    selectedDatabase,
+                    params.collection,
+                );
             });
         },
     );
@@ -264,7 +293,7 @@ async function handleConnectionStringRequest(
         // Verify that the connection, database, and collection exist in the tree
         // This is an easy way to verify that the connection is valid
         // and that the database and collection exist.
-        const treePath = buildConnectionsViewTreePath(storageId, isEmulator, selectedDatabase, params.collection);
+        const treePath = buildConnectionsViewTreePath(storageId, isInEmulatorZone, selectedDatabase, params.collection);
         const collectionNode = await ext.connectionsBranchDataProvider.findNodeById(treePath, false);
 
         if (!collectionNode) {

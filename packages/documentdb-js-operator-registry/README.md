@@ -49,8 +49,8 @@ const stages = getFilteredCompletions({ meta: STAGE_COMPLETION_META });
 All operator data is derived from the official DocumentDB documentation:
 
 - **Compatibility reference:** [DocumentDB Query Language Compatibility](https://learn.microsoft.com/en-us/azure/documentdb/compatibility-query-language) — lists every operator with its support status across DocumentDB versions 5.0–8.0.
-- **Per-operator docs:** [DocumentDB Operators](https://learn.microsoft.com/en-us/azure/documentdb/operators/) — individual pages with descriptions and syntax for each operator.
-- **Source repository:** [MicrosoftDocs/azure-databases-docs](https://github.com/MicrosoftDocs/azure-databases-docs) — the GitHub repo containing the raw Markdown source for all documentation pages above (under `articles/documentdb/`).
+- **Per-operator docs:** [DocumentDB Operators](https://learn.microsoft.com/en-us/documentdb/query/operators/) — individual pages with descriptions and syntax for each operator.
+- **Source repository:** [MicrosoftDocs/nosql-docs](https://github.com/MicrosoftDocs/nosql-docs) — the public GitHub repo containing the raw Markdown source for all documentation pages above. The compatibility page lives under `azure/documentdb/`, and the per-operator pages under `documentdb/query/operators/`.
 
 ### Scraper
 

@@ -1,5 +1,32 @@
 # Change Log
 
+## 0.10.0
+
+### New Features
+
+- **DocumentDB Local**: Adds a guided setup that provisions and manages the official DocumentDB Local container from the Connections view, with Docker readiness diagnostics, generated credentials, optional sample data, and start, stop, restart, and delete actions. [#798](https://github.com/microsoft/vscode-documentdb/pull/798)
+  - Pre-release refinements: [#841](https://github.com/microsoft/vscode-documentdb/pull/841), [#849](https://github.com/microsoft/vscode-documentdb/pull/849), [#851](https://github.com/microsoft/vscode-documentdb/issues/851), [#852](https://github.com/microsoft/vscode-documentdb/issues/852), [#855](https://github.com/microsoft/vscode-documentdb/issues/855), [#856](https://github.com/microsoft/vscode-documentdb/issues/856), [#857](https://github.com/microsoft/vscode-documentdb/issues/857), [#858](https://github.com/microsoft/vscode-documentdb/issues/858), [#865](https://github.com/microsoft/vscode-documentdb/issues/865), [#866](https://github.com/microsoft/vscode-documentdb/pull/866), [#873](https://github.com/microsoft/vscode-documentdb/issues/873), [#876](https://github.com/microsoft/vscode-documentdb/pull/876), [#879](https://github.com/microsoft/vscode-documentdb/pull/879), [#883](https://github.com/microsoft/vscode-documentdb/pull/883)
+- **MongoDB Atlas Service Discovery**: Adds an Atlas discovery provider that browses organizations, projects, and clusters and saves any of them as a connection. Supports Atlas API Keys and Service Accounts, multiple credentials side by side, and tree or list views. [#259](https://github.com/microsoft/vscode-documentdb/issues/259), [#261](https://github.com/microsoft/vscode-documentdb/issues/261), [#765](https://github.com/microsoft/vscode-documentdb/pull/765)
+  - Pre-release refinements: [#799](https://github.com/microsoft/vscode-documentdb/pull/799), [#813](https://github.com/microsoft/vscode-documentdb/pull/813), [#834](https://github.com/microsoft/vscode-documentdb/pull/834), [#842](https://github.com/microsoft/vscode-documentdb/pull/842), [#850](https://github.com/microsoft/vscode-documentdb/pull/850), [#883](https://github.com/microsoft/vscode-documentdb/pull/883)
+- **Index Management in Collection View**: Adds an Indexes tab with index metrics, filtering, sorting, and per-index details. Creates Standard, Wildcard, and Vector indexes through a guided drawer with JSON preview, and hides, unhides, or deletes existing indexes. [#732](https://github.com/microsoft/vscode-documentdb/pull/732)
+  - Pre-release refinements: [#836](https://github.com/microsoft/vscode-documentdb/pull/836), [#837](https://github.com/microsoft/vscode-documentdb/pull/837)
+
+### Improvements
+
+- **Connection Failures Are Explained by the Component That Caused Them**: Failures caused by a stopped DocumentDB Local container, a broken Kubernetes port forward, or an Atlas TLS rejection are now explained in plain language instead of surfacing as raw driver errors. [#873](https://github.com/microsoft/vscode-documentdb/issues/873), [#876](https://github.com/microsoft/vscode-documentdb/pull/876)
+- **Shell Terminal Survives a Failed Connect**: The interactive shell no longer closes itself when the initial connection fails. It keeps a prompt open so the next command retries, and reports the failure through a notification and the output channel. [#876](https://github.com/microsoft/vscode-documentdb/pull/876)
+- **Improved Theme Support in Webviews**: Maps the remaining Fluent UI surfaces, interaction and disabled states, fields, and progress indicators to semantic VS Code theme colors, and corrects index-table zebra, hover, pressed, header, and badge styling across tinted themes. [#838](https://github.com/microsoft/vscode-documentdb/pull/838)
+
+### Fixes
+
+- **Collection View Import and Export**: Fixes import and export resolution for Atlas Discovery and DocumentDB Local collections, reports resolution failures with a Show Output action, and replaces the destructive credentials-missing tree action with a guided review step. [#871](https://github.com/microsoft/vscode-documentdb/pull/871)
+- **Single-Click Collection View**: Based on user requests, restores opening the Collection View with one click on the Documents tree item. [#889](https://github.com/microsoft/vscode-documentdb/pull/889)
+- **Document View Stuck on Loading**: Fixes a race condition where the Document View editor could stay on its loading placeholder forever if the document finished loading before Monaco mounted, most noticeable against fast local backends. Also disables Save and Reload while a document is loading, saving, or refreshing. [#891](https://github.com/microsoft/vscode-documentdb/pull/891)
+
+### Security
+
+- **Dependency Updates**: Updates `fast-uri` from 3.1.4 to 3.1.5 and `postcss` from 8.5.10 to 8.5.26. [#844](https://github.com/microsoft/vscode-documentdb/pull/844), [#845](https://github.com/microsoft/vscode-documentdb/pull/845)
+
 ## 0.9.2
 
 ### Improvements

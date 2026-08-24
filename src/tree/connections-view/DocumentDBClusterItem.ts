@@ -13,13 +13,7 @@ import * as l10n from '@vscode/l10n';
 import * as vscode from 'vscode';
 import { nonNullProp } from '../../utils/nonNull';
 
-import {
-    authMethodFromString,
-    AuthMethodId,
-    authMethodsFromString,
-    getAuthMethod,
-    isSupportedAuthMethod,
-} from '../../documentdb/auth/AuthMethod';
+import { authMethodFromString, AuthMethodId, authMethodsFromString } from '../../documentdb/auth/AuthMethod';
 import { showConnectionFailedAndMaybeOfferDecodedRetry } from '../../documentdb/auth/urlEncodedPassword';
 import { ClustersClient } from '../../documentdb/ClustersClient';
 import { CredentialCache } from '../../documentdb/CredentialCache';
@@ -36,15 +30,8 @@ import { ConnectionStorageService, ConnectionType, isConnection } from '../../se
 import { ClusterItemBase, type EphemeralClusterCredentials } from '../documentdb/ClusterItemBase';
 import { type TreeCluster } from '../models/BaseClusterModel';
 import { type TreeElementWithStorageId } from '../TreeElementWithStorageId';
-import { type ConnectionClusterModel } from './models/ConnectionClusterModel';
-
-/**
- * Escapes markdown special characters so user-provided text is always rendered
- * as plain text rather than being interpreted as markdown formatting or links.
- */
-function escapeMarkdown(text: string): string {
-    return text.replace(/[\\`*_{}[\]()#+\-.!|~]/g, '\\$&');
-}
+import { buildClusterTreeItem } from './clusterItemPresentation';
+import { resolveStorageZone, type ConnectionClusterModel } from './models/ConnectionClusterModel';
 
 export class DocumentDBClusterItem extends ClusterItemBase<ConnectionClusterModel> implements TreeElementWithStorageId {
     public override readonly cluster: TreeCluster<ConnectionClusterModel>;
@@ -59,16 +46,14 @@ export class DocumentDBClusterItem extends ClusterItemBase<ConnectionClusterMode
     }
 
     public async getCredentials(): Promise<EphemeralClusterCredentials | undefined> {
-        const connectionType = this.cluster.emulatorConfiguration?.isEmulator
-            ? ConnectionType.Emulators
-            : ConnectionType.Clusters;
+        const connectionType = resolveStorageZone(this.cluster);
         const connectionCredentials = await ConnectionStorageService.get(this.storageId, connectionType);
 
         if (!connectionCredentials || !isConnection(connectionCredentials)) {
             return undefined;
         }
 
-        await this.ensureConnectionReachable(connectionCredentials.properties);
+        await this.ensureConnectionReachable(connectionCredentials.properties, this.cluster.clusterId);
 
         return {
             connectionString: connectionCredentials.secrets.connectionString,
@@ -102,9 +87,7 @@ export class DocumentDBClusterItem extends ClusterItemBase<ConnectionClusterMode
                 }),
             );
 
-            const connectionType = this.cluster.emulatorConfiguration?.isEmulator
-                ? ConnectionType.Emulators
-                : ConnectionType.Clusters;
+            const connectionType = resolveStorageZone(this.cluster);
 
             context.telemetry.properties.connectionType = connectionType;
 
@@ -114,7 +97,7 @@ export class DocumentDBClusterItem extends ClusterItemBase<ConnectionClusterMode
                 return null;
             }
 
-            await this.ensureConnectionReachable(connectionCredentials.properties);
+            await this.ensureConnectionReachable(connectionCredentials.properties, this.cluster.clusterId);
 
             const connectionString = new DocumentDBConnectionString(connectionCredentials.secrets.connectionString);
 
@@ -179,9 +162,7 @@ export class DocumentDBClusterItem extends ClusterItemBase<ConnectionClusterMode
                         }),
                     );
 
-                    const connectionType = this.cluster.emulatorConfiguration?.isEmulator
-                        ? ConnectionType.Emulators
-                        : ConnectionType.Clusters;
+                    const connectionType = resolveStorageZone(this.cluster);
 
                     const connection = await ConnectionStorageService.get(this.storageId, connectionType);
                     if (connection && isConnection(connection)) {
@@ -375,7 +356,7 @@ export class DocumentDBClusterItem extends ClusterItemBase<ConnectionClusterMode
         const connectionCredentials = await ConnectionStorageService.get(this.storageId, connectionType);
 
         if (connectionCredentials && isConnection(connectionCredentials)) {
-            await this.ensureConnectionReachable(connectionCredentials.properties);
+            await this.ensureConnectionReachable(connectionCredentials.properties, this.cluster.clusterId);
         }
     }
 
@@ -389,10 +370,13 @@ export class DocumentDBClusterItem extends ClusterItemBase<ConnectionClusterMode
      * The call is cheap and a no-op when no provider applies (the common case). Failures propagate to
      * the connect flow's telemetry/error handling.
      *
-     * @see docs/ai-and-plans/PRs/621-kubernetes-discovery/connection-reachability-providers.md
+     * @see docs/ai-and-plans/features/kubernetes-discovery/connection-reachability-providers.md
      */
-    private async ensureConnectionReachable(connectionProperties: Record<string, unknown> | undefined): Promise<void> {
-        await ConnectionReachabilityService.ensureReachable(connectionProperties);
+    private async ensureConnectionReachable(
+        connectionProperties: Record<string, unknown> | undefined,
+        clusterId?: string,
+    ): Promise<void> {
+        await ConnectionReachabilityService.ensureReachable(connectionProperties, clusterId);
     }
 
     /**
@@ -436,110 +420,6 @@ export class DocumentDBClusterItem extends ClusterItemBase<ConnectionClusterMode
      * @returns The TreeItem object.
      */
     getTreeItem(): vscode.TreeItem {
-        let description: string | undefined = undefined;
-        if (
-            this.cluster.emulatorConfiguration?.isEmulator &&
-            this.cluster.emulatorConfiguration?.disableEmulatorSecurity
-        ) {
-            description = l10n.t('⚠ TLS/SSL Disabled');
-        } else if (!this.cluster.emulatorConfiguration?.isEmulator && this.isTlsDisabled()) {
-            // Surface a connection-string TLS/SSL override (e.g. tls=false) the same way the
-            // emulator's "disable security" state is shown.
-            description = l10n.t('⚠ TLS/SSL Disabled');
-        }
-
-        return {
-            id: this.id,
-            contextValue: this.contextValue,
-            label: this.cluster.name,
-            description: description,
-            iconPath: this.cluster.emulatorConfiguration?.isEmulator
-                ? new vscode.ThemeIcon('plug')
-                : new vscode.ThemeIcon('server-environment'),
-            collapsibleState: vscode.TreeItemCollapsibleState.Collapsed,
-            tooltip: this.buildTooltip(),
-        };
-    }
-
-    /**
-     * Builds a markdown tooltip showing the connection name, host, auth method,
-     * username (SCRAM only), and emulator security status.
-     *
-     * The cluster name is escaped so it always renders as plain text regardless
-     * of characters that might otherwise be interpreted as markdown links or formatting.
-     */
-    private buildTooltip(): vscode.MarkdownString {
-        const md = new vscode.MarkdownString();
-        md.isTrusted = false;
-
-        md.appendMarkdown(`### ${escapeMarkdown(this.cluster.name)}\n\n`);
-
-        // Host(s) from the connection string
-        const hosts = this.getHosts();
-        if (hosts.length > 0) {
-            const escapedHosts = hosts.map((host) => escapeMarkdown(host));
-            md.appendMarkdown(`**${l10n.t('Host')}:** ${escapedHosts.join(', ')}\n\n`);
-        }
-
-        // Auth method
-        const authMethodId = this.cluster.selectedAuthMethod;
-        if (authMethodId) {
-            const isSupported = isSupportedAuthMethod(authMethodId);
-            const authLabel = isSupported ? getAuthMethod(authMethodId).label : authMethodId;
-            md.appendMarkdown(`**${l10n.t('Auth')}:** ${escapeMarkdown(authLabel)}\n\n`);
-
-            if (isSupported && authMethodId === AuthMethodId.NativeAuth && this.cluster.connectionUser) {
-                md.appendMarkdown(`**${l10n.t('User')}:** ${escapeMarkdown(this.cluster.connectionUser)}\n\n`);
-            }
-        }
-
-        // Emulator security notice
-        if (this.cluster.emulatorConfiguration?.isEmulator) {
-            if (this.cluster.emulatorConfiguration.disableEmulatorSecurity) {
-                md.appendMarkdown(`⚠️ **${l10n.t('Security')}:** ${l10n.t('TLS/SSL Disabled')}\n\n`);
-            } else {
-                md.appendMarkdown(`✅ **${l10n.t('Security')}:** ${l10n.t('TLS/SSL Enabled')}\n\n`);
-            }
-        } else if (this.isTlsDisabled()) {
-            // For non-emulator connections, only add a line when the connection string
-            // explicitly disables TLS/SSL; otherwise show no security entry.
-            md.appendMarkdown(`⚠️ **${l10n.t('Security')}:** ${l10n.t('TLS/SSL Disabled')}\n\n`);
-        }
-
-        return md;
-    }
-
-    /**
-     * Detects whether the connection string explicitly disables TLS/SSL
-     * (e.g. `tls=false` or `ssl=false`). Returns false when the parameter is
-     * absent or the connection string cannot be parsed.
-     */
-    private isTlsDisabled(): boolean {
-        if (!this.cluster.connectionString) {
-            return false;
-        }
-        try {
-            const parsed = new DocumentDBConnectionString(this.cluster.connectionString);
-            const tls = parsed.searchParams.get('tls');
-            const ssl = parsed.searchParams.get('ssl');
-            return tls === 'false' || ssl === 'false';
-        } catch {
-            return false;
-        }
-    }
-
-    /**
-     * Extracts the host(s) from the connection string for display in the tooltip.
-     * Returns an empty array if the connection string is unavailable or unparseable.
-     */
-    private getHosts(): string[] {
-        if (!this.cluster.connectionString) {
-            return [];
-        }
-        try {
-            return new DocumentDBConnectionString(this.cluster.connectionString).hosts ?? [];
-        } catch {
-            return [];
-        }
+        return buildClusterTreeItem({ id: this.id, contextValue: this.contextValue, cluster: this.cluster });
     }
 }

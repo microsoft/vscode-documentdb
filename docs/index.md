@@ -54,13 +54,16 @@ The User Manual provides guidance on using DocumentDB for VS Code. It contains d
   - [Azure VMs (DocumentDB)](./user-manual/service-discovery-azure-vms)
   - [Kubernetes](./user-manual/service-discovery-kubernetes)
     - [Kubernetes getting started and test lab](./user-manual/service-discovery-kubernetes-getting-started)
+  - [MongoDB Atlas](./user-manual/service-discovery-mongodb-atlas)
   - [Managing Azure Subscriptions](./user-manual/managing-azure-discovery)
 - [Connecting to Local Instances](./user-manual/local-connection)
+  - [Set up DocumentDB Local](./user-manual/local-quick-start)
   - [Azure Cosmos DB for MongoDB (RU) Emulator](./user-manual/local-connection-mongodb-ru)
   - [DocumentDB Local](./user-manual/local-connection-documentdb-local)
 
 ### Data Management
 
+- [Manage Indexes in Collection View](./user-manual/collection-view-index-management)
 - [Data Migrations (Experimental)](./user-manual/data-migrations)
 - [Copy and Paste Collections](./user-manual/copy-and-paste.md)
 - [Copy Connection String](./user-manual/copy-connection-string)
@@ -80,6 +83,7 @@ The User Manual provides guidance on using DocumentDB for VS Code. It contains d
 
 Explore the history of updates and improvements to the DocumentDB for VS Code extension. Each release brings new features, enhancements, and fixes to improve your experience.
 
+- [0.10](./release-notes/0.10)
 - [0.9](./release-notes/0.9), [0.9.1](./release-notes/0.9#patch-release-v091), [0.9.2](./release-notes/0.9#patch-release-v092)
 - [0.8](./release-notes/0.8), [0.8.1](./release-notes/0.8#patch-release-v081)
 - [0.7](./release-notes/0.7), [0.7.2](./release-notes/0.7#patch-release-v072), [0.7.3](./release-notes/0.7#patch-release-v073), [0.7.4](./release-notes/0.7#patch-release-v074)

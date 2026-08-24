@@ -29,7 +29,7 @@ See [1.6 Force-push policy](#16-force-push-policy) for the rules behind the forc
 
 CI runs automatically on:
 
-- **Push to `main` or `release/**`** — full build, tests, and packaging; build sizes cached for PR comparisons.
+- **Push to `main` or a release branch** (`release/**`) — full build, tests, and packaging; build sizes cached for PR comparisons.
 - **Pull requests targeting `main`, `release/**`, or `feature/**`** — full build, tests, packaging, and a code-quality report posted as a PR comment.
 - **Manual dispatch** — use `workflow_dispatch` with `enforce_full_run` to run the full pipeline on any branch.
 
@@ -37,14 +37,16 @@ CI runs automatically on:
 
 Releases are tags-first. Normally there are no release branches at all:
 
-1. When the team is ready to release, a maintainer tags a chosen `main` commit, for example `v0.9.0`, and publishes from that tag. Every release has a tag.
+1. When the team is ready to release, a maintainer tags a chosen `main` commit, for example `v0.9.0`. Every release has a tag.
 2. Later patch releases (`v0.9.1`, `v0.9.2`, and so on) normally tag later commits on `main` in the same way.
+
+The tag is the immutable marker of what shipped, not the publication source: the Marketplace pipeline builds and publishes from a branch — normally `main`, or the `release/<X.Y>` branch when one had to be cut (see [§7.9](#79-publish-to-the-marketplace)). Tag the commit you intend to release, and release from that commit.
 
 A `release/<X.Y>` branch is created for one scenario only: a quick patch release must ship while `main` is not yet in a releasable state. In that case:
 
 1. Branch `release/<X.Y>` off the relevant release tag, for example off `v0.9.0`.
 2. Apply the patch on that branch and open it as a PR to `release/<X.Y>`.
-3. Tag the patch release (`v0.9.1`) on that branch and publish from the tag.
+3. Tag the patch release (`v0.9.1`) on that branch and run the release pipeline against it.
 4. Forward-merge the fix back into `main` so `main` stays up to date.
 5. Delete the release branch. The tag preserves the release permanently, so deleting the branch is safe and loses nothing. If another patch is needed later, re-branch from the tag.
 
@@ -202,102 +204,97 @@ code .
 
 ## 4. PR Submission Checklist
 
-Before opening or marking a pull request as ready for review, **all of the following steps must pass locally**. The same checks run in CI, so catching failures locally saves time.
+There are two cases. Work out which one you are in, then run **only** that list.
 
-### 4.1. Localization
+| Case                                                                              | Run                                                             |
+| --------------------------------------------------------------------------------- | --------------------------------------------------------------- |
+| **Case 1 — still working** — any commit, any push, opening or updating a draft PR | The fast loop ([§4.1](#41-case-1--still-working-the-fast-loop)) |
+| **Case 2 — handing over** — marking a PR ready for review                         | The full list ([§4.2](#42-case-2--handing-over-the-full-list))  |
 
-If you added, changed, or removed any user-facing string (anything passed to `vscode.l10n.t()`), regenerate the localization bundle:
+A draft PR is **not** a hand-over. It exists to hold commits, CI, and discussion while the work is still moving, so stay on the fast loop until you mark the PR ready for review. If there is no PR at all, the fast loop is the whole list.
+
+### 4.1. Case 1 — still working: the fast loop
 
 ```bash
-npm run l10n
+npm run build                     # catches type errors
+npx jest --no-coverage <path>     # only the tests covering what you touched
 ```
 
-Commit any changes to the `l10n/` folder together with your code changes.
+Nothing else. `l10n`, `prettier-fix`, `lint`, and `package` each cost minutes and say nothing about whether the change is correct.
 
-### 4.2. Formatting
+### 4.2. Case 2 — handing over: the full list
 
-Run Prettier to ensure all files meet the project's formatting standards:
+All of these must pass locally. The same checks run in CI, so catching failures here saves time.
 
 ```bash
+npm run l10n            # only if a vscode.l10n.t() string was added, changed, or removed
 npm run prettier-fix
-```
-
-Commit any files that Prettier reformats.
-
-### 4.3. Linting
-
-Run ESLint and fix all reported issues before submitting:
-
-```bash
 npm run lint
+npx jest --no-coverage  # full suite
+npm run build
+npm run package         # catches bundling and missing-asset failures
 ```
 
-### 4.4. Tests
+Commit whatever these change, including regenerated files under `l10n/` and anything Prettier reformats.
 
-Run the Jest test suite and make sure it passes:
+Case 2 is also where the AI pre-review in [§6](#6-ai-assisted-review-workflow) is due. Do not mark a PR ready for human review until that pass has run and its review file is committed under the feature's `iterations/` folder.
 
-```bash
-npm run jesttest
-```
+### 4.3. Notes on individual steps
 
-### 4.5. Package Verification
-
-Verify the extension can be packaged successfully without errors:
-
-```bash
-npm run package
-```
-
-This step catches webpack bundling issues and missing assets that unit tests alone won't surface.
-
----
-
-> **Summary — run these five commands before every PR:**
->
-> ```bash
-> npm run l10n
-> npm run prettier-fix
-> npm run lint
-> npm run jesttest
-> npm run package
-> ```
+- **`npm run l10n`** regenerates the localization bundle from the strings passed to `vscode.l10n.t()`. **Never resolve a conflict in `l10n/bundle.l10n.json` by hand** — the file is generated. Take either side, or delete it, then re-run `npm run l10n` and commit the result.
+- **`npm run prettier-fix`** covers Markdown as well as source, so documentation formatting does not drift whenever a file is touched. Fenced code blocks are left exactly as authored: they are often partial or illustrative, and reformatting them to the Markdown tab width would leave every example disagreeing with the code it documents.
+- **`npm run package`** catches webpack bundling issues and missing assets that unit tests alone will not surface.
 
 ## 5. Documenting Work with AI
 
 This section is for new contributors, code maintainers, and AI agents. It describes where documentation about work done with AI lives so that decisions and reasoning stay discoverable long after a PR merges.
 
-The canonical location is `docs/ai-and-plans/` (see [PR #766](https://github.com/microsoft/vscode-documentdb/pull/766)). Use that exact path consistently.
+The canonical location is `docs/ai-and-plans/`. Start at [`docs/ai-and-plans/README.md`](docs/ai-and-plans/README.md), which carries the feature index and the full layout rules.
 
-### 5.1 Per-PR documentation
+Durable knowledge belongs to the feature that owns it. Iteration files preserve the plans, reviews, and implementation history of one round of work. Decisions that remain relevant across iterations are recorded in the feature's `decisions.md`. PR and commit links are kept as provenance; the PR number is no longer the navigation key.
 
-Per-PR documentation lives in `docs/ai-and-plans/PRs/<pr-number>-slug/`, for example `docs/ai-and-plans/PRs/766-webview-ext-package-redesign/`. This folder holds:
+### 5.1 Where a document goes
 
-- the planning doc(s) for the PR, and
-- a progress-and-decision log.
+**Almost everything belongs to a feature.**
+
+- **An existing feature** — `docs/ai-and-plans/features/<feature>/`. Durable documents (`design.md`, `decisions.md`, references, `future-work.md`) sit flat at the feature root. The history of one round of work goes in `iterations/NN-slug.md`, or `iterations/NN-slug/` once it grows past roughly three documents. Two documents for one iteration share the number and are told apart by a genre suffix, for example `01-item-counting-tree.md` and `01-item-counting-tree-review.md`.
+- **A new feature** — create `docs/ai-and-plans/features/<slug>/` with a `README.md`. Pick a slug a contributor who has never seen the repo would guess; never an abbreviation or an invented umbrella term. Add it to the feature index in the knowledge-base README.
+- **A document that touches several features** still belongs to one of them. File it under the feature it is the origin story or the implementation log of, and cross-link the siblings.
+- **A document that genuinely belongs to no feature** is a single file at the root of `docs/ai-and-plans/`.
+
+There is no `misc/`, no `general/`, and no bucket folder for "the rest". A folder named for the absence of a property invites exactly the judgment call this layout exists to remove.
+
+Every document under `features/` carries frontmatter with at least `feature`, `kind`, and `status`; root-level documents carry `kind` and `status` only. `code:` globs on durable documents are the only route from a source path back to its rationale; add them where you can.
+
+### 5.2 What a decision record must contain
 
 The decision log must capture decisions **and the reasons behind each decision**. Recording the reasoning shortens review loops: a reviewer, human or agent, who can see why a choice was made often does not need to ask. The code alone is not enough — the context is what makes review efficient.
 
-### 5.2 Cross-cutting concepts
+Entries in `decisions.md` are semantically immutable. Append new entries rather than rewriting old ones, and record a reversal as a new entry plus a status change in the table at the top. The "changed from the proposal?" column is the highest-signal content in the whole knowledge base: it records what the human changed about the agent's proposal.
 
-General or cross-cutting concepts that are not tied to a single PR go in the root of `docs/ai-and-plans/`.
+### 5.3 Draft PRs
 
-### 5.3 Draft PRs and bootstrapping the PR number
+Work that is still in progress must be opened as a **draft** pull request. This prevents the automatic GitHub Copilot review from kicking in before it is wanted.
 
-- Work that is still in progress must be opened as a **draft** pull request. This prevents the automatic GitHub Copilot review from kicking in before it is wanted.
-- Before a PR exists there is no PR number yet, so the `<pr-number>-slug` subfolder cannot be named. In that case, keep the planning and progress files directly in `docs/ai-and-plans/` (without the numbered subfolder) while you work.
-- Once the draft PR is created and the number is known, relocate those files into `docs/ai-and-plans/PRs/<pr-number>-slug/`.
+Documents do not wait for a PR number. The feature slug exists before the PR does, so write into the feature folder from the start.
+
+### 5.4 Keep the feature docs current
+
+Update `features/<feature>/README.md` (and `design.md` if applicable) in the same PR when a **decision, constraint, or intended design** changed, or when you already know a current document has become materially misleading. These documents record intent, not exact behavior, so a behavior change on its own is not a trigger.
+
+This is deliberately not mechanical. The usual shape is: a plan is written and records the decisions behind it; the work is done; if it deviates from the plan, the deviation and its reasoning are recorded. Minor choices made along the way do not each need an entry, and no PR needs a proactive sweep for drift.
 
 ## 6. AI-Assisted Review Workflow
 
-Contributors are expected to pre-review their own code with AI before requesting human review. The goal is to shorten the human PR-review loop by catching issues earlier. This is the repo maintainer's expectation, not optional polish. The stages below produce a structured review file that is committed into the PR's `docs/ai-and-plans/` folder.
+Contributors are expected to pre-review their own code with AI before requesting human review. The goal is to shorten the human PR-review loop by catching issues earlier. This is the repo maintainer's expectation, not optional polish. The stages below produce a structured review file that is committed into the relevant feature's `iterations/` folder under `docs/ai-and-plans/`.
 
 > **Note:** Some of these prompts will be turned into skills in the near future. They are recorded here now for transparency and to help current contributors.
 
 ### 6.1 Stage 1: AI review pass (run by the contributor)
 
-A multi-step review that produces a committed review markdown file stored in `docs/ai-and-plans/PRs/<pr-number>-slug/`:
+A multi-step review that produces a committed review markdown file stored in `docs/ai-and-plans/features/<feature>/iterations/`:
 
-1. **Initial edge-case review** using a stronger model from one vendor. Every issue gets a severity level. Findings are written to the review markdown file in the PR folder.
+1. **Initial edge-case review** using a stronger model from one vendor. Every issue gets a severity level. Findings are written to the review markdown file in the feature's `iterations/` folder.
 2. **Merge the Copilot reviewer comments.** Pull the GitHub Copilot reviewer's comments from the PR, merge them into the same file, and reassess the severity of each. Keep a link to each reviewer comment so it can be referenced later in follow-up responses.
 3. **Validation gate** using a stronger model from a different vendor than the first, at standard context. A 1M or extended context window is not needed here because everything is already scoped at this point, so the standard context window is sufficient. This gate verifies each finding against the codebase to confirm valid vs false positive, reassesses severity, and for each issue proposes one or more solutions with pros and cons and a recommended option. It filters out false assumptions made by the earlier passes.
 4. **Independent sweep:** the model looks beyond the captured issues for additional risks not identified earlier, and proposes solutions for them too.
@@ -334,20 +331,11 @@ For complex problems, or general problems the review discovers, the author is fr
 
 > **Status:** This is a **recommendation**, not a hard rule. The workflow is currently in use and being evaluated, so treat it as a pattern to try and give feedback on rather than a fixed process.
 
-The stages above target code review. UX and workflow review is different: the value comes from actually using the extension and exercising real user journeys, not from reading a diff. The recommended pattern here is a **person paired with an agent on the side**: the person steers, the agent reads the code, checks claims against it, and keeps the running log.
+The stages above target code review. UX and workflow review is different: the value comes from actually using the extension and walking real user journeys, not from reading a diff. The pattern is a **person paired with an agent** — you steer and report what you see, the agent verifies each claim against the code and keeps the log.
 
-A worked example lives in [`docs/ai-and-plans/PRs/621-kubernetes-discovery/bugbash-090-kubernetes-ux-review.md`](docs/ai-and-plans/PRs/621-kubernetes-discovery/bugbash-090-kubernetes-ux-review.md).
+**Use the [`ux-pr-review`](.github/skills/ux-pr-review/SKILL.md) skill.** Ask an agent to "prepare a UX review for PR #NNN". It owns the procedure, the document template, the status legend, and the worked examples. None of that is repeated here, so there is only one copy to keep correct.
 
-How the pattern works:
-
-- **The person drives the UX.** You try the extension, walk the flows, and share what you find with the agent. The agent does the reading, verifies behavior against the current code, drafts wording, and records decisions.
-- **Split the work into phases by user journey**, not by issue number. For example: first-run and empty states, adding a source, tree presentation, connectivity and tooltips, and so on. Discuss, decide, and implement one phase, then **close it out before moving to the next**.
-- **Why phase it:** the agent's working context stays lean, because only the slice of code and discussion relevant to the current phase is loaded at any time, which keeps the analysis accurate instead of sprawling. The reviewer's attention also stays on one coherent area at a time.
-- **Keep a running log** in the PR's `docs/ai-and-plans/` folder. Each iteration records the feedback that came in, the reasoning, the decision, and what was actually implemented, so a future reader, human or agent, can pick up any single phase cold and understand both what was decided and why.
-- **Ask the agent for tests** as discoveries land, so behavior agreed during the review is locked in rather than re-derived later.
-- **Use scannable status markers** (for example Done, Partial or Deferred, Flag, Won't fix) so the state of each item is visible at a glance.
-- **Extract out-of-scope findings into issues.** A UX review often surfaces things that are beyond the PR's scope, or that would risk delaying the merge if pulled in now. When that happens, ask the agent to file an issue on the repo summarizing the finding and link it from the log. This keeps the current PR focused and mergeable while making sure nothing discovered is lost.
-- **Reconcile after merge.** A running log goes stale the moment behavior changes. Once the work merges, stamp the log with a short note pointing to the current source of truth (the user manual and the pre-merge code review), so nobody mistakes an old iteration for current behavior.
+The gist, and the part that is yours rather than the agent's: **a UX review is worth what gets written down.** Every discovery, the decision taken on it, and the **reason** for that decision go into a running log committed to the feature's `iterations/` folder under `docs/ai-and-plans/`. Phase the work by user journey and close each phase out before starting the next, so the log stays readable and the agent's context stays lean. A decision recorded without its rationale gets re-litigated later by someone reading the code and wondering why.
 
 ## 7. Release Process
 
@@ -368,44 +356,75 @@ Ask the agent to deduplicate and merge the two lists: a single change is often r
 
 Review the generated files and edit for accuracy before continuing.
 
-### 7.2 Commit the notes
+### 7.2 Add screenshots
 
-Commit the generated `CHANGELOG.md` and `docs/release-notes/X.Y.md`.
+Release notes carry screenshots; the changelog does not. Take the screenshots by hand — only a person can drive the extension to the right state — then hand them to the agent and ask it to place them. Save them under `docs/release-notes/images/` named `X.Y.Z_feature_name.png`.
 
-### 7.3 Bump the version
+The `writing-release-notes` skill owns the exact markup and the width conventions (full-width versus dialog crops); see its `RELEASE-NOTES-FORMAT.md`. Do not hand-write the `<img>` tags.
+
+### 7.3 Commit the notes
+
+Commit the generated `CHANGELOG.md`, `docs/release-notes/X.Y.md`, and any images added in the previous step.
+
+### 7.4 Bump the version
 
 1. Update the `version` field in `package.json` to `X.Y.Z`.
 2. Run `npm install` so the lock file (`package-lock.json`) is regenerated with the new version.
 
 Running `npm install` here is required: bumping `package.json` alone leaves the lock file out of sync.
 
-### 7.4 Create the announcement discussion
+### 7.5 Create the announcement discussion
 
 Based on the `docs/release-notes/X.Y.md` file, create a new discussion under **Discussions** on the GitHub repo. This is the user-facing announcement for the release.
 
-If this is **more than a patch release** (a new minor or major, `X.Y.0`), copy the link to that discussion into the `releaseNotesUrl` field in `package.json` so users see the announcement from inside the extension. For a plain patch release, leave `releaseNotesUrl` pointing at the current minor's announcement.
+An agent can create it for you. GitHub's REST API has no endpoint for discussions, so this goes through GraphQL. First look up the repository ID and the category you want:
 
-### 7.5 Commit the version bump
+```bash
+gh api graphql -f query='
+{
+  repository(owner: "microsoft", name: "vscode-documentdb") {
+    id
+    discussionCategories(first: 20) { nodes { id name } }
+  }
+}'
+```
+
+Then create the discussion, using the release-notes body:
+
+```bash
+gh api graphql -f query='
+mutation($repo: ID!, $cat: ID!, $title: String!, $body: String!) {
+  createDiscussion(input: {repositoryId: $repo, categoryId: $cat, title: $title, body: $body}) {
+    discussion { url }
+  }
+}' -f repo=<repository id> -f cat=<category id> -f title="vX.Y.Z" -f body="$(cat docs/release-notes/X.Y.md)" \
+  --jq '.data.createDiscussion.discussion.url'
+```
+
+The mutation returns the discussion URL, which is what the next paragraph needs.
+
+If this is **more than a patch release** (a new minor or major, `X.Y.0`), copy that URL into the `releaseNotesUrl` field in `package.json` so users see the announcement from inside the extension. For a plain patch release, leave `releaseNotesUrl` pointing at the current minor's announcement.
+
+### 7.6 Commit the version bump
 
 Commit `package.json`, the updated `package-lock.json`, and any `releaseNotesUrl` change together.
 
-### 7.6 Build the official artifact
+### 7.7 Build the signed artifact
 
-1. Run the Azure DevOps (ADO) pipeline to build the release.
-2. Download the official, verified build (the `.vsix`) produced by that pipeline.
+Run the internal Azure DevOps **build** pipeline. It produces a **signed** `.vsix`. Download that artifact.
 
-Always ship the artifact from the ADO pipeline, not a locally packaged build.
+Always ship the signed artifact from the pipeline. A locally packaged `.vsix` is unsigned and must never be published or attached to a release.
 
-### 7.7 Create the GitHub release
+### 7.8 Create the GitHub release
 
-1. Create a release on GitHub for tag `vX.Y.Z`.
-2. Use the changelog content for this version as the release body.
-3. Attach the `.vsix` downloaded from the ADO pipeline.
+1. Create a release on GitHub with a new tag `vX.Y.Z`, pointing at the release commit on `main`.
+2. Use this version's section of `CHANGELOG.md` as the release body.
+3. Attach the **signed** `.vsix` downloaded in the previous step.
 4. Save the release.
 
-### 7.8 Publish to the Marketplace
+### 7.9 Publish to the Marketplace
 
-In parallel with creating the GitHub release, use the internal release pipeline to publish the verified build to the Visual Studio Marketplace.
+Run the second internal Azure DevOps pipeline, the **release** pipeline, which publishes to the Visual Studio Marketplace from whichever branch holds the release commit — `main` for a normal release, or the `release/<X.Y>` branch when a patch was cut off a tag ([§1.3](#13-releases)). This is a separate pipeline from the build in §7.7: one produces and signs the artifact, the other ships it.
 
 ## You're Ready to Contribute! 🎉
 

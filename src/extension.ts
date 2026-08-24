@@ -24,6 +24,7 @@ import { PLAYGROUND_RESULT_SCHEME, PlaygroundResultProvider } from './documentdb
 import { SchemaStore } from './documentdb/SchemaStore';
 import { ext } from './extensionVariables';
 import { flushAccumulatedTelemetry } from './utils/accumulatingTelemetry';
+import { registerReadOnlyJsonDocumentProvider } from './utils/readOnlyJsonDocumentProvider';
 import { globalUriHandler } from './vscodeUriHandler';
 // Import the DocumentDB Extension API interfaces
 import { type AzureResourcesExtensionApi } from '@microsoft/vscode-azureresources-api';
@@ -54,6 +55,7 @@ export async function activateInternal(
         ext.playgroundResultProvider,
         vscode.workspace.registerTextDocumentContentProvider(PLAYGROUND_RESULT_SCHEME, ext.playgroundResultProvider),
         new PlaygroundDiagnostics(),
+        registerReadOnlyJsonDocumentProvider(),
     );
 
     registerUIExtensionVariables(ext);

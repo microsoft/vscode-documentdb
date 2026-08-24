@@ -28,12 +28,13 @@ const groupAccumulators: readonly OperatorEntry[] = [
         description:
             "The addToSet operator adds elements to an array if they don't already exist, while ensuring uniqueness of elements within the set.",
         snippet: '{ $addToSet: "${1:\\$field}" }',
-        link: 'https://learn.microsoft.com/en-us/azure/documentdb/operators/array-update/$addtoset', // inferred from another category
+        link: 'https://learn.microsoft.com/en-us/documentdb/query/operators/array-update/$addtoset', // inferred from another category
     },
     {
         value: '$avg',
         meta: META_ACCUMULATOR,
-        description: 'Computes the average of numeric values for documents in a group, bucket, or window.',
+        description:
+            'The $avg operator computes the average of numeric values for documents in a group, bucket, or window.',
         snippet: '{ $avg: "${1:\\$field}" }',
         link: getDocLink('$avg', META_ACCUMULATOR),
     },
@@ -99,7 +100,7 @@ const groupAccumulators: readonly OperatorEntry[] = [
     {
         value: '$maxN',
         meta: META_ACCUMULATOR,
-        description: 'Retrieves the top N values based on a specified filtering criteria',
+        description: 'The $maxN operator retrieves the top N values based on specified filtering criteria.',
         snippet: '{ $maxN: { input: "${1:\\$field}", n: ${2:number} } }',
         link: getDocLink('$maxN', META_ACCUMULATOR),
     },
@@ -115,12 +116,12 @@ const groupAccumulators: readonly OperatorEntry[] = [
         meta: META_ACCUMULATOR,
         description: 'The $mergeObjects operator merges multiple documents into a single document',
         snippet: '{ $mergeObjects: "${1:\\$field}" }',
-        link: 'https://learn.microsoft.com/en-us/azure/documentdb/operators/object-expression/$mergeobjects', // inferred from another category
+        link: 'https://learn.microsoft.com/en-us/documentdb/query/operators/object-expression/$mergeobjects', // inferred from another category
     },
     {
         value: '$min',
         meta: META_ACCUMULATOR,
-        description: 'Retrieves the minimum value for a specified field',
+        description: 'The $min operator retrieves the minimum value for a specified field',
         snippet: '{ $min: "${1:\\$field}" }',
         link: getDocLink('$min', META_ACCUMULATOR),
     },
@@ -137,7 +138,7 @@ const groupAccumulators: readonly OperatorEntry[] = [
         meta: META_ACCUMULATOR,
         description: 'The $push operator adds a specified value to an array within a document.',
         snippet: '{ $push: "${1:\\$field}" }',
-        link: 'https://learn.microsoft.com/en-us/azure/documentdb/operators/array-update/$push', // inferred from another category
+        link: 'https://learn.microsoft.com/en-us/documentdb/query/operators/array-update/$push', // inferred from another category
     },
     {
         value: '$stdDevPop',

@@ -19,13 +19,12 @@ export class ExecuteStep extends AzureWizardExecuteStep<RenameConnectionWizardCo
     public priority: number = 100;
 
     public async execute(context: RenameConnectionWizardContext): Promise<void> {
+        const resourceType =
+            context.storageZone ?? (context.isEmulator ? ConnectionType.Emulators : ConnectionType.Clusters);
         // Set telemetry properties
-        context.telemetry.properties.connectionType = context.isEmulator
-            ? ConnectionType.Emulators
-            : ConnectionType.Clusters;
+        context.telemetry.properties.connectionType = resourceType;
 
         await withConnectionsViewProgress(async () => {
-            const resourceType = context.isEmulator ? ConnectionType.Emulators : ConnectionType.Clusters;
             const connection = await ConnectionStorageService.get(context.storageId, resourceType);
 
             if (connection) {
