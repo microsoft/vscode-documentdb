@@ -125,15 +125,29 @@ export abstract class ClusterItemBase<T extends BaseClusterModel = BaseClusterMo
      * Reuses a cached client when one exists, exactly as `getChildren` does, so calling this
      * on an already-connected cluster costs nothing.
      *
-     * @returns A connected client, or `null` when authentication failed or the user
-     *          cancelled — callers should abort quietly in that case, because the
-     *          authentication flow has already reported the reason.
+     * @returns A connected client, or `null` when authentication failed or the user cancelled —
+     *          callers should abort quietly in that case, because the flow has already reported
+     *          the reason, or the user asked for nothing to happen.
+     * @throws Any non-cancellation failure from reusing a cached client, so the caller's command
+     *         error handling can report it. Only cancellation is swallowed.
      */
     public async connect(): Promise<ClustersClient | null> {
         if (CredentialCache.hasCredentials(this.cluster.clusterId)) {
             await this.beforeCachedClientConnect();
 
-            return this.getClientWithProgress(this.cluster.clusterId);
+            try {
+                return await this.getClientWithProgress(this.cluster.clusterId);
+            } catch (error) {
+                // Cancelling the progress notification is a request for nothing to happen, so it
+                // must not surface as an error dialog. `getChildren` draws the same distinction;
+                // without it, dismissing "Connecting to …" reports the user's own cancellation
+                // back to them as a failure.
+                if (error instanceof UserCancelledError) {
+                    return null;
+                }
+
+                throw error;
+            }
         }
 
         return this.authenticateAndConnect();

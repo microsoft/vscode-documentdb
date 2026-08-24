@@ -391,6 +391,30 @@ describe('ClusterItemBase.connect', () => {
         expect(ClustersClientMock.getClient).not.toHaveBeenCalled();
     });
 
+    it('returns null when the user cancels the progress notification on the cached path', async () => {
+        mockHasCredentials.mockReturnValue(true);
+        const { UserCancelledError } = jest.requireMock('@microsoft/vscode-azext-utils');
+        const { ClustersClient: ClustersClientMock } = jest.requireMock('../../documentdb/ClustersClient');
+        (ClustersClientMock.getClient as jest.Mock).mockRejectedValue(new UserCancelledError());
+
+        const item = new ConnectTestClusterItem(makeCluster(), null);
+
+        // Dismissing "Connecting to …" is a request for nothing to happen. Letting it escape
+        // would report the user's own cancellation back to them as a command failure.
+        await expect(item.connect()).resolves.toBeNull();
+    });
+
+    it('propagates a genuine failure on the cached path so the command can report it', async () => {
+        mockHasCredentials.mockReturnValue(true);
+        const { ClustersClient: ClustersClientMock } = jest.requireMock('../../documentdb/ClustersClient');
+        (ClustersClientMock.getClient as jest.Mock).mockRejectedValue(new Error('server down'));
+
+        const item = new ConnectTestClusterItem(makeCluster(), null);
+
+        // Only cancellation is swallowed; a real failure must not look like a quiet abort.
+        await expect(item.connect()).rejects.toThrow('server down');
+    });
+
     it('returns null when authentication fails or the user cancels the prompt', async () => {
         mockHasCredentials.mockReturnValue(false);
 
