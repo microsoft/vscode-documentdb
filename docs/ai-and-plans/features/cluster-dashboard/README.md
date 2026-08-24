@@ -93,6 +93,10 @@ See [decisions.md](./decisions.md). The two that constrain everything else:
 
 ## Open gaps
 
+The [AI pre-review](./iterations/01-poc/ai-pre-review.md) is the authoritative list; the four
+questions in its _Outstanding author decisions_ section are what stand between this and a
+ready-for-review PR. The gaps below predate it.
+
 - **`design.md` is stale in its framing.** It predates
   [0006](./decisions.md#0006--the-page-is-a-data-inventory-not-a-performance-dashboard-reconstructed)
   and still takes the vscode-pgsql Server Dashboard as its template. Its research, technical
