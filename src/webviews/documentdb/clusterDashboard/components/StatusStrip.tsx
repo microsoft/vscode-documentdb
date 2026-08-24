@@ -8,11 +8,7 @@ import { type JSX } from 'react';
 
 import { type ClusterStorageStats } from '../../../../documentdb/utils/getClusterHealth';
 // TODO(dashboard): promote metricsRow to src/webviews/components/ so views don't reach into each other.
-import {
-    CountMetric,
-    GenericMetric,
-    MetricsRow,
-} from '../../collectionView/queryInsightsTab/components/metricsRow';
+import { CountMetric, GenericMetric, MetricsRow } from '../../collectionView/queryInsightsTab/components/metricsRow';
 import { PLACEHOLDER } from '../clusterFacts';
 import { formatBytes } from '../formatUtils';
 
