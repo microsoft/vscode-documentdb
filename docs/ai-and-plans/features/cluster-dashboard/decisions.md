@@ -334,3 +334,125 @@ full review sweep on its own scope.
 Requires agreement from [@khelanmodi](https://github.com/khelanmodi) (author of #753) and a
 maintainer. Until then this entry stays `Proposed`. The follow-on question, once convergence is
 agreed, is the **single** public command id and menu title the merged surface exposes.
+
+---
+
+## 0010 — An opid is not an identity; occurrences are
+
+**Status:** Accepted · **Date:** 2026-08-24 · **Raised by:** the two-vendor AI pre-review (S4, S10, F2)
+**Evidence:** [iterations/01-poc/ai-pre-review.md](./iterations/01-poc/ai-pre-review.md#d2--occurrence-identity), commit `73a43d68`
+
+### Question
+
+Servers reissue `opid` as soon as an operation finishes. Three separate defects followed: a table
+row keyed on `opid` kept an open Actions menu across a reissue and repointed its kill at a different
+operation; the pre-kill re-check compared only `opid` and namespace, which a recycled id on the same
+collection also matches; and history folded a reissued id into the previous run. Is a real identity
+worth building for a POC, or does Kill stay best-effort?
+
+### Decision
+
+Build it. The history module assigns each continuous run an `occurrenceId`, because it is the only
+place that knows whether an id is continuing or has just been handed over. Rows key on it, Kill
+carries it and refuses when that occurrence is gone.
+
+An occurrence ends when a poll stops reporting it and — the case nothing else catches — when its
+elapsed clock runs backwards, which only happens when the server gave the id to something new.
+
+### Reasoning
+
+Kill is the only destructive action in the panel, and the failure mode was killing an operation the
+user never selected, with nothing on screen to reveal it. A POC may be incomplete; it should not be
+silently wrong behind a destructive action. Deferring this would also have meant shipping three
+patches later instead of one idea now — the row key, the re-check and the history merge are the same
+question asked in three places.
+
+### Rejected alternatives
+
+- **Send the displayed `secs_running` and reject a lower one.** Closes most of the window and is
+  smaller, but leaves identity implicit, so the row key and the history merge stay broken.
+- **Disable Kill for the POC.** Removes the demo's most compelling moment to avoid a bug that turned
+  out to be tractable.
+- **Defer with an issue** — the review's own recommendation. Rejected for the reason above.
+
+---
+
+## 0011 — Cost is bounded per connection, not per call
+
+**Status:** Accepted · **Date:** 2026-08-24 · **Raised by:** the two-vendor AI pre-review (S6, F3, F4, F8, S5)
+**Evidence:** [iterations/01-poc/ai-pre-review.md](./iterations/01-poc/ai-pre-review.md#d3--polling-and-concurrency), commit `68dc3508`
+
+### Question
+
+Five findings described what the dashboard costs the cluster it is pointed at: a statistics limit of
+eight applied per invocation while twenty panels can run at once, a `currentOp` fallback chain
+re-walked every poll, two pollers asking the same question, nothing pausing while the panel was
+hidden, and no procedure honouring `ctx.signal`. Coordinator now, or next iteration?
+
+### Decision
+
+Now. The statistics budget lives on the connection and every collector draws from it. The winning
+`currentOp` form is remembered per connection. The two pollers share one request when they land in
+the same tick. Polling stops while the panel is hidden. Both fan-outs take an `AbortSignal`.
+
+### Reasoning
+
+Every one of these is invisible to the user and visible to whoever operates the cluster. A ceiling
+that was really a hundred and sixty, a poll that never stops, and a steady drip of authorization
+failures into an audit log are precisely what a DBA would object to — and "it is only a POC" is not
+an answer when the POC is pointed at production. Shipping first and fixing later means the first
+impression is the bad one, and load complaints are hard to walk back.
+
+The budget is claimed per command rather than per worker: a worker holding its slot for a whole pass
+would let one collector take the entire budget and starve the others, which is the problem this
+exists to prevent rather than a fix for it.
+
+### Rejected alternatives
+
+- **Restrict expansion to one database at a time.** Cheaper, but solves the symptom by removing a
+  feature.
+- **Cache the `currentOp` answer for the whole refresh interval.** Would let the pre-kill re-check
+  act on a stale view — the exact mechanism 0010 exists to prevent. The share window is deliberately
+  well under the cadence, and the re-check opts out entirely.
+
+---
+
+## 0012 — Warn at the sharing boundary rather than redact the preview
+
+**Status:** Accepted (modified) · **Date:** 2026-08-24 · **Raised by:** the two-vendor AI pre-review (S1, S2, F12)
+**Evidence:** [iterations/01-poc/ai-pre-review.md](./iterations/01-poc/ai-pre-review.md#d1--query-literals-in-the-export-clipboard-and-copilot-prompt), commit `73a43d68`
+
+### Question
+
+Redaction removes credential-bearing commands and secret-shaped field names. What survives is every
+in-flight command's query filters and document values — application data under names no denylist can
+know. Both reviewers proposed replacing the preview with a structural summary that drops literals.
+
+### Decision
+
+Take the warning, not the redesign. Export raises a modal naming what the document contains before
+it is produced. The preview keeps showing real values.
+
+### Reasoning
+
+The tooltip's entire value is seeing the actual query; `{find: "orders", filter: {<string>}}` answers
+none of the questions people open the Operations tab for. The export is different in kind — it
+leaves the machine, and by the time anyone reads it the decision to share has already been made.
+Warning at that boundary is the part that could not wait.
+
+What a redacted-but-still-useful preview looks like is a product question. Getting it wrong is
+expensive in both directions: over-redact and the feature is pointless, under-redact and it leaks
+while looking safe. That is worth deciding deliberately rather than under demo pressure.
+
+The more dangerous half was never the data — it was the comment above `exportDiagnostics` asserting
+the output was already redacted and safe, which would have been inherited by every future reader.
+That is gone.
+
+### Rejected alternatives
+
+- **Structural summary everywhere** — the reviewers' proposal. Correct about the risk, wrong about
+  the cost to the feature. Revisit with a real requirement rather than in a POC.
+- **Redact the export only** — plausible, but the export's value is that it reproduces what was on
+  screen; a differently-redacted copy is a third representation to keep consistent.
+- **Defer entirely.** Rejected: the export exists to be shared, so the gap is realised the first
+  time anyone uses it as intended.

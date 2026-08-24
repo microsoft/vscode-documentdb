@@ -104,11 +104,10 @@ ready-for-review PR. The gaps below predate it.
   re-verified against the code.
 - **The #753 convergence is unagreed.** See
   [0009](./decisions.md#0009--converge-with-pr-753-on-a-shared-feature-branch).
-- **Two independent pollers.** The health sample and the Operations tab each query `currentOp`.
-  Consolidating them is the first post-POC task
-  ([0001](./decisions.md#0001--poll-from-the-webview-not-trpc-subscriptions-reconstructed)).
-- **The panel keeps polling while hidden.** Throttling is designed but not implemented.
 - **Refresh interval is fixed at 5 s**, not user-configurable.
+- **Command previews still carry query literals.** Redaction removes credentials, not application
+  data; export warns rather than redacting
+  ([0012](./decisions.md#0012--warn-at-the-sharing-boundary-rather-than-redact-the-preview)).
 - **No collection-level drill-down** — that surface belongs to
   [#753](https://github.com/microsoft/vscode-documentdb/pull/753).
 - **No used-vs-provisioned storage figure**, because there is no Azure Monitor integration.

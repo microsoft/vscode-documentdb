@@ -11,8 +11,8 @@ created: 2026-08-24
 > The §6.1 pre-review for the Cluster Dashboard POC. Two independent cold reviews, cross-validated
 > against the code, merged with the GitHub Copilot reviewer's comments, and dispositioned.
 >
-> **Author decisions on the deferred items are outstanding** — see
-> [Outstanding author decisions](#outstanding-author-decisions). §6.2 is the author's to complete.
+> **§6.2 complete** — see [Author decisions](#author-decisions-62). Three of the four questions were
+> answered by building the fix rather than deferring it.
 
 ## Method
 
@@ -130,21 +130,70 @@ Recorded so a later round does not re-litigate them:
   requests within one mounted instance, and all polled state writes are guarded by `disposedRef`.
 - **No HTML injection path.** Server strings go through normal React text/attribute paths.
 
-## Outstanding author decisions
+## Author decisions (§6.2)
 
-§6.2 is the author's, and it is the part that matters most. What needs a decision from
-@guanzhousongmicrosoft before this PR is marked ready for review:
+Recorded 2026-08-24 by @guanzhousongmicrosoft. §6.2 is the part of this process that only the
+author can do, and it is the part a future maintainer will actually need.
 
-1. **The export/Copilot data question (S1 rest, S2, F12).** Does the Operations tab keep showing
-   real query literals? If yes, the diagnostics export needs either its own redaction pass or a
-   modal that states what the file contains. These three should get one answer, not three.
-2. **Occurrence identity (S4, S10, F2 rest).** Is a host-issued fingerprint per live occurrence
-   worth building now, or does the Kill action stay best-effort for the POC with the fail-closed
-   behaviour just added? This is the highest-severity deferred item.
-3. **The polling coordinator (F3, F4, S5 rest, S6, F8).** Five findings share one fix. Is that this
-   PR's scope or the next iteration's?
-4. ~~Whether F5/S8 blocks the POC.~~ **Answered: yes.** Fixed in `668994ad`, along with S9, ahead
-   of the maintainer demo.
+### D1 — Query literals in the export, clipboard and Copilot prompt
 
-Once those are recorded here with their reasoning, §6.2 is satisfied and the Case 2 gate in
-`prepare-pull-request` §2.3 is met.
+**Decision: warn now, redesign later.** Export raises a modal naming what the file contains —
+query filters, document values, client addresses — before the document is produced. The
+structural summary both reviewers proposed is deferred.
+
+**Reasoning.** The tooltip's whole value is seeing the actual query; a page that shows
+`{find: "orders", filter: {<string>}}` answers none of the questions people open it for. But an
+artifact built to be attached to a bug report is different in kind: it leaves the machine, and by
+the time anyone reads it the decision to share is already made. Warning at that boundary is the
+part that had to happen now. Deciding _what_ a redacted-but-useful command preview looks like is a
+product question, not a patch, and getting it wrong in either direction is expensive — over-redact
+and the feature is pointless, under-redact and it leaks. The comment claiming the output was
+already safe is gone, which was the more dangerous half.
+
+**Covers:** S1 (rest), S2, F12. Deferred half tracked for the next iteration.
+
+### D2 — Occurrence identity
+
+**Decision: build it now.** Fixed in `73a43d68`.
+
+**Reasoning.** This was the only finding where the product does the wrong thing silently and
+irreversibly — Kill is the one destructive action in the panel, and the failure mode is killing an
+operation the user never selected, with no signal that it happened. Deferring a correctness bug
+behind a destructive action is not a POC-appropriate trade; a POC may be incomplete, but it should
+not be wrong. It also turned out to be one idea, not three: rows, the kill re-check and the history
+merge all failed for the same reason, and one notion of occurrence identity closed all of them.
+
+**Covers:** S4, S10, F2 (rest).
+
+### D3 — Polling and concurrency
+
+**Decision: build it now.** Fixed in `68dc3508`.
+
+**Reasoning.** These five findings describe what the feature costs the cluster it is pointed at,
+and the numbers are not marginal: a ceiling of eight that was really a hundred and sixty, a poll
+that never stopped, and a stream of authorization failures into an audit log that reads like
+someone probing the server. A dashboard whose cost is invisible to its user is exactly the thing a
+DBA would object to, and "it is only a POC" is not an answer when the POC is pointed at production.
+The alternative — shipping it and fixing later — means the first impression is the bad one.
+
+**Covers:** F3, F4, S5 (rest), S6, F8.
+
+### D4 — Partial storage sums
+
+**Decision: fixed before the demo.** `668994ad`. See the fixed table above.
+
+**Reasoning.** A headline figure the cluster itself would contradict is the one defect that
+discredits every other number on the page.
+
+**Covers:** F5, S8.
+
+### Still deferred after these decisions
+
+Everything in the deferred table above except the items D2 and D3 promoted, plus the structural
+half of D1. The largest remaining are S11 (a `listCollections` failure renders as an empty
+database — same class as F6, one level down), S13 (dashboard failures bypass
+`ConnectionDiagnosticsService`), F10 (the history is re-serialized every poll) and F11 (expanded
+collection figures never refresh).
+
+None of them is a correctness bug behind a destructive action or a number presented as a fact the
+code does not have, which is the line these decisions drew.
