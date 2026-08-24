@@ -10,7 +10,7 @@ import { useTrpcClient } from '../../../_integration/useTrpcClient';
 // TODO(dashboard): promote the feedback pair to src/webviews/components/ so views don't
 // reach into each other. Reused as-is meanwhile — a second copy of the consent flow and its
 // privacy notice is the last thing this should grow.
-import { FeedbackCard, FeedbackDialog } from '../../collectionView/components/queryInsightsTab/components';
+import { FeedbackCard, FeedbackDialog } from '../../collectionView/queryInsightsTab/components';
 
 /**
  * The thumbs-up / thumbs-down vehicle from Query Insights, asking about the dashboard.

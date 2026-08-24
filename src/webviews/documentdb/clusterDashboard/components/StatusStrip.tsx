@@ -12,7 +12,7 @@ import {
     CountMetric,
     GenericMetric,
     MetricsRow,
-} from '../../collectionView/components/queryInsightsTab/components/metricsRow';
+} from '../../collectionView/queryInsightsTab/components/metricsRow';
 import { PLACEHOLDER } from '../clusterFacts';
 import { formatBytes } from '../formatUtils';
 

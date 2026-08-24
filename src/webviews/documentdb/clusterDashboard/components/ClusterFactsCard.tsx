@@ -10,7 +10,7 @@ import { type ClusterHealthSample } from '../../../../documentdb/utils/getCluste
 import { regionToDisplayName } from '../../../../utils/regionToDisplayName';
 // TODO(dashboard): promote summaryCard to src/webviews/components/ so views don't reach into
 // each other. Reused as-is meanwhile so this column is visually identical to Query Insights'.
-import { GenericCell, SummaryCard } from '../../collectionView/components/queryInsightsTab/components/summaryCard';
+import { GenericCell, SummaryCard } from '../../collectionView/queryInsightsTab/components/summaryCard';
 import { type ClusterDashboardAzureInfo } from '../clusterDashboardController';
 import { type ClusterDashboardInfo } from '../clusterDashboardRouter';
 import { describeCompute, describeProduct, extractHostName, formatEngineVersions, PLACEHOLDER } from '../clusterFacts';

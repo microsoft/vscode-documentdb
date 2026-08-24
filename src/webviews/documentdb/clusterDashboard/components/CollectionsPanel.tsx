@@ -24,7 +24,7 @@ import { useEffect, useState, type JSX } from 'react';
 
 import { type DatabaseCollectionsResult } from '../../../../documentdb/utils/getClusterHealth';
 import { useTrpcClient } from '../../../_integration/useTrpcClient';
-import { formatCount } from '../../collectionView/components/queryInsightsTab/components/metricsRow';
+import { formatCount } from '../../collectionView/queryInsightsTab/components/metricsRow';
 import { formatBytes } from '../formatUtils';
 import { RelativeSize } from './RelativeSize';
 

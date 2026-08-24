@@ -8,7 +8,7 @@ import * as l10n from '@vscode/l10n';
 import { type JSX } from 'react';
 
 import { type ClusterHealthSample } from '../../../../documentdb/utils/getClusterHealth';
-import { formatCount } from '../../collectionView/components/queryInsightsTab/components/metricsRow';
+import { formatCount } from '../../collectionView/queryInsightsTab/components/metricsRow';
 import { Sparkline } from './Sparkline';
 
 export interface ActivityTabProps {

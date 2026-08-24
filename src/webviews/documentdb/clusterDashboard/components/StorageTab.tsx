@@ -23,7 +23,7 @@ import * as l10n from '@vscode/l10n';
 import { Fragment, useMemo, type JSX } from 'react';
 
 import { type ClusterDatabaseStorage, type ClusterStorageStats } from '../../../../documentdb/utils/getClusterHealth';
-import { formatCount } from '../../collectionView/components/queryInsightsTab/components/metricsRow';
+import { formatCount } from '../../collectionView/queryInsightsTab/components/metricsRow';
 import { formatBytes } from '../formatUtils';
 import { CollectionsPanel } from './CollectionsPanel';
 import { RelativeSize } from './RelativeSize';
