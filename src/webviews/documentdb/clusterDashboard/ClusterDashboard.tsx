@@ -173,6 +173,15 @@ export const ClusterDashboard = (): JSX.Element => {
                     setConsecutiveFailures((failures) => (sample.pingLatencyMs === null ? failures + 1 : 0));
                     if (sample.errors.some((entry) => getFailedCommandName(entry) === 'serverStatus')) {
                         setOpcountersUnsupported(true);
+                    } else if (sample.opcounters !== null) {
+                        // A sample carrying opcounters proves `serverStatus` answered, so an
+                        // earlier failure was transient — a blip, a failover, a moment of load —
+                        // rather than the server refusing the command. Without this the tab is
+                        // removed by the first hiccup and never returns for the life of the
+                        // panel, which reads as the feature being broken rather than the server
+                        // being briefly busy. Only opcounters prove it: a sample can lack a
+                        // `serverStatus` error simply because the whole poll failed earlier.
+                        setOpcountersUnsupported(false);
                     }
                 })
                 .catch(() => {

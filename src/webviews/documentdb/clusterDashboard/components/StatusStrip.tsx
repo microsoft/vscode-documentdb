@@ -55,6 +55,47 @@ export const StatusStrip = ({ storageStats }: StatusStripProps): JSX.Element => 
     const totalIndexes = sumAcrossDatabases((database) => database.indexes);
     const totalIndexBytes = sumAcrossDatabases((database) => database.indexSizeBytes);
 
+    /**
+     * Whether these tiles are summing less than the whole cluster.
+     *
+     * Two independent truncations feed one number: `getStorageStats` inspects at most
+     * `DATABASE_STATS_LIMIT` databases, and any database whose `dbStats` failed contributes
+     * nothing. The Storage tab states both, but this strip stays on screen while Operations or
+     * Activity is selected, so a caveat that lives only on the tab is not always next to the
+     * number it qualifies.
+     */
+    const omittedCount = storageStats?.omittedDatabaseCount ?? 0;
+    const unreportedCount =
+        storageStats === null
+            ? 0
+            : storageStats.databases.filter((database) => database.sizeOnDiskBytes === null).length;
+    const isPartial = omittedCount > 0 || unreportedCount > 0;
+
+    /**
+     * Marks a summed figure as a lower bound when the sum is incomplete.
+     *
+     * A partial sum presented as a total is the one kind of wrong this page must not be: it
+     * reads as a fact about the cluster and there is nothing on screen to contradict it.
+     */
+    const asBound = (formatted: string | null | undefined): string | null | undefined =>
+        isPartial && typeof formatted === 'string' ? l10n.t('≥ {value}', { value: formatted }) : formatted;
+
+    /** Appended to every summed tile's tooltip while the sum is incomplete. */
+    const partialCaveat = !isPartial
+        ? ''
+        : omittedCount > 0 && unreportedCount > 0
+          ? l10n.t(
+                ' Showing a lower bound: {omitted} more database(s) were not inspected and {unreported} did not report a size.',
+                { omitted: String(omittedCount), unreported: String(unreportedCount) },
+            )
+          : omittedCount > 0
+            ? l10n.t(' Showing a lower bound: {omitted} more database(s) were not inspected.', {
+                  omitted: String(omittedCount),
+              })
+            : l10n.t(' Showing a lower bound: {unreported} database(s) did not report a size.', {
+                  unreported: String(unreportedCount),
+              });
+
     // `undefined` while loading, `null` when the server answered nothing — the two states the
     // metric cards distinguish, and the reason these are not collapsed into a string here.
     const storageUsed =
@@ -91,11 +132,13 @@ export const StatusStrip = ({ storageStats }: StatusStripProps): JSX.Element => 
                 <div className="statusTile">
                     <GenericMetric
                         label={l10n.t('Storage Used')}
-                        value={storageUsed}
+                        value={asBound(storageUsed)}
                         nullValuePlaceholder={NOT_REPORTED}
-                        tooltipExplanation={l10n.t(
-                            'Total size on disk reported for all user databases. This is the data footprint, not the provisioned disk. A dash means this server did not report it.',
-                        )}
+                        tooltipExplanation={
+                            l10n.t(
+                                'Size on disk across the user databases this dashboard inspected. This is the data footprint, not the provisioned disk. A dash means this server did not report it.',
+                            ) + partialCaveat
+                        }
                     />
                 </div>
 
@@ -104,9 +147,11 @@ export const StatusStrip = ({ storageStats }: StatusStripProps): JSX.Element => 
                         label={l10n.t('Documents')}
                         value={totalDocuments}
                         nullValuePlaceholder={NOT_REPORTED}
-                        tooltipExplanation={l10n.t(
-                            'Total documents across all user databases. A dash means this server did not report it.',
-                        )}
+                        tooltipExplanation={
+                            l10n.t(
+                                'Documents across the user databases this dashboard inspected. A dash means this server did not report it.',
+                            ) + partialCaveat
+                        }
                     />
                 </div>
 
