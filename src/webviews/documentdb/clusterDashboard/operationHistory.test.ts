@@ -9,6 +9,7 @@ import {
     clearObservedOperations,
     endObservedOperationsSession,
     getObservedOperations,
+    isOccurrenceStillRunning,
     recordObservedOperations,
 } from './operationHistory';
 
@@ -194,5 +195,67 @@ describe('observed-operation sessions', () => {
 
         // Clear empties the list; it does not stop the dashboard from observing.
         expect(getObservedOperations(CLUSTER)).toHaveLength(1);
+    });
+});
+
+describe('occurrence identity', () => {
+    it('gives a continuing operation one identity across polls', () => {
+        const [first] = recordObservedOperations(CLUSTER, [operation({ secsRunning: 1 })], 1_000);
+        const [second] = recordObservedOperations(CLUSTER, [operation({ secsRunning: 6 })], 6_000);
+
+        expect(first.occurrenceId).not.toBe('');
+        expect(second.occurrenceId).toBe(first.occurrenceId);
+        expect(getObservedOperations(CLUSTER)).toHaveLength(1);
+    });
+
+    it('treats a reissued opid as a new occurrence when the elapsed clock restarts', () => {
+        const [before] = recordObservedOperations(CLUSTER, [operation({ secsRunning: 40 })], 1_000);
+
+        // Same opid, same namespace, well inside the re-occurrence window — the case the
+        // dashboard could not previously tell apart. Only the restarted clock reveals that the
+        // server finished one operation and handed the id to another.
+        const [after] = recordObservedOperations(CLUSTER, [operation({ secsRunning: 0 })], 5_000);
+
+        expect(after.occurrenceId).not.toBe(before.occurrenceId);
+        expect(getObservedOperations(CLUSTER)).toHaveLength(2);
+    });
+
+    it('does not resurrect an entry a later poll already retired', () => {
+        const [before] = recordObservedOperations(CLUSTER, [operation({ secsRunning: 1 })], 1_000);
+        recordObservedOperations(CLUSTER, [], 2_000);
+        const [after] = recordObservedOperations(CLUSTER, [operation({ secsRunning: 2 })], 3_000);
+
+        // The first run ended. Folding a later sighting back into it would invent one long
+        // operation out of two and revive an Ended badge.
+        expect(after.occurrenceId).not.toBe(before.occurrenceId);
+        expect(getObservedOperations(CLUSTER).filter((entry) => entry.ended)).toHaveLength(1);
+    });
+
+    it('leaves operations the server did not identify without an occurrence', () => {
+        const [only] = recordObservedOperations(CLUSTER, [operation({ opid: '' })], 1_000);
+
+        expect(only.occurrenceId).toBe('');
+        expect(getObservedOperations(CLUSTER)).toEqual([]);
+    });
+});
+
+describe('isOccurrenceStillRunning', () => {
+    it('confirms the occurrence the user acted on', () => {
+        const [live] = recordObservedOperations(CLUSTER, [operation({ secsRunning: 1 })], 1_000);
+
+        expect(isOccurrenceStillRunning(CLUSTER, live.occurrenceId)).toBe(true);
+    });
+
+    it('refuses once that occurrence has ended, even though the opid is running again', () => {
+        const [original] = recordObservedOperations(CLUSTER, [operation({ secsRunning: 40 })], 1_000);
+        recordObservedOperations(CLUSTER, [operation({ secsRunning: 0 })], 5_000);
+
+        // This is the kill-the-wrong-operation case: the id is live, but not as the run the
+        // user was looking at when they opened the menu.
+        expect(isOccurrenceStillRunning(CLUSTER, original.occurrenceId)).toBe(false);
+    });
+
+    it('refuses an occurrence it has never seen', () => {
+        expect(isOccurrenceStillRunning(CLUSTER, 'fabricated')).toBe(false);
     });
 });

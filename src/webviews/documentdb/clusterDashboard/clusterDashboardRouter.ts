@@ -36,7 +36,9 @@ import { buildAskCopilotPrompt } from './askCopilotPrompt';
 import {
     clearObservedOperations,
     getObservedOperations,
+    isOccurrenceStillRunning,
     recordObservedOperations,
+    type IdentifiedOperation,
     type ObservedOperation,
 } from './operationHistory';
 
@@ -85,7 +87,9 @@ export type KillOperationResult = {
  * What the Operations tab renders: the live snapshot plus everything observed so far.
  * Both travel together because they are produced by the same poll.
  */
-export interface OperationsPayload extends CurrentOperationsResult {
+export interface OperationsPayload extends Omit<CurrentOperationsResult, 'operations'> {
+    /** Each carries the occurrence identity the host assigned it. */
+    operations: IdentifiedOperation[];
     history: ObservedOperation[];
 }
 
@@ -195,9 +199,14 @@ export const clusterDashboardRouter = router({
         // A poll whose every attempt failed reports no operations, which is not the same fact
         // as "nothing is running" — recording it would flip every entry to Ended and tell a
         // user watching a long aggregation that it died.
-        recordObservedOperations(myCtx.clusterId, result.operations, Date.now(), result.errors.length === 0);
+        const operations = recordObservedOperations(
+            myCtx.clusterId,
+            result.operations,
+            Date.now(),
+            result.errors.length === 0,
+        );
 
-        return { ...result, history: getObservedOperations(myCtx.clusterId) };
+        return { ...result, operations, history: getObservedOperations(myCtx.clusterId) };
     }),
 
     /** Drops the observed-operation history for this cluster. */
@@ -303,13 +312,37 @@ export const clusterDashboardRouter = router({
      * being retyped from screenshots.
      *
      * The live samples come from the webview because they are only kept there; everything
-     * else is re-read fresh. Command previews are redacted upstream, and cluster metadata
-     * carries only hashed domain fragments — no connection string or credential is included.
+     * else is re-read fresh. No connection string or credential is included: cluster metadata
+     * carries only hashed domain fragments, and command previews have had credential-bearing
+     * commands and secret-shaped fields stripped.
+     *
+     * **That is not the same as safe to share.** What survives redaction is the rest of every
+     * in-flight command — query filter values, document contents, and the client address that
+     * issued them. This document is built to be attached to a bug report, so the user is asked
+     * to confirm what it contains before it is produced rather than discovering it after
+     * uploading. See `buildCommandPreview` for why a denylist cannot do better.
      */
     exportDiagnostics: publicProcedureWithTelemetry
         .input(z.object({ samples: z.array(healthSampleSchema) }))
         .mutation(async ({ input, ctx }): Promise<void> => {
             const myCtx = ctx as WithTelemetry<RouterContext>;
+
+            const confirmed = await vscode.window.showWarningMessage(
+                l10n.t('Export diagnostics for "{cluster}"?', { cluster: myCtx.clusterDisplayName }),
+                {
+                    modal: true,
+                    detail: l10n.t(
+                        'The file includes the commands running on this cluster — query filters, document values and the client addresses that issued them — alongside storage and topology figures. Passwords and connection strings are removed, but application data is not. Review it before sharing.',
+                    ),
+                },
+                l10n.t('Export'),
+            );
+
+            if (confirmed === undefined) {
+                myCtx.actionContext.telemetry.properties.exportConfirmed = 'false';
+                return;
+            }
+            myCtx.actionContext.telemetry.properties.exportConfirmed = 'true';
 
             const client = await ClustersClient.getClient(myCtx.clusterId);
             const mongoClient = client.getMongoClient();
@@ -346,7 +379,15 @@ export const clusterDashboardRouter = router({
      * so it follows the user's configured confirmation style.
      */
     killOperation: publicProcedureWithTelemetry
-        .input(z.object({ opid: z.string(), opidIsNumeric: z.boolean(), namespace: z.string() }))
+        .input(
+            z.object({
+                opid: z.string(),
+                opidIsNumeric: z.boolean(),
+                namespace: z.string(),
+                /** Identity of the run the user acted on, so a reissued opid is not mistaken for it. */
+                occurrenceId: z.string(),
+            }),
+        )
         .mutation(async ({ input, ctx }): Promise<KillOperationResult> => {
             const myCtx = ctx as WithTelemetry<RouterContext>;
 
@@ -398,11 +439,13 @@ export const clusterDashboardRouter = router({
                 return { outcome: 'unverified' };
             }
 
-            const stillRunning = current.operations.some(
-                (operation) => operation.opid === input.opid && operation.namespace === input.namespace,
-            );
+            // Folding the fresh poll into the history is what decides whether this opid is the
+            // same run the user saw or a new one wearing its id: an operation whose elapsed
+            // time went backwards, or one that a previous poll already retired, becomes a new
+            // occurrence with a new identity.
+            recordObservedOperations(myCtx.clusterId, current.operations, Date.now());
 
-            if (!stillRunning) {
+            if (!isOccurrenceStillRunning(myCtx.clusterId, input.occurrenceId)) {
                 showConfirmationAsInSettings(l10n.t('Operation "{opid}" is no longer running.', { opid: input.opid }));
                 return { outcome: 'gone' };
             }

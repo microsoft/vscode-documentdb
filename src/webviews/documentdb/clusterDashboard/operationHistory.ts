@@ -34,6 +34,14 @@ const REOCCURRENCE_GAP_MS = 60_000;
 
 /** One operation the dashboard saw at least once. */
 export interface ObservedOperation {
+    /**
+     * Identity of one continuous run, stable for its whole life and never reused.
+     *
+     * `opid` alone is not an identity: servers reissue it the moment an operation finishes.
+     * Anything that must still refer to the *same* operation a moment later — a row's React
+     * key, an open menu, a pending kill — has to key on this instead.
+     */
+    occurrenceId: string;
     opid: string;
     type: string;
     namespace: string;
@@ -57,6 +65,12 @@ export interface ObservedOperation {
     ended: boolean;
 }
 
+/** A live operation with the host's occurrence identity attached. */
+export interface IdentifiedOperation extends CurrentOpEntry {
+    /** Empty when the server did not identify the operation, which makes it untrackable. */
+    occurrenceId: string;
+}
+
 /** Per-cluster history. Module-level so it outlives any single webview instance. */
 const historyByCluster = new Map<string, ObservedOperation[]>();
 
@@ -77,11 +91,44 @@ export function beginObservedOperationsSession(clusterId: string): void {
 }
 
 function isSameOccurrence(entry: ObservedOperation, operation: CurrentOpEntry, nowMs: number): boolean {
-    return (
-        entry.opid === operation.opid &&
-        entry.namespace === operation.namespace &&
-        nowMs - entry.lastSeenMs <= REOCCURRENCE_GAP_MS
-    );
+    if (entry.opid !== operation.opid || entry.namespace !== operation.namespace) {
+        return false;
+    }
+
+    // An entry a later poll already retired is finished. Matching it again would resurrect it
+    // and fold a new operation's sightings into the dead one's totals.
+    if (entry.ended) {
+        return false;
+    }
+
+    if (nowMs - entry.lastSeenMs > REOCCURRENCE_GAP_MS) {
+        return false;
+    }
+
+    // Elapsed time only ever grows within one run, so a clock that went backwards means the
+    // server reissued this id to a different operation. This is the only signal that
+    // distinguishes a recycled id from a continuing one inside the gap window — without it,
+    // an operation that ended and was replaced within a minute is indistinguishable from one
+    // that never stopped.
+    if (
+        entry.longestSecsRunning !== null &&
+        operation.secsRunning !== null &&
+        operation.secsRunning < entry.longestSecsRunning
+    ) {
+        return false;
+    }
+
+    return true;
+}
+
+/**
+ * Builds the identity of one continuous run.
+ *
+ * `firstSeenMs` is what makes it unique: a reissued opid is a new occurrence with a new first
+ * sighting, so the two never collide even though they share an id and a namespace.
+ */
+function buildOccurrenceId(opid: string, namespace: string, firstSeenMs: number): string {
+    return `${opid}\u0000${namespace}\u0000${firstSeenMs}`;
 }
 
 /**
@@ -93,23 +140,28 @@ function isSameOccurrence(entry: ObservedOperation, operation: CurrentOpEntry, n
  * @param pollSucceeded - Whether the poll actually reached the server. A failed poll reports no
  *        operations, which is not the same fact as "nothing is running": recording it would mark
  *        every entry ended. Defaults to `true` so an explicit empty poll still ends entries.
+ * @returns The same operations, each stamped with the occurrence identity the history assigned
+ *          it. Occurrence identity is decided here because this is the only place that knows
+ *          whether an opid is continuing or has just been reissued.
  */
 export function recordObservedOperations(
     clusterId: string,
     operations: CurrentOpEntry[],
     nowMs: number,
     pollSucceeded: boolean = true,
-): void {
+): IdentifiedOperation[] {
     // A poll that never reached the server tells us nothing about what stopped.
     if (!pollSucceeded) {
-        return;
+        return operations.map((operation) => ({ ...operation, occurrenceId: '' }));
     }
 
     // The panel closed while this poll was in flight; its result belongs to a session that no
     // longer exists.
     if (!openSessions.has(clusterId)) {
-        return;
+        return operations.map((operation) => ({ ...operation, occurrenceId: '' }));
     }
+
+    const identified: IdentifiedOperation[] = [];
 
     const history = historyByCluster.get(clusterId) ?? [];
     const stillRunning = new Set<ObservedOperation>();
@@ -118,6 +170,7 @@ export function recordObservedOperations(
         // Operations the server could not identify cannot be tracked across polls: every
         // sighting would look like the same entry, or like a new one, arbitrarily.
         if (operation.opid === '') {
+            identified.push({ ...operation, occurrenceId: '' });
             continue;
         }
 
@@ -125,6 +178,7 @@ export function recordObservedOperations(
 
         if (existing === undefined) {
             history.push({
+                occurrenceId: buildOccurrenceId(operation.opid, operation.namespace, nowMs),
                 opid: operation.opid,
                 type: operation.type,
                 namespace: operation.namespace,
@@ -136,9 +190,13 @@ export function recordObservedOperations(
                 observations: 1,
                 ended: false,
             });
-            stillRunning.add(history[history.length - 1]);
+            const created = history[history.length - 1];
+            stillRunning.add(created);
+            identified.push({ ...operation, occurrenceId: created.occurrenceId });
             continue;
         }
+
+        identified.push({ ...operation, occurrenceId: existing.occurrenceId });
 
         existing.lastSeenMs = nowMs;
         existing.observations += 1;
@@ -167,6 +225,19 @@ export function recordObservedOperations(
     }
 
     historyByCluster.set(clusterId, history);
+
+    return identified;
+}
+
+/**
+ * Whether the occurrence the user acted on is still the one holding that opid.
+ *
+ * Read-only: a destructive action must not disturb the record it is consulting.
+ */
+export function isOccurrenceStillRunning(clusterId: string, occurrenceId: string): boolean {
+    const history = historyByCluster.get(clusterId) ?? [];
+
+    return history.some((entry) => entry.occurrenceId === occurrenceId && !entry.ended);
 }
 
 /** Everything observed for a cluster, most recently seen first. */

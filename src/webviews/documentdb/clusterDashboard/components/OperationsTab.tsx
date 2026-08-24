@@ -42,7 +42,7 @@ import { type CurrentOpEntry, type CurrentOpScope } from '../../../../documentdb
 import { useTrpcClient } from '../../../_integration/useTrpcClient';
 import { Announcer } from '../../../components/accessibility';
 import { type KillOperationResult } from '../clusterDashboardRouter';
-import { type ObservedOperation } from '../operationHistory';
+import { type IdentifiedOperation, type ObservedOperation } from '../operationHistory';
 
 export interface OperationsTabProps {
     /** Polling cadence inherited from the panel configuration. */
@@ -159,7 +159,7 @@ function describeKillOutcome(outcome: KillOperationResult['outcome'], opid: stri
 export const OperationsTab = ({ refreshIntervalMs }: OperationsTabProps): JSX.Element => {
     const trpcClient = useTrpcClient();
 
-    const [operations, setOperations] = useState<CurrentOpEntry[] | null>(null);
+    const [operations, setOperations] = useState<IdentifiedOperation[] | null>(null);
     const [history, setHistory] = useState<ObservedOperation[]>([]);
     /**
      * Reference point for the history's "seen N ago" column, refreshed with each poll.
@@ -248,13 +248,14 @@ export const OperationsTab = ({ refreshIntervalMs }: OperationsTabProps): JSX.El
     }, [loadOperations, refreshIntervalMs]);
 
     const handleKill = useCallback(
-        async (operation: CurrentOpEntry): Promise<void> => {
+        async (operation: IdentifiedOperation): Promise<void> => {
             setKillingOpid(operation.opid);
             try {
                 const result = await trpcClient.clusterDashboard.killOperation.mutate({
                     opid: operation.opid,
                     opidIsNumeric: operation.opidIsNumeric,
                     namespace: operation.namespace,
+                    occurrenceId: operation.occurrenceId,
                 });
 
                 if (result.outcome === 'failed') {
@@ -364,7 +365,7 @@ export const OperationsTab = ({ refreshIntervalMs }: OperationsTabProps): JSX.El
      * unreachable — and an unexplained disabled action is worse than no action.
      */
     const renderRowActions = useCallback(
-        (operation: CurrentOpEntry): JSX.Element => {
+        (operation: IdentifiedOperation): JSX.Element => {
             const missingPrivilege = canKillOperations === false;
 
             return (
@@ -498,12 +499,18 @@ export const OperationsTab = ({ refreshIntervalMs }: OperationsTabProps): JSX.El
                     </TableHeader>
                     <TableBody>
                         {operations.map((operation, index) => (
-                            // Keyed by opid so a row keeps its identity across the 5 s
-                            // re-render — an index-based key remounts every row below a
-                            // vanished one, snapping its open Actions menu shut. The index
-                            // is only the fallback for rows whose opid the server omitted
-                            // ('' would collide).
-                            <TableRow key={operation.opid === '' ? `unidentified:${index}` : operation.opid}>
+                            // Keyed by the host-assigned occurrence, not by opid. A stable key
+                            // keeps a row's identity across the 5 s re-render, which is what
+                            // stops an open Actions menu snapping shut — but keying on opid
+                            // made that a liability: when the server reissued an id, React
+                            // kept the row and its open menu and quietly repointed the kill
+                            // action at a different operation. The occurrence changes when the
+                            // id is reused, so the row remounts and the menu closes, which is
+                            // the correct outcome. The index remains the fallback for rows the
+                            // server did not identify at all.
+                            <TableRow
+                                key={operation.occurrenceId === '' ? `unidentified:${index}` : operation.occurrenceId}
+                            >
                                 <TableCell className="opidColumn">
                                     <OperationIdCell opid={operation.opid} />
                                 </TableCell>
