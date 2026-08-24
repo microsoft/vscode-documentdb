@@ -94,7 +94,9 @@ See [decisions.md](./decisions.md). The two that constrain everything else:
 
 The [AI pre-review](./iterations/01-poc/ai-pre-review.md) is the authoritative list, and its
 [author decisions](./iterations/01-poc/ai-pre-review.md#author-decisions-62) record what was fixed
-and what was deliberately left. The gaps below remain.
+and what was deliberately left. Issue
+[#897](https://github.com/microsoft/vscode-documentdb/issues/897) tracks the deferred work. The
+gaps below remain.
 
 - **`design.md` is stale in its framing.** It predates
   [0006](./decisions.md#0006--the-page-is-a-data-inventory-not-a-performance-dashboard-reconstructed)
