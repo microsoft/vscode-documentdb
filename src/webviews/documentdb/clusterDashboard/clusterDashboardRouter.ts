@@ -78,7 +78,7 @@ export interface ClusterDashboardInfo {
  * claim an operation "has been killed" — it can only distinguish these cases.
  */
 export type KillOperationResult = {
-    outcome: 'requested' | 'cancelled' | 'gone' | 'failed';
+    outcome: 'requested' | 'cancelled' | 'gone' | 'failed' | 'unverified';
 };
 
 /**
@@ -191,7 +191,11 @@ export const clusterDashboardRouter = router({
         // Every poll feeds the history, so the tab can answer "what has run" and not only
         // "what is running". Recorded here rather than in the webview so it survives a tab
         // switch, a hidden panel, and the webview remounting.
-        recordObservedOperations(myCtx.clusterId, result.operations, Date.now());
+        //
+        // A poll whose every attempt failed reports no operations, which is not the same fact
+        // as "nothing is running" — recording it would flip every entry to Ended and tell a
+        // user watching a long aggregation that it died.
+        recordObservedOperations(myCtx.clusterId, result.operations, Date.now(), result.errors.length === 0);
 
         return { ...result, history: getObservedOperations(myCtx.clusterId) };
     }),
@@ -381,11 +385,24 @@ export const clusterDashboardRouter = router({
             // onto a different operation. Re-check before killing rather than terminating
             // whatever happens to hold that id.
             const current = await listCurrentOperations(mongoClient);
+
+            // A re-check that did not reach the server proves nothing. Killing anyway would
+            // terminate whatever now holds the id on the strength of a check that failed, so
+            // the destructive action fails closed and the user can retry with a fresh list.
+            if (current.errors.length > 0) {
+                showConfirmationAsInSettings(
+                    l10n.t('Could not confirm that operation "{opid}" is still running. Nothing was killed.', {
+                        opid: input.opid,
+                    }),
+                );
+                return { outcome: 'unverified' };
+            }
+
             const stillRunning = current.operations.some(
                 (operation) => operation.opid === input.opid && operation.namespace === input.namespace,
             );
 
-            if (!stillRunning && current.errors.length === 0) {
+            if (!stillRunning) {
                 showConfirmationAsInSettings(l10n.t('Operation "{opid}" is no longer running.', { opid: input.opid }));
                 return { outcome: 'gone' };
             }

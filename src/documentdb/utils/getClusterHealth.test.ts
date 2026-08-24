@@ -121,6 +121,45 @@ describe('sampleClusterHealth', () => {
         expect(sample.activeOperations).toBe(1);
     });
 
+    it('carries the breadth of the currentOp form alongside the active-operation count', async () => {
+        const { client } = createFakeClient({
+            adminCommand: (command) => {
+                if (command.ping === 1) {
+                    return { ok: 1 };
+                }
+                throw new Error('CommandNotSupported: serverStatus');
+            },
+            aggregate: () => [{ opid: 7, op: 'query', ns: 'db.coll', active: true }],
+        });
+
+        const sample = await sampleClusterHealth(client);
+
+        // Without the scope the count is unreadable: on a least-privileged connection the chain
+        // falls back to the caller's own operations, and "1" then means something entirely
+        // different from "1" on a privileged one.
+        expect(sample.activeOperations).toBe(1);
+        expect(sample.activeOperationsScope).not.toBeNull();
+    });
+
+    it('leaves the scope null when no currentOp form succeeded', async () => {
+        const { client } = createFakeClient({
+            adminCommand: (command) => {
+                if (command.ping === 1) {
+                    return { ok: 1 };
+                }
+                throw new Error('CommandNotSupported: serverStatus');
+            },
+            aggregate: () => {
+                throw new Error('Unauthorized');
+            },
+        });
+
+        const sample = await sampleClusterHealth(client);
+
+        expect(sample.activeOperations).toBeNull();
+        expect(sample.activeOperationsScope).toBeNull();
+    });
+
     it('records a null latency and the reason when the ping itself fails', async () => {
         const { client } = createFakeClient({
             adminCommand: () => {
@@ -511,7 +550,7 @@ describe('listCurrentOperations', () => {
                     op: 'command',
                     ns: 'sales.$cmd',
                     active: true,
-                    command: { find: 'orders', filter: { key: 'AKIAsecret' } },
+                    command: { find: 'orders', filter: { accessToken: 'AKIAsecret' } },
                 },
             ],
         });
@@ -522,10 +561,63 @@ describe('listCurrentOperations', () => {
         expect(previews[0]).toBe('{"saslStart":"[redacted]"}');
         expect(previews[1]).toBe('{"createUser":"[redacted]"}');
         // A nested credential field is redacted without discarding the rest of the command,
-        // which is what makes the preview useful at all.
-        expect(previews[2]).toBe('{"find":"orders","filter":{"key":"[redacted]"}}');
+        // which is what makes the preview useful at all. `accessToken` is not a wire-protocol
+        // field: it is caught by shape, because application data is where these actually appear.
+        expect(previews[2]).toBe('{"find":"orders","filter":{"accessToken":"[redacted]"}}');
         expect(previews.join(' ')).not.toContain('hunter2');
         expect(previews.join(' ')).not.toContain('biwsbj1h');
+    });
+
+    it('redacts secret-shaped application field names at any depth, in objects and arrays', async () => {
+        const { client } = createFakeClient({
+            aggregate: () => [
+                {
+                    opid: 1,
+                    op: 'query',
+                    ns: 'app.users',
+                    active: true,
+                    command: {
+                        find: 'users',
+                        filter: {
+                            password: 'hunter2',
+                            sessions: [{ accessToken: 'abc', label: 'laptop' }],
+                            nested: { clientSecret: 'shh', apiKey: 'k1' },
+                        },
+                    },
+                },
+            ],
+        });
+
+        const [preview] = (await listCurrentOperations(client)).operations.map((o) => o.commandPreview);
+
+        // The shape of the query survives — that is the point of a preview — while the values
+        // that look like secrets do not.
+        expect(preview).toContain('"find":"users"');
+        expect(preview).toContain('"label":"laptop"');
+        for (const secret of ['hunter2', 'abc', 'shh', 'k1']) {
+            expect(preview).not.toContain(secret);
+        }
+    });
+
+    it('keeps an index specification readable, because `key` is not a secret outside auth commands', async () => {
+        const { client } = createFakeClient({
+            aggregate: () => [
+                {
+                    opid: 1,
+                    op: 'command',
+                    ns: 'sales.$cmd',
+                    active: true,
+                    command: { createIndexes: 'orders', indexes: [{ key: { tenant: 1 }, name: 'tenant_1' }] },
+                },
+            ],
+        });
+
+        const [preview] = (await listCurrentOperations(client)).operations.map((o) => o.commandPreview);
+
+        // Redacting `key` globally hid the one field that says what the index is. The commands
+        // where `key` carries credential material are discarded wholesale by name instead.
+        expect(preview).toContain('"key":{"tenant":1}');
+        expect(preview).toContain('"name":"tenant_1"');
     });
 });
 

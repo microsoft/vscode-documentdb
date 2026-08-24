@@ -91,7 +91,7 @@ export function describeTopology(metadata: ClusterMetadataMap): string {
  * `hello.internal.kind` identifies an Azure DocumentDB server, and `domainInfo_api`
  * distinguishes the vCore and RU offerings from the host suffix. Both are already collected
  * by `getClusterMetadata`, so this costs no extra round trip. Returns `null` for a server
- * that identifies as neither — a local emulator or a generic MongoDB server, where the row
+ * that identifies as neither — a local emulator or a generic MongoDB-API server, where the row
  * would add nothing over the version that is already shown.
  */
 export function describeProduct(metadata: ClusterMetadataMap): string | null {

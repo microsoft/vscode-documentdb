@@ -103,7 +103,7 @@ export function buildAskCopilotPrompt(
 
     if (metadata['topology_hello_internal_kind'] === 'azuredocumentdb') {
         // Learned against a live vCore cluster; without this the model recommends the
-        // classic MongoDB toolbox and half of it fails on this platform.
+        // classic MongoDB-API toolbox and half of it fails on this platform.
         lines.push(
             'Platform notes: on Azure DocumentDB (vCore), `serverStatus`, `top`, `latencyStats` and the ' +
                 'profiler are NOT available. `explain`, `$indexStats`, `dbStats`, `$currentOp` and `killOp` ' +

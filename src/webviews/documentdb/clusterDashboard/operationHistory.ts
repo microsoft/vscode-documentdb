@@ -60,6 +60,22 @@ export interface ObservedOperation {
 /** Per-cluster history. Module-level so it outlives any single webview instance. */
 const historyByCluster = new Map<string, ObservedOperation[]>();
 
+/**
+ * Clusters with a dashboard panel currently open.
+ *
+ * The history is a module-level store but a *session*-scoped fact ("what has run since I opened
+ * this"). Disposal clears the map, yet a poll already in flight when the panel closed resolves
+ * afterwards and would write the entry straight back — leaving up to `MAX_HISTORY_ENTRIES`
+ * command previews retained for the lifetime of the extension host, and presenting them to the
+ * next session as its own. Recording is therefore gated on the session still being open.
+ */
+const openSessions = new Set<string>();
+
+/** Marks a cluster's dashboard session as open, so polls may record into its history. */
+export function beginObservedOperationsSession(clusterId: string): void {
+    openSessions.add(clusterId);
+}
+
 function isSameOccurrence(entry: ObservedOperation, operation: CurrentOpEntry, nowMs: number): boolean {
     return (
         entry.opid === operation.opid &&
@@ -74,8 +90,27 @@ function isSameOccurrence(entry: ObservedOperation, operation: CurrentOpEntry, n
  * @param clusterId - Stable cluster identifier (never a tree id).
  * @param operations - The operations the poll reported.
  * @param nowMs - Timestamp of the poll, injected so callers and tests share one clock.
+ * @param pollSucceeded - Whether the poll actually reached the server. A failed poll reports no
+ *        operations, which is not the same fact as "nothing is running": recording it would mark
+ *        every entry ended. Defaults to `true` so an explicit empty poll still ends entries.
  */
-export function recordObservedOperations(clusterId: string, operations: CurrentOpEntry[], nowMs: number): void {
+export function recordObservedOperations(
+    clusterId: string,
+    operations: CurrentOpEntry[],
+    nowMs: number,
+    pollSucceeded: boolean = true,
+): void {
+    // A poll that never reached the server tells us nothing about what stopped.
+    if (!pollSucceeded) {
+        return;
+    }
+
+    // The panel closed while this poll was in flight; its result belongs to a session that no
+    // longer exists.
+    if (!openSessions.has(clusterId)) {
+        return;
+    }
+
     const history = historyByCluster.get(clusterId) ?? [];
     const stillRunning = new Set<ObservedOperation>();
 
@@ -141,5 +176,17 @@ export function getObservedOperations(clusterId: string): ObservedOperation[] {
 
 /** Drops a cluster's history — used by the tab's Clear action. */
 export function clearObservedOperations(clusterId: string): void {
+    historyByCluster.delete(clusterId);
+}
+
+/**
+ * Ends a cluster's dashboard session and drops its history.
+ *
+ * Distinct from {@link clearObservedOperations}, which is the tab's Clear action and leaves the
+ * session open to keep recording. This is disposal: after it, a poll still in flight cannot
+ * resurrect the entry.
+ */
+export function endObservedOperationsSession(clusterId: string): void {
+    openSessions.delete(clusterId);
     historyByCluster.delete(clusterId);
 }

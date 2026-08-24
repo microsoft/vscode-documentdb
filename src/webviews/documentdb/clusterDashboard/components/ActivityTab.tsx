@@ -103,7 +103,11 @@ export const ActivityTab = ({ samples, opcountersUnsupported }: ActivityTabProps
             />
 
             <ChartCard
-                title={l10n.t('Active operations')}
+                title={
+                    latestSample?.activeOperationsScope === 'own'
+                        ? l10n.t('Your active operations')
+                        : l10n.t('Active operations')
+                }
                 caption={operationsCaption}
                 series={samples.map((sample) => sample.activeOperations)}
                 color="var(--vscode-charts-green, currentColor)"

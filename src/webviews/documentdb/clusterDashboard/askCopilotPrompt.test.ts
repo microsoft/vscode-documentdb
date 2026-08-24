@@ -40,7 +40,7 @@ describe('buildAskCopilotPrompt', () => {
     });
 
     it('warns the model which commands vCore rejects', () => {
-        // Without this the model recommends the classic MongoDB toolbox — `top`, the
+        // Without this the model recommends the classic MongoDB-API toolbox — `top`, the
         // profiler — and half of it fails on the platform the user is actually on.
         const prompt = buildAskCopilotPrompt('demo-cluster', VCORE_METADATA, operation());
 

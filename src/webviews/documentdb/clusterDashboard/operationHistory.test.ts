@@ -4,7 +4,13 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { type CurrentOpEntry } from '../../../documentdb/utils/getClusterHealth';
-import { clearObservedOperations, getObservedOperations, recordObservedOperations } from './operationHistory';
+import {
+    beginObservedOperationsSession,
+    clearObservedOperations,
+    endObservedOperationsSession,
+    getObservedOperations,
+    recordObservedOperations,
+} from './operationHistory';
 
 const CLUSTER = 'cluster-under-test';
 
@@ -22,9 +28,15 @@ function operation(overrides: Partial<CurrentOpEntry> = {}): CurrentOpEntry {
     };
 }
 
+beforeEach(() => {
+    // Recording is gated on an open dashboard session, so every test needs one.
+    beginObservedOperationsSession(CLUSTER);
+});
+
 afterEach(() => {
     // Module-level state deliberately outlives a webview; it must not outlive a test.
-    clearObservedOperations(CLUSTER);
+    endObservedOperationsSession(CLUSTER);
+    endObservedOperationsSession('other-cluster');
 });
 
 describe('recordObservedOperations', () => {
@@ -128,6 +140,59 @@ describe('recordObservedOperations', () => {
 
         expect(getObservedOperations(CLUSTER).map((entry) => entry.opid)).toEqual(['mine']);
 
+        beginObservedOperationsSession('other-cluster');
         clearObservedOperations('other-cluster');
+    });
+});
+
+describe('recordObservedOperations — polls that prove nothing', () => {
+    it('does not mark entries ended when the poll itself failed', () => {
+        recordObservedOperations(CLUSTER, [operation({ secsRunning: 1 })], 1_000);
+
+        // Every attempt in the chain failed, so the server reported no operations. That is not
+        // the same fact as "nothing is running"; treating it as such turns a running aggregation
+        // into an Ended badge until the next successful poll.
+        recordObservedOperations(CLUSTER, [], 6_000, false);
+
+        expect(getObservedOperations(CLUSTER)[0].ended).toBe(false);
+    });
+
+    it('still marks entries ended when a successful poll reports nothing', () => {
+        recordObservedOperations(CLUSTER, [operation({ secsRunning: 1 })], 1_000);
+        recordObservedOperations(CLUSTER, [], 6_000, true);
+
+        expect(getObservedOperations(CLUSTER)[0].ended).toBe(true);
+    });
+});
+
+describe('observed-operation sessions', () => {
+    it('ignores a poll that lands after the panel was disposed', () => {
+        recordObservedOperations(CLUSTER, [operation()], 1_000);
+        endObservedOperationsSession(CLUSTER);
+
+        // A poll in flight at disposal resolves afterwards. Without the session gate it would
+        // re-create the map entry, retaining command previews for the life of the extension
+        // host and showing them to the next session as its own.
+        recordObservedOperations(CLUSTER, [operation()], 6_000);
+
+        expect(getObservedOperations(CLUSTER)).toEqual([]);
+    });
+
+    it('records again once a new session begins', () => {
+        endObservedOperationsSession(CLUSTER);
+        beginObservedOperationsSession(CLUSTER);
+
+        recordObservedOperations(CLUSTER, [operation()], 1_000);
+
+        expect(getObservedOperations(CLUSTER)).toHaveLength(1);
+    });
+
+    it("keeps the tab's Clear action usable without ending the session", () => {
+        recordObservedOperations(CLUSTER, [operation()], 1_000);
+        clearObservedOperations(CLUSTER);
+        recordObservedOperations(CLUSTER, [operation()], 6_000);
+
+        // Clear empties the list; it does not stop the dashboard from observing.
+        expect(getObservedOperations(CLUSTER)).toHaveLength(1);
     });
 });

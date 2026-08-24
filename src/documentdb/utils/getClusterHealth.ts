@@ -95,7 +95,6 @@ const CREDENTIAL_COMMANDS = new Set([
 const CREDENTIAL_FIELDS = new Set([
     'pwd',
     'payload',
-    'key',
     'speculativeauthenticate',
     'credentials',
     'salt',
@@ -105,6 +104,44 @@ const CREDENTIAL_FIELDS = new Set([
     'storedkey',
     'passwordhash',
 ]);
+
+/**
+ * Substrings that make a field name secret-shaped, matched anywhere in the name.
+ *
+ * The exact-name set above covers the fields the wire protocol itself defines. It cannot cover
+ * application data: a `find` whose filter is `{password: "hunter2"}` or `{accessToken: "…"}` is
+ * an ordinary command carrying a secret in a field this code has never heard of. Those names are
+ * not wire-protocol fields, so no exact list will ever contain them, but they are conventional
+ * enough to catch by shape.
+ *
+ * This is defence in depth, not a guarantee. A denylist cannot establish that a command document
+ * is safe — an application is free to call its secret `q7`. See the note on `exportDiagnostics`
+ * for what that means for anything a user is invited to share.
+ */
+const CREDENTIAL_FIELD_FRAGMENTS = [
+    'password',
+    'passwd',
+    'secret',
+    'token',
+    'apikey',
+    'api_key',
+    'accesskey',
+    'access_key',
+    'privatekey',
+    'private_key',
+    'authorization',
+    'credential',
+];
+
+/** Whether a command-document field name should have its value withheld. */
+function isCredentialFieldName(fieldName: string): boolean {
+    const normalized = fieldName.toLowerCase();
+
+    return (
+        CREDENTIAL_FIELDS.has(normalized) ||
+        CREDENTIAL_FIELD_FRAGMENTS.some((fragment) => normalized.includes(fragment))
+    );
+}
 
 /** Marker substituted for redacted values. Data inside a JSON blob, so not localized. */
 const REDACTED_VALUE = '[redacted]';
@@ -148,6 +185,14 @@ export interface ClusterHealthSample {
     opcounters: Record<string, number> | null;
     /** Number of operations reported by `currentOp`. */
     activeOperations: number | null;
+    /**
+     * Breadth of the `currentOp` form that produced {@link activeOperations}.
+     *
+     * The count is meaningless without it: on a least-privileged connection the chain falls back
+     * to the caller's own operations, so "1" can mean one operation on an otherwise idle cluster
+     * or one of yours among hundreds. `null` when no attempt succeeded.
+     */
+    activeOperationsScope: CurrentOpScope | null;
     /** Names of the commands that failed while collecting this sample. */
     errors: string[];
 }
@@ -451,6 +496,7 @@ export async function sampleClusterHealth(client: MongoClient): Promise<ClusterH
         connectionsCurrent: null,
         opcounters: null,
         activeOperations: null,
+        activeOperationsScope: null,
         errors: [],
     };
 
@@ -502,6 +548,9 @@ export async function sampleClusterHealth(client: MongoClient): Promise<ClusterH
         sample.errors.push(...currentOperations.errors);
     } else {
         sample.activeOperations = currentOperations.operations.length;
+        // Carried with the count, never derived later: which attempt won decides what the
+        // number means, and the Activity tab has no other way to know.
+        sample.activeOperationsScope = currentOperations.scope;
     }
 
     return sample;
@@ -515,6 +564,13 @@ export async function sampleClusterHealth(client: MongoClient): Promise<ClusterH
  * caught mid-flight carries the SCRAM payload or a cleartext password. Serialized as-is it
  * would cross the webview bridge and render in a tooltip — the repository forbids surfacing
  * passwords or tokens, and a preview is never worth a credential.
+ *
+ * Two passes, and neither makes the result *safe*: commands that exist only to carry
+ * credentials lose their body entirely, and secret-shaped field names lose their values at any
+ * depth. What survives is the rest of the command — including **query filter values and document
+ * fields written by the application**. That is ordinary customer data, and no denylist can
+ * recognize it. Treat the result as sensitive wherever it is surfaced, and see
+ * `exportDiagnostics` for the consequence.
  */
 function buildCommandPreview(command: unknown): string {
     if (typeof command !== 'object' || command === null) {
@@ -528,9 +584,7 @@ function buildCommandPreview(command: unknown): string {
     }
 
     return (
-        JSON.stringify(command, (key, value: unknown) =>
-            CREDENTIAL_FIELDS.has(key.toLowerCase()) ? REDACTED_VALUE : value,
-        ) ?? ''
+        JSON.stringify(command, (key, value: unknown) => (isCredentialFieldName(key) ? REDACTED_VALUE : value)) ?? ''
     );
 }
 

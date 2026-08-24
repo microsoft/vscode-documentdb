@@ -41,6 +41,7 @@ import { type JSX, useCallback, useEffect, useRef, useState } from 'react';
 import { type CurrentOpEntry, type CurrentOpScope } from '../../../../documentdb/utils/getClusterHealth';
 import { useTrpcClient } from '../../../_integration/useTrpcClient';
 import { Announcer } from '../../../components/accessibility';
+import { type KillOperationResult } from '../clusterDashboardRouter';
 import { type ObservedOperation } from '../operationHistory';
 
 export interface OperationsTabProps {
@@ -133,6 +134,26 @@ function formatSeenAgo(lastSeenMs: number, nowMs: number): string {
     }
 
     return l10n.t('{minutes}m ago', { minutes: Math.round(secondsAgo / 60) });
+}
+
+/**
+ * The screen-reader announcement for a kill attempt.
+ *
+ * Every outcome gets its own sentence: the announcement is the only feedback a screen-reader
+ * user gets for a destructive action, so "could not confirm" must not be read out as "the
+ * server refused" — one says nothing happened and why, the other says the server rejected it.
+ */
+function describeKillOutcome(outcome: KillOperationResult['outcome'], opid: string): string {
+    switch (outcome) {
+        case 'requested':
+            return l10n.t('Kill request sent for operation {opid}.', { opid });
+        case 'gone':
+            return l10n.t('Operation {opid} is no longer running.', { opid });
+        case 'unverified':
+            return l10n.t('Could not confirm that operation {opid} is still running. Nothing was killed.', { opid });
+        default:
+            return l10n.t('The server did not accept the request to kill operation {opid}.', { opid });
+    }
 }
 
 export const OperationsTab = ({ refreshIntervalMs }: OperationsTabProps): JSX.Element => {
@@ -247,15 +268,7 @@ export const OperationsTab = ({ refreshIntervalMs }: OperationsTabProps): JSX.El
                 }
 
                 if (result.outcome !== 'cancelled') {
-                    setActionAnnouncement(
-                        result.outcome === 'requested'
-                            ? l10n.t('Kill request sent for operation {opid}.', { opid: operation.opid })
-                            : result.outcome === 'gone'
-                              ? l10n.t('Operation {opid} is no longer running.', { opid: operation.opid })
-                              : l10n.t('The server did not accept the request to kill operation {opid}.', {
-                                    opid: operation.opid,
-                                }),
-                    );
+                    setActionAnnouncement(describeKillOutcome(result.outcome, operation.opid));
                     await loadOperations();
                 }
             } catch (error) {

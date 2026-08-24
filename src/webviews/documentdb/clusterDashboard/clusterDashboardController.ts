@@ -9,7 +9,7 @@ import * as vscode from 'vscode';
 import { API } from '../../../DocumentDBExperiences';
 import { openAppWebview, type AppWebviewController } from '../../_integration/openAppWebview';
 import { type RouterContext } from './clusterDashboardRouter';
-import { clearObservedOperations } from './operationHistory';
+import { beginObservedOperationsSession, endObservedOperationsSession } from './operationHistory';
 
 /**
  * Azure resource facts for an Azure-backed cluster.
@@ -89,6 +89,7 @@ export function openClusterDashboardWebview(
     });
 
     openPanels.set(initialData.clusterId, controller);
+    beginObservedOperationsSession(initialData.clusterId);
     controller.onDisposed(() => {
         if (openPanels.get(initialData.clusterId) === controller) {
             openPanels.delete(initialData.clusterId);
@@ -99,7 +100,7 @@ export function openClusterDashboardWebview(
             // had been observed by the new one, and the entries would be retained for the
             // lifetime of the extension host. Guarded by the identity check above so a panel
             // that has already been superseded cannot clear the live panel's history.
-            clearObservedOperations(initialData.clusterId);
+            endObservedOperationsSession(initialData.clusterId);
         }
     });
 
