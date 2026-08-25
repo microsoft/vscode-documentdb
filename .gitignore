@@ -266,6 +266,9 @@ paket-files/
 test-results.xml
 testWorkspace
 
+# Artifacts from the Playwright webview visual suite (npm run test:visual)
+testOutput/
+
 # Artifacts from ANTLR4 extension
 grammar/.antlr
 
