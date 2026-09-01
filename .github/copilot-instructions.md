@@ -89,7 +89,7 @@ by hand is slower and produces a bundle that does not match the source.
 ## Branching
 
 - **`main`**: Default branch; all PRs target it. Normal releases are tagged on `main` and published from `main`.
-- **`release/<X.Y>`**: Created only when a patch must ship while `main` is not releasable. Branched off a release tag, published from, then deleted.
+- **`release/<X.Y.Z>`**: Created only when a patch must ship while `main` is not releasable. Branched off a release tag, published from, then deleted. Named for the version it ships (`release/0.9.1`), not the minor line.
 - Moving a merged fix onto a `release/*` branch is a **backport** — see [skills/backport/SKILL.md](skills/backport/SKILL.md).
 
 ## TypeScript Guidelines

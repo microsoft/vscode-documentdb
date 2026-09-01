@@ -13,7 +13,7 @@ Create a backport pull request that applies changes from a source (the current b
 
 This repository is **tags-first** ([CONTRIBUTING §1.3](../../../CONTRIBUTING.md#13-releases)). A release is a tag on `main`, and most of the time **no release branch exists at all**. That changes when a backport is appropriate:
 
-- **Normal patch flow — not a backport.** A `release/<X.Y>` branch is cut off a release tag only when a patch must ship while `main` is not releasable. The fix is authored **on that branch**, tagged there, and then **forward-merged into `main`**. Direction is release → main.
+- **Normal patch flow — not a backport.** A `release/<X.Y.Z>` branch is cut off a release tag only when a patch must ship while `main` is not releasable. The fix is authored **on that branch**, tagged there, and then **forward-merged into `main`**. Direction is release → main.
 - **Backport — the exception.** The fix already merged to `main`, a `release/*` branch exists for the patch, and the fix must also ship in that patch. Direction is main → release.
 
 If the user asks to backport but no `release/*` branch exists, **stop and say so**. Do not create one — release branches are cut and deleted by a maintainer as part of the release process, never by this skill.
@@ -26,7 +26,7 @@ These differ from the upstream skill this was adapted from — follow the values
 
 | Topic                  | This repository                                                                              |
 | ---------------------- | -------------------------------------------------------------------------------------------- |
-| Release branches       | `release/<X.Y>` or `release/<X.Y.Z>` (e.g. `release/0.10.1`) — never `rel/*`                  |
+| Release branches       | `release/<X.Y.Z>`, named for the version it ships (e.g. `release/0.10.1`) — never `rel/*`      |
 | Backport branch prefix | `dev/<user>/…` per [CONTRIBUTING §1.1](../../../CONTRIBUTING.md#11-branch-overview)            |
 | Build command          | `npm run build` — **never `npm run compile`**, which is `tsc -watch` and never exits           |
 | Tests                  | `npm run jesttest`                                                                             |
@@ -38,7 +38,7 @@ These differ from the upstream skill this was adapted from — follow the values
 Before running any git commands, determine:
 
 1. **Source** — one of: the **current branch** (default when the user says "backport this"), a **PR number**, a **branch name**, or **commit SHA(s) / a range**.
-2. **Target branch** — an existing branch on `origin`. List candidates with `git branch -r --list 'origin/release/*'`. Branch names in this repo have varied (`release/0.9.2`, `release/0.10.0`, `release/0.10.1`), so read the real list rather than assuming a shape. If none match, fall back to `git branch -r` and ask. **Refuse the source's own base branch** — a backport onto the same base is a no-op. Verify the target exists on `origin` before proceeding.
+2. **Target branch** — an existing branch on `origin`. List candidates with `git branch -r --list 'origin/release/*'`. The rule is `release/<X.Y.Z>` (e.g. `release/0.10.1`), but read the real list rather than assuming a shape — older branches predate the rule. If none match, fall back to `git branch -r` and ask. **Refuse the source's own base branch** — a backport onto the same base is a no-op. Verify the target exists on `origin` before proceeding.
 3. **Squash** — only if the user explicitly asks. Default: no squash.
 
 If anything is ambiguous, ask once before touching the working tree.
