@@ -1,0 +1,114 @@
+# CLI packaging feasibility spike — see cli-research/spike/README.md
+#
+# Runs the packaged-daemon acceptance test (detached self-spawn + local IPC +
+# @documentdb-js/shell-runtime eval) for the two finalist packagers, on native
+# runners for every first-class OS/arch target:
+#
+#   Node SEA  — no cross-compile: each target builds AND tests natively.
+#   Bun       — builds natively per target for the test; a separate job also
+#               demonstrates one Linux runner cross-compiling all targets.
+#
+# Scoped to the research branch; does not touch the extension's CI.
+
+name: cli-packaging-spike
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [cli-research]
+    paths:
+      - 'cli-research/spike/**'
+      - '.github/workflows/cli-packaging-spike.yml'
+
+defaults:
+  run:
+    working-directory: cli-research/spike
+
+jobs:
+  sea:
+    name: 'SEA: ${{ matrix.label }}'
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { os: ubuntu-latest, label: linux-x64 }
+          - { os: ubuntu-24.04-arm, label: linux-arm64 }
+          - { os: windows-latest, label: windows-x64 }
+          - { os: windows-11-arm, label: windows-arm64 }
+          - { os: macos-15, label: macos-arm64 }
+          # Node upstream skips SEA tests on macOS x64 — running it here is itself evidence.
+          - { os: macos-15-intel, label: macos-x64 }
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - run: npm ci
+      - run: npm run build:sea
+      - run: npm run test:sea
+      - name: Report binary size
+        shell: bash
+        run: ls -la dist/sea/
+      - uses: actions/upload-artifact@v4
+        with:
+          name: sea-${{ matrix.label }}
+          path: cli-research/spike/dist/sea/documentdb-spike*
+
+  bun:
+    name: 'Bun: ${{ matrix.label }}'
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { os: ubuntu-latest, label: linux-x64 }
+          - { os: ubuntu-24.04-arm, label: linux-arm64 }
+          - { os: windows-latest, label: windows-x64 }
+          - { os: windows-11-arm, label: windows-arm64 }
+          - { os: macos-15, label: macos-arm64 }
+          - { os: macos-15-intel, label: macos-x64 }
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+      - run: npm ci --omit=dev
+      - run: node scripts/build-bun.mjs
+      - run: npm run test:bun
+      - name: Report binary size
+        shell: bash
+        run: ls -la dist/bun/
+      - uses: actions/upload-artifact@v4
+        with:
+          name: bun-${{ matrix.label }}
+          path: cli-research/spike/dist/bun/documentdb-spike*
+
+  # Evidence for the "one runner emits every target" claim — build only, not tested here
+  # (the per-target `bun` job above is what proves runtime behavior).
+  bun-cross-compile:
+    name: 'Bun cross-compile matrix (from one Linux runner)'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+      - run: npm ci --omit=dev
+      - name: Compile all targets
+        shell: bash
+        run: |
+          for target in bun-linux-x64 bun-linux-arm64 bun-windows-x64 bun-darwin-x64 bun-darwin-arm64; do
+            node scripts/build-bun.mjs "$target"
+          done
+          ls -la dist/bun/
+      - uses: actions/upload-artifact@v4
+        with:
+          name: bun-cross-compiled-all-targets
+          path: cli-research/spike/dist/bun/*

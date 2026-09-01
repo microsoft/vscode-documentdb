@@ -1,0 +1,27 @@
+{
+    "name": "documentdb-cli-packaging-spike",
+    "private": true,
+    "version": "0.1.0",
+    "description": "Packaging feasibility spike: packaged CLI that self-spawns a daemon, talks over local IPC, and evaluates shell JS via @documentdb-js/shell-runtime",
+    "license": "MIT",
+    "scripts": {
+        "build": "node scripts/build-bundle.mjs",
+        "build:sea": "npm run build && node scripts/build-sea.mjs",
+        "build:bun": "node scripts/build-bun.mjs",
+        "test:node": "node test/acceptance.mjs node dist/bundle.cjs",
+        "test:sea": "node test/acceptance.mjs dist/sea/documentdb-spike",
+        "test:bun": "node test/acceptance.mjs dist/bun/documentdb-spike"
+    },
+    "dependencies": {
+        "@documentdb-js/shell-runtime": "^0.8.1",
+        "bson": "^6.10.4",
+        "mongodb": "^6.17.0"
+    },
+    "devDependencies": {
+        "@types/node": "^22.15.0",
+        "bun": "^1.4.0",
+        "esbuild": "^0.25.0",
+        "postject": "^1.0.0-alpha.6",
+        "typescript": "^5.8.0"
+    }
+}
