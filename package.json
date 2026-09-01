@@ -696,6 +696,13 @@
         "icon": "$(terminal)"
       },
       {
+        "//": "Show Cluster Dashboard (Preview)",
+        "category": "DocumentDB",
+        "command": "vscode-documentdb.command.clusterDashboard.open",
+        "title": "Show Cluster Dashboard (Preview)",
+        "icon": "$(pulse)"
+      },
+      {
         "//": "Open Container View",
         "category": "DocumentDB",
         "command": "vscode-documentdb.command.containerView.open",
@@ -1108,6 +1115,12 @@
           "group": "5@1"
         },
         {
+          "//": "[Account] Show Cluster Dashboard (Preview)",
+          "command": "vscode-documentdb.command.clusterDashboard.open",
+          "when": "view =~ /connectionsView|discoveryView|azure(ResourceGroups|FocusView)/ && viewItem =~ /\\btreeitem_documentdbcluster\\b/i && !listMultiSelection",
+          "group": "5@2"
+        },
+        {
           "//": "[Database] Create collection",
           "command": "vscode-documentdb.command.createCollection",
           "when": "view =~ /connectionsView|discoveryView|azure(ResourceGroups|FocusView)/ && viewItem =~ /\\btreeitem_database\\b/i && viewItem =~ /\\bexperience_(documentDB|mongoRU|mongoDBAtlas)\\b/i && !listMultiSelection",
@@ -1475,6 +1488,10 @@
         },
         {
           "command": "vscode-documentdb.command.shell.open.inline",
+          "when": "never"
+        },
+        {
+          "command": "vscode-documentdb.command.clusterDashboard.open",
           "when": "never"
         },
         {

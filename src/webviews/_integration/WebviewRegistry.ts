@@ -4,6 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { AtlasCredentialsView } from '../documentdb/atlasCredentials/AtlasCredentialsView';
+import { ClusterDashboard } from '../documentdb/clusterDashboard/ClusterDashboard';
 import { CollectionView } from '../documentdb/collectionView/CollectionView';
 import { DocumentView } from '../documentdb/documentView/documentView';
 import { LocalQuickStart } from '../documentdb/localQuickStart/LocalQuickStart';
@@ -37,6 +38,7 @@ import { LocalQuickStart } from '../documentdb/localQuickStart/LocalQuickStart';
  * {@link WebviewName} enforces that at compile time.
  */
 export const WebviewRegistry = {
+    clusterDashboard: ClusterDashboard,
     collectionView: CollectionView,
     documentView: DocumentView,
     localQuickStart: LocalQuickStart,

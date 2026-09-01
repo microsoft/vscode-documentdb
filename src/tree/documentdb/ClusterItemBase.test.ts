@@ -282,3 +282,146 @@ describe('ClusterItemBase.getChildren — cached client connection failure handl
         expect(mockTelemetryEvents[0].properties.connectionResult).toBe('cancelled');
     });
 });
+
+/**
+ * `connect()` is the entry point for commands invoked straight from a context menu, where the
+ * node may never have been expanded. It is shared base behaviour, so it is covered here rather
+ * than in any one command's tests.
+ */
+describe('ClusterItemBase.connect', () => {
+    /** Records the base hooks so we can assert which path `connect()` took. */
+    class ConnectTestClusterItem extends ClusterItemBase {
+        public authenticateCalls = 0;
+        public beforeCachedCalls = 0;
+
+        public constructor(
+            cluster: TreeCluster<BaseClusterModel>,
+            private readonly authResult: ClustersClient | null,
+        ) {
+            super(cluster);
+        }
+
+        protected authenticateAndConnect(): Promise<ClustersClient | null> {
+            this.authenticateCalls += 1;
+            return Promise.resolve(this.authResult);
+        }
+
+        protected override async beforeCachedClientConnect(): Promise<void> {
+            this.beforeCachedCalls += 1;
+        }
+
+        public getCredentials(): Promise<EphemeralClusterCredentials | undefined> {
+            return Promise.resolve(undefined);
+        }
+    }
+
+    /**
+     * A cluster whose tree position differs from its stable identity — the shape produced by a
+     * connection that lives inside a folder. The two ids are deliberately different so that a
+     * regression to `this.id` cannot pass.
+     */
+    function makeMovedCluster(): TreeCluster<BaseClusterModel> {
+        return {
+            treeId: 'connections/folder-a/cluster-1',
+            clusterId: 'cluster-1',
+            name: 'My Cluster',
+            dbExperience: { api: 'MongoDB' } as unknown as Experience,
+        } as unknown as TreeCluster<BaseClusterModel>;
+    }
+
+    beforeEach(() => {
+        jest.clearAllMocks();
+        mockTelemetryEvents.length = 0;
+
+        // jest-mock-vscode's withProgress is a no-op jest.fn(); make it run the task so the
+        // cached path actually reaches ClustersClient.getClient().
+        (vscode.window.withProgress as unknown as jest.Mock).mockImplementation(
+            (
+                _options: unknown,
+                task: (
+                    progress: unknown,
+                    token: { isCancellationRequested: boolean; onCancellationRequested: jest.Mock },
+                ) => unknown,
+            ) => task({ report: jest.fn() }, { isCancellationRequested: false, onCancellationRequested: jest.fn() }),
+        );
+    });
+
+    it('reuses the cached client, and does not re-authenticate, when credentials are cached', async () => {
+        mockHasCredentials.mockReturnValue(true);
+        const cached = makeClient(jest.fn());
+        const { ClustersClient: ClustersClientMock } = jest.requireMock('../../documentdb/ClustersClient');
+        (ClustersClientMock.getClient as jest.Mock).mockResolvedValue(cached);
+
+        const item = new ConnectTestClusterItem(makeCluster(), null);
+
+        await expect(item.connect()).resolves.toBe(cached);
+        expect(item.authenticateCalls).toBe(0);
+        // Subclasses such as Kubernetes restore a tunnel here; skipping it would reuse a dead client.
+        expect(item.beforeCachedCalls).toBe(1);
+    });
+
+    it('keys the credential cache and the client on clusterId, never on the tree position', async () => {
+        mockHasCredentials.mockReturnValue(true);
+        const cached = makeClient(jest.fn());
+        const { ClustersClient: ClustersClientMock } = jest.requireMock('../../documentdb/ClustersClient');
+        (ClustersClientMock.getClient as jest.Mock).mockResolvedValue(cached);
+
+        const cluster = makeMovedCluster();
+        const item = new ConnectTestClusterItem(cluster, null);
+
+        await item.connect();
+
+        // `treeId` changes when a connection is dragged into a folder; `clusterId` does not.
+        // Keying either lookup on the tree position opens a second, duplicate connection.
+        expect(mockHasCredentials).toHaveBeenCalledWith(cluster.clusterId);
+        expect(mockHasCredentials).not.toHaveBeenCalledWith(cluster.treeId);
+        expect(ClustersClientMock.getClient).toHaveBeenCalledWith(cluster.clusterId, expect.anything());
+    });
+
+    it('authenticates when no credentials are cached, without preparing a cached client', async () => {
+        mockHasCredentials.mockReturnValue(false);
+        const fresh = makeClient(jest.fn());
+        const { ClustersClient: ClustersClientMock } = jest.requireMock('../../documentdb/ClustersClient');
+
+        const item = new ConnectTestClusterItem(makeCluster(), fresh);
+
+        await expect(item.connect()).resolves.toBe(fresh);
+        expect(item.authenticateCalls).toBe(1);
+        expect(item.beforeCachedCalls).toBe(0);
+        expect(ClustersClientMock.getClient).not.toHaveBeenCalled();
+    });
+
+    it('returns null when the user cancels the progress notification on the cached path', async () => {
+        mockHasCredentials.mockReturnValue(true);
+        const { UserCancelledError } = jest.requireMock('@microsoft/vscode-azext-utils');
+        const { ClustersClient: ClustersClientMock } = jest.requireMock('../../documentdb/ClustersClient');
+        (ClustersClientMock.getClient as jest.Mock).mockRejectedValue(new UserCancelledError());
+
+        const item = new ConnectTestClusterItem(makeCluster(), null);
+
+        // Dismissing "Connecting to …" is a request for nothing to happen. Letting it escape
+        // would report the user's own cancellation back to them as a command failure.
+        await expect(item.connect()).resolves.toBeNull();
+    });
+
+    it('propagates a genuine failure on the cached path so the command can report it', async () => {
+        mockHasCredentials.mockReturnValue(true);
+        const { ClustersClient: ClustersClientMock } = jest.requireMock('../../documentdb/ClustersClient');
+        (ClustersClientMock.getClient as jest.Mock).mockRejectedValue(new Error('server down'));
+
+        const item = new ConnectTestClusterItem(makeCluster(), null);
+
+        // Only cancellation is swallowed; a real failure must not look like a quiet abort.
+        await expect(item.connect()).rejects.toThrow('server down');
+    });
+
+    it('returns null when authentication fails or the user cancels the prompt', async () => {
+        mockHasCredentials.mockReturnValue(false);
+
+        const item = new ConnectTestClusterItem(makeCluster(), null);
+
+        // Callers abort quietly on null: the authentication flow has already reported the reason.
+        await expect(item.connect()).resolves.toBeNull();
+        expect(item.authenticateCalls).toBe(1);
+    });
+});

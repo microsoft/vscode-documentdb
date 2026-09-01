@@ -185,6 +185,10 @@ async function fetchTopologyInfo(adminDb: Admin, result: ClusterMetadata): Promi
         result['topology_minWireVersion'] = helloInfo.minWireVersion?.toString() ?? 'unknown';
         result['topology_maxWireVersion'] = helloInfo.maxWireVersion?.toString() ?? 'unknown';
 
+        // `hello.readOnly` is the one replication fact the data plane always answers: it is
+        // true on a cross-region replica cluster and on any secondary connection, whatever
+        // the platform. Worth surfacing before a user types an insert.
+        setIfDefined(result, 'topology_readOnly', helloInfo.readOnly);
         setIfDefined(result, 'topology_hello_saslSupportedMechs', helloInfo.saslSupportedMechs);
         setIfDefined(result, 'topology_hello_internal_documentdb_versions', helloInfo.internal?.documentdb_versions);
         setIfDefined(result, 'topology_hello_internal_kind', helloInfo.internal?.kind);
