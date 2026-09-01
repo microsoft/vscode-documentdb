@@ -39,11 +39,11 @@ Four steps, none of them expensive.
 
 All PRs target `main`. The exceptions, per `CONTRIBUTING.md` §1.1:
 
-| Situation                                             | Base             |
-| ----------------------------------------------------- | ---------------- |
-| Normal work                                           | `main`           |
-| Part of a larger shared effort                        | `feature/<name>` |
-| A patch that must ship while `main` is not releasable | `release/<X.Y>`  |
+| Situation                                             | Base              |
+| ----------------------------------------------------- | ----------------- |
+| Normal work                                           | `main`            |
+| Part of a larger shared effort                        | `feature/<name>`  |
+| A patch that must ship while `main` is not releasable | `release/<X.Y.Z>` |
 
 If the branch was cut from something other than its intended base, say so and stop.
 Do not rebase a shared branch without asking.
