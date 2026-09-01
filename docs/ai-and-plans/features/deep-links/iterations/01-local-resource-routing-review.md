@@ -92,7 +92,7 @@ behavior are required by the AI review.
 
 | Finding | Status | Fix commit                                                                   | Resolution                                       |
 | ------- | ------ | ---------------------------------------------------------------------------- | ------------------------------------------------ |
-| F1      | Fixed  | [`25778a41`](https://github.com/microsoft/vscode-documentdb/commit/25778a41) | Regenerated `l10n/bundle.l10n.json`.             |
-| F2      | Fixed  | [`25778a41`](https://github.com/microsoft/vscode-documentdb/commit/25778a41) | Applied the repository's Prettier configuration. |
+| F1      | Fixed  | [`d53587de`](https://github.com/microsoft/vscode-documentdb/commit/d53587de) | Regenerated `l10n/bundle.l10n.json`.             |
+| F2      | Fixed  | [`d53587de`](https://github.com/microsoft/vscode-documentdb/commit/d53587de) | Applied the repository's Prettier configuration. |
 
 The full ready-for-review verification suite passed after these fixes.
