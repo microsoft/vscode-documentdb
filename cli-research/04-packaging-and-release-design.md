@@ -4,8 +4,9 @@
 **Evidence:** working spike in [`spike/`](./spike/) + CI matrix in
 [`.github/workflows/cli-packaging-spike.yml`](../.github/workflows/cli-packaging-spike.yml)
 **Verified locally:** macOS arm64 (all acceptance checks green for both finalists, plus the
-unpackaged `node` baseline). **CI matrix:** see §2.2 for the per-target results of the run
-triggered by this push.
+unpackaged `node` baseline). **Verified in CI:** 13/13 jobs green across all six OS/arch targets
+([run 33568213084](https://github.com/microsoft/vscode-documentdb/actions/runs/33568213084),
+2026-09-01); per-target results and sizes in §2.2.
 
 ---
 
@@ -22,8 +23,8 @@ triggered by this push.
 The no-Node/no-`npx` preference is **achievable at reasonable cost**. The make-or-break
 requirement — a packaged binary that spawns a detached copy of itself, binds a Unix
 socket/named pipe, serves a second invocation, and runs the real `@documentdb-js/shell-runtime`
-(`@mongosh/*` + driver + BSON + `node:vm`) — **passes for both finalists** on macOS arm64 (§2.1);
-the six-target CI matrix is the evidence for the other platforms (§2.2).
+(`@mongosh/*` + driver + BSON + `node:vm`) — **passes for both finalists**, locally on macOS arm64
+(§2.1) and in CI on all six OS/arch targets (§2.2).
 
 Two things changed my view while writing this up, and they are the parts I most want your read on:
 
@@ -44,7 +45,7 @@ Two things changed my view while writing this up, and they are the parts I most 
 |---|---|---|---|
 | 1 | **Which legal identity signs the binaries** — Microsoft (ESRP) or the DocumentDB org (its own Apple Developer ID / Windows identity)? | Decides whether signing lives on GitHub or on OneBranch/ADO (§5) | Design for both; build the GitHub path first with placeholder secrets |
 | 2 | **Which GitHub org/repo hosts the CLI** (and therefore where the CI matrix must be proven) | Runner labels, quotas, and allowed-actions policy differ per org; a green matrix in `microsoft/vscode-documentdb` proves nothing about the DocumentDB org | Move the spike to the CLI's future repo as its first commit |
-| 3 | **v1 target list** — is macOS x64 in? | The last Intel runner image (`macos-15-intel`) retires **August 2027**; SEA on macOS x64 is untested upstream | Ship it via CI while the runner exists; fall back to npm for that target |
+| 3 | **v1 target list** — is macOS x64 in? | The last Intel runner image (`macos-15-intel`) retires **August 2027**; SEA on macOS x64 is untested upstream (it passed in our run) | Ship it via CI while the runner exists; fall back to npm for that target |
 | 4 | **npm scope** — `@documentdb/cli`, `@documentdb-js/cli`, or something else? | Existing packages use `@documentdb-js`; I have not confirmed who owns `@documentdb` on npm | `@documentdb-js/cli`, reusing the existing OIDC trusted-publishing setup |
 | 5 | **Keep both build paths alive** in the real repo (SEA primary, Bun as a CI-only canary)? | Keeps the SEA-vs-Bun decision reversible with evidence | Yes, until v1 ships; then reassess |
 
@@ -101,15 +102,48 @@ build natively; §4).
 
 The workflow builds **and executes** the packaged acceptance suite on every first-class target
 (`ubuntu-latest`, `ubuntu-24.04-arm`, `windows-latest`, `windows-11-arm`, `macos-15`,
-`macos-15-intel`), for SEA and for Bun, plus one Linux job that cross-compiles every Bun target.
+`macos-15-intel`), for SEA and for Bun, plus one Linux job that cross-compiles five Bun targets.
 
-_Results of the run triggered by this push will be pasted here (per-target pass/fail and
-artifact sizes). Until then, treat every non-macOS-arm64 cell as "expected, not proven"._
+Run [33568213084](https://github.com/microsoft/vscode-documentdb/actions/runs/33568213084)
+(2026-09-01, triggered by this push): **13/13 jobs green** in 5.5 minutes of wall time. Every
+target printed `packaged=true` from inside the artifact and `ALL CHECKS PASSED`.
 
-One known weakness of this run: the suite does not yet assert `process.arch` inside the
-artifact, so on the arm64 runners a pass proves the *runner* is arm64, not that the *artifact*
-is (an x64 binary under emulation would pass silently). That assertion is the first follow-up
-to the workflow (§8).
+| Target (runner) | Node SEA | Bun compile |
+|---|---|---|
+| linux-x64 (`ubuntu-latest`) | ✅ node 24.19.0 · 130.1 MB | ✅ bun 1.4.0 · 87.5 MB |
+| linux-arm64 (`ubuntu-24.04-arm`) | ✅ node 24.19.0 · 126.3 MB | ✅ bun 1.4.0 · 87.4 MB |
+| windows-x64 (`windows-latest`) | ✅ node 24.19.0 · 98.5 MB | ✅ bun 1.4.0 · 93.5 MB |
+| windows-arm64 (`windows-11-arm`) | ✅ node 24.19.0 · 87.5 MB | ✅ bun 1.4.0 · 83.7 MB |
+| macos-arm64 (`macos-15`) | ✅ node 24.18.0 · 125.1 MB | ✅ bun 1.4.0 · 69.8 MB |
+| macos-x64 (`macos-15-intel`) | ✅ node 24.19.0 · 127.6 MB | ✅ bun 1.4.0 · 76.2 MB |
+
+Sizes are the uncompressed artifacts as reported by the build scripts (MiB). The Bun
+cross-compile job produced linux-x64, linux-arm64, windows-x64, darwin-x64 and darwin-arm64
+from one Linux runner, and each file has exactly the size of its natively built twin
+(darwin-arm64: 73,173,746 bytes both ways). It does not yet build `bun-windows-arm64` or the
+musl targets.
+
+What the run says beyond pass/fail:
+
+- **SEA on macOS x64 passed** despite being unsupported upstream. Worth re-running a few times
+  before trusting it, but it is not dead on arrival.
+- **Bun's size advantage is smaller than I estimated**: 70–94 MB vs SEA's 88–130 MB, and on
+  Windows they are nearly equal (93.5 vs 98.5 MB). §3 and §7 are updated accordingly.
+- **Floating Node versions drift even within one run**: `node-version: 24` resolved to 24.18.0
+  on the macOS arm64 runner and 24.19.0 everywhere else, because setup-node took whatever was in
+  each runner's tool cache. Harmless here (each job builds and tests its own binary), but it is
+  exactly why the release pipeline must pin an exact version (§4).
+- **The arm64 toolchains were native, not emulated**: setup-node used `node/24.19.0/arm64` and
+  setup-bun downloaded `bun-windows-aarch64` / `bun-linux-aarch64`. The suite still does not
+  assert `process.arch` from inside the artifact, so a pass proves the runner's architecture,
+  not the artifact's; that assertion is the first follow-up to the workflow (§8).
+- **Packaging itself is cheap; `npm ci` on Windows is not.** `build:sea` + `test:sea` take
+  12–30 s on every OS; `npm ci` takes ~30 s on Linux/macOS and 171–264 s on Windows (the SEA
+  job's figure includes downloading the `bun` devDependency it does not need). Windows jobs
+  therefore take ~5 minutes vs ~1–2 elsewhere; the fix is caching and trimming installs, not
+  changing packagers.
+- Every job carried GitHub's "Node.js 20 is deprecated" annotation for the `@v4` actions; the
+  release workflow should use the SHA-pinned v7 actions the rest of the repo already uses.
 
 ### 2.3 Findings that change the design (worth reading even if you skip the rest)
 
@@ -217,9 +251,12 @@ that nobody copies them into the real implementation:
   the `ghcr.io/documentdb/documentdb/documentdb-local` container on the Linux job, would close
   that.
 - Workflow: actions are pinned by floating tag rather than SHA (the repo convention is SHA +
-  Dependabot), no `permissions:`/`timeout-minutes`, `bun-version: latest`, Node pinned only to
-  a major, and the Bun cross-compile job omits `bun-windows-arm64` and the musl targets that
-  Bun documents. All small; listed so the release workflow (§4) does not inherit them.
+  Dependabot; GitHub flagged the `@v4` actions as Node 20-based on every job), no
+  `permissions:`/`timeout-minutes`, `bun-version: latest`, Node pinned only to a major (which
+  drifted between 24.18.0 and 24.19.0 within one run), the SEA job installs the `bun`
+  devDependency it never uses, and the Bun cross-compile job omits `bun-windows-arm64` and the
+  musl targets that Bun documents. All small; listed so the release workflow (§4) does not
+  inherit them.
 
 ## 3. Candidate comparison
 
@@ -227,8 +264,8 @@ Every cell is backed by a primary source (linked in §9) or by this spike ("spik
 
 | Approach | User friction | Node needed | Win x64/arm64 | macOS x64/arm64 | Linux x64/arm64 | Cross-compile | Daemon/IPC packaged | Worker threads | Size | Signing fit | Maintenance risk |
 |---|---|---|---|---|---|---|---|---|---|---|---|
-| **Node SEA** | one file / `curl \| sh`; nothing to preinstall | No | ✅/✅ | ⚠️ x64 untested upstream / ✅ | ✅/✅ (not Alpine; glibc ≥ 2.28) | Partially² | ✅ **spike** | ✅ eval-mode **spike** | ~90–125 MB | Standard signable binaries; postject step must precede signing | Experimental (Stability 1.1) but first-party; v25.5+ `--build-sea` shows active investment; postject unmaintained (replaced upstream) |
-| **Bun compile** | same as SEA | No | ✅/✅ | ✅/✅ | ✅/✅ + musl | ✅ all 8 targets from one runner | ✅ **spike** | ✅ eval-mode **spike**; file-based workers need extra entrypoints | ~50–70 MB | macOS documented (needs JIT entitlements); Windows Authenticode fixed v1.2.23; Windows metadata flags unavailable when cross-compiling; notarization unverified | Single vendor; Zig→Rust rewrite shipped in 1.4 (Aug 20, 2026); driver-relevant open bugs (TLS #24374, idle replica-set memory #24118) |
+| **Node SEA** | one file / `curl \| sh`; nothing to preinstall | No | ✅/✅ | ⚠️ x64 untested upstream / ✅ | ✅/✅ (not Alpine; glibc ≥ 2.28) | Partially² | ✅ **spike** | ✅ eval-mode **spike** | 88–130 MB (CI) | Standard signable binaries; postject step must precede signing | Experimental (Stability 1.1) but first-party; v25.5+ `--build-sea` shows active investment; postject unmaintained (replaced upstream) |
+| **Bun compile** | same as SEA | No | ✅/✅ | ✅/✅ | ✅/✅ + musl | ✅ all 8 targets from one runner | ✅ **spike** | ✅ eval-mode **spike**; file-based workers need extra entrypoints | 70–94 MB (CI) | macOS documented (needs JIT entitlements); Windows Authenticode fixed v1.2.23; Windows metadata flags unavailable when cross-compiling; notarization unverified | Single vendor; Zig→Rust rewrite shipped in 1.4 (Aug 20, 2026); driver-relevant open bugs (TLS #24374, idle replica-set memory #24118) |
 | **@yao-pkg/pkg** | same as SEA | No | ✅ | ✅ | ✅ | ✅ via prebuilt patched Node | Likely (not spiked) | V8 snapshot quirks historically | ~90+ MB | Third-party patched Node binaries — awkward provenance story for a Microsoft-signed release | Community fork of an archived Vercel project (active: v6.22 as of Aug 2026) |
 | **Deno compile** | same as SEA | No | ✅ | ✅ | ✅ | ✅ | Untested | — | ~70+ MB | OK | **Disqualifying risk:** `node:vm` support is the historic gap, and the entire `@mongosh` eval pipeline runs on `vm` — not worth a spike |
 | **npm i -g** (baseline) | needs Node ≥ 22 + working PATH; version drift | **Yes** | Node's matrix | Node's matrix | Node's matrix | n/a | ✅ **spike** (baseline) | ✅ | 10 MB package | npm provenance (repo already uses OIDC trusted publishing) | Lowest — but agents cannot self-serve past a missing/old Node |
@@ -283,8 +320,8 @@ SEA's honest weaknesses, so they're on the table:
   ([docs](https://nodejs.org/docs/latest-v24.x/api/single-executable-applications.html)) — our
   matrix runs it as the canary; if it proves flaky, macOS x64 falls back to the npm channel
   (a shrinking user base) or to a pkg-built artifact for that one target.
-- Binary is ~90–125 MB vs Bun's ~50–70 MB. Real, but nobody installs a database CLI over
-  dial-up; compressed release assets roughly halve it.
+- Binary is 88–130 MB vs Bun's 70–94 MB (CI-measured; on Windows they are nearly equal). Real,
+  but nobody installs a database CLI over dial-up; compressed release assets roughly halve it.
 - Official Node binaries need glibc ≥ 2.28 and are not built for Alpine/musl; older distros and
   Alpine images use the npm channel.
 
@@ -420,7 +457,7 @@ new client never attaches to an old daemon.
 
 You asked for this honestly, so: the preference is **worth keeping**, and here's its real price.
 
-1. **~10× artifact size** (90–125 MB vs a 10 MB npm package). Cost is bandwidth/disk, not UX.
+1. **~9–13× artifact size** (88–130 MB vs a 10 MB npm package, CI-measured). Cost is bandwidth/disk, not UX.
 2. **A 6-way native build matrix + signing pipeline** instead of one `npm publish`. The spike
    shows this is a few hundred lines of workflow, not a project. Ongoing cost: pinned-Node
    bumps, occasional packager churn (postject → `--build-sea` when Node 26 is LTS), and one
@@ -447,17 +484,17 @@ shipping the npm channel alongside.
 | IPC endpoint reachable by other local users (Linux `/tmp`, Windows pipe squatting) | **High until fixed**; v1 requirement | Per-user `0700` runtime dir + `0600` socket + per-user lock; document or token-authenticate the Windows pipe (§2.3 #7) |
 | Idle timeout / at-most-once / timeout bugs in the daemon protocol | Medium (design requirement) | In-flight counter, retry-connect-only, separate timeouts, request ids (§2.3 #5–6) |
 | SEA experimental-status churn | Medium | Pin Node exactly; migrate to `--build-sea` at Node 26 LTS; Bun path kept warm as fallback |
-| macOS x64: untested upstream **and** its runner retires Aug 2027 | Medium (dated) | CI matrix is the canary; then cross-build the portable blob into darwin-x64 Node and test under Rosetta, or drop to npm/pkg for that target |
+| macOS x64: untested upstream **and** its runner retires Aug 2027 | Medium (dated) | CI matrix is the canary (green on 2026-09-01); then cross-build the portable blob into darwin-x64 Node and test under Rosetta, or drop to npm/pkg for that target |
 | Bundling two driver majors (`mongodb@6` + `@7`) | Medium (spike-only today) | Align to the extension's lockfile; add a duplicate-package check to the bundle step (§2.4) |
 | `@mongosh` bundling regressions on dependency bumps | Medium | The packaged acceptance test in CI is the regression gate (it already caught the spawn race) |
 | Daemon/client version skew after binary upgrade | Known open | Build-keyed endpoint + protocol version fields from day one; installer stops old daemons |
 | Unix socket path length limits (~104 chars) | Low | Short hashed names in a short per-user directory |
 | CI evidence from the wrong org | Low, but real | Re-run the matrix in the CLI's future repo (§1.1 #2) |
 
-Open items before this is "done" by my own definition: per-target CI results and sizes pasted
-into §2.2 (this push); the signing workflow with placeholder secrets for the chosen variant
-(§5); the install-script prototype with daemon-stop (§6); the spike cleanups in §2.4 folded
-into whatever becomes the real daemon.
+Open items before this is "done" by my own definition: the signing workflow with placeholder
+secrets for the chosen variant (§5); the install-script prototype with daemon-stop (§6); the
+spike cleanups in §2.4 folded into whatever becomes the real daemon; the `process.arch`
+assertion, SHA-pinned actions and an exact Node pin in the workflow.
 
 Branch hygiene, for the record: `cli-research` is a research branch, not a merge candidate.
 The extension's root ESLint and `tsc` currently pick up `cli-research/spike/src`, so before any
@@ -501,3 +538,5 @@ merge the folder is excluded from both, or (better) the spike moves to the CLI's
   `.azure-pipelines/build.yml`, `.azure-pipelines/release.yml`,
   `.azure-pipelines/release-npm-packages.yml`; npm OIDC publishing:
   `.github/workflows/npm-publish-documentdb-js.yml`
+- CI evidence for this document: [run 33568213084](https://github.com/microsoft/vscode-documentdb/actions/runs/33568213084)
+  on `cli-research` (2026-09-01), 13/13 jobs green; per-target artifacts attached to the run
