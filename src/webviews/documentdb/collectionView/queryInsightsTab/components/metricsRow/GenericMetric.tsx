@@ -3,8 +3,10 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import type * as React from 'react';
-import { MetricBase, type MetricBaseProps } from './MetricBase';
+import { MetricCard } from '@microsoft/vscode-ext-webview-fluentui/components';
+import * as l10n from '@vscode/l10n';
+import { type JSX } from 'react';
+import { composeMetricAriaLabel, type MetricProps } from './metricProps';
 
 /**
  * Generic metric component for displaying string or number values without special formatting.
@@ -33,103 +35,63 @@ import { MetricBase, type MetricBaseProps } from './MetricBase';
  *     placeholder="empty"
  * />
  */
-export interface GenericMetricProps extends Omit<MetricBaseProps, 'value'> {
+export interface GenericMetricProps extends MetricProps {
     /** The value to display (string or number) */
     value: string | number | null | undefined;
 }
 
-export const GenericMetric: React.FC<GenericMetricProps> = ({
+export const GenericMetric = ({
     label,
     value,
     loadingPlaceholder = 'skeleton',
+    nullValuePlaceholder = l10n.t('N/A'),
     tooltipExplanation,
-}) => {
-    return (
-        <MetricBase
-            label={label}
-            value={value}
-            loadingPlaceholder={loadingPlaceholder}
-            tooltipExplanation={tooltipExplanation}
-        />
-    );
-};
+}: GenericMetricProps): JSX.Element => (
+    <MetricCard
+        label={label}
+        value={value}
+        description={tooltipExplanation}
+        loadingPlaceholder={loadingPlaceholder}
+        nullValuePlaceholder={nullValuePlaceholder}
+        tooltipRepeatsValue
+        ariaLabel={composeMetricAriaLabel(label, value, tooltipExplanation)}
+    />
+);
 
 /**
- * CREATING NEW SPECIALIZED METRIC COMPONENTS
- * ===========================================
+ * ADDING A NEW METRIC TYPE
+ * =======================
  *
- * To create a new metric type, follow this pattern:
+ * A metric component here is a formatter with a card attached. Everything that is not formatting —
+ * layout, the loading and unavailable states, the tooltip and the focus behaviour — belongs to
+ * `MetricCard` in `@microsoft/vscode-ext-webview-fluentui`.
  *
- * 1. Create a new file (e.g., YourMetric.tsx)
- * 2. Import MetricBase and its props
- * 3. Define your specific props (extending Omit<MetricBaseProps, 'value'>)
- * 4. Add your formatting logic
- * 5. Return <MetricBase> with formatted value
- *
- * Example - SizeMetric for bytes:
+ * 1. Create a file, e.g. `SizeMetric.tsx`.
+ * 2. Extend `MetricProps` with your own value shape.
+ * 3. Format the value, preserving `null` and `undefined` unchanged: they select the card's two
+ *    placeholder states, and collapsing them makes "loading" and "unavailable" the same picture.
+ * 4. Render `MetricCard`, and pass `ariaLabel={composeMetricAriaLabel(...)}`.
+ * 5. Export it from `index.ts`.
  *
  * ```typescript
- * import * as React from 'react';
- * import { MetricBase, type MetricBaseProps } from './MetricBase';
- *
- * function formatBytes(bytes: number): string {
- *     if (bytes < 1024) return `${bytes} B`;
- *     if (bytes < 1048576) return `${(bytes / 1024).toFixed(2)} KB`;
- *     return `${(bytes / 1048576).toFixed(2)} MB`;
- * }
- *
- * export interface SizeMetricProps extends Omit<MetricBaseProps, 'value'> {
+ * export interface SizeMetricProps extends MetricProps {
  *     valueBytes: number | null | undefined;
  * }
  *
- * export const SizeMetric: React.FC<SizeMetricProps> = ({
- *     label,
- *     valueBytes,
- *     placeholder = 'skeleton',
- *     tooltip
- * }) => {
- *     const formattedValue = valueBytes !== null && valueBytes !== undefined
- *         ? formatBytes(valueBytes)
- *         : undefined;
+ * export const SizeMetric = ({ label, valueBytes, tooltipExplanation }: SizeMetricProps): JSX.Element => {
+ *     const value = valueBytes === null ? null : valueBytes === undefined ? undefined : formatBytes(valueBytes);
  *
  *     return (
- *         <MetricBase
+ *         <MetricCard
  *             label={label}
- *             value={formattedValue}
- *             placeholder={placeholder}
- *             tooltip={tooltip}
+ *             value={value}
+ *             description={tooltipExplanation}
+ *             ariaLabel={composeMetricAriaLabel(label, value, tooltipExplanation)}
  *         />
  *     );
  * };
  * ```
  *
- * Then export it in index.ts:
- * ```typescript
- * export { SizeMetric, type SizeMetricProps } from './SizeMetric';
- * ```
- *
- * CUSTOM VALUE RENDERING
- * ======================
- *
- * You can also pass a React node to MetricBase for custom rendering:
- *
- * ```typescript
- * const customValue = (
- *     <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
- *         <Icon />
- *         <span>Custom Content</span>
- *     </div>
- * );
- *
- * return (
- *     <MetricBase
- *         label={label}
- *         value={customValue}
- *         placeholder={placeholder}
- *         tooltip={tooltip}
- *     />
- * );
- * ```
- *
- * See RatioMetric.tsx for an example with a progress bar.
+ * `value` also takes a node, for a figure the type scale cannot express on its own. See
+ * `RatioMetric.tsx`, which puts a bar under the number.
  */

@@ -54,6 +54,7 @@ parameters:
       default: vscode-ext-webview
       values:
           - vscode-ext-webview
+          - vscode-ext-webview-fluentui
 
     # The expected version - must match the version in the package's package.json
     - name: publishVersion
@@ -278,7 +279,7 @@ extends:
                                       exit 1
                                   }
 
-                        # Find the .tgz file for the selected package
+                        # Find the exact .tgz file for the selected package
                         - task: PowerShell@2
                           displayName: 'Find .tgz file'
                           name: findTgzStep
@@ -287,6 +288,16 @@ extends:
                               script: |
                                   $packageName = "${{ parameters.packageName }}"
                                   $npmPackagesDir = "$(System.DefaultWorkingDirectory)/npm-packages"
+                                  $packageJsonPath = "$(System.DefaultWorkingDirectory)/packages/$packageName/package.json"
+
+                                  if (-not (Test-Path $packageJsonPath)) {
+                                      Write-Error "[Error] package.json not found at $packageJsonPath"
+                                      exit 1
+                                  }
+
+                                  $packageJson = Get-Content $packageJsonPath -Raw | ConvertFrom-Json
+                                  $fullPackageName = $packageJson.name
+                                  $actualVersion = $packageJson.version
 
                                   Write-Output "Searching for .tgz files in: $npmPackagesDir"
 
@@ -304,19 +315,16 @@ extends:
                                       Write-Output "  $($_.Name) (${sizeKB} KB)"
                                   }
 
-                                  # Find the .tgz file matching the selected package.
-                                  # npm pack writes scope-flattened filenames, e.g.:
-                                  #   documentdb-js-schema-analyzer-0.8.1.tgz
-                                  #   microsoft-vscode-ext-webview-0.9.0-preview.tgz
-                                  # The packageName parameter matches the folder name under packages/,
-                                  # which appears in the .tgz filename for all packages here.
-                                  $tgzFiles = @(Get-ChildItem -Path $npmPackagesDir -Filter "*$packageName*.tgz")
+                                  # npm pack flattens a scoped package name into the filename:
+                                  # @microsoft/vscode-ext-webview@0.9.0-preview becomes
+                                  # microsoft-vscode-ext-webview-0.9.0-preview.tgz.
+                                  # Calculate the exact name because one package name may prefix another.
+                                  $scopeFlattenedName = $fullPackageName.TrimStart('@').Replace('/', '-')
+                                  $expectedTgzFileName = "$scopeFlattenedName-$actualVersion.tgz"
+                                  $tgzFiles = @(Get-ChildItem -Path $npmPackagesDir -Filter $expectedTgzFileName -File)
 
-                                  if ($tgzFiles.Count -eq 0) {
-                                      Write-Error "[Error] No .tgz file found matching package '$packageName'"
-                                      exit 1
-                                  } elseif ($tgzFiles.Count -gt 1) {
-                                      Write-Error "[Error] Multiple .tgz files found matching package '$packageName': $($tgzFiles.Name -join ', ')"
+                                  if ($tgzFiles.Count -ne 1) {
+                                      Write-Error "[Error] Expected exactly one .tgz file named '$expectedTgzFileName', found $($tgzFiles.Count)"
                                       exit 1
                                   }
 

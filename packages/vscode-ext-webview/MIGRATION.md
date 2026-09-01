@@ -27,7 +27,7 @@ The body no longer times the call, stamps `duration`, or classifies
 Instead it resolves the event id and delegates to your runner, which now:
 
 - receives `(eventId, invocation, invoke)` (was `(invocation, execute)`);
-- is **generic over the context enrichment** it contributes — it calls
+- is **generic over the context enrichment** it contributes: it calls
   `invoke(enrichment)` with any object, which the body merges into `ctx`;
 - **owns outcome classification** from the returned result. Your telemetry
   backend usually records duration already (for example
@@ -122,7 +122,7 @@ router context type and read it directly:
 type Tracked = WithTelemetry<RouterContext, ITelemetryContext>;
 ctx.telemetry.properties.x = '1';
 
-// After — declare the field you contribute, then read it:
+// After: declare the field you contribute, then read it:
 type RouterContext = BaseRouterContext & { actionContext: IActionContext };
 (ctx as RouterContext).actionContext.telemetry.properties.x = '1';
 ```
@@ -131,7 +131,7 @@ If a single tRPC instance serves several views, the root context your controller
 builds does not carry the injected field (the runner adds it per call), so type
 that root object as `Omit<RouterContext, 'actionContext'>`.
 
-Alternatively — recommended when some procedures run on plain `publicProcedure` —
+Alternatively, recommended when some procedures run on plain `publicProcedure`,
 keep `actionContext` **off** the base `RouterContext` and add it back only for
 instrumented procedures via a tiny consumer-side alias, so the type reflects what
 the runner actually injected:
@@ -165,7 +165,7 @@ const logger: ProcedureLogger = {
 };
 ```
 
-`loggingMiddlewareBody` is unchanged in shape — it still wires as
+`loggingMiddlewareBody` is unchanged in shape: it still wires as
 `publicProcedure.use((opts) => loggingMiddlewareBody(opts, logger))` and times
 the call itself.
 

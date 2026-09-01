@@ -249,14 +249,14 @@ host/browser import boundary.
 
 The transport reports what it is doing through **logging** (console / output, for
 humans) and **telemetry** (structured analytics, for dashboards). Logging comes
-in two flavours — one on the webview side, one on the extension-host side — and
+in two flavours, one on the webview side and one on the extension-host side, and
 telemetry is a separate, policy-driven layer. Everything except the host
 dispatch logger's console default is opt-in, so you enable exactly what you need.
 
 ### Webview-side request logging
 
 The shared webview client can log every query / mutation / subscription to the
-**webview devtools console** using tRPC's `loggerLink` — a rich, grouped,
+**webview devtools console** using tRPC's `loggerLink`, a rich, grouped,
 color-coded view of each call's input and result. It is **off by default** so a
 production webview stays quiet.
 
@@ -280,7 +280,7 @@ const { client } = connectTrpc<AppRouter>(vscodeApi, { logger: true });
 Developer Tools** from the Command Palette (with the webview focused) to open the
 Chromium devtools for that webview; the tRPC log appears on the **Console** tab.
 When you launch the extension with a debugger attached this is the webview's own
-console — distinct from the extension-host Debug Console, where the dispatch
+console, distinct from the extension-host Debug Console, where the dispatch
 logger below writes.
 
 ### Webview-side observer errors
@@ -290,7 +290,7 @@ Cross-cutting observers on the event channel (`useRpcEvents()` / `connectTrpc`'s
 handlers throws, the channel catches it so a broken observer can never break the
 RPC it was only watching. The isolated error goes to an `onObserverError` sink
 that defaults to `console.error`. Route it to telemetry when you want observer
-failures tracked — **off by default** so you are not opted into events you may
+failures tracked, **off by default** so you are not opted into events you may
 not want:
 
 ```tsx
@@ -305,7 +305,7 @@ See [ADVANCED.md](./ADVANCED.md#the-webview-event-channel) for the full contract
 
 The host dispatcher logs one structured entry per completed query, mutation, and
 subscription (`[tRPC] <type> <path> (<ms>) <status>`). It is on by default via
-`consoleProcedureLogger`, writing to the **extension-host console** — the
+`consoleProcedureLogger`, writing to the **extension-host console**: the
 `Extension Host` output channel, or your debugger's Debug Console when you run
 the extension under a debugger.
 
@@ -369,7 +369,7 @@ export const tracked = publicProcedure.use(
 
 Inside a procedure, read the fields your runner contributed (here
 `ctx.actionContext`) to add properties/measurements. Declare that field on your
-router context type so procedures read it without a telemetry-specific cast — see
+router context type so procedures read it without a telemetry-specific cast; see
 [ADVANCED.md](./ADVANCED.md#telemetry-adapters) for the full worked adapter, and
 [MIGRATION.md](./MIGRATION.md) if you are upgrading from an earlier version.
 
@@ -427,12 +427,12 @@ import { useTrpcClient, useConfiguration, WithWebviewContext } from '@microsoft/
 
 ## Peer dependencies
 
-| Package          | Version    | Optional?                                 |
-| ---------------- | ---------- | ----------------------------------------- |
-| `@trpc/client`   | `^11.0.0`  | Required — core transport                 |
-| `@trpc/server`   | `^11.0.0`  | Required — core transport                 |
-| `react`          | `>=18.0.0` | Optional — only for the `./react` surface |
-| `vscode-webview` | `^1.0.0`   | Optional — only for the `./react` surface |
+| Package          | Version    | Optional?                                |
+| ---------------- | ---------- | ---------------------------------------- |
+| `@trpc/client`   | `^11.0.0`  | Required, core transport                 |
+| `@trpc/server`   | `^11.0.0`  | Required, core transport                 |
+| `react`          | `>=18.0.0` | Optional, only for the `./react` surface |
+| `vscode-webview` | `^1.0.0`   | Optional, only for the `./react` surface |
 
 `react` and `vscode-webview` are declared optional via `peerDependenciesMeta`, so
 a consumer that only uses `./host` (or the framework-agnostic `./webview`) surface

@@ -3,22 +3,17 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import type * as React from 'react';
+import { MetricCard } from '@microsoft/vscode-ext-webview-fluentui/components';
+import * as l10n from '@vscode/l10n';
+import { type JSX } from 'react';
 import { formatTime } from './formatUtils';
-import { MetricBase, type MetricBaseProps } from './MetricBase';
+import { composeMetricAriaLabel, type MetricProps } from './metricProps';
 
 /**
- * Specialized metric component for displaying time values.
- *
- * Automatically formats time with Datadog/New Relic style:
- * - < 1000ms: "2.33 ms"
- * - 1s - 100s: "15.20 s"
- * - > 100s: "2m 15s"
- *
- * Value handling:
- * - undefined: Shows loading skeleton (data is being fetched)
- * - null: Shows N/A or custom nullValuePlaceholder (data unavailable/error)
- * - number: Formats and displays the time
+ * Time metric, formatted in the Datadog / New Relic style:
+ * - under 1000ms: "2.33 ms"
+ * - 1s to 100s: "15.20 s"
+ * - over 100s: "2m 15s"
  *
  * @example
  * <TimeMetric
@@ -26,48 +21,35 @@ import { MetricBase, type MetricBaseProps } from './MetricBase';
  *     valueMs={2.333}
  *     tooltipExplanation={l10n.t('Total query execution time')}
  * />
- *
- * @example
- * // Show N/A when data is unavailable (e.g., error state)
- * <TimeMetric
- *     label={l10n.t('Execution Time')}
- *     valueMs={null}
- *     nullValuePlaceholder={l10n.t('Not available')}
- * />
  */
-export interface TimeMetricProps extends Omit<MetricBaseProps, 'value'> {
-    /** Time value in milliseconds
-     * - undefined: Data is loading
-     * - null: Data is unavailable
-     * - number: Time value to format and display
-     */
+export interface TimeMetricProps extends MetricProps {
+    /** Time value in milliseconds. `undefined` is loading, `null` is unavailable. */
     valueMs: number | null | undefined;
 
-    /** Number of decimal places for ms/s display (default: 2) */
+    /** Number of decimal places for ms/s display (default: 2). */
     decimals?: number;
 }
 
-export const TimeMetric: React.FC<TimeMetricProps> = ({
+export const TimeMetric = ({
     label,
     valueMs,
     decimals = 2,
     loadingPlaceholder = 'skeleton',
-    nullValuePlaceholder = 'N/A',
+    nullValuePlaceholder = l10n.t('N/A'),
     tooltipExplanation,
-}) => {
-    // Preserve null vs undefined distinction
-    // - null → passes null to MetricBase (shows nullValuePlaceholder)
-    // - undefined → passes undefined to MetricBase (shows skeleton)
-    // - number → formats and passes string to MetricBase
-    const formattedValue = valueMs === null ? null : valueMs !== undefined ? formatTime(valueMs, decimals) : undefined;
+}: TimeMetricProps): JSX.Element => {
+    // null and undefined have to survive formatting: they select the card's two placeholder states.
+    const value = valueMs === null ? null : valueMs === undefined ? undefined : formatTime(valueMs, decimals);
 
     return (
-        <MetricBase
+        <MetricCard
             label={label}
-            value={formattedValue}
+            value={value}
+            description={tooltipExplanation}
             loadingPlaceholder={loadingPlaceholder}
             nullValuePlaceholder={nullValuePlaceholder}
-            tooltipExplanation={tooltipExplanation}
+            tooltipRepeatsValue
+            ariaLabel={composeMetricAriaLabel(label, value, tooltipExplanation)}
         />
     );
 };

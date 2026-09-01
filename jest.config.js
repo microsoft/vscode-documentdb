@@ -16,9 +16,21 @@ module.exports = {
                 '^.+\\.tsx?$': ['ts-jest', {}],
             },
         },
+        // React components in the webviews need a DOM. Kept as its own project rather than
+        // switching the extension project to jsdom, which would change the environment under
+        // every existing host-side test.
+        {
+            displayName: 'extension-webview',
+            testEnvironment: 'jsdom',
+            testMatch: ['<rootDir>/src/webviews/**/*.test.tsx'],
+            transform: {
+                '^.+\\.tsx?$': ['ts-jest', {}],
+            },
+        },
         '<rootDir>/packages/documentdb-js-schema-analyzer',
         '<rootDir>/packages/documentdb-js-operator-registry',
         '<rootDir>/packages/documentdb-js-shell-runtime',
         '<rootDir>/packages/vscode-ext-webview',
+        '<rootDir>/packages/vscode-ext-webview-fluentui',
     ],
 };

@@ -6,7 +6,6 @@
   "- Is the cluster paused, or still being provisioned?": "- Is the cluster paused, or still being provisioned?",
   "- Is this machineȁs IP address on the projectȁs IP access list?": "- Is this machineȁs IP address on the projectȁs IP access list?",
   "—": "—",
-  ", {0}": ", {0}",
   ", No public IP or FQDN found.": ", No public IP or FQDN found.",
   "! Task '{taskName}' failed. {message}": "! Task '{taskName}' failed. {message}",
   ".limit({0}) exceeds the display batch size ({1}), so only {1} documents will be shown. Use .toArray() to retrieve all {0}, or increase \"{2}\" in Settings.": ".limit({0}) exceeds the display batch size ({1}), so only {1} documents will be shown. Use .toArray() to retrieve all {0}, or increase \"{2}\" in Settings.",

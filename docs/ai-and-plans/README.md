@@ -22,19 +22,20 @@ treat `status: historical` or `status: superseded` as current.
 
 ## Features
 
-| Feature                                                               | What it covers                                                                 | Status            |
-| --------------------------------------------------------------------- | ------------------------------------------------------------------------------ | ----------------- |
-| [local-quickstart](./features/local-quickstart/README.md)             | Run DocumentDB locally in one click: Docker provisioning, readiness, lifecycle | shipped 0.10.0    |
-| [query-insights](./features/query-insights/README.md)                 | Query performance rating, static analysis, and streaming AI recommendations    | shipped           |
-| [interactive-shell](./features/interactive-shell/README.md)           | The in-terminal REPL, its runtime, completions, and highlighting               | shipped           |
-| [query-playground](./features/query-playground/README.md)             | `.documentdb` files, persistent worker evaluation, per-document connections    | shipped           |
-| [completions-and-schema](./features/completions-and-schema/README.md) | Operator registry, schema analyzer, and the shared completion layer            | shipped           |
-| [index-management](./features/index-management/README.md)             | The Indexes tab, the create drawer, and the Collection View chrome redesign    | shipped           |
-| [atlas-discovery](./features/atlas-discovery/README.md)               | MongoDB Atlas discovery: Admin API auth, discovery tree, credentials           | shipped           |
-| [kubernetes-discovery](./features/kubernetes-discovery/README.md)     | Kubernetes service discovery and connect-time reachability providers           | shipped           |
-| [webview-ext-package](./features/webview-ext-package/README.md)       | `@microsoft/vscode-ext-webview`: the extracted webview transport package       | published preview |
-| [connections-tree](./features/connections-tree/README.md)             | The Connections view: node item counts, connection load performance            | shipped           |
-| [no-auth](./features/no-auth/README.md)                               | Credential-free connections and connection-string TLS handling                 | shipped           |
+| Feature                                                                   | What it covers                                                                                | Status            |
+| ------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------- | ----------------- |
+| [local-quickstart](./features/local-quickstart/README.md)                 | Run DocumentDB locally in one click: Docker provisioning, readiness, lifecycle                | shipped 0.10.0    |
+| [query-insights](./features/query-insights/README.md)                     | Query performance rating, static analysis, and streaming AI recommendations                   | shipped           |
+| [interactive-shell](./features/interactive-shell/README.md)               | The in-terminal REPL, its runtime, completions, and highlighting                              | shipped           |
+| [query-playground](./features/query-playground/README.md)                 | `.documentdb` files, persistent worker evaluation, per-document connections                   | shipped           |
+| [completions-and-schema](./features/completions-and-schema/README.md)     | Operator registry, schema analyzer, and the shared completion layer                           | shipped           |
+| [index-management](./features/index-management/README.md)                 | The Indexes tab, the create drawer, and the Collection View chrome redesign                   | shipped           |
+| [atlas-discovery](./features/atlas-discovery/README.md)                   | MongoDB Atlas discovery: Admin API auth, discovery tree, credentials                          | shipped           |
+| [kubernetes-discovery](./features/kubernetes-discovery/README.md)         | Kubernetes service discovery and connect-time reachability providers                          | shipped           |
+| [webview-ext-package](./features/webview-ext-package/README.md)           | `@microsoft/vscode-ext-webview`: the extracted webview transport package                      | published preview |
+| [webview-fluentui-package](./features/webview-fluentui-package/README.md) | `@microsoft/vscode-ext-webview-fluentui`: Fluent theming and reusable components for webviews | workspace-only    |
+| [connections-tree](./features/connections-tree/README.md)                 | The Connections view: node item counts, connection load performance                           | shipped           |
+| [no-auth](./features/no-auth/README.md)                                   | Credential-free connections and connection-string TLS handling                                | shipped           |
 
 Everything else is a single file at this root, such as:
 
@@ -73,6 +74,26 @@ The rules, in full:
 
 `archive` is a **status**, not a location — supersede a document in place rather than moving it.
 
+## What goes inside an iteration document
+
+An iteration file is written before the work, and **kept up to date during it**.
+
+- **Record progress inline, against the work item it belongs to.** Not in a work-log chapter and
+  not in a summary table at the end. Someone reading the plan should meet what happened to an item
+  at the point that item is defined, without holding it in their head until the last page.
+- **Write the note when the item is committed**, not at the end. Name the commit that carries it,
+  what landed, and why. Reconstructing later only works while the session that did the work is
+  still open.
+- **A deviation records the alternatives considered and why each was rejected.** The option that
+  shipped is already in the code; the rejected ones exist nowhere else.
+- **Do not rewrite the plan to match what happened.** Add to it. That the plan and reality differed
+  is the part worth keeping.
+- **An `# Outcome` chapter at hand-over** states what was verified and, just as plainly, what was
+  not.
+
+Template and reasoning:
+[documentation-restructure-plan.md §6.5](./documentation-restructure-plan.md).
+
 ## Frontmatter
 
 Required: `feature`, `kind`, `status` for anything under `features/`. Root-level documents carry
@@ -88,8 +109,8 @@ prs: [798, 876]
 created: 2026-08-04
 verified: 2026-08-13 # absent means unverified; this is not a promise of currency
 code:
-    - src/commands/localQuickStart/**
-    - src/services/localQuickStart/**
+  - src/commands/localQuickStart/**
+  - src/services/localQuickStart/**
 ---
 ```
 

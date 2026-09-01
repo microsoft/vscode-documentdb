@@ -11,7 +11,7 @@ import type * as React from 'react';
 import { useMemo } from 'react';
 import '../../../../../../components/focusableBadge/focusableBadge.scss';
 import { type PerformanceDiagnostic } from '../../../../../../documentdb/collectionView/types/queryInsights';
-import { CellBase } from '../CellBase';
+import '../SummaryCard.scss';
 import './PerformanceRatingCell.scss';
 
 export type PerformanceRating = 'poor' | 'fair' | 'good' | 'excellent';
@@ -76,7 +76,7 @@ export const PerformanceRatingCell: React.FC<PerformanceRatingCellProps> = ({
     rating,
     diagnostics,
     visible = true,
-    nullValuePlaceholder = 'N/A',
+    nullValuePlaceholder = l10n.t('N/A'),
 }) => {
     // Stable random widths for badge skeletons — re-randomised each time the skeleton mounts
     const badgeWidths = useMemo(
@@ -126,7 +126,7 @@ export const PerformanceRatingCell: React.FC<PerformanceRatingCellProps> = ({
     );
 
     if (rating === null) {
-        // Explicit null: data unavailable (will use CellBase's nullValuePlaceholder)
+        // Explicit null: data unavailable, so the cell renders nullValuePlaceholder
         customContent = null;
     } else if (rating === undefined) {
         // Undefined: data loading — render a structured skeleton that mirrors the real layout
@@ -216,5 +216,13 @@ export const PerformanceRatingCell: React.FC<PerformanceRatingCellProps> = ({
         );
     }
 
-    return <CellBase label={label} value={customContent} nullValuePlaceholder={nullValuePlaceholder} span="full" />;
+    // Full-span markup, kept here rather than shared: this cell drops the fixed-height value slot,
+    // stretches its children and puts the label on its own line, so it is a different layout that
+    // happened to live in the same file as the single-span one.
+    return (
+        <div className="summaryCell cellSpanFull">
+            <div className="cellLabel">{label}</div>
+            {customContent === null ? <span className="nullValue">{nullValuePlaceholder}</span> : customContent}
+        </div>
+    );
 };
