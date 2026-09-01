@@ -1529,7 +1529,7 @@
             "order": 1,
             "type": "boolean",
             "default": true,
-            "description": "Show confirmation dialogs when handling external URLs that open DocumentDB connections in VS Code."
+            "description": "Show confirmation dialogs when handling external URLs that open DocumentDB resources or setup experiences in VS Code."
           },
           "documentDB.confirmations.confirmationStyle": {
             "order": 0,

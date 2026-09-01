@@ -10,13 +10,15 @@ created: 2026-08-24
 
 > The decisions that shaped the deep-link vocabulary, and what was rejected on the way.
 
-| #    | Decision                                            | Status   | Changed from the proposal?                   | Date       | PR   |
-| ---- | --------------------------------------------------- | -------- | -------------------------------------------- | ---------- | ---- |
-| 0001 | The action goes in the path, not the query          | Accepted | Accepted as proposed                         | 2026-08-24 | #898 |
-| 0002 | An empty path means `connect`, forever              | Accepted | Accepted as proposed                         | 2026-08-24 | #898 |
-| 0003 | The action list is hand-written, never the registry | Accepted | Raised from an implementation note to a rule | 2026-08-24 | #898 |
-| 0004 | `local` names the product, not the internal command | Accepted | **Open for the maintainer to overrule**      | 2026-08-24 | #898 |
-| 0005 | `local` opens the wizard without a confirmation     | Accepted | Diverges from `connect`, deliberately        | 2026-08-24 | #898 |
+| #    | Decision                                            | Status              | Changed from the proposal?                   | Date       | PR   |
+| ---- | --------------------------------------------------- | ------------------- | -------------------------------------------- | ---------- | ---- |
+| 0001 | The action goes in the path, not the query          | Accepted            | Accepted as proposed                         | 2026-08-24 | #898 |
+| 0002 | An empty path means `connect`, forever              | Accepted            | Accepted as proposed                         | 2026-08-24 | #898 |
+| 0003 | The action list is hand-written, never the registry | Accepted            | Raised from an implementation note to a rule | 2026-08-24 | #898 |
+| 0004 | `local` names the product, not the internal command | Accepted            | Retained during maintainer review            | 2026-08-24 | #898 |
+| 0005 | `local` opens the wizard without a confirmation     | Superseded by D0007 | Reversed after maintainer review             | 2026-08-24 | #898 |
+| 0006 | Local links model the resource type                 | Accepted            | Added during maintainer review               | 2026-09-01 | #898 |
+| 0007 | Local links show one lightweight confirmation       | Accepted            | Reversed 0005 during maintainer review       | 2026-09-01 | #898 |
 
 > Entries below are **semantically** immutable: append new entries rather than rewriting old ones,
 > and record reversals as a new entry plus a status change above. Heading text is frozen once
@@ -165,11 +167,16 @@ discoverability, which would make this `localquickstart`. Recorded as Accepted r
 because a shipping default is needed and this one is reversible while the action is new — but it is
 the first thing to raise.
 
+### Resolution
+
+Maintainer review retained `/local` as the public verb and placed the local resource type in the
+next path segment. `/local` remains shorthand for the default resource type.
+
 ---
 
 ## 0005 — `local` opens the wizard without a confirmation
 
-**Status:** Accepted · **Date:** 2026-08-24 · **Raised by:** implementation
+**Status:** Superseded by D0007 · **Date:** 2026-08-24 · **Raised by:** implementation
 
 ### Question
 
@@ -193,3 +200,63 @@ button and the thing it promised, which is precisely the friction this link exis
 
 An action is added that changes state before showing UI. That action needs a confirmation, and the
 reasoning above is the test to apply — not "does `connect` have one".
+
+---
+
+## 0006 — Local links model the resource type
+
+**Status:** Accepted · **Date:** 2026-09-01 · **Raised by:** maintainer review
+
+### Question
+
+Should `/local` identify only an action, or should it also leave room to identify which local
+product the user wants to set up?
+
+### Decision
+
+The first qualifier identifies the local resource type. `/local/documentdb` explicitly names
+DocumentDB Local, while `/local` remains equivalent shorthand that defaults to `documentdb`.
+
+Only allow-listed resource types are accepted. Unknown types and additional qualifiers are rejected.
+
+### Reasoning
+
+`local` describes a family of setup actions rather than one implementation forever. Keeping the
+resource type in the path leaves room for a future local offering without introducing another
+top-level verb or changing links that already use `/local`.
+
+The qualifier was previously parsed but ignored, which meant `/local/anything` silently opened the
+DocumentDB Local wizard. Validation makes the public URL describe the action it will actually take.
+
+### Consequence
+
+Resource type keywords are matched case-insensitively, like verbs, because both are public URL
+vocabulary rather than user data.
+
+---
+
+## 0007 — Local links show one lightweight confirmation
+
+**Status:** Accepted · **Date:** 2026-09-01 · **Raised by:** maintainer review
+
+### Question
+
+Should an external link open the DocumentDB Local setup webview without confirmation because the
+wizard begins on a non-mutating introduction page?
+
+### Decision
+
+Show one concise modal confirmation before opening the wizard when
+`documentDB.confirmations.showUrlHandlingConfirmations` is enabled. Dismissing it cancels the
+request. When the setting is disabled, the wizard opens directly.
+
+### Reasoning
+
+Opening a webview from an external link can still be surprising even when it does not immediately
+change state. One confirmation gives the user control without copying the connection flow's
+multiple-step confirmation sequence.
+
+### Revisit if
+
+User testing shows that the confirmation adds friction without helping users understand or control
+the transition into VS Code.

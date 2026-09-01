@@ -62,6 +62,11 @@ const DEEP_LINK_VERBS = ['connect', 'local'] as const;
 
 type DeepLinkVerb = (typeof DEEP_LINK_VERBS)[number];
 
+/** The local resource types that an external deep link is allowed to open. */
+const LOCAL_RESOURCE_TYPES = ['documentdb'] as const;
+
+type LocalResourceType = (typeof LOCAL_RESOURCE_TYPES)[number];
+
 /**
  * The verb assumed when a link names none.
  *
@@ -90,6 +95,7 @@ interface DeepLinkRoute {
  * ```text
  * vscode://ms-azuretools.vscode-documentdb/connect?connectionString=…&database=…&collection=…
  * vscode://ms-azuretools.vscode-documentdb/local
+ * vscode://ms-azuretools.vscode-documentdb/local/documentdb
  * vscode://ms-azuretools.vscode-documentdb?connectionString=…              (legacy, means /connect)
  * ```
  *
@@ -153,8 +159,12 @@ export async function globalUriHandler(uri: vscode.Uri): Promise<void> {
                 }
 
                 case 'local': {
+                    context.telemetry.properties.failureStage = 'validateLocalResourceType';
+                    const resourceType = parseLocalResourceType(route.qualifiers);
+                    context.telemetry.properties.deepLinkLocalResourceType = resourceType;
+
                     context.telemetry.properties.failureStage = 'openLocalQuickStart';
-                    await handleLocalQuickStartRequest(context);
+                    await handleLocalQuickStartRequest(context, resourceType);
                     break;
                 }
             }
@@ -199,17 +209,65 @@ function parseDeepLinkRoute(path: string): DeepLinkRoute | undefined {
 }
 
 /**
- * Opens the DocumentDB Local setup wizard.
+ * Resolves the local resource type named by a route.
  *
- * **Why this does not raise a confirmation, when `connect` does.** The `connect` confirmations
- * exist because that path stores a connection and its secret before the user sees any UI — the
- * modal is the only place to decline. The wizard is itself that place: it opens on an
- * introduction step, provisions nothing until the user walks it, and can be closed. Adding a
- * modal in front of it would put two consecutive prompts between a website's "Open in VS Code"
- * button and the thing it promised, which is the friction this link exists to remove.
+ * `/local` is shorthand for `/local/documentdb`. The allow-list is explicit so an unsupported
+ * qualifier never silently opens a different local product.
  */
-async function handleLocalQuickStartRequest(context: IActionContext): Promise<void> {
-    await openLocalQuickStart(context);
+function parseLocalResourceType(qualifiers: string[]): LocalResourceType {
+    if (qualifiers.length === 0) {
+        return 'documentdb';
+    }
+
+    if (qualifiers.length !== 1) {
+        throw new Error(l10n.t('This DocumentDB Local link has an invalid path. Use /local or /local/documentdb.'));
+    }
+
+    const candidate = qualifiers[0].toLowerCase();
+    const resourceType = LOCAL_RESOURCE_TYPES.find((known) => known === candidate);
+    if (resourceType === undefined) {
+        throw new Error(
+            l10n.t(
+                'This DocumentDB Local link asks for an unsupported resource type. Supported resource types: {0}.',
+                LOCAL_RESOURCE_TYPES.join(', '),
+            ),
+        );
+    }
+
+    return resourceType;
+}
+
+/**
+ * Confirms and opens the setup experience for a supported local resource type.
+ *
+ * External links can be surprising even when the destination is non-mutating, so this uses one
+ * lightweight confirmation when URL confirmations are enabled. Unlike `connect`, no additional
+ * confirmation is needed because the wizard opens on an introduction page.
+ */
+async function handleLocalQuickStartRequest(context: IActionContext, resourceType: LocalResourceType): Promise<void> {
+    const showUrlHandlingConfirmations = vscode.workspace
+        .getConfiguration()
+        .get<boolean>(ext.settingsKeys.showUrlHandlingConfirmations, true);
+
+    if (showUrlHandlingConfirmations) {
+        const openSetup = l10n.t('Open setup');
+        const confirmation = await vscode.window.showInformationMessage(
+            l10n.t('This link wants to open the DocumentDB Local setup in VS Code.'),
+            { modal: true },
+            openSetup,
+        );
+
+        if (confirmation !== openSetup) {
+            context.telemetry.properties.userCancelledAtStep = 'OpenLocalQuickStart';
+            return;
+        }
+    }
+
+    switch (resourceType) {
+        case 'documentdb':
+            await openLocalQuickStart(context);
+            break;
+    }
 }
 
 /**

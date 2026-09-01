@@ -20,6 +20,7 @@ A deep link names **what it wants** in the path and supplies **arguments for it*
 ```
 vscode://ms-azuretools.vscode-documentdb/connect?connectionString=…&database=…&collection=…
 vscode://ms-azuretools.vscode-documentdb/local
+vscode://ms-azuretools.vscode-documentdb/local/documentdb
 vscode://ms-azuretools.vscode-documentdb?connectionString=…            ← legacy, means /connect
 ```
 
@@ -58,15 +59,24 @@ Local" link has no connection string by definition, because the container does n
   ([0003](./decisions.md#0003--the-action-list-is-hand-written-never-the-command-registry)).
 - **An unrecognized action is refused, not defaulted.** Falling back to `connect` would make every
   typo a silent connection attempt against a connection string the user did not mean to use here.
+- **Local resource types are explicit and bounded.** `/local` defaults to `documentdb`, while
+  `/local/documentdb` names it explicitly. Unknown types and additional qualifiers are rejected
+  rather than silently opening the DocumentDB Local wizard
+  ([0006](./decisions.md#0006--local-links-model-the-resource-type)).
+- **External local links require one lightweight confirmation by default.** The existing URL
+  confirmation setting gates it; the wizard itself remains responsible for all provisioning
+  decisions
+  ([0007](./decisions.md#0007--local-links-show-one-lightweight-confirmation)).
 - **Telemetry keeps the `failureStage` / `errorName` shape.** It exists because of issue #655
   ("URL handler error rate at 100%"), and every new branch fills it in.
 
 ## Timeline
 
-| Date       | What                                                                       |
-| ---------- | -------------------------------------------------------------------------- |
-| —          | `connect` shipped as the only mode; dispatch read `uri.query` only         |
-| 2026-08-24 | Action switch added in the path; `local` opens the DocumentDB Local wizard |
+| Date       | What                                                                        |
+| ---------- | --------------------------------------------------------------------------- |
+| —          | `connect` shipped as the only mode; dispatch read `uri.query` only          |
+| 2026-08-24 | Action switch added in the path; `local` opens the DocumentDB Local wizard  |
+| 2026-09-01 | `local` gained a validated resource type and one setting-gated confirmation |
 
 ## Open gaps
 

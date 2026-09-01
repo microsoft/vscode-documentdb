@@ -3,11 +3,12 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import type * as vscode from 'vscode';
+import * as vscode from 'vscode';
 import { globalUriHandler } from './vscodeUriHandler';
 
 /** Telemetry recorded by the mocked azext wrapper, so routing decisions can be asserted. */
 let lastTelemetry: Record<string, string> = {};
+let showUrlHandlingConfirmations = true;
 
 jest.mock('@microsoft/vscode-azext-utils', () => ({
     callWithTelemetryAndErrorHandling: jest.fn(
@@ -68,6 +69,11 @@ async function runHandler(path: string, query: string = ''): Promise<Error | und
 beforeEach(() => {
     jest.clearAllMocks();
     lastTelemetry = {};
+    showUrlHandlingConfirmations = true;
+    (vscode.workspace.getConfiguration as jest.Mock).mockReturnValue({
+        get: jest.fn(() => showUrlHandlingConfirmations),
+    });
+    (vscode.window.showInformationMessage as jest.Mock).mockResolvedValue('Open setup');
 });
 
 describe('globalUriHandler — route parsing', () => {
@@ -94,19 +100,78 @@ describe('globalUriHandler — route parsing', () => {
         expect(error).toBeUndefined();
         expect(mockOpenLocalQuickStart).toHaveBeenCalledTimes(1);
         expect(lastTelemetry.deepLinkVerb).toBe('local');
+        expect(lastTelemetry.deepLinkLocalResourceType).toBe('documentdb');
     });
 
-    it('accepts a verb in any case, because links are typed and pasted by hand', async () => {
-        await runHandler('/LOCAL');
+    it('opens the DocumentDB Local wizard for the explicit /local/documentdb form', async () => {
+        const error = await runHandler('/local/documentdb');
+
+        expect(error).toBeUndefined();
+        expect(mockOpenLocalQuickStart).toHaveBeenCalledTimes(1);
+        expect(lastTelemetry.deepLinkLocalResourceType).toBe('documentdb');
+    });
+
+    it('accepts the verb and resource type in any case, because links are typed and pasted by hand', async () => {
+        await runHandler('/LOCAL/DOCUMENTDB');
 
         expect(mockOpenLocalQuickStart).toHaveBeenCalledTimes(1);
     });
 
-    it('tolerates a trailing slash', async () => {
-        await runHandler('/local/');
+    it.each(['/local/', '/local/documentdb/'])('tolerates a trailing slash in %s', async (path) => {
+        await runHandler(path);
 
         expect(mockOpenLocalQuickStart).toHaveBeenCalledTimes(1);
-        expect(lastTelemetry.deepLinkQualifierCount).toBe('0');
+    });
+
+    it('rejects an unsupported local resource type before opening or confirming', async () => {
+        const error = await runHandler('/local/anything');
+
+        expect(error?.message).toContain('unsupported resource type');
+        expect(lastTelemetry.failureStage).toBe('validateLocalResourceType');
+        expect(vscode.window.showInformationMessage).not.toHaveBeenCalled();
+        expect(mockOpenLocalQuickStart).not.toHaveBeenCalled();
+    });
+
+    it('rejects additional local path segments before opening or confirming', async () => {
+        const error = await runHandler('/local/documentdb/extra');
+
+        expect(error?.message).toContain('invalid path');
+        expect(lastTelemetry.failureStage).toBe('validateLocalResourceType');
+        expect(vscode.window.showInformationMessage).not.toHaveBeenCalled();
+        expect(mockOpenLocalQuickStart).not.toHaveBeenCalled();
+    });
+});
+
+describe('globalUriHandler — local confirmation', () => {
+    it('shows one lightweight confirmation before opening the setup wizard', async () => {
+        await runHandler('/local/documentdb');
+
+        expect(vscode.window.showInformationMessage).toHaveBeenCalledTimes(1);
+        expect(vscode.window.showInformationMessage).toHaveBeenCalledWith(
+            'This link wants to open the DocumentDB Local setup in VS Code.',
+            { modal: true },
+            'Open setup',
+        );
+        expect(mockOpenLocalQuickStart).toHaveBeenCalledTimes(1);
+    });
+
+    it('does not open the setup wizard when the confirmation is dismissed', async () => {
+        (vscode.window.showInformationMessage as jest.Mock).mockResolvedValue(undefined);
+
+        const error = await runHandler('/local');
+
+        expect(error).toBeUndefined();
+        expect(mockOpenLocalQuickStart).not.toHaveBeenCalled();
+        expect(lastTelemetry.userCancelledAtStep).toBe('OpenLocalQuickStart');
+    });
+
+    it('opens without prompting when URL handling confirmations are disabled', async () => {
+        showUrlHandlingConfirmations = false;
+
+        await runHandler('/local');
+
+        expect(vscode.window.showInformationMessage).not.toHaveBeenCalled();
+        expect(mockOpenLocalQuickStart).toHaveBeenCalledTimes(1);
     });
 });
 

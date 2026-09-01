@@ -29,10 +29,11 @@ vscode://ms-azuretools.vscode-documentdb/<action>?<parameters>
 
 ### Supported Actions
 
-| Action    | What it does                                                   | Parameters                                   |
-| --------- | -------------------------------------------------------------- | -------------------------------------------- |
-| `connect` | Opens a connection to a cluster, optionally navigating into it | `connectionString`, `database`, `collection` |
-| `local`   | Opens the **DocumentDB Local** setup wizard                    | none                                         |
+| Action             | What it does                                                   | Parameters                                   |
+| ------------------ | -------------------------------------------------------------- | -------------------------------------------- |
+| `connect`          | Opens a connection to a cluster, optionally navigating into it | `connectionString`, `database`, `collection` |
+| `local`            | Opens the **DocumentDB Local** setup wizard                    | none                                         |
+| `local/documentdb` | Opens the **DocumentDB Local** setup wizard                    | none                                         |
 
 Only the actions in this table are recognized. A link naming anything else is refused with an
 explanatory message — the extension never treats the path as a command name, so a link cannot
@@ -41,6 +42,11 @@ reach extension functionality that is not listed here.
 > **Links written before actions existed keep working.** A URL with no action, such as
 > `vscode://ms-azuretools.vscode-documentdb?connectionString=...`, means `connect`. You do not
 > need to update existing links.
+
+`local` accepts an optional local resource type. Currently, `documentdb` is the only supported
+type, and omitting it defaults to `documentdb`, so `/local` and `/local/documentdb` are equivalent.
+Unsupported resource types and additional path segments are refused rather than silently opening a
+different setup experience.
 
 ### Supported Parameters
 
@@ -138,6 +144,15 @@ wizard is for.
 ```
 vscode://ms-azuretools.vscode-documentdb/local
 ```
+
+The explicit resource-type form is equivalent:
+
+```
+vscode://ms-azuretools.vscode-documentdb/local/documentdb
+```
+
+When URL handling confirmations are enabled in the extension settings, either form shows one
+confirmation before opening the setup wizard.
 
 ## How It Works
 
