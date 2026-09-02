@@ -54,11 +54,11 @@ These apply to the `connect` action.
 
 The following table lists all supported URL parameters:
 
-| Parameter          | Required | Description                                                    | Example Value               |
-| ------------------ | -------- | -------------------------------------------------------------- | --------------------------- |
-| `connectionString` | Yes      | The MongoDB/DocumentDB connection string (double URL-encoded)  | `mongodb%253A%252F%252F...` |
-| `database`         | No       | Name of the database to open after connection                  | `myDatabase`                |
-| `collection`       | No       | Collection to open (requires a database parameter or path)     | `myCollection`              |
+| Parameter          | Required | Description                                                   | Example Value               |
+| ------------------ | -------- | ------------------------------------------------------------- | --------------------------- |
+| `connectionString` | Yes      | The MongoDB/DocumentDB connection string (double URL-encoded) | `mongodb%253A%252F%252F...` |
+| `database`         | No       | Name of the database to open after connection                 | `myDatabase`                |
+| `collection`       | No       | Collection to open (requires a database parameter or path)    | `myCollection`              |
 
 ### Parameter Details
 

@@ -170,8 +170,8 @@ and removed the internal error prefix identified by the polish finding.
 
 ## Priority index
 
-| #   | Priority | Item                                                   | Status  |
-| --- | -------- | ------------------------------------------------------ | ------- |
+| #   | Priority | Item                                                   | Status         |
+| --- | -------- | ------------------------------------------------------ | -------------- |
 | 1   | **P1**   | `/connect` silently accepts path qualifiers            | ✅ Implemented |
 | 2   | **P1**   | Connection confirmation does not identify the target   | ✅ Implemented |
 | 3   | **P1**   | `collection` without a database can silently degrade   | ✅ Implemented |
@@ -417,17 +417,17 @@ not decisions.
 
 1. VS Code activates the extension and passes the URL to `globalUriHandler`.
 2. An empty path permanently defaults to `connect`; recognized verbs are matched
-  case-insensitively. `/connect` rejects all path qualifiers.
+   case-insensitively. `/connect` rejects all path qualifiers.
 3. Unknown verbs, invalid local qualifiers, invalid connection parameters, and downstream lookup
    failures all throw localized errors.
 4. `callWithTelemetryAndErrorHandling` writes each actionable thrown error to the output channel
-  and shows a non-modal error toast. The handler retains failure diagnostics in telemetry without
-  adding an internal URI-processing prefix to the user-facing message.
+   and shows a non-modal error toast. The handler retains failure diagnostics in telemetry without
+   adding an internal URI-processing prefix to the user-facing message.
 
 ### Connect flow
 
 1. Parse the connection string and optional destination; reject a collection with no database
-  available from either the parameter or connection-string path.
+   available from either the parameter or connection-string path.
 2. Mask sensitive telemetry values and detect an existing matching connection.
 3. For a new connection, optionally confirm the storage change, focus the Connections View, save
    the connection, and refresh the tree. Confirmations show line-separated sanitized target data.

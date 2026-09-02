@@ -15,10 +15,7 @@ jest.mock('@microsoft/vscode-azext-utils', () => ({
     callWithTelemetryAndErrorHandling: jest.fn(
         async (
             _eventName: string,
-            callback: (ctx: {
-                telemetry: { properties: Record<string, string> };
-                valuesToMask: string[];
-            }) => unknown,
+            callback: (ctx: { telemetry: { properties: Record<string, string> }; valuesToMask: string[] }) => unknown,
         ) => {
             const context = {
                 telemetry: { properties: {} as Record<string, string>, measurements: {} },
@@ -229,10 +226,7 @@ describe('globalUriHandler — connection confirmation', () => {
         ]);
         (vscode.window.showInformationMessage as jest.Mock).mockResolvedValue(undefined);
 
-        await runHandler(
-            '/connect',
-            `connectionString=${encodeURIComponent(connectionString)}&collection=orders`,
-        );
+        await runHandler('/connect', `connectionString=${encodeURIComponent(connectionString)}&collection=orders`);
 
         expect(vscode.window.showInformationMessage).toHaveBeenCalledWith(
             'You clicked a link that wants to open a DocumentDB connection in VS Code.',
