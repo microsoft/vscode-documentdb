@@ -174,14 +174,13 @@ export async function globalUriHandler(uri: vscode.Uri): Promise<void> {
                 }
             }
         } catch (error) {
-            const errMsg = error instanceof Error ? error.message : String(error);
             if (!context.telemetry.properties.failureStage) {
                 context.telemetry.properties.failureStage = 'unknown';
             }
             // Record the error type (not the message, which can carry user data)
             // so we can group failures without exposing connection details.
             context.telemetry.properties.errorName = error instanceof Error ? error.name : 'NonError';
-            throw new Error(l10n.t('Failed to process URI: {0}', errMsg));
+            throw error;
         }
     });
 }

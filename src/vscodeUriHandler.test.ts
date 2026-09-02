@@ -307,6 +307,14 @@ describe('globalUriHandler — telemetry shape', () => {
         expect(lastTelemetry.deepLinkVerb).toBe('unrecognized');
     });
 
+    it('surfaces the actionable link error without an internal URI-processing prefix', async () => {
+        const error = await runHandler('/nonsense');
+
+        expect(error?.message).toBe(
+            'This DocumentDB link asks for an action the extension does not recognize. It may have been written for a newer version — check for an update, or verify the link.',
+        );
+    });
+
     it('keeps recording the non-sensitive URI diagnostics on every route', async () => {
         await runHandler('/local');
 
