@@ -7,13 +7,12 @@
 > branch), and — for each item — offers a **suggestion** and a **status**. Items are **sorted by
 > priority** (P0 → P3).
 
-- **Feature area:** [`src/vscodeUriHandler.ts`](../../../../src/vscodeUriHandler.ts),
-  [`src/extension.ts`](../../../../src/extension.ts), and
-  [`docs/user-manual/how-to-construct-url.md`](../../../user-manual/how-to-construct-url.md)
+- **Feature area:** [`src/vscodeUriHandler.ts`](../../../../../src/vscodeUriHandler.ts),
+  [`src/extension.ts`](../../../../../src/extension.ts), and
+  [`docs/user-manual/how-to-construct-url.md`](../../../../user-manual/how-to-construct-url.md)
 - **PR / branch:** [microsoft/vscode-documentdb#898](https://github.com/microsoft/vscode-documentdb/pull/898) · `dev/guanzhousong/deep-link-verbs`
 - **Reviewed commit:** [`8069d189`](https://github.com/microsoft/vscode-documentdb/commit/8069d189e0f5dad44e311cba7ce7198b4b398a3c)
-- **Related design docs:** [Deep Links](../../features/deep-links/README.md) ·
-  [Deep-link decisions](../../features/deep-links/decisions.md)
+- **Related design docs:** [Deep Links](../README.md) · [Deep-link decisions](../decisions.md)
 - **Scope:** the UX-facing surface (external URL entry, route validation, confirmations, progress,
   navigation, errors, and cancellation). Backend internals appear only where they explain a
   user-visible symptom.
