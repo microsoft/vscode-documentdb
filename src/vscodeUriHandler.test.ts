@@ -9,14 +9,21 @@ import { globalUriHandler } from './vscodeUriHandler';
 /** Telemetry recorded by the mocked azext wrapper, so routing decisions can be asserted. */
 let lastTelemetry: Record<string, string> = {};
 let showUrlHandlingConfirmations = true;
+const mockGetAllConnections = jest.fn().mockResolvedValue([]);
 
 jest.mock('@microsoft/vscode-azext-utils', () => ({
     callWithTelemetryAndErrorHandling: jest.fn(
         async (
             _eventName: string,
-            callback: (ctx: { telemetry: { properties: Record<string, string> } }) => unknown,
+            callback: (ctx: {
+                telemetry: { properties: Record<string, string> };
+                valuesToMask: string[];
+            }) => unknown,
         ) => {
-            const context = { telemetry: { properties: {} as Record<string, string>, measurements: {} } };
+            const context = {
+                telemetry: { properties: {} as Record<string, string>, measurements: {} },
+                valuesToMask: [] as string[],
+            };
             try {
                 return await callback(context);
             } finally {
@@ -37,7 +44,7 @@ jest.mock('./commands/localQuickStart/openLocalQuickStart', () => ({
 // validation — but the imports still have to resolve.
 jest.mock('./commands/openCollectionView/openCollectionView', () => ({ openCollectionViewInternal: jest.fn() }));
 jest.mock('./services/connectionStorageService', () => ({
-    ConnectionStorageService: { getAll: jest.fn().mockResolvedValue([]) },
+    ConnectionStorageService: { getAll: (...args: unknown[]) => mockGetAllConnections(...args) },
     ConnectionType: { Clusters: 'clusters', Emulators: 'emulators' },
     ItemType: { Cluster: 'cluster' },
 }));
@@ -70,6 +77,7 @@ beforeEach(() => {
     jest.clearAllMocks();
     lastTelemetry = {};
     showUrlHandlingConfirmations = true;
+    mockGetAllConnections.mockResolvedValue([]);
     (vscode.workspace.getConfiguration as jest.Mock).mockReturnValue({
         get: jest.fn(() => showUrlHandlingConfirmations),
     });
@@ -180,6 +188,58 @@ describe('globalUriHandler — local confirmation', () => {
 
         expect(vscode.window.showInformationMessage).not.toHaveBeenCalled();
         expect(mockOpenLocalQuickStart).toHaveBeenCalledTimes(1);
+    });
+});
+
+describe('globalUriHandler — connection confirmation', () => {
+    it('identifies a new target using separate lines without exposing its password', async () => {
+        (vscode.window.showInformationMessage as jest.Mock).mockResolvedValue(undefined);
+        const connectionString = encodeURIComponent('mongodb://user:secret@alpha.example:27017/sales');
+
+        await runHandler('/connect', `connectionString=${connectionString}&collection=orders`);
+
+        expect(vscode.window.showInformationMessage).toHaveBeenCalledWith(
+            'You clicked a link that wants to open a DocumentDB connection in VS Code.',
+            {
+                modal: true,
+                detail:
+                    'Connection: user@alpha.example:27017\n' +
+                    'Database: sales\n' +
+                    'Collection: orders\n\n' +
+                    'A new connection will be added to your Connections View.\n' +
+                    'Do you want to continue?\n\n' +
+                    'Note: You can disable these URL handling confirmations in the extension settings.',
+            },
+            'Yes, continue',
+        );
+        expect(JSON.stringify((vscode.window.showInformationMessage as jest.Mock).mock.calls)).not.toContain('secret');
+    });
+
+    it('identifies an existing connection by its saved name with destination lines', async () => {
+        const connectionString = 'mongodb://user:secret@alpha.example:27017/sales';
+        mockGetAllConnections.mockResolvedValue([
+            {
+                id: 'existing-id',
+                name: 'Production',
+                secrets: { connectionString },
+            },
+        ]);
+        (vscode.window.showInformationMessage as jest.Mock).mockResolvedValue(undefined);
+
+        await runHandler(
+            '/connect',
+            `connectionString=${encodeURIComponent(connectionString)}&collection=orders`,
+        );
+
+        expect(vscode.window.showInformationMessage).toHaveBeenCalledWith(
+            'You clicked a link that wants to open a DocumentDB connection in VS Code.',
+            expect.objectContaining({
+                modal: true,
+                detail: expect.stringContaining('Connection: Production\nDatabase: sales\nCollection: orders\n\n'),
+            }),
+            'Yes, open connection',
+        );
+        expect(JSON.stringify((vscode.window.showInformationMessage as jest.Mock).mock.calls)).not.toContain('secret');
     });
 });
 

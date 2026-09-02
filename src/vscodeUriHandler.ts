@@ -352,14 +352,17 @@ async function handleConnectionStringRequest(
     } else {
         // First confirmation: Ask user about adding new connection (if enabled)
         if (showUrlHandlingConfirmations) {
+            const detail = [
+                ...formatConnectionTargetDetails(newConnectionLabel, selectedDatabase, params.collection),
+                '',
+                l10n.t('A new connection will be added to your Connections View.'),
+                l10n.t('Do you want to continue?'),
+                '',
+                l10n.t('Note: You can disable these URL handling confirmations in the extension settings.'),
+            ].join('\n');
             const connectionConfirmation = await vscode.window.showInformationMessage(
                 l10n.t('You clicked a link that wants to open a DocumentDB connection in VS Code.'),
-                {
-                    modal: true,
-                    detail: l10n.t(
-                        'A new connection will be added to your Connections View.\nDo you want to continue?\n\nNote: You can disable these URL handling confirmations in the exension settings.',
-                    ),
-                },
+                { modal: true, detail },
                 l10n.t('Yes, continue'),
             );
 
@@ -411,16 +414,23 @@ async function handleConnectionStringRequest(
 
     // Second confirmation: Ask user about revealing the connection (if enabled)
     if (showUrlHandlingConfirmations) {
+        const detail = [
+            ...formatConnectionTargetDetails(
+                existingDuplicateConnection?.name ?? newConnectionLabel,
+                selectedDatabase,
+                params.collection,
+            ),
+            '',
+            l10n.t('You might be asked for credentials to establish the connection.'),
+            l10n.t('Do you want to continue?'),
+            '',
+            l10n.t('Note: You can disable these URL handling confirmations in the extension settings.'),
+        ].join('\n');
         const revealConfirmation = await vscode.window.showInformationMessage(
             existingDuplicateConnection
                 ? l10n.t('You clicked a link that wants to open a DocumentDB connection in VS Code.')
                 : l10n.t('The connection will now be opened in the Connections View.'),
-            {
-                modal: true,
-                detail: l10n.t(
-                    'You might be asked for credentials to establish the connection.\nDo you want to continue?\n\nNote: You can disable these URL handling confirmations in the extension settings.',
-                ),
-            },
+            { modal: true, detail },
             l10n.t('Yes, open connection'),
         );
 
@@ -538,6 +548,17 @@ function isEmulatorConnection(parsedCS: DocumentDBConnectionString): boolean {
  */
 function createConnectionLabel(parsedCS: DocumentDBConnectionString, joinedHosts: string): string {
     return parsedCS.username && parsedCS.username.length > 0 ? `${parsedCS.username}@${joinedHosts}` : joinedHosts;
+}
+
+function formatConnectionTargetDetails(connectionLabel: string, database?: string, collection?: string): string[] {
+    const lines = [l10n.t('Connection: {0}', connectionLabel)];
+    if (database) {
+        lines.push(l10n.t('Database: {0}', database));
+    }
+    if (collection) {
+        lines.push(l10n.t('Collection: {0}', collection));
+    }
+    return lines;
 }
 
 /**
