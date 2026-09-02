@@ -94,6 +94,14 @@ describe('globalUriHandler — route parsing', () => {
         expect(error?.message).toContain('connection string');
     });
 
+    it.each(['/connect/anything', '/connect/extra/path'])('rejects connect path qualifiers in %s', async (path) => {
+        const error = await runHandler(path, 'connectionString=mongodb%3A%2F%2Fhost');
+
+        expect(error?.message).toContain('invalid path');
+        expect(lastTelemetry.failureStage).toBe('validateConnectPath');
+        expect(vscode.window.showInformationMessage).not.toHaveBeenCalled();
+    });
+
     it('opens the DocumentDB Local wizard for /local', async () => {
         const error = await runHandler('/local');
 

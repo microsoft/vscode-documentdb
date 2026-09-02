@@ -149,6 +149,11 @@ export async function globalUriHandler(uri: vscode.Uri): Promise<void> {
 
             switch (route.verb) {
                 case 'connect': {
+                    context.telemetry.properties.failureStage = 'validateConnectPath';
+                    if (route.qualifiers.length > 0) {
+                        throw new Error(l10n.t('This DocumentDB connection link has an invalid path. Use /connect.'));
+                    }
+
                     context.telemetry.properties.failureStage = 'extractParams';
                     // Note: uri.query is already decoded once by VS Code when creating the vscode.Uri object
                     const params = extractAndValidateParams(context, uri.query);
