@@ -58,13 +58,13 @@ The following table lists all supported URL parameters:
 | ------------------ | -------- | -------------------------------------------------------------- | --------------------------- |
 | `connectionString` | Yes      | The MongoDB/DocumentDB connection string (double URL-encoded)  | `mongodb%253A%252F%252F...` |
 | `database`         | No       | Name of the database to open after connection                  | `myDatabase`                |
-| `collection`       | No       | Name of the collection to open (requires `database` parameter) | `myCollection`              |
+| `collection`       | No       | Collection to open (requires a database parameter or path)     | `myCollection`              |
 
 ### Parameter Details
 
 - **`connectionString`**: The core parameter that defines the database connection. Must be a valid DocumentDB or MongoDB connection string that has been double URL-encoded (see encoding section below). Note: While it's possible to include a database name in the connection string, it's recommended to use the separate `database` parameter instead to keep the API simple and consistent.
 - **`database`**: When provided, the extension will automatically navigate to the specified database after establishing the connection.
-- **`collection`**: When provided along with `database`, the extension will open the Collection View for the specified collection within that database.
+- **`collection`**: The extension opens the Collection View for this collection. A database must be supplied either through the `database` parameter or in the connection-string path; otherwise the link is rejected before a connection is added or opened.
 
 ## Double Encoding
 
