@@ -24,7 +24,8 @@ An AI assistant inventoried the interaction paths, traced each terminal state at
 commit, and seeded code-backed flags. The operator then accepted all four findings and specified
 the intended behavior for each. Iteration 1 implemented and verified each item in a dedicated
 commit. The original observations remain below as review history; each item now also records its
-decision, implementation, verification, and commit reference.
+decision, implementation, verification, and commit reference. A follow-up review of the rendered
+`/local` flow identified and resolved one additional consistency item in Iteration 2.
 
 ## Legend
 
@@ -175,6 +176,7 @@ and removed the internal error prefix identified by the polish finding.
 | 2   | **P1**   | Connection confirmation does not identify the target   | ✅ Implemented |
 | 3   | **P1**   | `collection` without a database can silently degrade   | ✅ Implemented |
 | 4   | **P2**   | Malformed-link errors lead with internal "URI" wording | ✅ Implemented |
+| 5   | **P2**   | Local confirmation omits the confirmation-setting note | ✅ Implemented |
 
 ---
 
@@ -327,14 +329,43 @@ restating that processing failed.
 [`b8775d46`](https://github.com/microsoft/vscode-documentdb/commit/b8775d46). Verified via focused
 Jest error-surfacing/telemetry tests and `npm run build`.
 
+### 5. Local confirmation omits the confirmation-setting note ⚠️
+
+**Priority:** P2 · **Status:** ✅ Implemented
+
+**Observation:** The `/local` confirmation identifies the setup it will open, but unlike the
+`/connect` confirmations it does not tell users that URL handling confirmations can be disabled in
+the extension settings.
+
+**Finding:**
+
+- ⚠️ The local confirmation passed only `{ modal: true }`, while both connection confirmations use
+  the dialog detail area for the same settings note.
+- The resource type is already resolved and validated before this dialog, so adding the note does
+  not change how current or future `/local/<resource-type>` routes are dispatched.
+
+💡 **Suggestion:** Add the same settings note to the local modal's detail area for consistency and
+discoverability.
+
+> **Decision (Iteration 2):** show the confirmation-setting note in the `/local` dialog.
+> **Reason:** users should receive the same discoverability cue regardless of which deep-link verb
+> opened a confirmation.
+
+✅ **Implemented (Iteration 2):** the local modal now shows the existing localized settings note in
+its detail area, with an exact-call regression assertion. Files:
+[`src/vscodeUriHandler.ts`](../../../../../src/vscodeUriHandler.ts),
+[`src/vscodeUriHandler.test.ts`](../../../../../src/vscodeUriHandler.test.ts). Commit:
+[`dfaadb4e`](https://github.com/microsoft/vscode-documentdb/commit/dfaadb4e). Verified via all 28
+focused URI-handler tests and `npm run build`.
+
 ## P3 — Nice-to-have / cosmetic / acknowledged
 
 No P3 items were pre-discovered.
 
 ## Implemented
 
-Iteration 1 implemented all four findings. Each item above records its decision, dedicated commit,
-files, and focused verification.
+Iterations 1 and 2 implemented all five findings. Each item above records its decision, dedicated
+commit, files, and focused verification.
 
 ---
 
@@ -349,6 +380,10 @@ next one; nothing is dropped without a terminal status.
 - P1.2: readable, sanitized confirmation targets — [`3eb60bc8`](https://github.com/microsoft/vscode-documentdb/commit/3eb60bc8)
 - P1.3: early collection/database dependency validation — [`29335d5d`](https://github.com/microsoft/vscode-documentdb/commit/29335d5d)
 - P2.4: direct actionable link errors — [`b8775d46`](https://github.com/microsoft/vscode-documentdb/commit/b8775d46)
+
+### Iteration 2 — completed 2026-09-02
+
+- P2.5: local confirmation-setting note — [`dfaadb4e`](https://github.com/microsoft/vscode-documentdb/commit/dfaadb4e)
 
 No findings remain open or need to carry into another iteration.
 
