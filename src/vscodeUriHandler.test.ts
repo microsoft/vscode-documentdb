@@ -165,7 +165,10 @@ describe('globalUriHandler — local confirmation', () => {
         expect(vscode.window.showInformationMessage).toHaveBeenCalledTimes(1);
         expect(vscode.window.showInformationMessage).toHaveBeenCalledWith(
             'This link wants to open the DocumentDB Local setup in VS Code.',
-            { modal: true },
+            {
+                modal: true,
+                detail: 'Note: You can disable these URL handling confirmations in the extension settings.',
+            },
             'Open setup',
         );
         expect(mockOpenLocalQuickStart).toHaveBeenCalledTimes(1);

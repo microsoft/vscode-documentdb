@@ -257,7 +257,10 @@ async function handleLocalQuickStartRequest(context: IActionContext, resourceTyp
         const openSetup = l10n.t('Open setup');
         const confirmation = await vscode.window.showInformationMessage(
             l10n.t('This link wants to open the DocumentDB Local setup in VS Code.'),
-            { modal: true },
+            {
+                modal: true,
+                detail: l10n.t('Note: You can disable these URL handling confirmations in the extension settings.'),
+            },
             openSetup,
         );
 
