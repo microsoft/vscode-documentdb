@@ -243,6 +243,29 @@ describe('globalUriHandler — connection confirmation', () => {
     });
 });
 
+describe('globalUriHandler — connection target validation', () => {
+    it('rejects a collection without a database before storage lookup or confirmation', async () => {
+        const connectionString = encodeURIComponent('mongodb://alpha.example:27017');
+
+        const error = await runHandler('/connect', `connectionString=${connectionString}&collection=orders`);
+
+        expect(error?.message).toContain('specifies a collection without a database');
+        expect(lastTelemetry.failureStage).toBe('validateCollectionTarget');
+        expect(mockGetAllConnections).not.toHaveBeenCalled();
+        expect(vscode.window.showInformationMessage).not.toHaveBeenCalled();
+    });
+
+    it('accepts the database in the connection-string path as the collection dependency', async () => {
+        (vscode.window.showInformationMessage as jest.Mock).mockResolvedValue(undefined);
+        const connectionString = encodeURIComponent('mongodb://alpha.example:27017/sales');
+
+        const error = await runHandler('/connect', `connectionString=${connectionString}&collection=orders`);
+
+        expect(error).toBeUndefined();
+        expect(mockGetAllConnections).toHaveBeenCalledTimes(1);
+    });
+});
+
 describe('globalUriHandler — the verb list is a security boundary', () => {
     // The tempting implementation of a "command switch" maps the verb onto a VS Code command id.
     // The extension has commands that delete a container and copy a password to the clipboard, so

@@ -308,6 +308,15 @@ async function handleConnectionStringRequest(
         }
     }
 
+    if (params.collection && !selectedDatabase) {
+        context.telemetry.properties.failureStage = 'validateCollectionTarget';
+        throw new Error(
+            l10n.t(
+                'This DocumentDB link specifies a collection without a database. Add a database parameter or include the database in the connection string.',
+            ),
+        );
+    }
+
     // Mask sensitive values in telemetry
     maskSensitiveValuesInTelemetry(context, parsedCS);
 
