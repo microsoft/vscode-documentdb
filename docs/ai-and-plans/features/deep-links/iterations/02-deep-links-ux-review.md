@@ -20,13 +20,11 @@
 
 ## How this review was run
 
-This document is currently at the **pre-assessment** stage. An AI assistant inventoried the
-interaction paths, traced each terminal state at the reviewed commit, and seeded code-backed flags.
-The hands-on pass is still pending: a person should exercise each journey and dictate what they
-observe, after which each item can be confirmed, reprioritized, or closed. Items are grouped and
-ordered **by priority**; each carries an **Observation**, a **Finding**, a **Suggestion**, and a
-**Status**. Heavier design questions with real trade-offs are pulled into
-[Open ideas](#open-ideas--options-pros--cons).
+An AI assistant inventoried the interaction paths, traced each terminal state at the reviewed
+commit, and seeded code-backed flags. The operator then accepted all four findings and specified
+the intended behavior for each. Iteration 1 implemented and verified each item in a dedicated
+commit. The original observations remain below as review history; each item now also records its
+decision, implementation, verification, and commit reference.
 
 ## Legend
 
@@ -162,9 +160,10 @@ native confirmation dialogs and should be checked for state clarity during the h
 The PR turns the handler from a connection-only endpoint into a small, allow-listed router:
 legacy links and `/connect` enter the existing connection flow, while `/local` opens the
 DocumentDB Local setup after one lightweight confirmation. Routing failures use one consistent
-toast-and-output surface. The main pre-assessment risks are that malformed `connect` routes and
-invalid collection parameter combinations still perform partial work, and that connection
-confirmations do not identify the target supplied by an untrusted external link.
+toast-and-output surface. At the reviewed commit, malformed `connect` routes and invalid collection
+parameter combinations could still perform partial work, and connection confirmations did not
+identify the target supplied by an untrusted external link. Iteration 1 addressed all three risks
+and removed the internal error prefix identified by the polish finding.
 
 ---
 
@@ -172,10 +171,10 @@ confirmations do not identify the target supplied by an untrusted external link.
 
 | #   | Priority | Item                                                   | Status  |
 | --- | -------- | ------------------------------------------------------ | ------- |
-| 1   | **P1**   | `/connect` silently accepts path qualifiers            | 🟠 Open |
-| 2   | **P1**   | Connection confirmation does not identify the target   | 🟠 Open |
-| 3   | **P1**   | `collection` without a database can silently degrade   | 🟠 Open |
-| 4   | **P2**   | Malformed-link errors lead with internal "URI" wording | 🟠 Open |
+| 1   | **P1**   | `/connect` silently accepts path qualifiers            | ✅ Implemented |
+| 2   | **P1**   | Connection confirmation does not identify the target   | ✅ Implemented |
+| 3   | **P1**   | `collection` without a database can silently degrade   | ✅ Implemented |
+| 4   | **P2**   | Malformed-link errors lead with internal "URI" wording | ✅ Implemented |
 
 ---
 
@@ -187,7 +186,7 @@ No P0 items were pre-discovered.
 
 ### 1. `/connect` silently accepts path qualifiers ⚠️
 
-**Priority:** P1 · **Status:** 🟠 Open
+**Priority:** P1 · **Status:** ✅ Implemented
 
 **Observation:** Code inspection shows that `/connect/anything` is treated as `/connect` and can
 add or open a connection. Confirm live with a harmless local test connection.
@@ -207,9 +206,20 @@ add or open a connection. Confirm live with a harmless local test connection.
 extracting the connection string or performing any side effect. Add route tests for
 `/connect/anything` and `/connect/extra/path`.
 
+> **Decision (Iteration 1):** `connect` accepts no path qualifiers; reject any extra segment.
+> **Reason:** each link should name exactly one supported action, without ignored verbs or
+> qualifiers that could make a malformed link perform an unintended connection action.
+
+✅ **Implemented (Iteration 1):** added an explicit `connect` path guard before parameter
+extraction and covered one- and two-segment qualifiers. Files:
+[`src/vscodeUriHandler.ts`](../../../../../src/vscodeUriHandler.ts),
+[`src/vscodeUriHandler.test.ts`](../../../../../src/vscodeUriHandler.test.ts). Commit:
+[`85cafbae`](https://github.com/microsoft/vscode-documentdb/commit/85cafbae). Verified via focused
+Jest route-parsing tests and `npm run build`.
+
 ### 2. Connection confirmation does not identify the target ⚠️
 
-**Priority:** P1 · **Status:** 🟠 Open
+**Priority:** P1 · **Status:** ✅ Implemented
 
 **Observation:** Before storing or opening a connection supplied by an external page, the modal
 only says that a DocumentDB connection will be opened or added. The user cannot tell which host or
@@ -232,9 +242,21 @@ host(s), optional database/collection destination, and whether the link will add
 or open an existing one. Never display the password or full connection string. See
 [O1](#o1-how-much-of-the-connection-target-should-the-confirmation-preview-item-2).
 
+> **Decision (Iteration 1):** identify the connection and optional destination, with each value on
+> its own line. **Reason:** users need a readable consent prompt rather than a wall of text, and the
+> existing folder/index confirmation pattern already establishes line-separated details.
+
+✅ **Implemented (Iteration 1):** both new- and existing-connection confirmations now show a
+sanitized connection label followed by optional database and collection lines, a blank separator,
+and the action explanation. Passwords and full connection strings are never rendered. Files:
+[`src/vscodeUriHandler.ts`](../../../../../src/vscodeUriHandler.ts),
+[`src/vscodeUriHandler.test.ts`](../../../../../src/vscodeUriHandler.test.ts). Commit:
+[`3eb60bc8`](https://github.com/microsoft/vscode-documentdb/commit/3eb60bc8). Verified via focused
+Jest confirmation tests, including password non-disclosure assertions, and `npm run build`.
+
 ### 3. `collection` without a database can silently degrade ⚠️
 
-**Priority:** P1 · **Status:** 🟠 Open
+**Priority:** P1 · **Status:** ✅ Implemented
 
 **Observation:** A link with `collection=orders` but no resolvable database still adds or opens the
 connection, then ends at the connection instead of opening the requested collection. No message
@@ -257,11 +279,25 @@ explains that part of the request was ignored.
 available, before confirmations or storage changes. Clarify in the manual whether a database in
 the connection string satisfies the dependency, and add tests for both cases.
 
+> **Decision (Iteration 1):** treat a collection without a resolvable database as invalid input and
+> reject it early. **Reason:** a malformed destination must not degrade into a partial connection
+> action or leave storage side effects.
+
+✅ **Implemented (Iteration 1):** after resolving the database from either the query parameter or
+connection-string path, the handler rejects an orphaned collection before storage lookup,
+confirmation, or persistence. The public manual now states both valid database sources. Files:
+[`src/vscodeUriHandler.ts`](../../../../../src/vscodeUriHandler.ts),
+[`src/vscodeUriHandler.test.ts`](../../../../../src/vscodeUriHandler.test.ts),
+[`docs/user-manual/how-to-construct-url.md`](../../../../user-manual/how-to-construct-url.md).
+Commits: [`29335d5d`](https://github.com/microsoft/vscode-documentdb/commit/29335d5d) (behavior and
+tests), [`06871f93`](https://github.com/microsoft/vscode-documentdb/commit/06871f93) (public
+contract). Verified via focused Jest target-validation tests and `npm run build`.
+
 ## P2 — Polish, expectation, or feature gap
 
 ### 4. Malformed-link errors lead with internal "URI" wording ⚠️
 
-**Priority:** P2 · **Status:** 🟠 Open
+**Priority:** P2 · **Status:** ✅ Implemented
 
 **Observation:** Invalid routes ultimately display messages such as "Failed to process URI: This
 DocumentDB link...". The actionable part is present, but it follows an implementation-oriented
@@ -280,13 +316,25 @@ prefix and uses a different term from the confirmations and manual.
 in telemetry/output diagnostics. If a prefix is retained, use the user-facing term "link" and avoid
 restating that processing failed.
 
+> **Decision (Iteration 1):** surface the actionable underlying error directly. **Reason:** users
+> interact with a link, not an internal URI-processing mechanism, and the prefix adds no recovery
+> information.
+
+✅ **Implemented (Iteration 1):** removed the `Failed to process URI` wrapper while retaining
+`failureStage` and `errorName` telemetry. Files:
+[`src/vscodeUriHandler.ts`](../../../../../src/vscodeUriHandler.ts),
+[`src/vscodeUriHandler.test.ts`](../../../../../src/vscodeUriHandler.test.ts). Commit:
+[`b8775d46`](https://github.com/microsoft/vscode-documentdb/commit/b8775d46). Verified via focused
+Jest error-surfacing/telemetry tests and `npm run build`.
+
 ## P3 — Nice-to-have / cosmetic / acknowledged
 
 No P3 items were pre-discovered.
 
 ## Implemented
 
-No UX-review items have been implemented yet.
+Iteration 1 implemented all four findings. Each item above records its decision, dedicated commit,
+files, and focused verification.
 
 ---
 
@@ -295,7 +343,14 @@ No UX-review items have been implemented yet.
 A running record of each fix pass. Items still 🟠 Open at the end of an iteration roll into the
 next one; nothing is dropped without a terminal status.
 
-No implementation iteration has started.
+### Iteration 1 — completed 2026-09-02
+
+- P1.1: strict `/connect` path validation — [`85cafbae`](https://github.com/microsoft/vscode-documentdb/commit/85cafbae)
+- P1.2: readable, sanitized confirmation targets — [`3eb60bc8`](https://github.com/microsoft/vscode-documentdb/commit/3eb60bc8)
+- P1.3: early collection/database dependency validation — [`29335d5d`](https://github.com/microsoft/vscode-documentdb/commit/29335d5d)
+- P2.4: direct actionable link errors — [`b8775d46`](https://github.com/microsoft/vscode-documentdb/commit/b8775d46)
+
+No findings remain open or need to carry into another iteration.
 
 ---
 
@@ -304,7 +359,7 @@ No implementation iteration has started.
 Genuinely open design questions with real trade-offs. Recommendations are suggestions to react to,
 not decisions.
 
-### O1. How much of the connection target should the confirmation preview? (item 2)
+### O1. How much of the connection target should the confirmation preview? (item 2, resolved)
 
 | Option                             | Pros                                                            | Cons                                                            |
 | ---------------------------------- | --------------------------------------------------------------- | --------------------------------------------------------------- |
@@ -315,6 +370,10 @@ not decisions.
 > 💡 **Suggested:** **B**, with bounded/truncated fields and no password, because the modal is the
 > only review point before the handler stores or opens external content.
 
+> **Resolved (Iteration 1):** selected **B**, rendered as separate connection, database, and
+> collection lines. The connection uses a sanitized label; passwords and full connection strings
+> are excluded.
+
 ---
 
 ## Appendix A — current flow (reference)
@@ -323,23 +382,23 @@ not decisions.
 
 1. VS Code activates the extension and passes the URL to `globalUriHandler`.
 2. An empty path permanently defaults to `connect`; recognized verbs are matched
-   case-insensitively.
+  case-insensitively. `/connect` rejects all path qualifiers.
 3. Unknown verbs, invalid local qualifiers, invalid connection parameters, and downstream lookup
    failures all throw localized errors.
-4. `callWithTelemetryAndErrorHandling` writes each thrown error to the output channel and shows a
-   non-modal error toast. It does not rethrow to the URI registration boundary.
+4. `callWithTelemetryAndErrorHandling` writes each actionable thrown error to the output channel
+  and shows a non-modal error toast. The handler retains failure diagnostics in telemetry without
+  adding an internal URI-processing prefix to the user-facing message.
 
 ### Connect flow
 
-1. Parse the connection string and optional destination, mask sensitive telemetry values, and
-   detect an existing matching connection.
-2. For a new connection, optionally confirm the storage change, focus the Connections View, save
-   the connection, and refresh the tree.
-3. Optionally confirm opening, then show notification and tree progress while revealing the
+1. Parse the connection string and optional destination; reject a collection with no database
+  available from either the parameter or connection-string path.
+2. Mask sensitive telemetry values and detect an existing matching connection.
+3. For a new connection, optionally confirm the storage change, focus the Connections View, save
+   the connection, and refresh the tree. Confirmations show line-separated sanitized target data.
+4. Optionally confirm opening, then show notification and tree progress while revealing the
    connection or database.
-4. When both database and collection resolve, optionally confirm and open the Collection View.
-   Otherwise the flow ends at the revealed tree target; a requested collection without a database
-   is currently ignored.
+5. When both database and collection resolve, optionally confirm and open the Collection View.
 
 ### Local flow
 
