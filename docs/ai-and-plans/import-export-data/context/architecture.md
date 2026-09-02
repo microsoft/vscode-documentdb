@@ -19,11 +19,142 @@ Each feature has its own `WebviewController` subclass and a dedicated tRPC route
 
 ### Task API Layer
 
-All long-running operations (export write, import insert) run as extension tasks:
+All long-running operations run as `Task` instances registered with the shared singleton `TaskService` (`src/services/taskService/taskService.ts`). `TaskService` is the lifecycle registry and event aggregator; it is not a separate service instance for each feature. Each operation gets its own task instance and task type.
 
-- Progress reporting streamed to the webview via tRPC subscription.
-- Cancellation tokens propagated from the webview through to the database adapter.
-- Errors, telemetry events, and cleanup (partial file removal on cancel/failure) handled by the task lifecycle.
+Task instances planned for this feature are:
+
+| Task type | Scope | Responsibility |
+|---|---|---|
+| `schema-analysis-collection` | Collection | Read documents in batches and produce the shared analysis snapshot used to build the confirmed contract. |
+| `schema-analysis-database` | Database | Analyze selected collections and aggregate shared per-collection analysis snapshots. |
+| `export-collection` | Collection | Stream documents, transform rows, and write the collection workbook or CSV output. |
+| `export-database` | Database | Coordinate collection exports, create temporary workbooks, and package the final ZIP. |
+| `import-archive-inspection` | Archive | Extract and validate a large ZIP and detect sheets or files. |
+| `import-collection` | Collection | Read rows, reconstruct documents, validate, and insert batches. |
+| `import-database` | Database | Coordinate selected sheet imports and aggregate the import summary. |
+
+Small bounded operations such as listing collections, loading a small preview, or validating a small configuration remain regular tRPC queries or mutations. They do not need a task unless their cost or cancellation requirements become user-visible.
+
+Every feature task must:
+
+- Extend `Task` and implement `doWork(signal, context)`.
+- Perform setup and point-in-time validation in `onInitialize`.
+- Check and forward the `AbortSignal` to readers, writers, parsers, and database adapters.
+- Call `updateProgress(progress, message)` using bounded, throttled updates.
+- Implement `onDelete` for closing cursors, streams, writers, temporary directories, and other resources.
+- Implement `ResourceTrackingTask` when it reads from or writes to a connection, database, or collection.
+- Record feature-specific telemetry using the task telemetry context; the base class records lifecycle telemetry.
+
+The task lifecycle is:
+
+```mermaid
+sequenceDiagram
+    participant W as Webview
+    participant R as tRPC router
+    participant S as TaskService
+    participant T as Feature Task
+    participant A as DB/File/Schema Adapter
+
+    W->>R: start operation with confirmed config
+    R->>T: construct task
+    R->>S: registerTask(task)
+    R->>T: start()
+    T->>A: initialize and validate
+    T-->>S: state/status events
+    R-->>W: taskId
+    W->>R: subscribe(taskId)
+    loop Until terminal state
+        T->>A: read, transform, write, or insert
+        T-->>S: progress/status event
+        S-->>R: aggregated task event
+        R-->>W: progress/status update
+    end
+    W->>R: cancel(taskId), if requested
+    R->>T: stop()
+    T->>A: abort and clean up
+    T-->>W: Completed, Failed, or Stopped
+    R->>S: deleteTask(taskId) after final result is available
+```
+
+Task status is identified by `taskId`, not by a webview instance. The router must reject unknown task IDs and must verify that the task belongs to the requesting controller/session before returning status or accepting cancellation. `Task.start()` only starts the task; completion is observed through task events or a status query.
+
+The existing `TaskProgressReportingService` may also monitor registered tasks and show VS Code notification progress. Import/export webviews need a tRPC status adapter subscribing to `TaskService.onDidChangeTaskStatus` and `onDidChangeTaskState`. The product should choose one primary progress surface per operation to avoid duplicate notifications; the webview is the primary surface for operations launched from these webviews.
+
+Task terminal results must contain the operation summary, error category, partial-result details, and cleanup warnings where applicable. The task should remain registered until the router has delivered the terminal result, then be deleted through `TaskService.deleteTask()`.
+
+### Layered Schema Analysis and Ownership
+
+`SchemaAnalyzer` is a required shared analysis foundation for this feature. The ownership model is layered rather than placing the entire import/export contract in either the analyzer or the webview feature.
+
+The initial source adapters are Azure DocumentDB and Mongo-compatible collections. Each adapter supplies documents and source metadata through the database-neutral adapter interfaces. Both sources must feed the same shared analyzer input model so that schema behavior does not diverge by provider. Future CLI and migration tools should consume the reusable analyzer package directly; they must not depend on the VS Code extension's `SchemaStore`.
+
+```mermaid
+flowchart LR
+    A[DocumentDB adapter] --> C[Shared SchemaAnalyzer]
+    B[Mongo collection adapter] --> C
+    C --> D[Shared document schema + analysis diagnostics]
+    D --> E[SchemaStore: VS Code cache]
+    D --> F[ExportSchema adapter]
+    D --> G[ImportSchema adapter]
+    F --> H[User confirms export contract]
+    G --> I[User confirms import mapping]
+    H --> J[Export task]
+    I --> K[Import task]
+    D --> L[Future CLI / migration consumers]
+```
+
+Each layer has one owner:
+
+| Layer | Owner | Responsibility |
+|---|---|---|
+| Source document access | DocumentDB or Mongo adapter | Read documents, expose source metadata, normalize provider-specific access, and preserve source type information. |
+| Shared document analysis | `SchemaAnalyzer` package | Incrementally infer fields, nesting, BSON/JSON types, occurrence information, array shapes, and analysis diagnostics from documents. |
+| Shared validation | Analyzer package validation APIs | Validate documents or reconstructed import records against an analyzed or supplied schema, report type/shape/path violations, and expose compatibility diagnostics. This is an extension of the current inference package, not a responsibility of `SchemaStore`. |
+| VS Code schema cache | `SchemaStore` | Cache analyzer results by stable cluster, database, and collection identifiers for reuse by extension surfaces. It is not the canonical cross-tool storage layer. |
+| Operation contract | Import/export pipeline | Convert the shared document schema into `ExportSchema` or `ImportSchema`, apply file-specific rules, and freeze the user-confirmed mapping before execution. |
+| Execution lifecycle | `TaskService` | Run analysis, export, and import tasks with progress, cancellation, cleanup, telemetry, and resource conflict handling. |
+
+Schema ownership therefore means:
+
+- `SchemaAnalyzer` owns what the documents look like and the reusable analysis/validation results.
+- `SchemaStore` owns only the extension-local cache of those results.
+- Import/export owns how those results map to sheets, columns, array companions, and import reconstruction.
+- The user-confirmed `ExportSchema` or `ImportSchema` is the immutable execution contract for a specific operation.
+
+The analyzer must participate in both directions:
+
+- **Export:** adapters stream a bounded analysis sample through `SchemaAnalyzer`; the pipeline converts the result into an `ExportSchema`; the user confirms field mappings and array policies; the export task executes against that frozen contract.
+- **Import:** the file adapter discovers file structure and mappings; rows are reconstructed into candidate documents; the shared analyzer validation layer checks paths, types, required fields, and array shapes before insertion; the import task reports row-level diagnostics according to the selected error policy.
+
+The analyzer should not own Excel/CSV sheet names, column separators, companion-sheet layout, or row compression. Those remain operation-contract concerns. Conversely, export/import tasks must not implement a second provider-specific schema inference algorithm.
+
+`SchemaStore` can be populated when the analysis is useful to other VS Code features, but export/import execution must use a task-owned snapshot of the analysis and confirmed contract rather than reading a mutable live cache. This preserves consistent output even if additional documents are observed later.
+
+### Task Resource and Conflict Policy
+
+Feature tasks use the existing hierarchical resource model:
+
+```typescript
+interface ResourceDefinition {
+    clusterId?: string;
+    databaseName?: string;
+    collectionName?: string;
+}
+```
+
+Before registering or starting a task, the router or command checks `TaskService.getConflictingTasks(...)`. Typical declarations are:
+
+| Operation | Resources |
+|---|---|
+| Collection schema analysis | Source collection |
+| Database schema analysis | Database, or each selected collection if analyzed independently |
+| Collection export | Source collection |
+| Database export | Source database and active collection |
+| Collection import | Destination collection |
+| Database import | Destination database and active destination collection |
+
+Resource identifiers must use the stable `clusterId`, never the tree item `treeId`. Conflict handling should explain the blocking task to the user and avoid starting a second operation against the same hierarchical resource. Independent collections or clusters may proceed concurrently when the adapters and filesystem destinations support it.
+
 
 ### Database-Neutral Adapter Pattern
 
@@ -53,6 +184,8 @@ src/webviews/import-export
     ├── exportDataContext.ts          # Context + state types
     ├── exportDataController.ts       # WebviewController subclass
     ├── exportDataRouter.ts           # tRPC router
+    ├── exportDataTasks.ts             # Task factories and task-result types
+    ├── importDataTasks.ts             # Task factories and task-result types
     ├── components/
     ├── hooks/
     ├── types/
@@ -82,44 +215,52 @@ The diagram below covers both Collection and Database source paths in a single f
 ```mermaid
 flowchart TD
     A([User clicks Export Data]) --> B[Open Export Webview]
-    B --> C[User reviews description & clicks Proceed]
+    B --> C[User reviews description & clicks <br />Proceed]
     C --> D{Source type?}
 
-    D -->|Collection| E[Fetch documents from collection]
+    D -->|Collection| E[Start schema-analysis-collection\n task]
     D -->|Database| F[List all collections in database]
 
-    F --> G[Display collection list in left panel\nEach marked as Pending\nArray field indicator chip shown]
+    F --> G[Display collection list in left panel<br/>Each marked as Pending<br/>Array field indicator chip shown]
     G --> H[User selects a collection to configure]
     H --> E
 
-    E --> I[Analyze documents\nDetect nested objects & inconsistent properties\nClassify array fields: array-of-objects · array-of-scalars · array-empty]
-    I --> J[Generate ExportSchema\nScalar fields: Required + Optional\nCompanion sheet schema per array-of-objects or array-of-scalars field]
-    J --> K[Push ExportSchema to webview — field discovery is advisory]
-    K --> L[User reviews columns\nTabbed preview: main sheet + one companion tab per array field\nField list: scalar section + array section]
+    E --> I[Task reads documents in batches<br/>Analyze nested objects & inconsistent properties<br/>Classify array fields: array-of-objects · array-of-scalars · array-empty]
+    I --> J[Generate ExportSchema<br/>from SchemaAnalyzer output<br/>Scalar fields: Required + Optional<br/>Companion sheet schema per array field]
+    J --> K[Analysis completes<br/>Return shared analysis + ExportSchema<br/>User confirms the execution contract]
+    K --> L[User reviews columns<br/>Tabbed preview: main sheet + one companion tab per array field<br/>Field list: scalar section + array section]
 
     L --> M{Nested Property mode?}
     M -->|No| N[Confirm column layout — applied per sheet independently]
     M -->|Yes| O[User enters separator character]
-    O --> P[Regenerate preview with separator\nApplied independently per sheet]
+    O --> P[Regenerate preview with separator<br/>Applied independently per sheet]
     P --> N
 
-    N --> Q{Database source with\nmore collections?}
+    N --> Q{Database source with<br/>more collections?}
     Q -->|Yes| H
     Q -->|No / all configured| R[User initiates export]
 
-    R --> S[Extension task starts\nProgress · Cancellation · Telemetry]
-    S --> T[For each document:\nMain sheet row — scalar fields + array count columns\nCompanion rows — one row per array element per array field]
+    R --> S[Register export-collection or export-database task<br/>TaskService lifecycle · Progress · Cancellation · Telemetry]
+    S --> T[For each document:<br/>Main sheet row — scalar fields + array count columns<br/>Companion rows — one row per array element per array field]
 
-    T --> U{Unexpected field\nencountered?}
+    T --> U{Unexpected field<br/>encountered?}
     U -->|Ignore — default| V[Continue export]
     U -->|Abort| W([Stop task — user revisits schema])
 
-    V --> X[Write main sheet + companion sheets\nvia format adapter — CSV or Excel]
+    V --> X[Write main sheet + companion sheets<br/>via format adapter — CSV or Excel]
     X --> Y{Source type?}
-    Y -->|Collection| Z([Export complete\nSingle .xlsx or zip-of-CSV files\nReport results])
-    Y -->|Database| AA[Package each collection workbook into .zip archive\nTemp directory → output archive]
-    AA --> AB([Export complete\nZip archive — one workbook per collection\nReport results per collection + totals])
+    Y -->|Collection| Z([Export complete<br/>Single .xlsx or zip-of-CSV files<br/>Report results])
+    Y -->|Database| AA[Package each collection workbook into .zip archive<br/>Temp directory → output archive]
+    AA --> AB([Task completes<br/>Export complete<br/>Zip archive — one workbook per collection<br/>Report results per collection + totals])
 ```
+
+#### Export Task Orchestration
+
+- Collection export creates one `export-collection` task after the schema contract is confirmed. The task freezes the contract before opening the document cursor.
+- Database export creates one `export-database` task. It owns temporary output and ZIP packaging and processes each configured collection using the same shared export pipeline. Child collection work may be implemented as internal phases rather than separately registered tasks unless independent cancellation and progress ownership are required.
+- Schema analysis is a separate `schema-analysis-collection` or `schema-analysis-database` task when it scans beyond the bounded preview. The task returns a snapshot to the webview and may populate `SchemaStore` for other VS Code consumers, but export execution always uses the task-owned snapshot and the user-confirmed contract.
+- A task must not mutate the confirmed field contract after execution begins. Runtime shape drift is handled by the configured unexpected-field policy.
+- Cancellation stops the active cursor and writers, removes partial files according to the failure policy, and ends in `Stopped`. A writer or packaging error ends in `Failed` with the relevant stable error category.
 
 ### Export Edge Cases and Failure Modes
 
@@ -351,40 +492,83 @@ The diagram covers both Collection and Database destination paths. The Database 
 flowchart TD
     A([User clicks Import Data]) --> B[Open Import Webview]
     B --> C[User selects destination type & uploads zip file]
-    C --> D[Server extracts zip & detects contents]
-    D --> E[Display zip preview with detected collections]
-    E --> F{User confirms?}
-    F -->|No| G([Cancel or re-upload])
-    F -->|Yes| H{Destination type?}
+    C --> D{Archive inspection required?}
+    D -->|Small archive| E[Validate and detect contents]
+    D -->|Large archive| F[Start import-archive-inspection task]
+    F --> G[Task extracts ZIP & detects contents]
+    G --> E
+    E --> H[Display ZIP preview with detected collections]
+    H --> I{User confirms?}
+    I -->|No| J([Cancel or re-upload])
+    I -->|Yes| K{Destination type?}
 
-    H -->|Collection| I[Detect array patterns in single sheet\nCompanion sheets · Indexed tabular · JSON-in-cell]
-    H -->|Database| J[List all sheets from zip]
-    J --> K[For each sheet: detect array patterns]
-    K --> L[Display detected collections with array indicators]
-    L --> M[User selects, renames, or excludes collections]
-    M --> N[User clicks Proceed]
-    N --> I
+    K -->|Collection| L[Detect array patterns in single sheet<br/>Companion sheets · Indexed tabular · JSON-in-cell]
+    K -->|Database| M[List all sheets from ZIP]
+    M --> N[For each selected sheet: detect array patterns]
+    N --> O[Display detected collections with array indicators]
+    O --> P[User selects, renames, or excludes collections]
+    P --> Q[User clicks Proceed]
+    Q --> L
 
-    I --> O[Classify array fields by pattern\nCompanion sheets matched by naming\nIndexed columns grouped by base path and index\nJSON-in-cell columns parsed]
-    O --> P[Analyze column names + array patterns\nFlat vs separator-inferred nesting\nDot-notation inference applied]
-    P --> Q[Generate sample schema with array reconstruction\nPush to webview]
-    Q --> R[User reviews source record + resulting JSON document with arrays\nNavigate bounded preview records]
+    L --> R[Classify array fields by pattern<br/>Companion sheets matched by naming<br/>Indexed columns grouped by base path and index<br/>JSON-in-cell columns parsed]
+    R --> S[Analyze column names + array patterns<br/>Flat vs separator-inferred nesting<br/>Dot-notation inference applied]
+    S --> T[Generate sample schema with array reconstruction<br/>Push to webview]
+    T --> U[User reviews source record + resulting JSON document with arrays<br/>Navigate bounded preview records]
 
-    R --> S[User customizes schema per sheet\nRename · Rearrange · Move · Type config · Defaults]
-    S --> T[Configure array reconstruction\nSparse vs compact policy per array field\nSelect array pattern if multiple detected]
-    T --> U[User confirms schema & clicks Proceed]
+    U --> V[User customizes schema per sheet<br/>Rename · Rearrange · Move · Type config · Defaults]
+    V --> W[Configure array reconstruction<br/>Sparse vs compact policy per array field<br/>Select array pattern if multiple detected]
+    W --> X[User confirms schema & clicks Proceed]
 
-    U --> V[Extension task starts\nProgress · Cancellation · Telemetry]
-    V --> W[Reconstruct arrays from source pattern\nJoin companion sheets on _sourceDocId\nGroup indexed columns by index\nParse JSON strings]
-    W --> X[Transform & validate records per confirmed schema]
+    X --> Y[Register import-collection or import-database task<br/>TaskService lifecycle · Progress · Cancellation · Telemetry]
+    Y --> Z[Reconstruct arrays from source pattern<br/>Join companion sheets on _sourceDocId<br/>Group indexed columns by index<br/>Parse JSON strings]
+    Z --> AA[Transform & validate records per confirmed schema]
 
-    X --> Y{Error or conversion\nfailure?}
-    Y -->|Abort on error| Z([Stop task — report error and last written record])
-    Y -->|Skip invalid records| AA[Collect skipped-record summary\nContinue with valid records]
-    Y -->|Convert where possible| AB[Apply conversion\nLog unconverted values]
+    AA --> AB{Error or conversion<br/>failure?}
+    AB -->|Abort on error| AC([Task failed or stopped<br/>Report error and last written record])
+    AB -->|Skip invalid records| AD[Collect skipped-record summary<br/>Continue with valid records]
+    AB -->|Convert where possible| AE[Apply conversion<br/>Log unconverted values]
 
-    AA --> AC[Insert documents via DB adapter]
-    AB --> AC
+    AD --> AF[Insert documents via DB adapter]
+    AE --> AF
 
-    AC --> AD([Return import summary\nTotal · Success · Failed · Errors])
+    AF --> AG([Task completes<br/>Return import summary<br/>Total · Success · Failed · Errors])
 ```
+
+#### Import Task Orchestration
+
+- ZIP inspection is a regular request for small inputs. For large archives, `import-archive-inspection` owns extraction, validation, temporary-file cleanup, and progress.
+- Collection import creates one `import-collection` task after schema confirmation. The task owns row reading, array reconstruction, transformation, validation, batched insertion, and the row-level summary.
+- Database import creates one `import-database` task. It owns selected-sheet ordering, destination collection validation, per-collection summaries, and the overall result. Collection processing is an internal phase unless separate task visibility is needed.
+- Preview transformation must call the same database-neutral mapping and reconstruction functions used by the task. The task must not use a second implementation of preview rules.
+- `Abort`, `Skip`, and `Convert` policies are applied inside the task pipeline. Adapter failures such as duplicate IDs, throttling, and connectivity loss are classified separately from row conversion failures.
+- Cancellation stops readers and insertion batches, preserves the partial-write summary, and ends in `Stopped`. It must not be reported as a generic import failure.
+
+### Task Status Contract for tRPC
+
+The routers should expose a small task-facing contract rather than the concrete `Task` object:
+
+```typescript
+interface ImportExportTaskStatus {
+    readonly taskId: string;
+    readonly taskType: string;
+    readonly state: 'Pending' | 'Initializing' | 'Running' | 'Stopping' | 'Stopped' | 'Completed' | 'Failed';
+    readonly progress?: number;
+    readonly message?: string;
+    readonly result?: unknown;
+    readonly errorCategory?: string;
+    readonly errorMessage?: string;
+    readonly cleanupWarnings?: readonly string[];
+}
+```
+
+The extension host adapts `TaskService.onDidChangeTaskStatus` and `TaskService.onDidChangeTaskState` into the subscription payload. The webview may query the current status after reconnecting or missing an event. Cancellation is a mutation that resolves after `Task.stop()` has been requested; the terminal `Stopped` event confirms completion of cleanup.
+
+### Task Lifecycle Requirements and Limits
+
+- Register the task before starting it so progress subscribers cannot miss early lifecycle events.
+- Validate source/destination existence, output paths, format limits, archive structure, and conflict policy in `onInitialize` before streaming begins.
+- Keep task configuration immutable after registration. Store the confirmed schema, mapping, destination, and output policy in the task instance.
+- Do not register a task for every row or array element. Rows and elements are units of work inside the owning task; only independently observable operations become task instances.
+- Throttle progress events at the task or router boundary. Preserve exact counters and final summaries even when intermediate UI updates are coalesced.
+- Keep terminal task results available until the router has returned them. Then call `TaskService.deleteTask(taskId)` and release event subscriptions.
+- Use stable `clusterId` values for resource tracking and telemetry correlation; never use a mutable tree item ID.

@@ -68,6 +68,86 @@ Full page UI built with mock data first — verified visually before any logic i
   }
   ```
 
+- [ ] 02a — Define the shared schema-analysis and validation contract
+
+  Make `SchemaAnalyzer` a required shared dependency for the import/export pipeline. The contract must support both Azure DocumentDB and Mongo collection adapters and remain usable by future CLI and migration tools without depending on VS Code APIs.
+
+  The shared package currently provides incremental document analysis and JSON Schema output with BSON/type-occurrence metadata. Extend or wrap it with explicit analysis and validation contracts rather than duplicating inference inside the webview or database adapters.
+
+  ```typescript
+  interface SchemaAnalysisResult {
+    readonly schema: JSONSchema;
+    readonly knownFields: readonly FieldEntry[];
+    readonly documentCount: number;
+    readonly diagnostics: readonly SchemaDiagnostic[];
+  }
+
+  interface SchemaValidator {
+    validateDocument(document: Document, schema: JSONSchema): SchemaValidationResult;
+    validateImportBatch(documents: readonly Document[], schema: JSONSchema): SchemaValidationSummary;
+  }
+  ```
+
+  Validation must cover missing required paths, incompatible types, invalid array shapes, literal-key/path handling, and bounded-depth or unsupported-value diagnostics. Validation results must be database-neutral and suitable for export preview, import preflight, row-level import errors, and future migration compatibility checks.
+
+- [ ] 02b — Define the layered schema ownership and adapter flow
+
+  DocumentDB and Mongo collection adapters provide documents to the shared analyzer. `SchemaStore` may cache the resulting analysis for VS Code consumers, while CLI and migration tools consume the analyzer package directly. Import/export converts the shared analysis into a user-confirmed `ExportSchema` or `ImportSchema`, then freezes that contract before starting the execution task.
+
+  ```text
+  Source adapter -> SchemaAnalyzer -> analysis + validation diagnostics
+                  -> SchemaStore (VS Code cache, when needed by extension consumers)
+                  -> ExportSchema / ImportSchema adapter
+                  -> confirmed immutable task contract
+  ```
+
+  Do not put file layout rules in `SchemaAnalyzer`, and do not implement provider-specific schema inference in import/export tasks.
+
+- [ ] 02c — Define the shared task API and resource-tracking contract for import/export
+
+  Bring the plan in line with the architecture: every long-running operation is a `Task` registered with the singleton `TaskService`, not a one-off promise or ad hoc event stream.
+
+  ```typescript
+  interface ResourceDefinition {
+    clusterId?: string;
+    databaseName?: string;
+    collectionName?: string;
+  }
+
+  abstract class ResourceTrackingTask extends Task {
+    protected abstract readonly resources: ResourceDefinition[];
+    protected abstract doWork(signal: AbortSignal, context: TaskContext): Promise<void>;
+  }
+  ```
+
+  Add the specific task types to the contract plane:
+  - `schema-analysis-collection`
+  - `schema-analysis-database`
+  - `export-collection`
+  - `export-database`
+  - `import-archive-inspection`
+  - `import-collection`
+  - `import-database`
+
+  All registered tasks use stable `clusterId` values, never mutable tree item IDs, and must report terminal results through the `TaskService` status/state events.
+
+- [ ] 02d — Define the tRPC task status contract and router ownership rules
+
+  The webview subscribes to `TaskService.onDidChangeTaskStatus` / `onDidChangeTaskState`, and the router verifies the task belongs to the current controller/session before returning status or accepting cancellation.
+
+  ```typescript
+  interface ImportExportTaskStatus {
+    readonly taskId: string;
+    readonly state: 'queued' | 'running' | 'stopping' | 'stopped' | 'done' | 'failed';
+    readonly progress: number;
+    readonly message?: string;
+    readonly errorCategory?: string;
+    readonly cleanupWarnings?: readonly string[];
+  }
+  ```
+
+  This task contract is intentionally smaller than the concrete `Task` object; it is the API that the UI consumes.
+
 ### Scaffolding — Export Webview
 
 - [ ] 03 — Register `documentdb.exportData` command in `package.json` (menu contributions, keybinding placeholder) and `registerCommands.ts`
@@ -465,7 +545,7 @@ Full page UI built with mock data first — verified visually before any logic i
 
 ### Logic — Schema Analysis
 
-- [ ] 17 — Fetch the collection schema from the server — samples a bounded set of documents, walks all field paths depth-first, and classifies each as Required (in every sample) or Optional (in some). (`exportData.getSchema` tRPC query)
+- [ ] 17 — Fetch the collection analysis from the server — streams a bounded set of documents through the shared `SchemaAnalyzer`, then returns the analysis snapshot and the derived Required/Optional field information. (`exportData.getSchema` tRPC query)
 
   Samples up to N documents (e.g., 200), walks all paths depth-first, and classifies each path.
 
@@ -477,7 +557,7 @@ Full page UI built with mock data first — verified visually before any logic i
     Optional: ["coupon", "customer.city"]    ← present in some docs only
   ```
 
-- [ ] 18 — Build the flat property extractor — converts a nested document into a flat list of classified path entries. Scalar and nested-object paths are walked depth-first. Arrays are classified at the point they are encountered; their contents are not recursively expanded by the extractor.
+- [ ] 18 — Build the export schema adapter — converts `SchemaAnalyzer` output into the flat field entries used by the export contract. Scalar and nested-object paths are mapped depth-first; arrays are handed to the companion schema adapter rather than analyzed by a second provider-specific algorithm.
 
   Each path entry carries a `kind`: `scalar`, `array-of-objects`, `array-of-scalars`, or `array-empty`. Only `scalar` paths are added to the main sheet field list; array paths are handed to the companion schema discoverer (task A-LOGIC-02).
 
@@ -524,147 +604,56 @@ Full page UI built with mock data first — verified visually before any logic i
 
 ### Logic — Export Task
 
-- [ ] 21 — Lock in the confirmed field list as the export contract — takes the user's confirmed field selection, ordering, and rename choices and produces an immutable `FieldContract` used for the entire export run.
+- [ ] 21 — Define the export task types, immutable config, and resource conflict policy — including the `schema-analysis-*`, `export-collection`, and `export-database` task types from the architecture.
 
-  At the moment the user clicks Export, the current field selection is frozen. This snapshot never changes during the export run, guaranteeing a consistent file structure even if the collection schema changes mid-export.
+  The task surface is now owned by `TaskService`; each exported collection or database operation is a registered `Task` with a stable resource key (`clusterId`, database, collection) and a frozen config snapshot. The task must not mutate the confirmed schema after `start()` begins.
 
-  ```typescript
-  const contract: FieldContract[] = [
-    { sourcePath: 'orderId',       columnHeader: 'orderId',       included: true },
-    { sourcePath: 'customer.name', columnHeader: 'customer_name', included: true },
-    { sourcePath: 'coupon',        columnHeader: 'coupon',        included: true },
-  ];
-  // This array is Object.freeze'd and never mutated during the export run.
-  ```
+- [ ] 22 — Implement the shared task lifecycle and `TaskService` registration flow — `onInitialize`, `doWork(signal, context)`, `updateProgress`, `onDelete`, and terminal result handling.
 
-- [ ] 22 — Implement the DocumentDB document cursor adapter — the real (non-stub) `IExportSourceAdapter` that opens a server-side cursor over the target collection and streams documents page by page to the export pipeline.
-
-  Replaces the stub from Phase 1 task 12. Opens a real server-side cursor with a batch size, yielding pages of documents until the cursor is exhausted.
+  This task creates the base pattern used by both export and import, and it ensures the router exposes a small status contract instead of the full concrete `Task` object.
 
   ```typescript
-  class DocumentDBExportSourceAdapter implements IExportSourceAdapter {
-    async *openCursor(config: ExportConfig): AsyncIterable<Document> {
-      const cursor = collection.find({}).batchSize(200);
-      for await (const doc of cursor) {
-        yield doc;
-      }
-    }
-    async estimateCount(config: ExportConfig): Promise<number> {
-      return collection.estimatedDocumentCount();
-    }
+  class ExportCollectionTask extends ResourceTrackingTask {
+    protected readonly resources = [{ clusterId, databaseName, collectionName }];
+
+    public async onInitialize(): Promise<void> { /* validate output path + field contract */ }
+    public async doWork(signal: AbortSignal, context: TaskContext): Promise<void> { /* stream rows */ }
+    public override updateProgress(progress: number, message?: string): void { /* throttle */ }
+    public override onDelete(): void { /* close cursor + temp files */ }
   }
   ```
 
-- [ ] 23 — Start the export background task — validates the config, creates an extension task, and returns a task ID. Streams live progress events back to the webview. (`exportData.startExport` tRPC mutation, collection source)
+- [ ] 23 — Implement the DocumentDB document cursor adapter and the real export source contract — the non-stub `IExportSourceAdapter` that opens a server-side cursor and streams pages to the export pipeline.
 
-  The tRPC mutation that kicks off the export. Validates config first (field contract non-empty, output path writable), then launches an extension `Task` and returns its ID.
+  Replaces the stub from Phase 1 and follows the adapter contract described in the architecture: source reads are database-neutral, while DocumentDB-specific cursor logic is isolated in the adapter.
 
-  ```typescript
-  // Webview calls:
-  const { taskId } = await trpc.exportData.startExport.mutate({ config });
+- [ ] 24 — Start the export background task through the router — validate config, register the task with `TaskService`, then return the `taskId` to the webview. (`exportData.startExport` tRPC mutation, collection source)
 
-  // Extension host: validates config → creates Task → starts cursor → streams progress
-  ```
+  This is the first task that creates the runtime object. The router must reject unknown IDs, enforce session ownership, and expose task status via the subscription layer.
 
-- [ ] 24 — Build the document-to-row transformer — reads the value at each field contract path for every document and produces a fixed-length row. Missing fields produce empty cells; nested objects at a leaf are serialized as a JSON string.
+- [ ] 25 — Build the document-to-row transformer and unexpected-field detector — apply the confirmed contract per row, emit empty cells for missing fields, serialize leaf objects as JSON, and honor the selected `Ignore` / `Abort` policy.
 
-  For every document, reads the value at each contract path and produces a fixed-length array. The row length always equals the number of included fields.
+  This work must use the frozen field contract created when the user confirms the operation; runtime drift is handled by the configured unexpected-field policy rather than by mutating the contract in place.
 
-  ```
-  Contract: ["orderId", "customer.name", "coupon"]
+- [ ] 26 — Implement the CSV and Excel writers with cleanup guarantees — write the main sheet plus companion sheets, apply type mapping, enforce row/column limits, and delete partial files on cancel or write failure.
 
-  Doc: { orderId: 1003, customer: { name: "Ben" } }
-  Row: [1003, "Ben", ""]   ← coupon absent → empty string
+  The architecture requires both writers to be resilient to cancellation and to fail with stable error categories such as `write_error`, `encoding_error`, and `array_expansion_error`.
 
-  Doc: { orderId: 1004, metadata: { source: "web", v: 2 } }
-  Contract includes "metadata" as a leaf →
-  Row: [1004, "", '{"source":"web","v":2}']   ← nested object serialized as JSON string
-  ```
+- [ ] 27 — Connect live export progress to the webview via tRPC subscriptions — `TaskService.onDidChangeTaskStatus` / `onDidChangeTaskState` must be adapted to the UI-facing payload and the webview must consume it without duplicating notifications.
 
-- [ ] 25 — Build the unexpected-field detector — checks each incoming document's keys against the field contract and applies the user's chosen policy: continue silently (Ignore) or stop the task (Abort).
+  The product should choose one primary progress surface per operation; the webview is the primary progress surface for import/export operations launched from the webview.
 
-  Inspects every document's keys against the field contract produced in task 21. Applied before the row transformer.
+- [ ] 28 — Wire the Cancel button to `Task.stop()` and the router cancellation mutation — stop the cursor, close the writer, remove partial outputs, and end in `Stopped` only after cleanup has completed.
 
-  ```
-  Contract keys:  { orderId, total, coupon }
-  Document:       { orderId: 1, total: 5, discountCode: "D10" }
+  Cancellation must be idempotent and must not be reported as a generic export failure. If cleanup cannot delete every file, the task reports a cleanup warning.
 
-  Policy = Ignore  →  "discountCode" dropped; row [1, 5, ""] is written normally.
-  Policy = Abort   →  task stops. Error: "Unexpected field 'discountCode' at document index 412."
-  ```
+- [ ] 29 — Add telemetry and stable error categorization for the export lifecycle — started, completed, cancelled, and failed events plus feature-specific error taxonomy.
 
-- [ ] 26 — Implement the CSV file writer — streams export rows into a CSV file using the user-configured delimiter, quoting style, text encoding, and line ending.
+  This also includes task summary data such as completed collection counts, output path, warnings, and per-collection result breakdowns for database exports.
 
-  Opens a write stream, writes the header row first, then writes each row produced by task 24. Respects all advanced format options.
+- [ ] 30 — Package database export zip output — as a `export-database` task, iterate configured collections, write each workbook to a shared temp directory, then package the final zip archive and surface the archive path and per-collection summary to the webview.
 
-  ```
-  Config: delimiter=;  encoding=UTF-8  line ending=LF
-
-  orderId;customer_name;total
-  1001;Ana;45.5
-  1002;;90
-  1003;Ben;
-  ```
-
-- [ ] 27 — Implement the Excel file writer — streams rows into an `.xlsx` workbook with correct value-type mapping (dates, numbers, booleans, strings). Writes the main sheet first, then one companion worksheet per included array field in declaration order. Respects Excel sheet name, row, and column count limits.
-
-  Uses `exceljs` streaming mode so large collections do not exhaust memory. Stores each value with the correct Excel cell type so formulas and sorting work correctly. Values that begin with formula-like prefixes (`=`, `+`, `-`, `@`) are written as explicit text cells. System field columns (`_sourceDocId`, `_arrayIndex`) are always written as text.
-
-  ```
-  Sheet 1: orders (main)
-  _id (Text) | customer_name (Text) | total (Number) | items_count (Number) | tags_count (Number)
-  ord_001    | Alice                | 45.50          | 3                    | 2
-  ord_002    | Bob                  | 90.00          | 1                    | 1
-
-  Sheet 2: orders_items (companion — array-of-objects)
-  _sourceDocId (Text) | _arrayIndex (Number) | sku (Text) | qty (Number) | price (Number)
-  ord_001             | 0                    | A1         | 2            | 49.99
-  ord_001             | 1                    | B9         | 1            | 29.99
-  ord_002             | 0                    | D2         | 1            | 89.00
-
-  Sheet 3: orders_tags (companion — array-of-scalars)
-  _sourceDocId (Text) | _arrayIndex (Number) | value (Text)
-  ord_001             | 0                    | electronics
-  ord_001             | 1                    | sale
-  ```
-
-- [ ] 28 — Connect live export progress to the progress panel — updates the progress bar and status message each time the server emits a progress event. (`exportData.taskProgress` tRPC subscription)
-
-  The webview subscribes to the tRPC subscription and pushes each event into React state, which re-renders the progress bar and status text.
-
-  ```typescript
-  trpc.exportData.taskProgress.subscribe({ taskId }, {
-    onData(event) {
-      setProgress({ current: event.rowsProcessed, total: event.estimatedTotal });
-      setStatusMessage(`Exporting row ${event.rowsProcessed} of ~${event.estimatedTotal}`);
-    },
-  });
-  ```
-
-- [ ] 29 — Wire the Cancel button — sends a cancellation signal to the running export task, stops the file writer, and deletes the partial output file on disk. (`exportData.cancelTask` mutation)
-
-  Sends the cancellation mutation. The extension host closes the cursor, aborts the writer, and deletes the incomplete output file so no corrupt file is left behind.
-
-  ```typescript
-  // Webview:
-  await trpc.exportData.cancelTask.mutate({ taskId });
-
-  // Extension host:
-  cursor.close();
-  writer.abort();
-  fs.unlinkSync(partialFilePath);  // clean up partial file
-  ```
-
-- [ ] 30 — Add telemetry for the export flow — emit events for: export started (source type, format, field count), export completed (row count, duration), export cancelled, and export failed (error category).
-
-  Emits structured events at key lifecycle points so the team can understand usage patterns and failure rates.
-
-  ```typescript
-  telemetry.sendEvent('exportData/started',   { sourceType: 'collection', format: 'csv', fieldCount: 5 });
-  telemetry.sendEvent('exportData/completed', { rowCount: 1198, durationMs: 4200 });
-  telemetry.sendEvent('exportData/cancelled', {});
-  telemetry.sendEvent('exportData/failed',    { errorCategory: 'write_error' });
-  ```
+  This task must follow the database export requirements in the architecture: zip output is always required, partial zip cleanup is mandatory on failure or cancellation, and temp directories may remain available for manual recovery only when appropriate.
 
 ### Logic — Database Export
 
@@ -828,7 +817,7 @@ Full page UI built with mock data first — verified visually before any logic i
 
 - [ ] A-UI-04 — Build the array-of-objects companion sheet field management panel
 
-  Each array-of-objects companion tab has its own independent field list. System fields (`_sourceDocId`, `_arrayIndex`) have a disabled checkbox (always included), a tooltip, and a rename input that shows a `⚠ Renamed system field` badge when used. System fields are pinned to the first two column positions; drag handles are hidden for them. Element fields support include/exclude, rename, and drag-to-reorder. The Required/Optional section split applies to element fields.
+  Each array-of-objects companion tab has its own independent field list. System fields (`_sourceDocId`, `_arrayIndex`) have a disabled checkbox (always included), a tooltip, and a disabled rename control because join keys cannot be renamed. System fields are pinned to the first two column positions; drag handles are hidden for them. Element fields support include/exclude, rename, and drag-to-reorder. The Required/Optional section split applies to element fields.
 
   ```
   Tab: orders_items
@@ -1271,7 +1260,7 @@ Full page UI built with mock data first — verified visually before any logic i
   };
   ```
 
-- [ ] 22 — Parse columns and infer schema from the primary (main) sheet — for flat columns, infer types by scanning non-empty cells. For indexed tabular array columns, group by base path and index, infer element schema. For companion sheets, join and infer element schema. (`importData.getSchema` tRPC query)
+- [ ] 22 — Normalize file rows and build the import analysis — convert parsed cells and reconstructed array candidates into the shared analyzer input model, then return analyzer-backed types, paths, required/optional information, and diagnostics. File pattern detection remains an import adapter concern. (`importData.getSchema` tRPC query)
 
   ```typescript
   return {
@@ -1286,21 +1275,23 @@ Full page UI built with mock data first — verified visually before any logic i
 
 ### Logic — Import Task
 
-- [ ] 24 — Lock in the confirmed schema and array reconstruction policies — takes the user's confirmed field selection, array policies (compact vs sparse), nesting choices, and missing-value configs and produces an immutable contract used for the entire import run.
+- [ ] 24 — Lock in the confirmed schema and array reconstruction policies — take the user's confirmed field mapping, array policies (compact vs sparse), nesting choices, missing-value behavior, and error policy and freeze them into an immutable contract for the entire run.
 
-- [ ] 25 — Implement the DocumentDB document insert adapter — the real (non-stub) `IImportDestinationAdapter` that opens a connection and inserts documents in batches with error handling and retry logic.
+- [ ] 25 — Implement the import task lifecycle with `TaskService` — create `import-archive-inspection`, `import-collection`, and `import-database` task classes that extend the shared task base, invoke shared analyzer validation for reconstructed documents, and report lifecycle state along with schema/row progress.
 
-- [ ] 26 — Start the import background task — validates the config, creates an extension task, and returns a task ID. Streams live progress events back to the webview. (`importData.startImport` tRPC mutation)
+- [ ] 26 — Implement the DocumentDB document insert adapter and `ResourceTrackingTask` contract — the real (non-stub) `IImportDestinationAdapter` that opens a connection and inserts documents in batches with retry, duplicate, and throttling handling.
 
-- [ ] 27 — Build the array reconstruction logic — for each source record, reconstruct arrays from the detected pattern: join companion sheet rows, group indexed columns, or parse JSON strings. Produce a normalized document with nested arrays.
+- [ ] 27 — Start the import background task through the router — validate the zip file, archive contents, and destination; register the task with `TaskService`; return a `taskId`; and stream the webview-facing status payload. (`importData.startImport` tRPC mutation)
 
-- [ ] 28 — Build the record-to-document transformer — applies field mapping, type conversions, nesting (dot-notation to object tree), and missing-value policies to each source record.
+- [ ] 28 — Build the array reconstruction logic — for each source record, reconstruct arrays from the detected pattern: join companion sheet rows, group indexed columns, or parse JSON strings. Produce a normalized document with nested arrays.
 
-- [ ] 29 — Connect live import progress to the progress panel — updates the progress bar and status message each time the server emits a progress event. (`importData.taskProgress` tRPC subscription)
+- [ ] 29 — Build the record-to-document transformer — apply field mapping, type conversions, nesting (dot-notation to object tree), and missing-value policies to each source record while honoring the selected error policy.
 
-- [ ] 30 — Wire the Cancel button — sends a cancellation signal to the running import task, stops the insert operation, and reports the last successfully inserted record. (`importData.cancelTask` mutation)
+- [ ] 30 — Connect live import progress to the progress panel — use the task status contract and router subscription mechanism to update the progress bar and status message without duplicating notifications. (`importData.taskProgress` tRPC subscription)
 
-- [ ] 31 — Add telemetry for the import flow — emit events for: import started (format, array patterns detected, field count), import completed (row count, duration), import cancelled, and import failed (error category).
+- [ ] 31 — Wire the Cancel button to `Task.stop()` and final result propagation — stop the insert batch, preserve the partial-write summary, and end in `Stopped` after cleanup rather than reporting a generic import failure.
+
+- [ ] 32 — Add telemetry and stable error categories for the import flow — started, completed, cancelled, and failed events aligned to the required taxonomy (`file_format_error`, `zip_extraction_error`, `schema_detection_error`, `orphaned_rows_error`, `type_conversion_error`, `insert_error`, `cancelled`, `skip_record_warning`, etc.).
 
 ### Tests
 
@@ -1318,8 +1309,8 @@ Full page UI built with mock data first — verified visually before any logic i
 
 ### Array Support — Import
 
-> Tasks below extend Phase 3 with comprehensive array field support across three equally-primary patterns.
-> All decisions are locked: companion sheets are first-priority, indexed tabular is second, JSON-in-cell is third; always-zip input format; reconstruction policies are user-configurable.
+> Tasks below extend Phase 3 with support for three import array patterns.
+> The single precedence rule is locked: companion sheets take priority over indexed tabular, which takes priority over JSON-in-cell. Input remains zip-only and reconstruction policies are user-configurable.
 
 #### UI — Array Support
 
