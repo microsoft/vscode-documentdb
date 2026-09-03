@@ -30,7 +30,8 @@ evaluation exercises the full dependency graph without needing a database.
 
 ## Build & test
 
-Requires Node ≥ 22 (tested with 24.9.0) and npm. Everything else is a local devDependency.
+Requires Node ≥ 22 and npm (verified from a fresh clone on Node 22.22 and 24.19; CI uses 24).
+Everything else is a local devDependency — no global Bun or Node tooling needed.
 
 ```bash
 npm install
@@ -54,7 +55,15 @@ npm run test:bun
 `test/acceptance.mjs` encodes the make-or-break checklist: cold auto-spawn, client exits while
 daemon survives, second client attaches to the same pid, persistent eval state across separate
 invocations, worker threads inside the packaged artifact, 10 concurrent cold clients converging
-on one daemon, idle-timeout shutdown and restart, stop.
+on one daemon, idle-timeout shutdown and restart, stop — and, from inside the artifact, that it
+really is packaged (`packaged: true`) and built for this machine's `process.arch`.
+
+Knobs: `DDB_SPIKE_IDLE_MS` (daemon idle timeout; default 120 000 ms, the test uses 3 000) and
+`DDB_SPIKE_SPAWN_WAIT_MS` (how long a client waits for a freshly spawned daemon; default 10 000).
+`sea-config.json` is the minimal SEA config; the release config in design doc §4 adds
+`"useCodeCache": true` (client start 170 → 66 ms on Linux x64, §2.1) and
+`"execArgvExtension": "none"` (blocks `NODE_OPTIONS` injection, §2.3 #9) — add them and rebuild
+to see the difference.
 
 CI: [`.github/workflows/cli-packaging-spike.yml`](../../.github/workflows/cli-packaging-spike.yml)
 runs the same suite on native runners for linux/windows/macos × x64/arm64, plus a
@@ -91,4 +100,6 @@ one-Linux-runner Bun cross-compile job.
 - **Known spike-only bugs, deliberately left in this revision** (design doc §2.3 #5–8 and
   §2.4): the idle timer can fire during a long request; the client re-sends a request after a
   failure; the socket is created `0755` in `os.tmpdir()`; the daemon inherits the client's cwd
-  and environment; `mongodb@6` and `@7` are both bundled. Do not copy these into the real CLI.
+  and environment (which, with the resolution behavior above, is how a repository's
+  `node_modules` would end up inside the credential-holding process — §2.3 #14); `mongodb@6`
+  and `@7` are both bundled. Do not copy these into the real CLI.

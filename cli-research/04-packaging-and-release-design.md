@@ -4,9 +4,12 @@
 **Evidence:** working spike in [`spike/`](./spike/) + CI matrix in
 [`.github/workflows/cli-packaging-spike.yml`](../.github/workflows/cli-packaging-spike.yml)
 **Verified locally:** macOS arm64 (all acceptance checks green for both finalists, plus the
-unpackaged `node` baseline) and Linux x64 (WSL2, Node 24.19.0: SEA + baseline, rev 4). **Verified in CI:** 13/13 jobs green across all six OS/arch targets
+unpackaged `node` baseline) and Linux x64 (WSL2; rev 4: SEA, Bun, baseline and the probe from a
+fresh clone on Node 22.22.3 and 24.19.0). **Verified in CI:** 13/13 jobs green across all six OS/arch targets
 ([run 33568213084](https://github.com/microsoft/vscode-documentdb/actions/runs/33568213084),
-2026-09-01); per-target results and sizes in §2.2.
+2026-09-01) and again for rev 4 with the stricter assertions
+([run 33792725837](https://github.com/microsoft/vscode-documentdb/actions/runs/33792725837), 2026-09-03);
+per-target results and sizes in §2.2.
 **Rev 4** adds a working-directory module-resolution probe (§2.3 #14), code-cache and compressed-size
 measurements (§2.1), CI cost (§2.2), a map from your questions to sections (§1.2) and two notes for
 the auth model (§2.5); the revision notes in §10 list what changed.
