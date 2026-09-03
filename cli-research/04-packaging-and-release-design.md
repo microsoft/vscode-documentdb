@@ -679,8 +679,8 @@ folded into whatever becomes the real daemon; the clean-environment run, `proces
 `packaged` assertions, SHA-pinned actions and an exact Node pin in the workflow.
 
 Branch hygiene, for the record: `cli-research` is a research branch, not a merge candidate.
-The extension's root ESLint and `tsc` currently pick up `cli-research/spike/src`, so before any
-merge the folder is excluded from both, or (better) the spike moves to the CLI's own repo.
+The folder is excluded from the extension's root ESLint, `tsc` and `.vscodeignore` so the
+extension's CI and package are untouched; longer term the spike moves to the CLI's own repo.
 
 ## 9. Appendix — key verified sources
 
