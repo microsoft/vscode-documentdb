@@ -139,7 +139,7 @@ async function runDaemon(): Promise<void> {
     async function handle(req: Request): Promise<Response> {
         switch (req.cmd) {
             case 'ping':
-                return ok(req, { pong: true, pid: process.pid, packaged: isPackaged(), runtime: runtimeDescription() });
+                return ok(req, { pong: true, pid: process.pid, packaged: isPackaged(), arch: process.arch, runtime: runtimeDescription() });
             case 'status':
                 return ok(req, {
                     pid: process.pid,

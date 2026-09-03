@@ -80,6 +80,14 @@ one-Linux-runner Bun cross-compile job.
   every case**, so `argv.slice(2)` and standard parsers work. The `KNOWN_COMMANDS` scan in
   `src/main.ts` predates that measurement and is unnecessary; the real rule is "never use
   `argv[1]` to find the script — use `process.execPath` + a packaged check for self-spawn".
+- **Dynamic imports resolve from the working directory in both packagers** — `probe/` is a
+  10-line probe built as a SEA (twice: relative and absolute `main` in the SEA config) and as a
+  Bun binary; `bash probe/run.sh` shows Bun's `require`/`import()` load `node_modules` from the
+  *cwd*, and the SEA's `eval("import(...)")` resolves relative to the config's `main` path — against
+  the runtime cwd when that path is relative (as in `sea-config.json` here and in Node's docs),
+  against the *build host's* directory when absolute. Neither looks next to the binary (design
+  doc §2.3 #14). A daemon that inherits an agent's repository cwd would import
+  repository-controlled code.
 - **Known spike-only bugs, deliberately left in this revision** (design doc §2.3 #5–8 and
   §2.4): the idle timer can fire during a long request; the client re-sends a request after a
   failure; the socket is created `0755` in `os.tmpdir()`; the daemon inherits the client's cwd

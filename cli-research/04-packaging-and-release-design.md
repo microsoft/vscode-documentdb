@@ -1,13 +1,15 @@
 # Packaging & Release Design — response to `03-where-id-love-your-help.md`
 
-**Author:** Guanzhou Song · **Date:** 2026-09-01 (rev 3) · **Status:** draft for review
+**Author:** Guanzhou Song · **Date:** 2026-09-03 (rev 4) · **Status:** draft for review
 **Evidence:** working spike in [`spike/`](./spike/) + CI matrix in
 [`.github/workflows/cli-packaging-spike.yml`](../.github/workflows/cli-packaging-spike.yml)
 **Verified locally:** macOS arm64 (all acceptance checks green for both finalists, plus the
-unpackaged `node` baseline). **Verified in CI:** 13/13 jobs green across all six OS/arch targets
+unpackaged `node` baseline) and Linux x64 (WSL2, Node 24.19.0: SEA + baseline, rev 4). **Verified in CI:** 13/13 jobs green across all six OS/arch targets
 ([run 33568213084](https://github.com/microsoft/vscode-documentdb/actions/runs/33568213084),
 2026-09-01); per-target results and sizes in §2.2.
-**Rev 3** folds in an independent cold review of rev 2; the revision notes in §10 list what changed.
+**Rev 4** adds a working-directory module-resolution probe (§2.3 #14), code-cache and compressed-size
+measurements (§2.1), CI cost (§2.2), a map from your questions to sections (§1.2) and two notes for
+the auth model (§2.5); the revision notes in §10 list what changed.
 
 ---
 
@@ -54,10 +56,29 @@ Three things changed my view while writing this up, and they are the parts I mos
 |---|---|---|---|
 | 1 | **Which legal identity signs the binaries** — Microsoft (ESRP), or the DocumentDB project? DocumentDB has been a Linux Foundation project since August 2025, so "the DocumentDB org" needs a named legal entity that can hold an Apple Developer ID and a validated Windows signing identity: the LF, Microsoft on the project's behalf, or nobody yet. | Decides whether signing (and, for the Microsoft identity, the whole build) lives on GitHub or on OneBranch/ADO (§5) | Design for both; build the GitHub path first with placeholder secrets |
 | 2 | **Which GitHub org/repo hosts the CLI**, and is it public? | Runner labels, quotas, allowed-actions policy and cost differ per org: macOS minutes bill at 10× and arm64 runners are metered on private repos; a green matrix in `microsoft/vscode-documentdb` proves nothing about the DocumentDB org | Move the spike to the CLI's future repo as its first commit |
-| 3 | **v1 target list** — is macOS x64 in? | The last Intel runner image (`macos-15-intel`) retires **August 2027**; SEA on macOS x64 is untested upstream (it passed in our run) | Ship it via CI while the runner exists; fall back to npm for that target |
+| 3 | **v1 target list** — is macOS x64 in? | The last Intel runner image (`macos-15-intel`) retires **August 2027** (re-checked 2026-09-03: `macos-26` ships arm64-only; the Intel-capable `macos-26-large` is a paid large runner, still beta); SEA on macOS x64 is untested upstream (it passed in our run) | Ship it via CI while the runner exists; fall back to npm for that target |
 | 4 | **npm scope** — `@documentdb/cli`, `@documentdb-js/cli`, or something else? | Existing packages use `@documentdb-js`; I have not confirmed who owns `@documentdb` on npm | `@documentdb-js/cli`, reusing the existing OIDC trusted-publishing setup |
 | 5 | **Keep both build paths alive** in the real repo (SEA primary, Bun as a CI-only canary)? | Keeps the SEA-vs-Bun decision reversible with evidence; the credential-store spike (§8) may move the needle | Yes, until v1 ships; then reassess |
 | 6 | **Which auth methods must v1 support** — password/SCRAM only, or also Entra ID / OIDC browser and device-code login? | Entra/OIDC login lives in `@mongodb-js/oidc-plugin`, whose browser-opening and HTTP paths are loaded through `eval("import(...)")` and are **dead in the packaged binary today** (§2.3 #2). Making them work is planned engineering, not a packaging switch | Assume Entra/OIDC is required; budget the bundling work |
+
+### 1.2 Where each of your questions is answered
+
+| Your doc 03 | Where |
+|---|---|
+| Priority 1 — simplest deployment for the user | §6 (GitHub Releases + one-line install scripts; npm alongside) |
+| Priority 2 — Windows/macOS/Linux, x64 + arm64, first-class | §2.2 (six native targets executed in CI), §3 |
+| Priority 3 — no Node / no `npx`, and tell me honestly what it costs | §1 verdict, §7 the bill |
+| Priority 4 — everything on GitHub; flag what forces us off | §4 pipeline, §5.1 (the signing identity is the one thing that can) |
+| Priority 5 — must not break the daemon | §2.1–2.2 (the make-or-break test passes for both finalists) |
+| Item 1 — Node SEA | §3 row + "honest weaknesses", §4 |
+| Item 2 — `@yao-pkg/pkg`, nexe | §3 row (not spiked; reason stated) |
+| Item 3 — Bun / Deno | §3 rows; Bun spiked, Deno deliberately not (stated) |
+| Item 4 — bundling | esbuild throughout; §2.3 #2 (externals, inventory), §4 (thin-client/daemon split) |
+| Item 5 — npm/npx baseline; what comparable tools ship | §3 rows + "What comparable tools actually ship" |
+| Item 6 — install/update UX | §6 |
+| Item 7 — signing & notarization | §5 |
+| Item 8 — daemon compatibility spike | §2, [`spike/`](./spike/) |
+| Requested shape: table / recommendation + runner-up / spikes / "where no-npx costs us" | §3 / §1 + §3 "Why SEA over Bun" / §2 / §7 |
 
 ## 2. What the spike proved
 
@@ -66,6 +87,12 @@ The spike ([`spike/`](./spike/)) is deliberately representative, not hello-world
 `@mongosh/service-provider-node-driver`, `mongodb`, `bson`) and evaluates shell JS in a
 persistent `vm.Context` inside the daemon, with an unconnected `MongoClient` so no database is
 needed.
+
+One thing to state plainly, because the `eval` demo invites the wrong conclusion: `eval` is the
+spike's vehicle for exercising the whole dependency graph (`node:vm`, the evaluator, the driver,
+BSON) in one call — it is not the agent surface. Per the dual-DX design, agents get structured
+commands with JSON in and out; a persistent shell context belongs to the human REPL. What the
+daemon holds *for agents* is authenticated connections, not shared shell state (§2.3 #12).
 
 **To try it yourself** (details in [`spike/README.md`](./spike/README.md)):
 
@@ -111,6 +138,20 @@ Caveat on the startup number: `help` is the cheapest path. What an agent pays hu
 per session is a full client round trip (`ping`), which also parses the 10 MB bundle on every
 invocation because the client and the daemon share one bundle; §4 splits them.
 
+Rev 4, Linux x64 (WSL2, Node 24.19.0, Bun 1.4.0; median of 10 runs):
+
+| Measurement | Node SEA | SEA + `useCodeCache` | Bun | `node bundle.cjs` |
+|---|---|---|---|---|
+| `help` (cold client, no daemon) | 170 ms | **66 ms** | 139 ms | 190 ms |
+| `ping` round trip against a warm daemon | 170 ms | **68 ms** | — | — |
+| Artifact, raw | 130.1 MB | 130.1 MB | 87.5 MB | 9.8 MB (+ Node) |
+| Artifact, gzip -6 / xz -6 | 43.0 / 29.2 MB | same | 36.9 / 28.3 MB | — |
+
+Two things follow. The release configuration (`useCodeCache: true`, §4) removes Bun's startup
+edge on this machine, and the per-call cost an agent pays is the 10 MB parse, which the code
+cache hides and the thin-client split in §4 removes. And the download gap is 1.2× (gzip) to
+nil (xz), not the 1.5× the raw sizes suggest — §3 uses the compressed numbers.
+
 ### 2.2 CI matrix — six targets, native runners
 
 The workflow builds **and executes** the packaged acceptance suite on every first-class target
@@ -147,15 +188,19 @@ What the run says beyond pass/fail:
   each runner's tool cache. Harmless here (each job builds and tests its own binary), but it is
   exactly why the release pipeline must pin an exact version (§4).
 - **The arm64 toolchains were native, not emulated**: setup-node used `node/24.19.0/arm64` and
-  setup-bun downloaded `bun-windows-aarch64` / `bun-linux-aarch64`. The suite still does not
-  assert `process.arch` from inside the artifact, so a pass proves the runner's architecture,
-  not the artifact's.
+  setup-bun downloaded `bun-windows-aarch64` / `bun-linux-aarch64`. Until rev 4 the suite did
+  not assert `process.arch` from inside the artifact, so that run proved the runner's
+  architecture, not the artifact's; the suite now asserts both `packaged` and `arch`.
 - **Packaging itself is cheap; `npm ci` on Windows is not.** `build:sea` + `test:sea` take
   12–30 s on every OS; `npm ci` takes ~30 s on Linux/macOS and 171–264 s on Windows. Most of
   that is `npm ci` running the install scripts of native addons (kerberos, client-encryption,
   ssh2, cpu-features, os-dns-native, the certificate exporters) that the bundle then discards —
   `--ignore-scripts` removes both the time and the third-party code execution on the machine
   that produces release binaries (§4).
+- **Cost, to answer "build complexity on GitHub" with a number:** the 13-job matrix used 27.8
+  runner-minutes (Windows 18.2, macOS 5.6, Linux 4.0; the Windows share is almost entirely
+  `npm ci`). Free on a public repo; on a private repo at list multipliers (Windows 2×, macOS 10×)
+  it is ~96 billed minutes, under a dollar per full run. Not a factor in the decision.
 - **What the run does *not* prove:** the artifact always ran with Node on PATH, from inside the
   checkout, with `node_modules` next to it. Anything that resolves modules from disk at runtime
   (§2.3 #2) would pass in CI and fail on a user's machine. The suite must run from an empty
@@ -164,6 +209,11 @@ What the run says beyond pass/fail:
   release workflow should use the SHA-pinned v7 actions the rest of the repo already uses.
 
 ### 2.3 Findings that change the design (worth reading even if you skip the rest)
+
+Numbering is unchanged from rev 3 so cross-references hold. **Packaging-specific:** #2, #3, #4,
+#9, #11 and #14. **Daemon-protocol requirements that packaging merely exposed:** #1, #5, #6,
+#7, #8, #10, #12, #13 — these belong in the daemon design doc and will move there; they stay
+here so nothing is lost between documents.
 
 1. **The spawn race is real, and packaging exposed it.** With naive "unlink stale socket, then
    bind" logic, 10 concurrent cold clients produced **4 coexisting daemons — but only in the
@@ -185,7 +235,9 @@ What the run says beyond pass/fail:
    - `@mongodb-js/oidc-plugin` loads `open` (browser launch) and `node-fetch` through
      `eval("import(...)")`, and `@mongodb-js/devtools-proxy-support` does the same for
      `node-fetch` and `require.resolve`s `pac-proxy-agent` — so **Entra ID / OIDC browser
-     login and PAC/proxy-aware HTTP are dead in the binary**, silently.
+     login and PAC/proxy-aware HTTP are dead in the binary when it runs from a clean
+     directory, and load whatever the working directory's `node_modules` holds otherwise**
+     (#14 — verified with a probe).
    - `system-ca`, `os-dns-native` and the macOS/Windows certificate exporters were bundled as
      their JavaScript wrappers *without* their `.node` files — so the **system CA store and
      native DNS resolution** fall back or fail: TLS-inspecting corporate proxies, private CAs.
@@ -286,8 +338,9 @@ What the run says beyond pass/fail:
 11. **The credential store is a packaging problem, and it is where the runner-up is ahead.**
     The auth model resolves named profiles from the OS keychain, silently, from a headless
     daemon. Node has no keychain API: it takes a native addon (`@napi-rs/keyring` or similar)
-    that a single-file SEA cannot load from inside the blob — it must ship next to the binary —
-    or shell-outs to `security` / `secret-tool` / PowerShell, or a file store encrypted with a
+    that a single-file SEA cannot load from inside the blob — it must ship next to the binary
+    and be loaded through an explicit `createRequire` root, since bare resolution never looks
+    there (#14) — or shell-outs to `security` / `secret-tool` / PowerShell, or a file store encrypted with a
     key that itself needs the keychain. Bun ships `Bun.secrets` (native, documented as
     experimental). On macOS, keychain item ACLs bind to the **signing identity**: an ad-hoc
     signature is a different identity for every build, so each upgrade re-prompts "wants to
@@ -309,6 +362,39 @@ What the run says beyond pass/fail:
     debugging, a crash-loop guard on the client side, and a `documentdb daemon status|stop|logs`
     surface. Also: `os.userInfo()` throws for uids without a passwd entry (common in containers);
     key the endpoint by uid with a fallback.
+14. **Dynamic imports resolve from the working directory in both packagers — verified, and it
+    turns #8 from hygiene into a security requirement.** The cold review of rev 2 claimed this;
+    rev 4 reproduces it with a 10-line probe ([`spike/probe/`](./spike/probe/)) built as a SEA
+    and as a Bun binary and run from three places on Linux x64 — and pins down the mechanism,
+    which is subtler than "cwd":
+
+    | Load path | cwd has `node_modules/probe-pkg` | empty cwd | empty cwd, package next to the binary |
+    |---|---|---|---|
+    | SEA `require('probe-pkg')` | `ERR_UNKNOWN_BUILTIN_MODULE` | same | same |
+    | SEA `eval('import("probe-pkg")')`, **relative** `main` in the SEA config (Node's documented example; the spike's `dist/bundle.cjs`) | **loads the cwd copy** (also from any subdirectory of it: normal walk-up) | `ERR_MODULE_NOT_FOUND` | `ERR_MODULE_NOT_FOUND` |
+    | SEA `eval('import("probe-pkg")')`, **absolute** `main` in the SEA config | `ERR_MODULE_NOT_FOUND` | same | same — but **loads a package planted at the build machine's path** (e.g. `/home/runner/work/<repo>/…`), from any cwd |
+    | Bun `require` **and** `import()` | **loads the cwd copy** | `MODULE_NOT_FOUND` | `MODULE_NOT_FOUND` |
+
+    So the SEA resolves `import()` relative to the `main` path *as written into the config*: a
+    relative path is re-resolved against the runtime cwd; an absolute path freezes the build
+    host's directory into the binary, which is public in CI logs and plantable. Neither
+    setting is safe on its own. Bun resolves from the cwd regardless.
+
+    Three consequences. (a) An agent that runs `documentdb` inside a checked-out repository
+    would have the OIDC/proxy paths in #2 import repository-controlled code into the process
+    that holds the credentials — the daemon, if it inherits the client's cwd (#8), or the
+    client itself. That is release-blocking, and it is exactly the environment this CLI is
+    built for. (b) The "ship the addon next to the binary" option in #11 does not work by
+    itself: neither packager consults the binary's directory, so anything sideloaded must be
+    loaded through `createRequire(path.dirname(process.execPath) + '/')`, never a bare
+    specifier. (c) The esbuild externals (kerberos, snappy, …) are deterministically unavailable
+    in the SEA — its `require` only knows builtins and the driver catches the error — but in
+    the Bun binary they too would load from cwd. Required: daemon *and* client run from a
+    trusted directory; every dynamic import in the #2 inventory is bundled or explicitly rooted
+    (a config-level fix does not exist — see the table);
+    and the release acceptance suite runs once from a **hostile** directory (a cwd whose
+    `node_modules/open` is booby-trapped) and asserts nothing loaded. Explicit roots are also
+    the answer for the npm channel, where cwd-relative resolution is Node's default behavior.
 
 ### 2.4 Known gaps in the spike itself (not fixed in this revision)
 
@@ -333,9 +419,10 @@ that nobody copies them into the real implementation:
   `mongodb@7.2`/`bson@7.2` everywhere and ships older `@mongosh` releases than the spike
   pulled. Align the spike (or better, the real CLI) to the extension's lockfile; cross-version
   BSON `instanceof` failures are a known bug class.
-- Test validity (`spike/test/acceptance.mjs`): the "second invocation attaches to the same
-  daemon" check compares two possibly-undefined pids and passes vacuously against a missing
-  binary; `packaged` and `process.arch` are not asserted; the suite never runs without Node on
+- Test validity (`spike/test/acceptance.mjs`): fixed in rev 4 — the "second invocation attaches
+  to the same daemon" check no longer passes vacuously on two undefined pids (it did, observed
+  live against a missing binary), and `packaged` and `process.arch` are asserted from inside
+  the artifact. Still open: the suite never runs without Node on
   PATH or outside the checkout (§2.2); it never touches the driver's connection path (dns/tls),
   the OIDC/proxy/system-CA paths (§2.3 #2), or a console-close / step-boundary on Windows; and
   the known bugs above should be encoded as expected failures so they cannot be forgotten. A
@@ -355,14 +442,34 @@ that nobody copies them into the real implementation:
   JSON to keep dependencies at zero. The production choice is still open; the spike's protocol
   is a stand-in, and the arbitration logic ports to either.
 
+### 2.5 Two auth-model claims this work bumped into (notes for your `context/` docs)
+
+Neither is a packaging matter, and both came up in the cold review; I agree with them, so I'd
+rather flag them now than have them surface during implementation.
+
+- **"An agent wielding a `--read-only` profile physically cannot write"** (`auth-model.md`) is
+  only true when the *stored credential* is read-only on the server. A CLI-side check is
+  defense in depth: it has to enumerate every write-shaped path (raw commands, `$out`/`$merge`,
+  index and admin commands, any evaluator) and stays one missed path away from wrong. Suggested
+  wording: a profile is *server-enforced read-only* when provisioned with a read-only role or
+  scoped token, and *best-effort read-only* otherwise — and `login --read-only` should prefer to
+  create the former.
+- **"TTY present → may prompt the human"** (`execution-modes.md`) is not a safe test for "a
+  human is driving": agent hosts allocate pseudo-terminals, and a `/dev/tty` credential prompt
+  triggered from an agent's turn is a phishing-shaped flow (repository content → agent runs a
+  command that needs an unprovisioned profile → the user sees an unexpected password prompt). An
+  explicit agent mode (`--agent` or `DOCUMENTDB_AGENT=1`, set by the Skill) in which the CLI
+  never prompts, never opens a browser, and only returns the structured "run `documentdb login
+  <name>`" error closes it; the TTY rule then applies only outside that mode.
+
 ## 3. Candidate comparison
 
 Every cell is backed by a primary source (linked in §9) or by this spike ("spike").
 
 | Approach | User friction | Node needed | Win x64/arm64 | macOS x64/arm64 | Linux x64/arm64 | Cross-compile | Daemon/IPC packaged | Worker threads | Size | Signing fit | Maintenance risk |
 |---|---|---|---|---|---|---|---|---|---|---|---|
-| **Node SEA** | one file / `curl \| sh`; nothing to preinstall | No | ✅/✅ | ⚠️ x64 untested upstream (passed once in our CI) / ✅ | ✅/✅ (not Alpine; glibc ≥ 2.28) | Partially² | ✅ **spike** | ✅ eval-mode **spike** | 88–130 MB (CI) | Standard signable binaries; postject step must precede signing; needs Node's JIT entitlements under the hardened runtime; `NODE_OPTIONS` injection unless `execArgvExtension: "none"` | Experimental (Stability 1.1) but first-party; v25.5+ `--build-sea` shows active investment; postject unmaintained (replaced upstream) |
-| **Bun compile** | same as SEA | No | ✅/✅ | ✅/✅ | ✅/✅ + musl | ✅ all 8 targets from one runner (downloads target runtimes at build time) | ✅ **spike** | ✅ eval-mode **spike**; file-based workers need extra entrypoints | 70–94 MB (CI) | macOS documented (JIT entitlements); Windows Authenticode fixed v1.2.23; Windows metadata flags unavailable when cross-compiling; notarization unverified; `BUN_OPTIONS` injection with no switch found | Single vendor; Zig→Rust rewrite shipped in 1.4 (Aug 20, 2026); three driver-related bugs reported and **fixed** in 2026 (#24118 Jan, #24374 Mar, #32501 Jun) — the class recurs, the fixes were fast |
+| **Node SEA** | one file / `curl \| sh`; nothing to preinstall | No | ✅/✅ | ⚠️ x64 untested upstream (passed once in our CI) / ✅ | ✅/✅ (not Alpine; glibc ≥ 2.28) | Partially² | ✅ **spike** | ✅ eval-mode **spike** | 88–130 MB raw (CI); 43 MB gzip / 29 MB xz | Standard signable binaries; postject step must precede signing; needs Node's JIT entitlements under the hardened runtime; `NODE_OPTIONS` injection unless `execArgvExtension: "none"` | Experimental (Stability 1.1) but first-party; v25.5+ `--build-sea` shows active investment; postject unmaintained (replaced upstream) |
+| **Bun compile** | same as SEA | No | ✅/✅ | ✅/✅ | ✅/✅ + musl | ✅ all 8 targets from one runner (downloads target runtimes at build time) | ✅ **spike** | ✅ eval-mode **spike**; file-based workers need extra entrypoints | 70–94 MB raw (CI); 37 MB gzip / 28 MB xz | macOS documented (JIT entitlements); Windows Authenticode fixed v1.2.23; Windows metadata flags unavailable when cross-compiling; notarization unverified; `BUN_OPTIONS` injection with no switch found | Single vendor; Zig→Rust rewrite shipped in 1.4 (Aug 20, 2026); three driver-related bugs reported and **fixed** in 2026 (#24118 Jan, #24374 Mar, #32501 Jun) — the class recurs, the fixes were fast |
 | **@yao-pkg/pkg** | same as SEA | No | ✅ | ✅ | ✅ | ✅ via prebuilt patched Node | Likely (not spiked) | V8 snapshot quirks historically | ~90+ MB | Third-party patched Node binaries — awkward provenance story for a Microsoft-signed release | Community fork of an archived Vercel project (active: v6.22 as of Aug 2026) |
 | **Deno compile** | same as SEA | No | ✅ | ✅ | ✅ | ✅ | Untested | — | ~70+ MB | OK | **Disqualifying risk (untested):** `node:vm` support is the historic gap, and the entire `@mongosh` eval pipeline runs on `vm` — I chose not to spend a spike on it; say so if you disagree |
 | **npm i -g** (baseline) | needs Node ≥ 22 + working PATH; version drift | **Yes** | Node's matrix | Node's matrix | Node's matrix | n/a | ✅ **spike** (baseline) | ✅ | 10 MB package | npm provenance (repo already uses OIDC trusted publishing) | Lowest — but agents cannot self-serve past a missing/old Node |
@@ -400,7 +507,8 @@ See §2.3 #11 and the spike in §8.
 ### Why SEA over Bun as primary
 
 Both passed everything we threw at them, and Bun's DX is genuinely better (no esbuild step, no
-postject, cross-compile, smaller, faster, a native secrets API). SEA wins on one axis that
+postject, cross-compile, smaller on disk, a native secrets API). "Faster" dropped off that list
+in rev 4: with the SEA code cache on, SEA starts in 66 ms to Bun's 139 ms on Linux x64 (§2.1). SEA wins on one axis that
 dominates for a **database** CLI: **engine fidelity**. To be precise about what that means: the
 SEA embeds the official Node 24 build — the same V8, libuv, OpenSSL and `net`/`tls` stack the
 MongoDB driver and `@mongosh` are tested against in their own CI — while the extension itself
@@ -431,8 +539,9 @@ SEA's honest weaknesses, so they're on the table:
   ([docs](https://nodejs.org/docs/latest-v24.x/api/single-executable-applications.html)) — our
   matrix runs it as the canary; if it proves flaky, macOS x64 falls back to the npm channel
   (a shrinking user base) or to a pkg-built artifact for that one target.
-- Binary is 88–130 MB vs Bun's 70–94 MB (CI-measured; on Windows they are nearly equal). Real,
-  but nobody installs a database CLI over dial-up; compressed release assets roughly halve it.
+- Binary is 88–130 MB vs Bun's 70–94 MB raw (CI-measured; on Windows they are nearly equal).
+  Compressed, which is what a user downloads, the gap is 43 vs 37 MB (gzip) or 29 vs 28 MB (xz),
+  measured in §2.1. Real on disk, immaterial on the wire.
 - Official Node binaries need glibc ≥ 2.28 and are not built for Alpine/musl; older distros and
   Alpine images use the npm channel.
 - Under the macOS hardened runtime the SEA needs Node's own entitlements (`allow-jit`,
@@ -458,7 +567,9 @@ tag v0.x.y
        │             unknowns) → download official Node tarball, verify SHASUMS256 → SEA blob
        │           → inject → otool -L / ldd gate → strip/ad-hoc sign (with Node's entitlements)
        │           → acceptance suite from an EMPTY dir with Node removed from PATH
-       │             (asserts packaged, arch, feature availability) → upload unsigned artifact
+       │             (asserts packaged, arch, feature availability) and once from a HOSTILE
+       │             dir (booby-trapped node_modules; asserts nothing loaded, §2.3 #14)
+       │           → upload unsigned artifact
        │
        ├─ Variant A — DocumentDB-project identity, GitHub-only:
        │    ├─ sign-windows   (Authenticode via Azure Trusted Signing or an HSM-backed cert; §5)
@@ -504,8 +615,10 @@ Notes:
   thin entry; the daemon runtime (`@mongosh`, driver) is a second bundle embedded as a SEA
   asset / Bun asset and loaded only in daemon mode. That removes the 10 MB parse from every
   agent invocation; `useCodeCache: true` (safe with native builds) is the mitigation until then.
-- SEA config: `useCodeCache: true`, `execArgvExtension: "none"` (§2.3 #9),
-  `disableExperimentalSEAWarning: true`; daemon spawned with an allowlisted environment.
+- SEA config: `useCodeCache: true` (2.5× faster client start, §2.1), `execArgvExtension: "none"`
+  (§2.3 #9), `disableExperimentalSEAWarning: true`. Daemon and client run from a trusted
+  directory with an allowlisted environment (§2.3 #8, #14); anything sideloaded is loaded via an
+  explicit `createRequire` root, never a bare specifier.
 - Workflow hygiene the spike skipped (§2.4): SHA-pinned actions, least-privilege
   `permissions:`, `timeout-minutes`, `concurrency`, artifact `retention-days`, pinned Bun
   version and pinned/cached target runtimes, `npm ci --ignore-scripts`.
@@ -560,9 +673,12 @@ identity the binaries carry**, and that decides where signing — and possibly t
   regardless. So a real Authenticode signature is still needed for a credible product — it is
   just not what blocks the first install-script release.
 - **Linux.** No signing wall; checksums + GitHub artifact attestations cover integrity. A
-  checksum served from the same origin as the binary proves nothing on its own; the install
-  scripts should verify a GitHub artifact attestation (`gh attestation verify`), the norm for
-  LF projects.
+  checksum served from the same origin as the binary proves nothing on its own, but the install
+  script cannot require `gh attestation verify` either — a tool whose point is zero prerequisites
+  cannot need another CLI to install. So: the script pins the release version and verifies
+  `sha256sums.txt`; the checksum file itself carries a GitHub artifact attestation; and
+  `gh attestation verify` (or a cosign bundle) is the documented, optional stronger check, the
+  norm for LF projects.
 
 **Net:** the install-script channel can *execute* before any certificate exists, which
 decouples the first packaging release from procurement; the **credential store cannot** on
@@ -578,7 +694,8 @@ Launch (cheap, all GitHub-native):
 1. **GitHub Releases** with per-target archives + `sha256sums.txt` + attestations (the
    substrate for everything else).
 2. **Install scripts**: `curl -fsSL …/install.sh | sh` and an `irm …/install.ps1 | iex`
-   PowerShell equivalent — detect OS/arch, download, verify the attestation, place on PATH, and
+   PowerShell equivalent — detect OS/arch, download a pinned version, verify the sha256
+   (attestation verification is optional and `gh`-based, §5.2), place on PATH, and
    **stop any running daemon of the previous version first** (Windows cannot replace a running
    `.exe`; §2.3 #8). This is what gives the "one-line install" your doc asks for, and agents
    can run it too. Enterprise reality check: many customers block `curl | sh` / `irm | iex`
@@ -641,6 +758,7 @@ shipping the npm channel alongside.
 | Daemon does not work inside agent-host sandboxes (session temp dir, proxy allowlist, Unix sockets blocked, lifetime) | **High — unknown** | Spike A below; defined degraded one-shot mode; endpoint placement follows the session temp dir (§2.3 #10) |
 | Credential store unreachable from a single-file binary, or re-prompting after each upgrade on macOS | **High — unknown** | Spike B below; Developer ID on the v1 critical path (§5.2); documented fallback store for headless Linux (§2.3 #11) |
 | Silent feature loss incl. Entra/OIDC login and proxy/system-CA support | **High until inventoried** | Tool-generated inventory + availability probe + clean-environment test in the release path (§2.3 #2, §4); decision §1.1 #6 |
+| Dynamic imports resolve from the working directory: repository-controlled code inside the credential-holding process | **High — verified** (§2.3 #14) | Trusted cwd for daemon and client; explicit `createRequire` roots for anything sideloaded; hostile-directory run in the release acceptance suite (§4) |
 | Microsoft-identity release requires ESRP/OneBranch, including the build | **High** (pipeline-shaping) | Decide §1.1 #1 early; Variant B in §4 keeps GitHub as the test gate either way |
 | IPC endpoint squatting (`/tmp` on Linux, global pipe namespace on Windows) | Medium; v1 requirement | Per-user `0700` runtime dir + `0600` socket + per-user lock; daemon proves identity to clients (§2.3 #7) |
 | Code injection via `NODE_OPTIONS` / `BUN_OPTIONS` into the credential-holding daemon | Medium | `execArgvExtension: "none"`, allowlisted daemon environment (§2.3 #9) |
@@ -675,8 +793,8 @@ and everything else on this page cannot:
 Other open items before this is "done" by my own definition: the feature inventory and
 availability probe (§2.3 #2); the signing workflow with placeholder secrets for the chosen
 variant (§5); the install-script prototype with daemon-stop (§6); the spike cleanups in §2.4
-folded into whatever becomes the real daemon; the clean-environment run, `process.arch` and
-`packaged` assertions, SHA-pinned actions and an exact Node pin in the workflow.
+folded into whatever becomes the real daemon; the clean-environment and hostile-directory
+runs, SHA-pinned actions and an exact Node pin in the workflow.
 
 Branch hygiene, for the record: `cli-research` is a research branch, not a merge candidate.
 The folder is excluded from the extension's root ESLint, `tsc` and `.vscodeignore` so the
@@ -728,10 +846,26 @@ extension's CI and package are untouched; longer term the spike moves to the CLI
   `.azure-pipelines/build.yml`, `.azure-pipelines/release.yml`,
   `.azure-pipelines/release-npm-packages.yml`; npm OIDC publishing:
   `.github/workflows/npm-publish-documentdb-js.yml`
+- macOS 26 runner images: arm64 GA ([changelog](https://github.blog/changelog/2026-02-26-macos-26-is-now-generally-available-for-github-hosted-runners/));
+  Intel only as the beta large runner ([actions/runner-images#13637](https://github.com/actions/runner-images/issues/13637))
+- Node 26.0.0 (2026-05-05; LTS October 2026): [release](https://nodejs.org/en/blog/release/v26.0.0)
+- Working-directory resolution probe (rev 4, Linux x64): [`spike/probe/`](./spike/probe/)
 - CI evidence for this document: [run 33568213084](https://github.com/microsoft/vscode-documentdb/actions/runs/33568213084)
   on `cli-research` (2026-09-01), 13/13 jobs green; per-target artifacts attached to the run
 
 ## 10. Revision notes
+
+**Rev 4 (2026-09-03)** — after re-verifying the rev 3 review against this machine and the repo:
+- Verified and adopted: dynamic imports resolve from the working directory in both packagers —
+  for the SEA, precisely: relative to the SEA config's `main` path, re-resolved against the
+  runtime cwd when relative and frozen to the build host's path when absolute (new §2.3 #14,
+  probe in `spike/probe/`); the installer cannot depend on `gh` (§5.2, §6); the
+  code cache erases Bun's startup lead and compression erases most of its size lead (§2.1, §3).
+- Added: a map from doc 03's questions to sections (§1.2); CI runner-minutes (§2.2); a plain
+  statement that `eval` is the spike's vehicle, not the agent surface (§2); a packaging-vs-daemon
+  reading guide for §2.3; two auth-model notes for the context docs (§2.5); a Linux x64 local run.
+- Not adopted: the review's `macos-26-intel` runner — no such label exists (§1.1 #3).
+- Spike: the acceptance suite now fails on undefined pids and asserts `packaged` and `arch`.
 
 **Rev 3 (2026-09-01)** — after an independent cold review of rev 2 by a reviewer with no prior
 context; everything adopted was re-verified on this machine:

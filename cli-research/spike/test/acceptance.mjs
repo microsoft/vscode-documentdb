@@ -12,6 +12,7 @@
  *   4. persistent shell state survives across separate CLI invocations
  *      (eval "x = 41" then eval "x + 1" -> 42, via @documentdb-js/shell-runtime)
  *   5. worker_threads works inside the packaged artifact
+ *      (plus: packaged=true and process.arch asserted from INSIDE the artifact)
  *   6. N concurrent cold-start clients converge on ONE daemon (spawn race)
  *   7. idle timeout shuts the daemon down; the next call restarts it
  *   8. stop works
@@ -72,10 +73,13 @@ await sleep(300);
 const ping1 = await invoke(['ping']);
 check('cold ping auto-spawns daemon and replies', ping1.json?.ok === true, JSON.stringify(ping1.json ?? ping1.stderr));
 const pid1 = ping1.json?.result?.pid;
-check('daemon reports packaged runtime', ping1.json?.result?.runtime !== undefined, `runtime=${ping1.json?.result?.runtime}, packaged=${ping1.json?.result?.packaged}`);
+// `node dist/bundle.cjs` is the unpackaged baseline; anything else must report packaged=true.
+const expectPackaged = cmd !== 'node' && cmd !== 'bun';
+check('daemon reports the expected packaging', ping1.json?.result?.runtime !== undefined && ping1.json?.result?.packaged === expectPackaged, `runtime=${ping1.json?.result?.runtime}, packaged=${ping1.json?.result?.packaged} (expected ${expectPackaged})`);
+check('artifact architecture matches this runner', ping1.json?.result?.arch === process.arch, `artifact arch=${ping1.json?.result?.arch}, runner arch=${process.arch}`);
 
 const ping2 = await invoke(['ping']);
-check('second invocation attaches to SAME daemon', ping2.json?.result?.pid === pid1, `pid ${ping2.json?.result?.pid} vs ${pid1}`);
+check('second invocation attaches to SAME daemon', pid1 !== undefined && ping2.json?.result?.pid === pid1, `pid ${ping2.json?.result?.pid} vs ${pid1}`);
 
 // 4: persistent shell-runtime state across separate CLI processes.
 const evalSet = await invoke(['eval', 'x = 41']);
