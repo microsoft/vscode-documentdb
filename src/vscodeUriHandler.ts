@@ -6,6 +6,7 @@
 import { callWithTelemetryAndErrorHandling, type IActionContext } from '@microsoft/vscode-azext-utils';
 import * as l10n from '@vscode/l10n';
 import * as vscode from 'vscode';
+import { openLocalQuickStart } from './commands/localQuickStart/openLocalQuickStart';
 import { openCollectionViewInternal } from './commands/openCollectionView/openCollectionView';
 import { DocumentDBConnectionString } from './documentdb/utils/DocumentDBConnectionString';
 import { canonicalizeTlsException, stripTlsBypassParams } from './documentdb/utils/tlsException';
@@ -42,6 +43,46 @@ interface UriParams {
     collection?: string;
 }
 
+/**
+ * The actions a deep link is allowed to name.
+ *
+ * **This list is the security boundary, and it is hand-written on purpose.**
+ *
+ * A "command switch" is tempting to implement by mapping the URL's verb onto a VS Code command
+ * id, because the extension already has a command for everything a link might want. That would
+ * also expose `localQuickStart.delete` and `localQuickStart.copyPassword` to any web page able to
+ * produce a link — one deletes a container, the other puts a password on the clipboard. A URL
+ * arriving from outside VS Code is untrusted input, so the set of things it can reach is
+ * enumerated here rather than derived from the command registry.
+ *
+ * Adding a verb is therefore a deliberate act: it means deciding that the action is safe to
+ * trigger from a link on a web page belonging to someone else.
+ */
+const DEEP_LINK_VERBS = ['connect', 'local'] as const;
+
+type DeepLinkVerb = (typeof DEEP_LINK_VERBS)[number];
+
+/** The local resource types that an external deep link is allowed to open. */
+const LOCAL_RESOURCE_TYPES = ['documentdb'] as const;
+
+type LocalResourceType = (typeof LOCAL_RESOURCE_TYPES)[number];
+
+/**
+ * The verb assumed when a link names none.
+ *
+ * Every link published before verbs existed has an empty path and a connection string in the
+ * query, so "no verb" has to keep meaning `connect` for as long as those links exist — which is
+ * forever, since a link in a blog post cannot be recalled.
+ */
+const DEFAULT_VERB: DeepLinkVerb = 'connect';
+
+/** A deep link's route: what it asks for, and any path segments qualifying it. */
+interface DeepLinkRoute {
+    verb: DeepLinkVerb;
+    /** Segments after the verb, e.g. the provider id in `/discovery/<provider>`. */
+    qualifiers: string[];
+}
+
 // #endregion
 
 // #region Main Handler Functions
@@ -49,9 +90,26 @@ interface UriParams {
 /**
  * Global URI handler for processing external URIs routed to this extension.
  *
- * This function handles URIs that contain a set of parameters:
- * - the default is a connection string to a DocumentDB / MongoDB resource
- * - other modes will be added in the future, these will be handled by our discoverability plugins
+ * A link names an action in its **path** and supplies that action's arguments in its **query**:
+ *
+ * ```text
+ * vscode://ms-azuretools.vscode-documentdb/connect?connectionString=…&database=…&collection=…
+ * vscode://ms-azuretools.vscode-documentdb/local
+ * vscode://ms-azuretools.vscode-documentdb/local/documentdb
+ * vscode://ms-azuretools.vscode-documentdb?connectionString=…              (legacy, means /connect)
+ * ```
+ *
+ * **Why the path and not another query parameter.** The query describes *how* to perform an
+ * action; putting *which* action in the same bag means every future reader has to know which keys
+ * are the verb and which are its arguments. It also leaves nowhere to namespace the discovery
+ * plugins, which will each want their own sub-routes.
+ *
+ * **Why this is safe to add.** The handler dispatched on `uri.query` alone until now and never
+ * read `uri.path`, so every link already in circulation has an empty path. Empty path therefore
+ * means {@link DEFAULT_VERB} and those links keep working unchanged.
+ *
+ * The set of reachable actions is {@link DEEP_LINK_VERBS}, which is a hand-written allow-list
+ * rather than a lookup into the command registry — see the note there.
  *
  * **URL Parameter Encoding:**
  * Input URLs should have double-encoded parameters as documented in how-to-construct-url.md.
@@ -72,25 +130,151 @@ export async function globalUriHandler(uri: vscode.Uri): Promise<void> {
         context.telemetry.properties.uriQueryLength = String((uri.query ?? '').length);
 
         try {
-            // Extract and validate parameters
-            // Note: uri.query is already decoded once by VS Code when creating the vscode.Uri object
-            context.telemetry.properties.failureStage = 'extractParams';
-            const params = extractAndValidateParams(context, uri.query);
+            context.telemetry.properties.failureStage = 'parseRoute';
+            const route = parseDeepLinkRoute(uri.path);
 
-            // Process the URI with user confirmation
-            context.telemetry.properties.failureStage = 'handleRequest';
-            await handleConnectionStringRequest(context, params);
+            // Recorded before the route is validated so an unrecognized verb is measurable:
+            // a link format someone published against a future version shows up here rather
+            // than as an anonymous parse failure.
+            context.telemetry.properties.deepLinkVerb = route?.verb ?? 'unrecognized';
+            context.telemetry.properties.deepLinkQualifierCount = String(route?.qualifiers.length ?? 0);
+
+            if (route === undefined) {
+                throw new Error(
+                    l10n.t(
+                        'This DocumentDB link asks for an action the extension does not recognize. It may have been written for a newer version — check for an update, or verify the link.',
+                    ),
+                );
+            }
+
+            switch (route.verb) {
+                case 'connect': {
+                    context.telemetry.properties.failureStage = 'validateConnectPath';
+                    if (route.qualifiers.length > 0) {
+                        throw new Error(l10n.t('This DocumentDB connection link has an invalid path. Use /connect.'));
+                    }
+
+                    context.telemetry.properties.failureStage = 'extractParams';
+                    // Note: uri.query is already decoded once by VS Code when creating the vscode.Uri object
+                    const params = extractAndValidateParams(context, uri.query);
+
+                    context.telemetry.properties.failureStage = 'handleRequest';
+                    await handleConnectionStringRequest(context, params);
+                    break;
+                }
+
+                case 'local': {
+                    context.telemetry.properties.failureStage = 'validateLocalResourceType';
+                    const resourceType = parseLocalResourceType(route.qualifiers);
+                    context.telemetry.properties.deepLinkLocalResourceType = resourceType;
+
+                    context.telemetry.properties.failureStage = 'openLocalQuickStart';
+                    await handleLocalQuickStartRequest(context, resourceType);
+                    break;
+                }
+            }
         } catch (error) {
-            const errMsg = error instanceof Error ? error.message : String(error);
             if (!context.telemetry.properties.failureStage) {
                 context.telemetry.properties.failureStage = 'unknown';
             }
             // Record the error type (not the message, which can carry user data)
             // so we can group failures without exposing connection details.
             context.telemetry.properties.errorName = error instanceof Error ? error.name : 'NonError';
-            throw new Error(l10n.t('Failed to process URI: {0}', errMsg));
+            throw error;
         }
     });
+}
+
+/**
+ * Reads the action out of a link's path.
+ *
+ * @param path - `uri.path`, which VS Code has already decoded once.
+ * @returns The route, or `undefined` when the path names something not in
+ *          {@link DEEP_LINK_VERBS}. An empty path is not unrecognized — it is
+ *          {@link DEFAULT_VERB}, which is what keeps already-published links working.
+ */
+function parseDeepLinkRoute(path: string): DeepLinkRoute | undefined {
+    const segments = path.split('/').filter((segment) => segment.trim() !== '');
+
+    if (segments.length === 0) {
+        return { verb: DEFAULT_VERB, qualifiers: [] };
+    }
+
+    // Case-insensitive because links are typed by hand and pasted through systems that
+    // helpfully "correct" capitalization; the verb is a keyword, not user data.
+    const candidate = segments[0].toLowerCase();
+    const verb = DEEP_LINK_VERBS.find((known) => known === candidate);
+
+    if (verb === undefined) {
+        return undefined;
+    }
+
+    return { verb, qualifiers: segments.slice(1) };
+}
+
+/**
+ * Resolves the local resource type named by a route.
+ *
+ * `/local` is shorthand for `/local/documentdb`. The allow-list is explicit so an unsupported
+ * qualifier never silently opens a different local product.
+ */
+function parseLocalResourceType(qualifiers: string[]): LocalResourceType {
+    if (qualifiers.length === 0) {
+        return 'documentdb';
+    }
+
+    if (qualifiers.length !== 1) {
+        throw new Error(l10n.t('This DocumentDB Local link has an invalid path. Use /local or /local/documentdb.'));
+    }
+
+    const candidate = qualifiers[0].toLowerCase();
+    const resourceType = LOCAL_RESOURCE_TYPES.find((known) => known === candidate);
+    if (resourceType === undefined) {
+        throw new Error(
+            l10n.t(
+                'This DocumentDB Local link asks for an unsupported resource type. Supported resource types: {0}.',
+                LOCAL_RESOURCE_TYPES.join(', '),
+            ),
+        );
+    }
+
+    return resourceType;
+}
+
+/**
+ * Confirms and opens the setup experience for a supported local resource type.
+ *
+ * External links can be surprising even when the destination is non-mutating, so this uses one
+ * lightweight confirmation when URL confirmations are enabled. Unlike `connect`, no additional
+ * confirmation is needed because the wizard opens on an introduction page.
+ */
+async function handleLocalQuickStartRequest(context: IActionContext, resourceType: LocalResourceType): Promise<void> {
+    const showUrlHandlingConfirmations = vscode.workspace
+        .getConfiguration()
+        .get<boolean>(ext.settingsKeys.showUrlHandlingConfirmations, true);
+
+    if (showUrlHandlingConfirmations) {
+        const openSetup = l10n.t('Open setup');
+        const confirmation = await vscode.window.showInformationMessage(
+            l10n.t('This link wants to open the DocumentDB Local setup in VS Code.'),
+            {
+                modal: true,
+                detail: l10n.t('Note: You can disable these URL handling confirmations in the extension settings.'),
+            },
+            openSetup,
+        );
+
+        if (confirmation !== openSetup) {
+            context.telemetry.properties.userCancelledAtStep = 'OpenLocalQuickStart';
+            return;
+        }
+    }
+
+    switch (resourceType) {
+        case 'documentdb':
+            await openLocalQuickStart(context);
+            break;
+    }
 }
 
 /**
@@ -124,6 +308,15 @@ async function handleConnectionStringRequest(
             selectedDatabase = firstPart;
             context.telemetry.properties.usedDbFromConnectionString = 'true';
         }
+    }
+
+    if (params.collection && !selectedDatabase) {
+        context.telemetry.properties.failureStage = 'validateCollectionTarget';
+        throw new Error(
+            l10n.t(
+                'This DocumentDB link specifies a collection without a database. Add a database parameter or include the database in the connection string.',
+            ),
+        );
     }
 
     // Mask sensitive values in telemetry
@@ -170,14 +363,17 @@ async function handleConnectionStringRequest(
     } else {
         // First confirmation: Ask user about adding new connection (if enabled)
         if (showUrlHandlingConfirmations) {
+            const detail = [
+                ...formatConnectionTargetDetails(newConnectionLabel, selectedDatabase, params.collection),
+                '',
+                l10n.t('A new connection will be added to your Connections View.'),
+                l10n.t('Do you want to continue?'),
+                '',
+                l10n.t('Note: You can disable these URL handling confirmations in the extension settings.'),
+            ].join('\n');
             const connectionConfirmation = await vscode.window.showInformationMessage(
                 l10n.t('You clicked a link that wants to open a DocumentDB connection in VS Code.'),
-                {
-                    modal: true,
-                    detail: l10n.t(
-                        'A new connection will be added to your Connections View.\nDo you want to continue?\n\nNote: You can disable these URL handling confirmations in the exension settings.',
-                    ),
-                },
+                { modal: true, detail },
                 l10n.t('Yes, continue'),
             );
 
@@ -229,16 +425,23 @@ async function handleConnectionStringRequest(
 
     // Second confirmation: Ask user about revealing the connection (if enabled)
     if (showUrlHandlingConfirmations) {
+        const detail = [
+            ...formatConnectionTargetDetails(
+                existingDuplicateConnection?.name ?? newConnectionLabel,
+                selectedDatabase,
+                params.collection,
+            ),
+            '',
+            l10n.t('You might be asked for credentials to establish the connection.'),
+            l10n.t('Do you want to continue?'),
+            '',
+            l10n.t('Note: You can disable these URL handling confirmations in the extension settings.'),
+        ].join('\n');
         const revealConfirmation = await vscode.window.showInformationMessage(
             existingDuplicateConnection
                 ? l10n.t('You clicked a link that wants to open a DocumentDB connection in VS Code.')
                 : l10n.t('The connection will now be opened in the Connections View.'),
-            {
-                modal: true,
-                detail: l10n.t(
-                    'You might be asked for credentials to establish the connection.\nDo you want to continue?\n\nNote: You can disable these URL handling confirmations in the extension settings.',
-                ),
-            },
+            { modal: true, detail },
             l10n.t('Yes, open connection'),
         );
 
@@ -356,6 +559,17 @@ function isEmulatorConnection(parsedCS: DocumentDBConnectionString): boolean {
  */
 function createConnectionLabel(parsedCS: DocumentDBConnectionString, joinedHosts: string): string {
     return parsedCS.username && parsedCS.username.length > 0 ? `${parsedCS.username}@${joinedHosts}` : joinedHosts;
+}
+
+function formatConnectionTargetDetails(connectionLabel: string, database?: string, collection?: string): string[] {
+    const lines = [l10n.t('Connection: {0}', connectionLabel)];
+    if (database) {
+        lines.push(l10n.t('Database: {0}', database));
+    }
+    if (collection) {
+        lines.push(l10n.t('Collection: {0}', collection));
+    }
+    return lines;
 }
 
 /**

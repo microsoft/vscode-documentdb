@@ -1,5 +1,16 @@
 # Change Log
 
+## 0.10.1
+
+### Improvements
+
+- **Deep Links to DocumentDB Local Setup**: `vscode://` links can now open the DocumentDB Local setup wizard directly instead of only carrying a connection string, with clearer connection confirmations and actionable errors for malformed links. [#898](https://github.com/microsoft/vscode-documentdb/pull/898)
+- **Development Workflow**: Restructures the AI-assisted feature documentation into per-feature folders, rewrites the release process guidance, and adds a `prepare-pull-request` skill for contributors readying a PR for review. [#892](https://github.com/microsoft/vscode-documentdb/pull/892)
+
+### Security
+
+- **Dependency Updates**: Updates `brace-expansion` to 1.1.18 and `JamesIves/github-pages-deploy-action` from 4.8.0 to 4.9.0. [#896](https://github.com/microsoft/vscode-documentdb/pull/896), [#893](https://github.com/microsoft/vscode-documentdb/pull/893)
+
 ## 0.10.0
 
 ### New Features
