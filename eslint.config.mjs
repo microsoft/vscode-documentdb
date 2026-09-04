@@ -18,6 +18,7 @@ export default ts.config(
     {
         ignores: [
             '.azure-pipelines',
+            'cli-research', // CLI packaging research spike; has its own tsconfig
             '.config',
             '.github',
             '.vscode-test',

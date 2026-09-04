@@ -46,3 +46,4 @@ test-results.xml
 tsconfig.*
 webpack.config*
 work-summary.md
+cli-research/**
