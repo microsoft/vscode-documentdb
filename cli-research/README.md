@@ -10,6 +10,7 @@ Hi Guanzhou 👋 — this is a small info pack for something I'd love your help 
 | [`02-nodejs-cli-tech-research.md`](./02-nodejs-cli-tech-research.md) | **What I already looked at** on the Node/TS runtime + daemon/IPC layer. ⚠️ *Overview done a while back (mid-2026) — may be inaccurate today; worth re-verifying.* |
 | [`03-where-id-love-your-help.md`](./03-where-id-love-your-help.md) | **The part I'm hoping you can dig into.** The open questions — chiefly: what's the simplest cross-platform *deployment* for our users today, ideally all built on GitHub? |
 | [`04-packaging-and-release-design.md`](./04-packaging-and-release-design.md) | **The answer: evidence-backed packaging proposal.** Compares Node SEA, Bun, npm, signing, release channels, and the packaged-daemon spike; recommendation + the decisions needed. |
+| [`05-review-and-discussion-notes.md`](./05-review-and-discussion-notes.md) | **Shareable follow-up notes.** Records clarifications and decision context from ongoing review discussions. |
 | [`spike/`](./spike/) | **The demo.** Packaged binary that self-spawns a daemon over local IPC and evaluates shell JS via `@documentdb-js/shell-runtime`; built and tested on six OS/arch targets in CI. |
 | [`context/`](./context/) | **Optional deeper context** on the CLI idea itself (dual human + agent design, command-surface parameters, execution modes, auth model). Read only if you want the fuller picture. |
 
