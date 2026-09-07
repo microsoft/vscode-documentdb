@@ -398,9 +398,9 @@ $content-gutter: var(--spacingHorizontalMNudge); // 10px
         table-layout: fixed;
 
         // Floor below which the fixed columns would start overlapping; the scroller above
-        // takes over from here. 120 + 92 + 120 + 84 + 92 + 88 of declared columns leaves
+        // takes over from here. 120 + 92 + 120 + 84 + 92 of declared columns leaves
         // ~130px for the name, which is the narrowest that still reads as a name.
-        min-width: 726px;
+        min-width: 638px;
 
         .fui-TableCell,
         .fui-TableHeaderCell {
@@ -425,24 +425,16 @@ $content-gutter: var(--spacingHorizontalMNudge); // 10px
         .colNarrow {
             width: 84px;
         }
-
-        .colAction {
-            width: 88px;
-        }
-
-        .actionCell {
-            padding-inline: 0;
-        }
     }
 
     .namespaceTableSkeleton {
         width: 100%;
-        min-width: 726px;
+        min-width: 638px;
 
         .namespaceSkeletonHeader,
         .namespaceSkeletonGrid {
             display: grid;
-            grid-template-columns: minmax(130px, 1fr) 120px 92px 120px 84px 92px 88px;
+            grid-template-columns: minmax(130px, 1fr) 120px 92px 120px 84px 92px;
             gap: var(--spacingHorizontalS);
         }
 

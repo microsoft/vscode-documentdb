@@ -92,7 +92,8 @@ export const DashboardFeedback = (): JSX.Element => {
                     l10n.t('Data shown was correct'),
                     l10n.t('Told me something I could not see elsewhere'),
                     l10n.t('Helped me find what is using storage'),
-                    l10n.t('Helped me understand a running operation'),
+                    // Restore when the Operations tab returns.
+                    // l10n.t('Helped me understand a running operation'),
                 ]}
                 negativeReasons={[
                     l10n.t('Data shown was incorrect'),

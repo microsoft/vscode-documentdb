@@ -11,6 +11,7 @@ import {
     getStorageStats,
     listCurrentOperations,
     sampleClusterHealth,
+    type RawCommandDiagnostic,
 } from './getClusterHealth';
 
 function getFailedCommandName(errorEntry: string): string {
@@ -603,6 +604,7 @@ describe('listCurrentOperations', () => {
 
 describe('getStorageStats', () => {
     it('skips system databases and survives a failing dbStats', async () => {
+        const diagnostics: RawCommandDiagnostic[] = [];
         const { client } = createFakeClient({
             listDatabases: () => ({
                 databases: [
@@ -621,7 +623,7 @@ describe('getStorageStats', () => {
             },
         });
 
-        const stats = await getStorageStats(client);
+        const stats = await getStorageStats(client, undefined, diagnostics);
 
         expect(stats.databases.map((database) => database.name)).toEqual(['sales', 'archive']);
         expect(stats.databases[0].dataSizeBytes).toBe(90);
@@ -634,6 +636,28 @@ describe('getStorageStats', () => {
         // listDatabases.totalSize (303), which also counts admin/local/config.
         expect(stats.totalSizeBytes).toBe(300);
         expect(stats.omittedDatabaseCount).toBe(0);
+        expect(diagnostics).toEqual(
+            expect.arrayContaining([
+                {
+                    database: 'admin',
+                    command: { listDatabases: 1 },
+                    result: expect.objectContaining({ ok: true }),
+                },
+                {
+                    database: 'sales',
+                    command: { dbStats: 1 },
+                    result: {
+                        ok: true,
+                        response: { dataSize: 90, indexSize: 10, collections: 3, objects: 500, indexes: 7 },
+                    },
+                },
+                {
+                    database: 'archive',
+                    command: { dbStats: 1 },
+                    result: { ok: false, error: 'dbStats failed' },
+                },
+            ]),
+        );
     });
 
     it('reports how many databases were omitted by the inspection cap', async () => {
@@ -875,6 +899,7 @@ describe('statistics concurrency budget', () => {
 
 describe('getClusterTopology', () => {
     it('describes a replica set from replSetGetStatus', async () => {
+        const diagnostics: RawCommandDiagnostic[] = [];
         const { client } = createFakeClient({
             adminCommand: (command) => {
                 if (command.hello === 1) {
@@ -908,7 +933,7 @@ describe('getClusterTopology', () => {
             },
         });
 
-        const topology = await getClusterTopology(client);
+        const topology = await getClusterTopology(client, diagnostics);
 
         expect(topology.kind).toBe('replicaSet');
         expect(topology.setName).toBe('rs0');
@@ -926,6 +951,17 @@ describe('getClusterTopology', () => {
             memSizeMB: null,
         });
         expect(topology.errors).toEqual([]);
+        expect(diagnostics.map(({ command }) => command)).toEqual([
+            { hello: 1 },
+            { replSetGetStatus: 1 },
+            { hostInfo: 1 },
+        ]);
+        expect(diagnostics[1].result).toEqual(
+            expect.objectContaining({
+                ok: true,
+                response: expect.objectContaining({ set: 'rs0' }),
+            }),
+        );
     });
 
     it('falls back to the addresses hello advertised when replSetGetStatus is refused', async () => {
@@ -973,6 +1009,7 @@ describe('getClusterTopology', () => {
     });
 
     it('lists the shards behind a mongos', async () => {
+        const diagnostics: RawCommandDiagnostic[] = [];
         const { client } = createFakeClient({
             adminCommand: (command) => {
                 if (command.hello === 1) {
@@ -985,10 +1022,27 @@ describe('getClusterTopology', () => {
             },
         });
 
-        const topology = await getClusterTopology(client);
+        const topology = await getClusterTopology(client, diagnostics);
 
         expect(topology.kind).toBe('sharded');
         expect(topology.shards).toEqual([{ name: 'shard0', host: 'shard0/a:27018,b:27018', state: 1 }]);
+        expect(diagnostics).toEqual(
+            expect.arrayContaining([
+                {
+                    database: 'admin',
+                    command: { listShards: 1 },
+                    result: {
+                        ok: true,
+                        response: { shards: [{ _id: 'shard0', host: 'shard0/a:27018,b:27018', state: 1 }] },
+                    },
+                },
+                {
+                    database: 'admin',
+                    command: { hostInfo: 1 },
+                    result: { ok: false, error: 'command not supported' },
+                },
+            ]),
+        );
     });
 
     it('reports an all-empty hostInfo as no machine rather than a row of dashes', async () => {

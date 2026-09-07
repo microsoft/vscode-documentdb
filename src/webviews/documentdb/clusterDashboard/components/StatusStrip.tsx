@@ -163,10 +163,10 @@ export const StatusStrip = ({ storageStats, currentDatabase }: StatusStripProps)
                             tooltipExplanation={
                                 currentDatabase === null
                                     ? l10n.t(
-                                          'Size on disk across the user databases this dashboard inspected. This is the data footprint, not the provisioned disk. N/A means this server did not report it.',
+                                          'Combined on-disk size of all user databases. Excludes provisioned disk capacity.',
                                       ) + partialCaveat
                                     : l10n.t(
-                                          'Size on disk reported for database "{database}". This is the data footprint, not the provisioned disk. N/A means this server did not report it.',
+                                          'On-disk size of the data in database "{database}". Excludes provisioned disk capacity.',
                                           { database: currentDatabase },
                                       )
                             }
@@ -182,10 +182,10 @@ export const StatusStrip = ({ storageStats, currentDatabase }: StatusStripProps)
                             tooltipExplanation={
                                 currentDatabase === null
                                     ? l10n.t(
-                                          'Approximate number of documents across the user databases this dashboard inspected. The servers report it from collection metadata rather than by counting, so it can drift. N/A means this server did not report it.',
+                                          'Approximate number of documents across all user databases, based on collection metadata.',
                                       ) + partialCaveat
                                     : l10n.t(
-                                          'Approximate number of documents in database "{database}". The server reports it from collection metadata rather than by counting, so it can drift. N/A means this server did not report it.',
+                                          'Approximate number of documents in database "{database}", based on collection metadata.',
                                           { database: currentDatabase },
                                       )
                             }
@@ -197,9 +197,7 @@ export const StatusStrip = ({ storageStats, currentDatabase }: StatusStripProps)
                             <GenericMetric
                                 label={l10n.t('Databases / Collections')}
                                 value={databaseSummary}
-                                tooltipExplanation={l10n.t(
-                                    'Number of user databases and the collections they contain.',
-                                )}
+                                tooltipExplanation={l10n.t('Number of user databases and their combined collections.')}
                             />
                         ) : (
                             <CountMetric
@@ -219,10 +217,10 @@ export const StatusStrip = ({ storageStats, currentDatabase }: StatusStripProps)
                             tooltipExplanation={
                                 currentDatabase === null
                                     ? l10n.t(
-                                          'Number of indexes across all user databases, and their total size. N/A means this server did not report it.',
+                                          'Number of indexes across all user databases and their combined on-disk size.',
                                       )
                                     : l10n.t(
-                                          'Number of indexes in database "{database}", and their total size. N/A means this server did not report it.',
+                                          'Number of indexes in database "{database}" and their combined on-disk size.',
                                           { database: currentDatabase },
                                       )
                             }

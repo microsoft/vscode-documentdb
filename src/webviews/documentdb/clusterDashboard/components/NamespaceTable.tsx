@@ -5,15 +5,10 @@
 
 import {
     Button,
-    Menu,
-    MenuDivider,
-    MenuItem,
-    MenuList,
-    MenuPopover,
-    MenuTrigger,
     Table,
     TableBody,
     TableCell,
+    TableCellActions,
     TableCellLayout,
     TableHeader,
     TableHeaderCell,
@@ -21,20 +16,13 @@ import {
     Tooltip,
 } from '@fluentui/react-components';
 import {
-    ArrowDownloadRegular,
     ArrowExpandRegular,
-    ArrowUploadRegular,
-    ClipboardPasteRegular,
-    CopyRegular,
     DatabaseRegular,
-    DeleteRegular,
     DocumentMultipleRegular,
-    KeyboardRegular,
-    KeyMultipleRegular,
     LibraryRegular,
-    LinkRegular,
-    WindowConsoleRegular,
+    MoreHorizontalRegular,
 } from '@fluentui/react-icons';
+import { useConfiguration } from '@microsoft/vscode-ext-webview/react';
 import * as l10n from '@vscode/l10n';
 import { useMemo, type JSX } from 'react';
 
@@ -43,7 +31,7 @@ import {
     type ClusterDatabaseStorage,
 } from '../../../../documentdb/utils/getClusterHealth';
 import { formatCount } from '../../collectionView/queryInsightsTab/components/metricsRow';
-import { type NamespaceCommandId } from '../clusterDashboardRouter';
+import { type ClusterDashboardWebviewConfigurationType } from '../clusterDashboardController';
 import { formatApproximateCount, formatBytes, formatExactCount } from '../formatUtils';
 import { RelativeSize } from './RelativeSize';
 
@@ -178,24 +166,17 @@ interface RowActionsProps {
     row: NamespaceRow;
     isDatabases: boolean;
     onActivate: (row: NamespaceRow) => void;
-    onManageIndexes: (row: NamespaceRow) => void;
-    onRunCommand: (row: NamespaceRow, commandId: NamespaceCommandId) => void;
 }
 
 /**
- * The two or three actions a reader reaches for repeatedly, as buttons in the Actions column.
- *
- * The split is the tree's: the tree puts Open / Shell / Playground inline on the node and
- * everything else in the context menu, so a reader who has learned one surface has learned
- * this one.
+ * The primary action and a button that opens the row's native VS Code context menu.
  */
-const RowActionButtons = ({ row, isDatabases, onActivate, onRunCommand }: RowActionsProps): JSX.Element => {
+const RowActionButtons = ({ row, isDatabases, onActivate }: RowActionsProps): JSX.Element => {
     // Not "Open a shell scoped to sample_mflix": the button sits in that row, so the row
     // already says which namespace it acts on. Naming it again makes every tooltip in the
     // column a different length and reads back the one thing the reader can already see.
     const primaryLabel = isDatabases ? l10n.t('Show collections') : l10n.t('Open collection');
-    const shellLabel = l10n.t('Open shell');
-    const playgroundLabel = l10n.t('New query playground');
+    const moreActionsLabel = l10n.t('More actions');
 
     return (
         <div className="namespaceActions">
@@ -213,142 +194,25 @@ const RowActionButtons = ({ row, isDatabases, onActivate, onRunCommand }: RowAct
                 />
             </Tooltip>
 
-            <Tooltip content={shellLabel} relationship="description" withArrow>
-                <Button
-                    appearance="subtle"
-                    size="small"
-                    icon={<WindowConsoleRegular />}
-                    aria-label={shellLabel}
-                    onClick={(event) => {
-                        event.stopPropagation();
-                        onRunCommand(row, 'vscode-documentdb.command.shell.open');
-                    }}
-                />
-            </Tooltip>
-
-            {/* A playground is scoped to a collection; at the database level it has nothing to query. */}
-            {!isDatabases && (
-                <Tooltip content={playgroundLabel} relationship="description" withArrow>
-                    <Button
-                        appearance="subtle"
-                        size="small"
-                        icon={<KeyboardRegular />}
-                        aria-label={playgroundLabel}
-                        onClick={(event) => {
-                            event.stopPropagation();
-                            onRunCommand(row, 'vscode-documentdb.command.playground.new');
-                        }}
-                    />
-                </Tooltip>
-            )}
+            <Button
+                appearance="subtle"
+                size="small"
+                icon={<MoreHorizontalRegular />}
+                aria-label={moreActionsLabel}
+                title={moreActionsLabel}
+                onClick={(event) => {
+                    event.stopPropagation();
+                    const bounds = event.currentTarget.getBoundingClientRect();
+                    event.currentTarget.dispatchEvent(
+                        new MouseEvent('contextmenu', {
+                            bubbles: true,
+                            clientX: event.clientX || bounds.left,
+                            clientY: event.clientY || bounds.bottom,
+                        }),
+                    );
+                }}
+            />
         </div>
-    );
-};
-
-/**
- * Everything the tree offers on this node, in the tree's own grouping and order.
- *
- * Opened by right-clicking the row, as in the tree. Every item runs the tree's own command,
- * not a reimplementation.
- */
-const RowMenuList = ({ row, isDatabases, onActivate, onManageIndexes, onRunCommand }: RowActionsProps): JSX.Element => {
-    const runShell = (): void => onRunCommand(row, 'vscode-documentdb.command.shell.open');
-    const runPlayground = (): void => onRunCommand(row, 'vscode-documentdb.command.playground.new');
-
-    return (
-        <MenuList>
-            {isDatabases ? (
-                <>
-                    <MenuItem icon={<ArrowExpandRegular />} onClick={() => onActivate(row)}>
-                        {l10n.t('View Collections')}
-                    </MenuItem>
-                    <MenuItem
-                        icon={<LinkRegular />}
-                        onClick={() => onRunCommand(row, 'vscode-documentdb.command.copyReference')}
-                    >
-                        {l10n.t('Copy Reference')}
-                    </MenuItem>
-
-                    <MenuDivider />
-
-                    <MenuItem icon={<WindowConsoleRegular />} onClick={runShell}>
-                        {l10n.t('Open Shell')}
-                    </MenuItem>
-                    <MenuItem icon={<KeyboardRegular />} onClick={runPlayground}>
-                        {l10n.t('New Query Playground')}
-                    </MenuItem>
-
-                    <MenuDivider />
-
-                    <MenuItem
-                        icon={<DeleteRegular />}
-                        onClick={() => onRunCommand(row, 'vscode-documentdb.command.dropDatabase')}
-                    >
-                        {l10n.t('Delete Database')}
-                    </MenuItem>
-                </>
-            ) : (
-                <>
-                    <MenuItem icon={<DocumentMultipleRegular />} onClick={() => onActivate(row)}>
-                        {l10n.t('Open Collection')}
-                    </MenuItem>
-                    <MenuItem icon={<WindowConsoleRegular />} onClick={runShell}>
-                        {l10n.t('Open Shell')}
-                    </MenuItem>
-                    <MenuItem icon={<KeyboardRegular />} onClick={runPlayground}>
-                        {l10n.t('New Query Playground')}
-                    </MenuItem>
-                    <MenuItem
-                        icon={<LinkRegular />}
-                        onClick={() => onRunCommand(row, 'vscode-documentdb.command.copyReference')}
-                    >
-                        {l10n.t('Copy Reference')}
-                    </MenuItem>
-
-                    <MenuDivider />
-
-                    <MenuItem icon={<KeyMultipleRegular />} onClick={() => onManageIndexes(row)}>
-                        {l10n.t('Manage Indexes')}
-                    </MenuItem>
-
-                    <MenuDivider />
-
-                    <MenuItem
-                        icon={<CopyRegular />}
-                        onClick={() => onRunCommand(row, 'vscode-documentdb.command.copyCollection')}
-                    >
-                        {l10n.t('Copy Collection')}
-                    </MenuItem>
-                    <MenuItem
-                        icon={<ClipboardPasteRegular />}
-                        onClick={() => onRunCommand(row, 'vscode-documentdb.command.pasteCollection')}
-                    >
-                        {l10n.t('Paste Collection')}
-                    </MenuItem>
-                    <MenuItem
-                        icon={<ArrowDownloadRegular />}
-                        onClick={() => onRunCommand(row, 'vscode-documentdb.command.exportDocuments')}
-                    >
-                        {l10n.t('Export Documents')}
-                    </MenuItem>
-                    <MenuItem
-                        icon={<ArrowUploadRegular />}
-                        onClick={() => onRunCommand(row, 'vscode-documentdb.command.importDocuments')}
-                    >
-                        {l10n.t('Import Documents')}
-                    </MenuItem>
-
-                    <MenuDivider />
-
-                    <MenuItem
-                        icon={<DeleteRegular />}
-                        onClick={() => onRunCommand(row, 'vscode-documentdb.command.dropCollection')}
-                    >
-                        {l10n.t('Delete Collection')}
-                    </MenuItem>
-                </>
-            )}
-        </MenuList>
     );
 };
 
@@ -359,10 +223,8 @@ export interface NamespaceTableProps {
     onSortToggle: (column: SortColumn) => void;
     /** Drills into a database, or opens the Collection View for a collection. */
     onActivate: (row: NamespaceRow) => void;
-    /** Opens the Collection View's Indexes tab for a collection. */
-    onManageIndexes: (row: NamespaceRow) => void;
-    /** Runs one of the tree's own commands against the row. */
-    onRunCommand: (row: NamespaceRow, commandId: NamespaceCommandId) => void;
+    /** Parent database when rendering collections. */
+    databaseName?: string;
 }
 
 /**
@@ -378,10 +240,10 @@ export const NamespaceTable = ({
     sort,
     onSortToggle,
     onActivate,
-    onManageIndexes,
-    onRunCommand,
+    databaseName,
 }: NamespaceTableProps): JSX.Element => {
     const isDatabases = level === 'databases';
+    const configuration = useConfiguration<ClusterDashboardWebviewConfigurationType>();
 
     // Scaled against the largest *visible* row so the bars stay meaningful while filtered.
     // The two size columns are scaled independently: an index total is a fraction of the
@@ -415,7 +277,6 @@ export const NamespaceTable = ({
                     <col className="colSize" />
                     <col className="colNarrow" />
                     <col className="colNumber" />
-                    <col className="colAction" />
                 </colgroup>
                 <TableHeader>
                     <TableRow>
@@ -455,7 +316,6 @@ export const NamespaceTable = ({
                             sort={sort}
                             onToggle={onSortToggle}
                         />
-                        <TableHeaderCell className="actionCell">{l10n.t('Actions')}</TableHeaderCell>
                     </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -464,79 +324,78 @@ export const NamespaceTable = ({
                             row,
                             isDatabases,
                             onActivate,
-                            onManageIndexes,
-                            onRunCommand,
                         };
 
+                        const contextMenuContext = JSON.stringify({
+                            preventDefaultContextMenuItems: true,
+                            clusterDashboardNamespace: isDatabases ? 'database' : 'collection',
+                            clusterDashboardClusterId: configuration.clusterId,
+                            clusterDashboardSelectedDatabase: configuration.selectedDatabaseName,
+                            clusterDashboardDatabase: isDatabases ? row.name : databaseName,
+                            clusterDashboardCollection: isDatabases ? undefined : row.name,
+                        });
+
                         return (
-                            // Right-click the row, as in the tree. `openOnContext` is what
-                            // suppresses the editor's own menu; `Menu` renders no element of
-                            // its own, so the <tr> stays a direct child of <tbody>.
-                            <Menu key={row.name} openOnContext>
-                                <MenuTrigger disableButtonEnhancement>
-                                    <TableRow
-                                        className={isDatabases ? 'namespaceRow namespaceRowClickable' : 'namespaceRow'}
-                                        // Only a database row is clickable. Stepping into one
-                                        // is a cheap, in-place move; opening a collection
-                                        // leaves for another editor tab, which is too much to
-                                        // hang on a stray click at a row the reader was only
-                                        // reading.
-                                        onClick={isDatabases ? () => onActivate(row) : undefined}
+                            <TableRow
+                                key={row.name}
+                                data-vscode-context={contextMenuContext}
+                                className={isDatabases ? 'namespaceRow namespaceRowClickable' : 'namespaceRow'}
+                                // Only a database row is clickable. Stepping into one
+                                // is a cheap, in-place move; opening a collection
+                                // leaves for another editor tab, which is too much to
+                                // hang on a stray click at a row the reader was only
+                                // reading.
+                                onClick={isDatabases ? () => onActivate(row) : undefined}
+                            >
+                                <TableCell>
+                                    <TableCellLayout
+                                        truncate
+                                        title={row.name}
+                                        media={isDatabases ? <DatabaseRegular /> : <LibraryRegular />}
                                     >
-                                        <TableCell>
-                                            <TableCellLayout
-                                                truncate
-                                                title={row.name}
-                                                media={isDatabases ? <DatabaseRegular /> : <LibraryRegular />}
-                                            >
-                                                {row.name}
-                                            </TableCellLayout>
-                                        </TableCell>
-                                        <TableCell>
-                                            {row.isView ? (
-                                                // A view stores nothing; a bar would claim
-                                                // otherwise. Kept in the size column's own
-                                                // slot so the figures above and below it keep
-                                                // their shared right edge.
-                                                <div className="relativeSizeCell">
-                                                    <span className="relativeSizeText mutedCell">{l10n.t('View')}</span>
-                                                </div>
-                                            ) : (
-                                                <RelativeSize value={row.sizeBytes} maximum={largestBytes} />
-                                            )}
-                                        </TableCell>
-                                        <TableCell>
-                                            <span className="numberCell">{formatBytes(row.dataSizeBytes)}</span>
-                                        </TableCell>
-                                        <TableCell>
-                                            <RelativeSize value={row.indexSizeBytes} maximum={largestIndexBytes} />
-                                        </TableCell>
-                                        <TableCell>
-                                            <span className="numberCell">
-                                                {row.childCount === null ? '—' : formatCount(row.childCount)}
-                                            </span>
-                                        </TableCell>
-                                        <TableCell>
-                                            {/*
-                                             * Rounded, with the server's own figure in the
-                                             * tooltip: a document count is read from
-                                             * collection metadata rather than counted, so the
-                                             * digits it would print are more precise than the
-                                             * number is.
-                                             */}
-                                            <span className="numberCell" title={formatExactCount(row.documents)}>
-                                                {formatApproximateCount(row.documents)}
-                                            </span>
-                                        </TableCell>
-                                        <TableCell className="actionCell">
-                                            <RowActionButtons {...actions} />
-                                        </TableCell>
-                                    </TableRow>
-                                </MenuTrigger>
-                                <MenuPopover>
-                                    <RowMenuList {...actions} />
-                                </MenuPopover>
-                            </Menu>
+                                        {row.name}
+                                    </TableCellLayout>
+                                    <TableCellActions>
+                                        <RowActionButtons {...actions} />
+                                    </TableCellActions>
+                                </TableCell>
+                                <TableCell>
+                                    {row.isView ? (
+                                        // A view stores nothing; a bar would claim
+                                        // otherwise. Kept in the size column's own
+                                        // slot so the figures above and below it keep
+                                        // their shared right edge.
+                                        <div className="relativeSizeCell">
+                                            <span className="relativeSizeText mutedCell">{l10n.t('View')}</span>
+                                        </div>
+                                    ) : (
+                                        <RelativeSize value={row.sizeBytes} maximum={largestBytes} />
+                                    )}
+                                </TableCell>
+                                <TableCell>
+                                    <span className="numberCell">{formatBytes(row.dataSizeBytes)}</span>
+                                </TableCell>
+                                <TableCell>
+                                    <RelativeSize value={row.indexSizeBytes} maximum={largestIndexBytes} />
+                                </TableCell>
+                                <TableCell>
+                                    <span className="numberCell">
+                                        {row.childCount === null ? '—' : formatCount(row.childCount)}
+                                    </span>
+                                </TableCell>
+                                <TableCell>
+                                    {/*
+                                     * Rounded, with the server's own figure in the
+                                     * tooltip: a document count is read from
+                                     * collection metadata rather than counted, so the
+                                     * digits it would print are more precise than the
+                                     * number is.
+                                     */}
+                                    <span className="numberCell" title={formatExactCount(row.documents)}>
+                                        {formatApproximateCount(row.documents)}
+                                    </span>
+                                </TableCell>
+                            </TableRow>
                         );
                     })}
                 </TableBody>

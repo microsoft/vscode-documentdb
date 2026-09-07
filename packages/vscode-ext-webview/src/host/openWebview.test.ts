@@ -75,6 +75,16 @@ describe('openWebview', () => {
         expect(html).toContain(encodeURIComponent(JSON.stringify({ hello: 'world' })));
     });
 
+    it('uses a custom panel viewType without changing the React registry key', () => {
+        const controller = openWebview(makeContext(), {
+            ...makeOptions(),
+            panelViewType: 'publisher-extension-my-view',
+        });
+
+        expect((controller.panel as unknown as { viewType: string }).viewType).toBe('publisher-extension-my-view');
+        expect(controller.panel.webview.html).toContain('"viewType":"myView"');
+    });
+
     it('escapes `</script>` in the serialized initial-data block so it cannot break out (R766-N03)', () => {
         const controller = openWebview(makeContext(), {
             ...makeOptions(),

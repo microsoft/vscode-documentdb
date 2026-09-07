@@ -52,7 +52,11 @@ None yet. A user-manual page is due before this ships.
   ([0002](./decisions.md#0002--per-command-trycatch-no-capability-probe-reconstructed)).
 - **Diagnostics are point-in-time.** Export takes a fresh current-operation snapshot on the host;
   it does not retain or export observed-operation history. Credential-bearing commands lose their
-  body, and credential fields are redacted at any depth before the snapshot is shown.
+  body, and credential fields are redacted at any depth before the snapshot is shown. Raw diagnostic
+  commands are a list that preserves each database and invocation beside its unflattened reply or
+  error, including the commands used by the topology summary and the `listDatabases` and bounded
+  per-database `dbStats` calls used by storage. Interpreted topology, storage, operations, and health
+  data lives under `aggregates`.
 - **Panel de-duplication is keyed on `clusterId`, never `treeId`**
   ([0005](./decisions.md#0005--panel-de-duplication-keyed-on-clusterid-never-treeid-reconstructed)).
 

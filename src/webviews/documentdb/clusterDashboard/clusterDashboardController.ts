@@ -9,6 +9,12 @@ import * as vscode from 'vscode';
 import { API } from '../../../DocumentDBExperiences';
 import { ext } from '../../../extensionVariables';
 import { openAppWebview, type AppWebviewController } from '../../_integration/openAppWebview';
+import {
+    CLUSTER_DASHBOARD_CONTEXT_MENU_COMMANDS,
+    type ClusterDashboardContextMenuAction,
+    type ClusterDashboardContextMenuContext,
+    type ClusterDashboardContextMenuMessage,
+} from './clusterDashboardContextMenu';
 import { type RouterContext } from './clusterDashboardRouter';
 
 /**
@@ -66,8 +72,68 @@ export type ClusterDashboardWebviewConfigurationType = {
  */
 const openPanels = new Map<string, AppWebviewController<ClusterDashboardWebviewConfigurationType>>();
 
+const contextMenuActions: Readonly<Record<string, ClusterDashboardContextMenuAction>> = {
+    [CLUSTER_DASHBOARD_CONTEXT_MENU_COMMANDS.viewCollections]: 'viewCollections',
+    [CLUSTER_DASHBOARD_CONTEXT_MENU_COMMANDS.openCollection]: 'openCollection',
+    [CLUSTER_DASHBOARD_CONTEXT_MENU_COMMANDS.manageIndexes]: 'manageIndexes',
+    [CLUSTER_DASHBOARD_CONTEXT_MENU_COMMANDS.copyReference]: 'vscode-documentdb.command.copyReference',
+    [CLUSTER_DASHBOARD_CONTEXT_MENU_COMMANDS.openShell]: 'vscode-documentdb.command.shell.open',
+    [CLUSTER_DASHBOARD_CONTEXT_MENU_COMMANDS.newPlayground]: 'vscode-documentdb.command.playground.new',
+    [CLUSTER_DASHBOARD_CONTEXT_MENU_COMMANDS.deleteDatabase]: 'vscode-documentdb.command.dropDatabase',
+    [CLUSTER_DASHBOARD_CONTEXT_MENU_COMMANDS.copyCollection]: 'vscode-documentdb.command.copyCollection',
+    [CLUSTER_DASHBOARD_CONTEXT_MENU_COMMANDS.pasteCollection]: 'vscode-documentdb.command.pasteCollection',
+    [CLUSTER_DASHBOARD_CONTEXT_MENU_COMMANDS.exportDocuments]: 'vscode-documentdb.command.exportDocuments',
+    [CLUSTER_DASHBOARD_CONTEXT_MENU_COMMANDS.importDocuments]: 'vscode-documentdb.command.importDocuments',
+    [CLUSTER_DASHBOARD_CONTEXT_MENU_COMMANDS.deleteCollection]: 'vscode-documentdb.command.dropCollection',
+};
+
 function getPanelKey(clusterId: string, selectedDatabaseName?: string): string {
     return `${clusterId}\u0000${selectedDatabaseName ?? ''}`;
+}
+
+function isContextMenuContext(value: unknown): value is ClusterDashboardContextMenuContext {
+    if (typeof value !== 'object' || value === null) {
+        return false;
+    }
+
+    const context = value as Partial<ClusterDashboardContextMenuContext>;
+    return (
+        typeof context.clusterDashboardClusterId === 'string' &&
+        typeof context.clusterDashboardDatabase === 'string' &&
+        (context.clusterDashboardSelectedDatabase === undefined ||
+            typeof context.clusterDashboardSelectedDatabase === 'string') &&
+        (context.clusterDashboardCollection === undefined || typeof context.clusterDashboardCollection === 'string')
+    );
+}
+
+export function registerClusterDashboardContextMenuCommands(context: vscode.ExtensionContext): void {
+    for (const [commandId, action] of Object.entries(contextMenuActions)) {
+        context.subscriptions.push(
+            vscode.commands.registerCommand(commandId, async (commandContext: unknown): Promise<void> => {
+                if (!isContextMenuContext(commandContext)) {
+                    return;
+                }
+
+                const panel = openPanels.get(
+                    getPanelKey(
+                        commandContext.clusterDashboardClusterId,
+                        commandContext.clusterDashboardSelectedDatabase,
+                    ),
+                );
+                if (!panel || panel.isDisposed) {
+                    return;
+                }
+
+                const message: ClusterDashboardContextMenuMessage = {
+                    type: 'clusterDashboard.contextMenu',
+                    action,
+                    databaseName: commandContext.clusterDashboardDatabase,
+                    collectionName: commandContext.clusterDashboardCollection,
+                };
+                await panel.panel.webview.postMessage(message);
+            }),
+        );
+    }
 }
 
 export function openClusterDashboardWebview(
@@ -97,6 +163,7 @@ export function openClusterDashboardWebview(
                       databaseName: initialData.selectedDatabaseName,
                   }),
         webviewName: 'clusterDashboard',
+        panelViewType: 'vscode-documentdb-cluster-dashboard',
         config: initialData,
         context: trpcContext,
         viewColumn: vscode.ViewColumn.One,

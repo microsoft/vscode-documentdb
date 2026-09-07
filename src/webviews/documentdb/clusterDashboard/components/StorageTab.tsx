@@ -16,10 +16,11 @@ import {
 } from '@fluentui/react-components';
 import { ArrowLeftRegular, DatabaseMultipleRegular, DatabaseRegular } from '@fluentui/react-icons';
 import * as l10n from '@vscode/l10n';
-import { useEffect, useState, useMemo, type JSX } from 'react';
+import { useCallback, useEffect, useMemo, useState, type JSX } from 'react';
 
 import { type ClusterStorageStats } from '../../../../documentdb/utils/getClusterHealth';
 import { useTrpcClient } from '../../../_integration/useTrpcClient';
+import { isClusterDashboardContextMenuMessage } from '../clusterDashboardContextMenu';
 import { type NamespaceCommandId } from '../clusterDashboardRouter';
 import {
     arrangeRows,
@@ -31,8 +32,8 @@ import {
     type SortColumn,
     type SortState,
 } from './NamespaceTable';
-import { type DatabaseCollectionsState } from './useDatabaseCollections';
 import { NamespaceTableSkeleton } from './NamespaceTableSkeleton';
+import { type DatabaseCollectionsState } from './useDatabaseCollections';
 
 /**
  * How the reader has arranged the list, and which level they are on.
@@ -125,7 +126,9 @@ export const StorageTab = ({
     const allRows = currentDatabase === null ? databaseRows : collectionRows;
     const levelKey = currentDatabase ?? 'databases';
     const knownCollectionCount =
-        currentDatabase === null ? undefined : databaseRows.find((database) => database.name === currentDatabase)?.childCount;
+        currentDatabase === null
+            ? undefined
+            : databaseRows.find((database) => database.name === currentDatabase)?.childCount;
     const [lastRowCounts, setLastRowCounts] = useState<Record<string, number>>({});
     const inventoryIsLoading = isLoading || storageStats === null;
 
@@ -137,17 +140,20 @@ export const StorageTab = ({
         }
     }, [allRows.length, inventoryIsLoading, levelKey]);
 
-    const openCollection = (collectionName: string, initialTab?: 'tab_result' | 'tab_indexes'): void => {
-        void trpcClient.clusterDashboard.openNamespace
-            .mutate({ namespace: `${currentDatabase ?? ''}.${collectionName}`, initialTab })
-            .catch((error: unknown) => {
-                void trpcClient.common.displayErrorMessage.mutate({
-                    message: l10n.t('Failed to open the collection view.'),
-                    modal: false,
-                    cause: error instanceof Error ? error.message : String(error),
+    const openCollection = useCallback(
+        (databaseName: string, collectionName: string, initialTab?: 'tab_result' | 'tab_indexes'): void => {
+            void trpcClient.clusterDashboard.openNamespace
+                .mutate({ namespace: `${databaseName}.${collectionName}`, initialTab })
+                .catch((error: unknown) => {
+                    void trpcClient.common.displayErrorMessage.mutate({
+                        message: l10n.t('Failed to open the collection view.'),
+                        modal: false,
+                        cause: error instanceof Error ? error.message : String(error),
+                    });
                 });
-            });
-    };
+        },
+        [trpcClient],
+    );
 
     /**
      * Runs one of the tree's own commands against a row.
@@ -156,27 +162,52 @@ export const StorageTab = ({
      * the branch not being expanded in the tree, so the node cannot be found — is
      * actionable but invisible from here.
      */
-    const runCommand = (row: NamespaceRow, commandId: NamespaceCommandId): void => {
-        void trpcClient.clusterDashboard.runNamespaceCommand
-            .mutate({
-                commandId,
-                databaseName: currentDatabase ?? row.name,
-                collectionName: currentDatabase === null ? undefined : row.name,
-            })
-            .catch((error: unknown) => {
-                void trpcClient.common.displayErrorMessage.mutate({
-                    message: l10n.t('The action could not be started.'),
-                    modal: true,
-                    cause: error instanceof Error ? error.message : String(error),
+    const runCommand = useCallback(
+        (databaseName: string, collectionName: string | undefined, commandId: NamespaceCommandId): void => {
+            void trpcClient.clusterDashboard.runNamespaceCommand
+                .mutate({
+                    commandId,
+                    databaseName,
+                    collectionName,
+                })
+                .catch((error: unknown) => {
+                    void trpcClient.common.displayErrorMessage.mutate({
+                        message: l10n.t('The action could not be started.'),
+                        modal: true,
+                        cause: error instanceof Error ? error.message : String(error),
+                    });
                 });
-            });
-    };
+        },
+        [trpcClient],
+    );
+
+    useEffect(() => {
+        const handleMessage = (event: MessageEvent<unknown>): void => {
+            if (!isClusterDashboardContextMenuMessage(event.data)) {
+                return;
+            }
+
+            const { action, databaseName, collectionName } = event.data;
+            if (action === 'viewCollections') {
+                onViewStateChange((current) => ({ ...current, currentDatabase: databaseName, filterText: '' }));
+            } else if (action === 'openCollection' && collectionName !== undefined) {
+                openCollection(databaseName, collectionName);
+            } else if (action === 'manageIndexes' && collectionName !== undefined) {
+                openCollection(databaseName, collectionName, 'tab_indexes');
+            } else if (action !== 'openCollection' && action !== 'manageIndexes') {
+                runCommand(databaseName, collectionName, action);
+            }
+        };
+
+        window.addEventListener('message', handleMessage);
+        return () => window.removeEventListener('message', handleMessage);
+    }, [onViewStateChange, openCollection, runCommand]);
 
     const activate = (row: NamespaceRow): void => {
         if (currentDatabase === null) {
             onViewStateChange((current) => ({ ...current, currentDatabase: row.name, filterText: '' }));
         } else {
-            openCollection(row.name);
+            openCollection(currentDatabase, row.name);
         }
     };
 
@@ -199,8 +230,8 @@ export const StorageTab = ({
         inventoryIsLoading || storageStats === null
             ? 0
             : currentDatabase === null
-            ? storageStats.omittedDatabaseCount
-            : (collections.result?.omittedCollectionCount ?? 0);
+              ? storageStats.omittedDatabaseCount
+              : (collections.result?.omittedCollectionCount ?? 0);
     const shownCount = currentDatabase === null ? (storageStats?.databases.length ?? 0) : collectionRows.length;
 
     return (
@@ -315,8 +346,7 @@ export const StorageTab = ({
                     sort={sort}
                     onSortToggle={toggleSort}
                     onActivate={activate}
-                    onManageIndexes={(row) => openCollection(row.name, 'tab_indexes')}
-                    onRunCommand={runCommand}
+                    databaseName={currentDatabase ?? undefined}
                 />
             )}
 

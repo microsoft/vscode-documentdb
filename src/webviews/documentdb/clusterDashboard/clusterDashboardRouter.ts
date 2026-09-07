@@ -21,6 +21,7 @@ import {
     type ClusterHealthSample,
     type ClusterStorageStats,
     type DatabaseCollectionsResult,
+    type RawCommandDiagnostic,
 } from '../../../documentdb/utils/getClusterHealth';
 import { readOnlyJsonDocumentProvider } from '../../../utils/readOnlyJsonDocumentProvider';
 import { type BaseRouterContext } from '../../_integration/appRouter';
@@ -53,25 +54,13 @@ export type NamespaceCommandId = (typeof NAMESPACE_COMMAND_IDS)[number];
  * The server commands the dashboard describes a cluster with, run for the diagnostics
  * document and reported verbatim.
  *
- * These are the same commands `getClusterMetadata` and `getClusterTopology` run. The document
- * carries their replies rather than the metadata map built from them: that map is shaped for
- * telemetry — hashed, stringified, pruned to a fixed key set — so a field missing from it says
- * nothing about whether the server reported it, which is exactly the question a diagnostics
- * document exists to answer.
+ * These supplement the commands captured directly by the storage and topology collectors.
+ * The document carries each command beside its reply rather than the metadata map built from
+ * them: that map is shaped for telemetry — hashed, stringified, and pruned to a fixed key set.
  *
  * `connectionStatus` is not among them because its reply names the signed-in principal.
  */
-const DIAGNOSTIC_COMMANDS: ReadonlyArray<{ name: string; command: Document }> = [
-    { name: 'buildInfo', command: { buildInfo: 1 } },
-    { name: 'hello', command: { hello: 1 } },
-    { name: 'serverStatus', command: { serverStatus: 1 } },
-    { name: 'hostInfo', command: { hostInfo: 1 } },
-    { name: 'replSetGetStatus', command: { replSetGetStatus: 1 } },
-    { name: 'listShards', command: { listShards: 1 } },
-];
-
-/** One command's outcome: what it answered, or why it did not. */
-type RawCommandReply = { ok: true; response: Document } | { ok: false; error: string };
+const DIAGNOSTIC_COMMANDS: readonly Document[] = [{ buildInfo: 1 }, { serverStatus: 1 }];
 
 /**
  * Runs every diagnostic command and keeps each outcome.
@@ -81,20 +70,26 @@ type RawCommandReply = { ok: true; response: Document } | { ok: false; error: st
  * gap to hide. They run concurrently because a failing command waits out the driver's server
  * selection timeout, and six of those in series is a minute of nothing happening.
  */
-async function collectRawCommandReplies(client: MongoClient): Promise<Record<string, RawCommandReply>> {
+export async function collectRawCommandReplies(client: MongoClient): Promise<RawCommandDiagnostic[]> {
     const adminDb = client.db().admin();
 
-    const entries = await Promise.all(
-        DIAGNOSTIC_COMMANDS.map(async ({ name, command }): Promise<[string, RawCommandReply]> => {
+    return Promise.all(
+        DIAGNOSTIC_COMMANDS.map(async (command): Promise<RawCommandDiagnostic> => {
             try {
-                return [name, { ok: true, response: await adminDb.command(command) }];
+                return {
+                    database: 'admin',
+                    command,
+                    result: { ok: true, response: await adminDb.command(command) },
+                };
             } catch (error) {
-                return [name, { ok: false, error: error instanceof Error ? error.message : String(error) }];
+                return {
+                    database: 'admin',
+                    command,
+                    result: { ok: false, error: error instanceof Error ? error.message : String(error) },
+                };
             }
         }),
     );
-
-    return Object.fromEntries(entries);
 }
 
 export type RouterContext = BaseRouterContext & {
@@ -324,11 +319,13 @@ export const clusterDashboardRouter = router({
 
         const client = await ClustersClient.getClient(myCtx.clusterId);
         const mongoClient = client.getMongoClient();
+        const storageCommands: RawCommandDiagnostic[] = [];
+        const topologyCommands: RawCommandDiagnostic[] = [];
 
         const [storage, operations, topology, commands, health] = await Promise.all([
-            getStorageStats(mongoClient),
+            getStorageStats(mongoClient, undefined, storageCommands),
             listCurrentOperations(mongoClient),
-            getClusterTopology(mongoClient),
+            getClusterTopology(mongoClient, topologyCommands),
             collectRawCommandReplies(mongoClient),
             sampleClusterHealth(mongoClient),
         ]);
@@ -336,15 +333,15 @@ export const clusterDashboardRouter = router({
         const diagnostics = {
             generatedAt: new Date().toISOString(),
             cluster: { displayName: myCtx.clusterDisplayName, viewId: myCtx.viewId },
-            // What each server command actually answered. Deliberately not the flattened
-            // metadata map the extension builds from these: that map is shaped for
-            // telemetry — hashed, stringified, and pruned to a fixed key set — so a field
-            // absent from it says nothing about whether the server reported it.
-            commands,
-            topology,
-            storage,
-            currentOperations: operations,
-            health,
+            // Each invocation beside exactly what the server answered (or why it did not).
+            commands: [...commands, ...storageCommands, ...topologyCommands],
+            // Interpreted summaries built for the dashboard, not raw server replies.
+            aggregates: {
+                topology,
+                storage,
+                currentOperations: operations,
+                health,
+            },
         };
 
         await readOnlyJsonDocumentProvider.openDocument(

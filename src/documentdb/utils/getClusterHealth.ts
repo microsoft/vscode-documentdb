@@ -259,6 +259,13 @@ export interface ClusterStorageStats {
     errors: string[];
 }
 
+/** A database command and its unmodified outcome, captured for diagnostic export. */
+export interface RawCommandDiagnostic {
+    database: string;
+    command: Document;
+    result: { ok: true; response: Document } | { ok: false; error: string };
+}
+
 /** Per-collection figures shown when a database row in the Data tab is expanded. */
 export interface ClusterCollectionStorage {
     name: string;
@@ -778,14 +785,29 @@ async function runCurrentOpAttempts(client: MongoClient): Promise<CurrentOperati
  * @param client - A connected MongoClient.
  * @returns The per-database figures; databases whose `dbStats` failed keep `null` fields.
  */
-export async function getStorageStats(client: MongoClient, signal?: AbortSignal): Promise<ClusterStorageStats> {
+export async function getStorageStats(
+    client: MongoClient,
+    signal?: AbortSignal,
+    diagnostics?: RawCommandDiagnostic[],
+): Promise<ClusterStorageStats> {
     const errors: string[] = [];
     const adminDb = client.db().admin();
+    const listDatabasesCommand = { listDatabases: 1 };
 
     let listed: Document;
     try {
         listed = await adminDb.listDatabases();
+        diagnostics?.push({
+            database: 'admin',
+            command: listDatabasesCommand,
+            result: { ok: true, response: listed },
+        });
     } catch (error) {
+        diagnostics?.push({
+            database: 'admin',
+            command: listDatabasesCommand,
+            result: { ok: false, error: error instanceof Error ? error.message : String(error) },
+        });
         return {
             databases: [],
             totalSizeBytes: null,
@@ -822,8 +844,14 @@ export async function getStorageStats(client: MongoClient, signal?: AbortSignal)
                 return database;
             }
 
+            const dbStatsCommand = { dbStats: 1 };
             try {
-                const stats = await client.db(name).command({ dbStats: 1 });
+                const stats = await client.db(name).command(dbStatsCommand);
+                diagnostics?.push({
+                    database: name,
+                    command: dbStatsCommand,
+                    result: { ok: true, response: stats },
+                });
                 database.dataSizeBytes = toNumberOrNull(stats.dataSize);
                 database.indexSizeBytes = toNumberOrNull(stats.indexSize);
                 database.collections = toNumberOrNull(stats.collections);
@@ -833,6 +861,11 @@ export async function getStorageStats(client: MongoClient, signal?: AbortSignal)
                 // replaced, but `null` (field absent) should fall back to storageSize.
                 database.sizeOnDiskBytes ??= toNumberOrNull(stats.storageSize);
             } catch (error) {
+                diagnostics?.push({
+                    database: name,
+                    command: dbStatsCommand,
+                    result: { ok: false, error: error instanceof Error ? error.message : String(error) },
+                });
                 errors.push(describeCommandFailure(`dbStats:${name}`, error));
             }
 
@@ -977,9 +1010,26 @@ function toHostFacts(hostInfo: Document): ClusterHostFacts | null {
  * @param client - A connected MongoClient.
  * @returns The topology that could be determined; never throws for an unsupported command.
  */
-export async function getClusterTopology(client: MongoClient): Promise<ClusterTopology> {
+export async function getClusterTopology(
+    client: MongoClient,
+    diagnostics?: RawCommandDiagnostic[],
+): Promise<ClusterTopology> {
     const errors: string[] = [];
     const adminDb = client.db().admin();
+    const runCommand = async (command: Document): Promise<Document> => {
+        try {
+            const response = await adminDb.command(command);
+            diagnostics?.push({ database: 'admin', command, result: { ok: true, response } });
+            return response;
+        } catch (error) {
+            diagnostics?.push({
+                database: 'admin',
+                command,
+                result: { ok: false, error: error instanceof Error ? error.message : String(error) },
+            });
+            throw error;
+        }
+    };
 
     const topology: ClusterTopology = {
         kind: 'unknown',
@@ -993,7 +1043,7 @@ export async function getClusterTopology(client: MongoClient): Promise<ClusterTo
 
     let hello: Document | null = null;
     try {
-        hello = await adminDb.command({ hello: 1 });
+        hello = await runCommand({ hello: 1 });
     } catch (error) {
         errors.push(describeCommandFailure('hello', error));
     }
@@ -1044,7 +1094,7 @@ export async function getClusterTopology(client: MongoClient): Promise<ClusterTo
 
     if (topology.kind === 'replicaSet' || topology.kind === 'unknown') {
         try {
-            const status = await adminDb.command({ replSetGetStatus: 1 });
+            const status = await runCommand({ replSetGetStatus: 1 });
             const members = Array.isArray(status.members) ? (status.members as Document[]) : [];
             const detailed = members.map((member) => toReplicaSetMember(member, self)).filter((m) => m.address !== '');
 
@@ -1060,7 +1110,7 @@ export async function getClusterTopology(client: MongoClient): Promise<ClusterTo
 
     if (topology.kind === 'sharded') {
         try {
-            const shardList = await adminDb.command({ listShards: 1 });
+            const shardList = await runCommand({ listShards: 1 });
             const shards = Array.isArray(shardList.shards) ? (shardList.shards as Document[]) : [];
             topology.shards = shards
                 .filter((shard) => typeof shard._id === 'string' && typeof shard.host === 'string')
@@ -1075,7 +1125,7 @@ export async function getClusterTopology(client: MongoClient): Promise<ClusterTo
     }
 
     try {
-        topology.host = toHostFacts(await adminDb.command({ hostInfo: 1 }));
+        topology.host = toHostFacts(await runCommand({ hostInfo: 1 }));
     } catch (error) {
         errors.push(describeCommandFailure('hostInfo', error));
     }

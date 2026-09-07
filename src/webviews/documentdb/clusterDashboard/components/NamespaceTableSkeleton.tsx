@@ -21,7 +21,7 @@ export const NamespaceTableSkeleton = ({ rowCount = 6 }: NamespaceTableSkeletonP
                     <SkeletonItem size={24} />
                 </div>
                 <div className="namespaceSkeletonGrid">
-                    {Array.from({ length: rowCount * 7 }).map((_, index) => (
+                    {Array.from({ length: rowCount * 6 }).map((_, index) => (
                         <SkeletonItem key={index} size={24} />
                     ))}
                 </div>

@@ -10,6 +10,7 @@ jest.mock('@vscode/l10n', () => ({
 jest.mock('vscode', () => ({
     ViewColumn: { One: 1 },
     Uri: { joinPath: jest.fn((base: unknown, ...parts: string[]) => ({ base, parts })) },
+    commands: { registerCommand: jest.fn() },
 }));
 
 jest.mock('../../../extensionVariables', () => ({
@@ -20,7 +21,9 @@ jest.mock('../../_integration/openAppWebview', () => ({
     openAppWebview: jest.fn(() => createFakeController()),
 }));
 
-import { openClusterDashboardWebview } from './clusterDashboardController';
+import * as vscode from 'vscode';
+import { CLUSTER_DASHBOARD_CONTEXT_MENU_COMMANDS } from './clusterDashboardContextMenu';
+import { openClusterDashboardWebview, registerClusterDashboardContextMenuCommands } from './clusterDashboardController';
 
 /**
  * Minimal stand-in for the parts of `AppWebviewController` this factory touches:
@@ -31,6 +34,7 @@ type FakeController = {
     onDisposed: (handler: () => void) => void;
     revealToForeground: jest.Mock;
     dispose: () => void;
+    panel: { webview: { postMessage: jest.Mock } };
 };
 
 function createFakeController(): FakeController {
@@ -39,6 +43,7 @@ function createFakeController(): FakeController {
     return {
         isDisposed: false,
         revealToForeground: jest.fn(),
+        panel: { webview: { postMessage: jest.fn().mockResolvedValue(true) } },
         onDisposed(handler: () => void): void {
             handlers.push(handler);
         },
@@ -93,5 +98,33 @@ describe('openClusterDashboardWebview panel lifecycle', () => {
         expect(second).not.toBe(first);
 
         second.dispose();
+    });
+});
+
+describe('cluster dashboard native context menu commands', () => {
+    it('routes the row action to the matching dashboard panel', async () => {
+        const handlers = new Map<string, (context: unknown) => Promise<void>>();
+        jest.mocked(vscode.commands.registerCommand).mockImplementation((commandId, handler) => {
+            handlers.set(commandId, handler as (context: unknown) => Promise<void>);
+            return { dispose: jest.fn() };
+        });
+        registerClusterDashboardContextMenuCommands({ subscriptions: [] } as unknown as vscode.ExtensionContext);
+        const controller = open(CLUSTER, 'sales');
+
+        await handlers.get(CLUSTER_DASHBOARD_CONTEXT_MENU_COMMANDS.openCollection)?.({
+            clusterDashboardClusterId: CLUSTER,
+            clusterDashboardSelectedDatabase: 'sales',
+            clusterDashboardDatabase: 'sales',
+            clusterDashboardCollection: 'orders',
+        });
+
+        expect(controller.panel.webview.postMessage).toHaveBeenCalledWith({
+            type: 'clusterDashboard.contextMenu',
+            action: 'openCollection',
+            databaseName: 'sales',
+            collectionName: 'orders',
+        });
+
+        controller.dispose();
     });
 });
