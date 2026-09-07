@@ -23,9 +23,6 @@ import { useDatabaseCollections } from './components/useDatabaseCollections';
 /** Consecutive failed polls after which the dashboard reports the cluster as disconnected. */
 const FAILURE_THRESHOLD = 2;
 
-/** Storage is refreshed every Nth health tick — `dbStats` per database is far heavier. */
-const STORAGE_REFRESH_MULTIPLIER = 12;
-
 export const ClusterDashboard = (): JSX.Element => {
     /**
      * Use the configuration object to access the data passed to the webview at its creation.
@@ -44,6 +41,7 @@ export const ClusterDashboard = (): JSX.Element => {
     const [latestSample, setLatestSample] = useState<ClusterHealthSample | null>(null);
     const [consecutiveFailures, setConsecutiveFailures] = useState(0);
     const [storageStats, setStorageStats] = useState<ClusterStorageStats | null>(null);
+    const [storageLastUpdatedAt, setStorageLastUpdatedAt] = useState<number>();
     const [isRefreshingStorage, setIsRefreshingStorage] = useState(false);
     /**
      * How the reader has arranged the inventory — order, filter, level.
@@ -88,6 +86,7 @@ export const ClusterDashboard = (): JSX.Element => {
             const stats = await trpcClient.clusterDashboard.getStorageStats.query();
             if (!disposedRef.current) {
                 setStorageStats(stats);
+                setStorageLastUpdatedAt(Date.now());
             }
         } catch (error) {
             if (!disposedRef.current) {
@@ -195,19 +194,6 @@ export const ClusterDashboard = (): JSX.Element => {
 
         return () => clearInterval(intervalId);
     }, [configuration.refreshIntervalMs, trpcClient, visibilityGeneration]);
-
-    // Storage refreshes on a much slower cadence than the health sample: `dbStats` per
-    // database is far heavier than a ping, but leaving it to a single load would freeze
-    // two tiles that sit in the live strip looking identical to the 5 s ones.
-    useEffect(() => {
-        const intervalId = setInterval(() => {
-            if (isVisibleRef.current) {
-                void loadStorageStats();
-            }
-        }, configuration.refreshIntervalMs * STORAGE_REFRESH_MULTIPLIER);
-
-        return () => clearInterval(intervalId);
-    }, [configuration.refreshIntervalMs, loadStorageStats]);
 
     const [isExporting, setIsExporting] = useState(false);
 
@@ -357,6 +343,7 @@ export const ClusterDashboard = (): JSX.Element => {
 
                 <StorageTab
                     storageStats={storageStats}
+                    storageLastUpdatedAt={storageLastUpdatedAt}
                     isLoading={isRefreshingStorage || collections.isLoading}
                     collections={collections}
                     viewState={storageViewState}

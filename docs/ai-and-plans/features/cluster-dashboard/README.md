@@ -43,9 +43,9 @@ None yet. A user-manual page is due before this ships.
 
 ## Architecture (intent — code is authoritative for behavior)
 
-- **The page is a place, not a feed.** The storage inventory refreshes on demand and on a slow
-  cadence; lightweight health polling pauses while the panel is hidden. There is no Operations
-  tab and no observed-operation history.
+- **The page is a place, not a feed.** The storage inventory refreshes when the dashboard opens
+  and on demand; lightweight health polling pauses while the panel is hidden. There is no
+  Operations tab and no observed-operation history.
 - **Every collector degrades per command.** A failed or unsupported command nulls its own fields
   and records the reason; the page never shows a broken panel. There is no capability probe,
   because a probe is a cache with an invalidation problem

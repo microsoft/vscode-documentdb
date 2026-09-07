@@ -11,6 +11,8 @@ import { useTrpcClient } from '../../../_integration/useTrpcClient';
 export interface DatabaseCollectionsState {
     /** `null` while the request for the current database is still outstanding. */
     result: DatabaseCollectionsResult | null;
+    /** Time when the current database's collections were last read successfully. */
+    lastUpdatedAt?: number;
     isLoading: boolean;
     error: string | null;
     reload: () => void;
@@ -32,6 +34,7 @@ export function useDatabaseCollections(databaseName: string | null): DatabaseCol
     const [entry, setEntry] = useState<{
         key: string;
         result: DatabaseCollectionsResult | null;
+        lastUpdatedAt?: number;
         error: string | null;
     } | null>(null);
 
@@ -51,7 +54,7 @@ export function useDatabaseCollections(databaseName: string | null): DatabaseCol
             .query({ databaseName })
             .then((result) => {
                 if (!disposed) {
-                    setEntry({ key, result, error: null });
+                    setEntry({ key, result, lastUpdatedAt: Date.now(), error: null });
                 }
             })
             .catch((reason: unknown) => {
@@ -77,6 +80,7 @@ export function useDatabaseCollections(databaseName: string | null): DatabaseCol
 
     return {
         result: isCurrent ? entry.result : null,
+        lastUpdatedAt: isCurrent ? entry.lastUpdatedAt : undefined,
         isLoading: databaseName !== null && !isCurrent,
         error: isCurrent ? entry.error : null,
         reload,

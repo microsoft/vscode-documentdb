@@ -52,6 +52,8 @@ export interface StorageTabViewState {
 
 export interface StorageTabProps {
     storageStats: ClusterStorageStats | null;
+    /** Time when the cluster's database inventory was last read successfully. */
+    storageLastUpdatedAt?: number;
     /** True while the active inventory level is being re-read. */
     isLoading: boolean;
     /**
@@ -95,6 +97,7 @@ export function createStorageViewState(selectedDatabaseName?: string): StorageTa
  */
 export const StorageTab = ({
     storageStats,
+    storageLastUpdatedAt,
     isLoading,
     collections,
     viewState,
@@ -124,6 +127,7 @@ export const StorageTab = ({
 
     /** Everything the level holds, before the filter — the denominator of the footer count. */
     const allRows = currentDatabase === null ? databaseRows : collectionRows;
+    const lastUpdatedAt = currentDatabase === null ? storageLastUpdatedAt : collections.lastUpdatedAt;
     const levelKey = currentDatabase ?? 'databases';
     const knownCollectionCount =
         currentDatabase === null
@@ -139,6 +143,39 @@ export const StorageTab = ({
             );
         }
     }, [allRows.length, inventoryIsLoading, levelKey]);
+
+    const [now, setNow] = useState(Date.now);
+    useEffect(() => {
+        if (lastUpdatedAt === undefined) {
+            return;
+        }
+        const elapsedMs = Math.max(0, Date.now() - lastUpdatedAt);
+        const nextUpdateMs =
+            elapsedMs < 30_000
+                ? 30_000 - elapsedMs
+                : elapsedMs < 60_000
+                  ? 60_000 - elapsedMs
+                  : 60_000 - (elapsedMs % 60_000);
+        const timer = setTimeout(() => setNow(Date.now()), Math.max(1, nextUpdateMs));
+        return () => clearTimeout(timer);
+    }, [lastUpdatedAt, now]);
+
+    const updatedText = useMemo(() => {
+        if (lastUpdatedAt === undefined) {
+            return undefined;
+        }
+        const elapsedSeconds = Math.max(0, Math.floor((now - lastUpdatedAt) / 1000));
+        if (elapsedSeconds < 30) {
+            return l10n.t('Updated a few seconds ago');
+        }
+        if (elapsedSeconds < 60) {
+            return l10n.t('Updated less than a minute ago');
+        }
+        const elapsedMinutes = Math.floor(elapsedSeconds / 60);
+        return elapsedMinutes === 1
+            ? l10n.t('Updated 1 minute ago')
+            : l10n.t('Updated {0} minutes ago', elapsedMinutes);
+    }, [lastUpdatedAt, now]);
 
     const openCollection = useCallback(
         (databaseName: string, collectionName: string, initialTab?: 'tab_result' | 'tab_indexes'): void => {
@@ -378,6 +415,12 @@ export const StorageTab = ({
                                 ? l10n.t('Showing {0} of {1} databases', rows.length, allRows.length)
                                 : l10n.t('Showing {0} of {1} collections', rows.length, allRows.length)}
                         </span>
+                        {updatedText !== undefined && (
+                            <>
+                                <span aria-hidden="true"> · </span>
+                                <span>{updatedText}</span>
+                            </>
+                        )}
                     </div>
                 </div>
             )}

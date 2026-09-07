@@ -21,6 +21,7 @@ created: 2026-08-24
 | 0007 | Nothing above the fold moves                              | Accepted            | Raised from a review note to a standing rule       | 2026-07-28 | #823 |
 | 0008 | A tab exists only when the server can answer it           | Accepted            | Emerged from live vCore testing, not the plan      | 2026-07-28 | #823 |
 | 0009 | Converge with PR #753 on a shared `feature/` branch       | Proposed            | Needs sign-off from #753's author and a maintainer | 2026-08-24 | #823 |
+| 0015 | Storage refresh is explicit after initial load            | Accepted            | Removes a timer left behind by the data-first redesign | 2026-09-07 | #823 |
 
 > Entries below are **semantically** immutable: append new entries rather than
 > rewriting old ones, and record reversals as a new entry plus a status change
@@ -555,3 +556,44 @@ complaint that started the exercise in a subtler form.
 - **No Alt+Left shortcut.** It was in the prototype and removed after testing: the browser performed
   a history navigation despite `preventDefault`, and a webview iframe has a history to be navigated
   out of. The Back button is focusable and reachable without it.
+
+---
+
+## 0015 — Storage refresh is explicit after initial load
+
+**Status:** Accepted · **Date:** 2026-09-07 · **Raised by:** Operator
+**Evidence:** Live testing and the `clusterDashboard.getStorageStats` dispatch log
+
+### Question
+
+Should the storage inventory re-read itself on a timer, or only when the reader asks it to?
+
+The 60-second timer came from commit `3396eaa6`: two storage tiles sat beside live health tiles and
+looked frozen when only health updated every five seconds. The later data-first restructure in
+commit `a21aa57f` made the page an inventory and established [0007](#0007--nothing-above-the-fold-moves-reconstructed),
+but the earlier timer survived that change. Its request set the same loading state as manual
+Refresh, unexpectedly replacing the database or collection list with a skeleton and disabling the
+Refresh button.
+
+### Decision
+
+After the dashboard's initial storage load, storage statistics are re-read only through the
+reader's explicit Refresh action. There is no timed or visibility-driven storage refresh.
+
+Entering a database still loads that database's collections because it is navigation to data that
+has not yet been read, not a background refresh. Lightweight cluster-health sampling remains live
+and does not replace the inventory list.
+
+### Reasoning
+
+Storage changes on an inventory timescale and is expensive to collect: it fans out into
+per-database `dbStats` calls. More importantly, a background request should not replace a list the
+reader is actively inspecting or disable its controls without an explicit action. This restores
+the implementation to the interaction rule already accepted in [0007](#0007--nothing-above-the-fold-moves-reconstructed).
+
+### Consequences
+
+- Opening the dashboard performs the initial storage read.
+- Refresh re-reads cluster storage and, when drilled into a database, that database's collections.
+- Moving between the database and collection levels never triggers a cluster storage re-read.
+- The five-second health sample continues independently and never puts the inventory into a loading state.
