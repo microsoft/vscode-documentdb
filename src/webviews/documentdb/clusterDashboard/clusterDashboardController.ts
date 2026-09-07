@@ -57,6 +57,8 @@ export type ClusterDashboardWebviewConfigurationType = {
     feedbackSignalsEnabled: boolean;
     /** Azure resource facts, when the cluster came from an Azure-backed tree node. */
     azure?: ClusterDashboardAzureInfo;
+    /** Database selected from the tree when opening the dashboard, if any. */
+    selectedDatabaseName?: string;
 };
 
 /**

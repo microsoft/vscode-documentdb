@@ -3,16 +3,24 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { Button, Divider, MessageBar, MessageBarBody, SearchBox, Spinner, Toolbar } from '@fluentui/react-components';
-import { ArrowLeftRegular } from '@fluentui/react-icons';
+import {
+    Breadcrumb,
+    BreadcrumbButton,
+    BreadcrumbDivider,
+    BreadcrumbItem,
+    Button,
+    MessageBar,
+    MessageBarBody,
+    SearchBox,
+    Toolbar,
+} from '@fluentui/react-components';
+import { ArrowLeftRegular, DatabaseMultipleRegular, DatabaseRegular } from '@fluentui/react-icons';
 import * as l10n from '@vscode/l10n';
-import { useMemo, type JSX } from 'react';
+import { useEffect, useState, useMemo, type JSX } from 'react';
 
 import { type ClusterStorageStats } from '../../../../documentdb/utils/getClusterHealth';
 import { useTrpcClient } from '../../../_integration/useTrpcClient';
-import { formatCount } from '../../collectionView/queryInsightsTab/components/metricsRow';
 import { type NamespaceCommandId } from '../clusterDashboardRouter';
-import { formatApproximateCount, formatBytes, formatExactCount } from '../formatUtils';
 import {
     arrangeRows,
     defaultDirectionFor,
@@ -24,6 +32,7 @@ import {
     type SortState,
 } from './NamespaceTable';
 import { type DatabaseCollectionsState } from './useDatabaseCollections';
+import { NamespaceTableSkeleton } from './NamespaceTableSkeleton';
 
 /**
  * How the reader has arranged the list, and which level they are on.
@@ -42,6 +51,8 @@ export interface StorageTabViewState {
 
 export interface StorageTabProps {
     storageStats: ClusterStorageStats | null;
+    /** True while the active inventory level is being re-read. */
+    isLoading: boolean;
     /**
      * The drilled-into database's collections, owned by the dashboard.
      *
@@ -65,11 +76,11 @@ export interface StorageTabProps {
  * question that brought them to a storage table in the first place. Alphabetical would make
  * them read every row to find it.
  */
-const DEFAULT_SORT: SortState = { column: 'sizeBytes', direction: 'descending' };
+const DEFAULT_SORT: SortState = { column: 'name', direction: 'ascending' };
 
 /** The arrangement a freshly-opened dashboard starts from. */
-export function createStorageViewState(): StorageTabViewState {
-    return { sort: DEFAULT_SORT, filterText: '', currentDatabase: null };
+export function createStorageViewState(selectedDatabaseName?: string): StorageTabViewState {
+    return { sort: DEFAULT_SORT, filterText: '', currentDatabase: selectedDatabaseName ?? null };
 }
 
 /**
@@ -83,6 +94,7 @@ export function createStorageViewState(): StorageTabViewState {
  */
 export const StorageTab = ({
     storageStats,
+    isLoading,
     collections,
     viewState,
     onViewStateChange,
@@ -111,20 +123,19 @@ export const StorageTab = ({
 
     /** Everything the level holds, before the filter — the denominator of the footer count. */
     const allRows = currentDatabase === null ? databaseRows : collectionRows;
+    const levelKey = currentDatabase ?? 'databases';
+    const knownCollectionCount =
+        currentDatabase === null ? undefined : databaseRows.find((database) => database.name === currentDatabase)?.childCount;
+    const [lastRowCounts, setLastRowCounts] = useState<Record<string, number>>({});
+    const inventoryIsLoading = isLoading || storageStats === null;
 
-    /** The drilled-into database's own figures, restated so drilling in does not lose them. */
-    const parentRow = useMemo(
-        () => (currentDatabase === null ? null : (databaseRows.find((row) => row.name === currentDatabase) ?? null)),
-        [databaseRows, currentDatabase],
-    );
-
-    if (storageStats === null) {
-        return (
-            <div className="tabPanel">
-                <Spinner size="small" label={l10n.t('Loading databases…')} />
-            </div>
-        );
-    }
+    useEffect(() => {
+        if (!inventoryIsLoading) {
+            setLastRowCounts((current) =>
+                current[levelKey] === allRows.length ? current : { ...current, [levelKey]: allRows.length },
+            );
+        }
+    }, [allRows.length, inventoryIsLoading, levelKey]);
 
     const openCollection = (collectionName: string, initialTab?: 'tab_result' | 'tab_indexes'): void => {
         void trpcClient.clusterDashboard.openNamespace
@@ -178,61 +189,50 @@ export const StorageTab = ({
                     : { column, direction: defaultDirectionFor(column) },
         }));
 
-    const errors = currentDatabase === null ? storageStats.errors : (collections.result?.errors ?? []);
+    const errors =
+        inventoryIsLoading || storageStats === null
+            ? []
+            : currentDatabase === null
+              ? storageStats.errors
+              : (collections.result?.errors ?? []);
     const omittedCount =
-        currentDatabase === null
+        inventoryIsLoading || storageStats === null
+            ? 0
+            : currentDatabase === null
             ? storageStats.omittedDatabaseCount
             : (collections.result?.omittedCollectionCount ?? 0);
-    const shownCount = currentDatabase === null ? storageStats.databases.length : collectionRows.length;
+    const shownCount = currentDatabase === null ? (storageStats?.databases.length ?? 0) : collectionRows.length;
 
     return (
         <div className="tabPanel">
             {/*
-             * The level band: present at both levels and always the same height, so stepping
-             * in or out does not shift the toolbar and the table beneath it.
+             * Where the reader is, as a path rather than a title plus a back button. One line
+             * at both levels and the same height at both, so stepping in or out no longer
+             * moves the toolbar and the table beneath it. Which list is on screen is already
+             * stated by the table's own first column heading, so the band does not repeat it.
              */}
             <div className="levelHeader">
-                {currentDatabase !== null && (
-                    <Button
-                        className="levelBackButton"
-                        appearance="outline"
-                        icon={<ArrowLeftRegular />}
-                        onClick={goBack}
-                        aria-label={l10n.t('Back to the database list')}
-                    >
-                        {l10n.t('Databases')}
-                    </Button>
-                )}
-                {/*
-                 * The title names what the list holds, not where it came from, so the word
-                 * changes when the level does — the reader's confirmation that the table
-                 * beneath is a different list and not a re-sorted one.
-                 */}
-                <span className="levelTitle">
-                    {currentDatabase === null ? l10n.t('Databases') : l10n.t('Collections')}
-                </span>
-                {currentDatabase !== null && (
-                    <>
-                        <Divider className="levelSeparator" vertical inset />
-                        <span className="levelSubject" title={currentDatabase}>
-                            {currentDatabase}
-                        </span>
-                    </>
-                )}
-                {parentRow !== null && (
-                    <span className="levelFacts">
-                        <span className="levelFact">
-                            <strong>{formatBytes(parentRow.sizeBytes)}</strong> {l10n.t('on disk')}
-                        </span>
-                        <span className="levelFact">
-                            <strong>{parentRow.childCount === null ? '—' : formatCount(parentRow.childCount)}</strong>{' '}
-                            {l10n.t('collections')}
-                        </span>
-                        <span className="levelFact" title={formatExactCount(parentRow.documents)}>
-                            <strong>{formatApproximateCount(parentRow.documents)}</strong> {l10n.t('documents')}
-                        </span>
-                    </span>
-                )}
+                <Breadcrumb aria-label={l10n.t('Inventory level')} size="medium">
+                    <BreadcrumbItem>
+                        <BreadcrumbButton
+                            current={currentDatabase === null}
+                            icon={<DatabaseMultipleRegular />}
+                            onClick={currentDatabase === null ? undefined : goBack}
+                        >
+                            {l10n.t('Databases')}
+                        </BreadcrumbButton>
+                    </BreadcrumbItem>
+                    {currentDatabase !== null && (
+                        <>
+                            <BreadcrumbDivider />
+                            <BreadcrumbItem>
+                                <BreadcrumbButton current icon={<DatabaseRegular />} title={currentDatabase}>
+                                    {currentDatabase}
+                                </BreadcrumbButton>
+                            </BreadcrumbItem>
+                        </>
+                    )}
+                </Breadcrumb>
             </div>
 
             {/*
@@ -295,8 +295,8 @@ export const StorageTab = ({
                 </MessageBar>
             )}
 
-            {collections.isLoading ? (
-                <Spinner size="small" label={l10n.t('Loading collections…')} />
+            {inventoryIsLoading ? (
+                <NamespaceTableSkeleton rowCount={lastRowCounts[levelKey] ?? knownCollectionCount} />
             ) : allRows.length === 0 ? (
                 <div className="emptyState">
                     {currentDatabase !== null
@@ -323,14 +323,32 @@ export const StorageTab = ({
             {/*
              * The index list's footer: how much of the list the filter is hiding, which is
              * the one thing the table itself cannot say.
+             *
+             * Nothing else. It once restated the drilled-into database's own size and document
+             * count, which read as a claim about the list above it — "1 of 1 collections ·
+             * 27.93 MB" invites the arithmetic that the one collection is 27.93 MB, and the
+             * two figures come from different levels.
+             *
+             * The way out shares the line rather than taking one of its own: the breadcrumb
+             * is off screen by the time a reader reaches the end of a long list, and a second
+             * exit costs nothing here if it does not add a row.
              */}
-            {!collections.isLoading && allRows.length > 0 && (
-                <div className="listCount">
-                    <span aria-live="polite">
-                        {currentDatabase === null
-                            ? l10n.t('Showing {0} of {1} databases', rows.length, allRows.length)
-                            : l10n.t('Showing {0} of {1} collections', rows.length, allRows.length)}
-                    </span>
+            {!inventoryIsLoading && allRows.length > 0 && (
+                <div className="listFooter">
+                    <div className="listFooterStart">
+                        {currentDatabase !== null && (
+                            <Button size="small" appearance="outline" icon={<ArrowLeftRegular />} onClick={goBack}>
+                                {l10n.t('Back to Databases')}
+                            </Button>
+                        )}
+                    </div>
+                    <div className="listCount">
+                        <span aria-live="polite">
+                            {currentDatabase === null
+                                ? l10n.t('Showing {0} of {1} databases', rows.length, allRows.length)
+                                : l10n.t('Showing {0} of {1} collections', rows.length, allRows.length)}
+                        </span>
+                    </div>
                 </div>
             )}
         </div>

@@ -7,10 +7,13 @@ import { type IActionContext } from '@microsoft/vscode-azext-utils';
 import * as l10n from '@vscode/l10n';
 import * as vscode from 'vscode';
 
+import { ClustersClient } from '../../documentdb/ClustersClient';
 import { CredentialCache } from '../../documentdb/CredentialCache';
 import { inferViewIdFromTreeId } from '../../documentdb/Views';
 import { type AzureClusterModel } from '../../tree/azure-views/models/AzureClusterModel';
 import { type ClusterItemBase } from '../../tree/documentdb/ClusterItemBase';
+import { DatabaseItem } from '../../tree/documentdb/DatabaseItem';
+import { type TreeCluster } from '../../tree/models/BaseClusterModel';
 import { trackJourneyCorrelationId } from '../../utils/commandTelemetry';
 import {
     openClusterDashboardWebview,
@@ -29,8 +32,8 @@ const DASHBOARD_REFRESH_INTERVAL_MS = 5000;
  * Returns `undefined` for a non-Azure cluster so the header omits the rows entirely
  * rather than rendering a row of dashes.
  */
-function extractAzureInfo(node: ClusterItemBase): ClusterDashboardAzureInfo | undefined {
-    const azureProps = node.cluster as unknown as Partial<AzureClusterModel>;
+function extractAzureInfo(cluster: TreeCluster): ClusterDashboardAzureInfo | undefined {
+    const azureProps = cluster as unknown as Partial<AzureClusterModel>;
 
     const info: ClusterDashboardAzureInfo = {
         location: azureProps.location,
@@ -62,7 +65,10 @@ function readFeedbackSignalsEnabled(): boolean {
     }
 }
 
-export async function openClusterDashboard(context: IActionContext, node: ClusterItemBase): Promise<void> {
+export async function openClusterDashboard(
+    context: IActionContext,
+    node: ClusterItemBase | DatabaseItem,
+): Promise<void> {
     // added manually here as this function can be called bypassing our general command registration
     trackJourneyCorrelationId(context, node);
 
@@ -78,11 +84,16 @@ export async function openClusterDashboard(context: IActionContext, node: Cluste
     // run the same authentication the tree runs. Cached credentials make this a no-op.
     context.telemetry.properties.wasSignedIn = String(CredentialCache.hasCredentials(node.cluster.clusterId));
 
-    const client = await node.connect();
-    if (!client) {
-        // `connect()` has already surfaced the reason, or the user cancelled the prompt.
-        context.telemetry.properties.connectionResult = 'failed';
-        return;
+    if (node instanceof DatabaseItem) {
+        // Database nodes are only rendered after their cluster connected, so reuse that client.
+        await ClustersClient.getClient(node.cluster.clusterId);
+    } else {
+        const client = await node.connect();
+        if (!client) {
+            // `connect()` has already surfaced the reason, or the user cancelled the prompt.
+            context.telemetry.properties.connectionResult = 'failed';
+            return;
+        }
     }
 
     // Extract viewId from the cluster model, or infer from treeId prefix
@@ -94,8 +105,9 @@ export async function openClusterDashboard(context: IActionContext, node: Cluste
         clusterDisplayName: node.cluster.name,
         viewId: viewId,
         refreshIntervalMs: DASHBOARD_REFRESH_INTERVAL_MS,
-        azure: extractAzureInfo(node),
+        azure: extractAzureInfo(node.cluster),
         feedbackSignalsEnabled: readFeedbackSignalsEnabled(),
+        selectedDatabaseName: node instanceof DatabaseItem ? node.databaseInfo.name : undefined,
     });
 
     view.revealToForeground();

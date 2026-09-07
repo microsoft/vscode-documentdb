@@ -3,17 +3,19 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+import { Fade } from '@fluentui/react-motion-components-preview';
 import * as l10n from '@vscode/l10n';
 import { type JSX } from 'react';
 
 import { type ClusterStorageStats } from '../../../../documentdb/utils/getClusterHealth';
 // TODO(dashboard): promote metricsRow to src/webviews/components/ so views don't reach into each other.
 import { CountMetric, GenericMetric, MetricsRow } from '../../collectionView/queryInsightsTab/components/metricsRow';
-import { PLACEHOLDER } from '../clusterFacts';
 import { formatBytes } from '../formatUtils';
 
 export interface StatusStripProps {
     storageStats: ClusterStorageStats | null;
+    /** The database whose collections are open, or `null` for cluster-wide metrics. */
+    currentDatabase: string | null;
 }
 
 /**
@@ -27,16 +29,15 @@ export interface StatusStripProps {
  * `undefined` values render the metric row's loading skeleton; `null` renders the
  * "not reported" placeholder.
  */
-export const StatusStrip = ({ storageStats }: StatusStripProps): JSX.Element => {
+export const StatusStrip = ({ storageStats, currentDatabase }: StatusStripProps): JSX.Element => {
     /**
-     * What a tile shows when the server did not report the figure.
+     * What a composed value shows for the half of it the server did not report.
      *
-     * The em dash, not a sentence: these values render at 28px, so "Not reported by this
-     * server" was truncated to "Not reported…" in every tile — larger, louder, and less
-     * informative than the mark the tables already use for the same fact. The tile's tooltip
-     * carries the explanation.
+     * The same text `MetricBase` renders for a wholly unavailable value, so `2 / N/A` and a
+     * dimmed `N/A` say the same thing in the same words. The tiles used an em dash, which is
+     * the tables' convention, not this row's.
      */
-    const NOT_REPORTED = PLACEHOLDER;
+    const UNAVAILABLE = l10n.t('N/A');
 
     /** Sums a per-database figure, treating "no database reported it" as null. */
     const sumAcrossDatabases = (read: (db: ClusterStorageStats['databases'][number]) => number | null) =>
@@ -110,7 +111,7 @@ export const StatusStrip = ({ storageStats }: StatusStripProps): JSX.Element => 
             ? undefined
             : l10n.t('{databases} / {collections}', {
                   databases: String(storageStats.databases.length),
-                  collections: totalCollections === null ? PLACEHOLDER : String(totalCollections),
+                  collections: totalCollections === null ? UNAVAILABLE : String(totalCollections),
               });
 
     // Same `a / b` shape as the databases tile beside it: the label names the two figures in
@@ -123,65 +124,112 @@ export const StatusStrip = ({ storageStats }: StatusStripProps): JSX.Element => 
               ? null
               : l10n.t('{count} / {size}', {
                     count: String(totalIndexes),
-                    size: formatBytes(totalIndexBytes),
+                    size: formatBytes(totalIndexBytes, UNAVAILABLE),
                 });
+
+    const selectedDatabase =
+        currentDatabase === null || storageStats === null
+            ? undefined
+            : storageStats.databases.find((database) => database.name === currentDatabase);
+
+    const databaseStorageUsed =
+        storageStats === null
+            ? undefined
+            : selectedDatabase?.sizeOnDiskBytes === undefined
+              ? null
+              : formatBytes(selectedDatabase.sizeOnDiskBytes);
+    const databaseDocumentCount = storageStats === null ? undefined : (selectedDatabase?.objects ?? null);
+    const databaseCollectionCount = storageStats === null ? undefined : (selectedDatabase?.collections ?? null);
+    const databaseIndexSummary =
+        storageStats === null
+            ? undefined
+            : selectedDatabase?.indexes === undefined
+              ? null
+              : selectedDatabase.indexes === null
+                ? null
+                : l10n.t('{count} / {size}', {
+                      count: String(selectedDatabase.indexes),
+                      size: formatBytes(selectedDatabase.indexSizeBytes, UNAVAILABLE),
+                  });
 
     return (
         <div className="statusStrip">
-            <MetricsRow>
-                <div className="statusTile">
-                    <GenericMetric
-                        label={l10n.t('Storage Used')}
-                        value={asBound(storageUsed)}
-                        nullValuePlaceholder={NOT_REPORTED}
-                        tooltipExplanation={
-                            l10n.t(
-                                'Size on disk across the user databases this dashboard inspected. This is the data footprint, not the provisioned disk. A dash means this server did not report it.',
-                            ) + partialCaveat
-                        }
-                    />
-                </div>
+            <Fade key={currentDatabase ?? 'cluster'} appear visible>
+                <MetricsRow>
+                    <div className="statusTile">
+                        <GenericMetric
+                            label={l10n.t('Storage Used')}
+                            value={currentDatabase === null ? asBound(storageUsed) : databaseStorageUsed}
+                            tooltipExplanation={
+                                currentDatabase === null
+                                    ? l10n.t(
+                                          'Size on disk across the user databases this dashboard inspected. This is the data footprint, not the provisioned disk. N/A means this server did not report it.',
+                                      ) + partialCaveat
+                                    : l10n.t(
+                                          'Size on disk reported for database "{database}". This is the data footprint, not the provisioned disk. N/A means this server did not report it.',
+                                          { database: currentDatabase },
+                                      )
+                            }
+                        />
+                    </div>
 
-                <div className="statusTile">
-                    {/*
-                     * Rounded from a thousand up. A document count is read from collection
-                     * metadata rather than counted, so a tile 28px tall printing `4,812,004`
-                     * offers precision the figure does not have.
-                     */}
-                    <CountMetric
-                        label={l10n.t('Documents')}
-                        value={totalDocuments}
-                        compact
-                        compactThreshold={1000}
-                        nullValuePlaceholder={NOT_REPORTED}
-                        tooltipExplanation={
-                            l10n.t(
-                                'Approximate number of documents across the user databases this dashboard inspected. The servers report it from collection metadata rather than by counting, so it can drift. A dash means this server did not report it.',
-                            ) + partialCaveat
-                        }
-                    />
-                </div>
+                    <div className="statusTile">
+                        <CountMetric
+                            label={l10n.t('Documents')}
+                            value={currentDatabase === null ? totalDocuments : databaseDocumentCount}
+                            compact
+                            compactThreshold={1000}
+                            tooltipExplanation={
+                                currentDatabase === null
+                                    ? l10n.t(
+                                          'Approximate number of documents across the user databases this dashboard inspected. The servers report it from collection metadata rather than by counting, so it can drift. N/A means this server did not report it.',
+                                      ) + partialCaveat
+                                    : l10n.t(
+                                          'Approximate number of documents in database "{database}". The server reports it from collection metadata rather than by counting, so it can drift. N/A means this server did not report it.',
+                                          { database: currentDatabase },
+                                      )
+                            }
+                        />
+                    </div>
 
-                <div className="statusTile">
-                    <GenericMetric
-                        label={l10n.t('Databases / Collections')}
-                        value={databaseSummary}
-                        nullValuePlaceholder={NOT_REPORTED}
-                        tooltipExplanation={l10n.t('Number of user databases and the collections they contain.')}
-                    />
-                </div>
-
-                <div className="statusTile">
-                    <GenericMetric
-                        label={l10n.t('Indexes / Size')}
-                        value={indexSummary}
-                        nullValuePlaceholder={NOT_REPORTED}
-                        tooltipExplanation={l10n.t(
-                            'Number of indexes across all user databases, and their total size. A dash means this server did not report it.',
+                    <div className="statusTile">
+                        {currentDatabase === null ? (
+                            <GenericMetric
+                                label={l10n.t('Databases / Collections')}
+                                value={databaseSummary}
+                                tooltipExplanation={l10n.t(
+                                    'Number of user databases and the collections they contain.',
+                                )}
+                            />
+                        ) : (
+                            <CountMetric
+                                label={l10n.t('Collections')}
+                                value={databaseCollectionCount}
+                                tooltipExplanation={l10n.t('Number of collections in database "{database}".', {
+                                    database: currentDatabase,
+                                })}
+                            />
                         )}
-                    />
-                </div>
-            </MetricsRow>
+                    </div>
+
+                    <div className="statusTile">
+                        <GenericMetric
+                            label={l10n.t('Indexes / Size')}
+                            value={currentDatabase === null ? indexSummary : databaseIndexSummary}
+                            tooltipExplanation={
+                                currentDatabase === null
+                                    ? l10n.t(
+                                          'Number of indexes across all user databases, and their total size. N/A means this server did not report it.',
+                                      )
+                                    : l10n.t(
+                                          'Number of indexes in database "{database}", and their total size. N/A means this server did not report it.',
+                                          { database: currentDatabase },
+                                      )
+                            }
+                        />
+                    </div>
+                </MetricsRow>
+            </Fade>
         </div>
     );
 };

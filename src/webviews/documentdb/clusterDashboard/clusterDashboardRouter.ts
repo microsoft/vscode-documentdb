@@ -5,6 +5,7 @@
 
 import { UserCancelledError } from '@microsoft/vscode-azext-utils';
 import * as l10n from '@vscode/l10n';
+import { type Document, type MongoClient } from 'mongodb';
 import * as vscode from 'vscode';
 import { z } from 'zod';
 
@@ -24,7 +25,6 @@ import {
     type ClusterHealthSample,
     type ClusterPrivileges,
     type ClusterStorageStats,
-    type ClusterTopology,
     type CurrentOperationsResult,
     type DatabaseCollectionsResult,
 } from '../../../documentdb/utils/getClusterHealth';
@@ -67,6 +67,55 @@ export const NAMESPACE_COMMAND_IDS = [
 
 export type NamespaceCommandId = (typeof NAMESPACE_COMMAND_IDS)[number];
 
+/**
+ * The server commands the dashboard describes a cluster with, run for the diagnostics
+ * document and reported verbatim.
+ *
+ * These are the same commands `getClusterMetadata` and `getClusterTopology` run. The document
+ * carries their replies rather than the metadata map built from them: that map is shaped for
+ * telemetry — hashed, stringified, pruned to a fixed key set — so a field missing from it says
+ * nothing about whether the server reported it, which is exactly the question a diagnostics
+ * document exists to answer.
+ *
+ * `connectionStatus` is not among them. Its reply names the signed-in principal, and the
+ * derived `privileges` block already answers everything the dashboard asks it.
+ */
+const DIAGNOSTIC_COMMANDS: ReadonlyArray<{ name: string; command: Document }> = [
+    { name: 'buildInfo', command: { buildInfo: 1 } },
+    { name: 'hello', command: { hello: 1 } },
+    { name: 'serverStatus', command: { serverStatus: 1 } },
+    { name: 'hostInfo', command: { hostInfo: 1 } },
+    { name: 'replSetGetStatus', command: { replSetGetStatus: 1 } },
+    { name: 'listShards', command: { listShards: 1 } },
+];
+
+/** One command's outcome: what it answered, or why it did not. */
+type RawCommandReply = { ok: true; response: Document } | { ok: false; error: string };
+
+/**
+ * Runs every diagnostic command and keeps each outcome.
+ *
+ * A refusal is recorded, not dropped: every supported platform rejects at least one of these,
+ * and "Azure DocumentDB (vCore) refuses serverStatus" is a finding a bug report needs, not a
+ * gap to hide. They run concurrently because a failing command waits out the driver's server
+ * selection timeout, and six of those in series is a minute of nothing happening.
+ */
+async function collectRawCommandReplies(client: MongoClient): Promise<Record<string, RawCommandReply>> {
+    const adminDb = client.db().admin();
+
+    const entries = await Promise.all(
+        DIAGNOSTIC_COMMANDS.map(async ({ name, command }): Promise<[string, RawCommandReply]> => {
+            try {
+                return [name, { ok: true, response: await adminDb.command(command) }];
+            } catch (error) {
+                return [name, { ok: false, error: error instanceof Error ? error.message : String(error) }];
+            }
+        }),
+    );
+
+    return Object.fromEntries(entries);
+}
+
 export type RouterContext = BaseRouterContext & {
     /**
      * Stable cluster identifier for cache/client lookups.
@@ -96,6 +145,14 @@ export interface ClusterDashboardInfo {
      * `getHostsFromConnectionString`, so no user, password, or query option travels with it.
      */
     hosts: string[];
+    /**
+     * How this connection authenticates, as the `AuthMethodId` string.
+     *
+     * The id rather than a label: the webview owns its own wording, and the two surfaces
+     * would otherwise drift. Absent when the connection was restored without cached
+     * credentials, which is the same case that leaves `hosts` empty.
+     */
+    authMethod?: string;
 }
 
 /**
@@ -117,17 +174,6 @@ export interface OperationsPayload extends Omit<CurrentOperationsResult, 'operat
     operations: IdentifiedOperation[];
     history: ObservedOperation[];
 }
-
-/** Zod mirror of `ClusterHealthSample`, so exported diagnostics carry the live charts too. */
-const healthSampleSchema = z.object({
-    timestampMs: z.number(),
-    pingLatencyMs: z.number().nullable(),
-    uptimeSeconds: z.number().nullable(),
-    connectionsCurrent: z.number().nullable(),
-    opcounters: z.record(z.string(), z.number()).nullable(),
-    activeOperations: z.number().nullable(),
-    errors: z.array(z.string()),
-});
 
 export const clusterDashboardRouter = router({
     /**
@@ -152,19 +198,9 @@ export const clusterDashboardRouter = router({
             hosts = [];
         }
 
-        return { clusterDisplayName: myCtx.clusterDisplayName, metadata, hosts };
-    }),
+        const authMethod = client.getCredentials()?.authMechanism;
 
-    /**
-     * The servers behind the connection. One-shot: membership changes on the timescale of a
-     * failover, and the tab that renders it is not a monitoring surface.
-     */
-    getTopology: publicProcedureWithTelemetry.query(async ({ ctx }): Promise<ClusterTopology> => {
-        const myCtx = ctx as WithTelemetry<RouterContext>;
-
-        const client = await ClustersClient.getClient(myCtx.clusterId);
-
-        return getClusterTopology(client.getMongoClient());
+        return { clusterDisplayName: myCtx.clusterDisplayName, metadata, hosts, authMethod };
     }),
 
     /** Per-collection breakdown for one database, loaded when its row is expanded. */
@@ -236,49 +272,6 @@ export const clusterDashboardRouter = router({
         );
 
         return { ...result, operations, history: getObservedOperations(myCtx.clusterId) };
-    }),
-
-    /**
-     * Opens everything the server answered about itself as a read-only JSON document.
-     *
-     * The Cluster card shows the handful of facts worth a permanent row; the metadata probe
-     * collects far more, and which fields a given platform answers varies enough that no
-     * fixed grid can cover it. Rather than guess, the whole reply is one click away — the
-     * same escape hatch the index list's "View Raw Index Definition" and Query Insights'
-     * "View Raw Execution Stats" provide.
-     */
-    viewRawClusterInfo: publicProcedureWithTelemetry.mutation(async ({ ctx }): Promise<void> => {
-        const myCtx = ctx as WithTelemetry<RouterContext>;
-
-        const client = await ClustersClient.getClient(myCtx.clusterId);
-        const metadata = await client.getClusterMetadata();
-        const topology = await getClusterTopology(client.getMongoClient()).catch(() => null);
-
-        // No hosts and no connection string: the metadata carries only hashed domain
-        // fragments, but the seed list is the address itself, and this document is one
-        // Ctrl+A away from a bug report.
-        const document = { metadata, topology };
-
-        await readOnlyJsonDocumentProvider.openDocument(
-            l10n.t('Cluster details: {clusterDisplayName}', { clusterDisplayName: myCtx.clusterDisplayName }),
-            JSON.stringify(document, null, 4),
-        );
-    }),
-
-    /**
-     * Opens the topology probe's own reply as a read-only JSON document.
-     *
-     * The card can only name what it recognises, and every supported platform refuses at
-     * least one of the commands the probe runs; the untouched reply is where a reader finds
-     * out what a given server actually said.
-     */
-    viewRawTopology: publicProcedureWithTelemetry.mutation(async ({ ctx }): Promise<void> => {
-        const myCtx = ctx as WithTelemetry<RouterContext>;
-
-        const client = await ClustersClient.getClient(myCtx.clusterId);
-        const topology = await getClusterTopology(client.getMongoClient());
-
-        await readOnlyJsonDocumentProvider.openDocument(l10n.t('Cluster topology'), JSON.stringify(topology, null, 4));
     }),
 
     /** Drops the observed-operation history for this cluster. */
@@ -441,10 +434,10 @@ export const clusterDashboardRouter = router({
      * editor: an untitled document is dirty from the moment it opens and VS Code asks the
      * reader to save or discard a file they only wanted to look at.
      *
-     * The live samples come from the webview because they are only kept there; everything
-     * else is re-read fresh. No connection string or credential is included: cluster metadata
-     * carries only hashed domain fragments, and command previews have had credential-bearing
-     * commands and secret-shaped fields stripped.
+     * Everything is re-read here, on the host, at the moment of export — including the health
+     * sample. No connection string or credential is included: cluster metadata carries only
+     * hashed domain fragments, and command previews have had credential-bearing commands and
+     * secret-shaped fields stripped.
      *
      * **That is not the same as safe to share.** What survives redaction is the rest of every
      * in-flight command: query filter values, document contents, and the client address that
@@ -452,56 +445,59 @@ export const clusterDashboardRouter = router({
      * to confirm what it contains before it is produced rather than discovering it after
      * uploading. See `buildCommandPreview` for why a denylist cannot do better.
      */
-    exportDiagnostics: publicProcedureWithTelemetry
-        .input(z.object({ samples: z.array(healthSampleSchema) }))
-        .mutation(async ({ input, ctx }): Promise<void> => {
-            const myCtx = ctx as WithTelemetry<RouterContext>;
+    exportDiagnostics: publicProcedureWithTelemetry.mutation(async ({ ctx }): Promise<void> => {
+        const myCtx = ctx as WithTelemetry<RouterContext>;
 
-            const confirmed = await vscode.window.showWarningMessage(
-                l10n.t('Export diagnostics for this cluster?'),
-                {
-                    modal: true,
-                    detail: l10n.t(
-                        'The document includes the commands running on this cluster: query filters, document values, and the client addresses that issued them, alongside storage and topology figures. Passwords and connection strings are removed, but application data is not. Review it before sharing.',
-                    ),
-                },
-                l10n.t('Export'),
-            );
+        const confirmed = await vscode.window.showWarningMessage(
+            l10n.t('Export diagnostics for this cluster?'),
+            {
+                modal: true,
+                detail: l10n.t(
+                    'The document includes the commands running on this cluster: query filters, document values, and the client addresses that issued them, alongside storage and topology figures. Passwords and connection strings are removed, but application data is not. Review it before sharing.',
+                ),
+            },
+            l10n.t('Export'),
+        );
 
-            if (confirmed === undefined) {
-                myCtx.actionContext.telemetry.properties.exportConfirmed = 'false';
-                return;
-            }
-            myCtx.actionContext.telemetry.properties.exportConfirmed = 'true';
+        if (confirmed === undefined) {
+            myCtx.actionContext.telemetry.properties.exportConfirmed = 'false';
+            return;
+        }
+        myCtx.actionContext.telemetry.properties.exportConfirmed = 'true';
 
-            const client = await ClustersClient.getClient(myCtx.clusterId);
-            const mongoClient = client.getMongoClient();
+        const client = await ClustersClient.getClient(myCtx.clusterId);
+        const mongoClient = client.getMongoClient();
 
-            const [metadata, privileges, storage, operations, topology] = await Promise.all([
-                client.getClusterMetadata(),
-                getClusterPrivileges(mongoClient),
-                getStorageStats(mongoClient),
-                listCurrentOperations(mongoClient),
-                getClusterTopology(mongoClient),
-            ]);
+        const [privileges, storage, operations, topology, commands, health] = await Promise.all([
+            getClusterPrivileges(mongoClient),
+            getStorageStats(mongoClient),
+            listCurrentOperations(mongoClient),
+            getClusterTopology(mongoClient),
+            collectRawCommandReplies(mongoClient),
+            sampleClusterHealth(mongoClient),
+        ]);
 
-            const diagnostics = {
-                generatedAt: new Date().toISOString(),
-                cluster: { displayName: myCtx.clusterDisplayName, viewId: myCtx.viewId },
-                metadata,
-                privileges,
-                topology,
-                storage,
-                currentOperations: operations,
-                observedOperations: getObservedOperations(myCtx.clusterId),
-                healthSamples: input.samples,
-            };
+        const diagnostics = {
+            generatedAt: new Date().toISOString(),
+            cluster: { displayName: myCtx.clusterDisplayName, viewId: myCtx.viewId },
+            // What each server command actually answered. Deliberately not the flattened
+            // metadata map the extension builds from these: that map is shaped for
+            // telemetry — hashed, stringified, and pruned to a fixed key set — so a field
+            // absent from it says nothing about whether the server reported it.
+            commands,
+            topology,
+            privileges,
+            storage,
+            currentOperations: operations,
+            observedOperations: getObservedOperations(myCtx.clusterId),
+            health,
+        };
 
-            await readOnlyJsonDocumentProvider.openDocument(
-                l10n.t('Cluster diagnostics'),
-                JSON.stringify(diagnostics, null, 4),
-            );
-        }),
+        await readOnlyJsonDocumentProvider.openDocument(
+            l10n.t('Cluster diagnostics'),
+            JSON.stringify(diagnostics, null, 4),
+        );
+    }),
 
     /**
      * Terminates a running operation. The confirmation prompt is raised here, on the host,

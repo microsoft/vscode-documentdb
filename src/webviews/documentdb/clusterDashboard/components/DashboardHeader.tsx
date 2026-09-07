@@ -4,14 +4,16 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { Badge, Tooltip } from '@fluentui/react-components';
-import { DatabaseMultipleRegular } from '@fluentui/react-icons';
 import * as l10n from '@vscode/l10n';
 import { type JSX } from 'react';
 
+import { DataBarVerticalAscendingRegular } from '@fluentui/react-icons';
 import { type ClusterHealthSample } from '../../../../documentdb/utils/getClusterHealth';
+import { regionToDisplayName } from '../../../../utils/regionToDisplayName';
 import { type ClusterDashboardAzureInfo } from '../clusterDashboardController';
 import { type ClusterDashboardInfo } from '../clusterDashboardRouter';
-import { collectResilienceWarnings, describeAddress } from '../clusterFacts';
+import { collectResilienceWarnings, describeAddress, describeCompute } from '../clusterFacts';
+import { formatUptime } from '../formatUtils';
 
 /** Connection state derived from the most recent samples. */
 export type ConnectionState = 'connecting' | 'connected' | 'disconnected';
@@ -26,13 +28,13 @@ export interface DashboardHeaderProps {
 }
 
 /**
- * The full-width identity band: icon, the cluster's name as the title, and the address it is
- * actually connected to as the subtitle.
+ * The full-width identity band: icon, the cluster's name and the address it is actually
+ * connected to, followed by its facts, connection state and latency. The trailing
+ * details wrap together when the panel cannot hold them on one line.
  *
  * Two names are in play and they routinely disagree — the tree's display name is whatever
  * the user or a discovery provider chose, while the address is which server is on screen.
- * Showing both, in the same title/subtitle shape the other webview tabs use, is what makes
- * the band worth its full width rather than a row of facts (those live in the right column).
+ * Showing both on one line makes them read as one answer to "what am I looking at?".
  *
  * Liveness stays here too: the connection badge and the ping figure sit next to the name
  * they describe, so nothing below the band has to animate.
@@ -56,6 +58,31 @@ export const DashboardHeader = ({
 
     const resilienceWarnings = collectResilienceWarnings(clusterInfo?.metadata, azure);
     const address = describeAddress(clusterInfo?.hosts);
+    const showAddress = address !== null && address !== clusterDisplayName;
+
+    // EXPERIMENT — four at most, in the order a reader asks them: what version, where, how
+    // big, how long has it been up. The rest lives on the About tab.
+    const keyFacts: Array<{ label: string; value: string }> = [];
+
+    if (clusterInfo !== null) {
+        const version = clusterInfo.metadata['serverInfo_version'];
+        if (version !== undefined && version !== '') {
+            keyFacts.push({ label: l10n.t('Version'), value: version });
+        }
+
+        if (azure?.location !== undefined) {
+            keyFacts.push({ label: l10n.t('Region'), value: regionToDisplayName(azure.location) });
+        }
+
+        const compute = describeCompute(azure);
+        if (compute !== null) {
+            keyFacts.push({ label: l10n.t('Compute'), value: compute });
+        }
+
+        if (latestSample?.uptimeSeconds !== null && latestSample?.uptimeSeconds !== undefined) {
+            keyFacts.push({ label: l10n.t('Uptime'), value: formatUptime(latestSample.uptimeSeconds) });
+        }
+    }
 
     const latencyText =
         typeof latestSample?.pingLatencyMs === 'number'
@@ -67,24 +94,35 @@ export const DashboardHeader = ({
     return (
         <header className="dashboardHeader">
             <div className="dashboardHeaderIcon" aria-hidden="true">
-                <DatabaseMultipleRegular />
+                <DataBarVerticalAscendingRegular fontSize={48} />
             </div>
 
             <div className="dashboardHeaderText">
-                <h1 className="dashboardHeaderTitle" title={clusterDisplayName}>
-                    {clusterDisplayName}
-                </h1>
-                {/*
-                 * Held open with a non-breaking space rather than removed while the host list
-                 * is in flight: the address arrives one round trip after the name, and a
-                 * subtitle that pops into existence would shove the whole layout down.
-                 */}
-                <span className="dashboardHeaderSubtitle" title={clusterInfo?.hosts.join(', ')}>
-                    {address ?? ' '}
-                </span>
+                <div className="dashboardHeaderIdentity">
+                    <h1 className="dashboardHeaderTitle" title={clusterDisplayName}>
+                        {clusterDisplayName}
+                    </h1>
+                    {showAddress && (
+                        <span className="dashboardHeaderAddress" title={clusterInfo?.hosts.join(', ')}>
+                            {address}
+                        </span>
+                    )}
+                </div>
             </div>
 
             <div className="dashboardHeaderBadges">
+                {keyFacts.map((fact) => (
+                    <Badge
+                        key={fact.label}
+                        appearance="filled"
+                        color="subtle"
+                        shape="rounded"
+                        className="dashboardHeaderFact"
+                    >
+                        <span className="dashboardHeaderFactLabel">{fact.label}</span>
+                        <span className="dashboardHeaderFactValue">{fact.value}</span>
+                    </Badge>
+                ))}
                 {/*
                  * Rounded and tinted, like every other badge in the extension — a filled pill
                  * read as a different family of object from the index and property badges the

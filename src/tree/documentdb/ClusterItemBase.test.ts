@@ -358,6 +358,7 @@ describe('ClusterItemBase.connect', () => {
         expect(item.authenticateCalls).toBe(0);
         // Subclasses such as Kubernetes restore a tunnel here; skipping it would reuse a dead client.
         expect(item.beforeCachedCalls).toBe(1);
+        expect(vscode.window.withProgress).not.toHaveBeenCalled();
     });
 
     it('keys the credential cache and the client on clusterId, never on the tree position', async () => {

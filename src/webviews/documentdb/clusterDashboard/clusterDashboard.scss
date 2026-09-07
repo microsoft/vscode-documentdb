@@ -20,10 +20,7 @@ $content-gutter: var(--spacingHorizontalMNudge); // 10px
 //    .dashboardHeaderBand → shaded full-width band, holding:
 //        .dashboardHeader  → identity (icon · name / address · state)
 //        .dashboardToolbar → cluster actions
-//    .dashboardScrollArea → the one scroll container, holding:
-//        .contentArea     → two columns ≥1000px, stacked below that
-//            .leftColumn  → inventory tiles + the tabbed lists (the work)
-//            .rightColumn → cluster facts + topology (reference material)
+//    .dashboardContent   → the one scroll container and full-width content column
 // =============================================================================
 .clusterDashboard {
     display: flex;
@@ -49,14 +46,11 @@ $content-gutter: var(--spacingHorizontalMNudge); // 10px
     // cropped by the webview's edges. The header band re-escapes this horizontally.
     padding-inline: $focus-inset;
 
-    // `clip` rather than `hidden`: it still suppresses the 1px cumulative-rounding
-    // scrollbar, but lets focus rings bleed a few px past the view's edges and lets the
-    // band's negative margin escape the padding above. Below 400px of height, keep real
-    // scrollbars for accessibility.
-    @media (min-height: 400px) {
-        overflow: clip;
-        overflow-clip-margin: var(--spacingHorizontalSNudge); // 6px
-    }
+    // The whole page scrolls here, so the identity band and action bar move with the content.
+    // Hiding only the cross axis suppresses cumulative-rounding overflow without clipping the
+    // list at the foot of a short panel.
+    overflow-y: auto;
+    overflow-x: hidden;
 
     // Pinned to the top edge of the panel, the same treatment every other view uses for a
     // background load, so a refresh never reflows the content under the reader's cursor.
@@ -85,8 +79,8 @@ $content-gutter: var(--spacingHorizontalMNudge); // 10px
 
         margin-inline: calc(-1 * #{$focus-inset}); // cancel the view's horizontal inset
         padding-inline: $focus-inset; // realign with the content below
-        padding-top: $focus-inset; // clear the top edge for focus outlines
-        padding-bottom: var(--spacingVerticalS); // 8px
+        // Equal block padding centres the content while exceeding the focus-outline inset.
+        padding-block: var(--spacingVerticalS); // 8px
         // The Collection View leaves 8px below its band and a further 4px above the action
         // bar; without this the dashboard's buttons sat 4px under the rule and read as
         // attached to it.
@@ -113,7 +107,7 @@ $content-gutter: var(--spacingHorizontalMNudge); // 10px
         height: 36px;
         border-radius: var(--borderRadiusMedium);
         background-color: var(--colorNeutralBackground3);
-        color: var(--colorNeutralForeground2);
+        color: var(--colorBrandForeground1);
         font-size: 20px;
     }
 
@@ -121,22 +115,37 @@ $content-gutter: var(--spacingHorizontalMNudge); // 10px
     // ellipsizes instead of pushing the badges off the panel.
     .dashboardHeaderText {
         display: flex;
-        flex-direction: column;
+        align-items: center;
         min-width: 0;
         flex: 1 1 auto;
     }
 
+    .dashboardHeaderIdentity {
+        display: flex;
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 2px;
+        width: 100%;
+        min-width: 0;
+    }
+
     .dashboardHeaderTitle {
         margin: 0;
+        flex: 0 1 auto;
+        min-width: 0;
         font-size: 18px;
         font-weight: var(--fontWeightSemibold);
         line-height: 24px;
+        max-width: 100%;
         white-space: nowrap;
         overflow: hidden;
         text-overflow: ellipsis;
     }
 
-    .dashboardHeaderSubtitle {
+    .dashboardHeaderAddress {
+        max-width: 100%;
+        min-width: 0;
+        font-family: var(--fontFamilyMonospace);
         font-size: var(--fontSizeBase200);
         line-height: var(--lineHeightBase200);
         color: var(--colorNeutralForeground3);
@@ -145,26 +154,44 @@ $content-gutter: var(--spacingHorizontalMNudge); // 10px
         text-overflow: ellipsis;
     }
 
+    .dashboardHeaderFact {
+        gap: var(--spacingHorizontalXXS);
+        max-width: 100%;
+        overflow: hidden;
+        font-weight: var(--fontWeightRegular);
+    }
+
+    .dashboardHeaderFactLabel {
+        color: var(--colorNeutralForeground3);
+    }
+
+    .dashboardHeaderFactValue {
+        color: var(--colorNeutralForeground1);
+        font-weight: var(--fontWeightSemibold);
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+
     .dashboardHeaderBadges {
         display: flex;
         align-items: center;
-        flex: 0 0 auto;
+        min-width: 0;
+        flex: 0 1 auto;
         flex-wrap: wrap;
         justify-content: flex-end;
-        gap: 8px;
+        gap: var(--spacingVerticalXS) 8px;
     }
 
-    // On a very narrow panel the badges are `flex: 0 0 auto` and take the row, leaving the
-    // cluster name a stub ("product…"). Below this width they move to their own line so the
-    // name — the thing the reader came for — gets the full width instead.
     @media (max-width: 560px) {
-        .dashboardHeader {
-            flex-wrap: wrap;
+        .dashboardHeaderIcon {
+            display: none;
         }
+    }
 
+    @media (max-width: 400px) {
+        .dashboardHeader,
         .dashboardHeaderBadges {
-            flex: 1 0 100%;
-            justify-content: flex-start;
+            gap: var(--spacingHorizontalXS);
         }
     }
 
@@ -229,55 +256,33 @@ $content-gutter: var(--spacingHorizontalMNudge); // 10px
 
     // ---- Two-column body ---------------------------------------------------
 
-    .dashboardScrollArea {
-        flex: 1 1 auto;
-        min-height: 0;
-        overflow-y: auto;
-        overflow-x: hidden;
-        padding-inline: $content-gutter;
-        padding-bottom: var(--spacingVerticalM); // 12px of run-out below the last card
-    }
-
-    // The same two-column rhythm Query Insights uses, so the two views' bodies are one
-    // object: 20px between the columns and between the cards stacked inside them.
-    .contentArea {
-        display: flex;
-        flex-direction: column; // Default: narrow panel, stacked
-        gap: 20px;
-        padding-block: 20px;
-
-        // Wide panel: work on the left, reference on the right.
-        @media (min-width: 1000px) {
-            flex-direction: row;
-            align-items: flex-start; // Prevent the columns from stretching to equal height
-        }
-    }
-
-    .leftColumn {
-        display: flex;
-        flex-direction: column;
-        gap: 20px;
-        min-width: 0; // Without this the tables refuse to shrink and the row overflows
-        flex: 1;
-
-        // 66/33 rather than Query Insights' 60/40: this column carries wide tables of
-        // figures, and the reference cards opposite are short lines of text.
-        @media (min-width: 1000px) {
-            flex: 1 1 66%;
-        }
-    }
-
-    .rightColumn {
+    .dashboardContent {
         display: flex;
         flex-direction: column;
         gap: 20px;
         min-width: 0;
-        flex: 1;
+        padding-inline: $content-gutter;
+        padding-block: 20px;
 
-        @media (min-width: 1000px) {
-            flex: 0 0 33%;
-            max-width: 500px;
+        // The tile row is measured against the content column rather than the viewport.
+        container-type: inline-size;
+        container-name: dashboardMain;
+    }
+
+    // Side by side once there is room; the facts grid and the topology list are both short
+    // and reading them stacked wastes the width this experiment just reclaimed.
+    .aboutTab {
+        @media (min-width: 900px) {
+            display: grid;
+            grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+            align-items: start;
+            gap: 20px;
         }
+    }
+
+    // One line at the foot of the panel, under whichever tab is open.
+    .dashboardFeedbackRow {
+        margin-top: 4px;
     }
 
     // `SummaryCard` has no slot for a title-row action, so the Cluster card builds its own
@@ -408,14 +413,10 @@ $content-gutter: var(--spacingHorizontalMNudge); // 10px
     }
 
     // `MetricsRow` picks its column count from *viewport* media queries, which is wrong for
-    // a tile row that now lives in a two-thirds column: at a 1000–1200px panel the viewport
-    // says "four columns" while the column is only wide enough for three, and the last tile
-    // was clipped mid-value. The same 1 → 2 → 4 progression is kept, but measured against
-    // the column the tiles actually sit in.
-    .leftColumn {
-        container-type: inline-size;
-        container-name: dashboardMain;
-    }
+    // a tile row measured against the panel: at a 1000–1200px window the viewport says "four
+    // columns" while the panel is only wide enough for three, and the last tile was clipped
+    // mid-value. The same 1 → 2 → 4 progression is kept, but measured against the content
+    // column the tiles actually sit in.
 
     .statusStrip .metricsRow {
         grid-template-columns: 1fr;
@@ -579,12 +580,7 @@ $content-gutter: var(--spacingHorizontalMNudge); // 10px
 
     // Centred "showing X of Y", the index list's footer: it states how much of the list the
     // filter is hiding, which is the one thing a filtered table cannot say for itself.
-    .listCount {
-        text-align: center;
-        padding: 8px 10px 4px;
-        color: var(--colorNeutralForeground2);
-        font-size: var(--fontSizeBase300);
-    }
+    // Styled with the level band, further down.
 
     .emptyState {
         display: flex;
@@ -673,9 +669,9 @@ $content-gutter: var(--spacingHorizontalMNudge); // 10px
         table-layout: fixed;
 
         // Floor below which the fixed columns would start overlapping; the scroller above
-        // takes over from here. 120 + 92 + 120 + 84 + 92 + 112 of declared columns leaves
+        // takes over from here. 120 + 92 + 120 + 84 + 92 + 88 of declared columns leaves
         // ~130px for the name, which is the narrowest that still reads as a name.
-        min-width: 750px;
+        min-width: 726px;
 
         .fui-TableCell,
         .fui-TableHeaderCell {
@@ -702,11 +698,27 @@ $content-gutter: var(--spacingHorizontalMNudge); // 10px
         }
 
         .colAction {
-            width: 112px;
+            width: 88px;
         }
 
         .actionCell {
             padding-inline: 0;
+        }
+    }
+
+    .namespaceTableSkeleton {
+        width: 100%;
+        min-width: 726px;
+
+        .namespaceSkeletonHeader,
+        .namespaceSkeletonGrid {
+            display: grid;
+            grid-template-columns: minmax(130px, 1fr) 120px 92px 120px 84px 92px 88px;
+            gap: var(--spacingHorizontalS);
+        }
+
+        .namespaceSkeletonHeader {
+            margin-bottom: var(--spacingVerticalXS);
         }
     }
 
@@ -731,82 +743,65 @@ $content-gutter: var(--spacingHorizontalMNudge); // 10px
 
     // ---- Level band --------------------------------------------------------
     //
-    // Rendered at both levels and always the same height, so stepping in or out does not
-    // shift the toolbar and the table below it.
+    // A breadcrumb, one line, the same height at both levels — which is what stops stepping
+    // into a database from moving the toolbar and the table below it.
 
     .levelHeader {
         display: flex;
         align-items: center;
-        gap: 8px;
         min-height: 32px;
         min-width: 0;
-        // One line, always. Wrapping would move the toolbar and the table down by a row on
-        // the way into a database, which is the shift this band exists to prevent; the
-        // database name gives up width instead.
-        flex-wrap: nowrap;
+        // One line, always. Wrapping would move everything below it by a row on the way into
+        // a database, which is the shift this band exists to prevent; the database name gives
+        // up width instead.
         overflow: hidden;
+
+        .fui-Breadcrumb {
+            min-width: 0;
+            flex-wrap: nowrap;
+            overflow: hidden;
+        }
+
+        // The last crumb is the database name and the only element allowed to give up width.
+        .fui-BreadcrumbItem:last-of-type {
+            min-width: 0;
+
+            .fui-BreadcrumbButton {
+                min-width: 0;
+            }
+
+            .fui-Button__icon {
+                flex-shrink: 0;
+            }
+        }
     }
 
-    // The way out is never the thing that shortens.
-    .levelBackButton {
-        flex: 0 0 auto;
-    }
-
-    .levelTitle {
-        // Never gives up width: it is a fixed word, and the database name beside it is the
-        // element that should shorten.
-        flex: 0 0 auto;
-        font-size: var(--fontSizeBase400);
-        font-weight: var(--fontWeightSemibold);
-        white-space: nowrap;
-    }
-
-    // Divides "what this list holds" from "which database it belongs to". A rule rather than
-    // a bullet: the two are different kinds of fact, not two items in one series. Fluent's
-    // Divider is `flex: 1` by default, which would let it eat the band.
-    .levelSeparator {
-        flex: 0 0 auto;
-        width: var(--strokeWidthThin);
-        height: 24px;
-        padding-inline: var(--spacingHorizontalXS);
-    }
-
-    // The only element here allowed to give up width, so a long database name ellipsizes
-    // instead of pushing the figures off the band.
-    .levelSubject {
-        min-width: 0;
-        flex: 0 1 auto;
-        font-size: var(--fontSizeBase300);
-        font-weight: var(--fontWeightSemibold);
-        overflow: hidden;
-        text-overflow: ellipsis;
-        white-space: nowrap;
-    }
-
-    // The parent database's own figures, carried into the child level: without them,
-    // stepping in costs the reader the numbers that sent them there.
-    .levelFacts {
-        display: flex;
+    // The count stays centred on the panel while the way out sits at the left edge, so the
+    // button's presence at one level and absence at the other does not move the sentence.
+    .listFooter {
+        display: grid;
+        grid-template-columns: 1fr auto 1fr;
         align-items: center;
-        gap: 12px;
-        flex: 0 0 auto;
-        flex-wrap: nowrap;
-        white-space: nowrap;
-        color: var(--colorNeutralForeground3);
-        font-size: var(--fontSizeBase200);
+        gap: 8px;
+        padding: 8px 10px 4px;
     }
 
-    .levelFact strong {
-        font-weight: var(--fontWeightSemibold);
-        color: var(--colorNeutralForeground1);
+    .listFooterStart {
+        display: flex;
+        justify-self: start;
     }
 
-    // Numeric columns read as a column of figures only when they share an edge; right
-    // alignment plus truncation keeps that true at every panel width.
+    .listCount {
+        text-align: center;
+        color: var(--colorNeutralForeground2);
+        font-size: var(--fontSizeBase300);
+    }
+
+    // Numeric values follow the table's default left alignment while retaining their reserved width.
     .numberCell {
         display: block;
         width: 100%;
-        text-align: right;
+        text-align: left;
         overflow: hidden;
         text-overflow: ellipsis;
         white-space: nowrap;
@@ -818,8 +813,8 @@ $content-gutter: var(--spacingHorizontalMNudge); // 10px
         font-size: var(--fontSizeBase200);
     }
 
-    // Size figure + relative bar. Copied from the Collection View's index list so both
-    // lists' size columns are the same object: right-aligned figure, short bar, and no
+    // Size figure + relative bar. The cell uses the table's default left alignment, while the
+    // fixed-width figure aligns against its adjacent bar as in the Collection View index list.
     // track behind it (a track reads as capacity, which nothing here measures).
     .relativeSizeCell {
         display: flex;

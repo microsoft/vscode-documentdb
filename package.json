@@ -700,7 +700,7 @@
         "category": "DocumentDB",
         "command": "vscode-documentdb.command.clusterDashboard.open",
         "title": "Show Cluster Dashboard (Preview)",
-        "icon": "$(pulse)"
+        "icon": "$(graph)"
       },
       {
         "//": "Open Container View",
@@ -1097,6 +1097,12 @@
           "group": "inline"
         },
         {
+          "//": "[Account] Show Cluster Dashboard (Preview, inline)",
+          "command": "vscode-documentdb.command.clusterDashboard.open",
+          "when": "view =~ /connectionsView|discoveryView|azure(ResourceGroups|FocusView)/ && viewItem =~ /\\btreeitem_documentdbcluster\\b/i && !listMultiSelection",
+          "group": "inline@5"
+        },
+        {
           "//": "Create database",
           "command": "vscode-documentdb.command.createDatabase",
           "when": "view =~ /connectionsView|discoveryView|azure(ResourceGroups|FocusView)/ && viewItem =~ /\\btreeitem_documentdbcluster\\b/i && !listMultiSelection",
@@ -1125,6 +1131,12 @@
           "command": "vscode-documentdb.command.createCollection",
           "when": "view =~ /connectionsView|discoveryView|azure(ResourceGroups|FocusView)/ && viewItem =~ /\\btreeitem_database\\b/i && viewItem =~ /\\bexperience_(documentDB|mongoRU|mongoDBAtlas)\\b/i && !listMultiSelection",
           "group": "1@1"
+        },
+        {
+          "//": "[Database] Show Cluster Dashboard (Preview, inline)",
+          "command": "vscode-documentdb.command.clusterDashboard.open",
+          "when": "view =~ /connectionsView|discoveryView|azure(ResourceGroups|FocusView)/ && viewItem =~ /\\btreeitem_database\\b/i && !listMultiSelection",
+          "group": "inline@5"
         },
         {
           "//": "[Database] Delete database",

@@ -21,6 +21,7 @@ import { ShellCommandIds } from '../../documentdb/shell/constants';
 import { ext } from '../../extensionVariables';
 import { ConnectionDiagnosticsService } from '../../services/connectionDiagnosticsService';
 import { regionToDisplayName } from '../../utils/regionToDisplayName';
+import { withDelayedProgress } from '../../utils/withProgress';
 import { type TreeElement } from '../TreeElement';
 import { type TreeElementWithContextValue } from '../TreeElementWithContextValue';
 import { type TreeElementWithExperience } from '../TreeElementWithExperience';
@@ -181,20 +182,19 @@ export abstract class ClusterItemBase<T extends BaseClusterModel = BaseClusterMo
      */
     protected async getClientWithProgress(clusterId: string): Promise<ClustersClient> {
         const abortController = new AbortController();
-        return vscode.window.withProgress(
+        const clientPromise = ClustersClient.getClient(clusterId, abortController.signal);
+        return withDelayedProgress(
+            clientPromise,
             {
                 location: vscode.ProgressLocation.Notification,
                 title: l10n.t('Connecting to "{cluster}"…', { cluster: this.cluster.name }),
                 cancellable: true,
             },
-            async (_progress, token) => {
-                token.onCancellationRequested(() => {
-                    ext.outputChannel.debug(
-                        `User cancelled connection attempt for "${this.cluster.name}" via progress notification.`,
-                    );
-                    abortController.abort();
-                });
-                return ClustersClient.getClient(clusterId, abortController.signal);
+            () => {
+                ext.outputChannel.debug(
+                    `User cancelled connection attempt for "${this.cluster.name}" via progress notification.`,
+                );
+                abortController.abort();
             },
         );
     }

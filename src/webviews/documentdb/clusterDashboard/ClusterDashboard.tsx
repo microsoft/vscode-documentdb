@@ -3,37 +3,22 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { ProgressBar, Tab, TabList, Toolbar, ToolbarButton, Tooltip } from '@fluentui/react-components';
+import { ProgressBar, Toolbar, ToolbarButton, Tooltip } from '@fluentui/react-components';
 import { ArrowClockwiseRegular, EyeRegular, WindowConsoleRegular } from '@fluentui/react-icons';
 import { useConfiguration } from '@microsoft/vscode-ext-webview/react';
 import * as l10n from '@vscode/l10n';
 import { useCallback, useEffect, useRef, useState, type JSX } from 'react';
 
-import {
-    getFailedCommandName,
-    type ClusterHealthSample,
-    type ClusterStorageStats,
-    type ClusterTopology,
-} from '../../../documentdb/utils/getClusterHealth';
+import { type ClusterHealthSample, type ClusterStorageStats } from '../../../documentdb/utils/getClusterHealth';
 import { useTrpcClient } from '../../_integration/useTrpcClient';
 import './clusterDashboard.scss';
 import { type ClusterDashboardWebviewConfigurationType } from './clusterDashboardController';
 import { type ClusterDashboardInfo } from './clusterDashboardRouter';
-import { describeTopology } from './clusterFacts';
-import { ActivityTab } from './components/ActivityTab';
-import { ClusterFactsCard } from './components/ClusterFactsCard';
 import { DashboardFeedback } from './components/DashboardFeedback';
 import { DashboardHeader, type ConnectionState } from './components/DashboardHeader';
-import { OperationsTab } from './components/OperationsTab';
 import { StatusStrip } from './components/StatusStrip';
 import { createStorageViewState, StorageTab, type StorageTabViewState } from './components/StorageTab';
-import { TopologyCard } from './components/TopologyCard';
 import { useDatabaseCollections } from './components/useDatabaseCollections';
-
-type DashboardTab = 'data' | 'operations' | 'activity';
-
-/** Number of samples kept in the webview for the sparklines (5 minutes at a 5 s cadence). */
-const MAX_SAMPLES = 60;
 
 /** Consecutive failed polls after which the dashboard reports the cluster as disconnected. */
 const FAILURE_THRESHOLD = 2;
@@ -54,23 +39,20 @@ export const ClusterDashboard = (): JSX.Element => {
     const trpcClient = useTrpcClient();
 
     const [clusterInfo, setClusterInfo] = useState<ClusterDashboardInfo | null>(null);
-    const [samples, setSamples] = useState<ClusterHealthSample[]>([]);
+    // Only the newest sample is kept: nothing renders a history since the Activity charts
+    // went, and the diagnostics document takes its own sample on the host.
+    const [latestSample, setLatestSample] = useState<ClusterHealthSample | null>(null);
     const [consecutiveFailures, setConsecutiveFailures] = useState(0);
     const [storageStats, setStorageStats] = useState<ClusterStorageStats | null>(null);
-    const [topology, setTopology] = useState<ClusterTopology | null>(null);
     const [isRefreshingStorage, setIsRefreshingStorage] = useState(false);
-    const [opcountersUnsupported, setOpcountersUnsupported] = useState(false);
-    // The inventory is the landing view: the dashboard is a map of the cluster's data
-    // first, and a monitoring surface only where the server can actually support one.
-    const [selectedTab, setSelectedTab] = useState<DashboardTab>('data');
     /**
-     * How the reader has arranged the Data tab — order, filter, expanded rows.
+     * How the reader has arranged the inventory — order, filter, level.
      *
-     * Held here rather than inside the tab because selecting Operations unmounts it, which
-     * silently discarded all three. Glancing at the running operations and coming back
-     * should not undo the arrangement the reader built to find something.
+     * Held here rather than inside the list so the main toolbar's Refresh can reach it.
      */
-    const [storageViewState, setStorageViewState] = useState<StorageTabViewState>(createStorageViewState);
+    const [storageViewState, setStorageViewState] = useState<StorageTabViewState>(() =>
+        createStorageViewState(configuration.selectedDatabaseName),
+    );
 
     /**
      * The drilled-into database's collections.
@@ -123,7 +105,7 @@ export const ClusterDashboard = (): JSX.Element => {
         }
     }, [trpcClient]);
 
-    // One-time header + storage + topology load.
+    // One-time header + storage load.
     useEffect(() => {
         disposedRef.current = false;
 
@@ -142,20 +124,6 @@ export const ClusterDashboard = (): JSX.Element => {
                         cause: error instanceof Error ? error.message : String(error),
                     });
                 }
-            });
-
-        // The topology probe is best effort by construction — every command it runs is
-        // refused by at least one supported platform — so a failure leaves the card in its
-        // loading state rather than raising a notification the reader can do nothing about.
-        void trpcClient.clusterDashboard.getTopology
-            .query()
-            .then((result) => {
-                if (!disposedRef.current) {
-                    setTopology(result);
-                }
-            })
-            .catch(() => {
-                // Deliberately silent; see above.
             });
 
         void loadStorageStats();
@@ -209,20 +177,8 @@ export const ClusterDashboard = (): JSX.Element => {
                     if (disposedRef.current) {
                         return;
                     }
-                    setSamples((previous) => [...previous.slice(-(MAX_SAMPLES - 1)), sample]);
+                    setLatestSample(sample);
                     setConsecutiveFailures((failures) => (sample.pingLatencyMs === null ? failures + 1 : 0));
-                    if (sample.errors.some((entry) => getFailedCommandName(entry) === 'serverStatus')) {
-                        setOpcountersUnsupported(true);
-                    } else if (sample.opcounters !== null) {
-                        // A sample carrying opcounters proves `serverStatus` answered, so an
-                        // earlier failure was transient — a blip, a failover, a moment of load —
-                        // rather than the server refusing the command. Without this the tab is
-                        // removed by the first hiccup and never returns for the life of the
-                        // panel, which reads as the feature being broken rather than the server
-                        // being briefly busy. Only opcounters prove it: a sample can lack a
-                        // `serverStatus` error simply because the whole poll failed earlier.
-                        setOpcountersUnsupported(false);
-                    }
                 })
                 .catch(() => {
                     if (!disposedRef.current) {
@@ -258,9 +214,9 @@ export const ClusterDashboard = (): JSX.Element => {
     const exportDiagnostics = useCallback(async (): Promise<void> => {
         setIsExporting(true);
         try {
-            // The samples only exist here — everything else is re-read on the host, so the
-            // export reflects the cluster now rather than whatever the webview last rendered.
-            await trpcClient.clusterDashboard.exportDiagnostics.mutate({ samples });
+            // Everything is re-read on the host, so the export reflects the cluster now
+            // rather than whatever the webview last rendered.
+            await trpcClient.clusterDashboard.exportDiagnostics.mutate();
         } catch (error) {
             void trpcClient.common.displayErrorMessage.mutate({
                 message: l10n.t('Failed to export diagnostics.'),
@@ -272,7 +228,7 @@ export const ClusterDashboard = (): JSX.Element => {
                 setIsExporting(false);
             }
         }
-    }, [samples, trpcClient]);
+    }, [trpcClient]);
 
     const openShell = useCallback(async (): Promise<void> => {
         try {
@@ -295,27 +251,12 @@ export const ClusterDashboard = (): JSX.Element => {
         }
     }, [loadStorageStats, reloadCollections, storageViewState.currentDatabase]);
 
-    const latestSample = samples.length > 0 ? samples[samples.length - 1] : null;
-
     const connectionState: ConnectionState =
         consecutiveFailures >= FAILURE_THRESHOLD
             ? 'disconnected'
             : latestSample !== null && latestSample.pingLatencyMs !== null
               ? 'connected'
               : 'connecting';
-
-    // The dashboard's shape is grown from the capability probe: a tab exists only when the
-    // server can answer it. `serverStatus_uptime` in the one-shot metadata means the server
-    // answered `serverStatus`, which is everything the Activity charts are made of — on
-    // Azure DocumentDB (vCore) the command is rejected, and a tab that could only show a
-    // sampling artifact dressed up as a rate would move without informing. Checked from
-    // metadata rather than the live samples so the tab set is stable from first render.
-    const activitySupported = clusterInfo?.metadata['serverStatus_uptime'] !== undefined && !opcountersUnsupported;
-
-    // If a later sample proves serverStatus unsupported while Activity is selected, the tab
-    // vanishes from under the selection; fall back to the landing view rather than pointing
-    // the TabList at a tab that no longer exists.
-    const effectiveTab: DashboardTab = selectedTab === 'activity' && !activitySupported ? 'data' : selectedTab;
 
     // Every load that replaces content the reader is looking at reports through the one bar
     // pinned to the top edge. The health poll is deliberately excluded: it runs every five
@@ -394,63 +335,33 @@ export const ClusterDashboard = (): JSX.Element => {
                         {l10n.t('View Raw Diagnostics')}
                     </ToolbarButton>
                 </Tooltip>
+                {/*
+                 * The question rides the action bar rather than the foot of the page: it is
+                 * the same question on every tab, it is reachable without scrolling to the
+                 * end of a long table, and up here it costs no vertical space at all.
+                 */}
+                {configuration.feedbackSignalsEnabled && <DashboardFeedback />}
             </Toolbar>
 
             {/*
-             * Two columns on a wide panel, one on a narrow one — the Query Insights layout.
-             * The wide left column carries the work (the inventory numbers and the lists the
-             * reader scans and sorts); the narrow right column carries reference material
-             * that is read once. Below 1000px the columns stack, so the tables keep their
-             * full width instead of being squeezed to a third of it.
+             * One full-width column, the Indexes tab's shape. There is no separate scroll
+             * region: the whole page scrolls, so the identity band and the action bar move
+             * off the top like everything else rather than staying pinned above a short
+             * viewport of table.
              */}
-            <div className="dashboardScrollArea">
-                <div className="contentArea">
-                    <div className="leftColumn">
-                        <StatusStrip storageStats={storageStats} />
+            <div className="dashboardContent">
+                <StatusStrip
+                    storageStats={isRefreshingStorage ? null : storageStats}
+                    currentDatabase={storageViewState.currentDatabase}
+                />
 
-                        <TabList
-                            selectedValue={effectiveTab}
-                            onTabSelect={(_event, data) => setSelectedTab(data.value as DashboardTab)}
-                            aria-label={l10n.t('Cluster dashboard sections')}
-                        >
-                            <Tab value="data">{l10n.t('Data')}</Tab>
-                            <Tab value="operations">{l10n.t('Operations')}</Tab>
-                            {activitySupported && <Tab value="activity">{l10n.t('Activity')}</Tab>}
-                        </TabList>
-
-                        {effectiveTab === 'data' && (
-                            <StorageTab
-                                storageStats={storageStats}
-                                collections={collections}
-                                viewState={storageViewState}
-                                onViewStateChange={setStorageViewState}
-                            />
-                        )}
-                        {effectiveTab === 'operations' && (
-                            <OperationsTab refreshIntervalMs={configuration.refreshIntervalMs} />
-                        )}
-                        {effectiveTab === 'activity' && (
-                            <ActivityTab samples={samples} opcountersUnsupported={opcountersUnsupported} />
-                        )}
-                    </div>
-
-                    <div className="rightColumn">
-                        <ClusterFactsCard
-                            clusterInfo={clusterInfo}
-                            latestSample={latestSample}
-                            azure={configuration.azure}
-                        />
-                        <TopologyCard
-                            topology={topology}
-                            metadataShape={clusterInfo === null ? undefined : describeTopology(clusterInfo.metadata)}
-                        />
-                        {/*
-                         * Last in the column, like Query Insights': the reader is asked what
-                         * they think only after everything there is to look at.
-                         */}
-                        {configuration.feedbackSignalsEnabled && <DashboardFeedback />}
-                    </div>
-                </div>
+                <StorageTab
+                    storageStats={storageStats}
+                    isLoading={isRefreshingStorage || collections.isLoading}
+                    collections={collections}
+                    viewState={storageViewState}
+                    onViewStateChange={setStorageViewState}
+                />
             </div>
         </div>
     );

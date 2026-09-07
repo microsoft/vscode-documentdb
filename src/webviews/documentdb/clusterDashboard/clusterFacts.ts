@@ -190,3 +190,24 @@ export function describeAddress(hosts: string[] | undefined): string | null {
 
     return l10n.t('{host} +{count} more', { host: hosts[0], count: String(hosts.length - 1) });
 }
+
+/**
+ * Short label for the authentication method behind this connection.
+ *
+ * Deliberately shorter than the wording the connection wizard uses ("Username and
+ * Password"): this appears as one badge among six, and the reader is being reminded which
+ * of three methods is in play, not choosing between them. `null` when the connection was
+ * restored without cached credentials, so the badge is dropped rather than guessing.
+ */
+export function describeAuthMethod(authMethod: string | undefined): string | null {
+    switch (authMethod) {
+        case 'NativeAuth':
+            return l10n.t('Username and password');
+        case 'MicrosoftEntraID':
+            return l10n.t('Entra ID');
+        case 'NoAuth':
+            return l10n.t('None');
+        default:
+            return null;
+    }
+}
