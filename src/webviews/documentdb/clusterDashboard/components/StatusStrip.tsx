@@ -111,7 +111,10 @@ export const StatusStrip = ({ storageStats, currentDatabase }: StatusStripProps)
             ? undefined
             : l10n.t('{databases} / {collections}', {
                   databases: String(storageStats.databases.length),
-                  collections: totalCollections === null ? UNAVAILABLE : String(totalCollections),
+                  collections:
+                      totalCollections === null && storageStats.databases.length > 0
+                          ? UNAVAILABLE
+                          : String(totalCollections ?? 0),
               });
 
     // Same `a / b` shape as the databases tile beside it: the label names the two figures in

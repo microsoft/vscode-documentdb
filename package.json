@@ -971,7 +971,7 @@
         {
           "command": "vscode-documentdb.command.localQuickStart.stop",
           "when": "view == connectionsView && viewItem =~ /\\btreeItem_quickStartInstance\\b/i && viewItem =~ /\\bstate_running\\b/i",
-          "group": "inline@1"
+          "group": "inline@99"
         },
         {
           "command": "vscode-documentdb.command.localQuickStart.start",
@@ -1013,6 +1013,18 @@
           "command": "vscode-documentdb.command.createDatabase",
           "when": "view == connectionsView && viewItem =~ /\\btreeItem_quickStartInstance\\b/i && viewItem =~ /\\bstate_running\\b/i && !listMultiSelection",
           "group": "1@1"
+        },
+        {
+          "//": "[Local Quick Start] Cluster Dashboard (inline)",
+          "command": "vscode-documentdb.command.clusterDashboard.open",
+          "when": "view == connectionsView && viewItem =~ /\\btreeItem_quickStartInstance\\b/i && viewItem =~ /\\bstate_running\\b/i && !listMultiSelection",
+          "group": "inline@5"
+        },
+        {
+          "//": "[Local Quick Start] Cluster Dashboard",
+          "command": "vscode-documentdb.command.clusterDashboard.open",
+          "when": "view == connectionsView && viewItem =~ /\\btreeItem_quickStartInstance\\b/i && viewItem =~ /\\bstate_running\\b/i && !listMultiSelection",
+          "group": "1@2"
         },
         {
           "//": "[Local Quick Start] Open Interactive Shell",
