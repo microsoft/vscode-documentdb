@@ -32,6 +32,7 @@ import { getObservedOperations, recordObservedOperations } from './operationHist
 type FakeController = {
     isDisposed: boolean;
     onDisposed: (handler: () => void) => void;
+    revealToForeground: jest.Mock;
     dispose: () => void;
 };
 
@@ -40,6 +41,7 @@ function createFakeController(): FakeController {
 
     return {
         isDisposed: false,
+        revealToForeground: jest.fn(),
         onDisposed(handler: () => void): void {
             handlers.push(handler);
         },
@@ -67,25 +69,37 @@ function operation(overrides: Partial<CurrentOpEntry> = {}): CurrentOpEntry {
     };
 }
 
-function open(clusterId: string): FakeController {
+function open(clusterId: string, selectedDatabaseName?: string): FakeController {
     return openClusterDashboardWebview({
         clusterId,
         clusterDisplayName: clusterId,
         viewId: 'connectionsView',
         refreshIntervalMs: 5_000,
         feedbackSignalsEnabled: false,
+        selectedDatabaseName,
     }) as unknown as FakeController;
 }
 
 describe('openClusterDashboardWebview panel lifecycle', () => {
-    it('reveals the existing panel instead of opening a duplicate', () => {
+    it('reuses the existing panel instead of opening a duplicate', () => {
         const first = open(CLUSTER);
         const second = open(CLUSTER);
 
         // A duplicate panel would double the polling load against the same cluster.
         expect(second).toBe(first);
+        expect(first.revealToForeground).toHaveBeenCalledTimes(1);
 
         first.dispose();
+    });
+
+    it('opens separate panels for different databases in the same cluster', () => {
+        const first = open(CLUSTER, 'sales');
+        const second = open(CLUSTER, 'inventory');
+
+        expect(second).not.toBe(first);
+
+        first.dispose();
+        second.dispose();
     });
 
     it('opens a fresh panel once the previous one was disposed', () => {

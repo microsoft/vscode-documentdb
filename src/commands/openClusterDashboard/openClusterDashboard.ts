@@ -100,7 +100,7 @@ export async function openClusterDashboard(
     // The viewId tells us which branch data provider owns this node
     const viewId = node.cluster.viewId ?? inferViewIdFromTreeId(node.cluster.treeId);
 
-    const view = openClusterDashboardWebview({
+    openClusterDashboardWebview({
         clusterId: node.cluster.clusterId,
         clusterDisplayName: node.cluster.name,
         viewId: viewId,
@@ -109,6 +109,4 @@ export async function openClusterDashboard(
         feedbackSignalsEnabled: readFeedbackSignalsEnabled(),
         selectedDatabaseName: node instanceof DatabaseItem ? node.databaseInfo.name : undefined,
     });
-
-    view.revealToForeground();
 }

@@ -75,7 +75,7 @@ export interface IdentifiedOperation extends CurrentOpEntry {
 const historyByCluster = new Map<string, ObservedOperation[]>();
 
 /**
- * Clusters with a dashboard panel currently open.
+ * Clusters with one or more dashboard panels currently open.
  *
  * The history is a module-level store but a *session*-scoped fact ("what has run since I opened
  * this"). Disposal clears the map, yet a poll already in flight when the panel closed resolves
@@ -83,11 +83,11 @@ const historyByCluster = new Map<string, ObservedOperation[]>();
  * command previews retained for the lifetime of the extension host, and presenting them to the
  * next session as its own. Recording is therefore gated on the session still being open.
  */
-const openSessions = new Set<string>();
+const openSessionCounts = new Map<string, number>();
 
 /** Marks a cluster's dashboard session as open, so polls may record into its history. */
 export function beginObservedOperationsSession(clusterId: string): void {
-    openSessions.add(clusterId);
+    openSessionCounts.set(clusterId, (openSessionCounts.get(clusterId) ?? 0) + 1);
 }
 
 function isSameOccurrence(entry: ObservedOperation, operation: CurrentOpEntry, nowMs: number): boolean {
@@ -157,7 +157,7 @@ export function recordObservedOperations(
 
     // The panel closed while this poll was in flight; its result belongs to a session that no
     // longer exists.
-    if (!openSessions.has(clusterId)) {
+    if (!openSessionCounts.has(clusterId)) {
         return operations.map((operation) => ({ ...operation, occurrenceId: '' }));
     }
 
@@ -258,6 +258,12 @@ export function clearObservedOperations(clusterId: string): void {
  * resurrect the entry.
  */
 export function endObservedOperationsSession(clusterId: string): void {
-    openSessions.delete(clusterId);
+    const remainingSessionCount = (openSessionCounts.get(clusterId) ?? 0) - 1;
+    if (remainingSessionCount > 0) {
+        openSessionCounts.set(clusterId, remainingSessionCount);
+        return;
+    }
+
+    openSessionCounts.delete(clusterId);
     historyByCluster.delete(clusterId);
 }

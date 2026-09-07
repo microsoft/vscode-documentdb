@@ -62,16 +62,22 @@ export type ClusterDashboardWebviewConfigurationType = {
 };
 
 /**
- * Open dashboard panels keyed by `clusterId`, so a second invocation reveals the
- * existing panel instead of opening a duplicate that would double the polling load.
+ * Open dashboard panels keyed by cluster and selected database. A matching invocation reuses
+ * its panel, while a different database can remain open beside it.
  */
 const openPanels = new Map<string, AppWebviewController<ClusterDashboardWebviewConfigurationType>>();
+
+function getPanelKey(clusterId: string, selectedDatabaseName?: string): string {
+    return `${clusterId}\u0000${selectedDatabaseName ?? ''}`;
+}
 
 export function openClusterDashboardWebview(
     initialData: ClusterDashboardWebviewConfigurationType,
 ): AppWebviewController<ClusterDashboardWebviewConfigurationType> {
-    const existingPanel = openPanels.get(initialData.clusterId);
+    const panelKey = getPanelKey(initialData.clusterId, initialData.selectedDatabaseName);
+    const existingPanel = openPanels.get(panelKey);
     if (existingPanel && !existingPanel.isDisposed) {
+        existingPanel.revealToForeground();
         return existingPanel;
     }
 
@@ -84,7 +90,13 @@ export function openClusterDashboardWebview(
     };
 
     const controller = openAppWebview<ClusterDashboardWebviewConfigurationType>({
-        title: l10n.t('Dashboard: {clusterDisplayName}', { clusterDisplayName: initialData.clusterDisplayName }),
+        title:
+            initialData.selectedDatabaseName === undefined
+                ? l10n.t('Dashboard: {clusterDisplayName}', { clusterDisplayName: initialData.clusterDisplayName })
+                : l10n.t('Dashboard: {clusterDisplayName} / {databaseName}', {
+                      clusterDisplayName: initialData.clusterDisplayName,
+                      databaseName: initialData.selectedDatabaseName,
+                  }),
         webviewName: 'clusterDashboard',
         config: initialData,
         context: trpcContext,
@@ -95,11 +107,11 @@ export function openClusterDashboardWebview(
         },
     });
 
-    openPanels.set(initialData.clusterId, controller);
+    openPanels.set(panelKey, controller);
     beginObservedOperationsSession(initialData.clusterId);
     controller.onDisposed(() => {
-        if (openPanels.get(initialData.clusterId) === controller) {
-            openPanels.delete(initialData.clusterId);
+        if (openPanels.get(panelKey) === controller) {
+            openPanels.delete(panelKey);
 
             // The operation history is scoped to one dashboard session ("what has run since I
             // opened this"), but it lives in a host-side store keyed by cluster. Without this,

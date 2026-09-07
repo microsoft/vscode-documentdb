@@ -41,6 +41,17 @@ afterEach(() => {
 });
 
 describe('recordObservedOperations', () => {
+    it('retains history until the final dashboard for a cluster closes', () => {
+        beginObservedOperationsSession(CLUSTER);
+        recordObservedOperations(CLUSTER, [operation()], 1_000);
+
+        endObservedOperationsSession(CLUSTER);
+        expect(getObservedOperations(CLUSTER)).toHaveLength(1);
+
+        endObservedOperationsSession(CLUSTER);
+        expect(getObservedOperations(CLUSTER)).toEqual([]);
+    });
+
     it('merges repeat sightings into one entry rather than duplicating it', () => {
         recordObservedOperations(CLUSTER, [operation({ secsRunning: 1 })], 1_000);
         recordObservedOperations(CLUSTER, [operation({ secsRunning: 4 })], 6_000);
