@@ -41,7 +41,6 @@ function extractAzureInfo(cluster: TreeCluster): ClusterDashboardAzureInfo | und
         nodeCount: azureProps.nodeCount,
         diskSize: azureProps.diskSize,
         enableHa: azureProps.enableHa,
-        replicaRole: azureProps.replicaRole,
     };
 
     return Object.values(info).some((value) => value !== undefined) ? info : undefined;

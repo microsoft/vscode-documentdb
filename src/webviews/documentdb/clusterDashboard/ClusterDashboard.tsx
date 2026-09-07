@@ -16,8 +16,8 @@ import { type ClusterDashboardWebviewConfigurationType } from './clusterDashboar
 import { type ClusterDashboardInfo } from './clusterDashboardRouter';
 import { DashboardFeedback } from './components/DashboardFeedback';
 import { DashboardHeader, type ConnectionState } from './components/DashboardHeader';
+import { createInventoryViewState, InventoryPanel, type InventoryViewState } from './components/InventoryPanel';
 import { StatusStrip } from './components/StatusStrip';
-import { createStorageViewState, StorageTab, type StorageTabViewState } from './components/StorageTab';
 import { useDatabaseCollections } from './components/useDatabaseCollections';
 
 /** Consecutive failed polls after which the dashboard reports the cluster as disconnected. */
@@ -36,8 +36,8 @@ export const ClusterDashboard = (): JSX.Element => {
     const trpcClient = useTrpcClient();
 
     const [clusterInfo, setClusterInfo] = useState<ClusterDashboardInfo | null>(null);
-    // Only the newest sample is kept: nothing renders a history since the Activity charts
-    // went, and the diagnostics document takes its own sample on the host.
+    // Only the newest sample is kept: the header states the current connection state and
+    // latency, and the diagnostics document takes its own sample on the host.
     const [latestSample, setLatestSample] = useState<ClusterHealthSample | null>(null);
     const [consecutiveFailures, setConsecutiveFailures] = useState(0);
     const [storageStats, setStorageStats] = useState<ClusterStorageStats | null>(null);
@@ -48,18 +48,18 @@ export const ClusterDashboard = (): JSX.Element => {
      *
      * Held here rather than inside the list so the main toolbar's Refresh can reach it.
      */
-    const [storageViewState, setStorageViewState] = useState<StorageTabViewState>(() =>
-        createStorageViewState(configuration.selectedDatabaseName),
+    const [inventoryViewState, setInventoryViewState] = useState<InventoryViewState>(() =>
+        createInventoryViewState(configuration.selectedDatabaseName),
     );
 
     /**
      * The drilled-into database's collections.
      *
-     * Held here rather than inside the Data tab because Refresh acts on whichever list is on
-     * screen and now lives in the panel's main toolbar, which cannot reach state owned by a
-     * tab it sits above.
+     * Held here rather than inside the inventory panel because Refresh acts on whichever list
+     * is on screen and lives in the panel's main toolbar, which cannot reach state owned by a
+     * component it sits above.
      */
-    const collections = useDatabaseCollections(storageViewState.currentDatabase);
+    const collections = useDatabaseCollections(inventoryViewState.currentDatabase);
 
     /**
      * Guards every asynchronous state write. The polling closures outlive a single render,
@@ -162,7 +162,8 @@ export const ClusterDashboard = (): JSX.Element => {
         return () => document.removeEventListener('visibilitychange', onVisibilityChange);
     }, []);
 
-    // Health polling loop. Failures are absorbed so a transient error does not clear the charts.
+    // Health polling loop. Failures are absorbed so a transient error does not flip the
+    // header to Disconnected on the first missed sample.
     useEffect(() => {
         const tick = (): void => {
             if (sampleInFlightRef.current || !isVisibleRef.current) {
@@ -232,10 +233,10 @@ export const ClusterDashboard = (): JSX.Element => {
     const reloadCollections = collections.reload;
     const refreshData = useCallback((): void => {
         void loadStorageStats();
-        if (storageViewState.currentDatabase !== null) {
+        if (inventoryViewState.currentDatabase !== null) {
             reloadCollections();
         }
-    }, [loadStorageStats, reloadCollections, storageViewState.currentDatabase]);
+    }, [loadStorageStats, reloadCollections, inventoryViewState.currentDatabase]);
 
     const connectionState: ConnectionState =
         consecutiveFailures >= FAILURE_THRESHOLD
@@ -338,16 +339,16 @@ export const ClusterDashboard = (): JSX.Element => {
             <div className="dashboardContent">
                 <StatusStrip
                     storageStats={isRefreshingStorage ? null : storageStats}
-                    currentDatabase={storageViewState.currentDatabase}
+                    currentDatabase={inventoryViewState.currentDatabase}
                 />
 
-                <StorageTab
+                <InventoryPanel
                     storageStats={storageStats}
                     storageLastUpdatedAt={storageLastUpdatedAt}
                     isLoading={isRefreshingStorage || collections.isLoading}
                     collections={collections}
-                    viewState={storageViewState}
-                    onViewStateChange={setStorageViewState}
+                    viewState={inventoryViewState}
+                    onViewStateChange={setInventoryViewState}
                 />
             </div>
         </div>

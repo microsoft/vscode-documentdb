@@ -3,8 +3,12 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { type NamespaceCommandId } from './clusterDashboardRouter';
+/**
+ * The contract between a dashboard row's native VS Code context menu and the panel it was
+ * opened on. Imported by both the host and the webview, so nothing host-only may live here.
+ */
 
+/** Context-menu command ids, contributed under `webview/context` in `package.json`. */
 export const CLUSTER_DASHBOARD_CONTEXT_MENU_COMMANDS = {
     viewCollections: 'vscode-documentdb.command.clusterDashboard.context.viewCollections',
     openCollection: 'vscode-documentdb.command.clusterDashboard.context.openCollection',
@@ -23,34 +27,10 @@ export const CLUSTER_DASHBOARD_CONTEXT_MENU_COMMANDS = {
 export type ClusterDashboardContextMenuCommandId =
     (typeof CLUSTER_DASHBOARD_CONTEXT_MENU_COMMANDS)[keyof typeof CLUSTER_DASHBOARD_CONTEXT_MENU_COMMANDS];
 
-export type ClusterDashboardContextMenuAction =
-    | 'viewCollections'
-    | 'openCollection'
-    | 'manageIndexes'
-    | NamespaceCommandId;
-
-const clusterDashboardContextMenuActions: ReadonlySet<string> = new Set([
-    'viewCollections',
-    'openCollection',
-    'manageIndexes',
-    'vscode-documentdb.command.copyReference',
-    'vscode-documentdb.command.shell.open',
-    'vscode-documentdb.command.playground.new',
-    'vscode-documentdb.command.dropDatabase',
-    'vscode-documentdb.command.copyCollection',
-    'vscode-documentdb.command.pasteCollection',
-    'vscode-documentdb.command.exportDocuments',
-    'vscode-documentdb.command.importDocuments',
-    'vscode-documentdb.command.dropCollection',
-]);
-
-export interface ClusterDashboardContextMenuMessage {
-    readonly type: 'clusterDashboard.contextMenu';
-    readonly action: ClusterDashboardContextMenuAction;
-    readonly databaseName: string;
-    readonly collectionName?: string;
-}
-
+/**
+ * The `data-vscode-context` payload a row publishes, and therefore the argument VS Code
+ * hands to the context-menu command.
+ */
 export interface ClusterDashboardContextMenuContext {
     readonly clusterDashboardClusterId: string;
     readonly clusterDashboardSelectedDatabase?: string;
@@ -58,17 +38,21 @@ export interface ClusterDashboardContextMenuContext {
     readonly clusterDashboardCollection?: string;
 }
 
-export function isClusterDashboardContextMenuMessage(value: unknown): value is ClusterDashboardContextMenuMessage {
+/**
+ * The one menu entry the host cannot carry out on its own: stepping the open panel into a
+ * database. Everything else acts on the tree node the row names and never reaches the
+ * webview at all.
+ */
+export interface ShowCollectionsMessage {
+    readonly type: 'clusterDashboard.showCollections';
+    readonly databaseName: string;
+}
+
+export function isShowCollectionsMessage(value: unknown): value is ShowCollectionsMessage {
     if (typeof value !== 'object' || value === null) {
         return false;
     }
 
-    const message = value as Partial<ClusterDashboardContextMenuMessage>;
-    return (
-        message.type === 'clusterDashboard.contextMenu' &&
-        typeof message.action === 'string' &&
-        clusterDashboardContextMenuActions.has(message.action) &&
-        typeof message.databaseName === 'string' &&
-        (message.collectionName === undefined || typeof message.collectionName === 'string')
-    );
+    const message = value as Partial<ShowCollectionsMessage>;
+    return message.type === 'clusterDashboard.showCollections' && typeof message.databaseName === 'string';
 }

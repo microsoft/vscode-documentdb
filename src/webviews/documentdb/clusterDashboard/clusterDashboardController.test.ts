@@ -10,7 +10,15 @@ jest.mock('@vscode/l10n', () => ({
 jest.mock('vscode', () => ({
     ViewColumn: { One: 1 },
     Uri: { joinPath: jest.fn((base: unknown, ...parts: string[]) => ({ base, parts })) },
-    commands: { registerCommand: jest.fn() },
+    commands: { registerCommand: jest.fn(), executeCommand: jest.fn() },
+    window: { showErrorMessage: jest.fn() },
+}));
+
+jest.mock('@microsoft/vscode-azext-utils', () => ({
+    callWithTelemetryAndErrorHandling: jest.fn(
+        async (_eventId: string, callback: (context: unknown) => Promise<void>) =>
+            callback({ telemetry: { properties: {}, measurements: {} } }),
+    ),
 }));
 
 jest.mock('../../../extensionVariables', () => ({
@@ -21,9 +29,19 @@ jest.mock('../../_integration/openAppWebview', () => ({
     openAppWebview: jest.fn(() => createFakeController()),
 }));
 
+jest.mock('../../../commands/openCollectionView/openCollectionView', () => ({
+    openCollectionViewInternal: jest.fn(async () => undefined),
+}));
+
+jest.mock('./resolveNamespaceNode', () => ({
+    resolveNamespaceNode: jest.fn(async () => ({ id: 'tree-node' })),
+}));
+
 import * as vscode from 'vscode';
+import { openCollectionViewInternal } from '../../../commands/openCollectionView/openCollectionView';
 import { CLUSTER_DASHBOARD_CONTEXT_MENU_COMMANDS } from './clusterDashboardContextMenu';
 import { openClusterDashboardWebview, registerClusterDashboardContextMenuCommands } from './clusterDashboardController';
+import { resolveNamespaceNode } from './resolveNamespaceNode';
 
 /**
  * Minimal stand-in for the parts of `AppWebviewController` this factory touches:
@@ -102,27 +120,94 @@ describe('openClusterDashboardWebview panel lifecycle', () => {
 });
 
 describe('cluster dashboard native context menu commands', () => {
-    it('routes the row action to the matching dashboard panel', async () => {
+    function registerAndOpen(): {
+        handlers: Map<string, (context: unknown) => Promise<void>>;
+        controller: FakeController;
+    } {
+        jest.clearAllMocks();
         const handlers = new Map<string, (context: unknown) => Promise<void>>();
         jest.mocked(vscode.commands.registerCommand).mockImplementation((commandId, handler) => {
             handlers.set(commandId, handler as (context: unknown) => Promise<void>);
             return { dispose: jest.fn() };
         });
         registerClusterDashboardContextMenuCommands({ subscriptions: [] } as unknown as vscode.ExtensionContext);
-        const controller = open(CLUSTER, 'sales');
 
-        await handlers.get(CLUSTER_DASHBOARD_CONTEXT_MENU_COMMANDS.openCollection)?.({
+        return { handlers, controller: open(CLUSTER, 'sales') };
+    }
+
+    it('opens the collection view on the host rather than relaying through the webview', async () => {
+        const { handlers, controller } = registerAndOpen();
+
+        await handlers.get(CLUSTER_DASHBOARD_CONTEXT_MENU_COMMANDS.manageIndexes)?.({
             clusterDashboardClusterId: CLUSTER,
             clusterDashboardSelectedDatabase: 'sales',
             clusterDashboardDatabase: 'sales',
             clusterDashboardCollection: 'orders',
         });
 
+        expect(openCollectionViewInternal).toHaveBeenCalledWith(
+            expect.anything(),
+            expect.objectContaining({
+                clusterId: CLUSTER,
+                databaseName: 'sales',
+                collectionName: 'orders',
+                initialTab: 'tab_indexes',
+            }),
+        );
+        expect(controller.panel.webview.postMessage).not.toHaveBeenCalled();
+
+        controller.dispose();
+    });
+
+    it('runs a tree command against the row`s tree node', async () => {
+        const { handlers, controller } = registerAndOpen();
+
+        await handlers.get(CLUSTER_DASHBOARD_CONTEXT_MENU_COMMANDS.deleteCollection)?.({
+            clusterDashboardClusterId: CLUSTER,
+            clusterDashboardSelectedDatabase: 'sales',
+            clusterDashboardDatabase: 'sales',
+            clusterDashboardCollection: 'orders',
+        });
+
+        expect(resolveNamespaceNode).toHaveBeenCalledWith('connectionsView', CLUSTER, 'sales', 'orders');
+        expect(vscode.commands.executeCommand).toHaveBeenCalledWith(
+            'vscode-documentdb.command.dropCollection',
+            { id: 'tree-node' },
+            null,
+            { source: 'webview;clusterDashboard' },
+        );
+
+        controller.dispose();
+    });
+
+    it('reports a row whose tree node cannot be found instead of failing silently', async () => {
+        const { handlers, controller } = registerAndOpen();
+        jest.mocked(resolveNamespaceNode).mockResolvedValueOnce(undefined);
+
+        await handlers.get(CLUSTER_DASHBOARD_CONTEXT_MENU_COMMANDS.deleteDatabase)?.({
+            clusterDashboardClusterId: CLUSTER,
+            clusterDashboardSelectedDatabase: 'sales',
+            clusterDashboardDatabase: 'sales',
+        });
+
+        expect(vscode.window.showErrorMessage).toHaveBeenCalled();
+        expect(vscode.commands.executeCommand).not.toHaveBeenCalled();
+
+        controller.dispose();
+    });
+
+    it('asks the panel to step into a database, the one action the host cannot take', async () => {
+        const { handlers, controller } = registerAndOpen();
+
+        await handlers.get(CLUSTER_DASHBOARD_CONTEXT_MENU_COMMANDS.viewCollections)?.({
+            clusterDashboardClusterId: CLUSTER,
+            clusterDashboardSelectedDatabase: 'sales',
+            clusterDashboardDatabase: 'inventory',
+        });
+
         expect(controller.panel.webview.postMessage).toHaveBeenCalledWith({
-            type: 'clusterDashboard.contextMenu',
-            action: 'openCollection',
-            databaseName: 'sales',
-            collectionName: 'orders',
+            type: 'clusterDashboard.showCollections',
+            databaseName: 'inventory',
         });
 
         controller.dispose();

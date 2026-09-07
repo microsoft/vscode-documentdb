@@ -19,7 +19,7 @@ export interface DatabaseCollectionsState {
 }
 
 /**
- * The collections of the database the Data tab has drilled into, or nothing at the top level.
+ * The collections of the database the inventory has drilled into, or nothing at the top level.
  *
  * Loaded on drill-in rather than with the storage stats: `collStats` is one round trip per
  * collection, and paying for every database's collections up front would make the dashboard's

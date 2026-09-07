@@ -1,4 +1,9 @@
-import type { Document, MongoClient } from 'mongodb';
+/*---------------------------------------------------------------------------------------------
+ *  Copyright (c) Microsoft Corporation. All rights reserved.
+ *  Licensed under the MIT License. See License.txt in the project root for license information.
+ *--------------------------------------------------------------------------------------------*/
+
+import { type Document, type MongoClient } from 'mongodb';
 
 import { collectRawCommandReplies } from './clusterDashboardRouter';
 
@@ -17,7 +22,16 @@ describe('collectRawCommandReplies', () => {
 
         const diagnostics = await collectRawCommandReplies(client);
 
-        expect(diagnostics).toHaveLength(2);
+        // A refusal is recorded rather than dropped: "vCore refuses serverStatus" is a
+        // finding a bug report needs, not a gap to hide.
+        expect(diagnostics.map(({ command }) => command)).toEqual([
+            { buildInfo: 1 },
+            { serverStatus: 1 },
+            { hello: 1 },
+            { replSetGetStatus: 1 },
+            { hostInfo: 1 },
+            { listShards: 1 },
+        ]);
         expect(diagnostics[0]).toEqual({
             database: 'admin',
             command: { buildInfo: 1 },

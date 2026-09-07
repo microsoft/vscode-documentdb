@@ -4,13 +4,13 @@
  *--------------------------------------------------------------------------------------------*/
 
 /**
- * Live health / storage / operations collectors for the Cluster Dashboard.
+ * Health, storage and running-operation collectors for the Cluster Dashboard.
  *
  * Resilience model (copied from the sibling `getClusterMetadata.ts`): every server command
  * runs in its own try/catch. A command that fails leaves its fields `null` and records the
  * command name in `errors` — the collector never throws because of an unsupported command.
- * This matters because Azure DocumentDB (vCore) does not support `serverStatus` or `top`,
- * while a local emulator or a self-hosted server usually does.
+ * This matters because Azure DocumentDB (vCore) does not support `serverStatus`, while a
+ * local emulator or a self-hosted server usually does.
  *
  * None of these functions cache; the caller decides the sampling cadence.
  */
@@ -228,7 +228,7 @@ export interface ClusterHealthSample {
     errors: string[];
 }
 
-/** Per-database storage figures used by the dashboard's Storage tab. */
+/** Per-database storage figures used by the dashboard's inventory list. */
 export interface ClusterDatabaseStorage {
     name: string;
     /** `listDatabases.databases[].sizeOnDisk`. */
@@ -250,7 +250,7 @@ export interface ClusterStorageStats {
     databases: ClusterDatabaseStorage[];
     /**
      * Sum of `sizeOnDiskBytes` across the databases in {@link databases} — i.e. exactly
-     * the rows the Storage tab renders, so the Total always reconciles with them.
+     * the rows the inventory list renders, so the Total always reconciles with them.
      */
     totalSizeBytes: number | null;
     /** User databases beyond {@link DATABASE_STATS_LIMIT} that were not inspected. */
@@ -266,7 +266,7 @@ export interface RawCommandDiagnostic {
     result: { ok: true; response: Document } | { ok: false; error: string };
 }
 
-/** Per-collection figures shown when a database row in the Data tab is expanded. */
+/** Per-collection figures shown when the inventory steps into a database. */
 export interface ClusterCollectionStorage {
     name: string;
     /** `listCollections.type`: `collection`, `view`, or `timeseries`. */
@@ -290,72 +290,6 @@ export interface DatabaseCollectionsResult {
     /** Collections beyond {@link COLLECTION_STATS_LIMIT} that were not inspected. */
     omittedCollectionCount: number;
     /** Names of the commands that failed while collecting these statistics. */
-    errors: string[];
-}
-
-/**
- * One server behind the connection, as far as the data plane will describe it.
- *
- * Everything except {@link address} is best effort: `replSetGetStatus` is refused on Azure
- * DocumentDB (vCore) and on any connection lacking the `replSetGetStatus` action, in which
- * case only the addresses `hello` advertised survive.
- */
-export interface ClusterServer {
-    /** `host:port`, as the server names itself. */
-    address: string;
-    /** Replica-set role (`PRIMARY`, `SECONDARY`, `ARBITER`, …) or `null` when unreported. */
-    role: string | null;
-    /** `replSetGetStatus.members[].health === 1`. */
-    healthy: boolean | null;
-    /** How long this member reports having been up. */
-    uptimeSeconds: number | null;
-    /** The member this one replicates from, when it reports one. */
-    syncSourceHost: string | null;
-    /** True for the member currently serving this connection (`hello.me`). */
-    isCurrentConnection: boolean;
-}
-
-/** Machine facts for the server serving this connection, from `hostInfo`. */
-export interface ClusterHostFacts {
-    hostname: string | null;
-    /** e.g. `Linux`. */
-    osType: string | null;
-    /** e.g. `Ubuntu`. */
-    osName: string | null;
-    osVersion: string | null;
-    cpuArch: string | null;
-    numCores: number | null;
-    memSizeMB: number | null;
-}
-
-/** A shard of a sharded cluster, from `listShards`. */
-export interface ClusterShard {
-    name: string;
-    /** The shard's connection string as the config server records it. */
-    host: string;
-    state: number | null;
-}
-
-/**
- * A dirty-draft picture of what sits behind the connection: which servers, what they are,
- * and — where the server will say — what machines they run on.
- *
- * Exploratory by design. Most managed platforms answer only part of this, so every field is
- * nullable and the failures are reported rather than thrown.
- */
-export interface ClusterTopology {
-    /** `standalone`, `replicaSet`, `sharded`, or `unknown` when `hello` itself failed. */
-    kind: 'standalone' | 'replicaSet' | 'sharded' | 'unknown';
-    /** `hello.setName`, when the server is a replica-set member. */
-    setName: string | null;
-    /** The member `hello.primary` names, when there is one. */
-    primary: string | null;
-    servers: ClusterServer[];
-    /** Machine facts for the server serving this connection. */
-    host: ClusterHostFacts | null;
-    /** Populated only when connected through a mongos. */
-    shards: ClusterShard[];
-    /** Names of the commands that failed while describing the topology. */
     errors: string[];
 }
 
@@ -411,7 +345,7 @@ function toNumberOrNull(value: unknown): number | null {
  *
  * Azure DocumentDB (vCore) answers `listDatabases` with `sizeOnDisk: 0` for *every*
  * database while setting `empty: false` on the same entry — so taking the figure literally
- * renders the whole Storage tab as `0 B` on a cluster holding hundreds of megabytes. A zero
+ * renders the whole inventory as `0 B` on a cluster holding hundreds of megabytes. A zero
  * next to `empty: false` is the server declining to answer, and is reported as `null` so the
  * caller falls back to `dbStats.storageSize`.
  *
@@ -697,45 +631,23 @@ const CURRENT_OP_ATTEMPTS: CurrentOpAttempt[] = [
 ];
 
 /**
- * Lists the operations currently running on the cluster.
+ * Lists the operations running on a cluster.
  *
  * Walks {@link CURRENT_OP_ATTEMPTS} until one succeeds, so an unsupported command form or a
  * missing `inprog` privilege narrows the result rather than emptying it. The raw server
- * documents are never returned — they are mapped to {@link CurrentOpEntry} so the payload
- * stays small.
+ * documents are never returned — they are mapped to {@link CurrentOpEntry} so the credential
+ * redaction in {@link buildCommandPreview} is applied on the way out.
  *
  * @param client - A connected MongoClient.
  * @returns The mapped operations and the breadth they cover, or an empty list plus the
  *          failed command names in `errors`.
  */
-const workingCurrentOpAttempt = new WeakMap<MongoClient, (typeof CURRENT_OP_ATTEMPTS)[number]>();
-
-/**
- * Lists the operations running on a cluster.
- *
- * @param client - The connection to ask.
- */
 export async function listCurrentOperations(client: MongoClient): Promise<CurrentOperationsResult> {
-    return runCurrentOpAttempts(client);
-}
-
-async function runCurrentOpAttempts(client: MongoClient): Promise<CurrentOperationsResult> {
     const errors: string[] = [];
 
-    // Start from whichever form worked last time so repeated diagnostics exports do not issue
-    // the same known-to-fail authorized commands. The memo is dropped as soon as the remembered
-    // form fails, so a permission or topology change re-discovers the right one.
-    const remembered = workingCurrentOpAttempt.get(client);
-    const attempts =
-        remembered === undefined
-            ? CURRENT_OP_ATTEMPTS
-            : [remembered, ...CURRENT_OP_ATTEMPTS.filter((attempt) => attempt !== remembered)];
-
-    for (const attempt of attempts) {
+    for (const attempt of CURRENT_OP_ATTEMPTS) {
         try {
             const documents = await attempt.run(client);
-
-            workingCurrentOpAttempt.set(client, attempt);
 
             return {
                 // Filtered client-side as well as in the pipeline: the `$match` stage is the
@@ -748,16 +660,11 @@ async function runCurrentOpAttempts(client: MongoClient): Promise<CurrentOperati
                     .map(mapCurrentOp),
                 scope: attempt.scope,
                 // A successful fallback is not an error: earlier attempts failing is the
-                // chain working as designed, and surfacing them would put a permanent
-                // warning on the tab of every cluster that only supports one form.
+                // chain working as designed, and surfacing them would report a permanent
+                // problem on every cluster that only supports one form.
                 errors: [],
             };
         } catch (error) {
-            // Whatever worked before does not any more, so stop preferring it.
-            if (workingCurrentOpAttempt.get(client) === attempt) {
-                workingCurrentOpAttempt.delete(client);
-            }
-
             const description = describeCommandFailure(attempt.commandName, error);
             if (!errors.includes(description)) {
                 errors.push(description);
@@ -960,179 +867,4 @@ export async function getDatabaseCollections(
     );
 
     return { databaseName, collections, omittedCollectionCount, errors };
-}
-
-/** Reads `replSetGetStatus.members[]` into the fields {@link ClusterServer} carries. */
-function toReplicaSetMember(entry: Document, self: string | null): ClusterServer {
-    const address = toStringOrNull(entry.name) ?? '';
-
-    return {
-        address,
-        role: toStringOrNull(entry.stateStr),
-        healthy: typeof entry.health === 'number' ? entry.health === 1 : null,
-        uptimeSeconds: toNumberOrNull(entry.uptime),
-        syncSourceHost: toStringOrNull(entry.syncSourceHost),
-        // `self: true` is what the member being *queried* sets; falling back to `hello.me`
-        // keeps the marker when a member omits it.
-        isCurrentConnection: entry.self === true || (self !== null && address === self),
-    };
-}
-
-/** Reads the `hostInfo` reply, which vCore answers with empty `os`/`system` sub-documents. */
-function toHostFacts(hostInfo: Document): ClusterHostFacts | null {
-    const os = (hostInfo.os ?? {}) as Document;
-    const system = (hostInfo.system ?? {}) as Document;
-
-    const facts: ClusterHostFacts = {
-        hostname: toStringOrNull(system.hostname),
-        osType: toStringOrNull(os.type),
-        osName: toStringOrNull(os.name),
-        osVersion: toStringOrNull(os.version),
-        cpuArch: toStringOrNull(system.cpuArch),
-        numCores: toNumberOrNull(system.numCores),
-        memSizeMB: toNumberOrNull(system.memSizeMB),
-    };
-
-    // Every field empty means the server answered the command without describing anything —
-    // reporting that as a machine would put an all-dashes card on screen.
-    return Object.values(facts).every((value) => value === null) ? null : facts;
-}
-
-/**
- * Describes what sits behind the connection: the servers, their replication roles, and the
- * machine facts of the one being talked to.
- *
- * Deliberately exploratory. `hello` is answered everywhere and provides the address list;
- * `replSetGetStatus` adds roles and health but is refused by managed platforms; `listShards`
- * only applies behind a mongos. Whatever a server declines to answer is reported through
- * `errors` and simply not rendered.
- *
- * @param client - A connected MongoClient.
- * @returns The topology that could be determined; never throws for an unsupported command.
- */
-export async function getClusterTopology(
-    client: MongoClient,
-    diagnostics?: RawCommandDiagnostic[],
-): Promise<ClusterTopology> {
-    const errors: string[] = [];
-    const adminDb = client.db().admin();
-    const runCommand = async (command: Document): Promise<Document> => {
-        try {
-            const response = await adminDb.command(command);
-            diagnostics?.push({ database: 'admin', command, result: { ok: true, response } });
-            return response;
-        } catch (error) {
-            diagnostics?.push({
-                database: 'admin',
-                command,
-                result: { ok: false, error: error instanceof Error ? error.message : String(error) },
-            });
-            throw error;
-        }
-    };
-
-    const topology: ClusterTopology = {
-        kind: 'unknown',
-        setName: null,
-        primary: null,
-        servers: [],
-        host: null,
-        shards: [],
-        errors,
-    };
-
-    let hello: Document | null = null;
-    try {
-        hello = await runCommand({ hello: 1 });
-    } catch (error) {
-        errors.push(describeCommandFailure('hello', error));
-    }
-
-    const self = hello === null ? null : toStringOrNull(hello.me);
-
-    if (hello !== null) {
-        topology.setName = toStringOrNull(hello.setName);
-        topology.primary = toStringOrNull(hello.primary);
-
-        const advertised = Array.isArray(hello.hosts) ? (hello.hosts as unknown[]).filter(isNonEmptyString) : [];
-
-        if (hello.msg === 'isdbgrid') {
-            topology.kind = 'sharded';
-        } else if (topology.setName !== null || advertised.length > 0) {
-            topology.kind = 'replicaSet';
-        } else {
-            topology.kind = 'standalone';
-        }
-
-        // The address list `hello` advertises is the floor: every server answers it, so the
-        // card has rows even where `replSetGetStatus` is refused. Roles are filled in below
-        // when the server allows it.
-        topology.servers = advertised.map((address) => ({
-            address,
-            role: address === topology.primary ? 'PRIMARY' : null,
-            healthy: null,
-            uptimeSeconds: null,
-            syncSourceHost: null,
-            isCurrentConnection: self !== null && address === self,
-        }));
-
-        // A standalone (or a mongos) advertises no `hosts`; name the endpoint we reached so
-        // the card is not empty.
-        if (topology.servers.length === 0 && self !== null) {
-            topology.servers = [
-                {
-                    address: self,
-                    role: null,
-                    healthy: null,
-                    uptimeSeconds: null,
-                    syncSourceHost: null,
-                    isCurrentConnection: true,
-                },
-            ];
-        }
-    }
-
-    if (topology.kind === 'replicaSet' || topology.kind === 'unknown') {
-        try {
-            const status = await runCommand({ replSetGetStatus: 1 });
-            const members = Array.isArray(status.members) ? (status.members as Document[]) : [];
-            const detailed = members.map((member) => toReplicaSetMember(member, self)).filter((m) => m.address !== '');
-
-            if (detailed.length > 0) {
-                topology.servers = detailed;
-                topology.kind = 'replicaSet';
-                topology.setName ??= toStringOrNull(status.set);
-            }
-        } catch (error) {
-            errors.push(describeCommandFailure('replSetGetStatus', error));
-        }
-    }
-
-    if (topology.kind === 'sharded') {
-        try {
-            const shardList = await runCommand({ listShards: 1 });
-            const shards = Array.isArray(shardList.shards) ? (shardList.shards as Document[]) : [];
-            topology.shards = shards
-                .filter((shard) => typeof shard._id === 'string' && typeof shard.host === 'string')
-                .map((shard) => ({
-                    name: shard._id as string,
-                    host: shard.host as string,
-                    state: toNumberOrNull(shard.state),
-                }));
-        } catch (error) {
-            errors.push(describeCommandFailure('listShards', error));
-        }
-    }
-
-    try {
-        topology.host = toHostFacts(await runCommand({ hostInfo: 1 }));
-    } catch (error) {
-        errors.push(describeCommandFailure('hostInfo', error));
-    }
-
-    return topology;
-}
-
-function isNonEmptyString(value: unknown): value is string {
-    return typeof value === 'string' && value.length > 0;
 }

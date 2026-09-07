@@ -13,7 +13,6 @@ import { ClustersClient } from '../../../documentdb/ClustersClient';
 import { ShellCommandIds } from '../../../documentdb/shell/constants';
 import { getHostsFromConnectionString } from '../../../documentdb/utils/connectionStringHelpers';
 import {
-    getClusterTopology,
     getDatabaseCollections,
     getStorageStats,
     listCurrentOperations,
@@ -26,41 +25,26 @@ import {
 import { readOnlyJsonDocumentProvider } from '../../../utils/readOnlyJsonDocumentProvider';
 import { type BaseRouterContext } from '../../_integration/appRouter';
 import { publicProcedureWithTelemetry, router, type WithTelemetry } from '../../_integration/trpc';
-import { resolveNamespaceNode } from './resolveNamespaceNode';
-
-/**
- * The tree commands the inventory list may run, as a closed set.
- *
- * Every entry is a command the tree already offers on a database or collection node, so the
- * dashboard adds no new capability — only a second place to reach one. Kept as an allowlist
- * because the command id crosses the webview boundary: a webview must never be able to name
- * an arbitrary VS Code command for the host to execute.
- */
-export const NAMESPACE_COMMAND_IDS = [
-    'vscode-documentdb.command.dropDatabase',
-    'vscode-documentdb.command.dropCollection',
-    'vscode-documentdb.command.importDocuments',
-    'vscode-documentdb.command.exportDocuments',
-    'vscode-documentdb.command.copyCollection',
-    'vscode-documentdb.command.pasteCollection',
-    'vscode-documentdb.command.copyReference',
-    'vscode-documentdb.command.playground.new',
-    'vscode-documentdb.command.shell.open',
-] as const;
-
-export type NamespaceCommandId = (typeof NAMESPACE_COMMAND_IDS)[number];
 
 /**
  * The server commands the dashboard describes a cluster with, run for the diagnostics
  * document and reported verbatim.
  *
- * These supplement the commands captured directly by the storage and topology collectors.
- * The document carries each command beside its reply rather than the metadata map built from
- * them: that map is shaped for telemetry — hashed, stringified, and pruned to a fixed key set.
+ * These supplement the commands captured directly by the storage collector. The document
+ * carries each command beside its reply rather than an interpretation of it: a reader of a
+ * bug report needs what the server actually said, and every parse of these replies that the
+ * dashboard once needed has since been deleted along with the panels it fed.
  *
  * `connectionStatus` is not among them because its reply names the signed-in principal.
  */
-const DIAGNOSTIC_COMMANDS: readonly Document[] = [{ buildInfo: 1 }, { serverStatus: 1 }];
+const DIAGNOSTIC_COMMANDS: readonly Document[] = [
+    { buildInfo: 1 },
+    { serverStatus: 1 },
+    { hello: 1 },
+    { replSetGetStatus: 1 },
+    { hostInfo: 1 },
+    { listShards: 1 },
+];
 
 /**
  * Runs every diagnostic command and keeps each outcome.
@@ -172,7 +156,7 @@ export const clusterDashboardRouter = router({
         return sampleClusterHealth(client.getMongoClient());
     }),
 
-    /** Storage breakdown for the Storage tab. */
+    /** Storage breakdown for the inventory list. */
     getStorageStats: publicProcedureWithTelemetry.query(async ({ ctx }): Promise<ClusterStorageStats> => {
         const myCtx = ctx as WithTelemetry<RouterContext>;
 
@@ -196,84 +180,25 @@ export const clusterDashboardRouter = router({
         });
     }),
 
-    /** Opens the Collection View for an operation's namespace. */
-    openNamespace: publicProcedureWithTelemetry
+    /** Opens the Collection View for a row in the inventory. */
+    openCollectionView: publicProcedureWithTelemetry
         .input(
             z.object({
-                namespace: z.string(),
+                databaseName: z.string().min(1),
+                collectionName: z.string().min(1),
                 initialTab: z.enum(['tab_result', 'tab_indexes', 'tab_queryInsights']).optional(),
             }),
         )
         .mutation(async ({ input, ctx }): Promise<void> => {
             const myCtx = ctx as WithTelemetry<RouterContext>;
 
-            // `ns` is `database.collection`, and a collection name may itself contain dots,
-            // so only the first separator is a boundary.
-            const separatorIndex = input.namespace.indexOf('.');
-            const databaseName = separatorIndex === -1 ? '' : input.namespace.slice(0, separatorIndex);
-            const collectionName = separatorIndex === -1 ? '' : input.namespace.slice(separatorIndex + 1);
-
-            if (databaseName === '' || collectionName === '') {
-                throw new Error(
-                    l10n.t('"{namespace}" does not name a collection.', { namespace: input.namespace || '—' }),
-                );
-            }
-
             await openCollectionViewInternal(myCtx.actionContext, {
                 clusterId: myCtx.clusterId,
                 clusterDisplayName: myCtx.clusterDisplayName,
                 viewId: myCtx.viewId,
-                databaseName,
-                collectionName,
+                databaseName: input.databaseName,
+                collectionName: input.collectionName,
                 initialTab: input.initialTab,
-            });
-        }),
-
-    /**
-     * Runs one of the tree's own database/collection commands against a row in the inventory.
-     *
-     * The dashboard reads its inventory from the server, so a row is not a tree node; the
-     * node is found again from the stable `clusterId` and handed to the command unchanged.
-     * Reusing the commands rather than reimplementing them is what keeps a drop from the
-     * dashboard identical to a drop from the tree — same confirmation, same telemetry, same
-     * refresh.
-     *
-     * `commandId` is a closed enum, not a string. A webview must never be able to name an
-     * arbitrary VS Code command for the host to execute.
-     */
-    runNamespaceCommand: publicProcedureWithTelemetry
-        .input(
-            z.object({
-                commandId: z.enum(NAMESPACE_COMMAND_IDS),
-                databaseName: z.string().min(1),
-                collectionName: z.string().min(1).optional(),
-            }),
-        )
-        .mutation(async ({ input, ctx }): Promise<void> => {
-            const myCtx = ctx as WithTelemetry<RouterContext>;
-            myCtx.actionContext.telemetry.properties.namespaceCommand = input.commandId;
-            myCtx.actionContext.telemetry.properties.namespaceLevel =
-                input.collectionName === undefined ? 'database' : 'collection';
-
-            const node = await resolveNamespaceNode(
-                myCtx.viewId,
-                myCtx.clusterId,
-                input.databaseName,
-                input.collectionName,
-            );
-
-            if (!node) {
-                myCtx.actionContext.telemetry.properties.failureReason = 'namespaceNodeNotFound';
-                throw new Error(
-                    l10n.t(
-                        'This action needs "{name}" to be present in the tree view, and it could not be found there. Expand this cluster in the tree and try again.',
-                        { name: input.collectionName ?? input.databaseName },
-                    ),
-                );
-            }
-
-            await vscode.commands.executeCommand(input.commandId, node, null, {
-                source: 'webview;clusterDashboard',
             });
         }),
 
@@ -282,7 +207,7 @@ export const clusterDashboardRouter = router({
      * state can be attached to a bug report in one action instead of being retyped from
      * screenshots.
      *
-     * Read-only, through the same provider as the two raw views, rather than an untitled
+     * Read-only, through the same provider as the raw document views, rather than an untitled
      * editor: an untitled document is dirty from the moment it opens and VS Code asks the
      * reader to save or discard a file they only wanted to look at.
      *
@@ -305,7 +230,7 @@ export const clusterDashboardRouter = router({
             {
                 modal: true,
                 detail: l10n.t(
-                    'The document includes the commands running on this cluster: query filters, document values, and the client addresses that issued them, alongside storage and topology figures. Passwords and connection strings are removed, but application data is not. Review it before sharing.',
+                    'The document includes the commands running on this cluster: query filters, document values, and the client addresses that issued them, alongside storage figures and the server’s own description of itself. Passwords and connection strings are removed, but application data is not. Review it before sharing.',
                 ),
             },
             l10n.t('Export'),
@@ -320,12 +245,10 @@ export const clusterDashboardRouter = router({
         const client = await ClustersClient.getClient(myCtx.clusterId);
         const mongoClient = client.getMongoClient();
         const storageCommands: RawCommandDiagnostic[] = [];
-        const topologyCommands: RawCommandDiagnostic[] = [];
 
-        const [storage, operations, topology, commands, health] = await Promise.all([
+        const [storage, operations, commands, health] = await Promise.all([
             getStorageStats(mongoClient, undefined, storageCommands),
             listCurrentOperations(mongoClient),
-            getClusterTopology(mongoClient, topologyCommands),
             collectRawCommandReplies(mongoClient),
             sampleClusterHealth(mongoClient),
         ]);
@@ -334,10 +257,11 @@ export const clusterDashboardRouter = router({
             generatedAt: new Date().toISOString(),
             cluster: { displayName: myCtx.clusterDisplayName, viewId: myCtx.viewId },
             // Each invocation beside exactly what the server answered (or why it did not).
-            commands: [...commands, ...storageCommands, ...topologyCommands],
-            // Interpreted summaries built for the dashboard, not raw server replies.
+            commands: [...commands, ...storageCommands],
+            // Interpreted summaries built for the dashboard, not raw server replies. Current
+            // operations are here rather than among the commands above because this is where
+            // credential material is stripped out of them.
             aggregates: {
-                topology,
                 storage,
                 currentOperations: operations,
                 health,

@@ -3,19 +3,21 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+import { callWithTelemetryAndErrorHandling, type IActionContext } from '@microsoft/vscode-azext-utils';
 import * as l10n from '@vscode/l10n';
 import * as vscode from 'vscode';
 
+import { openCollectionViewInternal } from '../../../commands/openCollectionView/openCollectionView';
 import { API } from '../../../DocumentDBExperiences';
 import { ext } from '../../../extensionVariables';
 import { openAppWebview, type AppWebviewController } from '../../_integration/openAppWebview';
 import {
     CLUSTER_DASHBOARD_CONTEXT_MENU_COMMANDS,
-    type ClusterDashboardContextMenuAction,
     type ClusterDashboardContextMenuContext,
-    type ClusterDashboardContextMenuMessage,
+    type ShowCollectionsMessage,
 } from './clusterDashboardContextMenu';
 import { type RouterContext } from './clusterDashboardRouter';
+import { resolveNamespaceNode } from './resolveNamespaceNode';
 
 /**
  * Azure resource facts for an Azure-backed cluster.
@@ -36,8 +38,6 @@ export type ClusterDashboardAzureInfo = {
     diskSize?: number;
     /** Whether in-region high availability (standby replicas per shard) is enabled. */
     enableHa?: boolean;
-    /** Cross-region replication role, e.g. `Primary`. */
-    replicaRole?: string;
 };
 
 export type ClusterDashboardWebviewConfigurationType = {
@@ -70,21 +70,65 @@ export type ClusterDashboardWebviewConfigurationType = {
  * Open dashboard panels keyed by cluster and selected database. A matching invocation reuses
  * its panel, while a different database can remain open beside it.
  */
-const openPanels = new Map<string, AppWebviewController<ClusterDashboardWebviewConfigurationType>>();
+const openPanels = new Map<string, OpenPanel>();
 
-const contextMenuActions: Readonly<Record<string, ClusterDashboardContextMenuAction>> = {
-    [CLUSTER_DASHBOARD_CONTEXT_MENU_COMMANDS.viewCollections]: 'viewCollections',
-    [CLUSTER_DASHBOARD_CONTEXT_MENU_COMMANDS.openCollection]: 'openCollection',
-    [CLUSTER_DASHBOARD_CONTEXT_MENU_COMMANDS.manageIndexes]: 'manageIndexes',
-    [CLUSTER_DASHBOARD_CONTEXT_MENU_COMMANDS.copyReference]: 'vscode-documentdb.command.copyReference',
-    [CLUSTER_DASHBOARD_CONTEXT_MENU_COMMANDS.openShell]: 'vscode-documentdb.command.shell.open',
-    [CLUSTER_DASHBOARD_CONTEXT_MENU_COMMANDS.newPlayground]: 'vscode-documentdb.command.playground.new',
-    [CLUSTER_DASHBOARD_CONTEXT_MENU_COMMANDS.deleteDatabase]: 'vscode-documentdb.command.dropDatabase',
-    [CLUSTER_DASHBOARD_CONTEXT_MENU_COMMANDS.copyCollection]: 'vscode-documentdb.command.copyCollection',
-    [CLUSTER_DASHBOARD_CONTEXT_MENU_COMMANDS.pasteCollection]: 'vscode-documentdb.command.pasteCollection',
-    [CLUSTER_DASHBOARD_CONTEXT_MENU_COMMANDS.exportDocuments]: 'vscode-documentdb.command.exportDocuments',
-    [CLUSTER_DASHBOARD_CONTEXT_MENU_COMMANDS.importDocuments]: 'vscode-documentdb.command.importDocuments',
-    [CLUSTER_DASHBOARD_CONTEXT_MENU_COMMANDS.deleteCollection]: 'vscode-documentdb.command.dropCollection',
+interface OpenPanel {
+    readonly controller: AppWebviewController<ClusterDashboardWebviewConfigurationType>;
+    readonly config: ClusterDashboardWebviewConfigurationType;
+}
+
+/**
+ * What a context-menu entry does with the row it was opened on.
+ *
+ * `treeCommand` ids are the tree's own database/collection commands, so a drop from the
+ * dashboard is the same drop as from the tree — same confirmation, same telemetry, same
+ * refresh — rather than a second implementation of it.
+ */
+type RowAction =
+    | { readonly kind: 'showCollections' }
+    | { readonly kind: 'collectionView'; readonly initialTab?: 'tab_indexes' }
+    | { readonly kind: 'treeCommand'; readonly commandId: string };
+
+const ROW_ACTIONS: Readonly<Record<string, RowAction>> = {
+    [CLUSTER_DASHBOARD_CONTEXT_MENU_COMMANDS.viewCollections]: { kind: 'showCollections' },
+    [CLUSTER_DASHBOARD_CONTEXT_MENU_COMMANDS.openCollection]: { kind: 'collectionView' },
+    [CLUSTER_DASHBOARD_CONTEXT_MENU_COMMANDS.manageIndexes]: { kind: 'collectionView', initialTab: 'tab_indexes' },
+    [CLUSTER_DASHBOARD_CONTEXT_MENU_COMMANDS.copyReference]: {
+        kind: 'treeCommand',
+        commandId: 'vscode-documentdb.command.copyReference',
+    },
+    [CLUSTER_DASHBOARD_CONTEXT_MENU_COMMANDS.openShell]: {
+        kind: 'treeCommand',
+        commandId: 'vscode-documentdb.command.shell.open',
+    },
+    [CLUSTER_DASHBOARD_CONTEXT_MENU_COMMANDS.newPlayground]: {
+        kind: 'treeCommand',
+        commandId: 'vscode-documentdb.command.playground.new',
+    },
+    [CLUSTER_DASHBOARD_CONTEXT_MENU_COMMANDS.deleteDatabase]: {
+        kind: 'treeCommand',
+        commandId: 'vscode-documentdb.command.dropDatabase',
+    },
+    [CLUSTER_DASHBOARD_CONTEXT_MENU_COMMANDS.copyCollection]: {
+        kind: 'treeCommand',
+        commandId: 'vscode-documentdb.command.copyCollection',
+    },
+    [CLUSTER_DASHBOARD_CONTEXT_MENU_COMMANDS.pasteCollection]: {
+        kind: 'treeCommand',
+        commandId: 'vscode-documentdb.command.pasteCollection',
+    },
+    [CLUSTER_DASHBOARD_CONTEXT_MENU_COMMANDS.exportDocuments]: {
+        kind: 'treeCommand',
+        commandId: 'vscode-documentdb.command.exportDocuments',
+    },
+    [CLUSTER_DASHBOARD_CONTEXT_MENU_COMMANDS.importDocuments]: {
+        kind: 'treeCommand',
+        commandId: 'vscode-documentdb.command.importDocuments',
+    },
+    [CLUSTER_DASHBOARD_CONTEXT_MENU_COMMANDS.deleteCollection]: {
+        kind: 'treeCommand',
+        commandId: 'vscode-documentdb.command.dropCollection',
+    },
 };
 
 function getPanelKey(clusterId: string, selectedDatabaseName?: string): string {
@@ -106,31 +150,88 @@ function isContextMenuContext(value: unknown): value is ClusterDashboardContextM
     );
 }
 
+/**
+ * Carries out one context-menu entry against the row it was opened on.
+ *
+ * The menu command already runs on the host with everything it needs, so the work happens
+ * here rather than being relayed to the webview and mutated back through tRPC. The dashboard
+ * reads its inventory from the server, so a row is not a tree node; the node is found again
+ * from the stable `clusterId` and handed to the tree's own command unchanged.
+ */
+async function runRowAction(
+    actionContext: IActionContext,
+    action: RowAction,
+    panel: OpenPanel,
+    menuContext: ClusterDashboardContextMenuContext,
+): Promise<void> {
+    const databaseName = menuContext.clusterDashboardDatabase;
+    const collectionName = menuContext.clusterDashboardCollection;
+
+    actionContext.telemetry.properties.namespaceLevel = collectionName === undefined ? 'database' : 'collection';
+
+    if (action.kind === 'showCollections') {
+        const message: ShowCollectionsMessage = { type: 'clusterDashboard.showCollections', databaseName };
+        await panel.controller.panel.webview.postMessage(message);
+        return;
+    }
+
+    if (action.kind === 'collectionView') {
+        if (collectionName === undefined) {
+            return;
+        }
+
+        await openCollectionViewInternal(actionContext, {
+            clusterId: panel.config.clusterId,
+            clusterDisplayName: panel.config.clusterDisplayName,
+            viewId: panel.config.viewId,
+            databaseName,
+            collectionName,
+            initialTab: action.initialTab,
+        });
+        return;
+    }
+
+    actionContext.telemetry.properties.namespaceCommand = action.commandId;
+
+    const node = await resolveNamespaceNode(panel.config.viewId, panel.config.clusterId, databaseName, collectionName);
+
+    if (!node) {
+        actionContext.telemetry.properties.failureReason = 'namespaceNodeNotFound';
+        void vscode.window.showErrorMessage(
+            l10n.t(
+                'This action needs "{name}" to be present in the tree view, and it could not be found there. Expand this cluster in the tree and try again.',
+                { name: collectionName ?? databaseName },
+            ),
+            { modal: true },
+        );
+        return;
+    }
+
+    await vscode.commands.executeCommand(action.commandId, node, null, { source: 'webview;clusterDashboard' });
+}
+
 export function registerClusterDashboardContextMenuCommands(context: vscode.ExtensionContext): void {
-    for (const [commandId, action] of Object.entries(contextMenuActions)) {
+    for (const [commandId, action] of Object.entries(ROW_ACTIONS)) {
         context.subscriptions.push(
-            vscode.commands.registerCommand(commandId, async (commandContext: unknown): Promise<void> => {
-                if (!isContextMenuContext(commandContext)) {
+            vscode.commands.registerCommand(commandId, async (menuContext: unknown): Promise<void> => {
+                if (!isContextMenuContext(menuContext)) {
                     return;
                 }
 
                 const panel = openPanels.get(
-                    getPanelKey(
-                        commandContext.clusterDashboardClusterId,
-                        commandContext.clusterDashboardSelectedDatabase,
-                    ),
+                    getPanelKey(menuContext.clusterDashboardClusterId, menuContext.clusterDashboardSelectedDatabase),
                 );
-                if (!panel || panel.isDisposed) {
+                if (!panel || panel.controller.isDisposed) {
                     return;
                 }
 
-                const message: ClusterDashboardContextMenuMessage = {
-                    type: 'clusterDashboard.contextMenu',
-                    action,
-                    databaseName: commandContext.clusterDashboardDatabase,
-                    collectionName: commandContext.clusterDashboardCollection,
-                };
-                await panel.panel.webview.postMessage(message);
+                await callWithTelemetryAndErrorHandling(
+                    'clusterDashboard.contextMenuAction',
+                    async (actionContext: IActionContext) => {
+                        actionContext.telemetry.properties.contextMenuCommand = commandId;
+                        await runRowAction(actionContext, action, panel, menuContext);
+                    },
+                );
             }),
         );
     }
@@ -141,9 +242,9 @@ export function openClusterDashboardWebview(
 ): AppWebviewController<ClusterDashboardWebviewConfigurationType> {
     const panelKey = getPanelKey(initialData.clusterId, initialData.selectedDatabaseName);
     const existingPanel = openPanels.get(panelKey);
-    if (existingPanel && !existingPanel.isDisposed) {
-        existingPanel.revealToForeground();
-        return existingPanel;
+    if (existingPanel && !existingPanel.controller.isDisposed) {
+        existingPanel.controller.revealToForeground();
+        return existingPanel.controller;
     }
 
     const trpcContext: RouterContext = {
@@ -173,9 +274,9 @@ export function openClusterDashboardWebview(
         },
     });
 
-    openPanels.set(panelKey, controller);
+    openPanels.set(panelKey, { controller, config: initialData });
     controller.onDisposed(() => {
-        if (openPanels.get(panelKey) === controller) {
+        if (openPanels.get(panelKey)?.controller === controller) {
             openPanels.delete(panelKey);
         }
     });

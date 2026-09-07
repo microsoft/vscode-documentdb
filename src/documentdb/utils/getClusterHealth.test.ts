@@ -6,7 +6,6 @@
 import { type Document, type MongoClient } from 'mongodb';
 
 import {
-    getClusterTopology,
     getDatabaseCollections,
     getStorageStats,
     listCurrentOperations,
@@ -102,7 +101,7 @@ function createFakeClient(options: FakeClientOptions): {
 }
 
 describe('listCurrentOperations — round-trip discipline', () => {
-    it('starts from the form that worked last time instead of re-walking the chain', async () => {
+    it('falls back to the caller`s own operations when the authorized forms are refused', async () => {
         const attempted: string[] = [];
         const { client } = createFakeClient({
             aggregate: (pipeline) => {
@@ -119,18 +118,13 @@ describe('listCurrentOperations — round-trip discipline', () => {
             },
         });
 
-        await listCurrentOperations(client);
-        const firstPass = attempted.length;
-        attempted.length = 0;
+        const result = await listCurrentOperations(client);
 
-        await listCurrentOperations(client);
-
-        // A least-privileged connection would otherwise pay for every failing authorized form
-        // on every poll, for as long as the dashboard stays open.
-        expect(attempted.length).toBeLessThan(firstPass);
-        expect(attempted[0]).toBe('own');
+        // A narrower list is reported as narrower rather than presented as the whole cluster.
+        expect(result.scope).toBe('own');
+        expect(result.operations).toHaveLength(1);
+        expect(attempted).toEqual(['all', 'currentOp', 'own']);
     });
-
 });
 
 describe('sampleClusterHealth', () => {
@@ -894,173 +888,5 @@ describe('statistics concurrency budget', () => {
 
         expect(peakWhileSaturated).toBeGreaterThan(0);
         expect(peakWhileSaturated).toBeLessThanOrEqual(8);
-    });
-});
-
-describe('getClusterTopology', () => {
-    it('describes a replica set from replSetGetStatus', async () => {
-        const diagnostics: RawCommandDiagnostic[] = [];
-        const { client } = createFakeClient({
-            adminCommand: (command) => {
-                if (command.hello === 1) {
-                    return {
-                        setName: 'rs0',
-                        hosts: ['node1:27017', 'node2:27017'],
-                        primary: 'node1:27017',
-                        me: 'node2:27017',
-                    };
-                }
-                if (command.replSetGetStatus === 1) {
-                    return {
-                        set: 'rs0',
-                        members: [
-                            { name: 'node1:27017', stateStr: 'PRIMARY', health: 1, uptime: 3600 },
-                            {
-                                name: 'node2:27017',
-                                stateStr: 'SECONDARY',
-                                health: 1,
-                                uptime: 3500,
-                                self: true,
-                                syncSourceHost: 'node1:27017',
-                            },
-                        ],
-                    };
-                }
-                if (command.hostInfo === 1) {
-                    return { os: { type: 'Linux', name: 'Ubuntu', version: '22.04' }, system: { numCores: 8 } };
-                }
-                throw new Error('command not supported');
-            },
-        });
-
-        const topology = await getClusterTopology(client, diagnostics);
-
-        expect(topology.kind).toBe('replicaSet');
-        expect(topology.setName).toBe('rs0');
-        expect(topology.primary).toBe('node1:27017');
-        expect(topology.servers.map((server) => server.role)).toEqual(['PRIMARY', 'SECONDARY']);
-        expect(topology.servers[1].isCurrentConnection).toBe(true);
-        expect(topology.servers[1].syncSourceHost).toBe('node1:27017');
-        expect(topology.host).toEqual({
-            hostname: null,
-            osType: 'Linux',
-            osName: 'Ubuntu',
-            osVersion: '22.04',
-            cpuArch: null,
-            numCores: 8,
-            memSizeMB: null,
-        });
-        expect(topology.errors).toEqual([]);
-        expect(diagnostics.map(({ command }) => command)).toEqual([
-            { hello: 1 },
-            { replSetGetStatus: 1 },
-            { hostInfo: 1 },
-        ]);
-        expect(diagnostics[1].result).toEqual(
-            expect.objectContaining({
-                ok: true,
-                response: expect.objectContaining({ set: 'rs0' }),
-            }),
-        );
-    });
-
-    it('falls back to the addresses hello advertised when replSetGetStatus is refused', async () => {
-        const { client } = createFakeClient({
-            adminCommand: (command) => {
-                if (command.hello === 1) {
-                    return { setName: 'rs0', hosts: ['a:27017', 'b:27017'], primary: 'a:27017', me: 'a:27017' };
-                }
-                throw new Error('Unauthorized');
-            },
-        });
-
-        const topology = await getClusterTopology(client);
-
-        expect(topology.kind).toBe('replicaSet');
-        expect(topology.servers.map((server) => server.address)).toEqual(['a:27017', 'b:27017']);
-        // The one role `hello` does report is which member is primary.
-        expect(topology.servers.map((server) => server.role)).toEqual(['PRIMARY', null]);
-        expect(topology.errors.map(getFailedCommandName)).toEqual(['replSetGetStatus', 'hostInfo']);
-    });
-
-    it('names the endpoint reached for a standalone that advertises no hosts', async () => {
-        const { client } = createFakeClient({
-            adminCommand: (command) => {
-                if (command.hello === 1) {
-                    return { me: 'localhost:27017' };
-                }
-                throw new Error('command not supported');
-            },
-        });
-
-        const topology = await getClusterTopology(client);
-
-        expect(topology.kind).toBe('standalone');
-        expect(topology.servers).toEqual([
-            {
-                address: 'localhost:27017',
-                role: null,
-                healthy: null,
-                uptimeSeconds: null,
-                syncSourceHost: null,
-                isCurrentConnection: true,
-            },
-        ]);
-    });
-
-    it('lists the shards behind a mongos', async () => {
-        const diagnostics: RawCommandDiagnostic[] = [];
-        const { client } = createFakeClient({
-            adminCommand: (command) => {
-                if (command.hello === 1) {
-                    return { msg: 'isdbgrid', me: 'router:27017' };
-                }
-                if (command.listShards === 1) {
-                    return { shards: [{ _id: 'shard0', host: 'shard0/a:27018,b:27018', state: 1 }] };
-                }
-                throw new Error('command not supported');
-            },
-        });
-
-        const topology = await getClusterTopology(client, diagnostics);
-
-        expect(topology.kind).toBe('sharded');
-        expect(topology.shards).toEqual([{ name: 'shard0', host: 'shard0/a:27018,b:27018', state: 1 }]);
-        expect(diagnostics).toEqual(
-            expect.arrayContaining([
-                {
-                    database: 'admin',
-                    command: { listShards: 1 },
-                    result: {
-                        ok: true,
-                        response: { shards: [{ _id: 'shard0', host: 'shard0/a:27018,b:27018', state: 1 }] },
-                    },
-                },
-                {
-                    database: 'admin',
-                    command: { hostInfo: 1 },
-                    result: { ok: false, error: 'command not supported' },
-                },
-            ]),
-        );
-    });
-
-    it('reports an all-empty hostInfo as no machine rather than a row of dashes', async () => {
-        const { client } = createFakeClient({
-            adminCommand: (command) => {
-                if (command.hello === 1) {
-                    return { me: 'vcore.example:10260' };
-                }
-                if (command.hostInfo === 1) {
-                    // The shape Azure DocumentDB (vCore) answers with.
-                    return { os: {}, system: {} };
-                }
-                throw new Error('command not supported');
-            },
-        });
-
-        const topology = await getClusterTopology(client);
-
-        expect(topology.host).toBeNull();
     });
 });

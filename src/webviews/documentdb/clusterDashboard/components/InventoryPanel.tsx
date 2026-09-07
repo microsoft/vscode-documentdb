@@ -20,8 +20,7 @@ import { useCallback, useEffect, useMemo, useState, type JSX } from 'react';
 
 import { type ClusterStorageStats } from '../../../../documentdb/utils/getClusterHealth';
 import { useTrpcClient } from '../../../_integration/useTrpcClient';
-import { isClusterDashboardContextMenuMessage } from '../clusterDashboardContextMenu';
-import { type NamespaceCommandId } from '../clusterDashboardRouter';
+import { isShowCollectionsMessage } from '../clusterDashboardContextMenu';
 import {
     arrangeRows,
     defaultDirectionFor,
@@ -35,22 +34,15 @@ import {
 import { NamespaceTableSkeleton } from './NamespaceTableSkeleton';
 import { type DatabaseCollectionsState } from './useDatabaseCollections';
 
-/**
- * How the reader has arranged the list, and which level they are on.
- *
- * Owned by the dashboard rather than this component because switching to Operations and back
- * unmounts the tab — which discarded the sort, the filter text, and the level. The Collection
- * View's index list hoists the same state to its parent for the same reason (there, a manual
- * refresh swaps the table for a skeleton).
- */
-export interface StorageTabViewState {
+/** How the reader has arranged the list, and which level they are on. */
+export interface InventoryViewState {
     sort: SortState;
     filterText: string;
     /** The database being read, or `null` at the cluster's database list. */
     currentDatabase: string | null;
 }
 
-export interface StorageTabProps {
+export interface InventoryPanelProps {
     storageStats: ClusterStorageStats | null;
     /** Time when the cluster's database inventory was last read successfully. */
     storageLastUpdatedAt?: number;
@@ -59,30 +51,31 @@ export interface StorageTabProps {
     /**
      * The drilled-into database's collections, owned by the dashboard.
      *
-     * Lifted out of this component along with the Refresh button: the button now lives in
-     * the panel's main toolbar, and it cannot reload a list whose state is held here.
+     * Lifted out of this component along with the Refresh button: the button lives in the
+     * panel's main toolbar, and it cannot reload a list whose state is held here.
      */
     collections: DatabaseCollectionsState;
-    viewState: StorageTabViewState;
+    viewState: InventoryViewState;
     /**
      * Takes an updater rather than a value, so every change rebases on the current state
      * instead of the snapshot this render closed over. With a plain value, two changes
      * landing in one React batch would have the second silently discard the first.
      */
-    onViewStateChange: (update: (current: StorageTabViewState) => StorageTabViewState) => void;
+    onViewStateChange: (update: (current: InventoryViewState) => InventoryViewState) => void;
 }
 
 /**
- * Default order: largest first.
+ * Default order: by name, A→Z.
  *
- * The landing view has to answer "what is big here?" with no input from the user — the
- * question that brought them to a storage table in the first place. Alphabetical would make
- * them read every row to find it.
+ * The list is read to find a known name at least as often as to find the biggest thing, and
+ * an alphabetical list is the one a reader can scan without first working out what it is
+ * sorted by. The size columns carry a bar each, so "what is big here?" is answerable at a
+ * glance in any order.
  */
 const DEFAULT_SORT: SortState = { column: 'name', direction: 'ascending' };
 
 /** The arrangement a freshly-opened dashboard starts from. */
-export function createStorageViewState(selectedDatabaseName?: string): StorageTabViewState {
+export function createInventoryViewState(selectedDatabaseName?: string): InventoryViewState {
     return { sort: DEFAULT_SORT, filterText: '', currentDatabase: selectedDatabaseName ?? null };
 }
 
@@ -95,14 +88,14 @@ export function createStorageViewState(selectedDatabaseName?: string): StorageTa
  * several of them interleave down the page, and left the collections no room for the columns
  * the databases already had.
  */
-export const StorageTab = ({
+export const InventoryPanel = ({
     storageStats,
     storageLastUpdatedAt,
     isLoading,
     collections,
     viewState,
     onViewStateChange,
-}: StorageTabProps): JSX.Element => {
+}: InventoryPanelProps): JSX.Element => {
     const { sort, filterText, currentDatabase } = viewState;
     const trpcClient = useTrpcClient();
 
@@ -128,21 +121,22 @@ export const StorageTab = ({
     /** Everything the level holds, before the filter — the denominator of the footer count. */
     const allRows = currentDatabase === null ? databaseRows : collectionRows;
     const lastUpdatedAt = currentDatabase === null ? storageLastUpdatedAt : collections.lastUpdatedAt;
-    const levelKey = currentDatabase ?? 'databases';
-    const knownCollectionCount =
-        currentDatabase === null
-            ? undefined
-            : databaseRows.find((database) => database.name === currentDatabase)?.childCount;
-    const [lastRowCounts, setLastRowCounts] = useState<Record<string, number>>({});
     const inventoryIsLoading = isLoading || storageStats === null;
 
-    useEffect(() => {
-        if (!inventoryIsLoading) {
-            setLastRowCounts((current) =>
-                current[levelKey] === allRows.length ? current : { ...current, [levelKey]: allRows.length },
-            );
-        }
-    }, [allRows.length, inventoryIsLoading, levelKey]);
+    /**
+     * How tall the loading skeleton should stand, so a refresh does not collapse the page and
+     * push everything under the table up.
+     *
+     * A storage refresh keeps the previous rows on hand, so their count is the answer. Stepping
+     * into a database has none yet — the database's own row already said how many collections
+     * to expect.
+     */
+    const skeletonRowCount =
+        allRows.length > 0
+            ? allRows.length
+            : currentDatabase === null
+              ? undefined
+              : (databaseRows.find((database) => database.name === currentDatabase)?.childCount ?? undefined);
 
     const [now, setNow] = useState(Date.now);
     useEffect(() => {
@@ -178,9 +172,9 @@ export const StorageTab = ({
     }, [lastUpdatedAt, now]);
 
     const openCollection = useCallback(
-        (databaseName: string, collectionName: string, initialTab?: 'tab_result' | 'tab_indexes'): void => {
-            void trpcClient.clusterDashboard.openNamespace
-                .mutate({ namespace: `${databaseName}.${collectionName}`, initialTab })
+        (databaseName: string, collectionName: string): void => {
+            void trpcClient.clusterDashboard.openCollectionView
+                .mutate({ databaseName, collectionName })
                 .catch((error: unknown) => {
                     void trpcClient.common.displayErrorMessage.mutate({
                         message: l10n.t('Failed to open the collection view.'),
@@ -192,53 +186,19 @@ export const StorageTab = ({
         [trpcClient],
     );
 
-    /**
-     * Runs one of the tree's own commands against a row.
-     *
-     * Failures are modal: the reader asked for this explicitly, and the most likely one —
-     * the branch not being expanded in the tree, so the node cannot be found — is
-     * actionable but invisible from here.
-     */
-    const runCommand = useCallback(
-        (databaseName: string, collectionName: string | undefined, commandId: NamespaceCommandId): void => {
-            void trpcClient.clusterDashboard.runNamespaceCommand
-                .mutate({
-                    commandId,
-                    databaseName,
-                    collectionName,
-                })
-                .catch((error: unknown) => {
-                    void trpcClient.common.displayErrorMessage.mutate({
-                        message: l10n.t('The action could not be started.'),
-                        modal: true,
-                        cause: error instanceof Error ? error.message : String(error),
-                    });
-                });
-        },
-        [trpcClient],
-    );
-
+    // Every other context-menu entry is carried out on the host against the row's tree node;
+    // only stepping into a database is something the host cannot do for this panel.
     useEffect(() => {
         const handleMessage = (event: MessageEvent<unknown>): void => {
-            if (!isClusterDashboardContextMenuMessage(event.data)) {
-                return;
-            }
-
-            const { action, databaseName, collectionName } = event.data;
-            if (action === 'viewCollections') {
+            if (isShowCollectionsMessage(event.data)) {
+                const { databaseName } = event.data;
                 onViewStateChange((current) => ({ ...current, currentDatabase: databaseName, filterText: '' }));
-            } else if (action === 'openCollection' && collectionName !== undefined) {
-                openCollection(databaseName, collectionName);
-            } else if (action === 'manageIndexes' && collectionName !== undefined) {
-                openCollection(databaseName, collectionName, 'tab_indexes');
-            } else if (action !== 'openCollection' && action !== 'manageIndexes') {
-                runCommand(databaseName, collectionName, action);
             }
         };
 
         window.addEventListener('message', handleMessage);
         return () => window.removeEventListener('message', handleMessage);
-    }, [onViewStateChange, openCollection, runCommand]);
+    }, [onViewStateChange]);
 
     const activate = (row: NamespaceRow): void => {
         if (currentDatabase === null) {
@@ -272,7 +232,7 @@ export const StorageTab = ({
     const shownCount = currentDatabase === null ? (storageStats?.databases.length ?? 0) : collectionRows.length;
 
     return (
-        <div className="tabPanel">
+        <div className="inventoryPanel">
             {/*
              * Where the reader is, as a path rather than a title plus a back button. One line
              * at both levels and the same height at both, so stepping in or out no longer
@@ -364,7 +324,7 @@ export const StorageTab = ({
             )}
 
             {inventoryIsLoading ? (
-                <NamespaceTableSkeleton rowCount={lastRowCounts[levelKey] ?? knownCollectionCount} />
+                <NamespaceTableSkeleton rowCount={skeletonRowCount} />
             ) : allRows.length === 0 ? (
                 <div className="emptyState">
                     {currentDatabase !== null

@@ -314,9 +314,9 @@ $content-gutter: var(--spacingHorizontalMNudge); // 10px
         display: block;
     }
 
-    // ---- Tab bodies --------------------------------------------------------
+    // ---- Inventory panel ---------------------------------------------------
 
-    .tabPanel {
+    .inventoryPanel {
         display: flex;
         flex-direction: column;
         // 10px, the row-gap the Collection View's index list uses between its filter row,
