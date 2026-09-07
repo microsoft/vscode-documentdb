@@ -72,7 +72,7 @@ export const ClusterDashboard = (): JSX.Element => {
      * Prevents overlapping health polls. Non-emulator connections use the driver's 30 s
      * `serverSelectionTimeoutMS`, so an unreachable cluster answers far slower than the
      * 5 s interval; without this guard the interval stacks samples faster than they drain,
-     * each re-entering `getClient`, and the backlog also makes `timestampMs` non-monotonic.
+    * each re-entering `getClient`.
      */
     const sampleInFlightRef = useRef(false);
     const storageInFlightRef = useRef(false);

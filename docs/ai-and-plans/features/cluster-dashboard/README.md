@@ -14,8 +14,8 @@ code:
 
 **Status:** proof of concept, unmerged ([#823](https://github.com/microsoft/vscode-documentdb/pull/823), milestone 0.11.0)
 
-> A data-first map of what a cluster holds, what is running against it right now, and whether it
-> is safe — opened from any cluster tree node.
+> A data-first map of what a cluster holds and whether it is healthy — opened from any cluster
+> tree node.
 
 The extension already has per-collection surfaces: Collection View, the Indexes tab, the shell,
 playgrounds. What no surface shows is the **whole cluster at once**. That aggregation is this
@@ -32,7 +32,7 @@ comes here to get oriented, not to keep vigil — so nothing above the fold move
 - `src/documentdb/utils/getClusterHealth.ts` — host-side collectors (health, storage,
   `$currentOp`); sibling of `getClusterMetadata.ts` and shares its resilience model
 - `src/webviews/documentdb/clusterDashboard/**` — the webview: tRPC router, controller, React root,
-  tabs, operation history, Copilot prompt builder
+  health strip and storage inventory
 
 The dashboard borrows shared presentation primitives (`metricsRow`, `summaryCard`, the feedback
 components) from `src/webviews/documentdb/collectionView/queryInsightsTab/components/`.
@@ -43,26 +43,16 @@ None yet. A user-manual page is due before this ships.
 
 ## Architecture (intent — code is authoritative for behavior)
 
-- **The page is a place, not a feed.** Header, tiles and the landing Data tab are static and
-  refresh on open or on demand. Polling is confined to the Operations tab, and only while it is
-  the active tab ([0007](./decisions.md#0007--nothing-above-the-fold-moves-reconstructed)).
-- **A tab exists only when the server can answer it.** On Azure DocumentDB (vCore) the Activity
-  tab is absent entirely, because `serverStatus` is rejected there
-  ([0008](./decisions.md#0008--a-tab-exists-only-when-the-server-can-answer-it-reconstructed)).
+- **The page is a place, not a feed.** The storage inventory refreshes on demand and on a slow
+  cadence; lightweight health polling pauses while the panel is hidden. There is no Operations
+  tab and no observed-operation history.
 - **Every collector degrades per command.** A failed or unsupported command nulls its own fields
   and records the reason; the page never shows a broken panel. There is no capability probe,
   because a probe is a cache with an invalidation problem
   ([0002](./decisions.md#0002--per-command-trycatch-no-capability-probe-reconstructed)).
-- **Partial results say so.** A privilege-limited operations list states that it is showing only
-  the caller's own operations; the history states that anything between two refreshes never
-  appears.
-- **Kill is non-committal.** `killOp` acknowledges the request, not the outcome, and the wording
-  says so. The opid is re-checked after the confirmation prompt, since ids recycle
-  ([0003](./decisions.md#0003--confirmation-on-the-host-kill-reports-the-request-not-the-outcome-reconstructed)).
-- **Credentials are redacted before they reach the webview.** `currentOp` reports commands
-  verbatim, so an auth handshake or `createUser` caught in flight would otherwise carry a SCRAM
-  payload or a cleartext password into a tooltip. Credential-bearing commands lose their body, and
-  credential fields are redacted at any depth.
+- **Diagnostics are point-in-time.** Export takes a fresh current-operation snapshot on the host;
+  it does not retain or export observed-operation history. Credential-bearing commands lose their
+  body, and credential fields are redacted at any depth before the snapshot is shown.
 - **Panel de-duplication is keyed on `clusterId`, never `treeId`**
   ([0005](./decisions.md#0005--panel-de-duplication-keyed-on-clusterid-never-treeid-reconstructed)).
 

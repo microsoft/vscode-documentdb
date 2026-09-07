@@ -72,7 +72,6 @@
                 'clusterDashboard.getClusterInfo': {
                     clusterDisplayName: 'preview-cluster',
                     hosts: ['preview-cluster.mongocluster.cosmos.azure.com:10260'],
-                    authMethod: 'NativeAuth',
                     metadata: {
                         serverInfo_version: '8.0.5',
                         serverStatus_uptime: '99123',
@@ -86,13 +85,8 @@
                     errors: [],
                 },
                 'clusterDashboard.getHealthSample': {
-                    timestampMs: Date.now(),
                     pingLatencyMs: 12,
                     uptimeSeconds: 99_123,
-                    connectionsCurrent: 4,
-                    opcounters: { query: 10, insert: 2, update: 1, delete: 0, getmore: 3, command: 40 },
-                    activeOperations: 1,
-                    activeOperationsScope: 'cluster',
                     errors: [],
                 },
                 'clusterDashboard.getDatabaseCollections': {
@@ -109,12 +103,6 @@
                     ],
                     errors: [],
                     omittedCollectionCount: 0,
-                },
-                'clusterDashboard.getCurrentOperations': {
-                    operations: [],
-                    history: [],
-                    scope: 'cluster',
-                    errors: [],
                 },
             };
 

@@ -6,16 +6,18 @@
 import { type Document, type MongoClient } from 'mongodb';
 
 import {
-    CURRENT_OP_SHARE_WINDOW_MS,
-    getClusterPrivileges,
     getClusterTopology,
     getDatabaseCollections,
-    getFailedCommandName,
     getStorageStats,
-    killOperation,
     listCurrentOperations,
     sampleClusterHealth,
 } from './getClusterHealth';
+
+function getFailedCommandName(errorEntry: string): string {
+    const separatorIndex = errorEntry.indexOf(':');
+
+    return separatorIndex === -1 ? errorEntry : errorEntry.slice(0, separatorIndex);
+}
 
 type CommandHandler = (command: Record<string, unknown>) => unknown;
 
@@ -128,27 +130,6 @@ describe('listCurrentOperations — round-trip discipline', () => {
         expect(attempted[0]).toBe('own');
     });
 
-    it('shares one answer between callers inside the window, and never for an uncached caller', async () => {
-        let aggregateCalls = 0;
-        const { client } = createFakeClient({
-            aggregate: () => {
-                aggregateCalls += 1;
-                return [{ opid: 1, op: 'query', ns: 'db.coll', active: true }];
-            },
-        });
-
-        await listCurrentOperations(client, CURRENT_OP_SHARE_WINDOW_MS);
-        await listCurrentOperations(client, CURRENT_OP_SHARE_WINDOW_MS);
-
-        // The health sample and the Operations tab poll on the same cadence; the second one in
-        // a tick reuses the first one's answer rather than paying for its own.
-        expect(aggregateCalls).toBe(1);
-
-        // The pre-kill re-check asks for a fresh view, because acting on a cached one is how a
-        // finished operation gets killed by opid.
-        await listCurrentOperations(client);
-        expect(aggregateCalls).toBe(2);
-    });
 });
 
 describe('sampleClusterHealth', () => {
@@ -171,47 +152,6 @@ describe('sampleClusterHealth', () => {
         // command from Unauthorized or a TLS timeout once telemetry is suppressed.
         expect(sample.errors.join(' ')).toContain('CommandNotSupported');
         expect(sample.uptimeSeconds).toBeNull();
-        expect(sample.opcounters).toBeNull();
-        expect(sample.activeOperations).toBe(1);
-    });
-
-    it('carries the breadth of the currentOp form alongside the active-operation count', async () => {
-        const { client } = createFakeClient({
-            adminCommand: (command) => {
-                if (command.ping === 1) {
-                    return { ok: 1 };
-                }
-                throw new Error('CommandNotSupported: serverStatus');
-            },
-            aggregate: () => [{ opid: 7, op: 'query', ns: 'db.coll', active: true }],
-        });
-
-        const sample = await sampleClusterHealth(client);
-
-        // Without the scope the count is unreadable: on a least-privileged connection the chain
-        // falls back to the caller's own operations, and "1" then means something entirely
-        // different from "1" on a privileged one.
-        expect(sample.activeOperations).toBe(1);
-        expect(sample.activeOperationsScope).not.toBeNull();
-    });
-
-    it('leaves the scope null when no currentOp form succeeded', async () => {
-        const { client } = createFakeClient({
-            adminCommand: (command) => {
-                if (command.ping === 1) {
-                    return { ok: 1 };
-                }
-                throw new Error('CommandNotSupported: serverStatus');
-            },
-            aggregate: () => {
-                throw new Error('Unauthorized');
-            },
-        });
-
-        const sample = await sampleClusterHealth(client);
-
-        expect(sample.activeOperations).toBeNull();
-        expect(sample.activeOperationsScope).toBeNull();
     });
 
     it('records a null latency and the reason when the ping itself fails', async () => {
@@ -229,7 +169,7 @@ describe('sampleClusterHealth', () => {
         expect(sample.errors.join(' ')).toContain('connection timed out');
     });
 
-    it('reads uptime, connections and opcounters when serverStatus is available', async () => {
+    it('reads uptime when serverStatus is available', async () => {
         const { client } = createFakeClient({
             adminCommand: (command) => {
                 if (command.ping === 1) {
@@ -238,8 +178,6 @@ describe('sampleClusterHealth', () => {
                 if (command.serverStatus === 1) {
                     return {
                         uptime: 1234,
-                        connections: { current: 12 },
-                        opcounters: { query: 5, insert: 2, deprecated: { total: 1 } },
                     };
                 }
                 throw new Error('unexpected command');
@@ -251,15 +189,12 @@ describe('sampleClusterHealth', () => {
 
         expect(sample.errors).toEqual([]);
         expect(sample.uptimeSeconds).toBe(1234);
-        expect(sample.connectionsCurrent).toBe(12);
-        expect(sample.opcounters).toEqual({ query: 5, insert: 2 });
-        expect(sample.activeOperations).toBe(0);
     });
 
-    it('issues every command of a sample concurrently', async () => {
+    it('issues both commands of a sample concurrently', async () => {
         // Run in sequence, an unreachable cluster pays the server-selection timeout once per
         // command, so the header badge stays on "Connecting…" for minutes. This guards the
-        // failure case by observing the healthy one: all three must be in flight at once.
+        // failure case by observing the healthy one: both must be in flight at once.
         const started: string[] = [];
         let release = (): void => {};
         const gate = new Promise<void>((resolve) => {
@@ -271,15 +206,11 @@ describe('sampleClusterHealth', () => {
                 started.push(command.ping === 1 ? 'ping' : 'serverStatus');
                 return gate.then(() => ({ ok: 1, uptime: 1 }));
             },
-            aggregate: () => {
-                started.push('currentOp');
-                return [];
-            },
         });
 
         const pending = sampleClusterHealth(client);
 
-        expect(started).toEqual(['ping', 'serverStatus', 'currentOp']);
+        expect(started).toEqual(['ping', 'serverStatus']);
 
         release();
         await pending;
@@ -301,7 +232,7 @@ describe('sampleClusterHealth', () => {
 
         const sample = await sampleClusterHealth(client);
 
-        expect(sample.errors.map(getFailedCommandName)).toEqual(['ping', 'serverStatus', '$currentOp', 'currentOp']);
+        expect(sample.errors.map(getFailedCommandName)).toEqual(['ping', 'serverStatus']);
     });
 });
 
@@ -327,7 +258,6 @@ describe('listCurrentOperations', () => {
         expect(result.operations).toHaveLength(1);
         expect(result.operations[0]).toEqual({
             opid: '42',
-            opidIsNumeric: true,
             type: 'query',
             namespace: 'sales.orders',
             secsRunning: 9,
@@ -354,9 +284,6 @@ describe('listCurrentOperations', () => {
     });
 
     it('drops the $currentOp query that is collecting the list', async () => {
-        // The server reports the inspecting aggregation itself. Keeping it would floor the
-        // Active Operations tile at 1 on an idle cluster and put a permanent phantom row in
-        // the table whose Kill button terminates the dashboard's own poll.
         const { client } = createFakeClient({
             aggregate: () => [
                 {
@@ -492,7 +419,6 @@ describe('listCurrentOperations', () => {
         expect(result.errors).toEqual([]);
         expect(result.operations).toHaveLength(1);
         expect(result.operations[0].opid).toBe('op-1');
-        expect(result.operations[0].opidIsNumeric).toBe(false);
     });
 
     it('reports both command names when neither form is supported', async () => {
@@ -515,7 +441,7 @@ describe('listCurrentOperations', () => {
     it('falls back to own operations when the cluster-wide forms are refused', async () => {
         // A connection without the `inprog` privilege: both cluster-wide forms are refused,
         // but the account may always see its own operations. Without the fallback the
-        // Operations tab is permanently empty on a least-privileged account.
+        // diagnostics would otherwise omit operations on a least-privileged account.
         const { client } = createFakeClient({
             aggregate: (pipeline) => {
                 const stage = pipeline[0] as { $currentOp?: { allUsers?: boolean } };
@@ -672,95 +598,6 @@ describe('listCurrentOperations', () => {
         // where `key` carries credential material are discarded wholesale by name instead.
         expect(preview).toContain('"key":{"tenant":1}');
         expect(preview).toContain('"name":"tenant_1"');
-    });
-});
-
-describe('killOperation', () => {
-    it('sends a numeric opid when the server reported a number', async () => {
-        const { client, adminCommands } = createFakeClient({ adminCommand: () => ({ ok: 1 }) });
-
-        await killOperation(client, '42', true);
-
-        expect(adminCommands).toEqual([{ killOp: 1, op: 42 }]);
-    });
-
-    it('sends a string opid unchanged when the server reported a string', async () => {
-        const { client, adminCommands } = createFakeClient({ adminCommand: () => ({ ok: 1 }) });
-
-        await killOperation(client, 'shard0:1234', false);
-
-        expect(adminCommands).toEqual([{ killOp: 1, op: 'shard0:1234' }]);
-    });
-
-    it('preserves a numeric-looking string opid rather than coercing it', async () => {
-        // Azure DocumentDB (vCore) reports string opids. `Number('12345')` would send a
-        // number the server does not match, and an int64 beyond MAX_SAFE_INTEGER would be
-        // rounded onto a *different* operation.
-        const { client, adminCommands } = createFakeClient({ adminCommand: () => ({ ok: 1 }) });
-
-        await killOperation(client, '9007199254740993', false);
-
-        expect(adminCommands).toEqual([{ killOp: 1, op: '9007199254740993' }]);
-    });
-
-    it('reports whether the server acknowledged the request', async () => {
-        const { client } = createFakeClient({ adminCommand: () => ({ ok: 0 }) });
-
-        await expect(killOperation(client, '42', true)).resolves.toBe(false);
-    });
-});
-
-describe('getClusterPrivileges', () => {
-    it('finds the killOp privilege in the cluster resource grant', async () => {
-        // Shape taken from a live Azure DocumentDB (vCore) cluster.
-        const { client, adminCommands } = createFakeClient({
-            adminCommand: () => ({
-                authInfo: {
-                    authenticatedUserRoles: [{ role: 'root', db: 'admin' }],
-                    authenticatedUserPrivileges: [
-                        { resource: { db: '', collection: '' }, actions: ['find', 'insert'] },
-                        { resource: { cluster: true }, actions: ['getLog', 'killop', 'listDatabases'] },
-                    ],
-                },
-            }),
-        });
-
-        const privileges = await getClusterPrivileges(client);
-
-        expect(privileges.canKillOperations).toBe(true);
-        expect(privileges.errors).toEqual([]);
-        expect(adminCommands).toEqual([{ connectionStatus: 1, showPrivileges: true }]);
-    });
-
-    it('reports the privilege as absent when no grant carries it', async () => {
-        const { client } = createFakeClient({
-            adminCommand: () => ({
-                authInfo: {
-                    authenticatedUserPrivileges: [{ resource: { cluster: true }, actions: ['listDatabases'] }],
-                },
-            }),
-        });
-
-        await expect(getClusterPrivileges(client)).resolves.toMatchObject({ canKillOperations: false });
-    });
-
-    it('stays unknown rather than denied when the server reports no privileges', async () => {
-        // "Did not say" is not "said no": disabling Kill here would block an action that
-        // works, so the button stays enabled and the server gets to refuse.
-        const { client } = createFakeClient({
-            adminCommand: () => ({ authInfo: { authenticatedUserRoles: [{ role: 'root', db: 'admin' }] } }),
-        });
-
-        await expect(getClusterPrivileges(client)).resolves.toEqual({ canKillOperations: null, errors: [] });
-    });
-
-    it('stays unknown when the command itself fails', async () => {
-        const { client } = createFakeClient({});
-
-        const privileges = await getClusterPrivileges(client);
-
-        expect(privileges.canKillOperations).toBeNull();
-        expect(privileges.errors.map(getFailedCommandName)).toEqual(['connectionStatus']);
     });
 });
 

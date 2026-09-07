@@ -254,7 +254,7 @@ $content-gutter: var(--spacingHorizontalMNudge); // 10px
         margin-inline-start: auto;
     }
 
-    // ---- Two-column body ---------------------------------------------------
+    // ---- Dashboard body ---------------------------------------------------
 
     .dashboardContent {
         display: flex;
@@ -267,140 +267,6 @@ $content-gutter: var(--spacingHorizontalMNudge); // 10px
         // The tile row is measured against the content column rather than the viewport.
         container-type: inline-size;
         container-name: dashboardMain;
-    }
-
-    // Side by side once there is room; the facts grid and the topology list are both short
-    // and reading them stacked wastes the width this experiment just reclaimed.
-    .aboutTab {
-        @media (min-width: 900px) {
-            display: grid;
-            grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-            align-items: start;
-            gap: 20px;
-        }
-    }
-
-    // One line at the foot of the panel, under whichever tab is open.
-    .dashboardFeedbackRow {
-        margin-top: 4px;
-    }
-
-    // `SummaryCard` has no slot for a title-row action, so the Cluster card builds its own
-    // header from the same parts. 8px below the row is what `SummaryCard` puts under its title.
-    .summaryCardHeader {
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        gap: 8px;
-        margin-bottom: 8px;
-    }
-
-    .summaryCardAction {
-        flex: 0 0 auto;
-        font-weight: var(--fontWeightRegular);
-    }
-
-    // Long facts (host names, engine version lists) must not widen the narrow column —
-    // `SummaryCard`'s grid cells have no intrinsic minimum. They wrap rather than clip: a
-    // truncated host name is unusable and, unlike a table cell, there is no tooltip here to
-    // recover the rest from.
-    .summaryCard {
-        .summaryCell {
-            min-width: 0;
-        }
-
-        .cellValue {
-            display: block;
-            max-width: 100%;
-            white-space: normal;
-            overflow-wrap: anywhere;
-        }
-    }
-
-    // ---- Topology card -----------------------------------------------------
-
-    .topologyCard {
-        display: flex;
-        flex-direction: column;
-        row-gap: 8px;
-    }
-
-    .topologyCardHeader {
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        gap: 8px;
-    }
-
-    .topologyCardTitle {
-        display: block;
-    }
-
-    .topologyKind {
-        font-size: var(--fontSizeBase200);
-        color: var(--colorNeutralForeground3);
-    }
-
-    .topologySectionLabel {
-        margin-top: 4px;
-        font-size: var(--fontSizeBase200);
-        font-weight: var(--fontWeightSemibold);
-        color: var(--colorNeutralForeground3);
-    }
-
-    .topologyServers {
-        display: flex;
-        flex-direction: column;
-        gap: 6px;
-        margin: 0;
-        padding: 0;
-        list-style: none;
-    }
-
-    .topologyServer {
-        display: flex;
-        flex-direction: column;
-        gap: 2px;
-        min-width: 0;
-    }
-
-    .topologyServerAddress {
-        font-family: var(--fontFamilyMonospace);
-        font-size: var(--fontSizeBase200);
-        overflow: hidden;
-        text-overflow: ellipsis;
-        white-space: nowrap;
-    }
-
-    .topologyServerMeta {
-        display: flex;
-        align-items: center;
-        flex-wrap: wrap;
-        gap: 4px;
-        min-width: 0;
-    }
-
-    .topologyServerHost,
-    .topologyServerUptime {
-        font-size: var(--fontSizeBase200);
-        color: var(--colorNeutralForeground3);
-        overflow: hidden;
-        text-overflow: ellipsis;
-        white-space: nowrap;
-    }
-
-    .topologyMachine {
-        margin-top: 4px;
-        font-size: var(--fontSizeBase200);
-        color: var(--colorNeutralForeground3);
-        overflow: hidden;
-        text-overflow: ellipsis;
-        white-space: nowrap;
-    }
-
-    .topologyEmpty {
-        font-size: var(--fontSizeBase200);
-        color: var(--colorNeutralForeground3);
     }
 
     // ---- Inventory tiles ---------------------------------------------------
@@ -448,12 +314,6 @@ $content-gutter: var(--spacingHorizontalMNudge); // 10px
         display: block;
     }
 
-    .sparkline {
-        display: block;
-        width: 100%;
-        height: 100%;
-    }
-
     // ---- Tab bodies --------------------------------------------------------
 
     .tabPanel {
@@ -464,12 +324,6 @@ $content-gutter: var(--spacingHorizontalMNudge); // 10px
         gap: var(--spacingVerticalMNudge);
         padding-top: var(--spacingVerticalMNudge);
         min-width: 0;
-    }
-
-    .tabToolbar {
-        display: flex;
-        align-items: center;
-        gap: 8px;
     }
 
     // The index list's filter row, reproduced: the box is first and fills the width.
@@ -486,18 +340,6 @@ $content-gutter: var(--spacingHorizontalMNudge); // 10px
             flex: 1 1 auto;
             min-width: 0;
             max-width: none;
-        }
-    }
-
-    .operationHistory {
-        margin-top: 8px;
-
-        // The accordion nests a toolbar, a message bar and a table; without this they sit
-        // flush against each other, unlike the spacing `.tabPanel` gives the tab body.
-        .fui-AccordionPanel {
-            display: flex;
-            flex-direction: column;
-            gap: 8px;
         }
     }
 
@@ -518,66 +360,6 @@ $content-gutter: var(--spacingHorizontalMNudge); // 10px
         background-color: transparent;
     }
 
-    // Fluent table cells are `flex: 1 1 0` with no minimum, so any long value pushes the
-    // columns after it out from under their headings. Azure DocumentDB (vCore) reports
-    // operation ids like `10000053116:1785197164497492` — 28 characters — which overlapped
-    // the next column outright. Columns are given explicit widths and long values truncate
-    // with the full text available in a tooltip.
-    .operationsTable {
-        table-layout: fixed;
-        width: 100%;
-
-        .fui-TableCell,
-        .fui-TableHeaderCell {
-            // Without this a flex item refuses to shrink below its content width, which is
-            // what defeats `text-overflow` inside a table cell.
-            min-width: 0;
-            overflow: hidden;
-        }
-
-        .opidColumn {
-            flex: 0 0 190px;
-        }
-
-        .narrowColumn {
-            flex: 0 0 92px;
-        }
-
-        .actionsColumn {
-            flex: 0 0 104px;
-        }
-    }
-
-    .opidValue {
-        display: block;
-        max-width: 100%;
-        overflow: hidden;
-        text-overflow: ellipsis;
-        white-space: nowrap;
-        // Monospaced so the digits line up down the column and a truncated id is still
-        // comparable at a glance.
-        font-family: var(--vscode-editor-font-family, monospace);
-        font-size: 12px;
-    }
-
-    .truncatedValue {
-        display: block;
-        max-width: 100%;
-        overflow: hidden;
-        text-overflow: ellipsis;
-        white-space: nowrap;
-    }
-
-    // Truncated cells are focusable so their hidden text stays reachable; without an
-    // explicit outline the focus ring is invisible against the table background, which is
-    // the defect class the current accessibility audit is filing.
-    .opidValue:focus-visible,
-    .truncatedValue:focus-visible {
-        outline: 1px solid var(--vscode-focusBorder);
-        outline-offset: 1px;
-        border-radius: 2px;
-    }
-
     // Centred "showing X of Y", the index list's footer: it states how much of the list the
     // filter is hiding, which is the one thing a filtered table cannot say for itself.
     // Styled with the level band, further down.
@@ -591,59 +373,6 @@ $content-gutter: var(--spacingHorizontalMNudge); // 10px
         text-align: center;
         color: var(--colorNeutralForeground2);
         font-size: var(--fontSizeBase300);
-    }
-
-    .activityTab {
-        display: flex;
-        flex-direction: column;
-        gap: var(--spacingVerticalMNudge); // 10px, matching .tabPanel
-        padding-top: var(--spacingVerticalMNudge);
-    }
-
-    .chartCard {
-        display: flex;
-        flex-direction: column;
-        gap: 4px;
-    }
-
-    .chartTitle {
-        font-size: var(--fontSizeBase200);
-        font-weight: var(--fontWeightSemibold);
-        color: var(--colorNeutralForeground3);
-    }
-
-    .chartValue {
-        font-size: var(--fontSizeHero700);
-        font-weight: var(--fontWeightSemibold);
-        line-height: var(--lineHeightHero700);
-    }
-
-    .chartCanvas {
-        height: 120px;
-    }
-
-    .opcounterList {
-        display: flex;
-        flex-wrap: wrap;
-        gap: 8px 24px;
-        margin: 8px 0 0;
-        padding: 0;
-        list-style: none;
-    }
-
-    .opcounterItem {
-        display: flex;
-        flex-direction: column;
-    }
-
-    .opcounterName {
-        font-size: var(--fontSizeBase200);
-        color: var(--colorNeutralForeground3);
-    }
-
-    .opcounterValue {
-        font-size: var(--fontSizeBase400);
-        font-weight: var(--fontWeightSemibold);
     }
 
     // ---- Inventory table ---------------------------------------------------

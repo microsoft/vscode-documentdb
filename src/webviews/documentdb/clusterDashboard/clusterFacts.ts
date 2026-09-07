@@ -16,113 +16,8 @@ import * as l10n from '@vscode/l10n';
 
 import { type ClusterDashboardAzureInfo } from './clusterDashboardController';
 
-/** Rendered wherever a value the server never reported would otherwise be blank. */
-export const PLACEHOLDER = '—';
-
 /** The flat `key → value` shape `getClusterMetadata` returns. */
 export type ClusterMetadataMap = Record<string, string | undefined> | undefined;
-
-/**
- * Reads the server host name out of the JSON blob `getClusterMetadata` stores under
- * `hostInfo_json`. Returns `null` when the server did not answer `hostInfo` (vCore) or
- * when the payload is not shaped as expected.
- */
-export function extractHostName(hostInfoJson: string | undefined): string | null {
-    if (!hostInfoJson) {
-        return null;
-    }
-
-    try {
-        const parsed: unknown = JSON.parse(hostInfoJson);
-        const system = (parsed as { system?: { hostname?: unknown } } | null)?.system;
-        return typeof system?.hostname === 'string' ? system.hostname : null;
-    } catch {
-        return null;
-    }
-}
-
-/**
- * Reads `topology_numberOfServers`, which `getClusterMetadata` stores as a string.
- * Returns `null` for absent, blank, or non-numeric values so they render as the
- * placeholder rather than being silently coerced into a topology claim.
- */
-function parseServerCount(rawServerCount: string | undefined): number | null {
-    if (rawServerCount === undefined || rawServerCount.trim() === '') {
-        return null;
-    }
-
-    const parsed = Number(rawServerCount);
-
-    return Number.isFinite(parsed) ? parsed : null;
-}
-
-/**
- * Describes the cluster's shape from the metadata `getClusterMetadata` collected.
- *
- * `topology_numberOfServers` is `hello.hosts.length`, and `hosts` is only present on a
- * replica-set member: 0 means a genuine standalone (or a mongos, which the `isdbgrid`
- * branch has already claimed), while 1 is a *single-member replica set* — a common local
- * setup, and one that supports transactions and change streams, so calling it "Standalone"
- * misinforms.
- */
-export function describeTopology(metadata: ClusterMetadataMap): string {
-    if (metadata?.['topology_type'] === 'isdbgrid') {
-        return l10n.t('Sharded cluster');
-    }
-
-    const serverCount = parseServerCount(metadata?.['topology_numberOfServers']);
-
-    if (serverCount === null) {
-        return PLACEHOLDER;
-    }
-    if (serverCount === 0) {
-        return l10n.t('Standalone');
-    }
-    if (serverCount === 1) {
-        return l10n.t('Replica set (1 server)');
-    }
-
-    return l10n.t('Replica set ({count} servers)', { count: serverCount });
-}
-
-/**
- * Names the product behind the connection.
- *
- * `hello.internal.kind` identifies an Azure DocumentDB server, and `domainInfo_api`
- * distinguishes the vCore and RU offerings from the host suffix. Both are already collected
- * by `getClusterMetadata`, so this costs no extra round trip. Returns `null` for a server
- * that identifies as neither — a local emulator or a generic MongoDB-API server, where the row
- * would add nothing over the version that is already shown.
- */
-export function describeProduct(metadata: ClusterMetadataMap): string | null {
-    const kind = metadata?.['topology_hello_internal_kind'];
-    const api = metadata?.['domainInfo_api'];
-
-    if (kind === 'azuredocumentdb') {
-        return api ? l10n.t('Azure DocumentDB ({api})', { api }) : l10n.t('Azure DocumentDB');
-    }
-
-    return kind ?? null;
-}
-
-/**
- * Formats `hello.internal.documentdb_versions`, which `getClusterMetadata` stores as a
- * `;`-joined list (e.g. `1.114-0;1.115.0;12.1-1`). Reported verbatim rather than reduced to
- * a single number: the entries are separate component versions, and picking one would be
- * guessing which the reader cares about.
- */
-export function formatEngineVersions(rawVersions: string | undefined): string | null {
-    if (!rawVersions) {
-        return null;
-    }
-
-    const versions = rawVersions
-        .split(';')
-        .map((version) => version.trim())
-        .filter((version) => version.length > 0);
-
-    return versions.length > 0 ? versions.join(', ') : null;
-}
 
 /**
  * Summarises the provisioned compute as one line, e.g. `M10 · 1 node · 128 GB`.
@@ -189,25 +84,4 @@ export function describeAddress(hosts: string[] | undefined): string | null {
     }
 
     return l10n.t('{host} +{count} more', { host: hosts[0], count: String(hosts.length - 1) });
-}
-
-/**
- * Short label for the authentication method behind this connection.
- *
- * Deliberately shorter than the wording the connection wizard uses ("Username and
- * Password"): this appears as one badge among six, and the reader is being reminded which
- * of three methods is in play, not choosing between them. `null` when the connection was
- * restored without cached credentials, so the badge is dropped rather than guessing.
- */
-export function describeAuthMethod(authMethod: string | undefined): string | null {
-    switch (authMethod) {
-        case 'NativeAuth':
-            return l10n.t('Username and password');
-        case 'MicrosoftEntraID':
-            return l10n.t('Entra ID');
-        case 'NoAuth':
-            return l10n.t('None');
-        default:
-            return null;
-    }
 }
