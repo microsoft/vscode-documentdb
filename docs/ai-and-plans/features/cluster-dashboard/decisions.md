@@ -10,18 +10,22 @@ created: 2026-08-24
 
 > The decisions that shaped the Cluster Dashboard, and what was rejected on the way.
 
-| #    | Decision                                                  | Status              | Changed from the proposal?                         | Date       | PR   |
-| ---- | --------------------------------------------------------- | ------------------- | -------------------------------------------------- | ---------- | ---- |
-| 0001 | Poll from the webview, not tRPC subscriptions             | Accepted            | Accepted as proposed, scoped down for the POC      | 2026-07-27 | #823 |
-| 0002 | Per-command try/catch, no capability probe                | Accepted            | Accepted as proposed                               | 2026-07-27 | #823 |
-| 0003 | Confirmation on the host; kill reports the request        | Accepted (modified) | Outcome vocabulary added after live testing        | 2026-07-28 | #823 |
-| 0004 | Custom SVG sparkline instead of a charting dependency     | Accepted            | Accepted as proposed                               | 2026-07-27 | #823 |
-| 0005 | Panel de-duplication keyed on `clusterId`, never `treeId` | Accepted            | Accepted as proposed                               | 2026-07-27 | #823 |
-| 0006 | The page is a data inventory, not a performance dashboard | Accepted            | **Reverses the genre-A model in `design.md` §1.1** | 2026-07-28 | #823 |
-| 0007 | Nothing above the fold moves                              | Accepted            | Raised from a review note to a standing rule       | 2026-07-28 | #823 |
-| 0008 | A tab exists only when the server can answer it           | Accepted            | Emerged from live vCore testing, not the plan      | 2026-07-28 | #823 |
-| 0009 | Converge with PR #753 on a shared `feature/` branch       | Proposed            | Needs sign-off from #753's author and a maintainer | 2026-08-24 | #823 |
-| 0015 | Storage refresh is explicit after initial load            | Accepted            | Removes a timer left behind by the data-first redesign | 2026-09-07 | #823 |
+| #    | Decision                                                    | Status              | Changed from the proposal?                             | Date       | PR   |
+| ---- | ----------------------------------------------------------- | ------------------- | ------------------------------------------------------ | ---------- | ---- |
+| 0001 | Poll from the webview, not tRPC subscriptions               | Accepted            | Accepted as proposed, scoped down for the POC          | 2026-07-27 | #823 |
+| 0002 | Per-command try/catch, no capability probe                  | Accepted            | Accepted as proposed                                   | 2026-07-27 | #823 |
+| 0003 | Confirmation on the host; kill reports the request          | Accepted (modified) | Outcome vocabulary added after live testing            | 2026-07-28 | #823 |
+| 0004 | Custom SVG sparkline instead of a charting dependency       | Accepted            | Accepted as proposed                                   | 2026-07-27 | #823 |
+| 0005 | Panel de-duplication keyed on `clusterId`, never `treeId`   | Accepted            | Accepted as proposed                                   | 2026-07-27 | #823 |
+| 0006 | The page is a data inventory, not a performance dashboard   | Accepted            | **Reverses the genre-A model in `design.md` §1.1**     | 2026-07-28 | #823 |
+| 0007 | Nothing above the fold moves                                | Accepted            | Raised from a review note to a standing rule           | 2026-07-28 | #823 |
+| 0008 | A tab exists only when the server can answer it             | Accepted            | Emerged from live vCore testing, not the plan          | 2026-07-28 | #823 |
+| 0009 | Converge with PR #753 on a shared `feature/` branch         | Proposed            | Needs sign-off from #753's author and a maintainer     | 2026-08-24 | #823 |
+| 0014 | Step into a database, do not expand it                      | Accepted (modified) | Its back-button-only exit was reversed by 0018         | 2026-09-02 | #823 |
+| 0015 | Storage refresh is explicit after initial load              | Accepted            | Removes a timer left behind by the data-first redesign | 2026-09-07 | #823 |
+| 0016 | Row context-menu entries run on the host                    | Accepted            | Removes a host → webview → host relay                  | 2026-09-07 | #823 |
+| 0017 | Diagnostics carry raw replies, not a second reading of them | Accepted            | Retires the topology summary with its card             | 2026-09-07 | #823 |
+| 0018 | The level band is a breadcrumb; Back stays in the footer    | Accepted            | Reverses 0014's rejection of the breadcrumb            | 2026-09-07 | #823 |
 
 > Entries below are **semantically** immutable: append new entries rather than
 > rewriting old ones, and record reversals as a new entry plus a status change
@@ -503,8 +507,10 @@ A future reader finding two overlapping dashboards again should get that analysi
 
 ## 0014 — Step into a database, do not expand it
 
-**Status:** Accepted · **Date:** 2026-09-02 · **Raised by:** Operator
+**Status:** Accepted (modified) · **Date:** 2026-09-02 · **Raised by:** Operator
 **Evidence:** Three navigation prototypes built and compared side by side on a live cluster
+**Modified by:** [0018](#0018--the-level-band-is-a-breadcrumb-back-stays-in-the-footer) — the exit
+is a breadcrumb plus a footer button, not a back button alone.
 
 ### Question
 
@@ -597,3 +603,132 @@ the implementation to the interaction rule already accepted in [0007](#0007--not
 - Refresh re-reads cluster storage and, when drilled into a database, that database's collections.
 - Moving between the database and collection levels never triggers a cluster storage re-read.
 - The five-second health sample continues independently and never puts the inventory into a loading state.
+
+---
+
+## 0016 — Row context-menu entries run on the host
+
+**Status:** Accepted · **Date:** 2026-09-07 · **Raised by:** Operator, reviewing the surface after the feature reduction
+**Evidence:** `clusterDashboardController.ts`, `clusterDashboardContextMenu.ts`
+
+### Question
+
+A row's native VS Code context menu was wired as a round trip: VS Code raised the menu command
+**on the host**, the controller looked up the panel and posted a message **to the webview**, the
+webview matched the action and called a `runNamespaceCommand` tRPC mutation **back to the host**,
+which resolved the tree node and executed the command. Four hops for something that started and
+ended in the same process.
+
+The relay carried real cost. `runNamespaceCommand` needed a closed `NAMESPACE_COMMAND_IDS`
+allowlist, because a command id was crossing the webview boundary and a webview must never be able
+to name an arbitrary VS Code command for the host to run. The message contract needed a matching
+runtime guard on the way in. Both existed only to police a boundary the work never actually had to
+cross.
+
+### Decision
+
+The menu command does the work where it is raised. `openCollection` and `manageIndexes` call
+`openCollectionViewInternal` directly; every tree command resolves the row's node through
+`resolveNamespaceNode` and executes against it. Only **View Collections** still posts to the
+webview, because stepping the open panel into a database is the one thing the host cannot do
+itself.
+
+### Reasoning
+
+The `data-vscode-context` payload already gives the host the cluster, the database and the
+collection, and the panel's own configuration supplies the display name and `viewId`. Nothing was
+missing. With the command id never leaving the host, the allowlist is not a mitigation that was
+removed — it is a boundary that no longer exists, which is the only safe way to delete a security
+control.
+
+Failure reporting improved as a side effect: "expand this cluster in the tree first" is now shown
+by the same handler that failed, instead of being thrown across tRPC to be re-raised as a modal by
+the webview.
+
+### Consequences
+
+- **`runNamespaceCommand` and `NAMESPACE_COMMAND_IDS` are deleted.**
+- **`clusterDashboardContextMenu.ts` is now a contract, not a dispatcher**: command ids, the
+  `data-vscode-context` shape, and the single `showCollections` message.
+- **`openNamespace` becomes `openCollectionView`** and takes `{databaseName, collectionName}`
+  rather than a `database.collection` string. The dot-splitting it needed existed because the
+  namespace arrived as an operations-table `ns`; nothing produces one any more.
+- Telemetry for a menu entry is now a host `clusterDashboard.contextMenuAction` event rather than a
+  tRPC procedure event.
+
+---
+
+## 0017 — Diagnostics carry raw replies, not a second reading of them
+
+**Status:** Accepted · **Date:** 2026-09-07 · **Raised by:** Operator, reviewing the surface after the feature reduction
+**Evidence:** `getClusterHealth.ts`, `clusterDashboardRouter.ts` `exportDiagnostics`
+
+### Question
+
+`getClusterTopology` parsed `hello`, `replSetGetStatus`, `listShards` and `hostInfo` into a
+`ClusterTopology` — roughly 250 lines of interpretation plus four exported interfaces. It was
+written for the topology card, which is gone. Its only remaining consumer was the diagnostics
+export, which **already carried the same four replies verbatim** in its `commands` list. Does the
+interpretation still earn its place?
+
+### Decision
+
+No. `getClusterTopology` and its types are deleted. The four commands move into
+`DIAGNOSTIC_COMMANDS`, so the export still reports everything the server said about its own shape —
+just once, unmodified.
+
+### Reasoning
+
+The export's stated principle is that it reports what the server said rather than what the
+dashboard kept. A parsed summary sitting beside the raw reply it was parsed from is a second
+representation to keep consistent, and the derived one is the one that can be wrong. Nothing renders
+it, so no reader would ever catch a drift.
+
+`listShards` and `replSetGetStatus` will now be refused on clusters that are not sharded or not a
+replica set. That is the intended behaviour of this document: a refusal is recorded, because
+"vCore refuses `replSetGetStatus`" is a finding a bug report needs.
+
+`currentOperations` deliberately stays interpreted. It is not a raw reply and must never become
+one — mapping it is where credential-bearing commands lose their body and secret-shaped fields lose
+their values.
+
+### Consequences
+
+- **`ClusterTopology`, `ClusterServer`, `ClusterHostFacts` and `ClusterShard` are deleted**, with
+  `toReplicaSetMember`, `toHostFacts` and their tests.
+- `aggregates` in the exported document is now `storage`, `currentOperations` and `health`.
+- If a future surface needs a topology summary again, it is re-derivable from the replies the
+  export already contains.
+
+---
+
+## 0018 — The level band is a breadcrumb; Back stays in the footer
+
+**Status:** Accepted · **Date:** 2026-09-07 · **Raised by:** Recorded retrospectively while auditing the branch
+**Evidence:** commit `12485b0c`, `InventoryPanel.tsx`
+
+### Question
+
+[0014](#0014--step-into-a-database-do-not-expand-it) chose a back-button drill-down and rejected a
+breadcrumb, on the grounds that a two-level hierarchy cannot produce an ambiguous path and so does
+not need a permanent row of chrome to disambiguate one. The implementation subsequently adopted a
+breadcrumb anyway, without recording the reversal. Which is the decision?
+
+### Decision
+
+The breadcrumb. The band above the table is a `Databases › <name>` breadcrumb at both levels, and
+the `← Back to Databases` button stays in the list footer.
+
+### Reasoning
+
+0014's argument was about _disambiguation_ and it still holds — the breadcrumb is not earning its
+place by resolving an ambiguous path. It earns it by being the same height at both levels. The
+title-plus-back-button band it replaced changed height when stepping in, which moved the filter
+row and the table underneath it on every drill-in and drill-out.
+
+The footer's Back button is not redundant with it. A reader who has scrolled a long list is
+several screens below the breadcrumb, and an exit that requires scrolling back up is an exit they
+will not use. It costs no vertical space there because it shares the footer's existing row.
+
+This entry exists mainly so the record matches the code: 0014 is otherwise a correct account of a
+navigation model that the branch no longer implements in one of its details.

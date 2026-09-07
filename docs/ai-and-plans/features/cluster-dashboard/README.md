@@ -50,27 +50,30 @@ None yet. A user-manual page is due before this ships.
   and records the reason; the page never shows a broken panel. There is no capability probe,
   because a probe is a cache with an invalidation problem
   ([0002](./decisions.md#0002--per-command-trycatch-no-capability-probe-reconstructed)).
-- **Diagnostics are point-in-time.** Export takes a fresh current-operation snapshot on the host;
-  it does not retain or export observed-operation history. Credential-bearing commands lose their
-  body, and credential fields are redacted at any depth before the snapshot is shown. Raw diagnostic
-  commands are a list that preserves each database and invocation beside its unflattened reply or
-  error, including the commands used by the topology summary and the `listDatabases` and bounded
-  per-database `dbStats` calls used by storage. Interpreted topology, storage, operations, and health
-  data lives under `aggregates`.
+- **Diagnostics are point-in-time and unmodified.** Export re-reads everything on the host and
+  reports each command beside exactly what the server answered, or why it did not. It does not
+  retain or export observed-operation history. The one interpreted section is the current-operation
+  snapshot, because mapping it is where credential-bearing commands lose their body and
+  credential-shaped fields lose their values at any depth
+  ([0017](./decisions.md#0017--diagnostics-carry-raw-replies-not-a-second-reading-of-them)).
+- **A row's context-menu entry runs on the host**, against the tree node the row names, rather than
+  being relayed through the webview
+  ([0016](./decisions.md#0016--row-context-menu-entries-run-on-the-host)).
 - **Panel de-duplication is keyed on `clusterId`, never `treeId`**
   ([0005](./decisions.md#0005--panel-de-duplication-keyed-on-clusterid-never-treeid-reconstructed)).
 
 ## Timeline
 
-| Date       | What                                                                              | Where                                                                                        |
-| ---------- | --------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------- |
-| 2026-07-26 | End-state design drafted from the vscode-pgsql Server Dashboard model             | [design.md](./design.md)                                                                     |
-| 2026-07-27 | POC implemented and reviewed (round 1)                                            | [iterations/01-poc/](./iterations/01-poc/implementation-plan.md)                             |
-| 2026-07-28 | Review feedback reframed the page as an inventory; data-first restructure applied | [iterations/01-poc/data-first-restructure.md](./iterations/01-poc/data-first-restructure.md) |
-| 2026-07-29 | PR [#823](https://github.com/microsoft/vscode-documentdb/pull/823) opened         | —                                                                                            |
-| 2026-08-04 | Marked ready for review; Copilot review round applied                             | [iterations/01-poc/summary.md](./iterations/01-poc/summary.md)                               |
-| 2026-08-16 | Milestoned 0.11.0 by the maintainer                                               | —                                                                                            |
-| 2026-08-24 | Merged current `main`; docs migrated into this layout                             | —                                                                                            |
+| Date       | What                                                                               | Where                                                                                                                                                               |
+| ---------- | ---------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 2026-07-26 | End-state design drafted from the vscode-pgsql Server Dashboard model              | [design.md](./design.md)                                                                                                                                            |
+| 2026-07-27 | POC implemented and reviewed (round 1)                                             | [iterations/01-poc/](./iterations/01-poc/implementation-plan.md)                                                                                                    |
+| 2026-07-28 | Review feedback reframed the page as an inventory; data-first restructure applied  | [iterations/01-poc/data-first-restructure.md](./iterations/01-poc/data-first-restructure.md)                                                                        |
+| 2026-07-29 | PR [#823](https://github.com/microsoft/vscode-documentdb/pull/823) opened          | —                                                                                                                                                                   |
+| 2026-08-04 | Marked ready for review; Copilot review round applied                              | [iterations/01-poc/summary.md](./iterations/01-poc/summary.md)                                                                                                      |
+| 2026-08-16 | Milestoned 0.11.0 by the maintainer                                                | —                                                                                                                                                                   |
+| 2026-08-24 | Merged current `main`; docs migrated into this layout                              | —                                                                                                                                                                   |
+| 2026-09-07 | Feature set reduced to the inventory; the leftovers of the removed panels swept up | [0015](./decisions.md#0015--storage-refresh-is-explicit-after-initial-load)–[0017](./decisions.md#0017--diagnostics-carry-raw-replies-not-a-second-reading-of-them) |
 
 ## Decisions
 
