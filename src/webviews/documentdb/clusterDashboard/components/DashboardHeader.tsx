@@ -3,7 +3,7 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { Badge } from '@fluentui/react-components';
+import { Badge, Tooltip } from '@fluentui/react-components';
 import { DatabaseMultipleRegular } from '@fluentui/react-icons';
 import * as l10n from '@vscode/l10n';
 import { type JSX } from 'react';
@@ -57,6 +57,13 @@ export const DashboardHeader = ({
     const resilienceWarnings = collectResilienceWarnings(clusterInfo?.metadata, azure);
     const address = describeAddress(clusterInfo?.hosts);
 
+    const latencyText =
+        typeof latestSample?.pingLatencyMs === 'number'
+            ? l10n.t('{latency} ms', { latency: Math.round(latestSample.pingLatencyMs) })
+            : '';
+    const latencyLabel =
+        latencyText === '' ? l10n.t('Ping latency not measured yet') : l10n.t('Ping latency {0}', latencyText);
+
     return (
         <header className="dashboardHeader">
             <div className="dashboardHeaderIcon" aria-hidden="true">
@@ -78,21 +85,45 @@ export const DashboardHeader = ({
             </div>
 
             <div className="dashboardHeaderBadges">
-                <Badge appearance="filled" color={connectionAppearance} aria-label={connectionLabel}>
+                {/*
+                 * Rounded and tinted, like every other badge in the extension — a filled pill
+                 * read as a different family of object from the index and property badges the
+                 * reader has already met.
+                 */}
+                <Badge appearance="tint" shape="rounded" color={connectionAppearance} aria-label={connectionLabel}>
                     {connectionLabel}
                 </Badge>
                 {/*
                  * Liveness lives here, next to the badge that already asserts it — not as a
                  * chart. A number is the honest representation of a ping; the metric row
                  * below is reserved for what the cluster contains.
+                 *
+                 * Rendered whenever connected, empty while a sample is missing, and given a
+                 * fixed width: a bare figure that appears, disappears and changes digit count
+                 * moved the badges beside it on every poll.
                  */}
-                {connectionState === 'connected' && typeof latestSample?.pingLatencyMs === 'number' && (
-                    <span className="dashboardHeaderLatency">
-                        {l10n.t('{latency} ms', { latency: Math.round(latestSample.pingLatencyMs) })}
-                    </span>
+                {connectionState === 'connected' && (
+                    <Tooltip
+                        content={l10n.t(
+                            'Round-trip time of the most recent ping to this cluster. It measures the network path and the server’s responsiveness, not the speed of your queries.',
+                        )}
+                        relationship="description"
+                        withArrow
+                    >
+                        {/*
+                         * Focusable so the explanation is reachable without a pointer, which
+                         * WCAG 1.4.13 requires of a tooltip carrying information not stated
+                         * elsewhere. The same pattern the index list uses for its truncated
+                         * property badges.
+                         */}
+                        {/* eslint-disable-next-line jsx-a11y/no-noninteractive-tabindex */}
+                        <span className="dashboardHeaderLatency" tabIndex={0} aria-label={latencyLabel}>
+                            <span aria-hidden={true}>{latencyText}</span>
+                        </span>
+                    </Tooltip>
                 )}
                 {resilienceWarnings.map((warning) => (
-                    <Badge key={warning} appearance="outline" color="warning">
+                    <Badge key={warning} appearance="outline" shape="rounded" color="warning">
                         {warning}
                     </Badge>
                 ))}

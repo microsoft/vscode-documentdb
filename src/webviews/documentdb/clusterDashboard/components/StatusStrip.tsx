@@ -143,13 +143,20 @@ export const StatusStrip = ({ storageStats }: StatusStripProps): JSX.Element => 
                 </div>
 
                 <div className="statusTile">
+                    {/*
+                     * Rounded from a thousand up. A document count is read from collection
+                     * metadata rather than counted, so a tile 28px tall printing `4,812,004`
+                     * offers precision the figure does not have.
+                     */}
                     <CountMetric
                         label={l10n.t('Documents')}
                         value={totalDocuments}
+                        compact
+                        compactThreshold={1000}
                         nullValuePlaceholder={NOT_REPORTED}
                         tooltipExplanation={
                             l10n.t(
-                                'Documents across the user databases this dashboard inspected. A dash means this server did not report it.',
+                                'Approximate number of documents across the user databases this dashboard inspected. The servers report it from collection metadata rather than by counting, so it can drift. A dash means this server did not report it.',
                             ) + partialCaveat
                         }
                     />

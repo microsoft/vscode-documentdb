@@ -70,7 +70,7 @@ function ChartCard({
     color?: string;
 }): JSX.Element {
     return (
-        <Card className="chartCard" appearance="filled">
+        <Card className="summaryCard chartCard">
             <div className="chartTitle">{title}</div>
             <div className="chartValue">{caption}</div>
             <div className="chartCanvas">
@@ -113,7 +113,7 @@ export const ActivityTab = ({ samples, opcountersUnsupported }: ActivityTabProps
                 color="var(--vscode-charts-green, currentColor)"
             />
 
-            <Card className="chartCard" appearance="filled">
+            <Card className="summaryCard chartCard">
                 <div className="chartTitle">{l10n.t('Operations per second')}</div>
                 {opcounterRates.length === 0 ? (
                     <div className="emptyState">

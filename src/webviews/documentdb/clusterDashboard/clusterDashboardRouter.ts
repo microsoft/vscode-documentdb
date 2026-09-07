@@ -31,6 +31,7 @@ import {
 import { CopilotService } from '../../../services/copilotService';
 import { getConfirmationAsInSettings } from '../../../utils/dialogs/getConfirmation';
 import { showConfirmationAsInSettings } from '../../../utils/dialogs/showConfirmation';
+import { readOnlyJsonDocumentProvider } from '../../../utils/readOnlyJsonDocumentProvider';
 import { type BaseRouterContext } from '../../_integration/appRouter';
 import { publicProcedureWithTelemetry, router, type WithTelemetry } from '../../_integration/trpc';
 import { buildAskCopilotPrompt } from './askCopilotPrompt';
@@ -42,6 +43,29 @@ import {
     type IdentifiedOperation,
     type ObservedOperation,
 } from './operationHistory';
+import { resolveNamespaceNode } from './resolveNamespaceNode';
+
+/**
+ * The tree commands the inventory list may run, as a closed set.
+ *
+ * Every entry is a command the tree already offers on a database or collection node, so the
+ * dashboard adds no new capability — only a second place to reach one. Kept as an allowlist
+ * because the command id crosses the webview boundary: a webview must never be able to name
+ * an arbitrary VS Code command for the host to execute.
+ */
+export const NAMESPACE_COMMAND_IDS = [
+    'vscode-documentdb.command.dropDatabase',
+    'vscode-documentdb.command.dropCollection',
+    'vscode-documentdb.command.importDocuments',
+    'vscode-documentdb.command.exportDocuments',
+    'vscode-documentdb.command.copyCollection',
+    'vscode-documentdb.command.pasteCollection',
+    'vscode-documentdb.command.copyReference',
+    'vscode-documentdb.command.playground.new',
+    'vscode-documentdb.command.shell.open',
+] as const;
+
+export type NamespaceCommandId = (typeof NAMESPACE_COMMAND_IDS)[number];
 
 export type RouterContext = BaseRouterContext & {
     /**
@@ -214,6 +238,49 @@ export const clusterDashboardRouter = router({
         return { ...result, operations, history: getObservedOperations(myCtx.clusterId) };
     }),
 
+    /**
+     * Opens everything the server answered about itself as a read-only JSON document.
+     *
+     * The Cluster card shows the handful of facts worth a permanent row; the metadata probe
+     * collects far more, and which fields a given platform answers varies enough that no
+     * fixed grid can cover it. Rather than guess, the whole reply is one click away — the
+     * same escape hatch the index list's "View Raw Index Definition" and Query Insights'
+     * "View Raw Execution Stats" provide.
+     */
+    viewRawClusterInfo: publicProcedureWithTelemetry.mutation(async ({ ctx }): Promise<void> => {
+        const myCtx = ctx as WithTelemetry<RouterContext>;
+
+        const client = await ClustersClient.getClient(myCtx.clusterId);
+        const metadata = await client.getClusterMetadata();
+        const topology = await getClusterTopology(client.getMongoClient()).catch(() => null);
+
+        // No hosts and no connection string: the metadata carries only hashed domain
+        // fragments, but the seed list is the address itself, and this document is one
+        // Ctrl+A away from a bug report.
+        const document = { metadata, topology };
+
+        await readOnlyJsonDocumentProvider.openDocument(
+            l10n.t('Cluster details: {clusterDisplayName}', { clusterDisplayName: myCtx.clusterDisplayName }),
+            JSON.stringify(document, null, 4),
+        );
+    }),
+
+    /**
+     * Opens the topology probe's own reply as a read-only JSON document.
+     *
+     * The card can only name what it recognises, and every supported platform refuses at
+     * least one of the commands the probe runs; the untouched reply is where a reader finds
+     * out what a given server actually said.
+     */
+    viewRawTopology: publicProcedureWithTelemetry.mutation(async ({ ctx }): Promise<void> => {
+        const myCtx = ctx as WithTelemetry<RouterContext>;
+
+        const client = await ClustersClient.getClient(myCtx.clusterId);
+        const topology = await getClusterTopology(client.getMongoClient());
+
+        await readOnlyJsonDocumentProvider.openDocument(l10n.t('Cluster topology'), JSON.stringify(topology, null, 4));
+    }),
+
     /** Drops the observed-operation history for this cluster. */
     clearOperationHistory: publicProcedureWithTelemetry.mutation(({ ctx }): void => {
         const myCtx = ctx as WithTelemetry<RouterContext>;
@@ -286,7 +353,12 @@ export const clusterDashboardRouter = router({
 
     /** Opens the Collection View for an operation's namespace. */
     openNamespace: publicProcedureWithTelemetry
-        .input(z.object({ namespace: z.string() }))
+        .input(
+            z.object({
+                namespace: z.string(),
+                initialTab: z.enum(['tab_result', 'tab_indexes', 'tab_queryInsights']).optional(),
+            }),
+        )
         .mutation(async ({ input, ctx }): Promise<void> => {
             const myCtx = ctx as WithTelemetry<RouterContext>;
 
@@ -308,13 +380,66 @@ export const clusterDashboardRouter = router({
                 viewId: myCtx.viewId,
                 databaseName,
                 collectionName,
+                initialTab: input.initialTab,
             });
         }),
 
     /**
-     * Collects everything the dashboard knows into one JSON document and opens it in an
-     * editor, so a cluster's state can be attached to a bug report in one action instead of
-     * being retyped from screenshots.
+     * Runs one of the tree's own database/collection commands against a row in the inventory.
+     *
+     * The dashboard reads its inventory from the server, so a row is not a tree node; the
+     * node is found again from the stable `clusterId` and handed to the command unchanged.
+     * Reusing the commands rather than reimplementing them is what keeps a drop from the
+     * dashboard identical to a drop from the tree — same confirmation, same telemetry, same
+     * refresh.
+     *
+     * `commandId` is a closed enum, not a string. A webview must never be able to name an
+     * arbitrary VS Code command for the host to execute.
+     */
+    runNamespaceCommand: publicProcedureWithTelemetry
+        .input(
+            z.object({
+                commandId: z.enum(NAMESPACE_COMMAND_IDS),
+                databaseName: z.string().min(1),
+                collectionName: z.string().min(1).optional(),
+            }),
+        )
+        .mutation(async ({ input, ctx }): Promise<void> => {
+            const myCtx = ctx as WithTelemetry<RouterContext>;
+            myCtx.actionContext.telemetry.properties.namespaceCommand = input.commandId;
+            myCtx.actionContext.telemetry.properties.namespaceLevel =
+                input.collectionName === undefined ? 'database' : 'collection';
+
+            const node = await resolveNamespaceNode(
+                myCtx.viewId,
+                myCtx.clusterId,
+                input.databaseName,
+                input.collectionName,
+            );
+
+            if (!node) {
+                myCtx.actionContext.telemetry.properties.failureReason = 'namespaceNodeNotFound';
+                throw new Error(
+                    l10n.t(
+                        'This action needs "{name}" to be present in the tree view, and it could not be found there. Expand this cluster in the tree and try again.',
+                        { name: input.collectionName ?? input.databaseName },
+                    ),
+                );
+            }
+
+            await vscode.commands.executeCommand(input.commandId, node, null, {
+                source: 'webview;clusterDashboard',
+            });
+        }),
+
+    /**
+     * Collects everything the dashboard knows into one read-only JSON document, so a cluster's
+     * state can be attached to a bug report in one action instead of being retyped from
+     * screenshots.
+     *
+     * Read-only, through the same provider as the two raw views, rather than an untitled
+     * editor: an untitled document is dirty from the moment it opens and VS Code asks the
+     * reader to save or discard a file they only wanted to look at.
      *
      * The live samples come from the webview because they are only kept there; everything
      * else is re-read fresh. No connection string or credential is included: cluster metadata
@@ -322,7 +447,7 @@ export const clusterDashboardRouter = router({
      * commands and secret-shaped fields stripped.
      *
      * **That is not the same as safe to share.** What survives redaction is the rest of every
-     * in-flight command — query filter values, document contents, and the client address that
+     * in-flight command: query filter values, document contents, and the client address that
      * issued them. This document is built to be attached to a bug report, so the user is asked
      * to confirm what it contains before it is produced rather than discovering it after
      * uploading. See `buildCommandPreview` for why a denylist cannot do better.
@@ -333,11 +458,11 @@ export const clusterDashboardRouter = router({
             const myCtx = ctx as WithTelemetry<RouterContext>;
 
             const confirmed = await vscode.window.showWarningMessage(
-                l10n.t('Export diagnostics for "{cluster}"?', { cluster: myCtx.clusterDisplayName }),
+                l10n.t('Export diagnostics for this cluster?'),
                 {
                     modal: true,
                     detail: l10n.t(
-                        'The file includes the commands running on this cluster — query filters, document values and the client addresses that issued them — alongside storage and topology figures. Passwords and connection strings are removed, but application data is not. Review it before sharing.',
+                        'The document includes the commands running on this cluster: query filters, document values, and the client addresses that issued them, alongside storage and topology figures. Passwords and connection strings are removed, but application data is not. Review it before sharing.',
                     ),
                 },
                 l10n.t('Export'),
@@ -372,11 +497,10 @@ export const clusterDashboardRouter = router({
                 healthSamples: input.samples,
             };
 
-            const document = await vscode.workspace.openTextDocument({
-                content: JSON.stringify(diagnostics, null, 2),
-                language: 'json',
-            });
-            await vscode.window.showTextDocument(document);
+            await readOnlyJsonDocumentProvider.openDocument(
+                l10n.t('Cluster diagnostics'),
+                JSON.stringify(diagnostics, null, 4),
+            );
         }),
 
     /**

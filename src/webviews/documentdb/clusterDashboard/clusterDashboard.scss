@@ -5,10 +5,21 @@
 
 @use '../../index';
 
+// Space reserved around the header band so a Fluent focus outline (drawn just outside
+// the control, plus its offset) clears the webview's own edges instead of being cropped.
+// Mirrors the Collection View's `$tab-focus-inset`; the band re-escapes it with a matching
+// negative margin so its shade still reaches every edge.
+$focus-inset: calc(2 * var(--strokeWidthThick));
+
+// The gutter every content region shares, so the header text, the toolbar buttons and the
+// tables below all line up on one left edge. Same value the Collection View uses.
+$content-gutter: var(--spacingHorizontalMNudge); // 10px
+
 // =============================================================================
 //  Cluster dashboard — layout regions, top to bottom:
-//    .dashboardHeader     → full-width identity band (icon · name / address · state)
-//    .dashboardToolbar    → full-width cluster actions
+//    .dashboardHeaderBand → shaded full-width band, holding:
+//        .dashboardHeader  → identity (icon · name / address · state)
+//        .dashboardToolbar → cluster actions
 //    .dashboardScrollArea → the one scroll container, holding:
 //        .contentArea     → two columns ≥1000px, stacked below that
 //            .leftColumn  → inventory tiles + the tabbed lists (the work)
@@ -17,14 +28,72 @@
 .clusterDashboard {
     display: flex;
     flex-direction: column;
-    row-gap: 12px;
+    row-gap: 0;
 
-    padding: 12px;
     height: 100vh;
-    box-sizing: border-box;
-    overflow: hidden;
+    // The progress bar below is absolutely positioned against this.
+    position: relative;
 
-    // ---- Identity band -----------------------------------------------------
+    // Standard neutral surface for the whole view. With the full-bleed margin below, this
+    // also paints the strips reclaimed from the body padding so they match the theme
+    // instead of showing through to the raw editor background.
+    background-color: var(--colorNeutralBackground1);
+
+    // Full-bleed: VS Code gives every webview <body> a default horizontal padding. Break
+    // out of it so the view — and the shaded band below — reaches the window's left/right
+    // edges. Without this the body padding also produced a permanently disabled horizontal
+    // scrollbar at the foot of the panel.
+    margin-inline: calc(50% - 50vw);
+
+    // Reserve the focus-outline allowance on every side of the content so nothing is
+    // cropped by the webview's edges. The header band re-escapes this horizontally.
+    padding-inline: $focus-inset;
+
+    // `clip` rather than `hidden`: it still suppresses the 1px cumulative-rounding
+    // scrollbar, but lets focus rings bleed a few px past the view's edges and lets the
+    // band's negative margin escape the padding above. Below 400px of height, keep real
+    // scrollbars for accessibility.
+    @media (min-height: 400px) {
+        overflow: clip;
+        overflow-clip-margin: var(--spacingHorizontalSNudge); // 6px
+    }
+
+    // Pinned to the top edge of the panel, the same treatment every other view uses for a
+    // background load, so a refresh never reflows the content under the reader's cursor.
+    .progressBar {
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        z-index: 1;
+    }
+
+    // ---- Shaded header band ------------------------------------------------
+    //
+    // The Collection View's tab strip is a shaded, full-width band carrying the view's
+    // identity, with the action bar below it in the panel. This is that band, carrying the
+    // cluster's name, address and state — and nothing else. It escapes the view's horizontal
+    // inset with a negative margin so the shade spans edge-to-edge, then re-applies it as
+    // padding so its content lines up with the panel below.
+
+    .dashboardHeaderBand {
+        background-color: var(--colorNeutralBackground2);
+        border-bottom: var(--strokeWidthThin) solid var(--colorNeutralStroke2);
+        box-sizing: border-box;
+        flex-shrink: 0;
+        min-width: 0;
+
+        margin-inline: calc(-1 * #{$focus-inset}); // cancel the view's horizontal inset
+        padding-inline: $focus-inset; // realign with the content below
+        padding-top: $focus-inset; // clear the top edge for focus outlines
+        padding-bottom: var(--spacingVerticalS); // 8px
+        // The Collection View leaves 8px below its band and a further 4px above the action
+        // bar; without this the dashboard's buttons sat 4px under the rule and read as
+        // attached to it.
+        margin-bottom: var(--spacingVerticalS); // 8px
+    }
+
+    // ---- Identity row ------------------------------------------------------
 
     .dashboardHeader {
         display: flex;
@@ -32,6 +101,7 @@
         gap: 12px;
         min-width: 0;
         flex-shrink: 0;
+        padding-inline: $content-gutter;
     }
 
     .dashboardHeaderIcon {
@@ -98,10 +168,26 @@
         }
     }
 
+    // A fixed slot, right-aligned and tabular: the figure is rewritten every five seconds and
+    // crosses digit counts (99 → 100 ms), which shifted every badge beside it on each poll.
     .dashboardHeaderLatency {
+        display: inline-flex;
+        align-items: center;
+        align-self: center;
+        justify-content: flex-end;
+        min-width: 7ch;
+        height: 20px; // a Fluent medium Badge, so the two share a baseline
         font-size: var(--fontSizeBase200);
+        line-height: var(--lineHeightBase200);
         color: var(--colorNeutralForeground3);
         white-space: nowrap;
+        font-variant-numeric: tabular-nums;
+        border-radius: var(--borderRadiusSmall);
+
+        &:focus-visible {
+            outline: var(--strokeWidthThick) solid var(--colorStrokeFocus2);
+            outline-offset: 1px;
+        }
     }
 
     // ---- Cluster action bar ------------------------------------------------
@@ -114,6 +200,11 @@
         flex-shrink: 0;
         min-height: 32px; // matches a Fluent control's height
         text-wrap: nowrap;
+        // Breathing room between the band's bottom border and the buttons, so their gap from
+        // the top reads closer to their gap from the left. A margin, not padding: the full
+        // amount shows as a gap instead of being partly swallowed by the toolbar's own
+        // vertical centering. Same reasoning as the Collection View's action bar.
+        margin-top: var(--spacingVerticalXS); // 4px
     }
 
     .actionBarToolbar {
@@ -121,10 +212,19 @@
     }
 
     .dashboardToolbar {
-        padding-inline: 0;
+        // Fluent's Toolbar carries its own horizontal padding; replace it with the shared
+        // gutter so the first button sits on the same left edge as the cluster name above.
+        padding-inline: $content-gutter;
         // Only as wide as its buttons, so the toolbar's own hover surface does not read as
         // a full-width band across the panel.
         justify-content: flex-start;
+    }
+
+    // Export diagnostics is a specialist's tool — it produces a file for a bug report, not
+    // something a reader of this page needs. It sits at the far end, away from the two
+    // actions that are part of using the dashboard.
+    .toolbarTrailingAction {
+        margin-inline-start: auto;
     }
 
     // ---- Two-column body ---------------------------------------------------
@@ -134,12 +234,17 @@
         min-height: 0;
         overflow-y: auto;
         overflow-x: hidden;
+        padding-inline: $content-gutter;
+        padding-bottom: var(--spacingVerticalM); // 12px of run-out below the last card
     }
 
+    // The same two-column rhythm Query Insights uses, so the two views' bodies are one
+    // object: 20px between the columns and between the cards stacked inside them.
     .contentArea {
         display: flex;
         flex-direction: column; // Default: narrow panel, stacked
-        gap: 16px;
+        gap: 20px;
+        padding-block: 20px;
 
         // Wide panel: work on the left, reference on the right.
         @media (min-width: 1000px) {
@@ -151,10 +256,12 @@
     .leftColumn {
         display: flex;
         flex-direction: column;
-        gap: 12px;
+        gap: 20px;
         min-width: 0; // Without this the tables refuse to shrink and the row overflows
         flex: 1;
 
+        // 66/33 rather than Query Insights' 60/40: this column carries wide tables of
+        // figures, and the reference cards opposite are short lines of text.
         @media (min-width: 1000px) {
             flex: 1 1 66%;
         }
@@ -163,14 +270,29 @@
     .rightColumn {
         display: flex;
         flex-direction: column;
-        gap: 12px;
+        gap: 20px;
         min-width: 0;
         flex: 1;
 
         @media (min-width: 1000px) {
             flex: 0 0 33%;
-            max-width: 420px;
+            max-width: 500px;
         }
+    }
+
+    // `SummaryCard` has no slot for a title-row action, so the Cluster card builds its own
+    // header from the same parts. 8px below the row is what `SummaryCard` puts under its title.
+    .summaryCardHeader {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 8px;
+        margin-bottom: 8px;
+    }
+
+    .summaryCardAction {
+        flex: 0 0 auto;
+        font-weight: var(--fontWeightRegular);
     }
 
     // Long facts (host names, engine version lists) must not widen the narrow column —
@@ -336,8 +458,10 @@
     .tabPanel {
         display: flex;
         flex-direction: column;
-        gap: 8px;
-        padding-top: 8px;
+        // 10px, the row-gap the Collection View's index list uses between its filter row,
+        // its table and its footer.
+        gap: var(--spacingVerticalMNudge);
+        padding-top: var(--spacingVerticalMNudge);
         min-width: 0;
     }
 
@@ -347,10 +471,10 @@
         gap: 8px;
     }
 
-    // The index list's filter row, reproduced: the box is first, fills the width, and the
-    // actions sit at the right end. `flex: 1 1 auto` with `max-width: none` is also what
-    // fixes the reported jump — a Fluent SearchBox sized by its own content grows the moment
-    // it gains focus and renders its dismiss button.
+    // The index list's filter row, reproduced: the box is first and fills the width.
+    // `flex: 1 1 auto` with `max-width: none` is also what fixes the reported jump — a Fluent
+    // SearchBox sized by its own content grows the moment it gains focus and renders its
+    // dismiss button.
     .dataToolbar {
         width: 100%;
         box-sizing: border-box;
@@ -361,16 +485,6 @@
             flex: 1 1 auto;
             min-width: 0;
             max-width: none;
-        }
-
-        .dataRefreshButton {
-            flex-shrink: 0;
-        }
-
-        // Fluent buttons default to semibold; the index list keeps its filter-row buttons at
-        // the regular weight for a lighter row.
-        .fui-Button {
-            font-weight: var(--fontWeightRegular);
         }
     }
 
@@ -384,6 +498,23 @@
             flex-direction: column;
             gap: 8px;
         }
+    }
+
+    // ---- Tables ------------------------------------------------------------
+    //
+    // Bolden every table's header labels, as the Collection View's index list does. Fluent's
+    // TableHeaderCell renders its label inside a `.fui-TableHeaderCell__button` that sets its
+    // own weight, so both the cell and that inner element have to be named.
+    th,
+    .fui-TableHeaderCell__button {
+        font-weight: var(--fontWeightSemibold);
+    }
+
+    // Fluent gives that inner button `background: inherit`; with translucent VS Code hover
+    // colours it repaints the same fill over the hovered <th>, producing a darker
+    // text-width band. Keep one layer.
+    .fui-TableHeaderCell__button {
+        background-color: transparent;
     }
 
     // Fluent table cells are `flex: 1 1 0` with no minimum, so any long value pushes the
@@ -446,36 +577,49 @@
         border-radius: 2px;
     }
 
+    // Centred "showing X of Y", the index list's footer: it states how much of the list the
+    // filter is hiding, which is the one thing a filtered table cannot say for itself.
+    .listCount {
+        text-align: center;
+        padding: 8px 10px 4px;
+        color: var(--colorNeutralForeground2);
+        font-size: var(--fontSizeBase300);
+    }
+
     .emptyState {
-        padding: 16px 4px;
-        color: var(--vscode-descriptionForeground);
-        max-width: 640px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        min-height: 120px;
+        padding: 24px 10px;
+        text-align: center;
+        color: var(--colorNeutralForeground2);
+        font-size: var(--fontSizeBase300);
     }
 
     .activityTab {
         display: flex;
         flex-direction: column;
-        gap: 12px;
-        padding-top: 8px;
+        gap: var(--spacingVerticalMNudge); // 10px, matching .tabPanel
+        padding-top: var(--spacingVerticalMNudge);
     }
 
     .chartCard {
-        padding: 16px;
         display: flex;
         flex-direction: column;
         gap: 4px;
     }
 
     .chartTitle {
-        font-size: 12px;
-        font-weight: 600;
-        color: var(--vscode-descriptionForeground);
+        font-size: var(--fontSizeBase200);
+        font-weight: var(--fontWeightSemibold);
+        color: var(--colorNeutralForeground3);
     }
 
     .chartValue {
-        font-size: 24px;
-        font-weight: 600;
-        line-height: 28px;
+        font-size: var(--fontSizeHero700);
+        font-weight: var(--fontWeightSemibold);
+        line-height: var(--lineHeightHero700);
     }
 
     .chartCanvas {
@@ -497,19 +641,23 @@
     }
 
     .opcounterName {
-        font-size: 11px;
-        color: var(--vscode-descriptionForeground);
+        font-size: var(--fontSizeBase200);
+        color: var(--colorNeutralForeground3);
     }
 
     .opcounterValue {
-        font-size: 16px;
-        font-weight: 600;
+        font-size: var(--fontSizeBase400);
+        font-weight: var(--fontWeightSemibold);
     }
 
-    // ---- Databases table ---------------------------------------------------
+    // ---- Inventory table ---------------------------------------------------
     //
-    // `table-layout: fixed` + a <colgroup> is what stops a long database name from pushing
-    // the numeric columns out from under their headings and printing over them. The name
+    // One geometry for both levels. Databases and collections are the same six facts, so
+    // they are drawn by one table at one density with one set of column widths: stepping
+    // into a database changes the rows and nothing else, and the columns do not move.
+    //
+    // `table-layout: fixed` + a <colgroup> is what stops a long name from pushing the
+    // numeric columns out from under their headings and printing over them. The name
     // column declares no width, so it absorbs the slack and clips first.
 
     // Sideways scroll for a table narrower than its columns need. Clipping alone would hide
@@ -520,10 +668,14 @@
         overflow-x: auto;
     }
 
-    .databasesTable,
-    .collectionsTable {
+    .namespaceTable {
         width: 100%;
         table-layout: fixed;
+
+        // Floor below which the fixed columns would start overlapping; the scroller above
+        // takes over from here. 120 + 92 + 120 + 84 + 92 + 112 of declared columns leaves
+        // ~130px for the name, which is the narrowest that still reads as a name.
+        min-width: 750px;
 
         .fui-TableCell,
         .fui-TableHeaderCell {
@@ -533,8 +685,8 @@
             overflow: hidden;
         }
 
-        .colExpand {
-            width: 36px;
+        .colName {
+            width: auto;
         }
 
         .colSize {
@@ -549,19 +701,104 @@
             width: 84px;
         }
 
-        // Holds a `count / size` pair, so it needs more room than a bare figure.
-        .colIndexes {
-            width: 118px;
+        .colAction {
+            width: 112px;
         }
 
-        .colOpen {
-            width: 52px;
-        }
-
-        .expandHeaderCell,
-        .expandCell {
+        .actionCell {
             padding-inline: 0;
         }
+    }
+
+    // Both actions on one row, like the index list's: the level's own action first, then
+    // everything the tree offers on the node behind it.
+    .namespaceActions {
+        display: flex;
+        align-items: center;
+        gap: var(--spacingHorizontalXXS); // 2px
+    }
+
+    .namespaceRow:hover {
+        background-color: var(--colorNeutralBackground1Hover);
+    }
+
+    // A database row is a destination — the whole row steps in, with the trailing chevron as
+    // the visible, keyboard-reachable affordance for the same thing. A collection row is not:
+    // opening one leaves for another editor tab, so only its trailing button does that.
+    .namespaceRowClickable {
+        cursor: pointer;
+    }
+
+    // ---- Level band --------------------------------------------------------
+    //
+    // Rendered at both levels and always the same height, so stepping in or out does not
+    // shift the toolbar and the table below it.
+
+    .levelHeader {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        min-height: 32px;
+        min-width: 0;
+        // One line, always. Wrapping would move the toolbar and the table down by a row on
+        // the way into a database, which is the shift this band exists to prevent; the
+        // database name gives up width instead.
+        flex-wrap: nowrap;
+        overflow: hidden;
+    }
+
+    // The way out is never the thing that shortens.
+    .levelBackButton {
+        flex: 0 0 auto;
+    }
+
+    .levelTitle {
+        // Never gives up width: it is a fixed word, and the database name beside it is the
+        // element that should shorten.
+        flex: 0 0 auto;
+        font-size: var(--fontSizeBase400);
+        font-weight: var(--fontWeightSemibold);
+        white-space: nowrap;
+    }
+
+    // Divides "what this list holds" from "which database it belongs to". A rule rather than
+    // a bullet: the two are different kinds of fact, not two items in one series. Fluent's
+    // Divider is `flex: 1` by default, which would let it eat the band.
+    .levelSeparator {
+        flex: 0 0 auto;
+        width: var(--strokeWidthThin);
+        height: 24px;
+        padding-inline: var(--spacingHorizontalXS);
+    }
+
+    // The only element here allowed to give up width, so a long database name ellipsizes
+    // instead of pushing the figures off the band.
+    .levelSubject {
+        min-width: 0;
+        flex: 0 1 auto;
+        font-size: var(--fontSizeBase300);
+        font-weight: var(--fontWeightSemibold);
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+
+    // The parent database's own figures, carried into the child level: without them,
+    // stepping in costs the reader the numbers that sent them there.
+    .levelFacts {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        flex: 0 0 auto;
+        flex-wrap: nowrap;
+        white-space: nowrap;
+        color: var(--colorNeutralForeground3);
+        font-size: var(--fontSizeBase200);
+    }
+
+    .levelFact strong {
+        font-weight: var(--fontWeightSemibold);
+        color: var(--colorNeutralForeground1);
     }
 
     // Numeric columns read as a column of figures only when they share an edge; right
@@ -613,45 +850,5 @@
         height: 4px;
         border-radius: var(--borderRadiusMedium);
         background-color: var(--vscode-focusBorder);
-    }
-
-    .storageTotalRow {
-        font-weight: var(--fontWeightSemibold);
-    }
-
-    // ---- Expanded collections ----------------------------------------------
-
-    .collectionsDetailRow .collectionsDetailCell {
-        padding: 4px 4px 10px 36px; // indent past the chevron column
-    }
-
-    // Tinted and outlined so the nested table reads as a detail *of* the row above it. Left
-    // flat, the sub-table's headings sat in the same plane as the parent's and the two grids
-    // — which deliberately do not share column edges — looked like one broken table.
-    .collectionsPanel {
-        display: flex;
-        flex-direction: column;
-        row-gap: 8px;
-        width: 100%;
-        box-sizing: border-box;
-        padding: 10px 12px;
-        background-color: var(--colorNeutralBackground3);
-        border: var(--strokeWidthThin) solid var(--colorNeutralStroke2);
-        border-radius: var(--borderRadiusMedium);
-    }
-
-    // Floors below which the fixed columns would start overlapping; the scroller above takes
-    // over from here. 36 + 120 + 92 + 92 + 84 + 92 of declared columns leaves ~130px for the
-    // database name, which is the narrowest that still reads as a name rather than a stub.
-    .databasesTable {
-        min-width: 646px;
-    }
-
-    .collectionsTable {
-        min-width: 520px;
-
-        .colCollectionName {
-            width: auto;
-        }
     }
 }

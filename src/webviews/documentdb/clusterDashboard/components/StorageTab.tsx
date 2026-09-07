@@ -3,58 +3,52 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import {
-    Button,
-    MessageBar,
-    MessageBarBody,
-    SearchBox,
-    Spinner,
-    Table,
-    TableBody,
-    TableCell,
-    TableCellLayout,
-    TableHeader,
-    TableHeaderCell,
-    TableRow,
-    Toolbar,
-} from '@fluentui/react-components';
-import { ArrowClockwiseRegular, ChevronDownRegular, ChevronRightRegular } from '@fluentui/react-icons';
+import { Button, Divider, MessageBar, MessageBarBody, SearchBox, Spinner, Toolbar } from '@fluentui/react-components';
+import { ArrowLeftRegular } from '@fluentui/react-icons';
 import * as l10n from '@vscode/l10n';
-import { Fragment, useMemo, type JSX } from 'react';
+import { useMemo, type JSX } from 'react';
 
-import { type ClusterDatabaseStorage, type ClusterStorageStats } from '../../../../documentdb/utils/getClusterHealth';
+import { type ClusterStorageStats } from '../../../../documentdb/utils/getClusterHealth';
+import { useTrpcClient } from '../../../_integration/useTrpcClient';
 import { formatCount } from '../../collectionView/queryInsightsTab/components/metricsRow';
-import { formatBytes } from '../formatUtils';
-import { CollectionsPanel } from './CollectionsPanel';
-import { RelativeSize } from './RelativeSize';
-
-/** Columns the table can be ordered by. */
-export type SortColumn = 'name' | 'sizeOnDiskBytes' | 'dataSizeBytes' | 'indexSizeBytes' | 'collections' | 'objects';
-
-export interface SortState {
-    column: SortColumn;
-    direction: 'ascending' | 'descending';
-}
+import { type NamespaceCommandId } from '../clusterDashboardRouter';
+import { formatApproximateCount, formatBytes, formatExactCount } from '../formatUtils';
+import {
+    arrangeRows,
+    defaultDirectionFor,
+    NamespaceTable,
+    toCollectionRow,
+    toDatabaseRow,
+    type NamespaceRow,
+    type SortColumn,
+    type SortState,
+} from './NamespaceTable';
+import { type DatabaseCollectionsState } from './useDatabaseCollections';
 
 /**
- * How the reader has arranged the list: the order, the filter, and which databases they
- * opened.
+ * How the reader has arranged the list, and which level they are on.
  *
  * Owned by the dashboard rather than this component because switching to Operations and back
- * unmounts the tab — which discarded the sort, the filter text, and every expanded row. The
- * Collection View's index list hoists the same three pieces of state to its parent for the
- * same reason (there, a manual refresh swaps the table for a skeleton).
+ * unmounts the tab — which discarded the sort, the filter text, and the level. The Collection
+ * View's index list hoists the same state to its parent for the same reason (there, a manual
+ * refresh swaps the table for a skeleton).
  */
 export interface StorageTabViewState {
     sort: SortState;
     filterText: string;
-    expanded: ReadonlySet<string>;
+    /** The database being read, or `null` at the cluster's database list. */
+    currentDatabase: string | null;
 }
 
 export interface StorageTabProps {
     storageStats: ClusterStorageStats | null;
-    isRefreshing: boolean;
-    onRefresh: () => void;
+    /**
+     * The drilled-into database's collections, owned by the dashboard.
+     *
+     * Lifted out of this component along with the Refresh button: the button now lives in
+     * the panel's main toolbar, and it cannot reload a list whose state is held here.
+     */
+    collections: DatabaseCollectionsState;
     viewState: StorageTabViewState;
     /**
      * Takes an updater rather than a value, so every change rebases on the current state
@@ -71,114 +65,58 @@ export interface StorageTabProps {
  * question that brought them to a storage table in the first place. Alphabetical would make
  * them read every row to find it.
  */
-const DEFAULT_SORT: SortState = { column: 'sizeOnDiskBytes', direction: 'descending' };
+const DEFAULT_SORT: SortState = { column: 'sizeBytes', direction: 'descending' };
 
-/**
- * The arrangement a freshly-opened dashboard starts from.
- *
- * A factory, not a shared constant: the state holds a `Set`, and one module-level instance
- * handed to every panel would be a mutation away from leaking one dashboard's expanded rows
- * into another's.
- */
+/** The arrangement a freshly-opened dashboard starts from. */
 export function createStorageViewState(): StorageTabViewState {
-    return { sort: DEFAULT_SORT, filterText: '', expanded: new Set<string>() };
-}
-
-/** Numeric columns sort largest-first on the first click; the name column sorts A→Z. */
-function defaultDirectionFor(column: SortColumn): SortState['direction'] {
-    return column === 'name' ? 'ascending' : 'descending';
-}
-
-function compareDatabases(left: ClusterDatabaseStorage, right: ClusterDatabaseStorage, sort: SortState): number {
-    if (sort.column === 'name') {
-        const byName = left.name.localeCompare(right.name);
-        return sort.direction === 'ascending' ? byName : -byName;
-    }
-
-    // A database whose `dbStats` failed sorts last whichever way the column is pointing:
-    // "unknown" is not "zero", and burying it under real values would misrepresent it.
-    const leftValue = left[sort.column];
-    const rightValue = right[sort.column];
-    if (leftValue === null && rightValue === null) {
-        return left.name.localeCompare(right.name);
-    }
-    if (leftValue === null) {
-        return 1;
-    }
-    if (rightValue === null) {
-        return -1;
-    }
-
-    const byValue = leftValue - rightValue;
-    if (byValue !== 0) {
-        return sort.direction === 'ascending' ? byValue : -byValue;
-    }
-
-    // Stable tiebreak so equal sizes do not shuffle between refreshes.
-    return left.name.localeCompare(right.name);
+    return { sort: DEFAULT_SORT, filterText: '', currentDatabase: null };
 }
 
 /**
- * Header cell that sorts, carrying `aria-sort` so the current order is announced rather than
- * only drawn.
+ * The cluster's inventory: databases, and the collections of the one being read.
  *
- * Declared at module scope, not inside `StorageTab`: a component created during render is a
- * new type on every render, so React would unmount and remount it — losing keyboard focus
- * the moment a sort changed, which is exactly when a keyboard user is holding it.
+ * One level is on screen at a time and both are drawn by the same table, so moving between
+ * them changes the contents and nothing else. The alternative — nesting the collections
+ * inside an expanded database row — made the two levels two different-looking lists, let
+ * several of them interleave down the page, and left the collections no room for the columns
+ * the databases already had.
  */
-function SortableHeader({
-    column,
-    label,
-    sort,
-    onToggle,
-    className,
-}: {
-    column: SortColumn;
-    label: string;
-    sort: SortState;
-    onToggle: (column: SortColumn) => void;
-    className?: string;
-}): JSX.Element {
-    const isActive = sort.column === column;
-
-    return (
-        <TableHeaderCell
-            className={className}
-            sortable
-            sortDirection={isActive ? sort.direction : undefined}
-            aria-sort={isActive ? sort.direction : 'none'}
-            onClick={() => onToggle(column)}
-        >
-            {label}
-        </TableHeaderCell>
-    );
-}
-
 export const StorageTab = ({
     storageStats,
-    isRefreshing,
-    onRefresh,
+    collections,
     viewState,
     onViewStateChange,
 }: StorageTabProps): JSX.Element => {
-    const { sort, filterText, expanded } = viewState;
+    const { sort, filterText, currentDatabase } = viewState;
+    const trpcClient = useTrpcClient();
 
-    const setSort = (next: SortState): void => onViewStateChange((current) => ({ ...current, sort: next }));
     const setFilterText = (next: string): void => onViewStateChange((current) => ({ ...current, filterText: next }));
 
-    const databases = useMemo(() => {
-        if (storageStats === null) {
-            return [];
-        }
+    const goBack = (): void => onViewStateChange((current) => ({ ...current, currentDatabase: null, filterText: '' }));
 
-        const needle = filterText.trim().toLowerCase();
-        const matching =
-            needle === ''
-                ? storageStats.databases
-                : storageStats.databases.filter((database) => database.name.toLowerCase().includes(needle));
+    const databaseRows = useMemo(
+        () => (storageStats === null ? [] : storageStats.databases.map(toDatabaseRow)),
+        [storageStats],
+    );
 
-        return [...matching].sort((left, right) => compareDatabases(left, right, sort));
-    }, [storageStats, filterText, sort]);
+    const collectionRows = useMemo(
+        () => (collections.result === null ? [] : collections.result.collections.map(toCollectionRow)),
+        [collections.result],
+    );
+
+    const rows = useMemo(
+        () => arrangeRows(currentDatabase === null ? databaseRows : collectionRows, filterText, sort),
+        [currentDatabase, databaseRows, collectionRows, filterText, sort],
+    );
+
+    /** Everything the level holds, before the filter — the denominator of the footer count. */
+    const allRows = currentDatabase === null ? databaseRows : collectionRows;
+
+    /** The drilled-into database's own figures, restated so drilling in does not lose them. */
+    const parentRow = useMemo(
+        () => (currentDatabase === null ? null : (databaseRows.find((row) => row.name === currentDatabase) ?? null)),
+        [databaseRows, currentDatabase],
+    );
 
     if (storageStats === null) {
         return (
@@ -188,277 +126,211 @@ export const StorageTab = ({
         );
     }
 
-    const toggleSort = (column: SortColumn): void =>
-        setSort(
-            sort.column === column
-                ? { column, direction: sort.direction === 'ascending' ? 'descending' : 'ascending' }
-                : { column, direction: defaultDirectionFor(column) },
-        );
-
-    const toggleExpanded = (name: string): void =>
-        onViewStateChange((current) => {
-            const next = new Set(current.expanded);
-            if (!next.delete(name)) {
-                next.add(name);
-            }
-            return { ...current, expanded: next };
-        });
-
-    // Scaled against the largest *visible* database so the bars stay meaningful while filtered.
-    const largestDatabaseBytes = databases.reduce(
-        (largest, database) => Math.max(largest, database.sizeOnDiskBytes ?? 0),
-        0,
-    );
-
-    const sumOf = (read: (database: ClusterDatabaseStorage) => number | null): number | null =>
-        databases.reduce<number | null>((total, database) => {
-            const value = read(database);
-            return value === null ? total : (total ?? 0) + value;
-        }, null);
+    const openCollection = (collectionName: string, initialTab?: 'tab_result' | 'tab_indexes'): void => {
+        void trpcClient.clusterDashboard.openNamespace
+            .mutate({ namespace: `${currentDatabase ?? ''}.${collectionName}`, initialTab })
+            .catch((error: unknown) => {
+                void trpcClient.common.displayErrorMessage.mutate({
+                    message: l10n.t('Failed to open the collection view.'),
+                    modal: false,
+                    cause: error instanceof Error ? error.message : String(error),
+                });
+            });
+    };
 
     /**
-     * Renders a summed count, preserving "not reported" rather than collapsing it to zero.
+     * Runs one of the tree's own commands against a row.
      *
-     * `sumOf` returns `null` only when *no* visible database reported the field, which means
-     * the cluster did not answer — not that the cluster holds none. Formatting that as `0`
-     * would state a fact the server never gave us, and would contradict the per-row cells,
-     * which already render the placeholder in exactly this case. `formatBytes` applies the
-     * same rule to the size columns on its own.
+     * Failures are modal: the reader asked for this explicitly, and the most likely one —
+     * the branch not being expanded in the tree, so the node cannot be found — is
+     * actionable but invisible from here.
      */
-    const formatSum = (total: number | null): string => (total === null ? '—' : formatCount(total));
+    const runCommand = (row: NamespaceRow, commandId: NamespaceCommandId): void => {
+        void trpcClient.clusterDashboard.runNamespaceCommand
+            .mutate({
+                commandId,
+                databaseName: currentDatabase ?? row.name,
+                collectionName: currentDatabase === null ? undefined : row.name,
+            })
+            .catch((error: unknown) => {
+                void trpcClient.common.displayErrorMessage.mutate({
+                    message: l10n.t('The action could not be started.'),
+                    modal: true,
+                    cause: error instanceof Error ? error.message : String(error),
+                });
+            });
+    };
 
-    const isFiltered = filterText.trim() !== '';
+    const activate = (row: NamespaceRow): void => {
+        if (currentDatabase === null) {
+            onViewStateChange((current) => ({ ...current, currentDatabase: row.name, filterText: '' }));
+        } else {
+            openCollection(row.name);
+        }
+    };
+
+    const toggleSort = (column: SortColumn): void =>
+        onViewStateChange((current) => ({
+            ...current,
+            sort:
+                current.sort.column === column
+                    ? { column, direction: current.sort.direction === 'ascending' ? 'descending' : 'ascending' }
+                    : { column, direction: defaultDirectionFor(column) },
+        }));
+
+    const errors = currentDatabase === null ? storageStats.errors : (collections.result?.errors ?? []);
+    const omittedCount =
+        currentDatabase === null
+            ? storageStats.omittedDatabaseCount
+            : (collections.result?.omittedCollectionCount ?? 0);
+    const shownCount = currentDatabase === null ? storageStats.databases.length : collectionRows.length;
 
     return (
         <div className="tabPanel">
             {/*
-             * Filter first, actions after — the same order the Collection View's index list
-             * uses. The box has a fixed flex basis rather than an intrinsic width so it does
-             * not resize when it gains focus and grows a dismiss button.
+             * The level band: present at both levels and always the same height, so stepping
+             * in or out does not shift the toolbar and the table beneath it.
              */}
-            <Toolbar size="small" className="dataToolbar" aria-label={l10n.t('Database list controls')}>
+            <div className="levelHeader">
+                {currentDatabase !== null && (
+                    <Button
+                        className="levelBackButton"
+                        appearance="outline"
+                        icon={<ArrowLeftRegular />}
+                        onClick={goBack}
+                        aria-label={l10n.t('Back to the database list')}
+                    >
+                        {l10n.t('Databases')}
+                    </Button>
+                )}
+                {/*
+                 * The title names what the list holds, not where it came from, so the word
+                 * changes when the level does — the reader's confirmation that the table
+                 * beneath is a different list and not a re-sorted one.
+                 */}
+                <span className="levelTitle">
+                    {currentDatabase === null ? l10n.t('Databases') : l10n.t('Collections')}
+                </span>
+                {currentDatabase !== null && (
+                    <>
+                        <Divider className="levelSeparator" vertical inset />
+                        <span className="levelSubject" title={currentDatabase}>
+                            {currentDatabase}
+                        </span>
+                    </>
+                )}
+                {parentRow !== null && (
+                    <span className="levelFacts">
+                        <span className="levelFact">
+                            <strong>{formatBytes(parentRow.sizeBytes)}</strong> {l10n.t('on disk')}
+                        </span>
+                        <span className="levelFact">
+                            <strong>{parentRow.childCount === null ? '—' : formatCount(parentRow.childCount)}</strong>{' '}
+                            {l10n.t('collections')}
+                        </span>
+                        <span className="levelFact" title={formatExactCount(parentRow.documents)}>
+                            <strong>{formatApproximateCount(parentRow.documents)}</strong> {l10n.t('documents')}
+                        </span>
+                    </span>
+                )}
+            </div>
+
+            {/*
+             * Filter only — the same filter-first row the Collection View's index list uses.
+             * Refresh is not repeated here: it acts on the whole panel and lives once, in the
+             * main toolbar, rather than once per list.
+             */}
+            <Toolbar size="small" className="dataToolbar" aria-label={l10n.t('List controls')}>
                 <SearchBox
                     className="dataFilterInput"
                     value={filterText}
-                    placeholder={l10n.t('Filter databases…')}
-                    aria-label={l10n.t('Filter databases by name')}
+                    placeholder={currentDatabase === null ? l10n.t('Filter databases…') : l10n.t('Filter collections…')}
+                    aria-label={
+                        currentDatabase === null
+                            ? l10n.t('Filter databases by name')
+                            : l10n.t('Filter collections by name')
+                    }
                     onChange={(_event, data) => setFilterText(data.value)}
                 />
-                <Button
-                    className="dataRefreshButton"
-                    appearance="subtle"
-                    icon={<ArrowClockwiseRegular />}
-                    disabled={isRefreshing}
-                    onClick={onRefresh}
-                    aria-label={l10n.t('Refresh database statistics')}
-                >
-                    {l10n.t('Refresh')}
-                </Button>
-                {isRefreshing && <Spinner size="tiny" aria-label={l10n.t('Refreshing…')} />}
             </Toolbar>
 
-            {storageStats.errors.length > 0 && (
+            {collections.error !== null && currentDatabase !== null && (
                 <MessageBar intent="warning">
                     <MessageBarBody>
-                        {l10n.t('Some database statistics could not be read: {reason}', {
-                            reason: storageStats.errors.join('; '),
+                        {l10n.t('Could not list the collections of "{database}": {reason}', {
+                            database: currentDatabase,
+                            reason: collections.error,
                         })}
                     </MessageBarBody>
                 </MessageBar>
             )}
 
-            {storageStats.omittedDatabaseCount > 0 && (
+            {errors.length > 0 && (
+                <MessageBar intent="warning">
+                    <MessageBarBody>
+                        {currentDatabase === null
+                            ? l10n.t('Some database statistics could not be read: {reason}', {
+                                  reason: errors.join('; '),
+                              })
+                            : l10n.t('Some collection statistics could not be read: {reason}', {
+                                  reason: errors.join('; '),
+                              })}
+                    </MessageBarBody>
+                </MessageBar>
+            )}
+
+            {omittedCount > 0 && (
                 <MessageBar intent="info">
                     <MessageBarBody>
-                        {l10n.t('Showing the first {shown} databases; {omitted} more are not listed.', {
-                            shown: String(storageStats.databases.length),
-                            omitted: String(storageStats.omittedDatabaseCount),
-                        })}
+                        {currentDatabase === null
+                            ? l10n.t('Showing the first {shown} databases; {omitted} more are not listed.', {
+                                  shown: String(shownCount),
+                                  omitted: String(omittedCount),
+                              })
+                            : l10n.t('Showing the first {shown} collections; {omitted} more are not listed.', {
+                                  shown: String(shownCount),
+                                  omitted: String(omittedCount),
+                              })}
                     </MessageBarBody>
                 </MessageBar>
             )}
 
-            {databases.length === 0 ? (
+            {collections.isLoading ? (
+                <Spinner size="small" label={l10n.t('Loading collections…')} />
+            ) : allRows.length === 0 ? (
                 <div className="emptyState">
-                    {isFiltered
-                        ? l10n.t('No database matches "{filter}".', { filter: filterText })
-                        : storageStats.errors.length > 0
+                    {currentDatabase !== null
+                        ? l10n.t('"{database}" holds no collections.', { database: currentDatabase })
+                        : errors.length > 0
                           ? l10n.t('Database statistics are unavailable for this cluster.')
                           : l10n.t('No user databases were reported for this cluster.')}
                 </div>
             ) : (
-                // Below the table's minimum width the columns would be squeezed into each
-                // other, so the region scrolls sideways instead — the same shape the index
-                // list uses. Nothing is ever hidden by clipping alone.
-                <div className="tableScroller">
-                    <Table size="small" className="databasesTable" aria-label={l10n.t('Databases in this cluster')}>
-                        {/*
-                         * Fixed layout with declared column widths. Without it a long database
-                         * name pushes every following column out from under its heading and the
-                         * values print on top of each other — the name column absorbs the slack
-                         * instead, and clips with an ellipsis when there is none left.
-                         */}
-                        <colgroup>
-                            <col className="colExpand" />
-                            <col className="colDatabaseName" />
-                            <col className="colSize" />
-                            <col className="colNumber" />
-                            <col className="colNumber" />
-                            <col className="colNarrow" />
-                            <col className="colNumber" />
-                        </colgroup>
-                        <TableHeader>
-                            <TableRow>
-                                <TableHeaderCell className="expandHeaderCell" aria-label={l10n.t('Expand row')} />
-                                <SortableHeader
-                                    column="name"
-                                    label={l10n.t('Database')}
-                                    sort={sort}
-                                    onToggle={toggleSort}
-                                />
-                                <SortableHeader
-                                    column="sizeOnDiskBytes"
-                                    label={l10n.t('Size')}
-                                    sort={sort}
-                                    onToggle={toggleSort}
-                                />
-                                <SortableHeader
-                                    column="dataSizeBytes"
-                                    label={l10n.t('Data')}
-                                    sort={sort}
-                                    onToggle={toggleSort}
-                                />
-                                <SortableHeader
-                                    column="indexSizeBytes"
-                                    label={l10n.t('Indexes')}
-                                    sort={sort}
-                                    onToggle={toggleSort}
-                                />
-                                <SortableHeader
-                                    column="collections"
-                                    label={l10n.t('Collections')}
-                                    sort={sort}
-                                    onToggle={toggleSort}
-                                />
-                                <SortableHeader
-                                    column="objects"
-                                    label={l10n.t('Documents')}
-                                    sort={sort}
-                                    onToggle={toggleSort}
-                                />
-                            </TableRow>
-                        </TableHeader>
-                        <TableBody>
-                            {databases.map((database) => {
-                                const isExpanded = expanded.has(database.name);
+                // A filter that matches nothing leaves the table standing and empty, as the
+                // index list does: the footer below already says "Showing 0 of N", and
+                // swapping the columns out for a sentence hides the filter's own effect.
+                <NamespaceTable
+                    level={currentDatabase === null ? 'databases' : 'collections'}
+                    rows={rows}
+                    sort={sort}
+                    onSortToggle={toggleSort}
+                    onActivate={activate}
+                    onManageIndexes={(row) => openCollection(row.name, 'tab_indexes')}
+                    onRunCommand={runCommand}
+                />
+            )}
 
-                                return (
-                                    <Fragment key={database.name}>
-                                        <TableRow>
-                                            {/*
-                                             * No tooltip on the chevron: it is the same
-                                             * affordance the index list uses bare, and a
-                                             * tooltip anchored in the leftmost column opens
-                                             * across the row it belongs to. The aria-label
-                                             * carries the meaning for assistive tech.
-                                             */}
-                                            <TableCell className="expandCell">
-                                                <Button
-                                                    appearance="subtle"
-                                                    size="small"
-                                                    aria-expanded={isExpanded}
-                                                    aria-label={
-                                                        isExpanded
-                                                            ? l10n.t('Collapse collections for {name}', {
-                                                                  name: database.name,
-                                                              })
-                                                            : l10n.t('Expand collections for {name}', {
-                                                                  name: database.name,
-                                                              })
-                                                    }
-                                                    icon={isExpanded ? <ChevronDownRegular /> : <ChevronRightRegular />}
-                                                    onClick={() => toggleExpanded(database.name)}
-                                                />
-                                            </TableCell>
-                                            <TableCell className="databaseNameCell">
-                                                <TableCellLayout truncate title={database.name}>
-                                                    {database.name}
-                                                </TableCellLayout>
-                                            </TableCell>
-                                            <TableCell>
-                                                <RelativeSize
-                                                    value={database.sizeOnDiskBytes}
-                                                    maximum={largestDatabaseBytes}
-                                                />
-                                            </TableCell>
-                                            <TableCell>
-                                                <span className="numberCell">
-                                                    {formatBytes(database.dataSizeBytes)}
-                                                </span>
-                                            </TableCell>
-                                            <TableCell>
-                                                <span className="numberCell">
-                                                    {formatBytes(database.indexSizeBytes)}
-                                                </span>
-                                            </TableCell>
-                                            <TableCell>
-                                                <span className="numberCell">
-                                                    {database.collections === null
-                                                        ? '—'
-                                                        : formatCount(database.collections)}
-                                                </span>
-                                            </TableCell>
-                                            <TableCell>
-                                                <span className="numberCell">
-                                                    {database.objects === null ? '—' : formatCount(database.objects)}
-                                                </span>
-                                            </TableCell>
-                                        </TableRow>
-                                        {isExpanded && (
-                                            <TableRow className="collectionsDetailRow">
-                                                <TableCell colSpan={7} className="collectionsDetailCell">
-                                                    <CollectionsPanel databaseName={database.name} />
-                                                </TableCell>
-                                            </TableRow>
-                                        )}
-                                    </Fragment>
-                                );
-                            })}
-                            <TableRow className="storageTotalRow">
-                                <TableCell className="expandCell" />
-                                <TableCell className="databaseNameCell">
-                                    <TableCellLayout truncate>
-                                        {isFiltered ? l10n.t('Total (filtered)') : l10n.t('Total')}
-                                    </TableCellLayout>
-                                </TableCell>
-                                <TableCell>
-                                    <span className="numberCell">
-                                        {formatBytes(sumOf((database) => database.sizeOnDiskBytes))}
-                                    </span>
-                                </TableCell>
-                                <TableCell>
-                                    <span className="numberCell">
-                                        {formatBytes(sumOf((database) => database.dataSizeBytes))}
-                                    </span>
-                                </TableCell>
-                                <TableCell>
-                                    <span className="numberCell">
-                                        {formatBytes(sumOf((database) => database.indexSizeBytes))}
-                                    </span>
-                                </TableCell>
-                                <TableCell>
-                                    <span className="numberCell">
-                                        {formatSum(sumOf((database) => database.collections))}
-                                    </span>
-                                </TableCell>
-                                <TableCell>
-                                    <span className="numberCell">
-                                        {formatSum(sumOf((database) => database.objects))}
-                                    </span>
-                                </TableCell>
-                            </TableRow>
-                        </TableBody>
-                    </Table>
+            {/*
+             * The index list's footer: how much of the list the filter is hiding, which is
+             * the one thing the table itself cannot say.
+             */}
+            {!collections.isLoading && allRows.length > 0 && (
+                <div className="listCount">
+                    <span aria-live="polite">
+                        {currentDatabase === null
+                            ? l10n.t('Showing {0} of {1} databases', rows.length, allRows.length)
+                            : l10n.t('Showing {0} of {1} collections', rows.length, allRows.length)}
+                    </span>
                 </div>
             )}
         </div>

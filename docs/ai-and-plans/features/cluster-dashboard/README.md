@@ -107,10 +107,11 @@ gaps below remain.
 - **Command previews still carry query literals.** Redaction removes credentials, not application
   data; export warns rather than redacting
   ([0012](./decisions.md#0012--warn-at-the-sharing-boundary-rather-than-redact-the-preview)).
-- **No collection-level drill-in, search, or create flows.** The Storage tab expands to list a
-  database's collections, but there is no navigation below that. PR #753 would have covered it and
-  was abandoned ([0013](./decisions.md#0013--753-is-abandoned-this-is-the-only-cluster-dashboard)),
-  so the surface now has no owner and is the largest functional gap in the feature.
+- **No search or create flows below the collection level.** The Data tab drills from the database
+  list into one database's collections and hands off to the Collection View from there, but there
+  is no navigation below that. PR #753 would have covered it and was abandoned
+  ([0013](./decisions.md#0013--753-is-abandoned-this-is-the-only-cluster-dashboard)), so the
+  surface now has no owner and is the largest functional gap in the feature.
 - **No used-vs-provisioned storage figure**, because there is no Azure Monitor integration.
 - **`Uptime` is a placeholder on vCore**, where `serverStatus` is unavailable.
 - **No user-manual page.**

@@ -7,6 +7,7 @@ import * as l10n from '@vscode/l10n';
 import * as vscode from 'vscode';
 
 import { API } from '../../../DocumentDBExperiences';
+import { ext } from '../../../extensionVariables';
 import { openAppWebview, type AppWebviewController } from '../../_integration/openAppWebview';
 import { type RouterContext } from './clusterDashboardRouter';
 import { beginObservedOperationsSession, endObservedOperationsSession } from './operationHistory';
@@ -86,6 +87,10 @@ export function openClusterDashboardWebview(
         config: initialData,
         context: trpcContext,
         viewColumn: vscode.ViewColumn.One,
+        icon: {
+            light: vscode.Uri.joinPath(ext.context.extensionUri, 'resources', 'icons', 'collection-view-light.svg'),
+            dark: vscode.Uri.joinPath(ext.context.extensionUri, 'resources', 'icons', 'collection-view-dark.svg'),
+        },
     });
 
     openPanels.set(initialData.clusterId, controller);

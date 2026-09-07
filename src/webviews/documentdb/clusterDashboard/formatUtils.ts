@@ -39,6 +39,43 @@ export function formatBytes(bytes: number | null | undefined, placeholder = '—
 }
 
 /**
+ * Rounds a count to a short magnitude, e.g. `1.2K`, `4.8M`.
+ *
+ * Deliberately `Intl.NumberFormat` rather than a rounding package. `notation: 'compact'` is
+ * the platform's own answer, it is locale-aware where a hardcoded `K`/`M`/`B` ladder is not
+ * (and this extension ships localized), and it costs no dependency. The well-known packages
+ * for this — `numeral`, `humanize-plus` — predate that support and are unmaintained.
+ *
+ * Used for document counts because they are estimates. `collStats.count` is read from
+ * collection metadata, not by counting, and diverges after an unclean shutdown; `dbStats`
+ * sums those same figures. Printing `4,812,004` invites a reader to trust digits the server
+ * does not stand behind, so the display rounds and the exact figure moves to the tooltip.
+ *
+ * @param value - The count, or `null`/`undefined` when unavailable.
+ * @param placeholder - Text rendered for an unavailable value.
+ */
+export function formatApproximateCount(value: number | null | undefined, placeholder = '—'): string {
+    if (value === null || value === undefined || !Number.isFinite(value)) {
+        return placeholder;
+    }
+
+    return new Intl.NumberFormat(undefined, { notation: 'compact', maximumFractionDigits: 1 }).format(value);
+}
+
+/**
+ * The full figure behind {@link formatApproximateCount}, grouped for reading.
+ *
+ * @param value - The count, or `null`/`undefined` when unavailable.
+ */
+export function formatExactCount(value: number | null | undefined): string | undefined {
+    if (value === null || value === undefined || !Number.isFinite(value)) {
+        return undefined;
+    }
+
+    return new Intl.NumberFormat(undefined, { useGrouping: true, maximumFractionDigits: 0 }).format(value);
+}
+
+/**
  * Formats an uptime in seconds as a compact `d/h/m` string.
  *
  * @param seconds - Uptime in seconds, or `null`/`undefined` when the server did not report it.

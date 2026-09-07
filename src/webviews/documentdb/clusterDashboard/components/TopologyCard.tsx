@@ -3,11 +3,13 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { Badge, Card, Skeleton, SkeletonItem, Text, Tooltip } from '@fluentui/react-components';
+import { Badge, Button, Card, Skeleton, SkeletonItem, Text, Tooltip } from '@fluentui/react-components';
+import { EyeRegular } from '@fluentui/react-icons';
 import * as l10n from '@vscode/l10n';
 import { type JSX } from 'react';
 
 import { type ClusterHostFacts, type ClusterTopology } from '../../../../documentdb/utils/getClusterHealth';
+import { useTrpcClient } from '../../../_integration/useTrpcClient';
 import { PLACEHOLDER } from '../clusterFacts';
 import { formatUptime } from '../formatUtils';
 
@@ -44,25 +46,52 @@ function describeKind(topology: ClusterTopology, metadataShape: string | undefin
     }
 }
 
-/** Machine facts as one line, e.g. `Linux Ubuntu 22.04 · x86_64 · 8 cores · 32 GB`. */
+/**
+ * Whether a `hostInfo` figure is a real measurement.
+ *
+ * A server that does not measure the machine answers `0` rather than omitting the field —
+ * Azure DocumentDB (vCore) reports `0` cores and `0 MB` of RAM. Printing "0 GB RAM" states a
+ * fact about the hardware that is certainly false; the figure is missing, and the card says so.
+ */
+function isReported(value: number | null): value is number {
+    return value !== null && value > 0;
+}
+
+/** Machine facts as one line, e.g. `Linux Ubuntu 22.04 · x86_64 · 8 cores · 32 GB RAM`. */
 function describeMachine(host: ClusterHostFacts): string | null {
+    // Resolved per call, not at module scope: the l10n bundle is configured after this
+    // module is imported.
+    const notAvailable = l10n.t('N/A');
     const parts: string[] = [];
 
     const os = [host.osType, host.osName, host.osVersion].filter((value): value is string => value !== null);
     if (os.length > 0) {
         parts.push(os.join(' '));
     }
-    if (host.cpuArch !== null) {
+    if (host.cpuArch !== null && host.cpuArch !== '') {
         parts.push(host.cpuArch);
     }
-    if (host.numCores !== null) {
-        parts.push(host.numCores === 1 ? l10n.t('1 core') : l10n.t('{count} cores', { count: String(host.numCores) }));
-    }
-    if (host.memSizeMB !== null) {
-        parts.push(l10n.t('{size} GB RAM', { size: (host.memSizeMB / 1024).toFixed(host.memSizeMB < 1024 ? 1 : 0) }));
+
+    // A server that reported none of it gets no line at all — a row reading only
+    // "Cores: N/A · RAM: N/A" is noise, not information.
+    if (parts.length === 0 && !isReported(host.numCores) && !isReported(host.memSizeMB)) {
+        return null;
     }
 
-    return parts.length > 0 ? parts.join(' · ') : null;
+    parts.push(
+        isReported(host.numCores)
+            ? host.numCores === 1
+                ? l10n.t('1 core')
+                : l10n.t('{count} cores', { count: String(host.numCores) })
+            : l10n.t('Cores: {value}', { value: notAvailable }),
+    );
+    parts.push(
+        isReported(host.memSizeMB)
+            ? l10n.t('{size} GB RAM', { size: (host.memSizeMB / 1024).toFixed(host.memSizeMB < 1024 ? 1 : 0) })
+            : l10n.t('RAM: {value}', { value: notAvailable }),
+    );
+
+    return parts.join(' · ');
 }
 
 /** Colour for a replica-set role badge; only a primary is called out. */
@@ -81,6 +110,18 @@ function roleAppearance(role: string): 'brand' | 'informative' {
  * answer for a platform that hides its topology.
  */
 export const TopologyCard = ({ topology, metadataShape }: TopologyCardProps): JSX.Element => {
+    const trpcClient = useTrpcClient();
+
+    const viewRawTopology = (): void => {
+        void trpcClient.clusterDashboard.viewRawTopology.mutate().catch((error: unknown) => {
+            void trpcClient.common.displayErrorMessage.mutate({
+                message: l10n.t('Failed to open the topology details.'),
+                modal: true,
+                cause: error instanceof Error ? error.message : String(error),
+            });
+        });
+    };
+
     if (topology === null) {
         return (
             <Card className="summaryCard topologyCard">
@@ -103,13 +144,19 @@ export const TopologyCard = ({ topology, metadataShape }: TopologyCardProps): JS
                     {l10n.t('Topology')}
                 </Text>
                 {/*
-                 * Marked as a draft on the card itself: it is here to find out whether the
-                 * information is worth showing at all, and a reader deserves to know that
-                 * before relying on it.
+                 * What a platform will admit about its own shape varies wildly, and the rows
+                 * below show only what could be named. The probe's whole reply is one click
+                 * away for the rest.
                  */}
-                <Badge appearance="outline" color="informative">
-                    {l10n.t('Draft')}
-                </Badge>
+                <Button
+                    size="small"
+                    appearance="subtle"
+                    icon={<EyeRegular />}
+                    className="summaryCardAction"
+                    onClick={viewRawTopology}
+                >
+                    {l10n.t('View Raw Topology')}
+                </Button>
             </div>
 
             <div className="topologyKind">{describeKind(topology, metadataShape)}</div>
@@ -134,7 +181,12 @@ export const TopologyCard = ({ topology, metadataShape }: TopologyCardProps): JS
                             </span>
                             <span className="topologyServerMeta">
                                 {server.role !== null && (
-                                    <Badge appearance="tint" color={roleAppearance(server.role)} size="small">
+                                    <Badge
+                                        appearance="tint"
+                                        shape="rounded"
+                                        color={roleAppearance(server.role)}
+                                        size="small"
+                                    >
                                         {server.role}
                                     </Badge>
                                 )}
@@ -144,13 +196,13 @@ export const TopologyCard = ({ topology, metadataShape }: TopologyCardProps): JS
                                         relationship="description"
                                         withArrow
                                     >
-                                        <Badge appearance="outline" size="small">
+                                        <Badge appearance="outline" shape="rounded" size="small">
                                             {l10n.t('This connection')}
                                         </Badge>
                                     </Tooltip>
                                 )}
                                 {server.healthy === false && (
-                                    <Badge appearance="tint" color="danger" size="small">
+                                    <Badge appearance="tint" shape="rounded" color="danger" size="small">
                                         {l10n.t('Unhealthy')}
                                     </Badge>
                                 )}

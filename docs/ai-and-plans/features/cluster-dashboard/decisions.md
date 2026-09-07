@@ -497,3 +497,61 @@ A future reader finding two overlapping dashboards again should get that analysi
   competes with `clusterView.open`; the open question about a single public name is closed by there
   being only one.
 - **Nothing in the code changes.** The convergence was never implemented, only proposed.
+
+---
+
+## 0014 — Step into a database, do not expand it
+
+**Status:** Accepted · **Date:** 2026-09-02 · **Raised by:** Operator
+**Evidence:** Three navigation prototypes built and compared side by side on a live cluster
+
+### Question
+
+The Data tab drew databases as a `size="small"` sortable table and a database's collections as an
+`extra-small` table inside a tinted Card inside an expanded row of the first table. Two densities,
+two column sets, two frames — and several expanded databases interleaved down the page. The
+operator's objection: _"we mix two visual elements to show lists in two different formats."_
+
+Three alternatives were prototyped in throwaway panels and opened together against the same
+cluster: **A** a breadcrumb drill-down, **B** a back-button drill-down, **C** a split pane with no
+level switching at all.
+
+### Decision
+
+**B.** One level is on screen at a time; both levels are drawn by the same table. A database row
+steps in, a `← Databases` button steps out, and the title carries the location. The database's own
+size, collection count and document count are restated beside the title, so stepping in does not
+cost the reader the figures that sent them there.
+
+### Reasoning
+
+The two levels were never two shapes. A database and a collection are the same six facts — a named
+container with a size, a data/index split, a child count, a document count — so `NamespaceTable`
+renders either from one `NamespaceRow`, at one density, with one `colgroup`. Only the leading
+heading and the trailing action differ, because those are the only things that actually do.
+
+**A** was rejected on cost, not correctness: a breadcrumb is the better answer at three levels or
+more, because Back degrades into a history the reader has to remember. This hierarchy is two levels
+and is not growing, so the breadcrumb spent a permanent row of chrome to disambiguate a path that
+cannot be ambiguous. **C** was rejected because a 320px master pane cannot afford the full column
+set — it renders the same table `compact`, dropping the numeric columns — which reintroduces the
+complaint that started the exercise in a subtler form.
+
+### Consequences
+
+- **`CollectionsPanel` is deleted**, along with the nested-table, detail-row and tinted-Card styles
+  that existed only to keep the sub-table from reading as a broken continuation of its parent.
+- **The fan-out concern in
+  [S6](./iterations/01-poc/ai-pre-review.md#author-decisions-62) is moot.** It assumed N expanded
+  databases each running their own bounded `collStats` pass; at most one database is open now. The
+  shared `ConcurrencyBudget` stays — a storage pass and a collection pass still overlap.
+- **`StorageTabViewState.expanded: Set<string>` becomes `currentDatabase: string | null`**, still
+  hoisted to the dashboard so a trip to the Operations tab does not lose the level, the sort or the
+  filter.
+- **Collections are no longer cached per database.** A second visit re-reads, because a second visit
+  is usually a second visit _because_ something changed.
+- **The index-size column is renamed `Index size`.** With one geometry, `Indexes` would have named
+  both a size and a count in adjacent columns.
+- **No Alt+Left shortcut.** It was in the prototype and removed after testing: the browser performed
+  a history navigation despite `preventDefault`, and a webview iframe has a history to be navigated
+  out of. The Back button is focusable and reachable without it.

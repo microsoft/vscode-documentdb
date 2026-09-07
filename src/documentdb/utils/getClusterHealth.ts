@@ -44,7 +44,7 @@ const COLLECTION_STATS_LIMIT = 100;
  *
  * The caps above bound the *amount* of work; this bounds its *burst*. Firing one command per
  * collection through a single `Promise.all` put up to a hundred simultaneous `collStats` on
- * the wire the moment a user expanded a row, which the driver services by opening
+ * the wire the moment a user opened a database, which the driver services by opening
  * connections until it hits its pool limit — a visible load spike on the cluster caused by a
  * disclosure gesture. Eight keeps the wall-clock benefit of overlapping round trips without
  * the dashboard behaving like a load generator.
@@ -54,10 +54,10 @@ const STATS_CONCURRENCY = 8;
 /**
  * A ceiling on concurrent work, shared by everyone who holds the same instance.
  *
- * A limit applied per call is not a limit on the cluster: the dashboard can have one storage
- * pass and a `CollectionsPanel` per expanded database all running at once, and a per-call
- * ceiling of eight multiplied by however many of those exist. Holding the budget outside the
- * call makes the number mean what it says.
+ * A limit applied per call is not a limit on the cluster: the dashboard can have a storage
+ * pass and a collection pass in flight at once, and a per-call ceiling of eight would apply
+ * to each of them separately. Holding the budget outside the call makes the number mean what
+ * it says.
  */
 class ConcurrencyBudget {
     private inFlight = 0;

@@ -3,8 +3,8 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { Tab, TabList, Toolbar, ToolbarButton, Tooltip } from '@fluentui/react-components';
-import { ArrowDownloadRegular, WindowConsoleRegular } from '@fluentui/react-icons';
+import { ProgressBar, Tab, TabList, Toolbar, ToolbarButton, Tooltip } from '@fluentui/react-components';
+import { ArrowClockwiseRegular, EyeRegular, WindowConsoleRegular } from '@fluentui/react-icons';
 import { useConfiguration } from '@microsoft/vscode-ext-webview/react';
 import * as l10n from '@vscode/l10n';
 import { useCallback, useEffect, useRef, useState, type JSX } from 'react';
@@ -28,6 +28,7 @@ import { OperationsTab } from './components/OperationsTab';
 import { StatusStrip } from './components/StatusStrip';
 import { createStorageViewState, StorageTab, type StorageTabViewState } from './components/StorageTab';
 import { TopologyCard } from './components/TopologyCard';
+import { useDatabaseCollections } from './components/useDatabaseCollections';
 
 type DashboardTab = 'data' | 'operations' | 'activity';
 
@@ -70,6 +71,15 @@ export const ClusterDashboard = (): JSX.Element => {
      * should not undo the arrangement the reader built to find something.
      */
     const [storageViewState, setStorageViewState] = useState<StorageTabViewState>(createStorageViewState);
+
+    /**
+     * The drilled-into database's collections.
+     *
+     * Held here rather than inside the Data tab because Refresh acts on whichever list is on
+     * screen and now lives in the panel's main toolbar, which cannot reach state owned by a
+     * tab it sits above.
+     */
+    const collections = useDatabaseCollections(storageViewState.currentDatabase);
 
     /**
      * Guards every asynchronous state write. The polling closures outlive a single render,
@@ -276,6 +286,15 @@ export const ClusterDashboard = (): JSX.Element => {
         }
     }, [trpcClient]);
 
+    /** Re-reads whichever inventory is on screen: the cluster's storage, plus the drilled-into database. */
+    const reloadCollections = collections.reload;
+    const refreshData = useCallback((): void => {
+        void loadStorageStats();
+        if (storageViewState.currentDatabase !== null) {
+            reloadCollections();
+        }
+    }, [loadStorageStats, reloadCollections, storageViewState.currentDatabase]);
+
     const latestSample = samples.length > 0 ? samples[samples.length - 1] : null;
 
     const connectionState: ConnectionState =
@@ -298,26 +317,60 @@ export const ClusterDashboard = (): JSX.Element => {
     // the TabList at a tab that no longer exists.
     const effectiveTab: DashboardTab = selectedTab === 'activity' && !activitySupported ? 'data' : selectedTab;
 
+    // Every load that replaces content the reader is looking at reports through the one bar
+    // pinned to the top edge. The health poll is deliberately excluded: it runs every five
+    // seconds and would leave the bar permanently animating.
+    const isBusy = clusterInfo === null || isRefreshingStorage || collections.isLoading || isExporting;
+
     return (
         <div className="clusterDashboard">
-            <DashboardHeader
-                clusterDisplayName={clusterInfo?.clusterDisplayName ?? configuration.clusterDisplayName}
-                clusterInfo={clusterInfo}
-                latestSample={latestSample}
-                connectionState={connectionState}
-                azure={configuration.azure}
-            />
+            {isBusy && <ProgressBar thickness="large" shape="square" className="progressBar" aria-hidden={true} />}
 
             {/*
-             * Cluster-wide actions live in the top row, alongside the identity they act on —
-             * the same place the Collection View's index tab puts Create Index / Refresh. It
-             * is also the row with space to grow: more tools will land here.
+             * The shaded band is the Collection View's header row: it carries the view's
+             * identity and nothing else, separated from the work below by a single shade and
+             * rule rather than by whitespace.
+             */}
+            <div className="dashboardHeaderBand">
+                <DashboardHeader
+                    clusterDisplayName={clusterInfo?.clusterDisplayName ?? configuration.clusterDisplayName}
+                    clusterInfo={clusterInfo}
+                    latestSample={latestSample}
+                    connectionState={connectionState}
+                    azure={configuration.azure}
+                />
+            </div>
+
+            {/*
+             * Actions sit below the band, not inside it — the Collection View puts its
+             * `.primaryActionBar` in the panel, under the shaded tab strip. It is also the
+             * row with space to grow: more tools will land here.
              */}
             <Toolbar
                 size="small"
                 className="primaryActionBar actionBarToolbar dashboardToolbar"
                 aria-label={l10n.t('Cluster actions')}
             >
+                {/*
+                 * One Refresh for the panel, not one per list: the inventory tiles are on
+                 * screen under every tab, so re-reading the cluster's storage is always the
+                 * meaningful thing this button does. Drilled into a database, it re-reads
+                 * that database's collections too.
+                 */}
+                <Tooltip
+                    content={l10n.t('Re-read this cluster’s storage statistics')}
+                    relationship="description"
+                    withArrow
+                >
+                    <ToolbarButton
+                        appearance="primary"
+                        icon={<ArrowClockwiseRegular />}
+                        disabled={isRefreshingStorage || collections.isLoading}
+                        onClick={refreshData}
+                    >
+                        {l10n.t('Refresh')}
+                    </ToolbarButton>
+                </Tooltip>
                 <Tooltip
                     content={l10n.t('Open an interactive shell against this cluster')}
                     relationship="description"
@@ -328,16 +381,17 @@ export const ClusterDashboard = (): JSX.Element => {
                     </ToolbarButton>
                 </Tooltip>
                 <Tooltip
-                    content={l10n.t('Collect this cluster’s state into a JSON document')}
+                    content={l10n.t('Open this cluster’s state as a JSON document')}
                     relationship="description"
                     withArrow
                 >
                     <ToolbarButton
-                        icon={<ArrowDownloadRegular />}
+                        className="toolbarTrailingAction"
+                        icon={<EyeRegular />}
                         disabled={isExporting}
                         onClick={() => void exportDiagnostics()}
                     >
-                        {l10n.t('Export diagnostics')}
+                        {l10n.t('View Raw Diagnostics')}
                     </ToolbarButton>
                 </Tooltip>
             </Toolbar>
@@ -367,8 +421,7 @@ export const ClusterDashboard = (): JSX.Element => {
                         {effectiveTab === 'data' && (
                             <StorageTab
                                 storageStats={storageStats}
-                                isRefreshing={isRefreshingStorage}
-                                onRefresh={() => void loadStorageStats()}
+                                collections={collections}
                                 viewState={storageViewState}
                                 onViewStateChange={setStorageViewState}
                             />

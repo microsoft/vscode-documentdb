@@ -11,6 +11,11 @@ jest.mock('@vscode/l10n', () => ({
 
 jest.mock('vscode', () => ({
     ViewColumn: { One: 1 },
+    Uri: { joinPath: jest.fn((base: unknown, ...parts: string[]) => ({ base, parts })) },
+}));
+
+jest.mock('../../../extensionVariables', () => ({
+    ext: { context: { extensionUri: { scheme: 'file', path: '/extension' } } },
 }));
 
 jest.mock('../../_integration/openAppWebview', () => ({
