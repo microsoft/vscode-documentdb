@@ -13,8 +13,10 @@ import {
     MessageBarBody,
     SearchBox,
     Toolbar,
+    ToolbarButton,
+    ToolbarDivider,
 } from '@fluentui/react-components';
-import { ArrowLeftRegular, DatabaseMultipleRegular, DatabaseRegular } from '@fluentui/react-icons';
+import { AddRegular, ArrowLeftRegular, DatabaseMultipleRegular, DatabaseRegular } from '@fluentui/react-icons';
 import * as l10n from '@vscode/l10n';
 import { useCallback, useEffect, useMemo, useState, type JSX } from 'react';
 
@@ -62,6 +64,9 @@ export interface InventoryPanelProps {
      * landing in one React batch would have the second silently discard the first.
      */
     onViewStateChange: (update: (current: InventoryViewState) => InventoryViewState) => void;
+    /** Creates a database or collection, according to the inventory level on screen. */
+    onCreateNamespace: () => void;
+    isCreatingNamespace: boolean;
 }
 
 /**
@@ -95,6 +100,8 @@ export const InventoryPanel = ({
     collections,
     viewState,
     onViewStateChange,
+    onCreateNamespace,
+    isCreatingNamespace,
 }: InventoryPanelProps): JSX.Element => {
     const { sort, filterText, currentDatabase } = viewState;
     const trpcClient = useTrpcClient();
@@ -239,7 +246,7 @@ export const InventoryPanel = ({
              * moves the toolbar and the table beneath it. Which list is on screen is already
              * stated by the table's own first column heading, so the band does not repeat it.
              */}
-            <div className="levelHeader">
+            <Toolbar className="levelHeader" size="small" aria-label={l10n.t('Inventory actions')}>
                 <Breadcrumb aria-label={l10n.t('Inventory level')} size="medium">
                     <BreadcrumbItem>
                         <BreadcrumbButton
@@ -261,7 +268,15 @@ export const InventoryPanel = ({
                         </>
                     )}
                 </Breadcrumb>
-            </div>
+                <ToolbarDivider />
+                <ToolbarButton
+                    icon={<AddRegular />}
+                    disabled={isCreatingNamespace}
+                    onClick={onCreateNamespace}
+                >
+                    {currentDatabase === null ? l10n.t('Create Database') : l10n.t('Create Collection')}
+                </ToolbarButton>
+            </Toolbar>
 
             {/*
              * Filter only — the same filter-first row the Collection View's index list uses.

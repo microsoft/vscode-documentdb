@@ -24,6 +24,7 @@ import {
 import { readOnlyJsonDocumentProvider } from '../../../utils/readOnlyJsonDocumentProvider';
 import { type BaseRouterContext } from '../../_integration/appRouter';
 import { publicProcedureWithTelemetry, router, type WithTelemetry } from '../../_integration/trpc';
+import { resolveClusterNode, resolveNamespaceNode } from './resolveNamespaceNode';
 
 /**
  * The server commands the dashboard describes a cluster with, run for the diagnostics
@@ -178,6 +179,50 @@ export const clusterDashboardRouter = router({
             clusterDisplayName: myCtx.clusterDisplayName,
         });
     }),
+
+    /** Runs the tree's existing create-database command for this cluster. */
+    createDatabase: publicProcedureWithTelemetry.mutation(async ({ ctx }): Promise<void> => {
+        const myCtx = ctx as WithTelemetry<RouterContext>;
+        const clusterNode = await resolveClusterNode(myCtx.viewId, myCtx.clusterId);
+
+        if (!clusterNode) {
+            throw new Error(l10n.t('Could not find this cluster in the tree view. Expand the cluster and try again.'));
+        }
+
+        await vscode.commands.executeCommand(
+            'vscode-documentdb.command.createDatabase',
+            clusterNode,
+            null,
+            { source: 'webview;clusterDashboard' },
+        );
+    }),
+
+    /** Runs the tree's existing create-collection command for the database on screen. */
+    createCollection: publicProcedureWithTelemetry
+        .input(z.object({ databaseName: z.string().min(1) }))
+        .mutation(async ({ input, ctx }): Promise<void> => {
+            const myCtx = ctx as WithTelemetry<RouterContext>;
+            const databaseNode = await resolveNamespaceNode(
+                myCtx.viewId,
+                myCtx.clusterId,
+                input.databaseName,
+            );
+
+            if (!databaseNode) {
+                throw new Error(
+                    l10n.t('Could not find "{name}" in the tree view. Expand the database and try again.', {
+                        name: input.databaseName,
+                    }),
+                );
+            }
+
+            await vscode.commands.executeCommand(
+                'vscode-documentdb.command.createCollection',
+                databaseNode,
+                null,
+                { source: 'webview;clusterDashboard' },
+            );
+        }),
 
     /** Opens the Collection View for a row in the inventory. */
     openCollectionView: publicProcedureWithTelemetry

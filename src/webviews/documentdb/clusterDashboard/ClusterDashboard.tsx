@@ -43,6 +43,7 @@ export const ClusterDashboard = (): JSX.Element => {
     const [storageStats, setStorageStats] = useState<ClusterStorageStats | null>(null);
     const [storageLastUpdatedAt, setStorageLastUpdatedAt] = useState<number>();
     const [isRefreshingStorage, setIsRefreshingStorage] = useState(false);
+    const [isCreatingNamespace, setIsCreatingNamespace] = useState(false);
     /**
      * How the reader has arranged the inventory — order, filter, level.
      *
@@ -238,6 +239,37 @@ export const ClusterDashboard = (): JSX.Element => {
         }
     }, [loadStorageStats, reloadCollections, inventoryViewState.currentDatabase]);
 
+    const createNamespace = useCallback(async (): Promise<void> => {
+        const databaseName = inventoryViewState.currentDatabase;
+        setIsCreatingNamespace(true);
+
+        try {
+            if (databaseName === null) {
+                await trpcClient.clusterDashboard.createDatabase.mutate();
+            } else {
+                await trpcClient.clusterDashboard.createCollection.mutate({ databaseName });
+            }
+
+            await loadStorageStats();
+            if (databaseName !== null) {
+                reloadCollections();
+            }
+        } catch (error) {
+            void trpcClient.common.displayErrorMessage.mutate({
+                message:
+                    databaseName === null
+                        ? l10n.t('Failed to create the database.')
+                        : l10n.t('Failed to create the collection.'),
+                modal: false,
+                cause: error instanceof Error ? error.message : String(error),
+            });
+        } finally {
+            if (!disposedRef.current) {
+                setIsCreatingNamespace(false);
+            }
+        }
+    }, [inventoryViewState.currentDatabase, loadStorageStats, reloadCollections, trpcClient]);
+
     const connectionState: ConnectionState =
         consecutiveFailures >= FAILURE_THRESHOLD
             ? 'disconnected'
@@ -248,7 +280,8 @@ export const ClusterDashboard = (): JSX.Element => {
     // Every load that replaces content the reader is looking at reports through the one bar
     // pinned to the top edge. The health poll is deliberately excluded: it runs every five
     // seconds and would leave the bar permanently animating.
-    const isBusy = clusterInfo === null || isRefreshingStorage || collections.isLoading || isExporting;
+    const isBusy =
+        clusterInfo === null || isRefreshingStorage || collections.isLoading || isExporting || isCreatingNamespace;
 
     return (
         <div className="clusterDashboard">
@@ -349,6 +382,8 @@ export const ClusterDashboard = (): JSX.Element => {
                     collections={collections}
                     viewState={inventoryViewState}
                     onViewStateChange={setInventoryViewState}
+                    onCreateNamespace={() => void createNamespace()}
+                    isCreatingNamespace={isCreatingNamespace}
                 />
             </div>
         </div>

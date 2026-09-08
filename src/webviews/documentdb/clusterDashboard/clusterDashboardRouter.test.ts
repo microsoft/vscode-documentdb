@@ -3,9 +3,61 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+import { type initWebviewTrpc as InitWebviewTrpc } from '@microsoft/vscode-ext-webview';
 import { type Document, type MongoClient } from 'mongodb';
+import * as vscode from 'vscode';
 
-import { collectRawCommandReplies } from './clusterDashboardRouter';
+import { API } from '../../../DocumentDBExperiences';
+
+const mockResolveClusterNode = jest.fn();
+const mockResolveNamespaceNode = jest.fn();
+
+jest.mock('vscode', () => ({
+    commands: { executeCommand: jest.fn() },
+    l10n: { t: jest.fn((message: string) => message) },
+}));
+
+jest.mock('../../../commands/openCollectionView/openCollectionView', () => ({
+    openCollectionViewInternal: jest.fn(),
+}));
+
+jest.mock('../../../documentdb/ClustersClient', () => ({
+    ClustersClient: { getClient: jest.fn() },
+}));
+
+jest.mock('../../../utils/readOnlyJsonDocumentProvider', () => ({
+    readOnlyJsonDocumentProvider: { openDocument: jest.fn() },
+}));
+
+jest.mock('./resolveNamespaceNode', () => ({
+    resolveClusterNode: (...args: unknown[]) => mockResolveClusterNode(...args) as unknown,
+    resolveNamespaceNode: (...args: unknown[]) => mockResolveNamespaceNode(...args) as unknown,
+}));
+
+jest.mock('../../_integration/trpc', () => {
+    const { initWebviewTrpc } = jest.requireActual<{ initWebviewTrpc: typeof InitWebviewTrpc }>(
+        '@microsoft/vscode-ext-webview',
+    );
+    const trpc = initWebviewTrpc();
+    return {
+        createCallerFactory: trpc.createCallerFactory,
+        publicProcedureWithTelemetry: trpc.publicProcedure,
+        router: trpc.router,
+    };
+});
+
+import { createCallerFactory } from '../../_integration/trpc';
+import { clusterDashboardRouter, collectRawCommandReplies, type RouterContext } from './clusterDashboardRouter';
+
+function createContext(): RouterContext {
+    return {
+        dbExperience: API.DocumentDB,
+        webviewName: 'clusterDashboard',
+        clusterId: 'cluster-id',
+        clusterDisplayName: 'Test cluster',
+        viewId: 'connectionsView',
+    };
+}
 
 describe('collectRawCommandReplies', () => {
     it('keeps each command invocation beside its raw response or error', async () => {
@@ -42,5 +94,43 @@ describe('collectRawCommandReplies', () => {
             command: { serverStatus: 1 },
             result: { ok: false, error: 'not authorized' },
         });
+    });
+});
+
+describe('clusterDashboardRouter create actions', () => {
+    beforeEach(() => {
+        jest.clearAllMocks();
+    });
+
+    it('runs the existing create-database command against the resolved cluster node', async () => {
+        const clusterNode = { id: 'cluster-tree-id' };
+        mockResolveClusterNode.mockResolvedValue(clusterNode);
+        const caller = createCallerFactory(clusterDashboardRouter)(createContext());
+
+        await caller.createDatabase();
+
+        expect(mockResolveClusterNode).toHaveBeenCalledWith('connectionsView', 'cluster-id');
+        expect(vscode.commands.executeCommand).toHaveBeenCalledWith(
+            'vscode-documentdb.command.createDatabase',
+            clusterNode,
+            null,
+            { source: 'webview;clusterDashboard' },
+        );
+    });
+
+    it('runs the existing create-collection command against the resolved database node', async () => {
+        const databaseNode = { id: 'cluster-tree-id/database' };
+        mockResolveNamespaceNode.mockResolvedValue(databaseNode);
+        const caller = createCallerFactory(clusterDashboardRouter)(createContext());
+
+        await caller.createCollection({ databaseName: 'database' });
+
+        expect(mockResolveNamespaceNode).toHaveBeenCalledWith('connectionsView', 'cluster-id', 'database');
+        expect(vscode.commands.executeCommand).toHaveBeenCalledWith(
+            'vscode-documentdb.command.createCollection',
+            databaseNode,
+            null,
+            { source: 'webview;clusterDashboard' },
+        );
     });
 });

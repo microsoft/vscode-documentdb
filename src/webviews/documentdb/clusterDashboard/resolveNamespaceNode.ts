@@ -33,6 +33,18 @@ function providersFor(viewId: string, clusterId: string): ExtendedTreeDataProvid
     return isAzureResource ? [ext.discoveryBranchDataProvider] : [ext.connectionsBranchDataProvider];
 }
 
+/** The tree node for the cluster identified by the dashboard's stable cluster id. */
+export async function resolveClusterNode(viewId: string, clusterId: string): Promise<TreeElement | undefined> {
+    for (const provider of providersFor(viewId, clusterId)) {
+        const clusterNode = await provider.findClusterNodeByClusterId?.(clusterId);
+        if (clusterNode) {
+            return clusterNode;
+        }
+    }
+
+    return undefined;
+}
+
 /**
  * The tree node for a database or a collection on the cluster this dashboard is pointed at.
  *

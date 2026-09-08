@@ -472,6 +472,7 @@ $content-gutter: var(--spacingHorizontalMNudge); // 10px
         align-items: center;
         min-height: 32px;
         min-width: 0;
+        padding-inline: 0;
         // One line, always. Wrapping would move everything below it by a row on the way into
         // a database, which is the shift this band exists to prevent; the database name gives
         // up width instead.
@@ -479,6 +480,7 @@ $content-gutter: var(--spacingHorizontalMNudge); // 10px
 
         .fui-Breadcrumb {
             min-width: 0;
+            flex: 0 1 auto;
             flex-wrap: nowrap;
             overflow: hidden;
         }
