@@ -34,6 +34,7 @@ import {
 
 /** Called on every readiness/sample-data probe, so a test can observe the world mid-provision. */
 let onProbe: () => void | Promise<void> = () => undefined;
+let existingDatabases: string[] = ['sampledb'];
 
 jest.mock('mongodb', () => ({
     MongoClient: class {
@@ -45,7 +46,10 @@ jest.mock('mongodb', () => ({
         public db(): unknown {
             return {
                 command: () => Promise.resolve({ ok: 1 }),
-                admin: () => ({ listDatabases: () => Promise.resolve({ databases: [{ name: 'sampledb' }] }) }),
+                admin: () => ({
+                    listDatabases: () =>
+                        Promise.resolve({ databases: existingDatabases.map((name) => ({ name })) }),
+                }),
             };
         }
         public close(): Promise<void> {
@@ -189,6 +193,7 @@ describe('QuickStartService — WP-3 provisioning durability and port model', ()
         ext.secretStorage = secretStorage;
         ext.context = fakeContext(globalState);
         onProbe = () => undefined;
+        existingDatabases = ['sampledb'];
     });
 
     afterEach(() => {
@@ -368,6 +373,88 @@ describe('QuickStartService — WP-3 provisioning durability and port model', ()
         await collect(service.provision(new AbortController().signal, { port: 10333 }));
 
         expect((createAndRunContainer.mock.calls[0][0] as { hostPort: number }).hostPort).toBe(10333);
+    });
+
+    describe('sample data initialization', () => {
+        it('detects environment-based passwords for 0.116 while preserving older image tags', async () => {
+            existingDatabases = [];
+            const runtime = runtimeFor();
+            const service = new QuickStartServiceImpl(runtime);
+
+            const events = await collect(service.provision(new AbortController().signal, { port: 10333 }));
+
+            expect(runtime.execShellInContainer).toHaveBeenCalledWith(
+                'c1',
+                'init_help="$(/home/documentdb/gateway/scripts/init_documentdb_data.sh --help)" || exit $?; ' +
+                    'case "$init_help" in ' +
+                    '*DOCUMENTDB_PASSWORD*) DOCUMENTDB_PASSWORD="$PASSWORD" /home/documentdb/gateway/scripts/init_documentdb_data.sh -H localhost -P 10260 -u "$USERNAME" -d /home/documentdb/gateway/sample-data ;; ' +
+                    '*) /home/documentdb/gateway/scripts/init_documentdb_data.sh -H localhost -P 10260 -u "$USERNAME" -d /home/documentdb/gateway/sample-data -p "$PASSWORD" ;; ' +
+                    'esac',
+                expect.any(Array),
+                expect.anything(),
+            );
+            expect(events.at(-1)).toMatchObject({ stage: 'done', status: 'done' });
+        });
+
+        it('finishes loading sample data before reporting the instance as running', async () => {
+            existingDatabases = [];
+            const runtime = runtimeFor();
+            const service = new QuickStartServiceImpl(runtime);
+            let seeded = false;
+            jest.spyOn(runtime, 'execShellInContainer').mockImplementation(async () => {
+                await Promise.resolve();
+                expect(service.getStatus().state).not.toBe(InstanceState.Running);
+                seeded = true;
+            });
+
+            for await (const event of service.provision(new AbortController().signal)) {
+                if (event.stage === 'done') {
+                    expect(seeded).toBe(true);
+                }
+            }
+
+            expect(seeded).toBe(true);
+            expect(service.getStatus().state).toBe(InstanceState.Running);
+            expect(runtime.createAndRunContainer).toHaveBeenCalledWith(
+                expect.not.objectContaining({ command: expect.anything() }),
+                expect.any(Array),
+                expect.anything(),
+            );
+        });
+
+        it('does not load sample data when the user disables it', async () => {
+            existingDatabases = [];
+            const runtime = runtimeFor();
+            const service = new QuickStartServiceImpl(runtime);
+
+            await collect(service.provision(new AbortController().signal, { loadSampleData: false }));
+
+            expect(runtime.execShellInContainer).not.toHaveBeenCalled();
+            expect(service.getStatus().state).toBe(InstanceState.Running);
+        });
+
+        it('does not overwrite an existing sample database', async () => {
+            const runtime = runtimeFor();
+            const service = new QuickStartServiceImpl(runtime);
+
+            await collect(service.provision(new AbortController().signal));
+
+            expect(runtime.execShellInContainer).not.toHaveBeenCalled();
+            expect(service.getStatus().state).toBe(InstanceState.Running);
+        });
+
+        it('keeps the database usable without retrying a failed sample load', async () => {
+            existingDatabases = [];
+            const runtime = runtimeFor();
+            jest.spyOn(runtime, 'execShellInContainer').mockRejectedValue(new Error('initialization failed'));
+            const service = new QuickStartServiceImpl(runtime);
+
+            const events = await collect(service.provision(new AbortController().signal));
+
+            expect(runtime.execShellInContainer).toHaveBeenCalledTimes(1);
+            expect(events.at(-1)).toMatchObject({ stage: 'done', status: 'done' });
+            expect(service.getStatus().state).toBe(InstanceState.Running);
+        });
     });
 
     // M5/3b: the port is pre-checked before the pull, which can take minutes — so a bind failure at
