@@ -1,16 +1,24 @@
-# Feature Overview
+# Import and Export Data Feature
 
-## About the Feature
+## Purpose
 
-This feature adds CSV and Excel import/export to the DocumentDB VS Code extension through dedicated webview experiences for both flows.
+This feature adds database-neutral CSV and Excel import/export workflows to the DocumentDB VS Code extension. The architecture document is the source of truth for ownership, task lifecycle, adapter boundaries, validation, and execution behavior.
 
-Export lets users start from supported source contexts, confirm a fixed column contract, preview bounded output rows, and export with consistent field ordering, naming, and value conversion rules. Field discovery is advisory; users can include discovered fields, add known paths, and choose how to handle unexpected fields during export.
+The initial database sources and destinations are Azure DocumentDB and Mongo-compatible collections through adapters. Future CLI and migration tools may consume the reusable schema-analyzer package directly; they must not depend on VS Code webview or `SchemaStore` APIs.
 
-Import lets users load CSV/Excel data, review source records, define field mapping (including nested document paths), configure types and missing-value behavior, preview transformed JSON documents, and run import with clear row-level validation behavior.
+## Shared Analysis Model
 
-For both import and export, preview behavior should match execution rules, support cancellation and progress for long-running tasks, and integrate with the extension task lifecycle (progress, errors, telemetry, and cleanup). The reusable implementation should remain database-neutral with adapter-based database-specific behavior.
+Both database adapters provide documents and source metadata to the shared `SchemaAnalyzer`. The analyzer produces a database-neutral analysis snapshot containing discovered paths, nested structure, BSON/JSON types, occurrence information, array shapes, and diagnostics. The shared validation layer validates reconstructed import documents and compatibility with the analyzed or supplied schema.
 
----
+`SchemaStore` is an extension-local cache of analyzer results keyed by stable cluster, database, and collection identifiers. It may support other VS Code surfaces, but import/export tasks use their own analysis snapshot and never use a mutable live cache as execution configuration.
+
+The ownership boundary is layered:
+
+1. Source adapters own database-specific reads, writes, metadata, retries, and throttling.
+2. `SchemaAnalyzer` owns reusable document analysis and validation.
+3. Import/export owns file formats, sheet layout, column mappings, array reconstruction, and operation contracts.
+4. The user-confirmed `ExportSchema` or `ImportSchema` is the immutable contract for one operation.
+5. `TaskService` owns progress, cancellation, cleanup, telemetry, and resource conflicts.
 
 ## Workflow
 
@@ -30,21 +38,26 @@ For both import and export, preview behavior should match execution rules, suppo
 ### 1. Analyze Collection
 
 1. Server retrieves all documents from the selected collection.
-2. Server analyzes the documents to:
+2. The source adapter streams a bounded sample through `SchemaAnalyzer`.
+3. If analysis exceeds the bounded request budget, the router registers a `schema-analysis-collection` task with `TaskService`.
+4. The analyzer produces the shared analysis snapshot used by the export pipeline to:
 
    * Detect nested objects.
    * Identify inconsistent properties across documents.
+   * Infer BSON/JSON types and array shapes.
+   * Report analysis and validation diagnostics.
 
 ### 2. Generate Export Schema
 
-1. Server creates a unified export schema.
+1. The export pipeline converts the `SchemaAnalyzer` snapshot into a unified `ExportSchema`.
 2. Property classification:
 
    * **Required Properties** – Properties present consistently across all documents.
    * **Optional Properties** – Properties that are inconsistent or exist only in some documents.
-3. Server sends the generated schema to the client for preview.
+3. Array fields are represented by array summary columns and companion-sheet schemas.
+4. The server sends the generated schema and analysis diagnostics to the client for preview.
 
-### 3. Preview & Customize Columns
+### 3. Preview and Customize Columns
 
 1. Client displays the generated schema as the export preview.
 2. By default:
@@ -86,15 +99,23 @@ address_street
 address_zip
 ```
 
-4. User reviews the final column preview and proceeds with the export.
+4. User reviews the final column preview and confirms the export contract.
+5. The router validates and freezes the confirmed `ExportSchema` and `ExportConfig` before creating an export task.
+
+### 4. Execute Collection Export
+
+1. The router registers an `export-collection` task with `TaskService`.
+2. The task streams documents through the source adapter and transforms them using the frozen contract.
+3. The task writes the selected CSV or Excel format and applies the configured unexpected-field policy.
+4. Progress, cancellation, cleanup, telemetry, and the terminal result are reported through `TaskService` and the tRPC task-status contract.
 
 ---
 
 ## Database Export Workflow
 
-### 1. Load Collections
+### 1. Load and Configure Collections
 
-1. Server retrieves all collections within the selected database.
+1. Server retrieves all collections within the selected database through the source adapter.
 2. Server sends the collection list to the client.
 
 ### 2. Collection Selection
@@ -120,8 +141,10 @@ address_zip
 
 ### 4. Final Export
 
-1. Once all required collections have been configured, the user initiates the export.
-2. Server exports each configured collection using its customized schema and formatting options.
+1. Once the selected collections have confirmed contracts, the user initiates the export.
+2. The router registers one `export-database` task with `TaskService`.
+3. The task processes each configured collection using its immutable schema and formatting options.
+4. The task owns temporary output and packages the collection results into the final ZIP.
 
 ---
 
@@ -135,9 +158,10 @@ address_zip
 
    * Reviews the feature description.
    * Selects the destination type (**Database** or **Collection**).
-   * Uploads the import file (CSV or Excel).
+   * Uploads a ZIP archive containing CSV or Excel files.
 4. User clicks **Proceed**.
-5. Server validates the request by checking:
+5. The server validates the request and, for large archives, registers `import-archive-inspection` with `TaskService` to perform extraction, validation, progress, and cleanup.
+6. Validation checks:
 
    * Destination type (Database or Collection).
    * Uploaded file format.
@@ -153,18 +177,21 @@ The server should return appropriate validation errors for scenarios such as:
 * Empty file.
 * Missing header row.
 * Invalid destination type.
-* Database file uploaded for a Collection import (or vice versa).
+* Archive contents are incompatible with the selected Collection or Database destination.
 * File size exceeds the allowed limit.
 
 ---
 
 ### Collection Import Workflow
 
-#### 1. Parse File
+#### 1. Inspect and Parse the Archive
 
-1. Server parses the uploaded file.
-2. Each column in the file is treated as a property.
-3. Server analyzes the column names:
+1. The file adapter inspects the ZIP and parses the selected CSV or Excel sheet.
+2. Each column in the file is treated as a candidate property.
+3. The adapter detects companion-sheet, indexed-tabular, and JSON-in-cell array patterns, with precedence Companion Sheet > Indexed Tabular > JSON-in-Cell.
+4. Parsed rows and reconstructed array candidates are normalized into the shared analyzer input model.
+5. `SchemaAnalyzer` analyzes the candidate documents and validates paths, types, required/optional fields, and array shapes.
+6. The server analyzes the column names:
 
    * Flat column names are treated as top-level properties.
    * Column names containing supported separators (e.g., `.`, `_`, `#`, `:`) are interpreted as nested properties.
@@ -201,8 +228,8 @@ Resulting Schema:
 
 #### 2. Preview & Customize Schema
 
-1. Server generates a sample schema from the parsed columns.
-2. Server sends the schema to the client.
+1. The pipeline converts the analyzer result and file-pattern diagnostics into an `ImportSchema` draft.
+2. Server sends the schema, diagnostics, and bounded preview records to the client.
 3. Client displays the schema preview.
 4. User can customize the schema by:
 
@@ -214,16 +241,18 @@ Resulting Schema:
 
 #### 3. Confirm Schema
 
-1. User reviews the customized schema.
+1. User reviews the customized schema and array reconstruction policies.
 2. User clicks **Proceed**.
-3. Client sends the updated schema to the server.
+3. Client sends the updated schema and import configuration to the server.
+4. The router validates the mapping, path conflicts, destination, and policies, then freezes the confirmed `ImportSchema` and `ImportConfig`.
 
-#### 4. Import Data
+#### 4. Execute Collection Import
 
-1. Server maps the uploaded data according to the customized schema.
-2. Server transforms the data into the required document structure.
-3. Server inserts the transformed documents into the selected collection within the database.
-4. Server returns the import summary, including:
+1. The router registers an `import-collection` task with `TaskService`.
+2. The task reconstructs arrays and maps rows according to the frozen schema.
+3. The shared analyzer validation layer validates each candidate document before insertion.
+4. The destination adapter inserts valid documents in batches and reports provider-specific failures separately.
+5. The task returns the import summary, including:
 
    * Total records processed.
    * Successfully imported records.
@@ -236,16 +265,17 @@ Resulting Schema:
 
 #### 1. Parse File
 
-1. Server parses the uploaded CSV or Excel file.
+1. Server inspects the uploaded ZIP archive.
 2. Supported file structures:
 
-   * Single-sheet file
-   * Multi-sheet Excel workbook
-3. Each worksheet is treated as an individual collection.
+   * CSV files packaged in the ZIP
+   * Single-workbook Excel archives
+   * Multi-sheet Excel workbooks
+3. Each selected file or worksheet is treated as an individual collection input.
 
 #### 2. Generate Database Structure
 
-1. Server generates a Database → Collection hierarchy based on the uploaded file.
+1. Server generates a Database → Collection hierarchy based on the archive contents.
 2. Server sends the generated structure to the client.
 
 #### 3. Review & Customize Collections
@@ -260,8 +290,9 @@ Resulting Schema:
 
 #### 4. Process Selected Collections
 
-1. Client sends the selected collection configuration to the server.
-2. For each selected collection, the server follows the **Collection Import Workflow**:
+1. Client sends the selected collection configurations to the server.
+2. The router registers one `import-database` task with `TaskService`.
+3. For each selected collection, the task follows the **Collection Import Workflow**:
 
    * Parse collection data.
    * Generate the sample schema.
@@ -275,8 +306,7 @@ Resulting Schema:
 
 1. After all selected collections have been processed:
 
-   * Server imports the transformed data into the destination database.
-   * Server generates an overall import summary, including:
+   * The `import-database` task reports an overall result, including:
 
      * Total collections processed.
      * Successfully imported collections.

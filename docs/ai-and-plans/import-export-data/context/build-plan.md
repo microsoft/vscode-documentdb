@@ -247,7 +247,7 @@ Full page UI built with mock data first — verified visually before any logic i
 
 - [ ] 11 — Create `src/services/importExport/` with database-neutral pipeline type definitions and empty adapter interfaces (`IExportSourceAdapter`, `IImportDestinationAdapter`)
 
-  Define the contracts that both DocumentDB and future Atlas adapters must satisfy, with no implementation yet.
+  Define the contracts that Azure DocumentDB and Mongo-compatible adapters must satisfy, with no provider-specific pipeline implementation yet. Future providers, including Atlas Discovery, must implement the same contracts.
 
   ```typescript
   // IExportSourceAdapter.ts
@@ -318,7 +318,6 @@ Full page UI built with mock data first — verified visually before any logic i
   The command handler reads the tree selection and injects it into the webview as initial state.
 
   ```typescript
-  // exportData.ts (command handler)
   const node = context.selectedItems[0] as CollectionTreeItem;
   ExportDataController.open({
     sourceType: 'collection',
@@ -2145,9 +2144,9 @@ Full page UI built with mock data first — verified visually before any logic i
   });
   ```
 
-- [ ] 05 — Manual integration test: import a CSV file into an Atlas Discovery collection, verify full flow end-to-end (parse → schema config → import → summary)
+- [ ] 05 — Manual integration test: import a ZIP containing CSV or Excel files into an Atlas Discovery collection, verify full flow end-to-end (parse → schema config → import → summary)
 
-  Upload a CSV via the Import webview targeting a live Atlas collection in the Discovery view. Verify the documents appear in the collection and the result summary shows the correct counts.
+  Upload a ZIP via the Import webview targeting a live Atlas collection in the Discovery view. Verify the documents appear in the collection and the result summary shows the correct counts.
 
 ---
 
@@ -2155,11 +2154,11 @@ Full page UI built with mock data first — verified visually before any logic i
 
 | Phase                                     | Tasks |
 | ----------------------------------------- | ----- |
-| Phase 1 — Foundation                      | 12    |
+| Phase 1 — Foundation                      | 16    |
 | Phase 2 — Export Feature                  | 37    |
 | Phase 2 — Array Support (Export)          | 25    |
-| Phase 3 — Import Feature                  | 37    |
-| Phase 3 — Array Support (Import)          | **36** ← NEW |
+| Phase 3 — Import Feature                  | 47    |
+| Phase 3 — Array Support (Import)          | 23    |
 | Phase 4 — Add Export feature to Atlas     | 5     |
 | Phase 5 — Add Import feature to Atlas     | 5     |
-| **Total**                                 | **157** |
+| **Total**                                 | **158** |
