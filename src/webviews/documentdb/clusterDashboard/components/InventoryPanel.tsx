@@ -356,9 +356,10 @@ export const InventoryPanel = ({
              * 27.93 MB" invites the arithmetic that the one collection is 27.93 MB, and the
              * two figures come from different levels.
              *
-             * The way out shares the line rather than taking one of its own: the breadcrumb
-             * is off screen by the time a reader reaches the end of a long list, and a second
-             * exit costs nothing here if it does not add a row.
+             * A labelled way out shares that line. It is not redundant with the breadcrumb: a
+             * dashboard opened from a database node lands already inside a database, so its
+             * reader never performed the step-in and has no reason to read the trail above the
+             * table as a way back out.
              */}
             {!inventoryIsLoading && allRows.length > 0 && (
                 <div className="listFooter">

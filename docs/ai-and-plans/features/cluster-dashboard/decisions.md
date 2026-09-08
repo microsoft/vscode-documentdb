@@ -705,7 +705,7 @@ their values.
 
 ## 0018 — The level band is a breadcrumb; Back stays in the footer
 
-**Status:** Accepted · **Date:** 2026-09-07 · **Raised by:** Recorded retrospectively while auditing the branch
+**Status:** Accepted · **Date:** 2026-09-07 · **Raised by:** Recorded retrospectively while auditing the branch; rationale confirmed by the Operator
 **Evidence:** commit `12485b0c`, `InventoryPanel.tsx`
 
 ### Question
@@ -727,9 +727,12 @@ place by resolving an ambiguous path. It earns it by being the same height at bo
 title-plus-back-button band it replaced changed height when stepping in, which moved the filter
 row and the table underneath it on every drill-in and drill-out.
 
-The footer's Back button is not redundant with it. A reader who has scrolled a long list is
-several screens below the breadcrumb, and an exit that requires scrolling back up is an exit they
-will not use. It costs no vertical space there because it shares the footer's existing row.
+The footer's Back button is kept deliberately, for readers who do not work out that the breadcrumb
+is clickable. That is not a hypothetical: a dashboard opened from a database node's inline command
+lands **already inside a database**, so its reader never saw the database list, never performed the
+step-in, and has no reason to read the trail above the table as a way back out. A labelled button
+says what the breadcrumb only implies. It costs no vertical space, because it shares the footer's
+existing row.
 
 This entry exists mainly so the record matches the code: 0014 is otherwise a correct account of a
 navigation model that the branch no longer implements in one of its details.
