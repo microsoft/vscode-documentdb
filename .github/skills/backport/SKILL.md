@@ -24,8 +24,8 @@ After the patch is tagged, the fix must exist on `main` too. If the backport's s
 
 These differ from the upstream skill this was adapted from — follow the values here.
 
-| Topic                  | This repository                                                                              |
-| ---------------------- | -------------------------------------------------------------------------------------------- |
+| Topic                  | This repository                                                                                |
+| ---------------------- | ---------------------------------------------------------------------------------------------- |
 | Release branches       | `release/<X.Y.Z>`, named for the version it ships (e.g. `release/0.10.1`) — never `rel/*`      |
 | Backport branch prefix | `dev/<user>/…` per [CONTRIBUTING §1.1](../../../CONTRIBUTING.md#11-branch-overview)            |
 | Build command          | `npm run build` — **never `npm run compile`**, which is `tsc -watch` and never exits           |
@@ -58,9 +58,9 @@ Execute these phases in order. Stop and report on any error.
 ### Phase B — Resolve the commit list
 
 - **PR source**: `gh pr view <num> --json number,title,body,headRefName,baseRefName,mergeCommit,commits,state`. If the command fails, abort and show the PR number and the `gh` error. Then branch on `state`:
-    - `MERGED` — prefer the squash-merge commit if it was squash-merged; otherwise use the listed commits in order.
-    - `OPEN` — warn that the work may be incomplete, and confirm before proceeding.
-    - `CLOSED` (not merged) — warn that the work may have been abandoned or superseded, and confirm.
+  - `MERGED` — prefer the squash-merge commit if it was squash-merged; otherwise use the listed commits in order.
+  - `OPEN` — warn that the work may be incomplete, and confirm before proceeding.
+  - `CLOSED` (not merged) — warn that the work may have been abandoned or superseded, and confirm.
 - **Branch source**: `git log --reverse --format=%H origin/<target>..<branch>`.
 - **SHA(s) / range**: use as given, validated with `git cat-file -e <sha>`.
 
@@ -69,12 +69,12 @@ Show the resolved list (count plus short log) and confirm before continuing.
 ### Phase C — Create the backport branch
 
 - **Branch name**: `dev/<user>/backport-<id>-to-<target-slug>` for local runs, matching this repo's `dev/<user>/<topic>` convention. Use the `copilot/` prefix **only** when running as the GitHub.com cloud agent.
-    - `<user>` is the current user's branch handle — reuse the one from their existing branches (`git branch --list 'dev/*'`) rather than inventing one.
-    - `<id>` is the PR number, the source branch's last segment, or a short SHA.
-    - `<target-slug>` is the target with **every** `/` replaced by `-`. Compute it, don't hand-write it (shell: `target_slug="${target//\//-}"`). So `release/0.10.1` → `release-0.10.1`.
-    - **Full example:** PR #898 onto `release/0.10.1` gives `dev/tnaum/backport-898-to-release-0.10.1`.
-    - **Verify before checkout:** the name must contain exactly two `/` (after `dev` and after `<user>`). A third means the slug was not applied — recompute it.
-- **Collision handling** (local *or* `origin/<branch>` exists): ask the user — *overwrite* (delete local and remote, recreate) or *use a numeric suffix* (`-2`, `-3`, …). Never silently overwrite.
+  - `<user>` is the current user's branch handle — reuse the one from their existing branches (`git branch --list 'dev/*'`) rather than inventing one.
+  - `<id>` is the PR number, the source branch's last segment, or a short SHA.
+  - `<target-slug>` is the target with **every** `/` replaced by `-`. Compute it, don't hand-write it (shell: `target_slug="${target//\//-}"`). So `release/0.10.1` → `release-0.10.1`.
+  - **Full example:** PR #898 onto `release/0.10.1` gives `dev/tnaum/backport-898-to-release-0.10.1`.
+  - **Verify before checkout:** the name must contain exactly two `/` (after `dev` and after `<user>`). A third means the slug was not applied — recompute it.
+- **Collision handling** (local _or_ `origin/<branch>` exists): ask the user — _overwrite_ (delete local and remote, recreate) or _use a numeric suffix_ (`-2`, `-3`, …). Never silently overwrite.
 - `git checkout -b <name> origin/<target>`.
 
 ### Phase D — Cherry-pick
@@ -88,17 +88,17 @@ Show the resolved list (count plus short log) and confirm before continuing.
 
 1. On conflict, run `git status` and `git diff` to inspect.
 2. **Auto-resolve only trivial cases:**
-    - *Import-order*: only the order of `import` / `require` differs; identifiers are identical.
-    - *Formatting-only*: whitespace, trailing comma, or semicolon differences with no change to identifiers, literals, or control flow.
-    - *Additive non-overlapping hunks*: one side adds lines, the other is unchanged in that region.
-    - *Pure deletions on one side*: one side deletes a block the other leaves untouched, and the block is not referenced by code added on either side.
+   - _Import-order_: only the order of `import` / `require` differs; identifiers are identical.
+   - _Formatting-only_: whitespace, trailing comma, or semicolon differences with no change to identifiers, literals, or control flow.
+   - _Additive non-overlapping hunks_: one side adds lines, the other is unchanged in that region.
+   - _Pure deletions on one side_: one side deletes a block the other leaves untouched, and the block is not referenced by code added on either side.
 
-    After resolving, verify with `git diff --check` and `! grep -R '<<<<<<<' -- .` before staging.
+   After resolving, verify with `git diff --check` and `! grep -R '<<<<<<<' -- .` before staging.
 
 3. **For anything ambiguous** (semantic overlap, both sides meaningfully changed the same hunk, version or lockfile bumps, generated files such as `l10n/bundle.l10n.json`): stop, present the conflicting files and hunks, and offer:
-    - *Resolve manually and continue* — wait, then `git add` + `git cherry-pick --continue`.
-    - *Abort* — `git cherry-pick --abort`, delete the backport branch, restore (Phase G).
-    - *Squash and retry* — only when there is more than one commit, the current run was not already squash, and the conflicting commit is not the last. Abort, delete the branch, restart from Phase C with squash enabled.
+   - _Resolve manually and continue_ — wait, then `git add` + `git cherry-pick --continue`.
+   - _Abort_ — `git cherry-pick --abort`, delete the backport branch, restore (Phase G).
+   - _Squash and retry_ — only when there is more than one commit, the current run was not already squash, and the conflicting commit is not the last. Abort, delete the branch, restart from Phase C with squash enabled.
 4. Record every conflict and its resolution for the PR body.
 
 ### Phase E — Local validation (recommended)
@@ -108,20 +108,20 @@ A cherry-pick onto an older release branch often compiles on the source's base b
 1. Ask whether to run validation. Default: **yes**. Offer to skip for speed.
 2. If yes: the working tree switched branches and may have been mutated, so `node_modules` is likely stale — **start with `npm install`**. Then run the repository's checklist ([CONTRIBUTING §4](../../../CONTRIBUTING.md#4-pr-submission-checklist)) in this order:
 
-    ```bash
-    npm run l10n
-    npm run prettier-fix
-    npm run lint
-    npm run jesttest
-    npm run build
-    npm run package
-    ```
+   ```bash
+   npm run l10n
+   npm run prettier-fix
+   npm run lint
+   npm run jesttest
+   npm run build
+   npm run package
+   ```
 
-    Use `npm run build`. **Never `npm run compile`** — it is a watch task and will hang the run.
+   Use `npm run build`. **Never `npm run compile`** — it is a watch task and will hang the run.
 
-    Run `npm run l10n` even when the cherry-pick has no obvious user-facing strings: the target branch can carry pre-existing drift that CI's `l10n:check` will fail on. If the bundle changes, commit it separately as `chore: regenerate l10n bundle` before the Phase F push.
+   Run `npm run l10n` even when the cherry-pick has no obvious user-facing strings: the target branch can carry pre-existing drift that CI's `l10n:check` will fail on. If the bundle changes, commit it separately as `chore: regenerate l10n bundle` before the Phase F push.
 
-    Unlike the upstream repository this skill came from, there are **no translated language files** here — the extension ships English only. There is nothing to reconcile from the source's base branch, so skip any translation-pulling step.
+   Unlike the upstream repository this skill came from, there are **no translated language files** here — the extension ships English only. There is nothing to reconcile from the source's base branch, so skip any translation-pulling step.
 
 3. On failure: surface the errors and stop. Treat fixes as another round of conflict resolution — change only what is needed, never pile on unrelated edits. Once green, continue.
 4. If the user skips validation, note that in the PR body so reviewers know CI is the first gate.
@@ -131,18 +131,19 @@ A cherry-pick onto an older release branch often compiles on the source's base b
 1. `git push -u origin <branch>` — **never** `--force` or `--force-with-lease`. If the push fails, surface the full error; for permission or branch-protection failures, advise checking repository settings and do not retry with force flags. Then go to Phase G failure cleanup.
 2. Write the PR body **to a file** and pass it with `--body-file`. Prefer the editor's file-creation tool; with a shell heredoc, write to the OS temp directory **outside the repo** (`"${TMPDIR:-/tmp}/backport-body.md"`, or `"$env:TEMP\backport-body.md"` on Windows PowerShell) and delete it afterwards. Then:
 
-    ```bash
-    gh pr create --base <target> --head <branch> --title "[<target>] <original-title>" --body-file <path> --draft
-    ```
+   ```bash
+   gh pr create --base <target> --head <branch> --title "[<target>] <original-title>" --body-file <path> --draft
+   ```
 
-    **Always `--body-file`, never inline `--body "…"`** — the shell eats backticks, `$`, and quotes, and literal `\n` sequences print verbatim.
+   **Always `--body-file`, never inline `--body "…"`** — the shell eats backticks, `$`, and quotes, and literal `\n` sequences print verbatim.
 
-    Body authoring rules:
-    - **Real newlines only.** Never write the two characters `\n` to mean a line break.
-    - **Do not hard-wrap sentences.** Keep each paragraph or bullet on one line, separated by a blank line. GitHub honors single newlines as hard breaks in PR descriptions, so wrapped prose renders broken mid-sentence.
-    - **No task-list checkboxes** (`- [ ]` / `- [x]`). GitHub turns them into a progress bar, and pre-checked boxes falsely imply a reviewer checklist is done. Use plain `-` bullets.
-    - **Title** must start with the target branch in square brackets — e.g. `[release/0.10.1] Fix tree refresh race` — keeping the rest identical to the original PR title (or the first commit subject).
-    - **Contents:** `Backport of #<n>` (or the branch / SHA list), the original PR description when applicable, a **Conflicts resolved** section listing each file with a one-line description, and the validation result.
+   Body authoring rules:
+   - **Real newlines only.** Never write the two characters `\n` to mean a line break.
+   - **Do not hard-wrap sentences.** Keep each paragraph or bullet on one line, separated by a blank line. GitHub honors single newlines as hard breaks in PR descriptions, so wrapped prose renders broken mid-sentence.
+   - **No task-list checkboxes** (`- [ ]` / `- [x]`). GitHub turns them into a progress bar, and pre-checked boxes falsely imply a reviewer checklist is done. Use plain `-` bullets.
+   - **Title** must start with the target branch in square brackets — e.g. `[release/0.10.1] Fix tree refresh race` — keeping the rest identical to the original PR title (or the first commit subject).
+   - **Contents:** `Backport of #<n>` (or the branch / SHA list), the original PR description when applicable, a **Conflicts resolved** section listing each file with a one-line description, and the validation result.
+
 3. Open it as a **draft** when conflicts were non-trivial or validation was skipped, per [CONTRIBUTING §5.3](../../../CONTRIBUTING.md#53-draft-prs-and-bootstrapping-the-pr-number). Mark it ready once it is clean.
 4. `gh pr view --web` to open it in the browser.
 
