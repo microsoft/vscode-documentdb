@@ -14,7 +14,7 @@ created: 2026-08-24
 | ---- | ----------------------------------------------------------- | ------------------- | ------------------------------------------------------ | ---------- | ---- |
 | 0001 | Poll from the webview, not tRPC subscriptions               | Accepted            | Accepted as proposed, scoped down for the POC          | 2026-07-27 | #823 |
 | 0002 | Per-command try/catch, no capability probe                  | Accepted            | Accepted as proposed                                   | 2026-07-27 | #823 |
-| 0003 | Confirmation on the host; kill reports the request          | Accepted (modified) | Outcome vocabulary added after live testing            | 2026-07-28 | #823 |
+| 0003 | Confirmation on the host; kill reports the request          | Superseded by 0019  | Outcome vocabulary added after live testing            | 2026-07-28 | #823 |
 | 0004 | Custom SVG sparkline instead of a charting dependency       | Accepted            | Accepted as proposed                                   | 2026-07-27 | #823 |
 | 0005 | Panel de-duplication keyed on `clusterId`, never `treeId`   | Accepted            | Accepted as proposed                                   | 2026-07-27 | #823 |
 | 0006 | The page is a data inventory, not a performance dashboard   | Accepted            | **Reverses the genre-A model in `design.md` §1.1**     | 2026-07-28 | #823 |
@@ -26,6 +26,7 @@ created: 2026-08-24
 | 0016 | Row context-menu entries run on the host                    | Accepted            | Removes a host → webview → host relay                  | 2026-09-07 | #823 |
 | 0017 | Diagnostics carry raw replies, not a second reading of them | Accepted            | Retires the topology summary with its card             | 2026-09-07 | #823 |
 | 0018 | The level band is a breadcrumb; Back stays in the footer    | Accepted            | Reverses 0014's rejection of the breadcrumb            | 2026-09-07 | #823 |
+| 0019 | `currentOp` is out of scope for this iteration              | Accepted            | Supersedes 0003 and 0010; makes 0012 moot              | 2026-09-08 | #823 |
 
 > Entries below are **semantically** immutable: append new entries rather than
 > rewriting old ones, and record reversals as a new entry plus a status change
@@ -113,7 +114,7 @@ loading skeleton, `null` is "Not available on this server", a number is the valu
 
 ## 0003 — Confirmation on the host; kill reports the request, not the outcome (reconstructed)
 
-**Status:** Accepted (modified) · **Date:** 2026-07-28 · **Raised by:** implementation, then live testing
+**Status:** Superseded by [0019](#0019--currentop-is-out-of-scope-for-this-iteration) · **Date:** 2026-07-28 · **Raised by:** implementation, then live testing
 **Evidence:** [iterations/01-poc/summary.md](./iterations/01-poc/summary.md#confirmation-lives-on-the-host-and-the-result-is-reported-honestly)
 
 ### Question
@@ -344,7 +345,7 @@ agreed, is the **single** public command id and menu title the merged surface ex
 
 ## 0010 — An opid is not an identity; occurrences are
 
-**Status:** Accepted · **Date:** 2026-08-24 · **Raised by:** the two-vendor AI pre-review (S4, S10, F2)
+**Status:** Superseded by [0019](#0019--currentop-is-out-of-scope-for-this-iteration) · **Date:** 2026-08-24 · **Raised by:** the two-vendor AI pre-review (S4, S10, F2)
 **Evidence:** [iterations/01-poc/ai-pre-review.md](./iterations/01-poc/ai-pre-review.md#d2--occurrence-identity), commit `73a43d68`
 
 ### Question
@@ -424,7 +425,7 @@ exists to prevent rather than a fix for it.
 
 ## 0012 — Warn at the sharing boundary rather than redact the preview
 
-**Status:** Accepted (modified) · **Date:** 2026-08-24 · **Raised by:** the two-vendor AI pre-review (S1, S2, F12)
+**Status:** Superseded by [0019](#0019--currentop-is-out-of-scope-for-this-iteration) · **Date:** 2026-08-24 · **Raised by:** the two-vendor AI pre-review (S1, S2, F12)
 **Evidence:** [iterations/01-poc/ai-pre-review.md](./iterations/01-poc/ai-pre-review.md#d1--query-literals-in-the-export-clipboard-and-copilot-prompt), commit `73a43d68`
 
 ### Question
@@ -732,3 +733,67 @@ will not use. It costs no vertical space there because it shares the footer's ex
 
 This entry exists mainly so the record matches the code: 0014 is otherwise a correct account of a
 navigation model that the branch no longer implements in one of its details.
+
+---
+
+## 0019 — `currentOp` is out of scope for this iteration
+
+**Status:** Accepted · **Date:** 2026-09-08 · **Raised by:** Operator
+**Supersedes:** [0003](#0003--confirmation-on-the-host-kill-reports-the-request-not-the-outcome-reconstructed),
+[0010](#0010--an-opid-is-not-an-identity-occurrences-are) · **Makes moot:**
+[0012](#0012--warn-at-the-sharing-boundary-rather-than-redact-the-preview)
+
+### Question
+
+The Operations tab, the kill action and the observed-operation history were removed when the page
+became a data inventory ([0006](#0006--the-page-is-a-data-inventory-not-a-performance-dashboard-reconstructed)).
+`listCurrentOperations` survived them, feeding a `currentOperations` section of the diagnostics
+export. Nothing on screen reads it. Does the iteration keep it?
+
+### Decision
+
+No. `currentOp` leaves this iteration entirely. The collector, its four-form privilege fallback,
+its background-thread and self-inspection filters, and the credential-redaction pass over command
+documents are deleted, along with the `currentOperations` section of the export.
+
+### Reasoning
+
+It was the last thing in the feature that read **what someone is running**, and therefore the only
+thing that put application data — query filter values, document contents, the client addresses
+that issued them — anywhere near a document a user is invited to attach to a bug report.
+
+That single fact was carrying a disproportionate amount of machinery. Redaction could remove
+credentials but, as [0012](#0012--warn-at-the-sharing-boundary-rather-than-redact-the-preview)
+records, no denylist can recognise application data, so the export had to be gated behind a modal
+that named what it could not remove. Dropping the source removes the exposure, the denylist, the
+argument about how much of a query to redact, and the modal's most alarming clause in one move.
+The remaining machinery was in the same position: a privilege-degradation chain and two
+server-quirk filters, all reachable only through a JSON blob nobody was reading.
+
+**"For this iteration" is the operative phrase.** Live operations remain a reasonable thing for a
+cluster dashboard to show, and the work that was deleted was correct — the vCore parallel-worker
+and self-inspection findings in particular were only reachable by live testing. When operations
+come back they should come back as a **surface**, designed with its own answer to the redaction
+question, rather than as a payload smuggled into an export.
+
+### Rejected alternatives
+
+- **Keep the export section, drop the modal.** The cheapest change, and the worst: it removes the
+  warning while leaving the thing being warned about.
+- **Keep it and redact structurally** (`{find: "orders", filter: {<string>}}`). 0012 rejected this
+  while a tooltip existed to justify the literals. With no tooltip there is no longer a feature on
+  the other side of the trade — only a lossy summary in a file nobody reads.
+- **Leave the collector in place, unused.** Dead code that reads customer data is the kind that
+  gets re-wired by someone who assumes it was reviewed for the use they have in mind.
+
+### Consequences
+
+- `listCurrentOperations`, `CurrentOpEntry`, `CurrentOperationsResult`, `CurrentOpScope`,
+  `buildCommandPreview` and the credential name/fragment denylists are deleted, with their tests.
+- The export's `aggregates` is now `storage` and `health`.
+- **The export confirmation stays, with honest wording.** The document no longer contains
+  application data, but it still names every database and collection and the addresses of the
+  servers behind them. That is a description of someone's estate, and one dialog before producing
+  a file whose purpose is to be sent elsewhere is proportionate. It no longer claims that
+  application data is in there.
+- Nothing in the dashboard requires the `inprog` privilege any more.

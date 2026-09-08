@@ -29,8 +29,8 @@ comes here to get oriented, not to keep vigil — so nothing above the fold move
 ## Code map
 
 - `src/commands/openClusterDashboard/**` — the command that opens the panel
-- `src/documentdb/utils/getClusterHealth.ts` — host-side collectors (health, storage,
-  `$currentOp`); sibling of `getClusterMetadata.ts` and shares its resilience model
+- `src/documentdb/utils/getClusterHealth.ts` — host-side collectors (health, storage); sibling of
+  `getClusterMetadata.ts` and shares its resilience model
 - `src/webviews/documentdb/clusterDashboard/**` — the webview: tRPC router, controller, React root,
   health strip and storage inventory
 
@@ -46,16 +46,18 @@ None yet. A user-manual page is due before this ships.
 - **The page is a place, not a feed.** The storage inventory refreshes when the dashboard opens
   and on demand; lightweight health polling pauses while the panel is hidden. There is no
   Operations tab and no observed-operation history.
+- **Nothing here reads what anyone is running.** `currentOp` is out of scope for this iteration,
+  so no command document, query filter or client address enters the feature at all
+  ([0019](./decisions.md#0019--currentop-is-out-of-scope-for-this-iteration)).
 - **Every collector degrades per command.** A failed or unsupported command nulls its own fields
   and records the reason; the page never shows a broken panel. There is no capability probe,
   because a probe is a cache with an invalidation problem
   ([0002](./decisions.md#0002--per-command-trycatch-no-capability-probe-reconstructed)).
 - **Diagnostics are point-in-time and unmodified.** Export re-reads everything on the host and
-  reports each command beside exactly what the server answered, or why it did not. It does not
-  retain or export observed-operation history. The one interpreted section is the current-operation
-  snapshot, because mapping it is where credential-bearing commands lose their body and
-  credential-shaped fields lose their values at any depth
-  ([0017](./decisions.md#0017--diagnostics-carry-raw-replies-not-a-second-reading-of-them)).
+  reports each command beside exactly what the server answered, or why it did not
+  ([0017](./decisions.md#0017--diagnostics-carry-raw-replies-not-a-second-reading-of-them)). It
+  carries no application data, but it does name every database and collection and the addresses of
+  the servers behind them, so it is confirmed before it is produced.
 - **A row's context-menu entry runs on the host**, against the tree node the row names, rather than
   being relayed through the webview
   ([0016](./decisions.md#0016--row-context-menu-entries-run-on-the-host)).
@@ -74,6 +76,7 @@ None yet. A user-manual page is due before this ships.
 | 2026-08-16 | Milestoned 0.11.0 by the maintainer                                                | —                                                                                                                                                                   |
 | 2026-08-24 | Merged current `main`; docs migrated into this layout                              | —                                                                                                                                                                   |
 | 2026-09-07 | Feature set reduced to the inventory; the leftovers of the removed panels swept up | [0015](./decisions.md#0015--storage-refresh-is-explicit-after-initial-load)–[0017](./decisions.md#0017--diagnostics-carry-raw-replies-not-a-second-reading-of-them) |
+| 2026-09-08 | `currentOp` dropped from the iteration, taking the last application data with it   | [0019](./decisions.md#0019--currentop-is-out-of-scope-for-this-iteration)                                                                                           |
 
 ## Decisions
 
@@ -83,9 +86,9 @@ See [decisions.md](./decisions.md). The two that constrain everything else:
   the page is a **data inventory**, not a performance dashboard. This **reverses the model in
   [design.md](./design.md) §1.1**, which has not been rewritten. Read `design.md` with this entry
   in hand.
-- [0010](./decisions.md#0010--an-opid-is-not-an-identity-occurrences-are) — an `opid` is not an
-  identity. Anything that must still refer to the same operation a moment later keys on the
-  occurrence instead, because servers reissue ids the moment an operation ends.
+- [0019](./decisions.md#0019--currentop-is-out-of-scope-for-this-iteration) — `currentOp` is out of
+  scope. Nothing in the feature reads what anyone is running, which is what keeps application data
+  out of it. Entries 0003, 0010 and 0012 are all about `currentOp` and no longer describe the code.
 
 ## Open gaps
 
@@ -101,9 +104,11 @@ gaps below remain.
   design and vCore corrections remain useful; its genre framing does not. It has not been
   re-verified against the code.
 - **Refresh interval is fixed at 5 s**, not user-configurable.
-- **Command previews still carry query literals.** Redaction removes credentials, not application
-  data; export warns rather than redacting
-  ([0012](./decisions.md#0012--warn-at-the-sharing-boundary-rather-than-redact-the-preview)).
+- **No live operations.** `currentOp` is out of scope for this iteration
+  ([0019](./decisions.md#0019--currentop-is-out-of-scope-for-this-iteration)). Bringing it back
+  means designing a surface for it, and answering the redaction question that
+  [0012](./decisions.md#0012--warn-at-the-sharing-boundary-rather-than-redact-the-preview) left
+  open, rather than restoring the collector.
 - **No search or create flows below the collection level.** The Data tab drills from the database
   list into one database's collections and hands off to the Collection View from there, but there
   is no navigation below that. PR #753 would have covered it and was abandoned

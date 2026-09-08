@@ -15,7 +15,6 @@ import { getHostsFromConnectionString } from '../../../documentdb/utils/connecti
 import {
     getDatabaseCollections,
     getStorageStats,
-    listCurrentOperations,
     sampleClusterHealth,
     type ClusterHealthSample,
     type ClusterStorageStats,
@@ -211,16 +210,13 @@ export const clusterDashboardRouter = router({
      * editor: an untitled document is dirty from the moment it opens and VS Code asks the
      * reader to save or discard a file they only wanted to look at.
      *
-     * Everything is re-read here, on the host, at the moment of export — including the health
-     * sample. No connection string or credential is included: cluster metadata carries only
-     * hashed domain fragments, and command previews have had credential-bearing commands and
-     * secret-shaped fields stripped.
+     * Everything is re-read here, on the host, at the moment of export. No application data
+     * travels with it: the document describes the deployment and what it holds, never the
+     * documents themselves or the commands running against them.
      *
-     * **That is not the same as safe to share.** What survives redaction is the rest of every
-     * in-flight command: query filter values, document contents, and the client address that
-     * issued them. This document is built to be attached to a bug report, so the user is asked
-     * to confirm what it contains before it is produced rather than discovering it after
-     * uploading. See `buildCommandPreview` for why a denylist cannot do better.
+     * It is still a description of someone's estate — database and collection names, host
+     * addresses, server configuration — so it is confirmed before it is produced rather than
+     * after it has been uploaded.
      */
     exportDiagnostics: publicProcedureWithTelemetry.mutation(async ({ ctx }): Promise<void> => {
         const myCtx = ctx as WithTelemetry<RouterContext>;
@@ -230,7 +226,7 @@ export const clusterDashboardRouter = router({
             {
                 modal: true,
                 detail: l10n.t(
-                    'The document includes the commands running on this cluster: query filters, document values, and the client addresses that issued them, alongside storage figures and the server’s own description of itself. Passwords and connection strings are removed, but application data is not. Review it before sharing.',
+                    'The document names every database and collection on this cluster and describes the servers behind it, including their addresses. It contains no documents, queries or credentials. Review it before sharing.',
                 ),
             },
             l10n.t('Export'),
@@ -246,9 +242,8 @@ export const clusterDashboardRouter = router({
         const mongoClient = client.getMongoClient();
         const storageCommands: RawCommandDiagnostic[] = [];
 
-        const [storage, operations, commands, health] = await Promise.all([
+        const [storage, commands, health] = await Promise.all([
             getStorageStats(mongoClient, undefined, storageCommands),
-            listCurrentOperations(mongoClient),
             collectRawCommandReplies(mongoClient),
             sampleClusterHealth(mongoClient),
         ]);
@@ -258,12 +253,9 @@ export const clusterDashboardRouter = router({
             cluster: { displayName: myCtx.clusterDisplayName, viewId: myCtx.viewId },
             // Each invocation beside exactly what the server answered (or why it did not).
             commands: [...commands, ...storageCommands],
-            // Interpreted summaries built for the dashboard, not raw server replies. Current
-            // operations are here rather than among the commands above because this is where
-            // credential material is stripped out of them.
+            // Interpreted summaries built for the dashboard, not raw server replies.
             aggregates: {
                 storage,
-                currentOperations: operations,
                 health,
             },
         };

@@ -3,12 +3,11 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { type Document, type MongoClient } from 'mongodb';
+import { type MongoClient } from 'mongodb';
 
 import {
     getDatabaseCollections,
     getStorageStats,
-    listCurrentOperations,
     sampleClusterHealth,
     type RawCommandDiagnostic,
 } from './getClusterHealth';
@@ -23,7 +22,6 @@ type CommandHandler = (command: Record<string, unknown>) => unknown;
 
 interface FakeClientOptions {
     adminCommand?: CommandHandler;
-    aggregate?: (pipeline: Document[]) => unknown[];
     listDatabases?: () => unknown;
     dbCommand?: (databaseName: string, command: Record<string, unknown>) => unknown;
     listCollections?: (databaseName: string) => unknown[];
@@ -58,20 +56,6 @@ function createFakeClient(options: FakeClientOptions): {
     const client = {
         db: (databaseName?: string) => ({
             admin: () => admin,
-            aggregate: (pipeline: Document[]) => ({
-                toArray: (): Promise<unknown[]> => {
-                    if (!options.aggregate) {
-                        return Promise.reject(new Error('$currentOp not supported'));
-                    }
-                    try {
-                        return Promise.resolve(options.aggregate(pipeline));
-                    } catch (error) {
-                        // Rejected rather than thrown synchronously, so a handler that
-                        // refuses a pipeline behaves like a real driver failure.
-                        return Promise.reject(error instanceof Error ? error : new Error(String(error)));
-                    }
-                },
-            }),
             command: (command: Record<string, unknown>): Promise<unknown> => {
                 if (!options.dbCommand) {
                     return Promise.reject(new Error('command not supported'));
@@ -100,33 +84,6 @@ function createFakeClient(options: FakeClientOptions): {
     return { client, adminCommands };
 }
 
-describe('listCurrentOperations — round-trip discipline', () => {
-    it('falls back to the caller`s own operations when the authorized forms are refused', async () => {
-        const attempted: string[] = [];
-        const { client } = createFakeClient({
-            aggregate: (pipeline) => {
-                const stage = (pipeline?.[0] ?? {}) as { $currentOp?: { allUsers?: boolean } };
-                attempted.push(stage.$currentOp?.allUsers === true ? 'all' : 'own');
-                if (stage.$currentOp?.allUsers === true) {
-                    throw new Error('Unauthorized');
-                }
-                return [{ opid: 1, op: 'query', ns: 'db.coll', active: true }];
-            },
-            adminCommand: () => {
-                attempted.push('currentOp');
-                throw new Error('Unauthorized');
-            },
-        });
-
-        const result = await listCurrentOperations(client);
-
-        // A narrower list is reported as narrower rather than presented as the whole cluster.
-        expect(result.scope).toBe('own');
-        expect(result.operations).toHaveLength(1);
-        expect(attempted).toEqual(['all', 'currentOp', 'own']);
-    });
-});
-
 describe('sampleClusterHealth', () => {
     it('still returns a latency reading when serverStatus is unsupported', async () => {
         const { client } = createFakeClient({
@@ -136,7 +93,6 @@ describe('sampleClusterHealth', () => {
                 }
                 throw new Error('CommandNotSupported: serverStatus');
             },
-            aggregate: () => [{ opid: 7, op: 'query', ns: 'db.coll', active: true }],
         });
 
         const sample = await sampleClusterHealth(client);
@@ -177,7 +133,6 @@ describe('sampleClusterHealth', () => {
                 }
                 throw new Error('unexpected command');
             },
-            aggregate: () => [],
         });
 
         const sample = await sampleClusterHealth(client);
@@ -228,371 +183,6 @@ describe('sampleClusterHealth', () => {
         const sample = await sampleClusterHealth(client);
 
         expect(sample.errors.map(getFailedCommandName)).toEqual(['ping', 'serverStatus']);
-    });
-});
-
-describe('listCurrentOperations', () => {
-    it('maps aggregation results and stringifies the opid', async () => {
-        const { client } = createFakeClient({
-            aggregate: () => [
-                {
-                    opid: 42,
-                    op: 'query',
-                    ns: 'sales.orders',
-                    secs_running: 9,
-                    active: true,
-                    client: '127.0.0.1:1234',
-                    command: { find: 'orders' },
-                },
-            ],
-        });
-
-        const result = await listCurrentOperations(client);
-
-        expect(result.errors).toEqual([]);
-        expect(result.operations).toHaveLength(1);
-        expect(result.operations[0]).toEqual({
-            opid: '42',
-            type: 'query',
-            namespace: 'sales.orders',
-            secsRunning: 9,
-            active: true,
-            clientDescription: '127.0.0.1:1234',
-            commandPreview: '{"find":"orders"}',
-        });
-    });
-
-    it('drops the server background threads reported as op "none"', async () => {
-        const { client } = createFakeClient({
-            aggregate: () => [
-                { opid: 1, op: 'none', ns: '', active: true, desc: 'Checkpointer' },
-                { opid: 2, op: 'none', ns: '', active: true, desc: 'JournalFlusher' },
-                { opid: 3, op: 'query', ns: 'sales.orders', active: true, desc: 'conn4' },
-            ],
-        });
-
-        const result = await listCurrentOperations(client);
-
-        expect(result.operations).toHaveLength(1);
-        expect(result.operations[0].opid).toBe('3');
-        expect(result.operations[0].clientDescription).toBe('conn4');
-    });
-
-    it('drops the $currentOp query that is collecting the list', async () => {
-        const { client } = createFakeClient({
-            aggregate: () => [
-                {
-                    opid: 10,
-                    op: 'command',
-                    ns: 'admin.$cmd.aggregate',
-                    active: true,
-                    command: { aggregate: 1, pipeline: [{ $currentOp: { allUsers: true } }, { $limit: 100 }] },
-                },
-                { opid: 11, op: 'query', ns: 'sales.orders', active: true },
-            ],
-        });
-
-        const result = await listCurrentOperations(client);
-
-        expect(result.operations.map((operation) => operation.opid)).toEqual(['11']);
-    });
-
-    it('drops the vCore self-inspection op, which reports no pipeline', async () => {
-        // Observed on Azure DocumentDB (vCore): the inspecting aggregation is reported as
-        // `{aggregate: ''}` with no namespace, so the pipeline check cannot see it and the
-        // tab shows a permanent unkillable row on an idle cluster.
-        const { client } = createFakeClient({
-            aggregate: () => [
-                { opid: '10000012901:1785186130769978', op: 'command', active: true, command: { aggregate: '' } },
-                { opid: '10000012902:1785186130769979', op: 'command', ns: 'sales.orders', active: true },
-            ],
-        });
-
-        const result = await listCurrentOperations(client);
-
-        expect(result.operations.map((operation) => operation.opid)).toEqual(['10000012902:1785186130769979']);
-    });
-
-    it('drops the vCore parallel workers of a single user aggregation', async () => {
-        // vCore fans one aggregation out internally and reports every worker as its own op
-        // with an empty opid, so a single slow query rendered as three rows — two of them
-        // unkillable duplicates — and tripled the Active Operations tile.
-        const { client } = createFakeClient({
-            aggregate: () => [
-                { opid: '10000053116:1785197164497492', op: 'command', ns: 'analytics.events', active: true },
-                {
-                    opid: '',
-                    op: 'command',
-                    ns: 'analytics.events',
-                    active: true,
-                    parallelWorker: true,
-                    leaderOpPatter: 53116,
-                },
-                {
-                    opid: '',
-                    op: 'command',
-                    ns: 'analytics.events',
-                    active: true,
-                    parallelWorker: true,
-                    leaderOpPatter: 53116,
-                },
-            ],
-        });
-
-        const result = await listCurrentOperations(client);
-
-        expect(result.operations.map((operation) => operation.opid)).toEqual(['10000053116:1785197164497492']);
-    });
-
-    it('excludes parallel workers in the pipeline, before the result limit', async () => {
-        const stages: Document[] = [];
-        const { client } = createFakeClient({
-            aggregate: (pipeline) => {
-                stages.push(...pipeline);
-                return [];
-            },
-        });
-
-        await listCurrentOperations(client);
-
-        // Serialized so the workers cannot consume the `$limit` budget on a busy cluster.
-        expect(JSON.stringify(stages)).toContain('parallelWorker');
-    });
-
-    it('drops the legacy currentOp command that is collecting the list', async () => {
-        const { client } = createFakeClient({
-            adminCommand: (command) => {
-                if (command.currentOp === 1) {
-                    return {
-                        inprog: [
-                            { opid: 20, op: 'command', ns: 'admin.$cmd', active: true, command: { currentOp: 1 } },
-                            { opid: 21, op: 'update', ns: 'sales.orders', active: true },
-                        ],
-                    };
-                }
-                throw new Error('unexpected command');
-            },
-        });
-
-        const result = await listCurrentOperations(client);
-
-        expect(result.operations.map((operation) => operation.opid)).toEqual(['21']);
-    });
-
-    it('excludes background threads before the result limit is applied', async () => {
-        // Regression guard: filtering after `$limit` lets background threads consume the
-        // whole budget so real user operations vanish on a busy server.
-        const stages: Document[] = [];
-        const { client } = createFakeClient({
-            aggregate: (pipeline) => {
-                stages.push(...pipeline);
-                return [];
-            },
-        });
-
-        await listCurrentOperations(client);
-
-        const matchIndex = stages.findIndex((stage) => '$match' in stage);
-        const limitIndex = stages.findIndex((stage) => '$limit' in stage);
-
-        expect(matchIndex).toBeGreaterThanOrEqual(0);
-        expect(limitIndex).toBeGreaterThan(matchIndex);
-    });
-
-    it('falls back to the legacy currentOp command when the aggregation fails', async () => {
-        const { client } = createFakeClient({
-            adminCommand: (command) => {
-                if (command.currentOp === 1) {
-                    return { inprog: [{ opid: 'op-1', op: 'command', ns: 'admin.$cmd', active: false }] };
-                }
-                throw new Error('unexpected command');
-            },
-        });
-
-        const result = await listCurrentOperations(client);
-
-        expect(result.errors).toEqual([]);
-        expect(result.operations).toHaveLength(1);
-        expect(result.operations[0].opid).toBe('op-1');
-    });
-
-    it('reports both command names when neither form is supported', async () => {
-        const { client } = createFakeClient({});
-
-        const result = await listCurrentOperations(client);
-
-        expect(result.operations).toEqual([]);
-        expect(result.errors.map(getFailedCommandName)).toEqual(['$currentOp', 'currentOp']);
-    });
-
-    it('reports the cluster-wide scope when the privileged form succeeds', async () => {
-        const { client } = createFakeClient({ aggregate: () => [] });
-
-        const result = await listCurrentOperations(client);
-
-        expect(result.scope).toBe('all');
-    });
-
-    it('falls back to own operations when the cluster-wide forms are refused', async () => {
-        // A connection without the `inprog` privilege: both cluster-wide forms are refused,
-        // but the account may always see its own operations. Without the fallback the
-        // diagnostics would otherwise omit operations on a least-privileged account.
-        const { client } = createFakeClient({
-            aggregate: (pipeline) => {
-                const stage = pipeline[0] as { $currentOp?: { allUsers?: boolean } };
-                if (stage.$currentOp?.allUsers === true) {
-                    throw new Error('not authorized on admin to execute command');
-                }
-                return [{ opid: 5, op: 'query', ns: 'sales.orders', active: true }];
-            },
-            adminCommand: () => {
-                throw new Error('not authorized on admin to execute command');
-            },
-        });
-
-        const result = await listCurrentOperations(client);
-
-        expect(result.scope).toBe('own');
-        expect(result.operations.map((operation) => operation.opid)).toEqual(['5']);
-        // A successful fallback is not an error — surfacing one would put a permanent
-        // warning on the tab of every cluster that only supports the narrower form.
-        expect(result.errors).toEqual([]);
-    });
-
-    it('uses $ownOps as the last resort when only the legacy command exists', async () => {
-        const { client, adminCommands } = createFakeClient({
-            adminCommand: (command) => {
-                if (command.currentOp === 1 && command.$ownOps === true) {
-                    return { inprog: [{ opid: 'op-9', op: 'update', ns: 'sales.orders', active: true }] };
-                }
-                throw new Error('not authorized on admin to execute command');
-            },
-        });
-
-        const result = await listCurrentOperations(client);
-
-        expect(result.scope).toBe('own');
-        expect(result.operations.map((operation) => operation.opid)).toEqual(['op-9']);
-        expect(adminCommands).toContainEqual({ currentOp: 1, $ownOps: true });
-    });
-
-    it('stops after the first attempt when the cluster is unreachable', async () => {
-        // Every attempt would pay the full server-selection timeout, so a dead connection
-        // must cost one timeout rather than four — the sample interval depends on it.
-        let attempts = 0;
-        const { client } = createFakeClient({
-            aggregate: () => {
-                attempts += 1;
-                const error = new Error('Server selection timed out after 30000 ms');
-                error.name = 'MongoServerSelectionError';
-                throw error;
-            },
-            adminCommand: () => {
-                attempts += 1;
-                throw new Error('unexpected command');
-            },
-        });
-
-        const result = await listCurrentOperations(client);
-
-        expect(attempts).toBe(1);
-        expect(result.operations).toEqual([]);
-        expect(result.errors.map(getFailedCommandName)).toEqual(['$currentOp']);
-    });
-
-    it('redacts credential-bearing commands caught in flight', async () => {
-        // `currentOp` reports commands verbatim, and `commandPreview` is rendered in a
-        // webview tooltip. An authentication handshake or a user-management command caught
-        // mid-flight must never carry its secret across that boundary.
-        const { client } = createFakeClient({
-            aggregate: () => [
-                {
-                    opid: 1,
-                    op: 'command',
-                    ns: 'admin.$cmd',
-                    active: true,
-                    command: { saslStart: 1, payload: 'biwsbj1h' },
-                },
-                {
-                    opid: 2,
-                    op: 'command',
-                    ns: 'admin.$cmd',
-                    active: true,
-                    command: { createUser: 'alice', pwd: 'hunter2', roles: ['readWrite'] },
-                },
-                {
-                    opid: 3,
-                    op: 'command',
-                    ns: 'sales.$cmd',
-                    active: true,
-                    command: { find: 'orders', filter: { accessToken: 'AKIAsecret' } },
-                },
-            ],
-        });
-
-        const result = await listCurrentOperations(client);
-        const previews = result.operations.map((operation) => operation.commandPreview);
-
-        expect(previews[0]).toBe('{"saslStart":"[redacted]"}');
-        expect(previews[1]).toBe('{"createUser":"[redacted]"}');
-        // A nested credential field is redacted without discarding the rest of the command,
-        // which is what makes the preview useful at all. `accessToken` is not a wire-protocol
-        // field: it is caught by shape, because application data is where these actually appear.
-        expect(previews[2]).toBe('{"find":"orders","filter":{"accessToken":"[redacted]"}}');
-        expect(previews.join(' ')).not.toContain('hunter2');
-        expect(previews.join(' ')).not.toContain('biwsbj1h');
-    });
-
-    it('redacts secret-shaped application field names at any depth, in objects and arrays', async () => {
-        const { client } = createFakeClient({
-            aggregate: () => [
-                {
-                    opid: 1,
-                    op: 'query',
-                    ns: 'app.users',
-                    active: true,
-                    command: {
-                        find: 'users',
-                        filter: {
-                            password: 'hunter2',
-                            sessions: [{ accessToken: 'abc', label: 'laptop' }],
-                            nested: { clientSecret: 'shh', apiKey: 'k1' },
-                        },
-                    },
-                },
-            ],
-        });
-
-        const [preview] = (await listCurrentOperations(client)).operations.map((o) => o.commandPreview);
-
-        // The shape of the query survives — that is the point of a preview — while the values
-        // that look like secrets do not.
-        expect(preview).toContain('"find":"users"');
-        expect(preview).toContain('"label":"laptop"');
-        for (const secret of ['hunter2', 'abc', 'shh', 'k1']) {
-            expect(preview).not.toContain(secret);
-        }
-    });
-
-    it('keeps an index specification readable, because `key` is not a secret outside auth commands', async () => {
-        const { client } = createFakeClient({
-            aggregate: () => [
-                {
-                    opid: 1,
-                    op: 'command',
-                    ns: 'sales.$cmd',
-                    active: true,
-                    command: { createIndexes: 'orders', indexes: [{ key: { tenant: 1 }, name: 'tenant_1' }] },
-                },
-            ],
-        });
-
-        const [preview] = (await listCurrentOperations(client)).operations.map((o) => o.commandPreview);
-
-        // Redacting `key` globally hid the one field that says what the index is. The commands
-        // where `key` carries credential material are discarded wholesale by name instead.
-        expect(preview).toContain('"key":{"tenant":1}');
-        expect(preview).toContain('"name":"tenant_1"');
     });
 });
 
