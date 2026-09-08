@@ -60,11 +60,6 @@ regular new-connection wizard instead ([0001](./decisions.md#0001--single-manage
   is a Docker CLI that can reach a Linux-container daemon from the extension host.
 - **Collision safety is non-negotiable.** A pre-existing container holding a planned name or port is
   never recreated over. Ours gets re-adopted; anything else is rejected with an inline error.
-- **Sample data loads after readiness.** When requested and `sampledb` is absent, setup waits for
-  the image's bundled init script to finish before reporting Running. Image 0.116 removed the
-  script's password argument; Quick Start supplies `DOCUMENTDB_PASSWORD` inside the container
-  instead, using the legacy argument only when the script's help identifies the older interface.
-  See [design §8.4](./design.md#84-container-initialization-and-seed-data).
 
 ## Timeline
 
