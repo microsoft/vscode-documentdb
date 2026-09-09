@@ -3,7 +3,16 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { ProgressBar, Toolbar, ToolbarButton, Tooltip } from '@fluentui/react-components';
+import {
+    Button,
+    MessageBar,
+    MessageBarActions,
+    MessageBarBody,
+    ProgressBar,
+    Toolbar,
+    ToolbarButton,
+    Tooltip,
+} from '@fluentui/react-components';
 import { ArrowClockwiseRegular, EyeRegular, WindowConsoleRegular } from '@fluentui/react-icons';
 import { useConfiguration } from '@microsoft/vscode-ext-webview/react';
 import * as l10n from '@vscode/l10n';
@@ -11,6 +20,7 @@ import { useCallback, useEffect, useRef, useState, type JSX } from 'react';
 
 import { type ClusterHealthSample, type ClusterStorageStats } from '../../../documentdb/utils/getClusterHealth';
 import { useTrpcClient } from '../../_integration/useTrpcClient';
+import { Announcer } from '../../components/accessibility';
 import './clusterDashboard.scss';
 import { isInventoryChangedMessage, isNamespaceBusyMessage } from './clusterDashboardContextMenu';
 import { type ClusterDashboardWebviewConfigurationType } from './clusterDashboardController';
@@ -37,11 +47,20 @@ export const ClusterDashboard = (): JSX.Element => {
     const trpcClient = useTrpcClient();
 
     const [clusterInfo, setClusterInfo] = useState<ClusterDashboardInfo | null>(null);
+    /**
+     * Why the header facts are missing.
+     *
+     * `clusterInfo === null` alone cannot tell "still loading" from "gave up": without this,
+     * a rejected first read left the panel-wide progress bar animating forever.
+     */
+    const [clusterInfoError, setClusterInfoError] = useState<string | null>(null);
     // Only the newest sample is kept: the header states the current connection state and
     // latency, and the diagnostics document takes its own sample on the host.
     const [latestSample, setLatestSample] = useState<ClusterHealthSample | null>(null);
     const [consecutiveFailures, setConsecutiveFailures] = useState(0);
     const [storageStats, setStorageStats] = useState<ClusterStorageStats | null>(null);
+    /** The same loading/loaded/failed distinction for the inventory read. */
+    const [storageError, setStorageError] = useState<string | null>(null);
     const [storageLastUpdatedAt, setStorageLastUpdatedAt] = useState<number>();
     const [isRefreshingStorage, setIsRefreshingStorage] = useState(false);
     const [isManuallyRefreshingStorage, setIsManuallyRefreshingStorage] = useState(false);
@@ -86,28 +105,73 @@ export const ClusterDashboard = (): JSX.Element => {
     const sampleInFlightRef = useRef(false);
     const storageInFlightRef = useRef(false);
 
+    /**
+     * Screen-reader narration for state this panel only shows visually.
+     *
+     * The top ProgressBar is `aria-hidden`, the skeleton is silent and the connection Badge
+     * is a plain label, so without this an assistive-technology user is told nothing when a
+     * refresh finishes, a row starts being deleted, or the cluster drops.
+     *
+     * The bumped `n` re-mounts the `Announcer`, which otherwise only fires on a false→true
+     * transition and would swallow a repeated identical message. Same shape as the index list.
+     */
+    const [live, setLive] = useState<{ text: string; politeness: 'polite' | 'assertive'; n: number }>({
+        text: '',
+        politeness: 'polite',
+        n: 0,
+    });
+    const announce = useCallback((text: string, politeness: 'polite' | 'assertive' = 'polite'): void => {
+        setLive((previous) => ({ text, politeness, n: previous.n + 1 }));
+    }, []);
+
     const loadStorageStats = useCallback(
-        async (source: 'background' | 'manual' = 'background'): Promise<void> => {
+        async (source: 'background' | 'manual' | 'reconcile' = 'background'): Promise<void> => {
             if (storageInFlightRef.current) {
                 return;
             }
             storageInFlightRef.current = true;
             setIsRefreshingStorage(true);
             setIsManuallyRefreshingStorage(source === 'manual');
+            setStorageError(null);
+
+            // Only a read the user asked for narrates its start. `reconcile` follows a
+            // command that has already reported itself, so it speaks only at the end.
+            if (source === 'manual') {
+                announce(l10n.t('Refreshing storage statistics…'));
+            }
 
             try {
                 const stats = await trpcClient.clusterDashboard.getStorageStats.query();
                 if (!disposedRef.current) {
                     setStorageStats(stats);
                     setStorageLastUpdatedAt(Date.now());
+
+                    // The count is the payload: a reload that returns the same rows is
+                    // otherwise indistinguishable from one that never happened.
+                    if (source === 'manual') {
+                        announce(l10n.t('Storage statistics refreshed. {0} databases.', stats.databases.length));
+                    } else if (source === 'reconcile') {
+                        announce(l10n.t('Inventory updated. {0} databases.', stats.databases.length));
+                    }
                 }
             } catch (error) {
+                const cause = error instanceof Error ? error.message : String(error);
                 if (!disposedRef.current) {
-                    void trpcClient.common.displayErrorMessage.mutate({
-                        message: l10n.t('Failed to read storage statistics.'),
-                        modal: false,
-                        cause: error instanceof Error ? error.message : String(error),
-                    });
+                    setStorageError(cause);
+
+                    if (source !== 'background') {
+                        announce(l10n.t('Failed to read storage statistics.'), 'assertive');
+                    }
+
+                    // The inline bar is the durable report. A toast is added only when the
+                    // user asked for this read and is waiting on an answer.
+                    if (source === 'manual') {
+                        void trpcClient.common.displayErrorMessage.mutate({
+                            message: l10n.t('Failed to read storage statistics.'),
+                            modal: false,
+                            cause,
+                        });
+                    }
                 }
             } finally {
                 storageInFlightRef.current = false;
@@ -117,36 +181,35 @@ export const ClusterDashboard = (): JSX.Element => {
                 }
             }
         },
-        [trpcClient],
+        [announce, trpcClient],
     );
+
+    const loadClusterInfo = useCallback(async (): Promise<void> => {
+        setClusterInfoError(null);
+
+        try {
+            const info = await trpcClient.clusterDashboard.getClusterInfo.query();
+            if (!disposedRef.current) {
+                setClusterInfo(info);
+            }
+        } catch (error) {
+            if (!disposedRef.current) {
+                setClusterInfoError(error instanceof Error ? error.message : String(error));
+            }
+        }
+    }, [trpcClient]);
 
     // One-time header + storage load.
     useEffect(() => {
         disposedRef.current = false;
 
-        void trpcClient.clusterDashboard.getClusterInfo
-            .query()
-            .then((info) => {
-                if (!disposedRef.current) {
-                    setClusterInfo(info);
-                }
-            })
-            .catch((error: unknown) => {
-                if (!disposedRef.current) {
-                    void trpcClient.common.displayErrorMessage.mutate({
-                        message: l10n.t('Failed to read cluster information.'),
-                        modal: false,
-                        cause: error instanceof Error ? error.message : String(error),
-                    });
-                }
-            });
-
+        void loadClusterInfo();
         void loadStorageStats();
 
         return () => {
             disposedRef.current = true;
         };
-    }, [loadStorageStats, trpcClient]);
+    }, [loadClusterInfo, loadStorageStats]);
 
     /**
      * Whether the panel is on screen.
@@ -252,6 +315,16 @@ export const ClusterDashboard = (): JSX.Element => {
         const handleMessage = (event: MessageEvent<unknown>): void => {
             if (isNamespaceBusyMessage(event.data)) {
                 const { databaseName, collectionName, operation, busy } = event.data;
+
+                // Only the start is narrated. `busy: false` is an abort or a hand-off to the
+                // settling phase, not an outcome, and the reload that follows says the rest.
+                if (busy) {
+                    const name = collectionName ?? databaseName;
+                    announce(
+                        operation === 'delete' ? l10n.t('Deleting “{0}”…', name) : l10n.t('Creating “{0}”…', name),
+                    );
+                }
+
                 setBusyNamespaces((current) => {
                     const matches = (namespace: { databaseName: string; collectionName?: string }): boolean =>
                         namespace.databaseName === databaseName && namespace.collectionName === collectionName;
@@ -277,7 +350,7 @@ export const ClusterDashboard = (): JSX.Element => {
                 return;
             }
 
-            void loadStorageStats();
+            void loadStorageStats('reconcile');
             if (inventoryViewState.currentDatabase === event.data.databaseName) {
                 reloadCollections();
             }
@@ -285,7 +358,7 @@ export const ClusterDashboard = (): JSX.Element => {
 
         window.addEventListener('message', handleMessage);
         return () => window.removeEventListener('message', handleMessage);
-    }, [inventoryViewState.currentDatabase, loadStorageStats, reloadCollections]);
+    }, [announce, inventoryViewState.currentDatabase, loadStorageStats, reloadCollections]);
 
     useEffect(() => {
         if (isRefreshingStorage || collections.isLoading) {
@@ -352,29 +425,43 @@ export const ClusterDashboard = (): JSX.Element => {
         try {
             if (databaseName === null) {
                 await trpcClient.clusterDashboard.createDatabase.mutate();
-                await loadStorageStats();
+                await loadStorageStats('reconcile');
                 settleCreatedNamespace(null);
             } else {
                 await trpcClient.clusterDashboard.createCollection.mutate({ databaseName });
-                await loadStorageStats();
+                await loadStorageStats('reconcile');
                 reloadCollections();
                 settleCreatedNamespace(databaseName);
             }
         } catch (error) {
+            const cause = error instanceof Error ? error.message : String(error);
+            announce(
+                databaseName === null
+                    ? l10n.t('Failed to create the database.')
+                    : l10n.t('Failed to create the collection.'),
+                'assertive',
+            );
             void trpcClient.common.displayErrorMessage.mutate({
                 message:
                     databaseName === null
                         ? l10n.t('Failed to create the database.')
                         : l10n.t('Failed to create the collection.'),
                 modal: false,
-                cause: error instanceof Error ? error.message : String(error),
+                cause,
             });
         } finally {
             if (!disposedRef.current) {
                 setIsCreatingNamespace(false);
             }
         }
-    }, [inventoryViewState.currentDatabase, loadStorageStats, reloadCollections, settleCreatedNamespace, trpcClient]);
+    }, [
+        announce,
+        inventoryViewState.currentDatabase,
+        loadStorageStats,
+        reloadCollections,
+        settleCreatedNamespace,
+        trpcClient,
+    ]);
 
     const connectionState: ConnectionState =
         consecutiveFailures >= FAILURE_THRESHOLD
@@ -386,12 +473,32 @@ export const ClusterDashboard = (): JSX.Element => {
     // Every visible load reports through the one bar pinned to the top edge. The health poll
     // is deliberately excluded: it runs every five seconds and would leave the bar permanently
     // animating. Background mutation reconciliation keeps the table rows mounted underneath.
+    // A failed read is terminal, so it stops the bar rather than leaving it running forever.
     const isBusy =
-        clusterInfo === null || isRefreshingStorage || collections.isLoading || isExporting || isCreatingNamespace;
+        (clusterInfo === null && clusterInfoError === null) ||
+        isRefreshingStorage ||
+        collections.isLoading ||
+        isExporting ||
+        isCreatingNamespace;
 
     return (
         <div className="clusterDashboard">
             {isBusy && <ProgressBar thickness="large" shape="square" className="progressBar" aria-hidden={true} />}
+
+            {/*
+             * The connection Badge changes silently, so the two transitions worth hearing get
+             * their own live regions. `connecting` is deliberately not announced: it is the
+             * mount state and also the gap after a single absorbed failure, which the badge
+             * itself treats as not worth reporting.
+             */}
+            <Announcer when={connectionState === 'connected'} message={l10n.t('Connected to the cluster.')} />
+            <Announcer
+                when={connectionState === 'disconnected'}
+                message={l10n.t('Lost connection to the cluster.')}
+                politeness="assertive"
+            />
+            {/* Everything else is narrated imperatively, from the callback that caused it. */}
+            <Announcer key={live.n} when={live.text.length > 0} message={live.text} politeness={live.politeness} />
 
             {/*
              * The shaded band is the Collection View's header row: it carries the view's
@@ -476,15 +583,56 @@ export const ClusterDashboard = (): JSX.Element => {
              * viewport of table.
              */}
             <div className="dashboardContent">
+                {/*
+                 * A failed read is stated where it happened and stays there until it succeeds:
+                 * a toast is gone by the time the reader looks up, and neither read retries
+                 * itself.
+                 */}
+                {clusterInfoError !== null && (
+                    <MessageBar intent="error" layout="multiline">
+                        <MessageBarBody>
+                            {l10n.t('Failed to read cluster information: {0}', clusterInfoError)}
+                        </MessageBarBody>
+                        <MessageBarActions>
+                            <Button appearance="secondary" onClick={() => void loadClusterInfo()}>
+                                {l10n.t('Retry')}
+                            </Button>
+                        </MessageBarActions>
+                    </MessageBar>
+                )}
+
+                {storageError !== null && (
+                    <MessageBar intent="error" layout="multiline">
+                        <MessageBarBody>
+                            {l10n.t('Failed to read storage statistics: {0}', storageError)}
+                        </MessageBarBody>
+                        <MessageBarActions>
+                            <Button
+                                appearance="secondary"
+                                disabled={isRefreshingStorage}
+                                onClick={() => void loadStorageStats('manual')}
+                            >
+                                {l10n.t('Retry')}
+                            </Button>
+                        </MessageBarActions>
+                    </MessageBar>
+                )}
+
                 <StatusStrip
                     storageStats={isRefreshingStorage ? null : storageStats}
                     currentDatabase={inventoryViewState.currentDatabase}
+                    isUnavailable={!isRefreshingStorage && storageStats === null && storageError !== null}
                 />
 
                 <InventoryPanel
                     storageStats={storageStats}
+                    storageError={storageError}
                     storageLastUpdatedAt={storageLastUpdatedAt}
-                    isLoading={storageStats === null || isManuallyRefreshingStorage || collections.isTableLoading}
+                    isLoading={
+                        (storageStats === null && storageError === null) ||
+                        isManuallyRefreshingStorage ||
+                        collections.isTableLoading
+                    }
                     collections={collections}
                     viewState={inventoryViewState}
                     onViewStateChange={setInventoryViewState}

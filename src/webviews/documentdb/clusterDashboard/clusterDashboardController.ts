@@ -19,7 +19,7 @@ import {
     type ShowCollectionsMessage,
 } from './clusterDashboardContextMenu';
 import { type RouterContext } from './clusterDashboardRouter';
-import { resolveNamespaceNode } from './resolveNamespaceNode';
+import { describeMissingNamespace, resolveNamespaceNode } from './resolveNamespaceNode';
 
 /**
  * Azure resource facts for an Azure-backed cluster.
@@ -134,6 +134,9 @@ const ROW_ACTIONS: Readonly<Record<string, RowAction>> = {
     [CLUSTER_DASHBOARD_CONTEXT_MENU_COMMANDS.importDocuments]: {
         kind: 'treeCommand',
         commandId: 'vscode-documentdb.command.importDocuments',
+        // Import awaits the whole transfer before returning, and it changes the two figures
+        // the dashboard puts on screen for that collection. Export does not, so it stays out.
+        invalidatesInventory: true,
     },
     [CLUSTER_DASHBOARD_CONTEXT_MENU_COMMANDS.deleteCollection]: {
         kind: 'treeCommand',
@@ -234,12 +237,11 @@ async function runRowAction(
 
     if (!node) {
         actionContext.telemetry.properties.failureReason = 'namespaceNodeNotFound';
+        // Non-modal, like every other dashboard failure: the same precondition is reported
+        // from the create procedures too, and a blocking dialog for a "expand this and retry"
+        // hint was the only modal error the panel raised.
         void vscode.window.showErrorMessage(
-            l10n.t(
-                'This action needs "{name}" to be present in the tree view, and it could not be found there. Expand this cluster in the tree and try again.',
-                { name: collectionName ?? databaseName },
-            ),
-            { modal: true },
+            describeMissingNamespace(panel.config.clusterDisplayName, databaseName, collectionName),
         );
         return;
     }
@@ -300,6 +302,9 @@ export function openClusterDashboardWebview(
         return existingPanel.controller;
     }
 
+    // Declared before `trpcContext` because that context closes over it, and assigned after,
+    // because `openAppWebview` needs the context. `const` is not available for that ordering.
+    // eslint-disable-next-line prefer-const
     let controller: AppWebviewController<ClusterDashboardWebviewConfigurationType>;
     const trpcContext: RouterContext = {
         dbExperience: API.DocumentDB,

@@ -907,6 +907,11 @@
           "group": "3_open@2"
         },
         {
+          "command": "vscode-documentdb.command.clusterDashboard.context.pasteCollection",
+          "when": "webviewId == 'vscode-documentdb-cluster-dashboard' && clusterDashboardNamespace == database",
+          "group": "4_transfer@1"
+        },
+        {
           "command": "vscode-documentdb.command.clusterDashboard.context.deleteDatabase",
           "when": "webviewId == 'vscode-documentdb-cluster-dashboard' && clusterDashboardNamespace == database",
           "group": "9_delete@1"

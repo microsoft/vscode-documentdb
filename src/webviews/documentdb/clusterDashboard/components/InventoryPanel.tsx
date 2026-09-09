@@ -10,6 +10,7 @@ import {
     BreadcrumbItem,
     Button,
     MessageBar,
+    MessageBarActions,
     MessageBarBody,
     SearchBox,
     Toolbar,
@@ -46,6 +47,13 @@ export interface InventoryViewState {
 
 export interface InventoryPanelProps {
     storageStats: ClusterStorageStats | null;
+    /**
+     * Why the cluster's database list is missing, or `null` when it is only still loading.
+     *
+     * The dashboard states the failure itself; the panel needs it only to stop showing a
+     * skeleton and to avoid claiming the cluster has no databases.
+     */
+    storageError: string | null;
     /** Time when the cluster's database inventory was last read successfully. */
     storageLastUpdatedAt?: number;
     /** True while the active inventory level is being re-read. */
@@ -101,6 +109,7 @@ export function createInventoryViewState(selectedDatabaseName?: string): Invento
  */
 export const InventoryPanel = ({
     storageStats,
+    storageError,
     storageLastUpdatedAt,
     isLoading,
     collections,
@@ -164,7 +173,7 @@ export const InventoryPanel = ({
 
     /** Everything the level holds, before the filter — the denominator of the footer count. */
     const lastUpdatedAt = currentDatabase === null ? storageLastUpdatedAt : collections.lastUpdatedAt;
-    const inventoryIsLoading = isLoading || storageStats === null;
+    const inventoryIsLoading = isLoading || (storageStats === null && storageError === null);
 
     /**
      * How tall the loading skeleton should stand, so a refresh does not collapse the page and
@@ -330,13 +339,22 @@ export const InventoryPanel = ({
             </Toolbar>
 
             {collections.error !== null && currentDatabase !== null && (
-                <MessageBar intent="warning">
+                <MessageBar intent="warning" layout="multiline">
                     <MessageBarBody>
                         {l10n.t('Could not list the collections of "{database}": {reason}', {
                             database: currentDatabase,
                             reason: collections.error,
                         })}
                     </MessageBarBody>
+                    <MessageBarActions>
+                        <Button
+                            appearance="secondary"
+                            disabled={collections.isLoading}
+                            onClick={() => collections.reload('manual')}
+                        >
+                            {l10n.t('Retry')}
+                        </Button>
+                    </MessageBarActions>
                 </MessageBar>
             )}
 
@@ -375,8 +393,14 @@ export const InventoryPanel = ({
             ) : allRows.length === 0 ? (
                 <div className="emptyState">
                     {currentDatabase !== null
-                        ? l10n.t('"{database}" holds no collections.', { database: currentDatabase })
-                        : errors.length > 0
+                        ? // A failed read knows nothing about the contents, so it must not be
+                          // reported as knowledge that there are none.
+                          collections.error !== null
+                            ? l10n.t('The collections of "{database}" could not be listed.', {
+                                  database: currentDatabase,
+                              })
+                            : l10n.t('"{database}" holds no collections.', { database: currentDatabase })
+                        : storageError !== null || errors.length > 0
                           ? l10n.t('Database statistics are unavailable for this cluster.')
                           : l10n.t('No user databases were reported for this cluster.')}
                 </div>

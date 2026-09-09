@@ -35,6 +35,7 @@ jest.mock('../../../commands/openCollectionView/openCollectionView', () => ({
 
 jest.mock('./resolveNamespaceNode', () => ({
     resolveNamespaceNode: jest.fn(async () => ({ id: 'tree-node' })),
+    describeMissingNamespace: jest.fn(() => 'missing-namespace-explanation'),
 }));
 
 import * as vscode from 'vscode';
@@ -221,6 +222,39 @@ describe('cluster dashboard native context menu commands', () => {
         controller.dispose();
     });
 
+    it('refreshes inventory after import returns, since it changes the figures on screen', async () => {
+        const { handlers, controller } = registerAndOpen();
+
+        await handlers.get(CLUSTER_DASHBOARD_CONTEXT_MENU_COMMANDS.importDocuments)?.({
+            clusterDashboardClusterId: CLUSTER,
+            clusterDashboardSelectedDatabase: 'sales',
+            clusterDashboardDatabase: 'sales',
+            clusterDashboardCollection: 'orders',
+        });
+
+        expect(controller.panel.webview.postMessage).toHaveBeenCalledWith({
+            type: 'clusterDashboard.inventoryChanged',
+            databaseName: 'sales',
+        });
+
+        controller.dispose();
+    });
+
+    it('leaves inventory alone after export, which changes nothing', async () => {
+        const { handlers, controller } = registerAndOpen();
+
+        await handlers.get(CLUSTER_DASHBOARD_CONTEXT_MENU_COMMANDS.exportDocuments)?.({
+            clusterDashboardClusterId: CLUSTER,
+            clusterDashboardSelectedDatabase: 'sales',
+            clusterDashboardDatabase: 'sales',
+            clusterDashboardCollection: 'orders',
+        });
+
+        expect(controller.panel.webview.postMessage).not.toHaveBeenCalled();
+
+        controller.dispose();
+    });
+
     it('reports a row whose tree node cannot be found instead of failing silently', async () => {
         const { handlers, controller } = registerAndOpen();
         jest.mocked(resolveNamespaceNode).mockResolvedValueOnce(undefined);
@@ -231,7 +265,9 @@ describe('cluster dashboard native context menu commands', () => {
             clusterDashboardDatabase: 'sales',
         });
 
-        expect(vscode.window.showErrorMessage).toHaveBeenCalled();
+        // The same non-modal surface and the same shared explanation the create procedures
+        // use for this precondition; a modal here made one failure feel like two.
+        expect(vscode.window.showErrorMessage).toHaveBeenCalledWith('missing-namespace-explanation');
         expect(vscode.commands.executeCommand).not.toHaveBeenCalled();
 
         controller.dispose();

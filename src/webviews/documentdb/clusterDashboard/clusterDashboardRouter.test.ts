@@ -32,6 +32,7 @@ jest.mock('../../../utils/readOnlyJsonDocumentProvider', () => ({
 jest.mock('./resolveNamespaceNode', () => ({
     resolveClusterNode: (...args: unknown[]) => mockResolveClusterNode(...args) as unknown,
     resolveNamespaceNode: (...args: unknown[]) => mockResolveNamespaceNode(...args) as unknown,
+    describeMissingNamespace: () => 'missing-namespace-explanation',
 }));
 
 jest.mock('../../_integration/trpc', () => {

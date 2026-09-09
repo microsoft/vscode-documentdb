@@ -17,6 +17,8 @@ export interface StatusStripProps {
     storageStats: ClusterStorageStats | null;
     /** The database whose collections are open, or `null` for cluster-wide metrics. */
     currentDatabase: string | null;
+    /** The read failed and will not be retried on its own, so the tiles must stop looking busy. */
+    isUnavailable?: boolean;
 }
 
 /**
@@ -202,8 +204,17 @@ function databaseTiles(stats: ClusterStorageStats | null, databaseName: string):
  * timescale of deployments, not seconds; per the dashboard's motion rule, nothing above the
  * fold animates. Liveness (connection state, latency) lives in the header badge instead.
  */
-export const StatusStrip = ({ storageStats, currentDatabase }: StatusStripProps): JSX.Element => {
-    const tiles = currentDatabase === null ? clusterTiles(storageStats) : databaseTiles(storageStats, currentDatabase);
+export const StatusStrip = ({
+    storageStats,
+    currentDatabase,
+    isUnavailable = false,
+}: StatusStripProps): JSX.Element => {
+    const computedTiles =
+        currentDatabase === null ? clusterTiles(storageStats) : databaseTiles(storageStats, currentDatabase);
+
+    // A failed read is a terminal state, not slow work: collapse the loading skeleton onto
+    // the "not reported" placeholder so the strip stops implying work is still in flight.
+    const tiles = isUnavailable ? computedTiles.map((tile) => ({ ...tile, value: tile.value ?? null })) : computedTiles;
 
     return (
         <div className="statusStrip">

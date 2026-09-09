@@ -24,7 +24,7 @@ import {
 import { readOnlyJsonDocumentProvider } from '../../../utils/readOnlyJsonDocumentProvider';
 import { type BaseRouterContext } from '../../_integration/appRouter';
 import { publicProcedureWithTelemetry, router, type WithTelemetry } from '../../_integration/trpc';
-import { resolveClusterNode, resolveNamespaceNode } from './resolveNamespaceNode';
+import { describeMissingNamespace, resolveClusterNode, resolveNamespaceNode } from './resolveNamespaceNode';
 
 /**
  * The server commands the dashboard describes a cluster with, run for the diagnostics
@@ -188,7 +188,7 @@ export const clusterDashboardRouter = router({
         const clusterNode = await resolveClusterNode(myCtx.viewId, myCtx.clusterId);
 
         if (!clusterNode) {
-            throw new Error(l10n.t('Could not find this cluster in the tree view. Expand the cluster and try again.'));
+            throw new Error(describeMissingNamespace(myCtx.clusterDisplayName));
         }
 
         let databaseName: string | undefined;
@@ -216,11 +216,7 @@ export const clusterDashboardRouter = router({
             const databaseNode = await resolveNamespaceNode(myCtx.viewId, myCtx.clusterId, input.databaseName);
 
             if (!databaseNode) {
-                throw new Error(
-                    l10n.t('Could not find "{name}" in the tree view. Expand the database and try again.', {
-                        name: input.databaseName,
-                    }),
-                );
+                throw new Error(describeMissingNamespace(myCtx.clusterDisplayName, input.databaseName));
             }
 
             let collectionName: string | undefined;

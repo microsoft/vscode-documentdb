@@ -3,6 +3,8 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+import * as l10n from '@vscode/l10n';
+
 import { Views } from '../../../documentdb/Views';
 import { ext } from '../../../extensionVariables';
 import { type ExtendedTreeDataProvider } from '../../../tree/ExtendedTreeDataProvider';
@@ -89,4 +91,43 @@ export async function resolveNamespaceNode(
     }
 
     return undefined;
+}
+
+/**
+ * The one sentence every unresolvable-node failure is reported with.
+ *
+ * The dashboard reads its inventory from the server, so it can prove a namespace exists,
+ * render it, and offer commands for it while the tree — which those commands still take
+ * their target from — has never materialized it. That is invisible from the row, so the
+ * message has to name what is missing *and* which node to expand to supply it, rather than
+ * saying only that something was not found.
+ *
+ * Shared by the row context-menu commands and by the create procedures so the same
+ * precondition never gets two different explanations.
+ *
+ * @param databaseName - Omit when the cluster node itself is what could not be resolved.
+ */
+export function describeMissingNamespace(
+    clusterDisplayName: string,
+    databaseName?: string,
+    collectionName?: string,
+): string {
+    if (databaseName === undefined) {
+        return l10n.t(
+            'This action works through the tree view, and the cluster "{cluster}" could not be found there. Make sure the connection is still listed in the tree view, then try again.',
+            { cluster: clusterDisplayName },
+        );
+    }
+
+    if (collectionName === undefined) {
+        return l10n.t(
+            'This action works through the tree view, and the database "{database}" is not loaded there yet. Expand the cluster "{cluster}" in the tree view, then try again.',
+            { database: databaseName, cluster: clusterDisplayName },
+        );
+    }
+
+    return l10n.t(
+        'This action works through the tree view, and the collection "{collection}" is not loaded there yet. Expand "{cluster}" and then "{database}" in the tree view, then try again.',
+        { collection: collectionName, cluster: clusterDisplayName, database: databaseName },
+    );
 }
