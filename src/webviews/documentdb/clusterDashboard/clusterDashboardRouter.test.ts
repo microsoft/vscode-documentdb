@@ -133,6 +133,34 @@ describe('clusterDashboardRouter create actions', () => {
         expect(mockUpdateGlobalSetting).toHaveBeenCalledWith('documentDB.userInterface.showDashboardOnConnect', true);
     });
 
+    it('runs the existing copy-connection-string command against the resolved cluster node', async () => {
+        const clusterNode = { id: 'cluster-tree-id' };
+        mockResolveClusterNode.mockResolvedValue(clusterNode);
+        const caller = createCallerFactory(clusterDashboardRouter)(createContext());
+
+        await caller.copyConnectionString();
+
+        expect(mockResolveClusterNode).toHaveBeenCalledWith('connectionsView', 'cluster-id');
+        expect(vscode.commands.executeCommand).toHaveBeenCalledWith(
+            'vscode-documentdb.command.copyConnectionString',
+            clusterNode,
+        );
+    });
+
+    it('runs the existing data-migration command against the resolved cluster node', async () => {
+        const clusterNode = { id: 'cluster-tree-id' };
+        mockResolveClusterNode.mockResolvedValue(clusterNode);
+        const caller = createCallerFactory(clusterDashboardRouter)(createContext());
+
+        await caller.openDataMigration();
+
+        expect(mockResolveClusterNode).toHaveBeenCalledWith('connectionsView', 'cluster-id');
+        expect(vscode.commands.executeCommand).toHaveBeenCalledWith(
+            'vscode-documentdb.command.accessDataMigrationServices',
+            clusterNode,
+        );
+    });
+
     it('runs the existing create-database command against the resolved cluster node', async () => {
         const clusterNode = { id: 'cluster-tree-id' };
         mockResolveClusterNode.mockResolvedValue(clusterNode);

@@ -191,6 +191,30 @@ export const clusterDashboardRouter = router({
         });
     }),
 
+    /** Runs the tree's existing copy-connection-string command for this cluster. */
+    copyConnectionString: publicProcedureWithTelemetry.mutation(async ({ ctx }): Promise<void> => {
+        const myCtx = ctx as WithTelemetry<RouterContext>;
+        const clusterNode = await resolveClusterNode(myCtx.viewId, myCtx.clusterId);
+
+        if (!clusterNode) {
+            throw new Error(describeMissingNamespace(myCtx.clusterDisplayName));
+        }
+
+        await vscode.commands.executeCommand('vscode-documentdb.command.copyConnectionString', clusterNode);
+    }),
+
+    /** Opens the existing data-migration experience for this cluster. */
+    openDataMigration: publicProcedureWithTelemetry.mutation(async ({ ctx }): Promise<void> => {
+        const myCtx = ctx as WithTelemetry<RouterContext>;
+        const clusterNode = await resolveClusterNode(myCtx.viewId, myCtx.clusterId);
+
+        if (!clusterNode) {
+            throw new Error(describeMissingNamespace(myCtx.clusterDisplayName));
+        }
+
+        await vscode.commands.executeCommand('vscode-documentdb.command.accessDataMigrationServices', clusterNode);
+    }),
+
     /** Runs the tree's existing create-database command for this cluster. */
     createDatabase: publicProcedureWithTelemetry.mutation(async ({ ctx }): Promise<void> => {
         const myCtx = ctx as WithTelemetry<RouterContext>;

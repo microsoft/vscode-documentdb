@@ -6,15 +6,32 @@
 import {
     Button,
     Checkbox,
+    Menu,
+    MenuDivider,
+    MenuItem,
+    MenuList,
+    MenuPopover,
+    MenuTrigger,
     MessageBar,
     MessageBarActions,
     MessageBarBody,
+    Overflow,
+    OverflowItem,
     ProgressBar,
     Toolbar,
     ToolbarButton,
+    ToolbarDivider,
     Tooltip,
+    useIsOverflowItemVisible,
+    useOverflowMenu,
 } from '@fluentui/react-components';
-import { ArrowClockwiseRegular, EyeRegular, WindowConsoleRegular } from '@fluentui/react-icons';
+import {
+    ArrowClockwiseRegular,
+    CopyRegular,
+    EyeRegular,
+    MoreHorizontalRegular,
+    WindowConsoleRegular,
+} from '@fluentui/react-icons';
 import { useConfiguration } from '@microsoft/vscode-ext-webview/react';
 import * as l10n from '@vscode/l10n';
 import { useCallback, useEffect, useRef, useState, type JSX } from 'react';
@@ -311,6 +328,30 @@ export const ClusterDashboard = (): JSX.Element => {
         }
     }, [trpcClient]);
 
+    const copyConnectionString = useCallback(async (): Promise<void> => {
+        try {
+            await trpcClient.clusterDashboard.copyConnectionString.mutate();
+        } catch (error) {
+            void trpcClient.common.displayErrorMessage.mutate({
+                message: l10n.t('Failed to copy the connection string.'),
+                modal: false,
+                cause: error instanceof Error ? error.message : String(error),
+            });
+        }
+    }, [trpcClient]);
+
+    const openDataMigration = useCallback(async (): Promise<void> => {
+        try {
+            await trpcClient.clusterDashboard.openDataMigration.mutate();
+        } catch (error) {
+            void trpcClient.common.displayErrorMessage.mutate({
+                message: l10n.t('Failed to open Data Migration.'),
+                modal: false,
+                cause: error instanceof Error ? error.message : String(error),
+            });
+        }
+    }, [trpcClient]);
+
     const updateShowDashboardOnConnect = useCallback(
         async (checked: boolean): Promise<void> => {
             const previousValue = showDashboardOnConnect;
@@ -547,61 +588,67 @@ export const ClusterDashboard = (): JSX.Element => {
              * `.primaryActionBar` in the panel, under the shaded tab strip. It is also the
              * row with space to grow: more tools will land here.
              */}
-            <Toolbar
-                size="small"
-                className="primaryActionBar actionBarToolbar dashboardToolbar"
-                aria-label={l10n.t('Cluster actions')}
-            >
-                {/*
-                 * One Refresh for the panel, not one per list: the inventory tiles are on
-                 * screen under every tab, so re-reading the cluster's storage is always the
-                 * meaningful thing this button does. Drilled into a database, it re-reads
-                 * that database's collections too.
-                 */}
-                <Tooltip
-                    content={l10n.t('Re-read this cluster’s storage statistics')}
-                    relationship="description"
-                    withArrow
+            <Overflow padding={40} hasHiddenItems>
+                <Toolbar
+                    size="small"
+                    className="primaryActionBar actionBarToolbar dashboardToolbar"
+                    aria-label={l10n.t('Cluster actions')}
                 >
-                    <ToolbarButton
-                        appearance="primary"
-                        icon={<ArrowClockwiseRegular />}
-                        disabled={isRefreshingStorage || collections.isLoading}
-                        onClick={refreshData}
-                    >
-                        {l10n.t('Refresh')}
-                    </ToolbarButton>
-                </Tooltip>
-                <Tooltip
-                    content={l10n.t('Open an interactive shell against this cluster')}
-                    relationship="description"
-                    withArrow
-                >
-                    <ToolbarButton icon={<WindowConsoleRegular />} onClick={() => void openShell()}>
-                        {l10n.t('Open Shell')}
-                    </ToolbarButton>
-                </Tooltip>
-                <Tooltip
-                    content={l10n.t('Open this cluster’s state as a JSON document')}
-                    relationship="description"
-                    withArrow
-                >
-                    <ToolbarButton
-                        className="toolbarTrailingAction"
-                        icon={<EyeRegular />}
-                        disabled={isExporting}
-                        onClick={() => void exportDiagnostics()}
-                    >
-                        {l10n.t('View Raw Diagnostics')}
-                    </ToolbarButton>
-                </Tooltip>
-                {/*
-                 * The question rides the action bar rather than the foot of the page: it is
-                 * the same question on every tab, it is reachable without scrolling to the
-                 * end of a long table, and up here it costs no vertical space at all.
-                 */}
-                {configuration.feedbackSignalsEnabled && <DashboardFeedback />}
-            </Toolbar>
+                    <OverflowItem id="shell" priority={2}>
+                        <Tooltip
+                            content={l10n.t('Open an interactive shell against this cluster')}
+                            relationship="description"
+                            withArrow
+                        >
+                            <ToolbarButton icon={<WindowConsoleRegular />} onClick={() => void openShell()}>
+                                {l10n.t('Open Shell')}
+                            </ToolbarButton>
+                        </Tooltip>
+                    </OverflowItem>
+                    <OverflowItem id="copy" priority={1}>
+                        <Tooltip
+                            content={l10n.t('Copy this cluster’s connection string to the clipboard')}
+                            relationship="description"
+                            withArrow
+                        >
+                            <ToolbarButton icon={<CopyRegular />} onClick={() => void copyConnectionString()}>
+                                {l10n.t('Copy Connection String')}
+                            </ToolbarButton>
+                        </Tooltip>
+                    </OverflowItem>
+                    <OverflowItem id="refresh" pinned>
+                        <Tooltip
+                            content={l10n.t('Re-read cluster storage statistics and the current inventory')}
+                            relationship="description"
+                            withArrow
+                        >
+                            <ToolbarButton
+                                className="toolbarRightGroupStart"
+                                icon={<ArrowClockwiseRegular />}
+                                disabled={isRefreshingStorage || collections.isLoading}
+                                onClick={refreshData}
+                            >
+                                {l10n.t('Refresh')}
+                            </ToolbarButton>
+                        </Tooltip>
+                    </OverflowItem>
+                    <ClusterMoreActionsMenu
+                        openShell={() => void openShell()}
+                        copyConnectionString={() => void copyConnectionString()}
+                        exportDiagnostics={() => void exportDiagnostics()}
+                        openDataMigration={() => void openDataMigration()}
+                        isExporting={isExporting}
+                    />
+                    {configuration.feedbackSignalsEnabled && (
+                        <OverflowItem id="feedback" pinned>
+                            <div className="dashboardToolbarFeedback">
+                                <ToolbarDivider />
+                                <DashboardFeedback />
+                            </div>
+                        </OverflowItem>
+                    )}
+                </Toolbar>
+            </Overflow>
 
             {/*
              * One full-width column, the Indexes tab's shape. There is no separate scroll
@@ -679,5 +726,58 @@ export const ClusterDashboard = (): JSX.Element => {
                 />
             </footer>
         </div>
+    );
+};
+
+interface ClusterMoreActionsMenuProps {
+    openShell: () => void;
+    copyConnectionString: () => void;
+    exportDiagnostics: () => void;
+    openDataMigration: () => void;
+    isExporting: boolean;
+}
+
+const ClusterMoreActionsMenu = ({
+    openShell,
+    copyConnectionString,
+    exportDiagnostics,
+    openDataMigration,
+    isExporting,
+}: ClusterMoreActionsMenuProps): JSX.Element => {
+    const { ref } = useOverflowMenu<HTMLButtonElement>();
+    const shellVisible = useIsOverflowItemVisible('shell');
+    const copyVisible = useIsOverflowItemVisible('copy');
+
+    return (
+        <Menu>
+            <MenuTrigger disableButtonEnhancement>
+                <Tooltip content={l10n.t('More cluster actions')} relationship="label" withArrow>
+                    <ToolbarButton
+                        ref={ref}
+                        icon={<MoreHorizontalRegular />}
+                        aria-label={l10n.t('More cluster actions')}
+                    />
+                </Tooltip>
+            </MenuTrigger>
+            <MenuPopover>
+                <MenuList>
+                    {!shellVisible && (
+                        <MenuItem icon={<WindowConsoleRegular />} onClick={openShell}>
+                            {l10n.t('Open Shell')}
+                        </MenuItem>
+                    )}
+                    {!copyVisible && (
+                        <MenuItem icon={<CopyRegular />} onClick={copyConnectionString}>
+                            {l10n.t('Copy Connection String')}
+                        </MenuItem>
+                    )}
+                    {(!shellVisible || !copyVisible) && <MenuDivider />}
+                    <MenuItem icon={<EyeRegular />} disabled={isExporting} onClick={exportDiagnostics}>
+                        {l10n.t('View Raw Diagnostics')}
+                    </MenuItem>
+                    <MenuItem onClick={openDataMigration}>{l10n.t('Data Migration…')}</MenuItem>
+                </MenuList>
+            </MenuPopover>
+        </Menu>
     );
 };

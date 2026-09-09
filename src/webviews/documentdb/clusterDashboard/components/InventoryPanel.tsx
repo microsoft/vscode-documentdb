@@ -285,13 +285,8 @@ export const InventoryPanel = ({
 
     return (
         <div className="inventoryPanel">
-            {/*
-             * Where the reader is, as a path rather than a title plus a back button. One line
-             * at both levels and the same height at both, so stepping in or out no longer
-             * moves the toolbar and the table beneath it. Which list is on screen is already
-             * stated by the table's own first column heading, so the band does not repeat it.
-             */}
-            <Toolbar className="levelHeader" size="small" aria-label={l10n.t('Inventory actions')}>
+            {/* The breadcrumb is the only control that yields width when the inventory toolbar is constrained. */}
+            <Toolbar className="inventoryToolbar" size="small" aria-label={l10n.t('Inventory controls')}>
                 <Breadcrumb aria-label={l10n.t('Inventory level')} size="medium">
                     <BreadcrumbItem>
                         <BreadcrumbButton
@@ -315,18 +310,10 @@ export const InventoryPanel = ({
                 </Breadcrumb>
                 <ToolbarDivider />
                 <ToolbarButton icon={<AddRegular />} disabled={isCreatingNamespace} onClick={onCreateNamespace}>
-                    {currentDatabase === null ? l10n.t('Create Database') : l10n.t('Create Collection')}
+                    {currentDatabase === null ? l10n.t('New Database') : l10n.t('New Collection')}
                 </ToolbarButton>
-            </Toolbar>
-
-            {/*
-             * Filter only — the same filter-first row the Collection View's index list uses.
-             * Refresh is not repeated here: it acts on the whole panel and lives once, in the
-             * main toolbar, rather than once per list.
-             */}
-            <Toolbar size="small" className="dataToolbar" aria-label={l10n.t('List controls')}>
                 <SearchBox
-                    className="dataFilterInput"
+                    className="inventoryFilterInput"
                     value={filterText}
                     placeholder={currentDatabase === null ? l10n.t('Filter databases…') : l10n.t('Filter collections…')}
                     aria-label={
@@ -391,7 +378,7 @@ export const InventoryPanel = ({
             {inventoryIsLoading ? (
                 <NamespaceTableSkeleton rowCount={skeletonRowCount} />
             ) : allRows.length === 0 ? (
-                <div className="emptyState">
+                <div className="emptyState" role="status">
                     {currentDatabase !== null
                         ? // A failed read knows nothing about the contents, so it must not be
                           // reported as knowledge that there are none.

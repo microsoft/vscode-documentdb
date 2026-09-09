@@ -46,6 +46,11 @@ None yet. A user-manual page is due before this ships.
 - **The page is a place, not a feed.** The storage inventory refreshes when the dashboard opens
   and on demand; lightweight health polling pauses while the panel is hidden. There is no
   Operations tab and no observed-operation history.
+- **The cluster toolbar groups connection tools separately from page utilities.** Open Shell and
+  Copy Connection String sit together on the left; Refresh, More actions and feedback sit on the
+  right. Fluent overflow moves Copy, then Shell, into More actions as space contracts. Refresh
+  stays visible and re-reads cluster storage and the current inventory; its label remains Refresh.
+  The inventory toolbar keeps its existing layout.
 - **Nothing here reads what anyone is running.** `currentOp` is out of scope for this iteration,
   so no command document, query filter or client address enters the feature at all
   ([0019](./decisions.md#0019--currentop-is-out-of-scope-for-this-iteration)).

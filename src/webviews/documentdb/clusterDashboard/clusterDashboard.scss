@@ -242,15 +242,25 @@ $content-gutter: var(--spacingHorizontalMNudge); // 10px
         // Fluent's Toolbar carries its own horizontal padding; replace it with the shared
         // gutter so the first button sits on the same left edge as the cluster name above.
         padding-inline: $content-gutter;
-        // Only as wide as its buttons, so the toolbar's own hover surface does not read as
-        // a full-width band across the panel.
-        justify-content: flex-start;
+        // Stretch across the panel so the utility group can align with its right edge.
+        width: 100%;
+        flex-wrap: nowrap;
+        min-width: 0;
+        overflow: hidden;
+
+        .fui-ToolbarButton {
+            flex-shrink: 0;
+        }
     }
 
-    // Export diagnostics is a specialist's tool — it produces a file for a bug report, not
-    // something a reader of this page needs. It sits at the far end, away from the two
-    // actions that are part of using the dashboard.
-    .toolbarTrailingAction {
+    .dashboardToolbarFeedback {
+        display: flex;
+        align-items: center;
+        flex-shrink: 0;
+    }
+
+    // Marks where the right-aligned utility group begins.
+    .toolbarRightGroupStart {
         margin-inline-start: auto;
     }
 
@@ -351,28 +361,11 @@ $content-gutter: var(--spacingHorizontalMNudge); // 10px
     .inventoryPanel {
         display: flex;
         flex-direction: column;
-        // 10px, the row-gap the Collection View's index list uses between its filter row,
-        // its table and its footer.
+        // 10px, the row-gap the Collection View's index list uses between its controls,
+        // table and footer.
         gap: var(--spacingVerticalMNudge);
         padding-top: var(--spacingVerticalMNudge);
         min-width: 0;
-    }
-
-    // The index list's filter row, reproduced: the box is first and fills the width.
-    // `flex: 1 1 auto` with `max-width: none` is also what fixes the reported jump — a Fluent
-    // SearchBox sized by its own content grows the moment it gains focus and renders its
-    // dismiss button.
-    .dataToolbar {
-        width: 100%;
-        box-sizing: border-box;
-        padding-inline: 0;
-        gap: 8px;
-
-        .dataFilterInput {
-            flex: 1 1 auto;
-            min-width: 0;
-            max-width: none;
-        }
     }
 
     // ---- Tables ------------------------------------------------------------
@@ -394,7 +387,7 @@ $content-gutter: var(--spacingHorizontalMNudge); // 10px
 
     // Centred "showing X of Y", the index list's footer: it states how much of the list the
     // filter is hiding, which is the one thing a filtered table cannot say for itself.
-    // Styled with the level band, further down.
+    // Its layout is defined with the other inventory controls further down.
 
     .emptyState {
         display: flex;
@@ -502,39 +495,84 @@ $content-gutter: var(--spacingHorizontalMNudge); // 10px
         cursor: pointer;
     }
 
-    // ---- Level band --------------------------------------------------------
+    // ---- Inventory toolbar -------------------------------------------------
     //
-    // A breadcrumb, one line, the same height at both levels — which is what stops stepping
-    // into a database from moving the toolbar and the table below it.
+    // The same height at both levels, so stepping into a database does not move the table
+    // beneath it. Fluent's Toolbar is already a centred flex row; only what it leaves unset
+    // or sets against us is stated here.
 
-    .levelHeader {
-        display: flex;
-        align-items: center;
+    .inventoryToolbar {
+        // Fluent's Toolbar sets no height of its own, and this row must match the controls in it.
         min-height: 32px;
-        min-width: 0;
+        // Fluent's small Toolbar pads its sides by 4px; the row starts at the panel's edge.
         padding-inline: 0;
-        // One line, always. Wrapping would move everything below it by a row on the way into
-        // a database, which is the shift this band exists to prevent; the database name gives
-        // up width instead.
+        gap: 8px;
         overflow: hidden;
 
         .fui-Breadcrumb {
             min-width: 0;
-            flex: 0 1 auto;
-            flex-wrap: nowrap;
             overflow: hidden;
         }
 
-        // The last crumb is the database name and the only element allowed to give up width.
+        .fui-BreadcrumbItem:first-of-type,
+        .fui-BreadcrumbDivider,
+        > .fui-Divider,
+        .fui-ToolbarButton {
+            flex-shrink: 0;
+        }
+
+        // The database name is the only element allowed to give up width.
         .fui-BreadcrumbItem:last-of-type {
             min-width: 0;
 
             .fui-BreadcrumbButton {
                 min-width: 0;
+                overflow: hidden;
             }
 
             .fui-Button__icon {
                 flex-shrink: 0;
+            }
+
+            .fui-Button__content {
+                min-width: 0;
+                overflow: hidden;
+                text-overflow: ellipsis;
+                white-space: nowrap;
+            }
+        }
+
+        // A fixed basis, not `auto`: a content-sized Fluent SearchBox grows the moment it
+        // gains focus and renders its dismiss button, which shifts the row.
+        .inventoryFilterInput {
+            flex: 0 1 280px;
+            min-width: 120px;
+            margin-inline-start: auto;
+        }
+    }
+
+    @media (max-width: 600px) {
+        .inventoryToolbar {
+            flex-wrap: wrap;
+            overflow: visible;
+
+            .fui-Breadcrumb {
+                flex: 1 1 0;
+            }
+
+            > .fui-Divider {
+                display: none;
+            }
+
+            .fui-ToolbarButton {
+                white-space: nowrap;
+            }
+
+            .inventoryFilterInput {
+                order: 1;
+                flex: 1 0 100%;
+                max-width: none;
+                margin-inline-start: 0;
             }
         }
     }
