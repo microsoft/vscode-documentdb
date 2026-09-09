@@ -12,6 +12,7 @@ import { useCallback, useEffect, useRef, useState, type JSX } from 'react';
 import { type ClusterHealthSample, type ClusterStorageStats } from '../../../documentdb/utils/getClusterHealth';
 import { useTrpcClient } from '../../_integration/useTrpcClient';
 import './clusterDashboard.scss';
+import { isInventoryChangedMessage } from './clusterDashboardContextMenu';
 import { type ClusterDashboardWebviewConfigurationType } from './clusterDashboardController';
 import { type ClusterDashboardInfo } from './clusterDashboardRouter';
 import { DashboardFeedback } from './components/DashboardFeedback';
@@ -232,6 +233,23 @@ export const ClusterDashboard = (): JSX.Element => {
 
     /** Re-reads whichever inventory is on screen: the cluster's storage, plus the drilled-into database. */
     const reloadCollections = collections.reload;
+
+    useEffect(() => {
+        const handleMessage = (event: MessageEvent<unknown>): void => {
+            if (!isInventoryChangedMessage(event.data)) {
+                return;
+            }
+
+            void loadStorageStats();
+            if (inventoryViewState.currentDatabase === event.data.databaseName) {
+                reloadCollections();
+            }
+        };
+
+        window.addEventListener('message', handleMessage);
+        return () => window.removeEventListener('message', handleMessage);
+    }, [inventoryViewState.currentDatabase, loadStorageStats, reloadCollections]);
+
     const refreshData = useCallback((): void => {
         void loadStorageStats();
         if (inventoryViewState.currentDatabase !== null) {

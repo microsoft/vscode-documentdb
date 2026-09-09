@@ -176,6 +176,33 @@ describe('cluster dashboard native context menu commands', () => {
             null,
             { source: 'webview;clusterDashboard' },
         );
+        expect(controller.panel.webview.postMessage).toHaveBeenCalledWith({
+            type: 'clusterDashboard.inventoryChanged',
+            databaseName: 'sales',
+        });
+
+        controller.dispose();
+    });
+
+    it('refreshes inventory after paste returns', async () => {
+        const { handlers, controller } = registerAndOpen();
+
+        await handlers.get(CLUSTER_DASHBOARD_CONTEXT_MENU_COMMANDS.pasteCollection)?.({
+            clusterDashboardClusterId: CLUSTER,
+            clusterDashboardSelectedDatabase: 'sales',
+            clusterDashboardDatabase: 'sales',
+        });
+
+        expect(vscode.commands.executeCommand).toHaveBeenCalledWith(
+            'vscode-documentdb.command.pasteCollection',
+            { id: 'tree-node' },
+            null,
+            { source: 'webview;clusterDashboard' },
+        );
+        expect(controller.panel.webview.postMessage).toHaveBeenCalledWith({
+            type: 'clusterDashboard.inventoryChanged',
+            databaseName: 'sales',
+        });
 
         controller.dispose();
     });

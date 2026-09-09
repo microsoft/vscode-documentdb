@@ -189,12 +189,9 @@ export const clusterDashboardRouter = router({
             throw new Error(l10n.t('Could not find this cluster in the tree view. Expand the cluster and try again.'));
         }
 
-        await vscode.commands.executeCommand(
-            'vscode-documentdb.command.createDatabase',
-            clusterNode,
-            null,
-            { source: 'webview;clusterDashboard' },
-        );
+        await vscode.commands.executeCommand('vscode-documentdb.command.createDatabase', clusterNode, null, {
+            source: 'webview;clusterDashboard',
+        });
     }),
 
     /** Runs the tree's existing create-collection command for the database on screen. */
@@ -202,11 +199,7 @@ export const clusterDashboardRouter = router({
         .input(z.object({ databaseName: z.string().min(1) }))
         .mutation(async ({ input, ctx }): Promise<void> => {
             const myCtx = ctx as WithTelemetry<RouterContext>;
-            const databaseNode = await resolveNamespaceNode(
-                myCtx.viewId,
-                myCtx.clusterId,
-                input.databaseName,
-            );
+            const databaseNode = await resolveNamespaceNode(myCtx.viewId, myCtx.clusterId, input.databaseName);
 
             if (!databaseNode) {
                 throw new Error(
@@ -216,12 +209,9 @@ export const clusterDashboardRouter = router({
                 );
             }
 
-            await vscode.commands.executeCommand(
-                'vscode-documentdb.command.createCollection',
-                databaseNode,
-                null,
-                { source: 'webview;clusterDashboard' },
-            );
+            await vscode.commands.executeCommand('vscode-documentdb.command.createCollection', databaseNode, null, {
+                source: 'webview;clusterDashboard',
+            });
         }),
 
     /** Opens the Collection View for a row in the inventory. */

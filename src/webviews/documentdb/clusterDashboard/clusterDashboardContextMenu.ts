@@ -56,3 +56,18 @@ export function isShowCollectionsMessage(value: unknown): value is ShowCollectio
     const message = value as Partial<ShowCollectionsMessage>;
     return message.type === 'clusterDashboard.showCollections' && typeof message.databaseName === 'string';
 }
+
+/** Tells the retained dashboard that a tree command may have changed its independently fetched inventory. */
+export interface InventoryChangedMessage {
+    readonly type: 'clusterDashboard.inventoryChanged';
+    readonly databaseName: string;
+}
+
+export function isInventoryChangedMessage(value: unknown): value is InventoryChangedMessage {
+    if (typeof value !== 'object' || value === null) {
+        return false;
+    }
+
+    const message = value as Partial<InventoryChangedMessage>;
+    return message.type === 'clusterDashboard.inventoryChanged' && typeof message.databaseName === 'string';
+}

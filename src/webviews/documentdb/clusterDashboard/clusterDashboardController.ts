@@ -14,6 +14,7 @@ import { openAppWebview, type AppWebviewController } from '../../_integration/op
 import {
     CLUSTER_DASHBOARD_CONTEXT_MENU_COMMANDS,
     type ClusterDashboardContextMenuContext,
+    type InventoryChangedMessage,
     type ShowCollectionsMessage,
 } from './clusterDashboardContextMenu';
 import { type RouterContext } from './clusterDashboardRouter';
@@ -87,7 +88,7 @@ interface OpenPanel {
 type RowAction =
     | { readonly kind: 'showCollections' }
     | { readonly kind: 'collectionView'; readonly initialTab?: 'tab_indexes' }
-    | { readonly kind: 'treeCommand'; readonly commandId: string };
+    | { readonly kind: 'treeCommand'; readonly commandId: string; readonly invalidatesInventory?: boolean };
 
 const ROW_ACTIONS: Readonly<Record<string, RowAction>> = {
     [CLUSTER_DASHBOARD_CONTEXT_MENU_COMMANDS.viewCollections]: { kind: 'showCollections' },
@@ -108,6 +109,7 @@ const ROW_ACTIONS: Readonly<Record<string, RowAction>> = {
     [CLUSTER_DASHBOARD_CONTEXT_MENU_COMMANDS.deleteDatabase]: {
         kind: 'treeCommand',
         commandId: 'vscode-documentdb.command.dropDatabase',
+        invalidatesInventory: true,
     },
     [CLUSTER_DASHBOARD_CONTEXT_MENU_COMMANDS.copyCollection]: {
         kind: 'treeCommand',
@@ -116,6 +118,7 @@ const ROW_ACTIONS: Readonly<Record<string, RowAction>> = {
     [CLUSTER_DASHBOARD_CONTEXT_MENU_COMMANDS.pasteCollection]: {
         kind: 'treeCommand',
         commandId: 'vscode-documentdb.command.pasteCollection',
+        invalidatesInventory: true,
     },
     [CLUSTER_DASHBOARD_CONTEXT_MENU_COMMANDS.exportDocuments]: {
         kind: 'treeCommand',
@@ -128,6 +131,7 @@ const ROW_ACTIONS: Readonly<Record<string, RowAction>> = {
     [CLUSTER_DASHBOARD_CONTEXT_MENU_COMMANDS.deleteCollection]: {
         kind: 'treeCommand',
         commandId: 'vscode-documentdb.command.dropCollection',
+        invalidatesInventory: true,
     },
 };
 
@@ -148,6 +152,14 @@ function isContextMenuContext(value: unknown): value is ClusterDashboardContextM
             typeof context.clusterDashboardSelectedDatabase === 'string') &&
         (context.clusterDashboardCollection === undefined || typeof context.clusterDashboardCollection === 'string')
     );
+}
+
+async function postInventoryChanged(panel: OpenPanel, databaseName: string): Promise<void> {
+    const message: InventoryChangedMessage = {
+        type: 'clusterDashboard.inventoryChanged',
+        databaseName,
+    };
+    await panel.controller.panel.webview.postMessage(message);
 }
 
 /**
@@ -207,7 +219,13 @@ async function runRowAction(
         return;
     }
 
-    await vscode.commands.executeCommand(action.commandId, node, null, { source: 'webview;clusterDashboard' });
+    await vscode.commands.executeCommand(action.commandId, node, null, {
+        source: 'webview;clusterDashboard',
+    });
+
+    if (action.invalidatesInventory) {
+        await postInventoryChanged(panel, databaseName);
+    }
 }
 
 export function registerClusterDashboardContextMenuCommands(context: vscode.ExtensionContext): void {

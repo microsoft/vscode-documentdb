@@ -269,11 +269,7 @@ export const InventoryPanel = ({
                     )}
                 </Breadcrumb>
                 <ToolbarDivider />
-                <ToolbarButton
-                    icon={<AddRegular />}
-                    disabled={isCreatingNamespace}
-                    onClick={onCreateNamespace}
-                >
+                <ToolbarButton icon={<AddRegular />} disabled={isCreatingNamespace} onClick={onCreateNamespace}>
                     {currentDatabase === null ? l10n.t('Create Database') : l10n.t('Create Collection')}
                 </ToolbarButton>
             </Toolbar>
