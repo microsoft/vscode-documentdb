@@ -12,12 +12,19 @@ import {
     MessageBar,
     MessageBarActions,
     MessageBarBody,
+    MessageBarTitle,
     SearchBox,
     Toolbar,
     ToolbarButton,
     ToolbarDivider,
 } from '@fluentui/react-components';
-import { AddRegular, ArrowLeftRegular, DatabaseMultipleRegular, DatabaseRegular } from '@fluentui/react-icons';
+import {
+    AddRegular,
+    ArrowLeftRegular,
+    DatabaseMultipleRegular,
+    DatabaseRegular,
+    ErrorCircleFilled,
+} from '@fluentui/react-icons';
 import * as l10n from '@vscode/l10n';
 import { useCallback, useEffect, useMemo, useState, type JSX } from 'react';
 
@@ -74,6 +81,8 @@ export interface InventoryPanelProps {
     onViewStateChange: (update: (current: InventoryViewState) => InventoryViewState) => void;
     /** Creates a database or collection, according to the inventory level on screen. */
     onCreateNamespace: () => void;
+    /** Re-reads the cluster's database inventory after a failed request. */
+    onRetryStorage: () => void;
     isCreatingNamespace: boolean;
     busyNamespaces: ReadonlyArray<{
         readonly databaseName: string;
@@ -116,6 +125,7 @@ export const InventoryPanel = ({
     viewState,
     onViewStateChange,
     onCreateNamespace,
+    onRetryStorage,
     isCreatingNamespace,
     busyNamespaces,
 }: InventoryPanelProps): JSX.Element => {
@@ -282,6 +292,76 @@ export const InventoryPanel = ({
               ? storageStats.omittedDatabaseCount
               : (collections.result?.omittedCollectionCount ?? 0);
     const shownCount = currentDatabase === null ? (storageStats?.databases.length ?? 0) : collectionRows.length;
+    const emptyStateFailureReason =
+        allRows.length === 0
+            ? currentDatabase === null
+                ? (storageError ?? (errors.length > 0 ? errors.join('; ') : null))
+                : collections.error
+            : null;
+    const canCreateNamespace = emptyStateFailureReason === null && (allRows.length > 0 || !inventoryIsLoading);
+
+    const renderEmptyState = (): JSX.Element => {
+        if (emptyStateFailureReason !== null) {
+            return (
+                <div className="emptyState" role="status">
+                    <MessageBar
+                        className="emptyStateFailure"
+                        intent="error"
+                        layout="multiline"
+                        icon={<ErrorCircleFilled />}
+                    >
+                        <MessageBarBody className="emptyStateMessageBody">
+                            <MessageBarTitle>
+                                {currentDatabase === null
+                                    ? l10n.t('Could not read databases')
+                                    : l10n.t('Could not read collections')}
+                            </MessageBarTitle>
+                            <span>
+                                {currentDatabase === null
+                                    ? l10n.t(
+                                          'The databases in this cluster could not be listed: {0}',
+                                          emptyStateFailureReason,
+                                      )
+                                    : l10n.t('The collections of "{database}" could not be listed: {reason}', {
+                                          database: currentDatabase,
+                                          reason: emptyStateFailureReason,
+                                      })}
+                            </span>
+                        </MessageBarBody>
+                        <MessageBarActions>
+                            <Button
+                                appearance="secondary"
+                                disabled={currentDatabase === null ? isLoading : collections.isLoading}
+                                onClick={currentDatabase === null ? onRetryStorage : () => collections.reload('manual')}
+                            >
+                                {l10n.t('Retry')}
+                            </Button>
+                        </MessageBarActions>
+                    </MessageBar>
+                </div>
+            );
+        }
+
+        return (
+            <div className="emptyState" role="status">
+                <h3 className="emptyStateHeading">
+                    {currentDatabase === null
+                        ? l10n.t('No databases in this cluster')
+                        : l10n.t('No collections in "{database}"', { database: currentDatabase })}
+                </h3>
+                <p className="emptyStateDescription">{l10n.t('Create one to start storing documents.')}</p>
+                <Button
+                    className="emptyStateAction"
+                    appearance="primary"
+                    icon={<AddRegular />}
+                    disabled={isCreatingNamespace}
+                    onClick={onCreateNamespace}
+                >
+                    {currentDatabase === null ? l10n.t('New Database') : l10n.t('New Collection')}
+                </Button>
+            </div>
+        );
+    };
 
     return (
         <div className="inventoryPanel">
@@ -309,9 +389,11 @@ export const InventoryPanel = ({
                     )}
                 </Breadcrumb>
                 <ToolbarDivider />
-                <ToolbarButton icon={<AddRegular />} disabled={isCreatingNamespace} onClick={onCreateNamespace}>
-                    {currentDatabase === null ? l10n.t('New Database') : l10n.t('New Collection')}
-                </ToolbarButton>
+                {canCreateNamespace && (
+                    <ToolbarButton icon={<AddRegular />} disabled={isCreatingNamespace} onClick={onCreateNamespace}>
+                        {currentDatabase === null ? l10n.t('New Database') : l10n.t('New Collection')}
+                    </ToolbarButton>
+                )}
                 <SearchBox
                     className="inventoryFilterInput"
                     value={filterText}
@@ -325,7 +407,7 @@ export const InventoryPanel = ({
                 />
             </Toolbar>
 
-            {collections.error !== null && currentDatabase !== null && (
+            {collections.error !== null && currentDatabase !== null && allRows.length > 0 && (
                 <MessageBar intent="warning" layout="multiline">
                     <MessageBarBody>
                         {l10n.t('Could not list the collections of "{database}": {reason}', {
@@ -345,7 +427,7 @@ export const InventoryPanel = ({
                 </MessageBar>
             )}
 
-            {errors.length > 0 && (
+            {errors.length > 0 && emptyStateFailureReason === null && (
                 <MessageBar intent="warning">
                     <MessageBarBody>
                         {currentDatabase === null
@@ -378,19 +460,7 @@ export const InventoryPanel = ({
             {inventoryIsLoading ? (
                 <NamespaceTableSkeleton rowCount={skeletonRowCount} />
             ) : allRows.length === 0 ? (
-                <div className="emptyState" role="status">
-                    {currentDatabase !== null
-                        ? // A failed read knows nothing about the contents, so it must not be
-                          // reported as knowledge that there are none.
-                          collections.error !== null
-                            ? l10n.t('The collections of "{database}" could not be listed.', {
-                                  database: currentDatabase,
-                              })
-                            : l10n.t('"{database}" holds no collections.', { database: currentDatabase })
-                        : storageError !== null || errors.length > 0
-                          ? l10n.t('Database statistics are unavailable for this cluster.')
-                          : l10n.t('No user databases were reported for this cluster.')}
-                </div>
+                renderEmptyState()
             ) : (
                 // A filter that matches nothing leaves the table standing and empty, as the
                 // index list does: the footer below already says "Showing 0 of N", and

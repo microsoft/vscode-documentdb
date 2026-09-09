@@ -675,7 +675,7 @@ export const ClusterDashboard = (): JSX.Element => {
                     </MessageBar>
                 )}
 
-                {storageError !== null && (
+                {storageError !== null && storageStats !== null && storageStats.databases.length > 0 && (
                     <MessageBar intent="error" layout="multiline">
                         <MessageBarBody>
                             {l10n.t('Failed to read storage statistics: {0}', storageError)}
@@ -711,6 +711,7 @@ export const ClusterDashboard = (): JSX.Element => {
                     viewState={inventoryViewState}
                     onViewStateChange={setInventoryViewState}
                     onCreateNamespace={() => void createNamespace()}
+                    onRetryStorage={() => void loadStorageStats('manual')}
                     isCreatingNamespace={isCreatingNamespace}
                     busyNamespaces={busyNamespaces}
                 />
