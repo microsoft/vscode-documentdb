@@ -47,8 +47,7 @@ jest.mock('mongodb', () => ({
             return {
                 command: () => Promise.resolve({ ok: 1 }),
                 admin: () => ({
-                    listDatabases: () =>
-                        Promise.resolve({ databases: existingDatabases.map((name) => ({ name })) }),
+                    listDatabases: () => Promise.resolve({ databases: existingDatabases.map((name) => ({ name })) }),
                 }),
             };
         }
