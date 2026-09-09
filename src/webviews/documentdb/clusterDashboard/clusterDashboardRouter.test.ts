@@ -11,6 +11,7 @@ import { API } from '../../../DocumentDBExperiences';
 
 const mockResolveClusterNode = jest.fn();
 const mockResolveNamespaceNode = jest.fn();
+const mockUpdateGlobalSetting = jest.fn();
 
 jest.mock('vscode', () => ({
     commands: { executeCommand: jest.fn() },
@@ -23,6 +24,14 @@ jest.mock('../../../commands/openCollectionView/openCollectionView', () => ({
 
 jest.mock('../../../documentdb/ClustersClient', () => ({
     ClustersClient: { getClient: jest.fn() },
+}));
+
+jest.mock('../../../extensionVariables', () => ({
+    ext: { settingsKeys: { showDashboardOnConnect: 'documentDB.userInterface.showDashboardOnConnect' } },
+}));
+
+jest.mock('../../../services/SettingsService', () => ({
+    SettingsService: { updateGlobalSetting: (...args: unknown[]) => mockUpdateGlobalSetting(...args) },
 }));
 
 jest.mock('../../../utils/readOnlyJsonDocumentProvider', () => ({
@@ -114,6 +123,14 @@ describe('clusterDashboardRouter create actions', () => {
             clusterDisplayName: 'Test cluster',
             databaseName: 'test',
         });
+    });
+
+    it('persists the dashboard-on-connect preference globally', async () => {
+        const caller = createCallerFactory(clusterDashboardRouter)(createContext());
+
+        await caller.setShowDashboardOnConnect(true);
+
+        expect(mockUpdateGlobalSetting).toHaveBeenCalledWith('documentDB.userInterface.showDashboardOnConnect', true);
     });
 
     it('runs the existing create-database command against the resolved cluster node', async () => {

@@ -269,6 +269,38 @@ $content-gutter: var(--spacingHorizontalMNudge); // 10px
         container-name: dashboardMain;
     }
 
+    .dashboardPreferences {
+        display: flex;
+        justify-content: center;
+        flex-shrink: 0;
+        margin-top: auto;
+        padding: var(--spacingVerticalS) $content-gutter var(--spacingVerticalXS);
+    }
+
+    .dashboardPreferenceCheckbox {
+        color: var(--colorNeutralForeground3);
+        --fui-Checkbox__indicator--backgroundColor: var(--colorNeutralBackground1);
+        --fui-Checkbox__indicator--borderColor: var(--colorNeutralStrokeAccessible);
+        --fui-Checkbox__indicator--color: var(--colorNeutralForeground1);
+
+        &:hover {
+            --fui-Checkbox__indicator--backgroundColor: var(--colorNeutralBackground1Hover);
+            --fui-Checkbox__indicator--borderColor: var(--colorNeutralStrokeAccessibleHover);
+            --fui-Checkbox__indicator--color: var(--colorNeutralForeground1Hover);
+        }
+
+        &:active {
+            --fui-Checkbox__indicator--backgroundColor: var(--colorNeutralBackground1Pressed);
+            --fui-Checkbox__indicator--borderColor: var(--colorNeutralStrokeAccessiblePressed);
+            --fui-Checkbox__indicator--color: var(--colorNeutralForeground1Pressed);
+        }
+
+        .fui-Checkbox__label {
+            font-size: var(--fontSizeBase200);
+            line-height: var(--lineHeightBase200);
+        }
+    }
+
     // ---- Inventory tiles ---------------------------------------------------
 
     .statusTile {

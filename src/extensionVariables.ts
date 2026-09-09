@@ -75,6 +75,7 @@ export namespace ext {
         export const collectionViewDefaultPageSize = 'documentDB.collectionView.defaultPageSize';
         export const playgroundConfirmRunAll = 'documentDB.playground.confirmRunAll';
         export const enableAIQueryGeneration = 'documentDB.experimental.enableAIQueryGeneration';
+        export const showDashboardOnConnect = 'documentDB.userInterface.showDashboardOnConnect';
 
         export namespace vsCode {
             export const proxyStrictSSL = 'http.proxyStrictSSL';

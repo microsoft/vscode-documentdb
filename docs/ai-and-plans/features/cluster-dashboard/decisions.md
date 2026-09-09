@@ -27,6 +27,7 @@ created: 2026-08-24
 | 0017 | Diagnostics carry raw replies, not a second reading of them | Accepted            | Retires the topology summary with its card             | 2026-09-07 | #823 |
 | 0018 | The level band is a breadcrumb; Back stays in the footer    | Accepted            | Reverses 0014's rejection of the breadcrumb            | 2026-09-07 | #823 |
 | 0019 | `currentOp` is out of scope for this iteration              | Accepted            | Supersedes 0003 and 0010; makes 0012 moot              | 2026-09-08 | #823 |
+| 0020 | Show the dashboard on tree connect by default               | Accepted            | New entry point, with a persistent opt-out             | 2026-09-09 | #823 |
 
 > Entries below are **semantically** immutable: append new entries rather than
 > rewriting old ones, and record reversals as a new entry plus a status change
@@ -800,3 +801,38 @@ question, rather than as a payload smuggled into an export.
   a file whose purpose is to be sent elsewhere is proportionate. It no longer claims that
   application data is in there.
 - Nothing in the dashboard requires the `inprog` privilege any more.
+
+---
+
+## 0020 — Show the dashboard on tree connect by default
+
+**Status:** Accepted · **Date:** 2026-09-09 · **Raised by:** Operator
+
+### Question
+
+The dashboard can follow a successful connection made by expanding a cluster in the tree. Should
+that behavior require users to discover and enable a setting first, or be the default with an
+opt-out?
+
+### Decision
+
+Show the dashboard by default after tree expansion successfully connects and lists the cluster's
+databases. Keep a centered footer checkbox in the dashboard, mirrored by
+`documentDB.userInterface.showDashboardOnConnect`, so the user can persistently disable or restore
+the behavior.
+
+### Reasoning
+
+Tree expansion is the moment the cluster becomes usable and the dashboard's inventory is most
+relevant. Making the follow-on opt-in would hide the new surface behind a setting users have no
+reason to seek out. The footer control keeps the automatic behavior reversible where its effect is
+visible, while the Settings UI provides the same choice outside the dashboard.
+
+The trigger stays limited to tree expansion. Commands that connect for another purpose, such as
+opening a shell or explicitly opening the dashboard, must not cause a second unsolicited panel.
+
+### Consequences
+
+- The contributed setting and defensive code fallbacks are `true`.
+- An explicit `false` remains authoritative and suppresses the dashboard.
+- Failed or cancelled connections, including a failed database listing, do not show the dashboard.

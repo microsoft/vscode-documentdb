@@ -66,6 +66,8 @@ export type ClusterDashboardWebviewConfigurationType = {
     azure?: ClusterDashboardAzureInfo;
     /** Database selected from the tree when opening the dashboard, if any. */
     selectedDatabaseName?: string;
+    /** Whether tree expansion should open the dashboard after connecting. */
+    showDashboardOnConnect: boolean;
 };
 
 /**

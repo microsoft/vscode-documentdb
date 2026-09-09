@@ -21,6 +21,8 @@ import {
     type DatabaseCollectionsResult,
     type RawCommandDiagnostic,
 } from '../../../documentdb/utils/getClusterHealth';
+import { ext } from '../../../extensionVariables';
+import { SettingsService } from '../../../services/SettingsService';
 import { readOnlyJsonDocumentProvider } from '../../../utils/readOnlyJsonDocumentProvider';
 import { type BaseRouterContext } from '../../_integration/appRouter';
 import { publicProcedureWithTelemetry, router, type WithTelemetry } from '../../_integration/trpc';
@@ -110,6 +112,12 @@ export interface ClusterDashboardInfo {
 }
 
 export const clusterDashboardRouter = router({
+    setShowDashboardOnConnect: publicProcedureWithTelemetry
+        .input(z.boolean())
+        .mutation(async ({ input }): Promise<void> => {
+            await SettingsService.updateGlobalSetting(ext.settingsKeys.showDashboardOnConnect, input);
+        }),
+
     /**
      * One-shot header data. `getClusterMetadata` is cached per client, so this is cheap
      * to call again when a panel is revealed.

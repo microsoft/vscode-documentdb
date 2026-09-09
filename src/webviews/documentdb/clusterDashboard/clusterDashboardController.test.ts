@@ -82,6 +82,7 @@ function open(clusterId: string, selectedDatabaseName?: string): FakeController 
         viewId: 'connectionsView',
         refreshIntervalMs: 5_000,
         feedbackSignalsEnabled: false,
+        showDashboardOnConnect: false,
         selectedDatabaseName,
     }) as unknown as FakeController;
 }

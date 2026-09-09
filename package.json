@@ -1783,6 +1783,12 @@
             "default": true,
             "description": "Show detailed operation summaries, displaying messages for actions such as database drops, document additions, deletions, or similar events."
           },
+          "documentDB.userInterface.showDashboardOnConnect": {
+            "order": 11.5,
+            "type": "boolean",
+            "default": true,
+            "description": "Show the Cluster Dashboard when connecting to a cluster by expanding it in the tree view."
+          },
           "documentDB.copyPaste.showLargeCollectionWarning": {
             "order": 12,
             "type": "boolean",

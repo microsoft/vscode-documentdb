@@ -10,6 +10,8 @@ import * as vscode from 'vscode';
 import { ClustersClient } from '../../documentdb/ClustersClient';
 import { CredentialCache } from '../../documentdb/CredentialCache';
 import { inferViewIdFromTreeId } from '../../documentdb/Views';
+import { ext } from '../../extensionVariables';
+import { SettingsService } from '../../services/SettingsService';
 import { type AzureClusterModel } from '../../tree/azure-views/models/AzureClusterModel';
 import { type ClusterItemBase } from '../../tree/documentdb/ClusterItemBase';
 import { DatabaseItem } from '../../tree/documentdb/DatabaseItem';
@@ -106,6 +108,7 @@ export async function openClusterDashboard(
         refreshIntervalMs: DASHBOARD_REFRESH_INTERVAL_MS,
         azure: extractAzureInfo(node.cluster),
         feedbackSignalsEnabled: readFeedbackSignalsEnabled(),
+        showDashboardOnConnect: SettingsService.getSetting<boolean>(ext.settingsKeys.showDashboardOnConnect) ?? true,
         selectedDatabaseName: node instanceof DatabaseItem ? node.databaseInfo.name : undefined,
     });
 }

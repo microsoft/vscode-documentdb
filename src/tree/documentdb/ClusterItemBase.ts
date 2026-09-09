@@ -19,6 +19,7 @@ import { type EntraIdAuthConfig, type NativeAuthConfig } from '../../documentdb/
 import { type AuthMethodId } from '../../documentdb/auth/AuthMethod';
 import { ShellCommandIds } from '../../documentdb/shell/constants';
 import { ext } from '../../extensionVariables';
+import { SettingsService } from '../../services/SettingsService';
 import { ConnectionDiagnosticsService } from '../../services/connectionDiagnosticsService';
 import { regionToDisplayName } from '../../utils/regionToDisplayName';
 import { withDelayedProgress } from '../../utils/withProgress';
@@ -377,6 +378,10 @@ export abstract class ClusterItemBase<T extends BaseClusterModel = BaseClusterMo
             );
 
             return this.createErrorRecoveryChildren(true);
+        }
+
+        if (SettingsService.getSetting<boolean>(ext.settingsKeys.showDashboardOnConnect) ?? true) {
+            await vscode.commands.executeCommand('vscode-documentdb.command.clusterDashboard.open', this);
         }
 
         if (databases.length === 0) {

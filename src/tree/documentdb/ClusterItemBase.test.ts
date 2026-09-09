@@ -52,6 +52,7 @@ jest.mock('../api/createGenericElementWithContext', () => ({
 }));
 
 const mockHasCredentials = jest.fn().mockReturnValue(false);
+const mockGetSetting = jest.fn().mockReturnValue(false);
 jest.mock('../../documentdb/CredentialCache', () => ({
     CredentialCache: {
         hasCredentials: (...args: unknown[]) => mockHasCredentials(...args),
@@ -64,10 +65,19 @@ jest.mock('../../documentdb/ClustersClient', () => ({
 
 jest.mock('../../extensionVariables', () => ({
     ext: {
+        settingsKeys: {
+            showDashboardOnConnect: 'documentDB.userInterface.showDashboardOnConnect',
+        },
         outputChannel: {
             appendLine: jest.fn(),
             debug: jest.fn(),
         },
+    },
+}));
+
+jest.mock('../../services/SettingsService', () => ({
+    SettingsService: {
+        getSetting: (...args: unknown[]) => mockGetSetting(...args),
     },
 }));
 
@@ -119,6 +129,7 @@ describe('ClusterItemBase.getChildren — listDatabases failure handling', () =>
         jest.clearAllMocks();
         mockTelemetryEvents.length = 0;
         mockHasCredentials.mockReturnValue(false);
+        mockGetSetting.mockReturnValue(false);
     });
 
     it('returns a retry node (and records telemetry) when listDatabases is rejected', async () => {
@@ -188,6 +199,46 @@ describe('ClusterItemBase.getChildren — listDatabases failure handling', () =>
         expect(children.map((c) => c.id)).toEqual(['alpha', 'beta']);
         expect(item.hasRetryNode(children)).toBe(false);
         expect(mockTelemetryEvents).toHaveLength(0);
+    });
+
+    it('opens the dashboard after connecting through tree expansion when enabled', async () => {
+        mockGetSetting.mockReturnValue(true);
+        const listDatabases = jest.fn().mockResolvedValue([{ name: 'database' }] as DatabaseItemModel[]);
+        const item = new TestClusterItem(makeCluster(), makeClient(listDatabases));
+
+        await item.getChildren();
+
+        expect(mockGetSetting).toHaveBeenCalledWith('documentDB.userInterface.showDashboardOnConnect');
+        expect(vscode.commands.executeCommand).toHaveBeenCalledWith(
+            'vscode-documentdb.command.clusterDashboard.open',
+            item,
+        );
+    });
+
+    it('opens the dashboard by default when the setting is unavailable', async () => {
+        mockGetSetting.mockReturnValue(undefined);
+        const listDatabases = jest.fn().mockResolvedValue([{ name: 'database' }] as DatabaseItemModel[]);
+        const item = new TestClusterItem(makeCluster(), makeClient(listDatabases));
+
+        await item.getChildren();
+
+        expect(vscode.commands.executeCommand).toHaveBeenCalledWith(
+            'vscode-documentdb.command.clusterDashboard.open',
+            item,
+        );
+    });
+
+    it('does not open the dashboard when connecting through tree expansion is disabled', async () => {
+        mockGetSetting.mockReturnValue(false);
+        const listDatabases = jest.fn().mockResolvedValue([{ name: 'database' }] as DatabaseItemModel[]);
+        const item = new TestClusterItem(makeCluster(), makeClient(listDatabases));
+
+        await item.getChildren();
+
+        expect(vscode.commands.executeCommand).not.toHaveBeenCalledWith(
+            'vscode-documentdb.command.clusterDashboard.open',
+            item,
+        );
     });
 
     it('returns the "Create Database…" node when the cluster has no databases', async () => {

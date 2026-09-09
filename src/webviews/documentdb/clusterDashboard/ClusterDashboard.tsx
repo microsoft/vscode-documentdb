@@ -5,6 +5,7 @@
 
 import {
     Button,
+    Checkbox,
     MessageBar,
     MessageBarActions,
     MessageBarBody,
@@ -65,6 +66,8 @@ export const ClusterDashboard = (): JSX.Element => {
     const [isRefreshingStorage, setIsRefreshingStorage] = useState(false);
     const [isManuallyRefreshingStorage, setIsManuallyRefreshingStorage] = useState(false);
     const [isCreatingNamespace, setIsCreatingNamespace] = useState(false);
+    const [showDashboardOnConnect, setShowDashboardOnConnect] = useState(configuration.showDashboardOnConnect);
+    const [isSavingDashboardPreference, setIsSavingDashboardPreference] = useState(false);
     const [busyNamespaces, setBusyNamespaces] = useState<
         ReadonlyArray<{
             readonly databaseName: string;
@@ -307,6 +310,30 @@ export const ClusterDashboard = (): JSX.Element => {
             });
         }
     }, [trpcClient]);
+
+    const updateShowDashboardOnConnect = useCallback(
+        async (checked: boolean): Promise<void> => {
+            const previousValue = showDashboardOnConnect;
+            setShowDashboardOnConnect(checked);
+            setIsSavingDashboardPreference(true);
+
+            try {
+                await trpcClient.clusterDashboard.setShowDashboardOnConnect.mutate(checked);
+            } catch (error) {
+                setShowDashboardOnConnect(previousValue);
+                void trpcClient.common.displayErrorMessage.mutate({
+                    message: l10n.t('Failed to save the dashboard preference.'),
+                    modal: false,
+                    cause: error instanceof Error ? error.message : String(error),
+                });
+            } finally {
+                if (!disposedRef.current) {
+                    setIsSavingDashboardPreference(false);
+                }
+            }
+        },
+        [showDashboardOnConnect, trpcClient],
+    );
 
     /** Re-reads whichever inventory is on screen: the cluster's storage, plus the drilled-into database. */
     const reloadCollections = collections.reload;
@@ -641,6 +668,16 @@ export const ClusterDashboard = (): JSX.Element => {
                     busyNamespaces={busyNamespaces}
                 />
             </div>
+
+            <footer className="dashboardPreferences">
+                <Checkbox
+                    className="dashboardPreferenceCheckbox"
+                    checked={showDashboardOnConnect}
+                    disabled={isSavingDashboardPreference}
+                    label={l10n.t('Show dashboard when connecting')}
+                    onChange={(_event, data) => void updateShowDashboardOnConnect(data.checked === true)}
+                />
+            </footer>
         </div>
     );
 };
