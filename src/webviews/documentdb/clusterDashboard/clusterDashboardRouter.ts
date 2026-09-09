@@ -179,6 +179,7 @@ export const clusterDashboardRouter = router({
         await vscode.commands.executeCommand(ShellCommandIds.openWithInput, {
             clusterId: myCtx.clusterId,
             clusterDisplayName: myCtx.clusterDisplayName,
+            databaseName: 'test',
         });
     }),
 

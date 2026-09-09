@@ -373,10 +373,6 @@ export class DocumentDBShellRuntime {
  * of binding to the call expression.
  */
 export function normalizeDirectCommands(code: string): string {
-    if (!code.includes('\n')) {
-        return code;
-    }
-
     // Cheap early exit: if neither token appears anywhere, skip scanning.
     if (!/\b(use|show)\b/.test(code)) {
         return code;

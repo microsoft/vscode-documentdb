@@ -104,6 +104,18 @@ describe('clusterDashboardRouter create actions', () => {
         jest.clearAllMocks();
     });
 
+    it('opens the shell with the default database', async () => {
+        const caller = createCallerFactory(clusterDashboardRouter)(createContext());
+
+        await caller.openShell();
+
+        expect(vscode.commands.executeCommand).toHaveBeenCalledWith('vscode-documentdb.command.shell.open.withInput', {
+            clusterId: 'cluster-id',
+            clusterDisplayName: 'Test cluster',
+            databaseName: 'test',
+        });
+    });
+
     it('runs the existing create-database command against the resolved cluster node', async () => {
         const clusterNode = { id: 'cluster-tree-id' };
         mockResolveClusterNode.mockResolvedValue(clusterNode);
