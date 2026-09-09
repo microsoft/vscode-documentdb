@@ -49,13 +49,14 @@ jest.mock('../../_integration/trpc', () => {
 import { createCallerFactory } from '../../_integration/trpc';
 import { clusterDashboardRouter, collectRawCommandReplies, type RouterContext } from './clusterDashboardRouter';
 
-function createContext(): RouterContext {
+function createContext(onNamespaceBusy?: RouterContext['onNamespaceBusy']): RouterContext {
     return {
         dbExperience: API.DocumentDB,
         webviewName: 'clusterDashboard',
         clusterId: 'cluster-id',
         clusterDisplayName: 'Test cluster',
         viewId: 'connectionsView',
+        onNamespaceBusy,
     };
 }
 
@@ -105,7 +106,13 @@ describe('clusterDashboardRouter create actions', () => {
     it('runs the existing create-database command against the resolved cluster node', async () => {
         const clusterNode = { id: 'cluster-tree-id' };
         mockResolveClusterNode.mockResolvedValue(clusterNode);
-        const caller = createCallerFactory(clusterDashboardRouter)(createContext());
+        const onNamespaceBusy = jest.fn(async () => undefined);
+        jest.mocked(vscode.commands.executeCommand).mockImplementationOnce(async (_command, ...args: unknown[]) => {
+            const options = args[2] as { onNameResolved: (name: string) => Promise<void> };
+            await options.onNameResolved('new-database');
+            return 'new-database';
+        });
+        const caller = createCallerFactory(clusterDashboardRouter)(createContext(onNamespaceBusy));
 
         await caller.createDatabase();
 
@@ -114,14 +121,20 @@ describe('clusterDashboardRouter create actions', () => {
             'vscode-documentdb.command.createDatabase',
             clusterNode,
             null,
-            { source: 'webview;clusterDashboard' },
+            expect.objectContaining({ source: 'webview;clusterDashboard', onNameResolved: expect.any(Function) }),
         );
+        expect(onNamespaceBusy).toHaveBeenCalledWith('new-database', undefined, true);
     });
 
     it('runs the existing create-collection command against the resolved database node', async () => {
         const databaseNode = { id: 'cluster-tree-id/database' };
         mockResolveNamespaceNode.mockResolvedValue(databaseNode);
-        const caller = createCallerFactory(clusterDashboardRouter)(createContext());
+        const onNamespaceBusy = jest.fn(async () => undefined);
+        jest.mocked(vscode.commands.executeCommand).mockImplementationOnce(async (_command, ...args: unknown[]) => {
+            const options = args[2] as { onNameResolved: (name: string) => Promise<void> };
+            await options.onNameResolved('new-collection');
+        });
+        const caller = createCallerFactory(clusterDashboardRouter)(createContext(onNamespaceBusy));
 
         await caller.createCollection({ databaseName: 'database' });
 
@@ -130,7 +143,8 @@ describe('clusterDashboardRouter create actions', () => {
             'vscode-documentdb.command.createCollection',
             databaseNode,
             null,
-            { source: 'webview;clusterDashboard' },
+            expect.objectContaining({ source: 'webview;clusterDashboard', onNameResolved: expect.any(Function) }),
         );
+        expect(onNamespaceBusy).toHaveBeenCalledWith('database', 'new-collection', true);
     });
 });

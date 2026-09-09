@@ -12,7 +12,7 @@ import { useCallback, useEffect, useRef, useState, type JSX } from 'react';
 import { type ClusterHealthSample, type ClusterStorageStats } from '../../../documentdb/utils/getClusterHealth';
 import { useTrpcClient } from '../../_integration/useTrpcClient';
 import './clusterDashboard.scss';
-import { isInventoryChangedMessage } from './clusterDashboardContextMenu';
+import { isInventoryChangedMessage, isNamespaceBusyMessage } from './clusterDashboardContextMenu';
 import { type ClusterDashboardWebviewConfigurationType } from './clusterDashboardController';
 import { type ClusterDashboardInfo } from './clusterDashboardRouter';
 import { DashboardFeedback } from './components/DashboardFeedback';
@@ -44,7 +44,16 @@ export const ClusterDashboard = (): JSX.Element => {
     const [storageStats, setStorageStats] = useState<ClusterStorageStats | null>(null);
     const [storageLastUpdatedAt, setStorageLastUpdatedAt] = useState<number>();
     const [isRefreshingStorage, setIsRefreshingStorage] = useState(false);
+    const [isManuallyRefreshingStorage, setIsManuallyRefreshingStorage] = useState(false);
     const [isCreatingNamespace, setIsCreatingNamespace] = useState(false);
+    const [busyNamespaces, setBusyNamespaces] = useState<
+        ReadonlyArray<{
+            readonly databaseName: string;
+            readonly collectionName?: string;
+            readonly operation: 'create' | 'delete';
+            readonly phase: 'running' | 'settling';
+        }>
+    >([]);
     /**
      * How the reader has arranged the inventory — order, filter, level.
      *
@@ -77,34 +86,39 @@ export const ClusterDashboard = (): JSX.Element => {
     const sampleInFlightRef = useRef(false);
     const storageInFlightRef = useRef(false);
 
-    const loadStorageStats = useCallback(async (): Promise<void> => {
-        if (storageInFlightRef.current) {
-            return;
-        }
-        storageInFlightRef.current = true;
-        setIsRefreshingStorage(true);
+    const loadStorageStats = useCallback(
+        async (source: 'background' | 'manual' = 'background'): Promise<void> => {
+            if (storageInFlightRef.current) {
+                return;
+            }
+            storageInFlightRef.current = true;
+            setIsRefreshingStorage(true);
+            setIsManuallyRefreshingStorage(source === 'manual');
 
-        try {
-            const stats = await trpcClient.clusterDashboard.getStorageStats.query();
-            if (!disposedRef.current) {
-                setStorageStats(stats);
-                setStorageLastUpdatedAt(Date.now());
+            try {
+                const stats = await trpcClient.clusterDashboard.getStorageStats.query();
+                if (!disposedRef.current) {
+                    setStorageStats(stats);
+                    setStorageLastUpdatedAt(Date.now());
+                }
+            } catch (error) {
+                if (!disposedRef.current) {
+                    void trpcClient.common.displayErrorMessage.mutate({
+                        message: l10n.t('Failed to read storage statistics.'),
+                        modal: false,
+                        cause: error instanceof Error ? error.message : String(error),
+                    });
+                }
+            } finally {
+                storageInFlightRef.current = false;
+                if (!disposedRef.current) {
+                    setIsRefreshingStorage(false);
+                    setIsManuallyRefreshingStorage(false);
+                }
             }
-        } catch (error) {
-            if (!disposedRef.current) {
-                void trpcClient.common.displayErrorMessage.mutate({
-                    message: l10n.t('Failed to read storage statistics.'),
-                    modal: false,
-                    cause: error instanceof Error ? error.message : String(error),
-                });
-            }
-        } finally {
-            storageInFlightRef.current = false;
-            if (!disposedRef.current) {
-                setIsRefreshingStorage(false);
-            }
-        }
-    }, [trpcClient]);
+        },
+        [trpcClient],
+    );
 
     // One-time header + storage load.
     useEffect(() => {
@@ -236,6 +250,29 @@ export const ClusterDashboard = (): JSX.Element => {
 
     useEffect(() => {
         const handleMessage = (event: MessageEvent<unknown>): void => {
+            if (isNamespaceBusyMessage(event.data)) {
+                const { databaseName, collectionName, operation, busy } = event.data;
+                setBusyNamespaces((current) => {
+                    const matches = (namespace: { databaseName: string; collectionName?: string }): boolean =>
+                        namespace.databaseName === databaseName && namespace.collectionName === collectionName;
+
+                    if (busy) {
+                        return current.some(matches)
+                            ? current
+                            : [...current, { databaseName, collectionName, operation, phase: 'running' }];
+                    }
+
+                    if (operation === 'delete') {
+                        return current.map((namespace) =>
+                            matches(namespace) ? { ...namespace, phase: 'settling' } : namespace,
+                        );
+                    }
+
+                    return current.filter((namespace) => !matches(namespace));
+                });
+                return;
+            }
+
             if (!isInventoryChangedMessage(event.data)) {
                 return;
             }
@@ -250,12 +287,63 @@ export const ClusterDashboard = (): JSX.Element => {
         return () => window.removeEventListener('message', handleMessage);
     }, [inventoryViewState.currentDatabase, loadStorageStats, reloadCollections]);
 
+    useEffect(() => {
+        if (isRefreshingStorage || collections.isLoading) {
+            return;
+        }
+
+        setBusyNamespaces((current) => {
+            const next = current.filter((namespace) => {
+                if (namespace.operation === 'delete') {
+                    return namespace.phase !== 'settling';
+                }
+
+                if (namespace.collectionName === undefined) {
+                    return (
+                        namespace.phase !== 'settling' &&
+                        !storageStats?.databases.some((database) => database.name === namespace.databaseName)
+                    );
+                }
+
+                return (
+                    namespace.phase !== 'settling' &&
+                    !(
+                        inventoryViewState.currentDatabase === namespace.databaseName &&
+                        collections.result?.collections.some(
+                            (collection) => collection.name === namespace.collectionName,
+                        )
+                    )
+                );
+            });
+            return next.length === current.length ? current : next;
+        });
+    }, [
+        collections.isLoading,
+        collections.result,
+        inventoryViewState.currentDatabase,
+        isRefreshingStorage,
+        storageStats,
+    ]);
+
     const refreshData = useCallback((): void => {
-        void loadStorageStats();
+        void loadStorageStats('manual');
         if (inventoryViewState.currentDatabase !== null) {
-            reloadCollections();
+            reloadCollections('manual');
         }
     }, [loadStorageStats, reloadCollections, inventoryViewState.currentDatabase]);
+
+    const settleCreatedNamespace = useCallback((databaseName: string | null): void => {
+        setBusyNamespaces((current) =>
+            current.map((namespace) =>
+                namespace.operation === 'create' &&
+                (databaseName === null
+                    ? namespace.collectionName === undefined
+                    : namespace.databaseName === databaseName && namespace.collectionName !== undefined)
+                    ? { ...namespace, phase: 'settling' }
+                    : namespace,
+            ),
+        );
+    }, []);
 
     const createNamespace = useCallback(async (): Promise<void> => {
         const databaseName = inventoryViewState.currentDatabase;
@@ -264,13 +352,13 @@ export const ClusterDashboard = (): JSX.Element => {
         try {
             if (databaseName === null) {
                 await trpcClient.clusterDashboard.createDatabase.mutate();
+                await loadStorageStats();
+                settleCreatedNamespace(null);
             } else {
                 await trpcClient.clusterDashboard.createCollection.mutate({ databaseName });
-            }
-
-            await loadStorageStats();
-            if (databaseName !== null) {
+                await loadStorageStats();
                 reloadCollections();
+                settleCreatedNamespace(databaseName);
             }
         } catch (error) {
             void trpcClient.common.displayErrorMessage.mutate({
@@ -286,7 +374,7 @@ export const ClusterDashboard = (): JSX.Element => {
                 setIsCreatingNamespace(false);
             }
         }
-    }, [inventoryViewState.currentDatabase, loadStorageStats, reloadCollections, trpcClient]);
+    }, [inventoryViewState.currentDatabase, loadStorageStats, reloadCollections, settleCreatedNamespace, trpcClient]);
 
     const connectionState: ConnectionState =
         consecutiveFailures >= FAILURE_THRESHOLD
@@ -295,9 +383,9 @@ export const ClusterDashboard = (): JSX.Element => {
               ? 'connected'
               : 'connecting';
 
-    // Every load that replaces content the reader is looking at reports through the one bar
-    // pinned to the top edge. The health poll is deliberately excluded: it runs every five
-    // seconds and would leave the bar permanently animating.
+    // Every visible load reports through the one bar pinned to the top edge. The health poll
+    // is deliberately excluded: it runs every five seconds and would leave the bar permanently
+    // animating. Background mutation reconciliation keeps the table rows mounted underneath.
     const isBusy =
         clusterInfo === null || isRefreshingStorage || collections.isLoading || isExporting || isCreatingNamespace;
 
@@ -396,12 +484,13 @@ export const ClusterDashboard = (): JSX.Element => {
                 <InventoryPanel
                     storageStats={storageStats}
                     storageLastUpdatedAt={storageLastUpdatedAt}
-                    isLoading={isRefreshingStorage || collections.isLoading}
+                    isLoading={storageStats === null || isManuallyRefreshingStorage || collections.isTableLoading}
                     collections={collections}
                     viewState={inventoryViewState}
                     onViewStateChange={setInventoryViewState}
                     onCreateNamespace={() => void createNamespace()}
                     isCreatingNamespace={isCreatingNamespace}
+                    busyNamespaces={busyNamespaces}
                 />
             </div>
         </div>

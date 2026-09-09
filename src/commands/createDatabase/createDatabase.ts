@@ -15,19 +15,37 @@ import { type CreateDatabaseWizardContext } from './CreateDatabaseWizardContext'
 import { DatabaseNameStep } from './DatabaseNameStep';
 import { ExecuteStep } from './ExecuteStep';
 
-export async function createAzureDatabase(context: IActionContext, node: ClusterItemBase): Promise<void> {
+interface CreateDatabaseCommandOptions {
+    readonly onNameResolved?: (databaseName: string) => Promise<void>;
+}
+
+export async function createAzureDatabase(
+    context: IActionContext,
+    node: ClusterItemBase,
+    nodes?: ClusterItemBase[],
+    options?: CreateDatabaseCommandOptions,
+): Promise<void> {
     if (!node) {
         throw new Error(l10n.t('No node selected.'));
     }
 
-    return createDatabase(context, node);
+    await createDatabase(context, node, nodes, options);
 }
 
-export async function createDatabase(context: IActionContext, node: ClusterItemBase): Promise<void> {
-    await createMongoDatabase(context, node);
+export async function createDatabase(
+    context: IActionContext,
+    node: ClusterItemBase,
+    _nodes?: ClusterItemBase[],
+    options?: CreateDatabaseCommandOptions,
+): Promise<void> {
+    await createMongoDatabase(context, node, options);
 }
 
-async function createMongoDatabase(context: IActionContext, node: ClusterItemBase): Promise<void> {
+async function createMongoDatabase(
+    context: IActionContext,
+    node: ClusterItemBase,
+    options?: CreateDatabaseCommandOptions,
+): Promise<void> {
     context.telemetry.properties.experience = node.experience.api;
 
     if (!CredentialCache.hasCredentials(node.cluster.clusterId)) {
@@ -55,8 +73,9 @@ async function createMongoDatabase(context: IActionContext, node: ClusterItemBas
     });
 
     await wizard.prompt();
+    const newDatabaseName = nonNullValue(wizardContext.databaseName, 'wizardContext.databaseName', 'createDatabase.ts');
+    await options?.onNameResolved?.(newDatabaseName);
     await wizard.execute();
 
-    const newDatabaseName = nonNullValue(wizardContext.databaseName, 'wizardContext.databaseName', 'createDatabase.ts');
     showConfirmationAsInSettings(l10n.t('The "{name}" database has been created.', { name: newDatabaseName }));
 }

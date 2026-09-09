@@ -90,6 +90,8 @@ export type RouterContext = BaseRouterContext & {
      * @see Views enum for possible values (e.g., 'connectionsView', 'discoveryView')
      */
     viewId: string;
+    /** Reports row-local create progress to the dashboard that owns this router. */
+    onNamespaceBusy?: (databaseName: string, collectionName: string | undefined, busy: boolean) => Promise<void>;
 };
 
 /** Flat string map produced by `getClusterMetadata` (e.g. `serverInfo_version`). */
@@ -189,9 +191,21 @@ export const clusterDashboardRouter = router({
             throw new Error(l10n.t('Could not find this cluster in the tree view. Expand the cluster and try again.'));
         }
 
-        await vscode.commands.executeCommand('vscode-documentdb.command.createDatabase', clusterNode, null, {
-            source: 'webview;clusterDashboard',
-        });
+        let databaseName: string | undefined;
+        try {
+            await vscode.commands.executeCommand('vscode-documentdb.command.createDatabase', clusterNode, null, {
+                source: 'webview;clusterDashboard',
+                onNameResolved: async (name: string): Promise<void> => {
+                    databaseName = name;
+                    await myCtx.onNamespaceBusy?.(name, undefined, true);
+                },
+            });
+        } catch (error) {
+            if (databaseName !== undefined) {
+                await myCtx.onNamespaceBusy?.(databaseName, undefined, false);
+            }
+            throw error;
+        }
     }),
 
     /** Runs the tree's existing create-collection command for the database on screen. */
@@ -209,9 +223,21 @@ export const clusterDashboardRouter = router({
                 );
             }
 
-            await vscode.commands.executeCommand('vscode-documentdb.command.createCollection', databaseNode, null, {
-                source: 'webview;clusterDashboard',
-            });
+            let collectionName: string | undefined;
+            try {
+                await vscode.commands.executeCommand('vscode-documentdb.command.createCollection', databaseNode, null, {
+                    source: 'webview;clusterDashboard',
+                    onNameResolved: async (name: string): Promise<void> => {
+                        collectionName = name;
+                        await myCtx.onNamespaceBusy?.(input.databaseName, name, true);
+                    },
+                });
+            } catch (error) {
+                if (collectionName !== undefined) {
+                    await myCtx.onNamespaceBusy?.(input.databaseName, collectionName, false);
+                }
+                throw error;
+            }
         }),
 
     /** Opens the Collection View for a row in the inventory. */

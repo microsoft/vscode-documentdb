@@ -15,6 +15,7 @@ import {
     CLUSTER_DASHBOARD_CONTEXT_MENU_COMMANDS,
     type ClusterDashboardContextMenuContext,
     type InventoryChangedMessage,
+    type NamespaceBusyMessage,
     type ShowCollectionsMessage,
 } from './clusterDashboardContextMenu';
 import { type RouterContext } from './clusterDashboardRouter';
@@ -88,7 +89,12 @@ interface OpenPanel {
 type RowAction =
     | { readonly kind: 'showCollections' }
     | { readonly kind: 'collectionView'; readonly initialTab?: 'tab_indexes' }
-    | { readonly kind: 'treeCommand'; readonly commandId: string; readonly invalidatesInventory?: boolean };
+    | {
+          readonly kind: 'treeCommand';
+          readonly commandId: string;
+          readonly invalidatesInventory?: boolean;
+          readonly reportsBusy?: boolean;
+      };
 
 const ROW_ACTIONS: Readonly<Record<string, RowAction>> = {
     [CLUSTER_DASHBOARD_CONTEXT_MENU_COMMANDS.viewCollections]: { kind: 'showCollections' },
@@ -110,6 +116,7 @@ const ROW_ACTIONS: Readonly<Record<string, RowAction>> = {
         kind: 'treeCommand',
         commandId: 'vscode-documentdb.command.dropDatabase',
         invalidatesInventory: true,
+        reportsBusy: true,
     },
     [CLUSTER_DASHBOARD_CONTEXT_MENU_COMMANDS.copyCollection]: {
         kind: 'treeCommand',
@@ -132,6 +139,7 @@ const ROW_ACTIONS: Readonly<Record<string, RowAction>> = {
         kind: 'treeCommand',
         commandId: 'vscode-documentdb.command.dropCollection',
         invalidatesInventory: true,
+        reportsBusy: true,
     },
 };
 
@@ -158,6 +166,23 @@ async function postInventoryChanged(panel: OpenPanel, databaseName: string): Pro
     const message: InventoryChangedMessage = {
         type: 'clusterDashboard.inventoryChanged',
         databaseName,
+    };
+    await panel.controller.panel.webview.postMessage(message);
+}
+
+async function postNamespaceBusy(
+    panel: OpenPanel,
+    databaseName: string,
+    collectionName: string | undefined,
+    operation: NamespaceBusyMessage['operation'],
+    busy: boolean,
+): Promise<void> {
+    const message: NamespaceBusyMessage = {
+        type: 'clusterDashboard.namespaceBusy',
+        databaseName,
+        collectionName,
+        operation,
+        busy,
     };
     await panel.controller.panel.webview.postMessage(message);
 }
@@ -219,12 +244,22 @@ async function runRowAction(
         return;
     }
 
-    await vscode.commands.executeCommand(action.commandId, node, null, {
-        source: 'webview;clusterDashboard',
-    });
+    if (action.reportsBusy) {
+        await postNamespaceBusy(panel, databaseName, collectionName, 'delete', true);
+    }
 
-    if (action.invalidatesInventory) {
-        await postInventoryChanged(panel, databaseName);
+    try {
+        await vscode.commands.executeCommand(action.commandId, node, null, {
+            source: 'webview;clusterDashboard',
+        });
+
+        if (action.invalidatesInventory) {
+            await postInventoryChanged(panel, databaseName);
+        }
+    } finally {
+        if (action.reportsBusy) {
+            await postNamespaceBusy(panel, databaseName, collectionName, 'delete', false);
+        }
     }
 }
 
@@ -265,15 +300,19 @@ export function openClusterDashboardWebview(
         return existingPanel.controller;
     }
 
+    let controller: AppWebviewController<ClusterDashboardWebviewConfigurationType>;
     const trpcContext: RouterContext = {
         dbExperience: API.DocumentDB,
         webviewName: 'clusterDashboard',
         clusterId: initialData.clusterId,
         clusterDisplayName: initialData.clusterDisplayName,
         viewId: initialData.viewId,
+        onNamespaceBusy: async (databaseName, collectionName, busy): Promise<void> => {
+            await postNamespaceBusy({ controller, config: initialData }, databaseName, collectionName, 'create', busy);
+        },
     };
 
-    const controller = openAppWebview<ClusterDashboardWebviewConfigurationType>({
+    controller = openAppWebview<ClusterDashboardWebviewConfigurationType>({
         title:
             initialData.selectedDatabaseName === undefined
                 ? l10n.t('Dashboard: {clusterDisplayName}', { clusterDisplayName: initialData.clusterDisplayName })

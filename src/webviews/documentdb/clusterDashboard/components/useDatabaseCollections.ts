@@ -14,8 +14,10 @@ export interface DatabaseCollectionsState {
     /** Time when the current database's collections were last read successfully. */
     lastUpdatedAt?: number;
     isLoading: boolean;
+    /** True only when the table should be replaced by its skeleton. */
+    isTableLoading: boolean;
     error: string | null;
-    reload: () => void;
+    reload: (source?: 'background' | 'manual') => void;
 }
 
 /**
@@ -29,17 +31,22 @@ export interface DatabaseCollectionsState {
  * something changed, and a cache would answer it with the figures from the first.
  */
 export function useDatabaseCollections(databaseName: string | null): DatabaseCollectionsState {
-    // Bumped by `reload` so a manual refresh re-runs the effect for the same database.
-    const [attempt, setAttempt] = useState(0);
+    // Bumped by `reload` so a refresh re-runs the effect for the same database. Background
+    // reconciliation preserves the current rows; an explicit manual refresh shows a skeleton.
+    const [request, setRequest] = useState<{ attempt: number; source: 'background' | 'manual' }>({
+        attempt: 0,
+        source: 'background',
+    });
     const [entry, setEntry] = useState<{
         key: string;
+        databaseName: string;
         result: DatabaseCollectionsResult | null;
         lastUpdatedAt?: number;
         error: string | null;
     } | null>(null);
 
     const trpcClient = useTrpcClient();
-    const key = `${attempt}\u0000${databaseName ?? ''}`;
+    const key = `${request.attempt}\u0000${databaseName ?? ''}`;
 
     useEffect(() => {
         if (databaseName === null) {
@@ -54,16 +61,18 @@ export function useDatabaseCollections(databaseName: string | null): DatabaseCol
             .query({ databaseName })
             .then((result) => {
                 if (!disposed) {
-                    setEntry({ key, result, lastUpdatedAt: Date.now(), error: null });
+                    setEntry({ key, databaseName, result, lastUpdatedAt: Date.now(), error: null });
                 }
             })
             .catch((reason: unknown) => {
                 if (!disposed) {
-                    setEntry({
+                    setEntry((current) => ({
                         key,
-                        result: null,
+                        databaseName,
+                        result: current?.databaseName === databaseName ? current.result : null,
+                        lastUpdatedAt: current?.databaseName === databaseName ? current.lastUpdatedAt : undefined,
                         error: reason instanceof Error ? reason.message : String(reason),
-                    });
+                    }));
                 }
             });
 
@@ -74,14 +83,19 @@ export function useDatabaseCollections(databaseName: string | null): DatabaseCol
         };
     }, [databaseName, key, trpcClient]);
 
-    const reload = useCallback((): void => setAttempt((current) => current + 1), []);
+    const reload = useCallback((source: 'background' | 'manual' = 'background'): void => {
+        setRequest((current) => ({ attempt: current.attempt + 1, source }));
+    }, []);
 
     const isCurrent = entry !== null && entry.key === key;
+    const isSameDatabase = entry !== null && entry.databaseName === databaseName;
+    const isLoading = databaseName !== null && !isCurrent;
 
     return {
-        result: isCurrent ? entry.result : null,
-        lastUpdatedAt: isCurrent ? entry.lastUpdatedAt : undefined,
-        isLoading: databaseName !== null && !isCurrent,
+        result: isSameDatabase ? entry.result : null,
+        lastUpdatedAt: isSameDatabase ? entry.lastUpdatedAt : undefined,
+        isLoading,
+        isTableLoading: databaseName !== null && (!isSameDatabase || (isLoading && request.source === 'manual')),
         error: isCurrent ? entry.error : null,
         reload,
     };

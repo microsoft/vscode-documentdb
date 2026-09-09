@@ -451,6 +451,14 @@ $content-gutter: var(--spacingHorizontalMNudge); // 10px
         gap: var(--spacingHorizontalXXS); // 2px
     }
 
+    .namespaceStatusIcon,
+    .namespaceStatusSpinner {
+        display: inline-flex;
+        width: 16px;
+        height: 16px;
+        flex: 0 0 16px;
+    }
+
     .namespaceRow:hover {
         background-color: var(--colorNeutralBackground1Hover);
     }

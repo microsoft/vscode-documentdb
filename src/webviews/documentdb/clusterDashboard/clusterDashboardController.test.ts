@@ -176,9 +176,23 @@ describe('cluster dashboard native context menu commands', () => {
             null,
             { source: 'webview;clusterDashboard' },
         );
-        expect(controller.panel.webview.postMessage).toHaveBeenCalledWith({
+        expect(controller.panel.webview.postMessage).toHaveBeenNthCalledWith(1, {
+            type: 'clusterDashboard.namespaceBusy',
+            databaseName: 'sales',
+            collectionName: 'orders',
+            operation: 'delete',
+            busy: true,
+        });
+        expect(controller.panel.webview.postMessage).toHaveBeenNthCalledWith(2, {
             type: 'clusterDashboard.inventoryChanged',
             databaseName: 'sales',
+        });
+        expect(controller.panel.webview.postMessage).toHaveBeenNthCalledWith(3, {
+            type: 'clusterDashboard.namespaceBusy',
+            databaseName: 'sales',
+            collectionName: 'orders',
+            operation: 'delete',
+            busy: false,
         });
 
         controller.dispose();

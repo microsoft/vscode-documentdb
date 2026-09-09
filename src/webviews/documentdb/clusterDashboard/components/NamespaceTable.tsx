@@ -5,6 +5,7 @@
 
 import {
     Button,
+    Spinner,
     Table,
     TableBody,
     TableCell,
@@ -165,13 +166,14 @@ function SortableHeader({
 interface RowActionsProps {
     row: NamespaceRow;
     isDatabases: boolean;
+    isBusy: boolean;
     onActivate: (row: NamespaceRow) => void;
 }
 
 /**
  * The primary action and a button that opens the row's native VS Code context menu.
  */
-const RowActionButtons = ({ row, isDatabases, onActivate }: RowActionsProps): JSX.Element => {
+const RowActionButtons = ({ row, isDatabases, isBusy, onActivate }: RowActionsProps): JSX.Element => {
     // Not "Open a shell scoped to sample_mflix": the button sits in that row, so the row
     // already says which namespace it acts on. Naming it again makes every tooltip in the
     // column a different length and reads back the one thing the reader can already see.
@@ -186,6 +188,7 @@ const RowActionButtons = ({ row, isDatabases, onActivate }: RowActionsProps): JS
                     size="small"
                     icon={isDatabases ? <ArrowExpandRegular /> : <DocumentMultipleRegular />}
                     aria-label={primaryLabel}
+                    disabled={isBusy}
                     onClick={(event) => {
                         // A database row handles the click too; without this it fires twice.
                         event.stopPropagation();
@@ -200,6 +203,7 @@ const RowActionButtons = ({ row, isDatabases, onActivate }: RowActionsProps): JS
                 icon={<MoreHorizontalRegular />}
                 aria-label={moreActionsLabel}
                 title={moreActionsLabel}
+                disabled={isBusy}
                 onClick={(event) => {
                     event.stopPropagation();
                     const bounds = event.currentTarget.getBoundingClientRect();
@@ -225,7 +229,26 @@ export interface NamespaceTableProps {
     onActivate: (row: NamespaceRow) => void;
     /** Parent database when rendering collections. */
     databaseName?: string;
+    /** Names of rows whose create or delete command is in progress. */
+    busyNames?: ReadonlySet<string>;
 }
+
+const NamespaceStatusIndicator = ({ isDatabase, busy }: { isDatabase: boolean; busy: boolean }): JSX.Element => {
+    if (busy) {
+        const label = isDatabase ? l10n.t('Updating database') : l10n.t('Updating collection');
+        return (
+            <Tooltip content={label} relationship="label" withArrow>
+                <Spinner size="extra-tiny" aria-label={label} className="namespaceStatusSpinner" />
+            </Tooltip>
+        );
+    }
+
+    return isDatabase ? (
+        <DatabaseRegular className="namespaceStatusIcon" aria-hidden={true} />
+    ) : (
+        <LibraryRegular className="namespaceStatusIcon" aria-hidden={true} />
+    );
+};
 
 /**
  * The inventory list, at either level.
@@ -241,6 +264,7 @@ export const NamespaceTable = ({
     onSortToggle,
     onActivate,
     databaseName,
+    busyNames,
 }: NamespaceTableProps): JSX.Element => {
     const isDatabases = level === 'databases';
     const configuration = useConfiguration<ClusterDashboardWebviewConfigurationType>();
@@ -320,9 +344,11 @@ export const NamespaceTable = ({
                 </TableHeader>
                 <TableBody>
                     {rows.map((row) => {
+                        const isBusy = busyNames?.has(row.name) ?? false;
                         const actions = {
                             row,
                             isDatabases,
+                            isBusy,
                             onActivate,
                         };
 
@@ -345,13 +371,13 @@ export const NamespaceTable = ({
                                 // leaves for another editor tab, which is too much to
                                 // hang on a stray click at a row the reader was only
                                 // reading.
-                                onClick={isDatabases ? () => onActivate(row) : undefined}
+                                onClick={isDatabases && !isBusy ? () => onActivate(row) : undefined}
                             >
                                 <TableCell>
                                     <TableCellLayout
                                         truncate
                                         title={row.name}
-                                        media={isDatabases ? <DatabaseRegular /> : <LibraryRegular />}
+                                        media={<NamespaceStatusIndicator isDatabase={isDatabases} busy={isBusy} />}
                                     >
                                         {row.name}
                                     </TableCellLayout>

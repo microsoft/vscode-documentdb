@@ -12,7 +12,16 @@ import { CollectionNameStep } from './CollectionNameStep';
 import { type CreateCollectionWizardContext } from './CreateCollectionWizardContext';
 import { ExecuteStep } from './ExecuteStep';
 
-export async function createCollection(context: IActionContext, node: DatabaseItem): Promise<void> {
+interface CreateCollectionCommandOptions {
+    readonly onNameResolved?: (collectionName: string) => Promise<void>;
+}
+
+export async function createCollection(
+    context: IActionContext,
+    node: DatabaseItem,
+    _nodes?: DatabaseItem[],
+    options?: CreateCollectionCommandOptions,
+): Promise<void> {
     if (!node) {
         throw new Error(l10n.t('No node selected.'));
     }
@@ -34,13 +43,14 @@ export async function createCollection(context: IActionContext, node: DatabaseIt
     });
 
     await wizard.prompt();
-    await wizard.execute();
-
     const newCollectionName = nonNullValue(
         wizardContext.newCollectionName,
         'wizardContext.newCollectionName',
         'createCollection.ts',
     );
+    await options?.onNameResolved?.(newCollectionName);
+    await wizard.execute();
+
     showConfirmationAsInSettings(
         l10n.t('The "{newCollectionName}" collection has been created.', { newCollectionName }),
     );

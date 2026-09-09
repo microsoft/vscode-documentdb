@@ -67,6 +67,12 @@ export interface InventoryPanelProps {
     /** Creates a database or collection, according to the inventory level on screen. */
     onCreateNamespace: () => void;
     isCreatingNamespace: boolean;
+    busyNamespaces: ReadonlyArray<{
+        readonly databaseName: string;
+        readonly collectionName?: string;
+        readonly operation: 'create' | 'delete';
+        readonly phase: 'running' | 'settling';
+    }>;
 }
 
 /**
@@ -102,6 +108,7 @@ export const InventoryPanel = ({
     onViewStateChange,
     onCreateNamespace,
     isCreatingNamespace,
+    busyNamespaces,
 }: InventoryPanelProps): JSX.Element => {
     const { sort, filterText, currentDatabase } = viewState;
     const trpcClient = useTrpcClient();
@@ -120,13 +127,42 @@ export const InventoryPanel = ({
         [collections.result],
     );
 
-    const rows = useMemo(
-        () => arrangeRows(currentDatabase === null ? databaseRows : collectionRows, filterText, sort),
-        [currentDatabase, databaseRows, collectionRows, filterText, sort],
+    const busyNames = useMemo(
+        () =>
+            new Set(
+                busyNamespaces.flatMap((namespace) => {
+                    if (currentDatabase === null && namespace.collectionName === undefined) {
+                        return [namespace.databaseName];
+                    }
+                    if (currentDatabase === namespace.databaseName && namespace.collectionName !== undefined) {
+                        return [namespace.collectionName];
+                    }
+                    return [];
+                }),
+            ),
+        [busyNamespaces, currentDatabase],
     );
 
+    const allRows = useMemo(() => {
+        const loadedRows = currentDatabase === null ? databaseRows : collectionRows;
+        const loadedNames = new Set(loadedRows.map((row) => row.name));
+        const pendingRows = [...busyNames]
+            .filter((name) => !loadedNames.has(name))
+            .map<NamespaceRow>((name) => ({
+                name,
+                sizeBytes: null,
+                dataSizeBytes: null,
+                indexSizeBytes: null,
+                childCount: null,
+                documents: null,
+                isView: false,
+            }));
+        return pendingRows.length === 0 ? loadedRows : [...loadedRows, ...pendingRows];
+    }, [busyNames, collectionRows, currentDatabase, databaseRows]);
+
+    const rows = useMemo(() => arrangeRows(allRows, filterText, sort), [allRows, filterText, sort]);
+
     /** Everything the level holds, before the filter — the denominator of the footer count. */
-    const allRows = currentDatabase === null ? databaseRows : collectionRows;
     const lastUpdatedAt = currentDatabase === null ? storageLastUpdatedAt : collections.lastUpdatedAt;
     const inventoryIsLoading = isLoading || storageStats === null;
 
@@ -355,6 +391,7 @@ export const InventoryPanel = ({
                     onSortToggle={toggleSort}
                     onActivate={activate}
                     databaseName={currentDatabase ?? undefined}
+                    busyNames={busyNames}
                 />
             )}
 

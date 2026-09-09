@@ -71,3 +71,27 @@ export function isInventoryChangedMessage(value: unknown): value is InventoryCha
     const message = value as Partial<InventoryChangedMessage>;
     return message.type === 'clusterDashboard.inventoryChanged' && typeof message.databaseName === 'string';
 }
+
+/** Marks one database or collection row as busy while its tree command is running. */
+export interface NamespaceBusyMessage {
+    readonly type: 'clusterDashboard.namespaceBusy';
+    readonly databaseName: string;
+    readonly collectionName?: string;
+    readonly operation: 'create' | 'delete';
+    readonly busy: boolean;
+}
+
+export function isNamespaceBusyMessage(value: unknown): value is NamespaceBusyMessage {
+    if (typeof value !== 'object' || value === null) {
+        return false;
+    }
+
+    const message = value as Partial<NamespaceBusyMessage>;
+    return (
+        message.type === 'clusterDashboard.namespaceBusy' &&
+        typeof message.databaseName === 'string' &&
+        (message.collectionName === undefined || typeof message.collectionName === 'string') &&
+        (message.operation === 'create' || message.operation === 'delete') &&
+        typeof message.busy === 'boolean'
+    );
+}
