@@ -51,6 +51,24 @@ there is no tier for non-Fluent consumers and the package name says as much (000
 The facade is built only from tier 2 and 3 (invariant I3): a consumer assembling it by hand gets an
 identical result.
 
+### Container and wizard sizing
+
+On 2026-09-10 the operator confirmed that full-webview sizing is intentional. `Container` defaults
+to `height: 100vh`, and `Wizard` inherits that default through its root `Container`. This settles
+increment 2's root-height question: retain the current behavior rather than requiring every host
+to establish parent-relative heights. The body owns scrolling and the footer stays visible within
+the allocated height; document padding remains consumer-owned.
+
+Embedding is an opt-in consumer override, not a change to the default or a new sizing prop.
+Consumers must supply a bounded parent height. `Container` accepts a `style` or `className`
+override; `Wizard` does not forward those props, so its documented workaround uses a dedicated
+wrapper and a scoped direct-child height rule. That workaround depends on the current root DOM
+shape. Consumers needing direct root control can compose the lower-level components instead.
+
+The consumer examples and scroll/landmark constraints live in the
+[Container README](../../../../packages/vscode-ext-webview-fluentui/src/components/Container/README.md#sizing-and-embedding)
+and [Wizard README](../../../../packages/vscode-ext-webview-fluentui/src/components/Wizard/README.md#sizing-and-embedding).
+
 ## 3. Layering
 
 ```

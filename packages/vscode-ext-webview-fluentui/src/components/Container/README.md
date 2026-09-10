@@ -12,6 +12,67 @@ the three regions the body holds, `ContainerSection` is a titled block of conten
 Use a container when the surface is the whole window. For content layered above an existing page,
 use Fluent's `Dialog` or `Drawer` instead.
 
+## Sizing and embedding
+
+`Container` intentionally defaults to `height: 100vh`: it fills the visible height of the webview,
+not its parent element and not the whole VS Code window. Place it at the top level for a full-webview
+screen. `ContainerBody` scrolls within that height, while `ContainerFooter` stays visible at the
+bottom. The consuming application owns document padding and margins; reset those when the surface
+should reach the webview edges.
+
+To embed a container below your own toolbar or inside a smaller pane, give its parent a bounded
+height and override the container's height through its standard `style` prop. For example:
+
+```tsx
+<div className="embeddedSurfaceHost">
+  <div>{toolbar}</div>
+  <div className="embeddedSurfaceSlot">
+    <Container style={{ height: '100%' }}>
+      <ContainerBody>
+        <ContainerHeader title={title} headingLevel={2} />
+        <ContainerNav>{navigation}</ContainerNav>
+        <ContainerMain>{content}</ContainerMain>
+      </ContainerBody>
+      <ContainerFooter>{actions}</ContainerFooter>
+    </Container>
+  </div>
+</div>
+```
+
+```css
+.embeddedSurfaceHost {
+  height: 480px;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  min-width: 0;
+  overflow: hidden;
+}
+
+.embeddedSurfaceSlot {
+  min-height: 0;
+  min-width: 0;
+  overflow: hidden;
+}
+```
+
+The 480px is an example allocation, not a required size. Use the height your application assigns to
+the pane. The first grid row fits the toolbar; the second provides a definite remaining height for
+the container's `100%`. For a pane with no toolbar, a parent with an explicit height is sufficient.
+
+Do not change the container to `100%` without establishing that parent height: an auto-sized parent
+does not provide a bounded scroll area. Do not leave the embedded container at `100vh` either: it
+would still request a whole webview's height in addition to the toolbar. In flex/grid ancestors,
+allow the allocated pane to shrink (`min-height: 0`, and `min-width: 0` where needed). Keep scrolling
+inside `ContainerBody`, rather than adding `overflow: auto` to the embedding wrapper, so the footer
+stays visible and its overflow indication measures the correct region.
+
+`className` can also override the root height with consumer CSS. `Wizard` does not expose these root
+props; see its [embedding workaround](../Wizard/README.md#sizing-and-embedding).
+
+Sizing does not change landmark semantics: `ContainerMain` still renders `<main>`. Do not nest it
+inside another `<main>`, and choose header levels that fit the surrounding document. Applications
+needing different landmark semantics should compose a layout with suitable elements instead.
+
 ## Best practices
 
 ### Do
