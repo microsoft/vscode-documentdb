@@ -352,12 +352,11 @@ export const InventoryPanel = ({
         }));
     };
 
-    const errors =
-        inventoryIsLoading || storageStats === null
-            ? []
-            : currentDatabase === null
-              ? storageStats.errors
-              : (collections.result?.errors ?? []);
+    const errors = inventoryIsLoading
+        ? []
+        : currentDatabase === null
+          ? (storageStats?.errors ?? [])
+          : (collections.result?.errors ?? []);
     const omittedCount =
         inventoryIsLoading || storageStats === null
             ? 0
@@ -369,7 +368,7 @@ export const InventoryPanel = ({
         allRows.length === 0
             ? currentDatabase === null
                 ? (storageError ?? (errors.length > 0 ? errors.join('; ') : null))
-                : collections.error
+                : (collections.error ?? (errors.length > 0 ? errors.join('; ') : null))
             : null;
     const canCreateNamespace = emptyStateFailureReason === null && (allRows.length > 0 || !inventoryIsLoading);
 

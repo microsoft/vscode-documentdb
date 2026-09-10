@@ -337,6 +337,13 @@ claim when `collections.error` is present and put a Retry action in the warning.
 > it as "loaded and empty". Adding a parallel status field would have duplicated that derivation
 > without changing any behavior.
 
+**Follow-up (2026-09-10):** The earlier fix covered rejected RPCs only. The collector catches
+`listCollections` failures and resolves with an empty list plus `errors`, leaving the hook's
+`error` null. The zero-row branch now also treats those returned errors as a failed read, showing
+Retry without an empty-data claim or creation action. This works even when storage failed
+independently. Nonempty lists with individual `collStats` failures retain their rows and warning.
+Regression tests use the collector's actual failure responses.
+
 ### 3. Tree-dependent actions expose inconsistent failure and recovery ⚠️
 
 **Priority:** P1 · **Status:** ✅ Implemented (locally; architecture tracked in #915)
