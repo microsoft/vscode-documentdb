@@ -202,7 +202,8 @@ $content-gutter: var(--spacingHorizontalMNudge); // 10px
         align-items: center;
         align-self: center;
         justify-content: flex-end;
-        min-width: 7ch;
+        gap: var(--spacingHorizontalXXS);
+        min-width: 9ch;
         height: 20px; // a Fluent medium Badge, so the two share a baseline
         font-size: var(--fontSizeBase200);
         line-height: var(--lineHeightBase200);
@@ -215,6 +216,11 @@ $content-gutter: var(--spacingHorizontalMNudge); // 10px
             outline: var(--strokeWidthThick) solid var(--colorStrokeFocus2);
             outline-offset: 1px;
         }
+    }
+
+    .dashboardHeaderLatencyIcon {
+        flex: 0 0 auto;
+        font-size: 14px;
     }
 
     // ---- Cluster action bar ------------------------------------------------
@@ -493,7 +499,15 @@ $content-gutter: var(--spacingHorizontalMNudge); // 10px
         .namespaceSkeletonGrid {
             display: grid;
             grid-template-columns: minmax(130px, 1fr) 120px 92px 120px 84px 92px;
-            gap: var(--spacingHorizontalS);
+            column-gap: var(--spacingHorizontalS);
+        }
+
+        .namespaceSkeletonGrid {
+            // Fluent's small table rows are taller than their 24px contents. Reproduce that
+            // vertical rhythm so swapping between the table and its skeleton does not collapse
+            // the inventory panel by roughly one row across a six-row placeholder.
+            row-gap: var(--spacingVerticalMNudge);
+            padding-block: var(--spacingVerticalMNudge);
         }
 
         .namespaceSkeletonHeader {

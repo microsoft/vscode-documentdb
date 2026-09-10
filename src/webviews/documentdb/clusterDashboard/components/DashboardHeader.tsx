@@ -7,7 +7,7 @@ import { Badge, Tooltip } from '@fluentui/react-components';
 import * as l10n from '@vscode/l10n';
 import { type JSX } from 'react';
 
-import { DataBarVerticalAscendingRegular } from '@fluentui/react-icons';
+import { DataBarVerticalAscendingRegular, NetworkCheckRegular } from '@fluentui/react-icons';
 import { type ClusterHealthSample } from '../../../../documentdb/utils/getClusterHealth';
 import { regionToDisplayName } from '../../../../utils/regionToDisplayName';
 import { type ClusterDashboardAzureInfo } from '../clusterDashboardController';
@@ -222,6 +222,7 @@ export const DashboardHeader = ({
                          */}
                         {/* eslint-disable-next-line jsx-a11y/no-noninteractive-tabindex */}
                         <span className="dashboardHeaderLatency" tabIndex={0} aria-label={latencyLabel}>
+                            <NetworkCheckRegular className="dashboardHeaderLatencyIcon" aria-hidden={true} />
                             <span aria-hidden={true}>{latencyText}</span>
                         </span>
                     </Tooltip>

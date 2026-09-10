@@ -3,7 +3,6 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { Fade } from '@fluentui/react-motion-components-preview';
 import * as l10n from '@vscode/l10n';
 import { type JSX } from 'react';
 
@@ -218,29 +217,27 @@ export const StatusStrip = ({
 
     return (
         <div className="statusStrip">
-            <Fade key={currentDatabase ?? 'cluster'} appear visible>
-                <MetricsRow>
-                    {tiles.map((tile) => (
-                        <div className="statusTile" key={tile.label}>
-                            {tile.render === 'text' ? (
-                                <GenericMetric
-                                    label={tile.label}
-                                    value={tile.value as string | null | undefined}
-                                    tooltipExplanation={tile.tooltip}
-                                />
-                            ) : (
-                                <CountMetric
-                                    label={tile.label}
-                                    value={tile.value as number | null | undefined}
-                                    compact={tile.render === 'roundedCount'}
-                                    compactThreshold={1000}
-                                    tooltipExplanation={tile.tooltip}
-                                />
-                            )}
-                        </div>
-                    ))}
-                </MetricsRow>
-            </Fade>
+            <MetricsRow>
+                {tiles.map((tile) => (
+                    <div className="statusTile" key={tile.label}>
+                        {tile.render === 'text' ? (
+                            <GenericMetric
+                                label={tile.label}
+                                value={tile.value as string | null | undefined}
+                                tooltipExplanation={tile.tooltip}
+                            />
+                        ) : (
+                            <CountMetric
+                                label={tile.label}
+                                value={tile.value as number | null | undefined}
+                                compact={tile.render === 'roundedCount'}
+                                compactThreshold={1000}
+                                tooltipExplanation={tile.tooltip}
+                            />
+                        )}
+                    </div>
+                ))}
+            </MetricsRow>
         </div>
     );
 };

@@ -270,7 +270,7 @@ export const ClusterDashboard = (): JSX.Element => {
             }
             sampleInFlightRef.current = true;
 
-            trpcClient.clusterDashboard.getHealthSample
+            trpcClient.clusterDashboard.measureRtt
                 .query()
                 .then((sample) => {
                     if (disposedRef.current) {

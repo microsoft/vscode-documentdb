@@ -217,7 +217,7 @@ export const clusterDashboardRouter = router({
         }),
 
     /** Live health sample. Polled by the webview, so telemetry is suppressed. */
-    getHealthSample: publicProcedureWithTelemetry.query(async ({ ctx }): Promise<ClusterHealthSample> => {
+    measureRtt: publicProcedureWithTelemetry.query(async ({ ctx }): Promise<ClusterHealthSample> => {
         const myCtx = ctx as WithTelemetry<RouterContext>;
         myCtx.actionContext.telemetry.suppressAll = true;
 
