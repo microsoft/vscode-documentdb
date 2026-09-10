@@ -18,6 +18,7 @@ import {
     type InventoryPanelProps,
     type InventoryViewState,
 } from './InventoryPanel';
+import { NamespaceTableSkeleton } from './NamespaceTableSkeleton';
 
 jest.mock('@vscode/l10n', () => ({
     t: (message: string, ...args: unknown[]): string => {
@@ -77,6 +78,23 @@ function renderInventory(overrides: Partial<InventoryPanelProps> = {}): string {
 function databaseViewState(databaseName: string): InventoryViewState {
     return { ...createInventoryViewState(), currentDatabase: databaseName };
 }
+
+describe('NamespaceTableSkeleton row limits', () => {
+    it.each<[number | undefined, number]>([
+        [10_000, 100],
+        [5, 5],
+        [undefined, 6],
+        [Number.NaN, 6],
+        [Number.POSITIVE_INFINITY, 6],
+        [-1, 0],
+    ])('bounds %s requested rows to %s', (rowCount, expectedRows) => {
+        const markup = renderToStaticMarkup(
+            createElement(SSRProvider, null, createElement(NamespaceTableSkeleton, { rowCount })),
+        );
+
+        expect(markup.match(/class="fui-SkeletonItem\b/g)).toHaveLength(1 + expectedRows * 6);
+    });
+});
 
 describe('InventoryPanel mouse navigation', () => {
     function mouseEvent(
