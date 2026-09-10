@@ -12,7 +12,7 @@ export interface MetricGridProps extends ComponentPropsWithoutRef<'div'> {
 
 export interface MetricCardProps extends Omit<
     ComponentPropsWithoutRef<'div'>,
-    'aria-label' | 'aria-labelledby' | 'tabIndex'
+    'aria-label' | 'aria-labelledby' | 'role' | 'tabIndex'
 > {
     /** The caption above the value. */
     readonly label: ReactNode;

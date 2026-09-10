@@ -543,14 +543,15 @@ are unchanged.
 
 Added the component family under the package's `components` entry. The component:
 
-- extends `BadgeProps` while reserving `tabIndex`, `aria-label` and `aria-labelledby` for its
-  contract;
+- extends `BadgeProps` while reserving `tabIndex`, `role`, `aria-label` and `aria-labelledby` for
+  its contract;
 - forwards appearance, icon, DOM event and ref-capable Badge props;
 - merges its Griffel focus class with the consumer's `className`;
 - uses `createFocusOutlineStyle()` with Fluent's default 2px ring directly outside the badge;
-- names focusable instances from a generated-ID wrapper around the visible children;
-- defaults `focusable` to `true`, with `false` removing only the tab stop and explicit name
-  relationship.
+- names focusable instances from a generated-ID wrapper around the visible children, and gives them
+  `role="group"` so that name is not one ARIA permits an implementation to discard;
+- defaults `focusable` to `true`, with `false` removing the tab stop, the role, the name
+  relationship and the wrapper, leaving the DOM of a plain Fluent `Badge`.
 
 The colocated suite covers default and opt-out focusability, visible-content naming, Tooltip trigger
 integration, class/event/attribute forwarding and all four requested appearance props.
@@ -581,6 +582,20 @@ tree.
 Every card remains unconditionally focusable. This preserves increment 3's product tab order and
 keeps tooltip descriptions reachable. Summary cells gain meaningful label-plus-value names; their
 layout and focusability do not change.
+
+## Item 7: the naming target needed a role (post-review)
+
+Items 3 and 5 both attach `aria-labelledby` to an element whose computed role is `generic`: Fluent's
+`Badge` is a bare `div`, Fluent's `Card` sets no role, and the `subtle` appearance is a literal
+`div`. ARIA prohibits naming `generic`, so every name this increment added was one a conforming
+implementation may discard. Chrome computes it regardless, which is why item 0's and item 6's
+browser measurements looked correct and the defect survived to code review.
+
+`role="group"` was added to `FocusableBadge` when focusable and to both `MetricCard` appearances,
+and `role` joined the reserved props on both. Recorded as
+[decision 0030](../decisions.md#0030---named-focusable-containers-carry-rolegroup). This is a
+conformance correction reasoned from the specification, not a screen reader measurement; the
+computed-accessibility testing that would settle the announcement pacing remains deferred to #918.
 
 ## Item 6: documentation and browser after-measurement
 

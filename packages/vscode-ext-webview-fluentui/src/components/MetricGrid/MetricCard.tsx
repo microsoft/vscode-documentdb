@@ -142,16 +142,19 @@ export const MetricCard = ({
                 {...rest}
                 appearance="filled"
                 className={mergeClasses(styles.filled, className)}
+                // ARIA forbids naming a role-less element, and Card sets no role by default.
+                role="group"
                 tabIndex={0}
                 aria-labelledby={`${labelId} ${valueId}`}
             >
                 {body}
             </Card>
         ) : (
-            // eslint-disable-next-line jsx-a11y/no-noninteractive-tabindex -- every card is a tab stop
             <div
                 {...rest}
                 className={mergeClasses(styles.subtle, className)}
+                role="group"
+                // eslint-disable-next-line jsx-a11y/no-noninteractive-tabindex -- every card is a tab stop
                 tabIndex={0}
                 aria-labelledby={`${labelId} ${valueId}`}
             >

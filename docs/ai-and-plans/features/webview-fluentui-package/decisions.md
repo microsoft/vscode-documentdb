@@ -9,35 +9,38 @@ created: 2026-08-18
 
 > What was decided while designing the UI package extraction, and what was rejected on the way.
 
-| #    | Decision                                                       | Status              | Changed from the proposal?                                      | Date       | PR   |
-| ---- | -------------------------------------------------------------- | ------------------- | --------------------------------------------------------------- | ---------- | ---- | --- | ---- | ------------------------------------------------------------ | ------------------- | --------------------------------------------- | ---------- | ---- |
-| 0001 | Extract the UX layer as a second package, behind a scope gate  | Accepted (amended)  | Accepted as proposed; condition 1 relaxed by 0021               | 2026-08-18 | -    |
-| 0002 | Name: `@microsoft/vscode-ext-webview-fluentui`                 | Accepted (modified) | `-ui` rejected as too general once the scope proved Fluent-only | 2026-08-18 | -    |
-| 0003 | No dependency between the two packages, in either direction    | Accepted            | Accepted as proposed                                            | 2026-08-18 | -    |
-| 0004 | Three invariants: provider independence, layering, facade      | Accepted            | Accepted as proposed                                            | 2026-08-18 | -    |
-| 0005 | ESM-only, despite the sibling being CommonJS                   | Accepted (modified) | `typesVersions` reinstated when 0016 was corrected              | 2026-08-18 | -    |
-| 0006 | Tests stay CommonJS, transformed by `@swc/jest`                | Accepted            | Accepted as proposed                                            | 2026-08-18 | -    |
-| 0007 | v1 public entries are `.` and `./components`                   | Accepted (modified) | `./styles.css` dropped after 0010                               | 2026-08-18 | -    |
-| 0008 | The token list and palette math stay internal                  | Accepted (modified) | Proposal left it open; evidence closed it                       | 2026-08-18 | -    |
-| 0009 | The `adaptive` flag is deleted, not defaulted                  | Accepted (modified) | Proposal was to flip the default to `true`                      | 2026-08-18 | -    |
-| 0010 | The stylesheet injects itself at module scope                  | Accepted (modified) | Proposal was a consumer-side `styles.css` import                | 2026-08-18 | -    |
-| 0011 | No opt-out from the Fluent overrides                           | Accepted            | Operator-originated; not in the proposal                        | 2026-08-18 | -    |
-| 0012 | No public CSS custom properties in v1                          | Accepted (modified) | Proposal was a neutral or configurable prefix                   | 2026-08-18 | -    |
-| 0013 | Monaco theming stays in the extension                          | Deferred            | Proposal left it open                                           | 2026-08-18 | -    |
-| 0014 | Public naming vocabulary is locked before publish              | Accepted (modified) | `useVSCodeTheme` → `useActiveVSCodeTheme` after operator review | 2026-08-18 | -    |
-| 0015 | The generated CSS module is committed, not gitignored          | Accepted (modified) | Reverses the recommendation made during design                  | 2026-08-18 | -    |
-| 0016 | The package follows the repo's existing resolution pattern     | Accepted            | Replaces the proposal's webview-scoped tsconfig                 | 2026-08-18 | -    |     | 0017 | Relative imports inside the package are fully specified      | Accepted            | Corrects a gap in 0005, found at first bundle | 2026-08-18 | #895 |
-| 0018 | The theme hooks are standalone, not context-backed             | Accepted (modified) | The extracted code was context-backed; I3 required otherwise    | 2026-08-18 | #895 |
-| 0019 | Adapt Fluent by re-pointing tokens, never by out-specifying    | Accepted            | Forced by the zero-specificity rule in 0010                     | 2026-08-18 | #895 |
-| 0020 | Opaque stencils stay opaque; `translucent` is what we document | Accepted            | Reverses the alpha-overlay approach the code arrived with       | 2026-08-18 | #895 |
-| 0021 | The scope gate widens to reusable components                   | Accepted            | Relaxes condition 1 of 0001; operator-originated                | 2026-08-19 | -    |
-| 0022 | `MessageBlock` stays in the extension                          | Accepted            | Proposal was to ship it from the package                        | 2026-08-19 | -    |     | 0023 | The README presents theming and components as equal, mixable | Accepted (modified) | Reverses §1 of design.md; operator-originated | 2026-08-20 | -    |
-| 0024 | The metric card enters, and converges its fork                 | Accepted (modified) | Three token and geometry mappings corrected by measurement      | 2026-08-21 | #895 |
-| 0025 | `Announcer` is out of scope for this package                   | Accepted            | Accepted as proposed                                            | 2026-08-21 | #895 |
-| 0026 | The focusable badge ships with one naming contract             | Accepted (modified) | Focusability separated from naming after browser measurement    | 2026-09-10 | #895 |
-| 0027 | The package is published, not workspace-only                   | Accepted            | Replaces the earlier no-publish restriction; operator-confirmed | 2026-09-10 | #895 |
-| 0028 | Full-webview sizing is the container default | Accepted | Ratifies `100vh`; embedding remains a consumer override | 2026-09-10 | #895 |
-| 0029 | No external consumers; finalize the API for 1.0.0 | Accepted | Clarifies 0027; pre-release API changes need no compatibility migration | 2026-09-10 | #895 |
+| #    | Decision                                                       | Status              | Changed from the proposal?                                              | Date       | PR   |
+| ---- | -------------------------------------------------------------- | ------------------- | ----------------------------------------------------------------------- | ---------- | ---- |
+| 0001 | Extract the UX layer as a second package, behind a scope gate  | Accepted (amended)  | Accepted as proposed; condition 1 relaxed by 0021                       | 2026-08-18 | -    |
+| 0002 | Name: `@microsoft/vscode-ext-webview-fluentui`                 | Accepted (modified) | `-ui` rejected as too general once the scope proved Fluent-only         | 2026-08-18 | -    |
+| 0003 | No dependency between the two packages, in either direction    | Accepted            | Accepted as proposed                                                    | 2026-08-18 | -    |
+| 0004 | Three invariants: provider independence, layering, facade      | Accepted            | Accepted as proposed                                                    | 2026-08-18 | -    |
+| 0005 | ESM-only, despite the sibling being CommonJS                   | Accepted (modified) | `typesVersions` reinstated when 0016 was corrected                      | 2026-08-18 | -    |
+| 0006 | Tests stay CommonJS, transformed by `@swc/jest`                | Accepted            | Accepted as proposed                                                    | 2026-08-18 | -    |
+| 0007 | v1 public entries are `.` and `./components`                   | Accepted (modified) | `./styles.css` dropped after 0010                                       | 2026-08-18 | -    |
+| 0008 | The token list and palette math stay internal                  | Accepted (modified) | Proposal left it open; evidence closed it                               | 2026-08-18 | -    |
+| 0009 | The `adaptive` flag is deleted, not defaulted                  | Accepted (modified) | Proposal was to flip the default to `true`                              | 2026-08-18 | -    |
+| 0010 | The stylesheet injects itself at module scope                  | Accepted (modified) | Proposal was a consumer-side `styles.css` import                        | 2026-08-18 | -    |
+| 0011 | No opt-out from the Fluent overrides                           | Accepted            | Operator-originated; not in the proposal                                | 2026-08-18 | -    |
+| 0012 | No public CSS custom properties in v1                          | Accepted (modified) | Proposal was a neutral or configurable prefix                           | 2026-08-18 | -    |
+| 0013 | Monaco theming stays in the extension                          | Deferred            | Proposal left it open                                                   | 2026-08-18 | -    |
+| 0014 | Public naming vocabulary is locked before publish              | Accepted (modified) | `useVSCodeTheme` → `useActiveVSCodeTheme` after operator review         | 2026-08-18 | -    |
+| 0015 | The generated CSS module is committed, not gitignored          | Accepted (modified) | Reverses the recommendation made during design                          | 2026-08-18 | -    |
+| 0016 | The package follows the repo's existing resolution pattern     | Accepted            | Replaces the proposal's webview-scoped tsconfig                         | 2026-08-18 | -    |
+| 0017 | Relative imports inside the package are fully specified        | Accepted            | Corrects a gap in 0005, found at first bundle                           | 2026-08-18 | #895 |
+| 0018 | The theme hooks are standalone, not context-backed             | Accepted (modified) | The extracted code was context-backed; I3 required otherwise            | 2026-08-18 | #895 |
+| 0019 | Adapt Fluent by re-pointing tokens, never by out-specifying    | Accepted            | Forced by the zero-specificity rule in 0010                             | 2026-08-18 | #895 |
+| 0020 | Opaque stencils stay opaque; `translucent` is what we document | Accepted            | Reverses the alpha-overlay approach the code arrived with               | 2026-08-18 | #895 |
+| 0021 | The scope gate widens to reusable components                   | Accepted            | Relaxes condition 1 of 0001; operator-originated                        | 2026-08-19 | -    |
+| 0022 | `MessageBlock` stays in the extension                          | Accepted            | Proposal was to ship it from the package                                | 2026-08-19 | -    |
+| 0023 | The README presents theming and components as equal, mixable   | Accepted (modified) | Reverses §1 of design.md; operator-originated                           | 2026-08-20 | -    |
+| 0024 | The metric card enters, and converges its fork                 | Accepted (modified) | Three token and geometry mappings corrected by measurement              | 2026-08-21 | #895 |
+| 0025 | `Announcer` is out of scope for this package                   | Accepted            | Accepted as proposed                                                    | 2026-08-21 | #895 |
+| 0026 | The focusable badge ships with one naming contract             | Accepted (modified) | Focusability separated from naming after browser measurement            | 2026-09-10 | #895 |
+| 0027 | The package is published, not workspace-only                   | Accepted            | Replaces the earlier no-publish restriction; operator-confirmed         | 2026-09-10 | #895 |
+| 0028 | Full-webview sizing is the container default                   | Accepted            | Ratifies `100vh`; embedding remains a consumer override                 | 2026-09-10 | #895 |
+| 0029 | No external consumers; finalize the API for 1.0.0              | Accepted            | Clarifies 0027; pre-release API changes need no compatibility migration | 2026-09-10 | #895 |
+| 0030 | Named focusable containers carry `role="group"`                | Accepted            | Corrects 0026 and 0024; found in review, not in the plan                | 2026-09-10 | #895 |
 
 > Entries below are **semantically** immutable: append new entries rather than
 > rewriting old ones, and record reversals as a new entry plus a status change
@@ -1133,6 +1136,9 @@ it will not survive contact with the next reader.
 
 **Status:** Accepted (modified) · **Date:** 2026-09-10 · **PR:** #895
 
+> Amended by [0030](#0030---named-focusable-containers-carry-rolegroup): the elements this decision
+> names now carry `role="group"`, because ARIA forbids naming a role-less element.
+
 ### Decision
 
 `FocusableBadge` ships from `./components`. It uses Fluent's supported
@@ -1248,3 +1254,43 @@ the release version, not a registry publish or a PR-status change.
 Computed-accessibility testing is deferred to issue #918 for the broader testing-infrastructure
 evaluation; it does not block this release preparation. API Extractor and Announcer work remain
 separate follow-ups.
+
+---
+
+## 0030 - Named focusable containers carry `role="group"`
+
+**Status:** Accepted · **Date:** 2026-09-10 · **PR:** #895
+
+### Decision
+
+Wherever this package attaches `aria-labelledby` to a focusable container that would otherwise have
+no role, it also sets `role="group"`. That is `FocusableBadge` when `focusable` is true, and both
+`MetricCard` appearances.
+
+### Why
+
+Decision 0026 established that visible content names these components through `aria-labelledby`.
+Both land on an element whose computed role is `generic`: Fluent's `Badge` renders a bare `div`,
+Fluent's `Card` sets no role by default, and `MetricCard`'s `subtle` appearance is a literal `div`.
+ARIA prohibits naming the `generic` role, so a conforming implementation may discard the name that
+0026's whole contract depends on. Chrome computes it anyway, which is why the increment's evidence
+looked correct and the defect survived to review.
+
+`group` is the minimum role that legitimises the name: it carries no interaction semantics, no
+landmark weight, and no keyboard contract this package does not already implement. The alternative
+considered was leaving the markup alone and relying on screen readers reading a focused `div`'s
+subtree. That works in practice today but makes the contract depend on recovery behaviour rather
+than on the specification.
+
+### Limits
+
+This is a specification-conformance fix derived from the ARIA naming prohibition, not a screen
+reader measurement. Nobody has confirmed how NVDA, JAWS or VoiceOver paces `group` boundaries
+around a badge. If the added boundary proves too verbose in a real screen reader, reverse it here.
+The computed-accessibility testing that would settle it is deferred to issue #918 by 0029.
+
+### Non-focusable badges
+
+`FocusableBadge focusable={false}` sets no role, no `tabIndex`, no `aria-labelledby`, and no wrapper
+element around its children. It emits the same DOM as a plain Fluent `Badge`, so a consumer can use
+one component across a mixed list without the non-focusable entries diverging from Fluent's markup.

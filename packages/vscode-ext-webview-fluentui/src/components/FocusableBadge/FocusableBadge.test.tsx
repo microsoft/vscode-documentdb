@@ -17,6 +17,7 @@ describe('FocusableBadge accessibility contract', () => {
         const content = root.firstElementChild as HTMLElement;
 
         expect(root.getAttribute('tabindex')).toBe('0');
+        expect(root.getAttribute('role')).toBe('group');
         expect(root.getAttribute('aria-labelledby')).toBe(content.id);
         expect(content.textContent).toBe('Collection scan detected');
         expect(content.getAttribute('aria-hidden')).toBeNull();
@@ -27,8 +28,11 @@ describe('FocusableBadge accessibility contract', () => {
         const { root } = await renderSurface(<FocusableBadge focusable={false}>Unique</FocusableBadge>);
 
         expect(root.getAttribute('tabindex')).toBeNull();
+        expect(root.getAttribute('role')).toBeNull();
         expect(root.getAttribute('aria-labelledby')).toBeNull();
         expect(root.textContent).toBe('Unique');
+        // Same DOM as a plain Fluent Badge: no naming wrapper is left behind.
+        expect(root.firstElementChild).toBeNull();
     });
 
     test('preserves Tooltip trigger integration through the component boundary', async () => {

@@ -114,6 +114,8 @@ describe('MetricCard accessibility contract', () => {
         for (const configuration of configurations) {
             const { root } = await renderSurface(configuration);
             expect(root.getAttribute('tabindex')).toBe('0');
+            // ARIA forbids naming a role-less element, so the name needs a role to survive.
+            expect(root.getAttribute('role')).toBe('group');
         }
     });
 });

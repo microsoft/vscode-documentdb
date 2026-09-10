@@ -20,6 +20,8 @@ const useStyles = makeStyles({
  *
  * Keep `Tooltip` at the call site and use `relationship="description"`. The badge's visible
  * content is its accessible name; the tooltip supplies only supplementary description.
+ *
+ * When not focusable it emits the same DOM as a plain Fluent `Badge`.
  */
 export const FocusableBadge = ({
     focusable = true,
@@ -34,10 +36,12 @@ export const FocusableBadge = ({
         <Badge
             {...badgeProps}
             className={mergeClasses(styles.root, className)}
+            // ARIA forbids naming a role-less element, and Badge renders a bare div.
+            role={focusable ? 'group' : undefined}
             tabIndex={focusable ? 0 : undefined}
             aria-labelledby={focusable ? contentId : undefined}
         >
-            <span id={contentId}>{children}</span>
+            {focusable ? <span id={contentId}>{children}</span> : children}
         </Badge>
     );
 };

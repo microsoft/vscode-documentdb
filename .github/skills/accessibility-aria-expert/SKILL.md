@@ -30,13 +30,15 @@ tooltip as a description:
 
 - The visible content is the name through `aria-labelledby`.
 - Tooltip content is the supplementary description through `aria-describedby`.
+- The badge carries `role="group"`, because ARIA cannot name a role-less element.
 - Browser-computed results do not prove what a real screen reader says.
 
 ## Detection Rules
 
-### 1. Tooltip Without aria-label Context
+### 1. Tooltip Content Never Reaches the Accessibility Tree
 
-❌ **Problem**: Tooltip content inaccessible to screen readers
+❌ **Problem**: the tooltip declares no ARIA relationship, so its content is invisible to assistive
+technology — and the `aria-label` here only restates the visible text
 
 ```tsx
 <Tooltip content="Save document to database">
@@ -44,13 +46,17 @@ tooltip as a description:
 </Tooltip>
 ```
 
-✅ **Fix**: Include tooltip in aria-label
+✅ **Fix**: declare the relationship and let the tooltip be the description
 
 ```tsx
 <Tooltip content="Save document to database" relationship="description">
-  <Button aria-label="Save document to database">Save</Button>
+  <Button>Save</Button>
 </Tooltip>
 ```
+
+`relationship="description"` wires `aria-describedby` to the tooltip. Do **not** also copy the
+tooltip text into `aria-label`: that announces it twice (rule 2). Use `relationship="label"` only
+when the trigger has no visible text of its own.
 
 ### 2. Composed Badge Name Repeats Its Description
 
@@ -240,9 +246,12 @@ useEffect(() => {
 
 **DO use** on:
 
-- Visible text when aria-label provides complete context
 - Decorative icons, spinners, progress bars
 - Visual separators (\`|\`, \`—\`)
+
+**Last resort only**: visible text that a composed `aria-label` already covers. Prefer naming the
+element _from_ its visible content with `aria-labelledby`, which needs no hiding at all — that is
+what `FocusableBadge` and `MetricCard` do.
 
 **DO NOT use** on:
 
@@ -250,7 +259,7 @@ useEffect(() => {
 - Interactive/focusable elements
 - Error messages or alerts
 
-## focusableBadge Pattern
+## FocusableBadge Pattern
 
 For keyboard-accessible badges with tooltips:
 
@@ -268,6 +277,11 @@ For keyboard-accessible badges with tooltips:
 For rich tooltip content that visually repeats the badge name, set the content slot's `aria-label`
 to only the supplementary details. For truncated values, keep the visible label and truncated value
 as the badge name and the full value as the description; do not use `relationship="label"`.
+
+When you name a focusable container yourself rather than using these components, give it a role.
+ARIA forbids naming the `generic` role, so `aria-labelledby` on a bare `div` (or on Fluent's `Badge`
+or `Card`, neither of which sets a role) is a name a conforming screen reader may discard.
+`role="group"` is usually the least-weight role that makes the name legitimate.
 
 ## Screen Reader Announcements
 
@@ -311,12 +325,13 @@ import { Announcer } from '<relative-path>/components/accessibility';
 
 - [ ] Icon-only buttons have `aria-label`
 - [ ] Form inputs have associated labels or `aria-label`
-- [ ] Tooltip content included in `aria-label`
-- [ ] Visible text wrapped in `aria-hidden="true"` when aria-label duplicates it
+- [ ] Tooltips declare a `relationship`; their text is not also copied into `aria-label`
+- [ ] Visible text is not hidden with `aria-hidden` to make room for a composed `aria-label`
 - [ ] Redundant aria-labels removed (identical to visible text)
-- [ ] Visible button labels match accessible name exactly (for voice control)
+- [ ] Visible button labels are contained in the accessible name (for voice control)
 - [ ] Decorative elements have `aria-hidden={true}`
 - [ ] Badges with keyboard-reachable tooltips use `FocusableBadge` + `relationship="description"`
+- [ ] Focusable elements carrying `aria-labelledby` have a role (ARIA cannot name `generic`)
 - [ ] Status updates use `Announcer` component
 - [ ] Focus moves to dialog/modal content when opened
 - [ ] Related controls wrapped in `role="group"` with `aria-labelledby`

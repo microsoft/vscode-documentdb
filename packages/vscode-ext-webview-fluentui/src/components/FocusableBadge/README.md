@@ -22,6 +22,10 @@ The visible badge content is the accessible name. The tooltip is its supplementa
 focus-outline helper; do not add a second `aria-label`, hide the visible children, or apply a
 consumer focus-ring class.
 
+A focusable badge also carries `role="group"`. Fluent's `Badge` is a bare `div`, and ARIA forbids
+naming a role-less element, so without a role the name is one a conforming screen reader may
+discard. `role` is not accepted as a prop for that reason.
+
 For rich tooltip markup that repeats the badge text visually, give the tooltip content an
 `aria-label` containing only the additional explanation:
 
@@ -54,7 +58,8 @@ keyboard navigation while exposing only tooltip-bearing badges:
 ```
 
 Use `focusable={false}` only when the badge has no focus-only information. The visible content stays
-available as ordinary inline text.
+available as ordinary inline text, and the badge emits the same DOM as a plain Fluent `Badge`: no
+role, no `tabIndex`, no naming wrapper.
 
 ## Truncated values
 

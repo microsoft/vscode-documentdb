@@ -264,7 +264,9 @@ identified after increment 1 both shipped:
 
 - **Focusable badge.** Increment 4 replaces the stylesheet and hand-authored accessibility pattern
   with `FocusableBadge`, Fluent's supported focus outline, and one measured name/description
-  contract. See [decision 0026](./decisions.md#0026--the-focusable-badge-ships-with-one-naming-contract).
+  contract. See [decision 0026](./decisions.md#0026--the-focusable-badge-ships-with-one-naming-contract)
+  and [decision 0030](./decisions.md#0030---named-focusable-containers-carry-rolegroup), which gives
+  the named elements a role so ARIA permits the name.
 - **Metrics cards.** Increment 3 translated the coupled styles into provider-independent package
   components and kept formatting in the extension. See
   [decision 0024](./decisions.md#0024--the-metric-card-enters-and-converges-its-fork).

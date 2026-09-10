@@ -94,6 +94,9 @@ references them with `aria-labelledby`, including for subtle summary cells where
 element would otherwise have no computed name. Loading cards are named by their label; unavailable
 cards include the rendered placeholder.
 
+The card carries `role="group"` so that name is legitimate: neither Fluent's `Card` nor a plain
+`div` has a role, and ARIA forbids naming a role-less element. `role` is not accepted as a prop.
+
 When `description` is present, Fluent's `Tooltip` supplies it through `aria-describedby`. Rich
 tooltip markup may repeat the label and value visually, but its accessible label contains only the
 explanation, so the name is not repeated in the description.

@@ -106,10 +106,11 @@ After increments 1-4:
 | 2026-08-21 | #895 | Increment 3 completed: metric cards, grid and summary-cell convergence                                                 | [iterations/03-metric-card.md](./iterations/03-metric-card.md)                                                   |
 | 2026-09-10 | #895 | Increment 4 implemented in `b4aee678`; operator confirmed acceptance tests complete                                    | [iterations/04-focusable-badge-and-accessible-names.md](./iterations/04-focusable-badge-and-accessible-names.md) |
 | 2026-09-10 | #895 | Operator confirmed the package is already being published; workspace-only restriction retired                          | [Decision 0027](./decisions.md#0027--the-package-is-published-not-workspace-only)                                |
+| 2026-09-10 | #895 | Review corrections: `role="group"` on the named containers, repaired decision table, `publishConfig`, a11y skill       | [Decision 0030](./decisions.md#0030---named-focusable-containers-carry-rolegroup)                                |
 
 ## Decisions
 
-[decisions.md](./decisions.md) - twenty-nine entries covering scope, layering, module format, styling
+[decisions.md](./decisions.md) - thirty entries covering scope, layering, module format, styling
 delivery, and public naming.
 
 The highest-signal ones, because they reverse what was originally proposed:

@@ -43,6 +43,9 @@
     "directory": "packages/vscode-ext-webview-fluentui"
   },
   "license": "MIT",
+  "publishConfig": {
+    "access": "public"
+  },
   "peerDependencies": {
     "@fluentui/react-components": "~9.74",
     "@fluentui/react-icons": "~2.0",
