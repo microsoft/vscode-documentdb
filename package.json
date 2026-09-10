@@ -761,14 +761,14 @@
         "category": "DocumentDB",
         "command": "vscode-documentdb.command.containerView.open",
         "title": "Open Collection",
-        "icon": "$(files)"
+        "icon": "$(screen-full)"
       },
       {
         "//": "Open Container View (inline button)",
         "category": "DocumentDB",
         "command": "vscode-documentdb.command.containerView.open.inline",
         "title": "Open Collection",
-        "icon": "$(files)"
+        "icon": "$(screen-full)"
       },
       {
         "//": "Manage Indexes",

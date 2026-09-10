@@ -148,7 +148,7 @@ export class PlaygroundCodeLensProvider implements vscode.CodeLensProvider, vsco
                 if (displayName && this.blockContainsCode(document, activeBlock)) {
                     lenses.push(
                         new vscode.CodeLens(blockRange, {
-                            title: `$(files)  ${l10n.t('Collection View')}`,
+                            title: `$(screen-full)  ${l10n.t('Collection View')}`,
                             command: PlaygroundCommandIds.openQueryInCollectionView,
                             arguments: [document.uri, activeBlock.startLine, activeBlock.endLine],
                             tooltip: l10n.t('Open this query in Collection View'),

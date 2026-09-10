@@ -16,13 +16,7 @@ import {
     TableRow,
     Tooltip,
 } from '@fluentui/react-components';
-import {
-    ArrowExpandRegular,
-    DatabaseRegular,
-    DocumentMultipleRegular,
-    LibraryRegular,
-    MoreHorizontalRegular,
-} from '@fluentui/react-icons';
+import { ArrowExpandRegular, DatabaseRegular, LibraryRegular, MoreHorizontalRegular } from '@fluentui/react-icons';
 import { useConfiguration } from '@microsoft/vscode-ext-webview/react';
 import * as l10n from '@vscode/l10n';
 import { useMemo, type JSX } from 'react';
@@ -186,7 +180,7 @@ const RowActionButtons = ({ row, isDatabases, isBusy, onActivate }: RowActionsPr
                 <Button
                     appearance="subtle"
                     size="small"
-                    icon={isDatabases ? <ArrowExpandRegular /> : <DocumentMultipleRegular />}
+                    icon={<ArrowExpandRegular />}
                     aria-label={primaryLabel}
                     disabled={isBusy}
                     onClick={(event) => {
