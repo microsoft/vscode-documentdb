@@ -108,6 +108,34 @@ export function createInventoryViewState(selectedDatabaseName?: string): Invento
     return { sort: DEFAULT_SORT, filterText: '', currentDatabase: selectedDatabaseName ?? null };
 }
 
+type MouseBackEvent = Pick<MouseEvent, 'button' | 'type' | 'preventDefault' | 'stopPropagation'>;
+type InventoryBackControl = 'breadcrumb' | 'footerButton' | 'mouseBackButton';
+
+export function handleMouseBackNavigation(
+    event: MouseBackEvent,
+    goBack: (control: InventoryBackControl) => void,
+): void {
+    if (event.button !== 3) {
+        return;
+    }
+
+    event.preventDefault();
+    event.stopPropagation();
+
+    if (event.type === 'mousedown') {
+        goBack('mouseBackButton');
+    }
+}
+
+export function navigateBackFromCollections(
+    control: InventoryBackControl,
+    report: ReturnType<typeof useDashboardReporter>,
+    onViewStateChange: InventoryPanelProps['onViewStateChange'],
+): void {
+    report('inventoryNavigation', { direction: 'up', control, level: 'collections' });
+    onViewStateChange((current) => ({ ...current, currentDatabase: null, filterText: '' }));
+}
+
 /**
  * The cluster's inventory: databases, and the collections of the one being read.
  *
@@ -144,10 +172,31 @@ export const InventoryPanel = ({
      * already inside a database. Which of them is load-bearing is the whole reason the second
      * one was added, and only telemetry can answer it.
      */
-    const goBack = (control: 'breadcrumb' | 'footerButton'): void => {
-        report('inventoryNavigation', { direction: 'up', control, level: 'collections' });
-        onViewStateChange((current) => ({ ...current, currentDatabase: null, filterText: '' }));
-    };
+    const goBack = useCallback(
+        (control: InventoryBackControl): void => {
+            navigateBackFromCollections(control, report, onViewStateChange);
+        },
+        [onViewStateChange, report],
+    );
+
+    useEffect(() => {
+        if (currentDatabase === null) {
+            return;
+        }
+
+        const handleMouseButton = (event: MouseEvent): void => {
+            handleMouseBackNavigation(event, goBack);
+        };
+
+        window.addEventListener('mousedown', handleMouseButton, true);
+        window.addEventListener('mouseup', handleMouseButton, true);
+        window.addEventListener('auxclick', handleMouseButton, true);
+        return () => {
+            window.removeEventListener('mousedown', handleMouseButton, true);
+            window.removeEventListener('mouseup', handleMouseButton, true);
+            window.removeEventListener('auxclick', handleMouseButton, true);
+        };
+    }, [currentDatabase, goBack]);
 
     const databaseRows = useMemo(
         () => (storageStats === null ? [] : storageStats.databases.map(toDatabaseRow)),

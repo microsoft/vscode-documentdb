@@ -377,7 +377,9 @@ export const clusterDashboardRouter = router({
         )
         .mutation(async ({ input, ctx }): Promise<void> => {
             const myCtx = dashboardContext(ctx);
-            myCtx.actionContext.telemetry.properties.activationSource = describeActivationSource(input.activationSource);
+            myCtx.actionContext.telemetry.properties.activationSource = describeActivationSource(
+                input.activationSource,
+            );
             myCtx.actionContext.telemetry.properties.initialTab = input.initialTab ?? 'tab_result';
 
             await openCollectionViewInternal(myCtx.actionContext, {

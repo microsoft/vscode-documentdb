@@ -11,7 +11,9 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { type ClusterStorageStats } from '../../../../documentdb/utils/getClusterHealth';
 import {
     createInventoryViewState,
+    handleMouseBackNavigation,
     InventoryPanel,
+    navigateBackFromCollections,
     type InventoryPanelProps,
     type InventoryViewState,
 } from './InventoryPanel';
@@ -74,6 +76,67 @@ function renderInventory(overrides: Partial<InventoryPanelProps> = {}): string {
 function databaseViewState(databaseName: string): InventoryViewState {
     return { ...createInventoryViewState(), currentDatabase: databaseName };
 }
+
+describe('InventoryPanel mouse navigation', () => {
+    function mouseEvent(
+        type: string,
+        button: number,
+    ): Pick<MouseEvent, 'button' | 'type' | 'preventDefault' | 'stopPropagation'> {
+        return {
+            type,
+            button,
+            preventDefault: jest.fn(),
+            stopPropagation: jest.fn(),
+        };
+    }
+
+    it('handles mouse button 3 as Back on mousedown', () => {
+        const event = mouseEvent('mousedown', 3);
+        const goBack = jest.fn();
+
+        handleMouseBackNavigation(event, goBack);
+
+        expect(event.preventDefault).toHaveBeenCalledTimes(1);
+        expect(event.stopPropagation).toHaveBeenCalledTimes(1);
+        expect(goBack).toHaveBeenCalledWith('mouseBackButton');
+    });
+
+    it('suppresses the matching mouseup without navigating twice', () => {
+        const event = mouseEvent('mouseup', 3);
+        const goBack = jest.fn();
+
+        handleMouseBackNavigation(event, goBack);
+
+        expect(event.preventDefault).toHaveBeenCalledTimes(1);
+        expect(event.stopPropagation).toHaveBeenCalledTimes(1);
+        expect(goBack).not.toHaveBeenCalled();
+    });
+
+    it('ignores other mouse buttons', () => {
+        const event = mouseEvent('mousedown', 0);
+        const goBack = jest.fn();
+
+        handleMouseBackNavigation(event, goBack);
+
+        expect(event.preventDefault).not.toHaveBeenCalled();
+        expect(event.stopPropagation).not.toHaveBeenCalled();
+        expect(goBack).not.toHaveBeenCalled();
+    });
+
+    it('records the mouse Back source in inventory navigation telemetry', () => {
+        const report = jest.fn();
+        const onViewStateChange = jest.fn();
+
+        navigateBackFromCollections('mouseBackButton', report, onViewStateChange);
+
+        expect(report).toHaveBeenCalledWith('inventoryNavigation', {
+            direction: 'up',
+            control: 'mouseBackButton',
+            level: 'collections',
+        });
+        expect(onViewStateChange).toHaveBeenCalledTimes(1);
+    });
+});
 
 describe('InventoryPanel empty states', () => {
     it('offers database creation after a successful empty cluster read', () => {
