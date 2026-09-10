@@ -161,7 +161,7 @@ export const ClusterDashboard = (): JSX.Element => {
             }
 
             try {
-                const stats = await trpcClient.clusterDashboard.getStorageStats.query();
+                const stats = await trpcClient.clusterDashboard.getStorageStats.query({ loadReason: source });
                 if (!disposedRef.current) {
                     setStorageStats(stats);
                     setStorageLastUpdatedAt(Date.now());
@@ -486,50 +486,56 @@ export const ClusterDashboard = (): JSX.Element => {
         );
     }, []);
 
-    const createNamespace = useCallback(async (): Promise<void> => {
-        const databaseName = inventoryViewState.currentDatabase;
-        setIsCreatingNamespace(true);
+    const createNamespace = useCallback(
+        async (control: 'inventoryToolbar' | 'emptyState'): Promise<void> => {
+            const databaseName = inventoryViewState.currentDatabase;
+            setIsCreatingNamespace(true);
 
-        try {
-            if (databaseName === null) {
-                await trpcClient.clusterDashboard.createDatabase.mutate();
-                await loadStorageStats('reconcile');
-                settleCreatedNamespace(null);
-            } else {
-                await trpcClient.clusterDashboard.createCollection.mutate({ databaseName });
-                await loadStorageStats('reconcile');
-                reloadCollections();
-                settleCreatedNamespace(databaseName);
-            }
-        } catch (error) {
-            const cause = error instanceof Error ? error.message : String(error);
-            announce(
-                databaseName === null
-                    ? l10n.t('Failed to create the database.')
-                    : l10n.t('Failed to create the collection.'),
-                'assertive',
-            );
-            void trpcClient.common.displayErrorMessage.mutate({
-                message:
+            try {
+                if (databaseName === null) {
+                    await trpcClient.clusterDashboard.createDatabase.mutate({ activationSource: control });
+                    await loadStorageStats('reconcile');
+                    settleCreatedNamespace(null);
+                } else {
+                    await trpcClient.clusterDashboard.createCollection.mutate({
+                        databaseName,
+                        activationSource: control,
+                    });
+                    await loadStorageStats('reconcile');
+                    reloadCollections();
+                    settleCreatedNamespace(databaseName);
+                }
+            } catch (error) {
+                const cause = error instanceof Error ? error.message : String(error);
+                announce(
                     databaseName === null
                         ? l10n.t('Failed to create the database.')
                         : l10n.t('Failed to create the collection.'),
-                modal: false,
-                cause,
-            });
-        } finally {
-            if (!disposedRef.current) {
-                setIsCreatingNamespace(false);
+                    'assertive',
+                );
+                void trpcClient.common.displayErrorMessage.mutate({
+                    message:
+                        databaseName === null
+                            ? l10n.t('Failed to create the database.')
+                            : l10n.t('Failed to create the collection.'),
+                    modal: false,
+                    cause,
+                });
+            } finally {
+                if (!disposedRef.current) {
+                    setIsCreatingNamespace(false);
+                }
             }
-        }
-    }, [
-        announce,
-        inventoryViewState.currentDatabase,
-        loadStorageStats,
-        reloadCollections,
-        settleCreatedNamespace,
-        trpcClient,
-    ]);
+        },
+        [
+            announce,
+            inventoryViewState.currentDatabase,
+            loadStorageStats,
+            reloadCollections,
+            settleCreatedNamespace,
+            trpcClient,
+        ],
+    );
 
     const connectionState: ConnectionState =
         consecutiveFailures >= FAILURE_THRESHOLD
@@ -710,7 +716,7 @@ export const ClusterDashboard = (): JSX.Element => {
                     collections={collections}
                     viewState={inventoryViewState}
                     onViewStateChange={setInventoryViewState}
-                    onCreateNamespace={() => void createNamespace()}
+                    onCreateNamespace={(control) => void createNamespace(control)}
                     onRetryStorage={() => void loadStorageStats('manual')}
                     isCreatingNamespace={isCreatingNamespace}
                     busyNamespaces={busyNamespaces}

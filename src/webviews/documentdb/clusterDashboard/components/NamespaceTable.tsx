@@ -167,7 +167,7 @@ interface RowActionsProps {
     row: NamespaceRow;
     isDatabases: boolean;
     isBusy: boolean;
-    onActivate: (row: NamespaceRow) => void;
+    onActivate: (row: NamespaceRow, control: 'rowClick' | 'rowActionButton') => void;
 }
 
 /**
@@ -192,7 +192,7 @@ const RowActionButtons = ({ row, isDatabases, isBusy, onActivate }: RowActionsPr
                     onClick={(event) => {
                         // A database row handles the click too; without this it fires twice.
                         event.stopPropagation();
-                        onActivate(row);
+                        onActivate(row, 'rowActionButton');
                     }}
                 />
             </Tooltip>
@@ -226,7 +226,7 @@ export interface NamespaceTableProps {
     sort: SortState;
     onSortToggle: (column: SortColumn) => void;
     /** Drills into a database, or opens the Collection View for a collection. */
-    onActivate: (row: NamespaceRow) => void;
+    onActivate: (row: NamespaceRow, control: 'rowClick' | 'rowActionButton') => void;
     /** Parent database when rendering collections. */
     databaseName?: string;
     /** Names of rows whose create or delete command is in progress. */
@@ -371,7 +371,7 @@ export const NamespaceTable = ({
                                 // leaves for another editor tab, which is too much to
                                 // hang on a stray click at a row the reader was only
                                 // reading.
-                                onClick={isDatabases && !isBusy ? () => onActivate(row) : undefined}
+                                onClick={isDatabases && !isBusy ? () => onActivate(row, 'rowClick') : undefined}
                             >
                                 <TableCell>
                                     <TableCellLayout

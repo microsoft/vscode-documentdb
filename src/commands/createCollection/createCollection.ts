@@ -13,6 +13,11 @@ import { type CreateCollectionWizardContext } from './CreateCollectionWizardCont
 import { ExecuteStep } from './ExecuteStep';
 
 interface CreateCollectionCommandOptions {
+    /**
+     * Which affordance asked for the collection, e.g. `treeContextMenu`,
+     * `treeEmptyPlaceholder`, `clusterDashboard:emptyState`.
+     */
+    readonly activationSource?: string;
     readonly onNameResolved?: (collectionName: string) => Promise<void>;
 }
 
@@ -27,6 +32,8 @@ export async function createCollection(
     }
 
     context.telemetry.properties.experience = node.experience.api;
+    context.telemetry.properties.activationSource = options?.activationSource ?? 'treeContextMenu';
+    context.telemetry.properties.viewId = node.cluster.viewId ?? 'unknown';
 
     const wizardContext: CreateCollectionWizardContext = {
         ...context,

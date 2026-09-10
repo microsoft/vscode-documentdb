@@ -56,17 +56,26 @@ jest.mock('../../_integration/trpc', () => {
     };
 });
 
-import { createCallerFactory } from '../../_integration/trpc';
+import { createCallerFactory, type WithTelemetry } from '../../_integration/trpc';
 import { clusterDashboardRouter, collectRawCommandReplies, type RouterContext } from './clusterDashboardRouter';
 
-function createContext(onNamespaceBusy?: RouterContext['onNamespaceBusy']): RouterContext {
+// The suite swaps `publicProcedureWithTelemetry` for a plain procedure, so the action context
+// the telemetry middleware would inject has to be supplied here instead.
+function createContext(onNamespaceBusy?: RouterContext['onNamespaceBusy']): WithTelemetry<RouterContext> {
     return {
         dbExperience: API.DocumentDB,
         webviewName: 'clusterDashboard',
         clusterId: 'cluster-id',
         clusterDisplayName: 'Test cluster',
         viewId: 'connectionsView',
+        dashboardSessionId: 'dashboard-session',
         onNamespaceBusy,
+        actionContext: {
+            telemetry: { properties: {}, measurements: {} },
+            errorHandling: {},
+            ui: {},
+            valuesToMask: [],
+        } as unknown as WithTelemetry<RouterContext>['actionContext'],
     };
 }
 
@@ -172,16 +181,37 @@ describe('clusterDashboardRouter create actions', () => {
         });
         const caller = createCallerFactory(clusterDashboardRouter)(createContext(onNamespaceBusy));
 
-        await caller.createDatabase();
+        await caller.createDatabase({ activationSource: 'emptyState' });
 
         expect(mockResolveClusterNode).toHaveBeenCalledWith('connectionsView', 'cluster-id');
         expect(vscode.commands.executeCommand).toHaveBeenCalledWith(
             'vscode-documentdb.command.createDatabase',
             clusterNode,
             null,
-            expect.objectContaining({ source: 'webview;clusterDashboard', onNameResolved: expect.any(Function) }),
+            expect.objectContaining({
+                source: 'webview;clusterDashboard',
+                activationSource: 'clusterDashboard:emptyState',
+                onNameResolved: expect.any(Function),
+            }),
         );
         expect(onNamespaceBusy).toHaveBeenCalledWith('new-database', undefined, true);
+    });
+
+    it('records which dashboard control asked for the database, and whether a name was confirmed', async () => {
+        mockResolveClusterNode.mockResolvedValue({ id: 'cluster-tree-id' });
+        const context = createContext();
+        const caller = createCallerFactory(clusterDashboardRouter)(context);
+
+        // The wizard swallows its own cancellation, so a resolved command with no name is the
+        // shape of an abandoned dialog rather than a create.
+        await caller.createDatabase({ activationSource: 'inventoryToolbar' });
+
+        expect(context.actionContext.telemetry.properties).toMatchObject({
+            activationSource: 'clusterDashboard:inventoryToolbar',
+            dashboardSessionId: 'dashboard-session',
+            viewId: 'connectionsView',
+            nameConfirmed: 'false',
+        });
     });
 
     it('runs the existing create-collection command against the resolved database node', async () => {
@@ -194,14 +224,18 @@ describe('clusterDashboardRouter create actions', () => {
         });
         const caller = createCallerFactory(clusterDashboardRouter)(createContext(onNamespaceBusy));
 
-        await caller.createCollection({ databaseName: 'database' });
+        await caller.createCollection({ databaseName: 'database', activationSource: 'inventoryToolbar' });
 
         expect(mockResolveNamespaceNode).toHaveBeenCalledWith('connectionsView', 'cluster-id', 'database');
         expect(vscode.commands.executeCommand).toHaveBeenCalledWith(
             'vscode-documentdb.command.createCollection',
             databaseNode,
             null,
-            expect.objectContaining({ source: 'webview;clusterDashboard', onNameResolved: expect.any(Function) }),
+            expect.objectContaining({
+                source: 'webview;clusterDashboard',
+                activationSource: 'clusterDashboard:inventoryToolbar',
+                onNameResolved: expect.any(Function),
+            }),
         );
         expect(onNamespaceBusy).toHaveBeenCalledWith('database', 'new-collection', true);
     });

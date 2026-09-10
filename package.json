@@ -703,6 +703,12 @@
         "icon": "$(graph)"
       },
       {
+        "//": "Cluster Dashboard, inline variant. Same handler; a separate id is the only way the inline button and the context-menu entry can be told apart in telemetry.",
+        "command": "vscode-documentdb.command.clusterDashboard.open.inline",
+        "title": "Cluster Dashboard",
+        "icon": "$(graph)"
+      },
+      {
         "command": "vscode-documentdb.command.clusterDashboard.context.viewCollections",
         "title": "View Collections"
       },
@@ -1021,7 +1027,7 @@
         },
         {
           "//": "[Local Quick Start] Cluster Dashboard (inline)",
-          "command": "vscode-documentdb.command.clusterDashboard.open",
+          "command": "vscode-documentdb.command.clusterDashboard.open.inline",
           "when": "view == connectionsView && viewItem =~ /\\btreeItem_quickStartInstance\\b/i && viewItem =~ /\\bstate_running\\b/i && !listMultiSelection",
           "group": "inline@5"
         },
@@ -1240,7 +1246,7 @@
         },
         {
           "//": "[Account] Cluster Dashboard (inline)",
-          "command": "vscode-documentdb.command.clusterDashboard.open",
+          "command": "vscode-documentdb.command.clusterDashboard.open.inline",
           "when": "view =~ /connectionsView|discoveryView|azure(ResourceGroups|FocusView)/ && viewItem =~ /\\btreeitem_documentdbcluster\\b/i && !listMultiSelection",
           "group": "inline@5"
         },
@@ -1276,7 +1282,7 @@
         },
         {
           "//": "[Database] Cluster Dashboard (inline)",
-          "command": "vscode-documentdb.command.clusterDashboard.open",
+          "command": "vscode-documentdb.command.clusterDashboard.open.inline",
           "when": "view =~ /connectionsView|discoveryView|azure(ResourceGroups|FocusView)/ && viewItem =~ /\\btreeitem_database\\b/i && !listMultiSelection",
           "group": "inline@5"
         },
@@ -1700,6 +1706,10 @@
         },
         {
           "command": "vscode-documentdb.command.clusterDashboard.open",
+          "when": "never"
+        },
+        {
+          "command": "vscode-documentdb.command.clusterDashboard.open.inline",
           "when": "never"
         },
         {

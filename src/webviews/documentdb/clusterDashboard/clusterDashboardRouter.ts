@@ -92,9 +92,37 @@ export type RouterContext = BaseRouterContext & {
      * @see Views enum for possible values (e.g., 'connectionsView', 'discoveryView')
      */
     viewId: string;
+    /** Correlation id shared by every event this panel produces. @see ClusterDashboardWebviewConfigurationType */
+    dashboardSessionId?: string;
+    /** Journey id of the command that opened this panel, when the tree carried one. */
+    journeyCorrelationId?: string;
+    /** Database the panel was opened on, if it was opened from a database node. */
+    selectedDatabaseName?: string;
     /** Reports row-local create progress to the dashboard that owns this router. */
     onNamespaceBusy?: (databaseName: string, collectionName: string | undefined, busy: boolean) => Promise<void>;
 };
+
+/**
+ * Narrows the procedure context and stamps the facts every dashboard event should carry.
+ *
+ * Every procedure here belongs to one panel, so `viewId` and the panel's session id are the
+ * same for all of them; setting them in one place keeps a new procedure from silently
+ * dropping out of per-panel aggregation.
+ */
+function dashboardContext(ctx: unknown): WithTelemetry<RouterContext> {
+    const myCtx = ctx as WithTelemetry<RouterContext>;
+    const telemetry = myCtx.actionContext.telemetry;
+
+    telemetry.properties.viewId = myCtx.viewId;
+    if (myCtx.dashboardSessionId) {
+        telemetry.properties.dashboardSessionId = myCtx.dashboardSessionId;
+    }
+    if (myCtx.journeyCorrelationId) {
+        telemetry.properties.journeyCorrelationId = myCtx.journeyCorrelationId;
+    }
+
+    return myCtx;
+}
 
 /** Flat string map produced by `getClusterMetadata` (e.g. `serverInfo_version`). */
 export interface ClusterDashboardInfo {
@@ -111,10 +139,30 @@ export interface ClusterDashboardInfo {
     hosts: string[];
 }
 
+/**
+ * Which control in the dashboard asked for the action, as the webview names it.
+ *
+ * The dashboard offers the same create and open actions from more than one place, and the
+ * question these answer — is the toolbar button carrying the feature, or is it only ever
+ * reached from the empty state — cannot be recovered from the event alone.
+ */
+const DASHBOARD_CONTROL = z.enum(['inventoryToolbar', 'emptyState', 'rowClick', 'rowActionButton']);
+
+/** Prefixed so a dashboard-originated action is distinguishable from the tree's own. */
+function describeActivationSource(control: z.infer<typeof DASHBOARD_CONTROL> | undefined): string {
+    return control === undefined ? 'clusterDashboard' : `clusterDashboard:${control}`;
+}
+
+/** Why a read ran: a load the panel started for itself, or one the reader asked for. */
+const LOAD_REASON = z.enum(['initial', 'manual', 'reconcile', 'background']);
+
 export const clusterDashboardRouter = router({
     setShowDashboardOnConnect: publicProcedureWithTelemetry
         .input(z.boolean())
-        .mutation(async ({ input }): Promise<void> => {
+        .mutation(async ({ input, ctx }): Promise<void> => {
+            const myCtx = dashboardContext(ctx);
+            myCtx.actionContext.telemetry.properties.showDashboardOnConnect = input ? 'true' : 'false';
+
             await SettingsService.updateGlobalSetting(ext.settingsKeys.showDashboardOnConnect, input);
         }),
 
@@ -123,7 +171,7 @@ export const clusterDashboardRouter = router({
      * to call again when a panel is revealed.
      */
     getClusterInfo: publicProcedureWithTelemetry.query(async ({ ctx }): Promise<ClusterDashboardInfo> => {
-        const myCtx = ctx as WithTelemetry<RouterContext>;
+        const myCtx = dashboardContext(ctx);
 
         const client = await ClustersClient.getClient(myCtx.clusterId);
         const metadata = await client.getClusterMetadata();
@@ -140,20 +188,32 @@ export const clusterDashboardRouter = router({
             hosts = [];
         }
 
+        // The header renders nothing without a subtitle, and a metadata read that returns an
+        // empty map is the shape behind an otherwise blank set of facts.
+        myCtx.actionContext.telemetry.properties.hasHosts = hosts.length > 0 ? 'true' : 'false';
+        myCtx.actionContext.telemetry.measurements.metadataFieldCount = Object.keys(metadata).length;
+
         return { clusterDisplayName: myCtx.clusterDisplayName, metadata, hosts };
     }),
 
     /** Per-collection breakdown for one database, loaded when its row is expanded. */
     getDatabaseCollections: publicProcedureWithTelemetry
-        .input(z.object({ databaseName: z.string().min(1) }))
+        .input(z.object({ databaseName: z.string().min(1), loadReason: LOAD_REASON.optional() }))
         .query(async ({ input, ctx }): Promise<DatabaseCollectionsResult> => {
-            const myCtx = ctx as WithTelemetry<RouterContext>;
+            const myCtx = dashboardContext(ctx);
+            myCtx.actionContext.telemetry.properties.loadReason = input.loadReason ?? 'initial';
 
             const client = await ClustersClient.getClient(myCtx.clusterId);
 
             // Expanding a row can fan out to 100 `collStats`; the panel is often collapsed or the
             // dashboard closed long before they finish.
-            return getDatabaseCollections(client.getMongoClient(), input.databaseName, myCtx.signal);
+            const result = await getDatabaseCollections(client.getMongoClient(), input.databaseName, myCtx.signal);
+
+            myCtx.actionContext.telemetry.measurements.collectionCount = result.collections.length;
+            myCtx.actionContext.telemetry.measurements.omittedCollectionCount = result.omittedCollectionCount;
+            myCtx.actionContext.telemetry.measurements.statsErrorCount = result.errors.length;
+
+            return result;
         }),
 
     /** Live health sample. Polled by the webview, so telemetry is suppressed. */
@@ -167,13 +227,25 @@ export const clusterDashboardRouter = router({
     }),
 
     /** Storage breakdown for the inventory list. */
-    getStorageStats: publicProcedureWithTelemetry.query(async ({ ctx }): Promise<ClusterStorageStats> => {
-        const myCtx = ctx as WithTelemetry<RouterContext>;
+    getStorageStats: publicProcedureWithTelemetry
+        .input(z.object({ loadReason: LOAD_REASON }).optional())
+        .query(async ({ input, ctx }): Promise<ClusterStorageStats> => {
+            const myCtx = dashboardContext(ctx);
+            myCtx.actionContext.telemetry.properties.loadReason = input?.loadReason ?? 'initial';
 
-        const client = await ClustersClient.getClient(myCtx.clusterId);
+            const client = await ClustersClient.getClient(myCtx.clusterId);
 
-        return getStorageStats(client.getMongoClient(), myCtx.signal);
-    }),
+            const stats = await getStorageStats(client.getMongoClient(), myCtx.signal);
+
+            // How large the estates being looked at actually are, and how often the read is only
+            // partially answerable — a cluster whose stats are half errors renders a table of
+            // dashes, which no error event reports today.
+            myCtx.actionContext.telemetry.measurements.databaseCount = stats.databases.length;
+            myCtx.actionContext.telemetry.measurements.omittedDatabaseCount = stats.omittedDatabaseCount;
+            myCtx.actionContext.telemetry.measurements.statsErrorCount = stats.errors.length;
+
+            return stats;
+        }),
 
     /**
      * Opens the interactive shell against this cluster.
@@ -182,7 +254,8 @@ export const clusterDashboardRouter = router({
      * inherits its terminal wiring, telemetry and connection handling unchanged.
      */
     openShell: publicProcedureWithTelemetry.mutation(async ({ ctx }): Promise<void> => {
-        const myCtx = ctx as WithTelemetry<RouterContext>;
+        const myCtx = dashboardContext(ctx);
+        myCtx.actionContext.telemetry.properties.activationSource = 'clusterDashboard:clusterToolbar';
 
         await vscode.commands.executeCommand(ShellCommandIds.openWithInput, {
             clusterId: myCtx.clusterId,
@@ -193,10 +266,12 @@ export const clusterDashboardRouter = router({
 
     /** Runs the tree's existing copy-connection-string command for this cluster. */
     copyConnectionString: publicProcedureWithTelemetry.mutation(async ({ ctx }): Promise<void> => {
-        const myCtx = ctx as WithTelemetry<RouterContext>;
+        const myCtx = dashboardContext(ctx);
+        myCtx.actionContext.telemetry.properties.activationSource = 'clusterDashboard:clusterToolbar';
         const clusterNode = await resolveClusterNode(myCtx.viewId, myCtx.clusterId);
 
         if (!clusterNode) {
+            myCtx.actionContext.telemetry.properties.failureReason = 'clusterNodeNotFound';
             throw new Error(describeMissingNamespace(myCtx.clusterDisplayName));
         }
 
@@ -205,10 +280,12 @@ export const clusterDashboardRouter = router({
 
     /** Opens the existing data-migration experience for this cluster. */
     openDataMigration: publicProcedureWithTelemetry.mutation(async ({ ctx }): Promise<void> => {
-        const myCtx = ctx as WithTelemetry<RouterContext>;
+        const myCtx = dashboardContext(ctx);
+        myCtx.actionContext.telemetry.properties.activationSource = 'clusterDashboard:clusterToolbar';
         const clusterNode = await resolveClusterNode(myCtx.viewId, myCtx.clusterId);
 
         if (!clusterNode) {
+            myCtx.actionContext.telemetry.properties.failureReason = 'clusterNodeNotFound';
             throw new Error(describeMissingNamespace(myCtx.clusterDisplayName));
         }
 
@@ -216,39 +293,55 @@ export const clusterDashboardRouter = router({
     }),
 
     /** Runs the tree's existing create-database command for this cluster. */
-    createDatabase: publicProcedureWithTelemetry.mutation(async ({ ctx }): Promise<void> => {
-        const myCtx = ctx as WithTelemetry<RouterContext>;
-        const clusterNode = await resolveClusterNode(myCtx.viewId, myCtx.clusterId);
+    createDatabase: publicProcedureWithTelemetry
+        .input(z.object({ activationSource: DASHBOARD_CONTROL }))
+        .mutation(async ({ input, ctx }): Promise<void> => {
+            const myCtx = dashboardContext(ctx);
+            const activationSource = describeActivationSource(input.activationSource);
+            myCtx.actionContext.telemetry.properties.activationSource = activationSource;
 
-        if (!clusterNode) {
-            throw new Error(describeMissingNamespace(myCtx.clusterDisplayName));
-        }
+            const clusterNode = await resolveClusterNode(myCtx.viewId, myCtx.clusterId);
 
-        let databaseName: string | undefined;
-        try {
-            await vscode.commands.executeCommand('vscode-documentdb.command.createDatabase', clusterNode, null, {
-                source: 'webview;clusterDashboard',
-                onNameResolved: async (name: string): Promise<void> => {
-                    databaseName = name;
-                    await myCtx.onNamespaceBusy?.(name, undefined, true);
-                },
-            });
-        } catch (error) {
-            if (databaseName !== undefined) {
-                await myCtx.onNamespaceBusy?.(databaseName, undefined, false);
+            if (!clusterNode) {
+                myCtx.actionContext.telemetry.properties.failureReason = 'clusterNodeNotFound';
+                throw new Error(describeMissingNamespace(myCtx.clusterDisplayName));
             }
-            throw error;
-        }
-    }),
+
+            let databaseName: string | undefined;
+            try {
+                await vscode.commands.executeCommand('vscode-documentdb.command.createDatabase', clusterNode, null, {
+                    source: 'webview;clusterDashboard',
+                    activationSource,
+                    onNameResolved: async (name: string): Promise<void> => {
+                        databaseName = name;
+                        await myCtx.onNamespaceBusy?.(name, undefined, true);
+                    },
+                });
+            } catch (error) {
+                if (databaseName !== undefined) {
+                    await myCtx.onNamespaceBusy?.(databaseName, undefined, false);
+                }
+                throw error;
+            }
+
+            // The wizard is cancellable and swallows its own cancellation, so a resolved call is
+            // not the same as a name having been confirmed. Without this the event counts every
+            // abandoned dialog as a create.
+            myCtx.actionContext.telemetry.properties.nameConfirmed = databaseName === undefined ? 'false' : 'true';
+        }),
 
     /** Runs the tree's existing create-collection command for the database on screen. */
     createCollection: publicProcedureWithTelemetry
-        .input(z.object({ databaseName: z.string().min(1) }))
+        .input(z.object({ databaseName: z.string().min(1), activationSource: DASHBOARD_CONTROL }))
         .mutation(async ({ input, ctx }): Promise<void> => {
-            const myCtx = ctx as WithTelemetry<RouterContext>;
+            const myCtx = dashboardContext(ctx);
+            const activationSource = describeActivationSource(input.activationSource);
+            myCtx.actionContext.telemetry.properties.activationSource = activationSource;
+
             const databaseNode = await resolveNamespaceNode(myCtx.viewId, myCtx.clusterId, input.databaseName);
 
             if (!databaseNode) {
+                myCtx.actionContext.telemetry.properties.failureReason = 'namespaceNodeNotFound';
                 throw new Error(describeMissingNamespace(myCtx.clusterDisplayName, input.databaseName));
             }
 
@@ -256,6 +349,7 @@ export const clusterDashboardRouter = router({
             try {
                 await vscode.commands.executeCommand('vscode-documentdb.command.createCollection', databaseNode, null, {
                     source: 'webview;clusterDashboard',
+                    activationSource,
                     onNameResolved: async (name: string): Promise<void> => {
                         collectionName = name;
                         await myCtx.onNamespaceBusy?.(input.databaseName, name, true);
@@ -267,6 +361,8 @@ export const clusterDashboardRouter = router({
                 }
                 throw error;
             }
+
+            myCtx.actionContext.telemetry.properties.nameConfirmed = collectionName === undefined ? 'false' : 'true';
         }),
 
     /** Opens the Collection View for a row in the inventory. */
@@ -276,10 +372,13 @@ export const clusterDashboardRouter = router({
                 databaseName: z.string().min(1),
                 collectionName: z.string().min(1),
                 initialTab: z.enum(['tab_result', 'tab_indexes', 'tab_queryInsights']).optional(),
+                activationSource: DASHBOARD_CONTROL.optional(),
             }),
         )
         .mutation(async ({ input, ctx }): Promise<void> => {
-            const myCtx = ctx as WithTelemetry<RouterContext>;
+            const myCtx = dashboardContext(ctx);
+            myCtx.actionContext.telemetry.properties.activationSource = describeActivationSource(input.activationSource);
+            myCtx.actionContext.telemetry.properties.initialTab = input.initialTab ?? 'tab_result';
 
             await openCollectionViewInternal(myCtx.actionContext, {
                 clusterId: myCtx.clusterId,
@@ -309,7 +408,8 @@ export const clusterDashboardRouter = router({
      * after it has been uploaded.
      */
     exportDiagnostics: publicProcedureWithTelemetry.mutation(async ({ ctx }): Promise<void> => {
-        const myCtx = ctx as WithTelemetry<RouterContext>;
+        const myCtx = dashboardContext(ctx);
+        myCtx.actionContext.telemetry.properties.activationSource = 'clusterDashboard:moreActionsMenu';
 
         const confirmed = await vscode.window.showWarningMessage(
             l10n.t('Export diagnostics for this cluster?'),
@@ -349,6 +449,14 @@ export const clusterDashboardRouter = router({
                 health,
             },
         };
+
+        // How much of the deployment a bug report actually describes: a document whose every
+        // command was refused is a report with nothing in it, and looks identical from here.
+        myCtx.actionContext.telemetry.measurements.refusedCommandCount = diagnostics.commands.filter(
+            ({ result }) => !result.ok,
+        ).length;
+        myCtx.actionContext.telemetry.measurements.commandCount = diagnostics.commands.length;
+        myCtx.actionContext.telemetry.measurements.databaseCount = storage.databases.length;
 
         await readOnlyJsonDocumentProvider.openDocument(
             l10n.t('Cluster diagnostics'),

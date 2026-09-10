@@ -5,6 +5,7 @@
 
 import { callWithTelemetryAndErrorHandling, type IActionContext } from '@microsoft/vscode-azext-utils';
 import * as l10n from '@vscode/l10n';
+import { randomUUID } from 'crypto';
 import * as vscode from 'vscode';
 
 import { openCollectionViewInternal } from '../../../commands/openCollectionView/openCollectionView';
@@ -68,6 +69,17 @@ export type ClusterDashboardWebviewConfigurationType = {
     selectedDatabaseName?: string;
     /** Whether tree expansion should open the dashboard after connecting. */
     showDashboardOnConnect: boolean;
+    /**
+     * Correlation id shared by every telemetry event this panel produces, host- and
+     * webview-side, for as long as it stays open.
+     *
+     * A dashboard has no "session end" event, so per-panel aggregation (how many refreshes,
+     * how many drill-ins, how long before the first create) is only answerable by grouping on
+     * this. Assigned by {@link openClusterDashboardWebview}; a reused panel keeps its original.
+     */
+    dashboardSessionId?: string;
+    /** Journey id of the command that opened this panel, when the tree carried one. */
+    journeyCorrelationId?: string;
 };
 
 /**
@@ -150,6 +162,17 @@ const ROW_ACTIONS: Readonly<Record<string, RowAction>> = {
 
 function getPanelKey(clusterId: string, selectedDatabaseName?: string): string {
     return `${clusterId}\u0000${selectedDatabaseName ?? ''}`;
+}
+
+/**
+ * The live panel for this cluster/database pair, if one is open.
+ *
+ * Exposed so the opening command can tell a fresh panel from a reveal of an existing one, and
+ * can tag its own event with the session id the panel's later events will carry.
+ */
+export function getOpenClusterDashboardSessionId(clusterId: string, selectedDatabaseName?: string): string | undefined {
+    const panel = openPanels.get(getPanelKey(clusterId, selectedDatabaseName));
+    return panel && !panel.controller.isDisposed ? panel.config.dashboardSessionId : undefined;
 }
 
 function isContextMenuContext(value: unknown): value is ClusterDashboardContextMenuContext {
@@ -286,6 +309,14 @@ export function registerClusterDashboardContextMenuCommands(context: vscode.Exte
                     'clusterDashboard.contextMenuAction',
                     async (actionContext: IActionContext) => {
                         actionContext.telemetry.properties.contextMenuCommand = commandId;
+                        actionContext.telemetry.properties.activationSource = 'clusterDashboard:rowContextMenu';
+                        actionContext.telemetry.properties.viewId = panel.config.viewId;
+                        if (panel.config.dashboardSessionId) {
+                            actionContext.telemetry.properties.dashboardSessionId = panel.config.dashboardSessionId;
+                        }
+                        if (panel.config.journeyCorrelationId) {
+                            actionContext.telemetry.properties.journeyCorrelationId = panel.config.journeyCorrelationId;
+                        }
                         await runRowAction(actionContext, action, panel, menuContext);
                     },
                 );
@@ -304,6 +335,10 @@ export function openClusterDashboardWebview(
         return existingPanel.controller;
     }
 
+    // Assigned here rather than by the caller so a reveal of an existing panel cannot mint a
+    // second id for the same session.
+    initialData = { ...initialData, dashboardSessionId: randomUUID() };
+
     // Declared before `trpcContext` because that context closes over it, and assigned after,
     // because `openAppWebview` needs the context. `const` is not available for that ordering.
     // eslint-disable-next-line prefer-const
@@ -314,6 +349,9 @@ export function openClusterDashboardWebview(
         clusterId: initialData.clusterId,
         clusterDisplayName: initialData.clusterDisplayName,
         viewId: initialData.viewId,
+        dashboardSessionId: initialData.dashboardSessionId,
+        journeyCorrelationId: initialData.journeyCorrelationId,
+        selectedDatabaseName: initialData.selectedDatabaseName,
         onNamespaceBusy: async (databaseName, collectionName, busy): Promise<void> => {
             await postNamespaceBusy({ controller, config: initialData }, databaseName, collectionName, 'create', busy);
         },

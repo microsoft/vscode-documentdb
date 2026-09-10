@@ -1005,6 +1005,16 @@ export class ClustersExtension implements vscode.Disposable {
 
                 // Inline button variant — same handler, different activationSource
                 registerCommandWithTreeNodeUnwrapping(
+                    'vscode-documentdb.command.clusterDashboard.open.inline',
+                    withTreeNodeCommandCorrelation((context, node) =>
+                        openClusterDashboard(context, node as ClusterItemBase | DatabaseItem, null, {
+                            activationSource: 'treeNodeInline',
+                        }),
+                    ),
+                );
+
+                // Inline button variant — same handler, different activationSource
+                registerCommandWithTreeNodeUnwrapping(
                     ShellCommandIds.openInline,
                     withTreeNodeCommandCorrelation((context, node) => {
                         context.telemetry.properties.activationSource = 'treeNodeInline';

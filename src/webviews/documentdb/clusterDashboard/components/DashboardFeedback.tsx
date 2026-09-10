@@ -8,11 +8,11 @@ import { ThumbDislikeRegular, ThumbLikeRegular } from '@fluentui/react-icons';
 import * as l10n from '@vscode/l10n';
 import { useState, type JSX } from 'react';
 
-import { useTrpcClient } from '../../../_integration/useTrpcClient';
 // TODO(dashboard): promote the feedback dialog to src/webviews/components/ so views don't
 // reach into each other. Reused as-is meanwhile — a second copy of the consent flow and its
 // privacy notice is the last thing this should grow.
 import { FeedbackDialog } from '../../collectionView/queryInsightsTab/components';
+import { useDashboardReporter } from '../useDashboardReporter';
 
 /**
  * The thumbs-up / thumbs-down question, as a labelled pair of toolbar buttons.
@@ -26,16 +26,13 @@ import { FeedbackDialog } from '../../collectionView/queryInsightsTab/components
  * Returns a fragment of toolbar children, so it must be rendered inside a `Toolbar`.
  */
 export const DashboardFeedback = (): JSX.Element => {
-    const trpcClient = useTrpcClient();
+    const report = useDashboardReporter();
 
     const [dialogOpen, setDialogOpen] = useState(false);
     const [sentiment, setSentiment] = useState<'positive' | 'negative'>('positive');
 
     const handleFeedbackClick = (clicked: 'positive' | 'negative'): void => {
-        void trpcClient.common.reportEvent.mutate({
-            eventName: 'clusterDashboardThumb',
-            properties: { sentiment: clicked, source: 'feedbackThumb' },
-        });
+        report('clusterDashboardThumb', { sentiment: clicked, source: 'feedbackThumb' });
         setSentiment(clicked);
         setDialogOpen(true);
     };
@@ -51,14 +48,14 @@ export const DashboardFeedback = (): JSX.Element => {
             return properties;
         }, {});
 
-        void trpcClient.common.reportEvent.mutate({
-            eventName: 'clusterDashboardFeedback',
-            properties: { sentiment: feedback.sentiment, source: 'feedbackDialog', ...reasonProperties },
+        report('clusterDashboardFeedback', {
+            sentiment: feedback.sentiment,
+            source: 'feedbackDialog',
+            ...reasonProperties,
         });
 
         return Promise.resolve();
     };
-
     return (
         <>
             <div className="dashboardFeedbackGroup" role="group" aria-label={l10n.t('Feedback')}>

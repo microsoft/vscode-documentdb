@@ -31,6 +31,7 @@ import { useCallback, useEffect, useMemo, useState, type JSX } from 'react';
 import { type ClusterStorageStats } from '../../../../documentdb/utils/getClusterHealth';
 import { useTrpcClient } from '../../../_integration/useTrpcClient';
 import { isShowCollectionsMessage } from '../clusterDashboardContextMenu';
+import { useDashboardReporter } from '../useDashboardReporter';
 import {
     arrangeRows,
     defaultDirectionFor,
@@ -80,7 +81,7 @@ export interface InventoryPanelProps {
      */
     onViewStateChange: (update: (current: InventoryViewState) => InventoryViewState) => void;
     /** Creates a database or collection, according to the inventory level on screen. */
-    onCreateNamespace: () => void;
+    onCreateNamespace: (control: 'inventoryToolbar' | 'emptyState') => void;
     /** Re-reads the cluster's database inventory after a failed request. */
     onRetryStorage: () => void;
     isCreatingNamespace: boolean;
@@ -131,10 +132,22 @@ export const InventoryPanel = ({
 }: InventoryPanelProps): JSX.Element => {
     const { sort, filterText, currentDatabase } = viewState;
     const trpcClient = useTrpcClient();
+    const report = useDashboardReporter();
 
     const setFilterText = (next: string): void => onViewStateChange((current) => ({ ...current, filterText: next }));
 
-    const goBack = (): void => onViewStateChange((current) => ({ ...current, currentDatabase: null, filterText: '' }));
+    /**
+     * Leaves the collections of a database for the cluster's database list.
+     *
+     * Reached from the breadcrumb above the table and from the labelled button below it, which
+     * exist for different readers — one arrived by stepping in, the other opened the dashboard
+     * already inside a database. Which of them is load-bearing is the whole reason the second
+     * one was added, and only telemetry can answer it.
+     */
+    const goBack = (control: 'breadcrumb' | 'footerButton'): void => {
+        report('inventoryNavigation', { direction: 'up', control, level: 'collections' });
+        onViewStateChange((current) => ({ ...current, currentDatabase: null, filterText: '' }));
+    };
 
     const databaseRows = useMemo(
         () => (storageStats === null ? [] : storageStats.databases.map(toDatabaseRow)),
@@ -234,9 +247,9 @@ export const InventoryPanel = ({
     }, [lastUpdatedAt, now]);
 
     const openCollection = useCallback(
-        (databaseName: string, collectionName: string): void => {
+        (databaseName: string, collectionName: string, activationSource: 'rowClick' | 'rowActionButton'): void => {
             void trpcClient.clusterDashboard.openCollectionView
-                .mutate({ databaseName, collectionName })
+                .mutate({ databaseName, collectionName, activationSource })
                 .catch((error: unknown) => {
                     void trpcClient.common.displayErrorMessage.mutate({
                         message: l10n.t('Failed to open the collection view.'),
@@ -254,23 +267,33 @@ export const InventoryPanel = ({
         const handleMessage = (event: MessageEvent<unknown>): void => {
             if (isShowCollectionsMessage(event.data)) {
                 const { databaseName } = event.data;
+                report('inventoryNavigation', { direction: 'down', control: 'rowContextMenu', level: 'databases' });
                 onViewStateChange((current) => ({ ...current, currentDatabase: databaseName, filterText: '' }));
             }
         };
 
         window.addEventListener('message', handleMessage);
         return () => window.removeEventListener('message', handleMessage);
-    }, [onViewStateChange]);
+    }, [onViewStateChange, report]);
 
-    const activate = (row: NamespaceRow): void => {
+    const activate = (row: NamespaceRow, control: 'rowClick' | 'rowActionButton'): void => {
         if (currentDatabase === null) {
+            report('inventoryNavigation', {
+                direction: 'down',
+                control,
+                level: 'databases',
+                isFiltered: filterText.length > 0 ? 'true' : 'false',
+            });
             onViewStateChange((current) => ({ ...current, currentDatabase: row.name, filterText: '' }));
         } else {
-            openCollection(currentDatabase, row.name);
+            openCollection(currentDatabase, row.name, control);
         }
     };
 
-    const toggleSort = (column: SortColumn): void =>
+    const toggleSort = (column: SortColumn): void => {
+        // Which column the estate is arranged by is the closest thing to a statement of what
+        // the reader came here to find out.
+        report('inventorySort', { column, level: currentDatabase === null ? 'databases' : 'collections' });
         onViewStateChange((current) => ({
             ...current,
             sort:
@@ -278,6 +301,7 @@ export const InventoryPanel = ({
                     ? { column, direction: current.sort.direction === 'ascending' ? 'descending' : 'ascending' }
                     : { column, direction: defaultDirectionFor(column) },
         }));
+    };
 
     const errors =
         inventoryIsLoading || storageStats === null
@@ -355,7 +379,7 @@ export const InventoryPanel = ({
                     appearance="primary"
                     icon={<AddRegular />}
                     disabled={isCreatingNamespace}
-                    onClick={onCreateNamespace}
+                    onClick={() => onCreateNamespace('emptyState')}
                 >
                     {currentDatabase === null ? l10n.t('New Database') : l10n.t('New Collection')}
                 </Button>
@@ -372,7 +396,7 @@ export const InventoryPanel = ({
                         <BreadcrumbButton
                             current={currentDatabase === null}
                             icon={<DatabaseMultipleRegular />}
-                            onClick={currentDatabase === null ? undefined : goBack}
+                            onClick={currentDatabase === null ? undefined : () => goBack('breadcrumb')}
                         >
                             {l10n.t('Databases')}
                         </BreadcrumbButton>
@@ -390,7 +414,11 @@ export const InventoryPanel = ({
                 </Breadcrumb>
                 <ToolbarDivider />
                 {canCreateNamespace && (
-                    <ToolbarButton icon={<AddRegular />} disabled={isCreatingNamespace} onClick={onCreateNamespace}>
+                    <ToolbarButton
+                        icon={<AddRegular />}
+                        disabled={isCreatingNamespace}
+                        onClick={() => onCreateNamespace('inventoryToolbar')}
+                    >
                         {currentDatabase === null ? l10n.t('New Database') : l10n.t('New Collection')}
                     </ToolbarButton>
                 )}
@@ -494,7 +522,12 @@ export const InventoryPanel = ({
                 <div className="listFooter">
                     <div className="listFooterStart">
                         {currentDatabase !== null && (
-                            <Button size="small" appearance="outline" icon={<ArrowLeftRegular />} onClick={goBack}>
+                            <Button
+                                size="small"
+                                appearance="outline"
+                                icon={<ArrowLeftRegular />}
+                                onClick={() => goBack('footerButton')}
+                            >
                                 {l10n.t('Back to Databases')}
                             </Button>
                         )}

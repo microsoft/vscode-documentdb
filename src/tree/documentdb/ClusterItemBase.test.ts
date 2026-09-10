@@ -212,6 +212,8 @@ describe('ClusterItemBase.getChildren — listDatabases failure handling', () =>
         expect(vscode.commands.executeCommand).toHaveBeenCalledWith(
             'vscode-documentdb.command.clusterDashboard.open',
             item,
+            null,
+            { activationSource: 'autoOpenOnConnect' },
         );
     });
 
@@ -225,6 +227,8 @@ describe('ClusterItemBase.getChildren — listDatabases failure handling', () =>
         expect(vscode.commands.executeCommand).toHaveBeenCalledWith(
             'vscode-documentdb.command.clusterDashboard.open',
             item,
+            null,
+            { activationSource: 'autoOpenOnConnect' },
         );
     });
 
@@ -238,6 +242,8 @@ describe('ClusterItemBase.getChildren — listDatabases failure handling', () =>
         expect(vscode.commands.executeCommand).not.toHaveBeenCalledWith(
             'vscode-documentdb.command.clusterDashboard.open',
             item,
+            null,
+            { activationSource: 'autoOpenOnConnect' },
         );
     });
 

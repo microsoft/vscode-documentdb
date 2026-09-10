@@ -132,11 +132,16 @@ describe('Local Quick Start cluster-command opt-in (UX review item 20)', () => {
     });
 
     it('offers the Cluster Dashboard inline and in the context menu on the running instance', () => {
-        const entries = instanceEntries.filter(
-            (entry) => entry.command === 'vscode-documentdb.command.clusterDashboard.open',
+        // Two ids for one feature: the inline button and the context-menu entry run the same
+        // handler and are only separable in telemetry because they are registered apart.
+        const entries = instanceEntries.filter((entry) =>
+            entry.command?.startsWith('vscode-documentdb.command.clusterDashboard.open'),
         );
 
-        expect(entries.map((entry) => entry.group)).toEqual(['inline@5', '1@2']);
+        expect(entries.map((entry) => [entry.command, entry.group])).toEqual([
+            ['vscode-documentdb.command.clusterDashboard.open.inline', 'inline@5'],
+            ['vscode-documentdb.command.clusterDashboard.open', '1@2'],
+        ]);
         for (const entry of entries) {
             expect(entry.when).toContain('state_running');
         }

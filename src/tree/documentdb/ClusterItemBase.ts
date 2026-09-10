@@ -381,7 +381,9 @@ export abstract class ClusterItemBase<T extends BaseClusterModel = BaseClusterMo
         }
 
         if (SettingsService.getSetting<boolean>(ext.settingsKeys.showDashboardOnConnect) ?? true) {
-            await vscode.commands.executeCommand('vscode-documentdb.command.clusterDashboard.open', this);
+            await vscode.commands.executeCommand('vscode-documentdb.command.clusterDashboard.open', this, null, {
+                activationSource: 'autoOpenOnConnect',
+            });
         }
 
         if (databases.length === 0) {
@@ -392,7 +394,7 @@ export abstract class ClusterItemBase<T extends BaseClusterModel = BaseClusterMo
                     label: l10n.t('Create Database…'),
                     iconPath: new vscode.ThemeIcon('plus'),
                     commandId: 'vscode-documentdb.command.createDatabase',
-                    commandArgs: [this],
+                    commandArgs: [this, null, { activationSource: 'treeEmptyPlaceholder' }],
                 }) as TreeElement,
             ];
         }

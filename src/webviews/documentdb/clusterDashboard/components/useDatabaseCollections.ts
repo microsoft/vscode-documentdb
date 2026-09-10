@@ -58,7 +58,7 @@ export function useDatabaseCollections(databaseName: string | null): DatabaseCol
         // State is written only from the callbacks: `isLoading` below is derived from the key
         // instead, so entering a database does not cost a render just to raise a flag.
         trpcClient.clusterDashboard.getDatabaseCollections
-            .query({ databaseName })
+            .query({ databaseName, loadReason: request.source })
             .then((result) => {
                 if (!disposed) {
                     setEntry({ key, databaseName, result, lastUpdatedAt: Date.now(), error: null });
@@ -81,7 +81,7 @@ export function useDatabaseCollections(databaseName: string | null): DatabaseCol
             // one's table.
             disposed = true;
         };
-    }, [databaseName, key, trpcClient]);
+    }, [databaseName, key, request.source, trpcClient]);
 
     const reload = useCallback((source: 'background' | 'manual' = 'background'): void => {
         setRequest((current) => ({ attempt: current.attempt + 1, source }));

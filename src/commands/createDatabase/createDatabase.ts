@@ -16,6 +16,12 @@ import { DatabaseNameStep } from './DatabaseNameStep';
 import { ExecuteStep } from './ExecuteStep';
 
 interface CreateDatabaseCommandOptions {
+    /**
+     * Which affordance asked for the database, e.g. `treeContextMenu`, `treeEmptyPlaceholder`,
+     * `clusterDashboard:inventoryToolbar`. Defaults to `treeContextMenu` — the only caller that
+     * cannot say is a menu entry.
+     */
+    readonly activationSource?: string;
     readonly onNameResolved?: (databaseName: string) => Promise<void>;
 }
 
@@ -47,8 +53,11 @@ async function createMongoDatabase(
     options?: CreateDatabaseCommandOptions,
 ): Promise<void> {
     context.telemetry.properties.experience = node.experience.api;
+    context.telemetry.properties.activationSource = options?.activationSource ?? 'treeContextMenu';
+    context.telemetry.properties.viewId = node.cluster.viewId ?? 'unknown';
 
     if (!CredentialCache.hasCredentials(node.cluster.clusterId)) {
+        context.telemetry.properties.failureReason = 'notSignedIn';
         throw new Error(
             l10n.t(
                 'You are not signed in to the DocumentDB cluster. Please sign in (by expanding the node "{0}") and try again.',

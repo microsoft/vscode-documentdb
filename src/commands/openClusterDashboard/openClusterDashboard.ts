@@ -18,6 +18,7 @@ import { DatabaseItem } from '../../tree/documentdb/DatabaseItem';
 import { type TreeCluster } from '../../tree/models/BaseClusterModel';
 import { trackJourneyCorrelationId } from '../../utils/commandTelemetry';
 import {
+    getOpenClusterDashboardSessionId,
     openClusterDashboardWebview,
     type ClusterDashboardAzureInfo,
 } from '../../webviews/documentdb/clusterDashboard/clusterDashboardController';
@@ -66,9 +67,21 @@ function readFeedbackSignalsEnabled(): boolean {
     }
 }
 
+export interface OpenClusterDashboardOptions {
+    /**
+     * Which affordance asked for the dashboard: the inline tree button, the context menu, or
+     * the automatic open that follows a successful connection. The three are the same command
+     * with the same arguments, so nothing else in the event tells them apart — and whether the
+     * setting-driven open is carrying the feature is the question the preview needs answered.
+     */
+    readonly activationSource?: string;
+}
+
 export async function openClusterDashboard(
     context: IActionContext,
     node: ClusterItemBase | DatabaseItem,
+    _nodes?: unknown,
+    options?: OpenClusterDashboardOptions,
 ): Promise<void> {
     // added manually here as this function can be called bypassing our general command registration
     trackJourneyCorrelationId(context, node);
@@ -78,6 +91,8 @@ export async function openClusterDashboard(
     }
 
     context.telemetry.properties.experience = node?.experience.api;
+    context.telemetry.properties.activationSource = options?.activationSource ?? 'treeContextMenu';
+    context.telemetry.properties.nodeType = node instanceof DatabaseItem ? 'database' : 'cluster';
 
     // A dashboard opened without credentials cannot connect, and would re-fail its poll
     // every few seconds with no sign-in affordance. Rather than refusing and telling the
@@ -100,15 +115,33 @@ export async function openClusterDashboard(
     // Extract viewId from the cluster model, or infer from treeId prefix
     // The viewId tells us which branch data provider owns this node
     const viewId = node.cluster.viewId ?? inferViewIdFromTreeId(node.cluster.treeId);
+    const azure = extractAzureInfo(node.cluster);
+    const selectedDatabaseName = node instanceof DatabaseItem ? node.databaseInfo.name : undefined;
+    const showDashboardOnConnect = SettingsService.getSetting<boolean>(ext.settingsKeys.showDashboardOnConnect) ?? true;
+
+    // Read before opening: afterwards every call looks like a reuse. A reveal of an already
+    // open panel is not a new dashboard session and must not be counted as one.
+    const existingSessionId = getOpenClusterDashboardSessionId(node.cluster.clusterId, selectedDatabaseName);
 
     openClusterDashboardWebview({
         clusterId: node.cluster.clusterId,
         clusterDisplayName: node.cluster.name,
         viewId: viewId,
         refreshIntervalMs: DASHBOARD_REFRESH_INTERVAL_MS,
-        azure: extractAzureInfo(node.cluster),
+        azure,
         feedbackSignalsEnabled: readFeedbackSignalsEnabled(),
-        showDashboardOnConnect: SettingsService.getSetting<boolean>(ext.settingsKeys.showDashboardOnConnect) ?? true,
-        selectedDatabaseName: node instanceof DatabaseItem ? node.databaseInfo.name : undefined,
+        showDashboardOnConnect,
+        selectedDatabaseName,
+        journeyCorrelationId:
+            typeof context.telemetry.properties.journeyCorrelationId === 'string'
+                ? context.telemetry.properties.journeyCorrelationId
+                : undefined,
     });
+
+    context.telemetry.properties.viewId = viewId;
+    context.telemetry.properties.isAzureCluster = azure === undefined ? 'false' : 'true';
+    context.telemetry.properties.showDashboardOnConnect = showDashboardOnConnect ? 'true' : 'false';
+    context.telemetry.properties.panelReused = existingSessionId === undefined ? 'false' : 'true';
+    context.telemetry.properties.dashboardSessionId =
+        existingSessionId ?? getOpenClusterDashboardSessionId(node.cluster.clusterId, selectedDatabaseName);
 }
