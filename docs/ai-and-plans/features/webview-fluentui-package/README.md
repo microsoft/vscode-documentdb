@@ -10,7 +10,7 @@ code:
 
 # `@microsoft/vscode-ext-webview-fluentui`
 
-**Status:** in design · **Created:** 2026-08-18
+**Status:** published preview; increments 1-4 implemented · **Created:** 2026-08-18
 
 > The React theming layer and a small set of components, extracted so other VS Code extensions can
 > make Fluent UI look correct inside a webview without rebuilding it.
@@ -67,7 +67,7 @@ peer ranges in design.md §7 are chosen to satisfy both repositories at once.
 
 ## Code map
 
-After increment 1:
+After increments 1-4:
 
 - `packages/vscode-ext-webview-fluentui/**` — the package
 - `src/webviews/index.tsx` — the consumer wiring, now rendering through `VSCodeFluentProvider`
@@ -75,6 +75,10 @@ After increment 1:
   its token list, which stayed behind (decisions 0008, 0013), beside their only consumer
 - `src/webviews/index.scss` — the `--documentdb-*` field stroke aliases, kept extension-side (0012)
 - `src/webviews/slickgrid.scss` — product-specific, moved out of the dissolved `theme/` folder
+- `packages/vscode-ext-webview-fluentui/src/components/` - `Container`, `StepList`, `StatusList`,
+  `Wizard`, `MetricGrid`, `MetricCard`, and `FocusableBadge`, with their supporting components
+- Local Quick Start and Atlas Credentials consume the wizard components; Query Insights and
+  Indexes consume the metric and badge components. Formatting and product logic stay extension-side.
 
 `src/webviews/theme/` no longer exists.
 
@@ -83,8 +87,8 @@ After increment 1:
 [design.md](./design.md) is the durable document. The load-bearing ideas:
 
 - **Three front doors, one implementation.** A facade for greenfield consumers, a composable pair
-  for consumers who own their own `FluentProvider`, and the raw generators for non-Fluent design
-  systems. The facade is built only from the public lower tiers.
+  for consumers who own their own `FluentProvider`, and the raw generators for consumers who
+  post-process Fluent themes. The facade is built only from the public lower tiers.
 - **Components do not require the package's theming.** `components/` may not import `theme/`. This
   is what lets a consumer adopt a component without adopting a whole visual philosophy.
 - **The stylesheet ships itself.** Importing the package's main entry injects the Fluent overrides;
@@ -94,14 +98,18 @@ After increment 1:
 
 ## Timeline
 
-| Date       | PR   | What changed                                                                                                           | Docs                                                                                       |
-| ---------- | ---- | ---------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------ |
-| 2026-08-18 | —    | Design and decisions settled; increment 1 planned                                                                      | [iterations/01-theme-and-first-component.md](./iterations/01-theme-and-first-component.md) |
-| 2026-08-18 | #895 | Increment 1 implemented and visually verified: package on disk, theming layer and `WizardBreadcrumb` moved, no publish | [iterations/01-theme-and-first-component.md](./iterations/01-theme-and-first-component.md) |
+| Date       | PR   | What changed                                                                                                           | Docs                                                                                                             |
+| ---------- | ---- | ---------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------- |
+| 2026-08-18 | —    | Design and decisions settled; increment 1 planned                                                                      | [iterations/01-theme-and-first-component.md](./iterations/01-theme-and-first-component.md)                       |
+| 2026-08-18 | #895 | Increment 1 implemented and visually verified: package on disk, theming layer and `WizardBreadcrumb` moved, no publish | [iterations/01-theme-and-first-component.md](./iterations/01-theme-and-first-component.md)                       |
+| 2026-08-20 | #895 | Increment 2 completed: shared wizard surface; Local Quick Start and Atlas Credentials migrated                         | [iterations/02-wizard-shell-and-components.md](./iterations/02-wizard-shell-and-components.md)                   |
+| 2026-08-21 | #895 | Increment 3 completed: metric cards, grid and summary-cell convergence                                                 | [iterations/03-metric-card.md](./iterations/03-metric-card.md)                                                   |
+| 2026-09-10 | #895 | Increment 4 implemented in `b4aee678`; operator confirmed acceptance tests complete                                    | [iterations/04-focusable-badge-and-accessible-names.md](./iterations/04-focusable-badge-and-accessible-names.md) |
+| 2026-09-10 | #895 | Operator confirmed the package is already being published; workspace-only restriction retired                          | [Decision 0027](./decisions.md#0027--the-package-is-published-not-workspace-only)                                |
 
 ## Decisions
 
-[decisions.md](./decisions.md) — twenty entries covering scope, layering, module format, styling
+[decisions.md](./decisions.md) — twenty-seven entries covering scope, layering, module format, styling
 delivery, and public naming.
 
 The highest-signal ones, because they reverse what was originally proposed:
@@ -117,6 +125,21 @@ And the four that only implementation could have produced:
 - **0019** — adapt Fluent by re-pointing its tokens, never by out-specifying its classes
 - **0020** — opaque stencils must stay opaque; `translucent` is what consumers should use
 
+The later increments also settled that `MessageBlock` and `Announcer` stay extension-local,
+components and theming are independently adoptable, badges and metrics share an explicit
+name/description contract, and the package is already being published (0022-0027).
+
+## Acceptance and publishing
+
+On 2026-09-10 the operator confirmed that the requested increment 4 acceptance tests were complete
+and satisfactory. The review of `b4aee678` also passed `npm run build` and all 18 focused tests
+across the badge, metric-card and components-entry suites. Detailed browser evidence is in the
+increment 4 work log; no screen-reader transcript or exact operator test matrix was supplied.
+
+The package is a published preview, not workspace-only. The absence of `private: true` is
+intentional (0027). This records the operator's publishing status; it does not identify a registry
+version or claim that every local change has already been published.
+
 ## Open gaps
 
 - **Fluent internals coupling.** The overrides key off `fui-*` class names, which are Fluent
@@ -131,11 +154,12 @@ And the four that only implementation could have produced:
 - **Type-checking resolves built output, not source** (0016). The package must be built before the
   root `tsc` runs — already guaranteed by the `prebuild` fan-out, and true of the other five
   workspace packages too. Modernising resolution repo-wide is filed as future work.
-- **The two originally shortlisted components are still unbuilt.** Increment 2 took the wizard
-  surface instead. The metric card is planned in
-  [iterations/03-metric-card.md](./iterations/03-metric-card.md), which also closes increment 2's
-  `Announcer` question; the focusable badge and the accessible-name question it raises are
-  [iterations/04-focusable-badge-and-accessible-names.md](./iterations/04-focusable-badge-and-accessible-names.md).
+- **Computed-accessibility regression tests remain optional follow-up.** The badge and metric
+  suites assert ARIA relationships, with computed names and descriptions checked in the recorded
+  browser measurements. Adding `dom-accessibility-api` still needs operator approval; it was not
+  added by increment 4. Manual acceptance is complete, not blocked on this dependency.
+- **API Extractor remains deferred.** No dependency or lockfile change was made as a side effect
+  of the component extractions.
 
 ## Reading order for newcomers
 

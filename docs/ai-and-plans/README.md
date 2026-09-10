@@ -33,7 +33,7 @@ treat `status: historical` or `status: superseded` as current.
 | [atlas-discovery](./features/atlas-discovery/README.md)                   | MongoDB Atlas discovery: Admin API auth, discovery tree, credentials                          | shipped           |
 | [kubernetes-discovery](./features/kubernetes-discovery/README.md)         | Kubernetes service discovery and connect-time reachability providers                          | shipped           |
 | [webview-ext-package](./features/webview-ext-package/README.md)           | `@microsoft/vscode-ext-webview`: the extracted webview transport package                      | published preview |
-| [webview-fluentui-package](./features/webview-fluentui-package/README.md) | `@microsoft/vscode-ext-webview-fluentui`: Fluent theming and reusable components for webviews | workspace-only    |
+| [webview-fluentui-package](./features/webview-fluentui-package/README.md) | `@microsoft/vscode-ext-webview-fluentui`: Fluent theming and reusable components for webviews | published preview |
 | [connections-tree](./features/connections-tree/README.md)                 | The Connections view: node item counts, connection load performance                           | shipped           |
 | [no-auth](./features/no-auth/README.md)                                   | Credential-free connections and connection-string TLS handling                                | shipped           |
 

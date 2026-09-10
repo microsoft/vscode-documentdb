@@ -13,9 +13,12 @@ created: 2026-08-21
 > way that also affects the metric card. This increment settles the question with evidence, then
 > ships the component the answer implies. **No npm publish.**
 
-**Implemented; pending operator keyboard and assistive-technology checks. Depends on
+**Implemented in `b4aee678`; operator confirmed acceptance tests complete on 2026-09-10. Depends on
 [increment 3](./03-metric-card.md) only for its baseline capture**, not for its code. Decisions are
 settled in [decisions.md](../decisions.md); this increment adds 0026.
+
+The plan below preserves the original scope. Its no-publish restriction has since been replaced
+by decision 0027: the operator confirmed the package is already being published.
 
 ---
 
@@ -635,7 +638,7 @@ Case 1 only, per the operator's correction to the old handover ladder:
 No TDD-prefixed contract failed. No l10n, formatter, lint, full-suite, package or publish command was
 run because Case 1 explicitly excludes them. No commit, push, publish or PR-status change was made.
 
-Remaining operator checks:
+Operator acceptance checklist at implementation handover:
 
 1. In the real extension host, keyboard through the Indexes tab and Query Insights tab in light,
    dark and high-contrast themes. Confirm tooltip-bearing badges are reached in product order,
@@ -645,3 +648,18 @@ Remaining operator checks:
    truncated stage metric, one diagnostic badge, a described metric card and a summary cell. Confirm
    the name is spoken once, followed by the supplementary description once, and that the truncated
    metric says both its visible label and full value. No real screen-reader pass was performed here.
+
+## Operator acceptance and publishing update, 2026-09-10
+
+After the review of local commit `b4aee678`, the operator confirmed: "I did tests, so I'm good."
+The requested manual acceptance is therefore recorded as complete. No exact theme/reader matrix
+or screen-reader transcript was supplied; the implementing agent's browser-only evidence and its
+limits above remain unchanged.
+
+The same review independently reran `npm run build` and the three focused suites: all 18 tests
+passed, and the working tree remained clean. `dom-accessibility-api` is still an optional,
+unapproved dependency, not an outstanding manual-acceptance gate.
+
+The operator also confirmed that the package is already being published. Decision 0027 records
+that the original workspace-only restriction is superseded; no publishing action was performed
+as part of this documentation update.

@@ -158,9 +158,11 @@ applying, with no build error. The `fluentOverrides` test suite is the tripwire.
 defaulting to English. This is not merely tidier: the repo's `npm run l10n` extractor does not scan
 `node_modules`, so a package-internal string would silently never be translated in any consumer.
 
-`version` is `0.1.0-preview` and `"private": true` until the first publish — increment 1 consumes the
-package through the npm workspace only, and `private` is the one thing that makes an accidental
-`npm publish` impossible.
+The workspace manifest currently declares `version: 0.1.0-preview`. The operator confirmed on
+2026-09-10 that the package is already being published, so the absence of `private: true` is
+intentional. Decision 0027 replaces the original workspace-only restriction. Registry versions
+and the publication status of individual commits must be checked separately; public API changes
+must no longer assume there are no published consumers.
 
 ## 8. Testing
 
@@ -227,9 +229,15 @@ than declaring completion.
 
 ## 11. Increments
 
-**Increment 1** — package skeleton, theming layer, `WizardBreadcrumb`, consumed through the npm
-workspace. No publish. Planned in
+**Increment 1** — package skeleton, theming layer, `WizardBreadcrumb`, initially consumed through
+the npm workspace without publishing. Implemented in
 [iterations/01-theme-and-first-component.md](./iterations/01-theme-and-first-component.md).
+
+**Increment 2** - shared wizard components, consumed by Local Quick Start and Atlas Credentials.
+Implemented in [iterations/02-wizard-shell-and-components.md](./iterations/02-wizard-shell-and-components.md).
+
+All four increments are implemented. The operator confirmed increment 4 acceptance tests complete
+on 2026-09-10. Publishing is now established policy under decision 0027, not a deferred increment.
 
 Later increments are recorded in the iteration plans and decisions log. The two candidates first
 identified after increment 1 both shipped:

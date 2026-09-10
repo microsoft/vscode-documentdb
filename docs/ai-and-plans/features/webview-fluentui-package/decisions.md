@@ -35,6 +35,7 @@ created: 2026-08-18
 | 0024 | The metric card enters, and converges its fork                 | Accepted (modified) | Three token and geometry mappings corrected by measurement      | 2026-08-21 | #895 |
 | 0025 | `Announcer` is out of scope for this package                   | Accepted            | Accepted as proposed                                            | 2026-08-21 | #895 |
 | 0026 | The focusable badge ships with one naming contract             | Accepted (modified) | Focusability separated from naming after browser measurement    | 2026-09-10 | #895 |
+| 0027 | The package is published, not workspace-only                   | Accepted            | Replaces the earlier no-publish restriction; operator-confirmed | 2026-09-10 | #895 |
 
 > Entries below are **semantically** immutable: append new entries rather than
 > rewriting old ones, and record reversals as a new entry plus a status change
@@ -1179,3 +1180,27 @@ the emitted contract; Chrome remains the oracle for computed names and descripti
 increment's recorded before/after evidence.
 
 ---
+
+## 0027 — The package is published, not workspace-only
+
+**Status:** Accepted · **Date:** 2026-09-10 · **PR:** #895
+
+### Decision
+
+The operator confirmed that `@microsoft/vscode-ext-webview-fluentui` is already being published.
+The earlier workspace-only and no-publish restrictions are no longer current policy. The absence
+of `private: true` in the package manifest is intentional; do not restore it as an accidental-publish
+safeguard. Preview status remains unchanged.
+
+### What this replaces
+
+The original design and increments 1-4 described a private, workspace-only package and treated
+publication as out of scope. Those statements remain historical context in the iteration plans,
+not current release policy. Published consumers must be considered when changing the public API;
+the old assumption that nothing has been published cannot justify an API removal.
+
+### Evidence and limits
+
+This decision records the operator's confirmation, not a registry audit. It does not establish
+which versions or commits have been published. No publish, version bump or release workflow change
+was performed when recording it.
