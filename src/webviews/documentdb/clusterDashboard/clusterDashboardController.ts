@@ -41,6 +41,20 @@ export type ClusterDashboardAzureInfo = {
     diskSize?: number;
     /** Whether in-region high availability (standby replicas per shard) is enabled. */
     enableHa?: boolean;
+    /** Resource group the cluster lives in. */
+    resourceGroup?: string;
+    /** Subscription id, parsed out of the ARM resource id. */
+    subscriptionId?: string;
+    /** Cluster name segment of the ARM resource id, which can differ from the tree label. */
+    resourceName?: string;
+    /** Server version ARM reports, which is available before the cluster is reachable. */
+    serverVersion?: string;
+    /** `properties.replica.role` — `Primary`, or a replica role on a read-only copy. */
+    replicaRole?: string;
+    /** Comma-separated enabled capabilities, populated for RU accounts. */
+    capabilities?: string;
+    /** Creation timestamp as ISO-8601; a `Date` does not survive the webview boundary. */
+    createdAt?: string;
 };
 
 export type ClusterDashboardWebviewConfigurationType = {

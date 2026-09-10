@@ -23,6 +23,12 @@ best-effort sums of reported values. The operator declined additional completene
 row warning icons for this iteration; see [decision 0021](./decisions.md#0021--unavailable-table-values-are-enough-for-best-effort-summaries).
 The earlier proposal below is historical context, not a requirement to restore removed surfaces.
 
+**Settled header (2026-09-10):** The header uses one wrapping layout, not selectable variants.
+Connection state and fixed-width RTT precede the responsive facts. Host addresses and extended
+server/resource facts sit in the animated details disclosure, which also offers raw diagnostics.
+See [the current architecture](./README.md#architecture-intent--code-is-authoritative-for-behavior).
+The layout lab and alternate-header toggle are not part of the feature.
+
 ---
 
 ## 1. Research summary — what we learned before designing

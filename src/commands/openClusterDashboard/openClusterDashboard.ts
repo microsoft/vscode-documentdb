@@ -26,6 +26,18 @@ import {
 /** Refresh cadence of the dashboard's live tiles. Not user-configurable yet (preview). */
 const DASHBOARD_REFRESH_INTERVAL_MS = 5000;
 
+/** Pulls the subscription and cluster name segments out of an ARM resource id. */
+function parseResourceId(resourceId: string | undefined): { subscriptionId?: string; resourceName?: string } {
+    if (resourceId === undefined) {
+        return {};
+    }
+
+    const subscriptionId = /\/subscriptions\/([^/]+)/i.exec(resourceId)?.[1];
+    const resourceName = /\/([^/]+)$/.exec(resourceId)?.[1];
+
+    return { subscriptionId, resourceName };
+}
+
 /**
  * Reads the Azure resource facts off a cluster node, when it has any.
  *
@@ -37,6 +49,11 @@ const DASHBOARD_REFRESH_INTERVAL_MS = 5000;
  */
 function extractAzureInfo(cluster: TreeCluster): ClusterDashboardAzureInfo | undefined {
     const azureProps = cluster as unknown as Partial<AzureClusterModel>;
+    const { subscriptionId, resourceName } = parseResourceId(azureProps.azureResourceId);
+
+    // `systemData.createdAt` is typed as a Date but arrives as a string once a model has been
+    // round-tripped through storage, so both shapes have to be accepted.
+    const createdAt = azureProps.systemData?.createdAt;
 
     const info: ClusterDashboardAzureInfo = {
         location: azureProps.location,
@@ -44,6 +61,14 @@ function extractAzureInfo(cluster: TreeCluster): ClusterDashboardAzureInfo | und
         nodeCount: azureProps.nodeCount,
         diskSize: azureProps.diskSize,
         enableHa: azureProps.enableHa,
+        resourceGroup: azureProps.resourceGroup,
+        subscriptionId,
+        resourceName,
+        serverVersion: azureProps.serverVersion,
+        replicaRole: azureProps.replicaRole,
+        capabilities: azureProps.capabilities,
+        createdAt:
+            createdAt instanceof Date ? createdAt.toISOString() : typeof createdAt === 'string' ? createdAt : undefined,
     };
 
     return Object.values(info).some((value) => value !== undefined) ? info : undefined;

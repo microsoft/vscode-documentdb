@@ -85,14 +85,25 @@ $content-gutter: var(--spacingHorizontalMNudge); // 10px
         // bar; without this the dashboard's buttons sat 4px under the rule and read as
         // attached to it.
         margin-bottom: var(--spacingVerticalS); // 8px
+
+        container-type: inline-size;
+        container-name: dashboardBand;
     }
 
     // ---- Identity row ------------------------------------------------------
 
+    // Two flex items — identity (icon and name), then the status block — on a wrapping line.
+    //
+    // This is the whole responsive mechanism. When both fit, the header is one row. When they do
+    // not, the status block takes a row of its own and the header becomes the two-row layout. It
+    // is content-driven: `flex-wrap` breaks when the content actually does not fit, where a
+    // container query would have to guess a width — and the content here varies by hundreds of
+    // pixels between a short cluster name with no Azure facts and a long one with four.
     .dashboardHeader {
         display: flex;
+        flex-wrap: wrap;
         align-items: center;
-        gap: 12px;
+        gap: var(--spacingVerticalXS) 12px;
         min-width: 0;
         flex-shrink: 0;
         padding-inline: $content-gutter;
@@ -111,8 +122,24 @@ $content-gutter: var(--spacingHorizontalMNudge); // 10px
         font-size: 20px;
     }
 
-    // The only element allowed to consume the leftover width, so a long cluster name
-    // ellipsizes instead of pushing the badges off the panel.
+    // The icon belongs to the cluster identity, so it must not separate from the name when the
+    // status block moves to its own row.
+    .dashboardHeaderIdentityGroup {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        min-width: 0;
+        flex: 1000 1 auto;
+    }
+
+    // Absorbs the free space on the first row, which is what right-aligns the status block while
+    // the two share a row. A very large grow factor rather than a spacer element: free space is
+    // split by grow ratio, so the identity group leaves the status block its content width and
+    // hands the rest to the cluster name. The status block still grows to fill a row of its own
+    // once it wraps, because there it is the only item on the line.
+    //
+    // The flex *basis* stays `auto`, so this element contributes only the name's width when the
+    // browser decides where to break — growing is a distribution rule, not a size claim.
     .dashboardHeaderText {
         display: flex;
         align-items: center;
@@ -142,55 +169,32 @@ $content-gutter: var(--spacingHorizontalMNudge); // 10px
         text-overflow: ellipsis;
     }
 
-    .dashboardHeaderAddress {
-        max-width: 100%;
-        min-width: 0;
-        font-family: var(--fontFamilyMonospace);
-        font-size: var(--fontSizeBase200);
-        line-height: var(--lineHeightBase200);
-        color: var(--colorNeutralForeground3);
-        white-space: nowrap;
-        overflow: hidden;
-        text-overflow: ellipsis;
-    }
-
-    .dashboardHeaderFact {
-        gap: var(--spacingHorizontalXXS);
-        max-width: 100%;
-        overflow: hidden;
-        font-weight: var(--fontWeightRegular);
-    }
-
-    .dashboardHeaderFactLabel {
-        color: var(--colorNeutralForeground3);
-    }
-
-    .dashboardHeaderFactValue {
-        color: var(--colorNeutralForeground1);
-        font-weight: var(--fontWeightSemibold);
-        overflow: hidden;
-        text-overflow: ellipsis;
-    }
-
-    .dashboardHeaderBadges {
+    // Grows to the panel's right edge so the disclosure lands there in both states. Its own
+    // children never wrap: the fact list sheds pairs instead (see the container queries below).
+    .dashboardHeaderStatus {
         display: flex;
         align-items: center;
+        flex: 1 1 auto;
+        flex-wrap: nowrap;
         min-width: 0;
-        flex: 0 1 auto;
-        flex-wrap: wrap;
-        justify-content: flex-end;
-        gap: var(--spacingVerticalXS) 8px;
+        gap: 8px;
     }
 
-    @media (max-width: 560px) {
-        .dashboardHeaderIcon {
-            display: none;
-        }
+    // Pinned right whichever row it lands on — the one thing that stays put across the switch.
+    .dashboardHeaderStatus .dashboardDisclosure {
+        margin-inline-start: auto;
+    }
+
+    // Connection state is the primary status in every header layout. It must keep its intrinsic
+    // width while lower-priority facts are hidden by the container queries below.
+    .dashboardConnectionStatus {
+        flex: 0 0 auto;
+        white-space: nowrap;
     }
 
     @media (max-width: 400px) {
         .dashboardHeader,
-        .dashboardHeaderBadges {
+        .dashboardHeaderStatus {
             gap: var(--spacingHorizontalXS);
         }
     }
@@ -221,6 +225,191 @@ $content-gutter: var(--spacingHorizontalMNudge); // 10px
     .dashboardHeaderLatencyIcon {
         flex: 0 0 auto;
         font-size: 14px;
+    }
+
+    .dashboardFactList {
+        display: flex;
+        align-items: center;
+        gap: var(--spacingHorizontalSNudge);
+        min-width: 0;
+        overflow: hidden;
+    }
+
+    .dashboardFact {
+        display: inline-flex;
+        align-items: baseline;
+        gap: var(--spacingHorizontalXXS);
+        min-width: 0;
+        font-size: var(--fontSizeBase200);
+        line-height: var(--lineHeightBase300);
+        white-space: nowrap;
+    }
+
+    .dashboardFactLabel {
+        color: var(--colorNeutralForeground3);
+    }
+
+    .dashboardFactValue {
+        color: var(--colorNeutralForeground1);
+        font-weight: var(--fontWeightSemibold);
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+
+    .dashboardFactSeparator {
+        color: var(--colorNeutralStroke1);
+        user-select: none;
+    }
+
+    .dashboardDisclosure {
+        white-space: nowrap;
+        font-size: var(--fontSizeBase200);
+        font-weight: var(--fontWeightSemibold);
+    }
+
+    // Both labels occupy the same grid cell, so the button is as wide as the longer of the two and
+    // does not resize on toggle. `visibility` rather than `display`, so the inactive one still
+    // contributes its width.
+    .dashboardDisclosureLabel {
+        display: grid;
+        justify-items: start;
+
+        > * {
+            grid-area: 1 / 1;
+        }
+
+        > [data-inactive='true'] {
+            visibility: hidden;
+        }
+    }
+
+    // Pairs are shed from the right in a fixed order: Uptime, then Compute, then Region.
+    //
+    // Ordering matters here, and it is subtle. The width at which the strip stops fitting inline
+    // *depends on how many pairs it carries*, so a shed step can hand back exactly enough room for
+    // the strip to jump back onto the first row — dragging a panel narrower then went two rows,
+    // one row, two rows again, once per threshold. Each threshold therefore sits below the width
+    // at which the reduced set would fit inline again, which means shedding only ever happens once
+    // the strip already has a row of its own. All four pairs survive until that row runs out.
+    @container dashboardBand (max-width: 700px) {
+        .dashboardFactList > *:nth-child(n + 6) {
+            display: none;
+        }
+    }
+
+    @container dashboardBand (max-width: 560px) {
+        .dashboardFactList > *:nth-child(n + 4) {
+            display: none;
+        }
+    }
+
+    @container dashboardBand (max-width: 440px) {
+        .dashboardFactList > *:nth-child(n + 2) {
+            display: none;
+        }
+    }
+
+    // Freed while the strip is already wrapped, so it cannot un-wrap the header.
+    @container dashboardBand (max-width: 400px) {
+        .dashboardHeaderIcon {
+            display: none;
+        }
+    }
+
+    // Narrower than any real editor group. The remaining pair would clip rather than ellipsise,
+    // and the connection state is the only thing at this width worth the room. The separator that
+    // divides state from facts goes with them, or it is left dividing nothing.
+    @container dashboardBand (max-width: 300px) {
+        .dashboardFactList,
+        .dashboardHeaderStatus > .dashboardFactSeparator {
+            display: none;
+        }
+    }
+
+    // ---- Disclosed details -------------------------------------------------
+    //
+    // Fluent's `Collapse` animates `maxHeight` from 0 to this region's `scrollHeight`, which does
+    // not include a child's margins. The vertical spacing therefore has to live here as padding —
+    // a margin on the panel would sit outside the clip and jump when the motion ends.
+
+    .dashboardDetailsRegion {
+        padding-block: var(--spacingVerticalXS);
+    }
+
+    .dashboardDetailsPanel {
+        display: flex;
+        flex-direction: column;
+        gap: var(--spacingVerticalM);
+        margin-inline: $content-gutter;
+    }
+
+    .dashboardDetailsGroups {
+        display: grid;
+        // `1fr`, not a capped track. `auto-fit` decides how many columns fit from the track's *max*
+        // when that max is definite, so a `460px` cap made the browser reserve 460 per column and
+        // drop to one column while half the panel sat empty. With `1fr` the count comes from the
+        // 320px minimum and the columns then share whatever is actually there.
+        grid-template-columns: repeat(auto-fit, minmax(min(100%, 320px), 1fr));
+        column-gap: 48px;
+        row-gap: var(--spacingVerticalM);
+    }
+
+    .dashboardDetailsFooter {
+        display: flex;
+        justify-content: flex-start;
+        padding-top: var(--spacingVerticalXS);
+        border-top: var(--strokeWidthThin) solid var(--colorNeutralStroke2);
+    }
+
+    .dashboardDetailsGroup {
+        min-width: 0;
+    }
+
+    .dashboardDetailsGroupTitle {
+        margin: 0 0 var(--spacingVerticalXS);
+        font-size: var(--fontSizeBase200);
+        font-weight: var(--fontWeightSemibold);
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+        color: var(--colorNeutralForeground3);
+    }
+
+    .dashboardDetailsGrid {
+        display: grid;
+        // The label column sizes to its own widest label rather than to a share of the track, so
+        // the two columns stay next to each other instead of drifting apart in a wide panel.
+        grid-template-columns: auto minmax(0, 1fr);
+        column-gap: var(--spacingHorizontalXXL);
+        row-gap: var(--spacingVerticalXXS);
+        margin: 0;
+        font-size: var(--fontSizeBase200);
+    }
+
+    .dashboardDetailLabel {
+        color: var(--colorNeutralForeground3);
+        min-width: 0;
+    }
+
+    .dashboardDetailValue {
+        display: flex;
+        align-items: center;
+        gap: var(--spacingHorizontalXXS);
+        margin: 0;
+        min-width: 0;
+    }
+
+    .dashboardDetailText {
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+
+    .dashboardDetailCopy {
+        flex: 0 0 auto;
+        min-width: 20px;
+        height: 20px;
+        padding: 0;
     }
 
     // ---- Cluster action bar ------------------------------------------------
@@ -287,7 +476,10 @@ $content-gutter: var(--spacingHorizontalMNudge); // 10px
 
     .dashboardPreferences {
         display: flex;
+        align-items: center;
         justify-content: center;
+        flex-wrap: wrap;
+        gap: var(--spacingHorizontalL);
         flex-shrink: 0;
         margin-top: auto;
         padding: var(--spacingVerticalS) $content-gutter var(--spacingVerticalXS);

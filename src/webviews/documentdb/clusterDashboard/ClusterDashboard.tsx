@@ -586,6 +586,8 @@ export const ClusterDashboard = (): JSX.Element => {
                     latestSample={latestSample}
                     connectionState={connectionState}
                     azure={configuration.azure}
+                    onShowRawDiagnostics={() => void exportDiagnostics()}
+                    isExportingDiagnostics={isExporting}
                 />
             </div>
 

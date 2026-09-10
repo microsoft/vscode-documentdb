@@ -46,6 +46,12 @@ None yet. A user-manual page is due before this ships.
 - **The page is a place, not a feed.** The storage inventory refreshes when the dashboard opens
   and on demand; lightweight health polling pauses while the panel is hidden. There is no
   Operations tab and no observed-operation history.
+- **One responsive header replaces the layout experiments.** The cluster identity and trailing
+  status block share a row when they fit; the status block wraps as a unit otherwise. Connection
+  state and a stable-width RTT slot lead the facts. Lower-priority facts disappear as space
+  contracts. Host addresses live in the disclosed Server details, alongside an optional Azure
+  resource group of facts and the raw diagnostics action. The disclosure retains both label
+  widths, and its mounted Fluent `Collapse` handles opening and closing without a layout toggle.
 - **The cluster toolbar groups connection tools separately from page utilities.** Open Shell and
   Copy Connection String sit together on the left; Refresh, More actions and feedback sit on the
   right. Fluent overflow moves Copy, then Shell, into More actions as space contracts. Refresh
