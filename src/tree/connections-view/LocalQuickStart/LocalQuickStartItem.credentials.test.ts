@@ -27,12 +27,22 @@ jest.mock('@microsoft/vscode-azext-utils', () => ({
 }));
 
 jest.mock('../../../extensionVariables', () => ({
-    ext: { outputChannel: { appendLine: jest.fn(), debug: jest.fn() } },
+    ext: {
+        outputChannel: { appendLine: jest.fn(), debug: jest.fn() },
+        settingsKeys: { showDashboardOnConnect: 'documentDB.userInterface.showDashboardOnConnect' },
+    },
+}));
+
+jest.mock('../../../services/SettingsService', () => ({
+    SettingsService: { getSetting: jest.fn().mockReturnValue(false) },
 }));
 
 const mockGetClient = jest.fn();
 jest.mock('../../../documentdb/ClustersClient', () => ({
-    ClustersClient: { getClient: (...args: unknown[]) => mockGetClient(...args) },
+    ClustersClient: {
+        exists: jest.fn().mockReturnValue(false),
+        getClient: (...args: unknown[]) => mockGetClient(...args),
+    },
 }));
 
 jest.mock('../../documentdb/DatabaseItem', () => ({

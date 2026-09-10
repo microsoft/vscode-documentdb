@@ -70,7 +70,8 @@ None yet. A user-manual page is due before this ships.
   ([0005](./decisions.md#0005--panel-de-duplication-keyed-on-clusterid-never-treeid-reconstructed)).
 - **Showing on connection is the default.** The dashboard footer mirrors the
   `documentDB.userInterface.showDashboardOnConnect` setting. Successfully connecting by expanding
-  a cluster in a tree shows the dashboard unless the user opts out; direct command-based
+  a cluster in a tree shows the dashboard unless the user opts out. Refreshes that reuse a cached
+  client do not reopen or reveal it; removing the client allows the next tree connection to open it again. Direct command-based
   connections are unchanged ([0020](./decisions.md#0020--show-the-dashboard-on-tree-connect-by-default)).
 
 ## Timeline

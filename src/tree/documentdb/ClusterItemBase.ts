@@ -250,6 +250,7 @@ export abstract class ClusterItemBase<T extends BaseClusterModel = BaseClusterMo
     async getChildren(): Promise<TreeElement[]> {
         ext.outputChannel.appendLine(l10n.t('Loading cluster details for "{cluster}"', { cluster: this.cluster.name }));
 
+        const wasConnected = ClustersClient.exists(this.cluster.clusterId);
         let clustersClient: ClustersClient | null;
 
         // Check if credentials are cached, and return the cached client if available
@@ -380,7 +381,7 @@ export abstract class ClusterItemBase<T extends BaseClusterModel = BaseClusterMo
             return this.createErrorRecoveryChildren(true);
         }
 
-        if (SettingsService.getSetting<boolean>(ext.settingsKeys.showDashboardOnConnect) ?? true) {
+        if (!wasConnected && (SettingsService.getSetting<boolean>(ext.settingsKeys.showDashboardOnConnect) ?? true)) {
             await vscode.commands.executeCommand('vscode-documentdb.command.clusterDashboard.open', this, null, {
                 activationSource: 'autoOpenOnConnect',
             });

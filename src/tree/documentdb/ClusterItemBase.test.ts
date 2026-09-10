@@ -60,7 +60,7 @@ jest.mock('../../documentdb/CredentialCache', () => ({
 }));
 
 jest.mock('../../documentdb/ClustersClient', () => ({
-    ClustersClient: { getClient: jest.fn() },
+    ClustersClient: { getClient: jest.fn(), exists: jest.fn().mockReturnValue(false) },
 }));
 
 jest.mock('../../extensionVariables', () => ({
@@ -130,6 +130,8 @@ describe('ClusterItemBase.getChildren — listDatabases failure handling', () =>
         mockTelemetryEvents.length = 0;
         mockHasCredentials.mockReturnValue(false);
         mockGetSetting.mockReturnValue(false);
+        const { ClustersClient: ClustersClientMock } = jest.requireMock('../../documentdb/ClustersClient');
+        ClustersClientMock.exists.mockReturnValue(false);
     });
 
     it('returns a retry node (and records telemetry) when listDatabases is rejected', async () => {
@@ -230,6 +232,39 @@ describe('ClusterItemBase.getChildren — listDatabases failure handling', () =>
             null,
             { activationSource: 'autoOpenOnConnect' },
         );
+    });
+
+    it('does not reopen the dashboard on refresh or when the tree node is recreated', async () => {
+        mockGetSetting.mockReturnValue(true);
+        const { ClustersClient: ClustersClientMock } = jest.requireMock('../../documentdb/ClustersClient');
+        const client = makeClient(jest.fn().mockResolvedValue([{ name: 'database' }]));
+        ClustersClientMock.getClient.mockResolvedValue(client);
+        const item = new TestClusterItem(makeCluster(), client);
+
+        await item.getChildren();
+        mockHasCredentials.mockReturnValue(true);
+        ClustersClientMock.exists.mockReturnValue(true);
+        await item.getChildren();
+        await new TestClusterItem(makeCluster(), client).getChildren();
+
+        expect(vscode.commands.executeCommand).toHaveBeenCalledTimes(1);
+        expect(ClustersClientMock.exists).toHaveBeenCalledWith('cluster-1');
+    });
+
+    it('opens the dashboard again after the cached client is removed', async () => {
+        mockGetSetting.mockReturnValue(true);
+        mockHasCredentials.mockReturnValue(true);
+        const { ClustersClient: ClustersClientMock } = jest.requireMock('../../documentdb/ClustersClient');
+        const client = makeClient(jest.fn().mockResolvedValue([{ name: 'database' }]));
+        ClustersClientMock.getClient.mockResolvedValue(client);
+        ClustersClientMock.exists.mockReturnValueOnce(true).mockReturnValueOnce(false);
+        const item = new TestClusterItem(makeCluster(), client);
+
+        await item.getChildren();
+        expect(vscode.commands.executeCommand).not.toHaveBeenCalled();
+        await item.getChildren();
+
+        expect(vscode.commands.executeCommand).toHaveBeenCalledTimes(1);
     });
 
     it('does not open the dashboard when connecting through tree expansion is disabled', async () => {
