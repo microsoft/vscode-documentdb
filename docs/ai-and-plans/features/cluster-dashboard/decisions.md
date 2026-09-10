@@ -10,24 +10,25 @@ created: 2026-08-24
 
 > The decisions that shaped the Cluster Dashboard, and what was rejected on the way.
 
-| #    | Decision                                                    | Status              | Changed from the proposal?                             | Date       | PR   |
-| ---- | ----------------------------------------------------------- | ------------------- | ------------------------------------------------------ | ---------- | ---- |
-| 0001 | Poll from the webview, not tRPC subscriptions               | Accepted            | Accepted as proposed, scoped down for the POC          | 2026-07-27 | #823 |
-| 0002 | Per-command try/catch, no capability probe                  | Accepted            | Accepted as proposed                                   | 2026-07-27 | #823 |
-| 0003 | Confirmation on the host; kill reports the request          | Superseded by 0019  | Outcome vocabulary added after live testing            | 2026-07-28 | #823 |
-| 0004 | Custom SVG sparkline instead of a charting dependency       | Accepted            | Accepted as proposed                                   | 2026-07-27 | #823 |
-| 0005 | Panel de-duplication keyed on `clusterId`, never `treeId`   | Accepted            | Accepted as proposed                                   | 2026-07-27 | #823 |
-| 0006 | The page is a data inventory, not a performance dashboard   | Accepted            | **Reverses the genre-A model in `design.md` §1.1**     | 2026-07-28 | #823 |
-| 0007 | Nothing above the fold moves                                | Accepted            | Raised from a review note to a standing rule           | 2026-07-28 | #823 |
-| 0008 | A tab exists only when the server can answer it             | Accepted            | Emerged from live vCore testing, not the plan          | 2026-07-28 | #823 |
-| 0009 | Converge with PR #753 on a shared `feature/` branch         | Proposed            | Needs sign-off from #753's author and a maintainer     | 2026-08-24 | #823 |
-| 0014 | Step into a database, do not expand it                      | Accepted (modified) | Its back-button-only exit was reversed by 0018         | 2026-09-02 | #823 |
-| 0015 | Storage refresh is explicit after initial load              | Accepted            | Removes a timer left behind by the data-first redesign | 2026-09-07 | #823 |
-| 0016 | Row context-menu entries run on the host                    | Accepted            | Removes a host → webview → host relay                  | 2026-09-07 | #823 |
-| 0017 | Diagnostics carry raw replies, not a second reading of them | Accepted            | Retires the topology summary with its card             | 2026-09-07 | #823 |
-| 0018 | The level band is a breadcrumb; Back stays in the footer    | Accepted            | Reverses 0014's rejection of the breadcrumb            | 2026-09-07 | #823 |
-| 0019 | `currentOp` is out of scope for this iteration              | Accepted            | Supersedes 0003 and 0010; makes 0012 moot              | 2026-09-08 | #823 |
-| 0020 | Show the dashboard on tree connect by default               | Accepted            | New entry point, with a persistent opt-out             | 2026-09-09 | #823 |
+| #    | Decision                                                      | Status              | Changed from the proposal?                                                 | Date       | PR   |
+| ---- | ------------------------------------------------------------- | ------------------- | -------------------------------------------------------------------------- | ---------- | ---- |
+| 0001 | Poll from the webview, not tRPC subscriptions                 | Accepted            | Accepted as proposed, scoped down for the POC                              | 2026-07-27 | #823 |
+| 0002 | Per-command try/catch, no capability probe                    | Accepted            | Accepted as proposed                                                       | 2026-07-27 | #823 |
+| 0003 | Confirmation on the host; kill reports the request            | Superseded by 0019  | Outcome vocabulary added after live testing                                | 2026-07-28 | #823 |
+| 0004 | Custom SVG sparkline instead of a charting dependency         | Accepted            | Accepted as proposed                                                       | 2026-07-27 | #823 |
+| 0005 | Panel de-duplication keyed on `clusterId`, never `treeId`     | Accepted            | Accepted as proposed                                                       | 2026-07-27 | #823 |
+| 0006 | The page is a data inventory, not a performance dashboard     | Accepted            | **Reverses the genre-A model in `design.md` §1.1**                         | 2026-07-28 | #823 |
+| 0007 | Nothing above the fold moves                                  | Accepted            | Raised from a review note to a standing rule                               | 2026-07-28 | #823 |
+| 0008 | A tab exists only when the server can answer it               | Accepted            | Emerged from live vCore testing, not the plan                              | 2026-07-28 | #823 |
+| 0009 | Converge with PR #753 on a shared `feature/` branch           | Proposed            | Needs sign-off from #753's author and a maintainer                         | 2026-08-24 | #823 |
+| 0014 | Step into a database, do not expand it                        | Accepted (modified) | Its back-button-only exit was reversed by 0018                             | 2026-09-02 | #823 |
+| 0015 | Storage refresh is explicit after initial load                | Accepted            | Removes a timer left behind by the data-first redesign                     | 2026-09-07 | #823 |
+| 0016 | Row context-menu entries run on the host                      | Accepted            | Removes a host → webview → host relay                                      | 2026-09-07 | #823 |
+| 0017 | Diagnostics carry raw replies, not a second reading of them   | Accepted            | Retires the topology summary with its card                                 | 2026-09-07 | #823 |
+| 0018 | The level band is a breadcrumb; Back stays in the footer      | Accepted            | Reverses 0014's rejection of the breadcrumb                                | 2026-09-07 | #823 |
+| 0019 | `currentOp` is out of scope for this iteration                | Accepted            | Supersedes 0003 and 0010; makes 0012 moot                                  | 2026-09-08 | #823 |
+| 0020 | Show the dashboard on tree connect by default                 | Accepted            | New entry point, with a persistent opt-out                                 | 2026-09-09 | #823 |
+| 0021 | Unavailable table values are enough for best-effort summaries | Accepted            | Replaces proposed completeness badges and row warning icons with N/A cells | 2026-09-10 | #823 |
 
 > Entries below are **semantically** immutable: append new entries rather than
 > rewriting old ones, and record reversals as a new entry plus a status change
@@ -836,3 +837,26 @@ opening a shell or explicitly opening the dashboard, must not cause a second uns
 - The contributed setting and defensive code fallbacks are `true`.
 - An explicit `false` remains authoritative and suppresses the dashboard.
 - Failed or cancelled connections, including a failed database listing, do not show the dashboard.
+
+---
+
+## 0021 -- Unavailable table values are enough for best-effort summaries
+
+**Status:** Accepted · **Date:** 2026-09-10 · **Raised by:** Operator
+
+### Decision
+
+Render unavailable database and collection table statistics as localized `N/A` instead of dashes.
+Keep the existing list-level warnings and summary calculations. Do not add per-row warning icons
+or per-metric completeness badges for this iteration.
+
+### Reasoning
+
+The review demonstrated that when five databases are listed but two refuse `dbStats`, all five
+rows remain, unavailable cells are placeholders, and the summary counts sum only the three
+reported values. Disk sizes may still be available independently from `listDatabases`.
+
+The proposed follow-up added warning icons and explicit partial-result labels to the affected
+summaries. The operator instead accepted the available-value sums as good enough for this
+inventory: the table's unavailable values and existing warning provide sufficient context.
+This is an accepted limitation, not a claim that those sums cover every database.

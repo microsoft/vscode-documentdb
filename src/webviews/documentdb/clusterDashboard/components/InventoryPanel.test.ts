@@ -255,37 +255,40 @@ describe('InventoryPanel empty states', () => {
         expect(markup).not.toContain('New Database');
     });
 
-    it.each([false, true])('offers retry for a collector failure when storage also failed: %s', async (storageFailed) => {
-        const client = {
-            db: () => ({
-                listCollections: () => ({
-                    toArray: async () => {
-                        throw new Error('not authorized');
-                    },
+    it.each([false, true])(
+        'offers retry for a collector failure when storage also failed: %s',
+        async (storageFailed) => {
+            const client = {
+                db: () => ({
+                    listCollections: () => ({
+                        toArray: async () => {
+                            throw new Error('not authorized');
+                        },
+                    }),
                 }),
-            }),
-        } as unknown as MongoClient;
-        const result = await getDatabaseCollections(client, 'catalog');
-        const markup = renderInventory({
-            storageStats: storageFailed ? null : EMPTY_STORAGE,
-            storageError: storageFailed ? 'storage unavailable' : null,
-            viewState: databaseViewState('catalog'),
-            collections: {
-                result,
-                isLoading: false,
-                isTableLoading: false,
-                error: null,
-                reload: jest.fn(),
-            },
-        });
+            } as unknown as MongoClient;
+            const result = await getDatabaseCollections(client, 'catalog');
+            const markup = renderInventory({
+                storageStats: storageFailed ? null : EMPTY_STORAGE,
+                storageError: storageFailed ? 'storage unavailable' : null,
+                viewState: databaseViewState('catalog'),
+                collections: {
+                    result,
+                    isLoading: false,
+                    isTableLoading: false,
+                    error: null,
+                    reload: jest.fn(),
+                },
+            });
 
-        expect(markup).toContain('Could not read collections');
-        expect(markup).toContain('Retry');
-        expect(markup.split('listCollections: not authorized')).toHaveLength(2);
-        expect(markup).not.toContain('No collections in');
-        expect(markup).not.toContain('New Collection');
-        expect(markup).not.toContain('Some collection statistics could not be read');
-    });
+            expect(markup).toContain('Could not read collections');
+            expect(markup).toContain('Retry');
+            expect(markup.split('listCollections: not authorized')).toHaveLength(2);
+            expect(markup).not.toContain('No collections in');
+            expect(markup).not.toContain('New Collection');
+            expect(markup).not.toContain('Some collection statistics could not be read');
+        },
+    );
 
     it('preserves collection rows and the statistics warning after a partial stats failure', async () => {
         const client = {
@@ -311,6 +314,7 @@ describe('InventoryPanel empty states', () => {
         expect(markup).toContain('orders');
         expect(markup).toContain('Showing 1 of 1 collections');
         expect(markup).toContain('Some collection statistics could not be read');
+        expect(markup.match(/>N\/A</g)).toHaveLength(5);
         expect(markup).not.toContain('Could not read collections');
         expect(markup).not.toContain('No collections in');
     });

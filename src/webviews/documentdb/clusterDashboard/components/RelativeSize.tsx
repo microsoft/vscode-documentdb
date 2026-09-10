@@ -3,6 +3,7 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+import * as l10n from '@vscode/l10n';
 import { type JSX } from 'react';
 
 import { formatBytes } from '../formatUtils';
@@ -42,7 +43,7 @@ export const RelativeSize = ({ value, maximum }: RelativeSizeProps): JSX.Element
 
     return (
         <div className="relativeSizeCell">
-            <span className="relativeSizeText">{formatBytes(value)}</span>
+            <span className="relativeSizeText">{formatBytes(value, l10n.t('N/A'))}</span>
             {barWidth !== undefined && (
                 <span className="relativeSizeTrack" aria-hidden="true">
                     <span className="relativeSizeBar" style={{ width: barWidth }} />

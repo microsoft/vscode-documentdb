@@ -399,14 +399,14 @@ export const NamespaceTable = ({
                                     )}
                                 </TableCell>
                                 <TableCell>
-                                    <span className="numberCell">{formatBytes(row.dataSizeBytes)}</span>
+                                    <span className="numberCell">{formatBytes(row.dataSizeBytes, l10n.t('N/A'))}</span>
                                 </TableCell>
                                 <TableCell>
                                     <RelativeSize value={row.indexSizeBytes} maximum={largestIndexBytes} />
                                 </TableCell>
                                 <TableCell>
                                     <span className="numberCell">
-                                        {row.childCount === null ? '—' : formatCount(row.childCount)}
+                                        {row.childCount === null ? l10n.t('N/A') : formatCount(row.childCount)}
                                     </span>
                                 </TableCell>
                                 <TableCell>
@@ -418,7 +418,7 @@ export const NamespaceTable = ({
                                      * number is.
                                      */}
                                     <span className="numberCell" title={formatExactCount(row.documents)}>
-                                        {formatApproximateCount(row.documents)}
+                                        {formatApproximateCount(row.documents, l10n.t('N/A'))}
                                     </span>
                                 </TableCell>
                             </TableRow>

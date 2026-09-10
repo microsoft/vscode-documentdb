@@ -17,6 +17,12 @@ indicators for at-a-glance operational insight, opened from a cluster node in an
 
 Status: **design proposal** (no implementation yet).
 
+**Current inventory constraint (2026-09-10):** The implemented inventory uses `N/A` for unavailable
+table statistics and retains list-level failure warnings. Summary sums intentionally remain
+best-effort sums of reported values. The operator declined additional completeness badges and
+row warning icons for this iteration; see [decision 0021](./decisions.md#0021--unavailable-table-values-are-enough-for-best-effort-summaries).
+The earlier proposal below is historical context, not a requirement to restore removed surfaces.
+
 ---
 
 ## 1. Research summary — what we learned before designing

@@ -58,6 +58,10 @@ None yet. A user-manual page is due before this ships.
   and records the reason; the page never shows a broken panel. There is no capability probe,
   because a probe is a cache with an invalidation problem
   ([0002](./decisions.md#0002--per-command-trycatch-no-capability-probe-reconstructed)).
+- **Unavailable table statistics read `N/A`.** Rows remain listed when their statistics fail,
+  with the existing list-level warning. Summary sums remain best-effort sums of available values;
+  per-metric completeness badges and row warning icons are not required for this iteration
+  ([0021](./decisions.md#0021--unavailable-table-values-are-enough-for-best-effort-summaries)).
 - **Diagnostics are point-in-time and unmodified.** Export re-reads everything on the host and
   reports each command beside exactly what the server answered, or why it did not
   ([0017](./decisions.md#0017--diagnostics-carry-raw-replies-not-a-second-reading-of-them)). It
