@@ -5,42 +5,44 @@ status: active
 created: 2026-08-18
 ---
 
-# `@microsoft/vscode-ext-webview-fluentui` — Decisions
+# `@microsoft/vscode-ext-webview-fluentui` - Decisions
 
 > What was decided while designing the UI package extraction, and what was rejected on the way.
 
 | #    | Decision                                                       | Status              | Changed from the proposal?                                      | Date       | PR   |
 | ---- | -------------------------------------------------------------- | ------------------- | --------------------------------------------------------------- | ---------- | ---- | --- | ---- | ------------------------------------------------------------ | ------------------- | --------------------------------------------- | ---------- | ---- |
-| 0001 | Extract the UX layer as a second package, behind a scope gate  | Accepted (amended)  | Accepted as proposed; condition 1 relaxed by 0021               | 2026-08-18 | —    |
-| 0002 | Name: `@microsoft/vscode-ext-webview-fluentui`                 | Accepted (modified) | `-ui` rejected as too general once the scope proved Fluent-only | 2026-08-18 | —    |
-| 0003 | No dependency between the two packages, in either direction    | Accepted            | Accepted as proposed                                            | 2026-08-18 | —    |
-| 0004 | Three invariants: provider independence, layering, facade      | Accepted            | Accepted as proposed                                            | 2026-08-18 | —    |
-| 0005 | ESM-only, despite the sibling being CommonJS                   | Accepted (modified) | `typesVersions` reinstated when 0016 was corrected              | 2026-08-18 | —    |
-| 0006 | Tests stay CommonJS, transformed by `@swc/jest`                | Accepted            | Accepted as proposed                                            | 2026-08-18 | —    |
-| 0007 | v1 public entries are `.` and `./components`                   | Accepted (modified) | `./styles.css` dropped after 0010                               | 2026-08-18 | —    |
-| 0008 | The token list and palette math stay internal                  | Accepted (modified) | Proposal left it open; evidence closed it                       | 2026-08-18 | —    |
-| 0009 | The `adaptive` flag is deleted, not defaulted                  | Accepted (modified) | Proposal was to flip the default to `true`                      | 2026-08-18 | —    |
-| 0010 | The stylesheet injects itself at module scope                  | Accepted (modified) | Proposal was a consumer-side `styles.css` import                | 2026-08-18 | —    |
-| 0011 | No opt-out from the Fluent overrides                           | Accepted            | Operator-originated; not in the proposal                        | 2026-08-18 | —    |
-| 0012 | No public CSS custom properties in v1                          | Accepted (modified) | Proposal was a neutral or configurable prefix                   | 2026-08-18 | —    |
-| 0013 | Monaco theming stays in the extension                          | Deferred            | Proposal left it open                                           | 2026-08-18 | —    |
-| 0014 | Public naming vocabulary is locked before publish              | Accepted (modified) | `useVSCodeTheme` → `useActiveVSCodeTheme` after operator review | 2026-08-18 | —    |
-| 0015 | The generated CSS module is committed, not gitignored          | Accepted (modified) | Reverses the recommendation made during design                  | 2026-08-18 | —    |
-| 0016 | The package follows the repo's existing resolution pattern     | Accepted            | Replaces the proposal's webview-scoped tsconfig                 | 2026-08-18 | —    |     | 0017 | Relative imports inside the package are fully specified      | Accepted            | Corrects a gap in 0005, found at first bundle | 2026-08-18 | #895 |
+| 0001 | Extract the UX layer as a second package, behind a scope gate  | Accepted (amended)  | Accepted as proposed; condition 1 relaxed by 0021               | 2026-08-18 | -    |
+| 0002 | Name: `@microsoft/vscode-ext-webview-fluentui`                 | Accepted (modified) | `-ui` rejected as too general once the scope proved Fluent-only | 2026-08-18 | -    |
+| 0003 | No dependency between the two packages, in either direction    | Accepted            | Accepted as proposed                                            | 2026-08-18 | -    |
+| 0004 | Three invariants: provider independence, layering, facade      | Accepted            | Accepted as proposed                                            | 2026-08-18 | -    |
+| 0005 | ESM-only, despite the sibling being CommonJS                   | Accepted (modified) | `typesVersions` reinstated when 0016 was corrected              | 2026-08-18 | -    |
+| 0006 | Tests stay CommonJS, transformed by `@swc/jest`                | Accepted            | Accepted as proposed                                            | 2026-08-18 | -    |
+| 0007 | v1 public entries are `.` and `./components`                   | Accepted (modified) | `./styles.css` dropped after 0010                               | 2026-08-18 | -    |
+| 0008 | The token list and palette math stay internal                  | Accepted (modified) | Proposal left it open; evidence closed it                       | 2026-08-18 | -    |
+| 0009 | The `adaptive` flag is deleted, not defaulted                  | Accepted (modified) | Proposal was to flip the default to `true`                      | 2026-08-18 | -    |
+| 0010 | The stylesheet injects itself at module scope                  | Accepted (modified) | Proposal was a consumer-side `styles.css` import                | 2026-08-18 | -    |
+| 0011 | No opt-out from the Fluent overrides                           | Accepted            | Operator-originated; not in the proposal                        | 2026-08-18 | -    |
+| 0012 | No public CSS custom properties in v1                          | Accepted (modified) | Proposal was a neutral or configurable prefix                   | 2026-08-18 | -    |
+| 0013 | Monaco theming stays in the extension                          | Deferred            | Proposal left it open                                           | 2026-08-18 | -    |
+| 0014 | Public naming vocabulary is locked before publish              | Accepted (modified) | `useVSCodeTheme` → `useActiveVSCodeTheme` after operator review | 2026-08-18 | -    |
+| 0015 | The generated CSS module is committed, not gitignored          | Accepted (modified) | Reverses the recommendation made during design                  | 2026-08-18 | -    |
+| 0016 | The package follows the repo's existing resolution pattern     | Accepted            | Replaces the proposal's webview-scoped tsconfig                 | 2026-08-18 | -    |     | 0017 | Relative imports inside the package are fully specified      | Accepted            | Corrects a gap in 0005, found at first bundle | 2026-08-18 | #895 |
 | 0018 | The theme hooks are standalone, not context-backed             | Accepted (modified) | The extracted code was context-backed; I3 required otherwise    | 2026-08-18 | #895 |
 | 0019 | Adapt Fluent by re-pointing tokens, never by out-specifying    | Accepted            | Forced by the zero-specificity rule in 0010                     | 2026-08-18 | #895 |
 | 0020 | Opaque stencils stay opaque; `translucent` is what we document | Accepted            | Reverses the alpha-overlay approach the code arrived with       | 2026-08-18 | #895 |
-| 0021 | The scope gate widens to reusable components                   | Accepted            | Relaxes condition 1 of 0001; operator-originated                | 2026-08-19 | —    |
-| 0022 | `MessageBlock` stays in the extension                          | Accepted            | Proposal was to ship it from the package                        | 2026-08-19 | —    |     | 0023 | The README presents theming and components as equal, mixable | Accepted (modified) | Reverses §1 of design.md; operator-originated | 2026-08-20 | —    |
+| 0021 | The scope gate widens to reusable components                   | Accepted            | Relaxes condition 1 of 0001; operator-originated                | 2026-08-19 | -    |
+| 0022 | `MessageBlock` stays in the extension                          | Accepted            | Proposal was to ship it from the package                        | 2026-08-19 | -    |     | 0023 | The README presents theming and components as equal, mixable | Accepted (modified) | Reverses §1 of design.md; operator-originated | 2026-08-20 | -    |
 | 0024 | The metric card enters, and converges its fork                 | Accepted (modified) | Three token and geometry mappings corrected by measurement      | 2026-08-21 | #895 |
 | 0025 | `Announcer` is out of scope for this package                   | Accepted            | Accepted as proposed                                            | 2026-08-21 | #895 |
 | 0026 | The focusable badge ships with one naming contract             | Accepted (modified) | Focusability separated from naming after browser measurement    | 2026-09-10 | #895 |
 | 0027 | The package is published, not workspace-only                   | Accepted            | Replaces the earlier no-publish restriction; operator-confirmed | 2026-09-10 | #895 |
+| 0028 | Full-webview sizing is the container default | Accepted | Ratifies `100vh`; embedding remains a consumer override | 2026-09-10 | #895 |
+| 0029 | No external consumers; finalize the API for 1.0.0 | Accepted | Clarifies 0027; pre-release API changes need no compatibility migration | 2026-09-10 | #895 |
 
 > Entries below are **semantically** immutable: append new entries rather than
 > rewriting old ones, and record reversals as a new entry plus a status change
 > above. Editing for typos, broken links, or added verification metadata is fine.
-> Heading text is frozen once written — a retitle means a new decision.
+> Heading text is frozen once written - a retitle means a new decision.
 
 **Status vocabulary** (closed set of seven):
 
@@ -49,7 +51,7 @@ created: 2026-08-18
 
 ---
 
-## 0001 — Extract the UX layer as a second package, behind a scope gate
+## 0001 - Extract the UX layer as a second package, behind a scope gate
 
 **Status:** Accepted (amended by [0021](#0021--the-scope-gate-widens-to-reusable-components-not-only-vs-code-adapters)) · **Date:** 2026-08-18
 
@@ -70,14 +72,14 @@ A thing enters only if **all four** hold:
 
 ### Why
 
-The exclusion was never "UX code is not worth sharing" — it was "a UX kit accumulates opinions."
+The exclusion was never "UX code is not worth sharing" - it was "a UX kit accumulates opinions."
 A gate answers that objection directly, where a promise of restraint would not. Condition 3 is the
 one that does the most work in practice: it is what kept `./tokens` out (0008) and what deferred the
 opt-in class (0012).
 
 ---
 
-## 0002 — Name: `@microsoft/vscode-ext-webview-fluentui`
+## 0002 - Name: `@microsoft/vscode-ext-webview-fluentui`
 
 **Status:** Accepted (modified) · **Date:** 2026-08-18
 
@@ -100,26 +102,26 @@ settled and turned out to be **entirely Fluent**: `createVSCodeFluentTheme` retu
 | Candidate  | Rejected because                                                |
 | ---------- | --------------------------------------------------------------- |
 | `-ui`      | implies a design-system-neutral kit; v1 is Fluent top to bottom |
-| `-helpers` | "is this a helper?" is unanswerable — everything is             |
+| `-helpers` | "is this a helper?" is unanswerable - everything is             |
 | `-addons`  | same vagueness, plus a browser-extension connotation            |
 | `-kit`     | implies a suite, which is what 0001 exists to prevent           |
 | `-ext`     | doubles the `ext` already in the stem                           |
 
 The discriminator is not aesthetic. **A name is part of the scope gate in 0001**, because it is what
-people reason with at the moment they are about to add something. Category names — `helpers`,
-`utils`, `common`, `misc` — are solvents: they admit anything. `fluentui` names the _boundary_
+people reason with at the moment they are about to add something. Category names - `helpers`,
+`utils`, `common`, `misc` - are solvents: they admit anything. `fluentui` names the _boundary_
 rather than the contents, which turns the admission test into a question with an answer: _does this
 exist because Fluent does not behave correctly inside a VS Code webview?_
 
 The name proved itself before the package existed. Asked whether a Monaco editor wrapper belonged,
-the answer was immediate and needed no debate — Monaco is not Fluent. Under `-helpers` a Monaco
+the answer was immediate and needed no debate - Monaco is not Fluent. Under `-helpers` a Monaco
 wrapper is unambiguously a helper and there would have been no argument against it. See 0013: if a
 wrapper is ever wanted it is a **third** package, not a subpath here, which is cleaner anyway given
 `monaco-editor` is a roughly 5 MB peer.
 
 ---
 
-## 0003 — No dependency between the two packages, in either direction
+## 0003 - No dependency between the two packages, in either direction
 
 **Status:** Accepted · **Date:** 2026-08-18
 
@@ -136,17 +138,17 @@ piecemeal rather than wholesale.
 
 ---
 
-## 0004 — Three invariants: provider independence, layering, facade
+## 0004 - Three invariants: provider independence, layering, facade
 
 **Status:** Accepted · **Date:** 2026-08-18
 
 ### Decision
 
-**I1 — Components must not require the package's provider.** `src/components/` must not import from
+**I1 - Components must not require the package's provider.** `src/components/` must not import from
 `src/theme/`. Components style themselves from Fluent `tokens.*`, which resolve against whatever
 `FluentProvider` is above them.
 
-**I2 — One-directional layering, React-free at the bottom.**
+**I2 - One-directional layering, React-free at the bottom.**
 
 ```
 components  ──┐   (React + Fluent, provider-agnostic)
@@ -155,14 +157,14 @@ components  ──┐   (React + Fluent, provider-agnostic)
               └───────────────-> palette     (no Fluent, no React: color math)
 ```
 
-**I3 — Self-hosting facade.** `VSCodeFluentProvider` is built only on public tier-2/3 API. A
+**I3 - Self-hosting facade.** `VSCodeFluentProvider` is built only on public tier-2/3 API. A
 consumer assembling it by hand from `useActiveVSCodeThemeKind()` + `createVSCodeFluentTheme()` gets
 an identical result.
 
 ### Why
 
-I1 is the analogue of the sibling package's bring-your-own-panel requirement — here it is
-_bring your own `FluentProvider`_ — and it is precisely what lets another extension adopt a
+I1 is the analogue of the sibling package's bring-your-own-panel requirement - here it is
+_bring your own `FluentProvider`_ - and it is precisely what lets another extension adopt a
 component without adopting a visual philosophy. I2 means the two halves never import each other, so
 splitting them into separate packages later is mechanical. I3 is the same rule the sibling settled
 on: a facade that reaches into private internals is a facade that cannot be replaced.
@@ -172,14 +174,14 @@ test asserting that importing `./components` injects no stylesheet.
 
 ---
 
-## 0005 — ESM-only, despite the sibling being CommonJS
+## 0005 - ESM-only, despite the sibling being CommonJS
 
 **Status:** Accepted (modified) · **Date:** 2026-08-18
 
 ### Decision
 
 `"type": "module"`, `"module": "esnext"`, `"moduleResolution": "bundler"`, and real `exports`
-conditions. A `typesVersions` block ships alongside them — see 0016.
+conditions. A `typesVersions` block ships alongside them - see 0016.
 
 ### Why
 
@@ -187,7 +189,7 @@ This will be asked as "why don't the two packages match", so the reasoning is re
 left to be re-derived.
 
 The sibling **has to** be CommonJS: it has a `./host` entry loaded by the VS Code extension host,
-which is CommonJS. **This package has no host entry at all** — every consumer runs in a browser
+which is CommonJS. **This package has no host entry at all** - every consumer runs in a browser
 through a bundler.
 
 CommonJS would also actively hurt here. It kills tree-shaking across the package boundary, which
@@ -200,7 +202,7 @@ Node ≥ 22.12 / ≥ 20.19.
 
 ### Changed from the proposal
 
-The proposal, and the first version of this entry, also said **no `typesVersions`** — on the reasoning
+The proposal, and the first version of this entry, also said **no `typesVersions`** - on the reasoning
 that it is a legacy affordance an ESM-only package should not need. Two corrections killed that.
 First, `typesVersions` is a **type-resolution-only** mechanism; it has no effect at runtime and
 coexists with ESM-only output perfectly well, so "ESM-only" never implied its absence. Second, it is
@@ -209,7 +211,7 @@ unchanged; only the `typesVersions` clause was wrong.
 
 ---
 
-## 0006 — Tests stay CommonJS, transformed by `@swc/jest`
+## 0006 - Tests stay CommonJS, transformed by `@swc/jest`
 
 **Status:** Accepted · **Date:** 2026-08-18
 
@@ -235,7 +237,7 @@ make `module.exports` a syntax error.
 
 ---
 
-## 0007 — v1 public entries are `.` and `./components`
+## 0007 - v1 public entries are `.` and `./components`
 
 **Status:** Accepted (modified) · **Date:** 2026-08-18
 
@@ -244,7 +246,7 @@ make `module.exports` a syntax error.
 Two entries. `.` for theming, `./components` for components.
 
 Explicitly **not** in v1: `./tokens` (0008), `./monaco` (0013), `./styles.css` (0010), and
-`./testing` — the last by direct analogy with the sibling, whose `src/testing/` ships no runtime
+`./testing` - the last by direct analogy with the sibling, whose `src/testing/` ships no runtime
 code and is in no public entry point.
 
 ### Changed from the proposal
@@ -253,7 +255,7 @@ The original plan listed `./styles.css` as a third entry. Decision 0010 removed 
 
 ---
 
-## 0008 — The token list and palette math stay internal
+## 0008 - The token list and palette math stay internal
 
 **Status:** Accepted (modified) · **Date:** 2026-08-18
 
@@ -268,19 +270,19 @@ No. Both stay internal.
 
 ### Why
 
-Consumer tracing settled it. The palette math has exactly one caller —
+Consumer tracing settled it. The palette math has exactly one caller -
 `getBrandTokensFromPalette`, inside the theme generator. The token list and
-`vscodeThemeTokenToCSSVar` have exactly one caller — `generateMonacoTheme`. Since Monaco is deferred
+`vscodeThemeTokenToCSSVar` have exactly one caller - `generateMonacoTheme`. Since Monaco is deferred
 (0013), **the token list would have shipped with zero consumers**, purely on the theory that someone
 might want it.
 
 That fails condition 3 of the scope gate in 0001. The layering in 0004 still holds internally, so
-promoting either later is a one-line addition to `exports` — the cheapest possible decision to
+promoting either later is a one-line addition to `exports` - the cheapest possible decision to
 reverse, and among the most expensive to un-ship.
 
 ---
 
-## 0009 — The `adaptive` flag is deleted, not defaulted
+## 0009 - The `adaptive` flag is deleted, not defaulted
 
 **Status:** Accepted (modified) · **Date:** 2026-08-18
 
@@ -296,7 +298,7 @@ package always derives the theme from the active VS Code theme.
 
 ### Why
 
-`useAdaptive={false}` is not a feature of the package — it is the **absence** of the package. It
+`useAdaptive={false}` is not a feature of the package - it is the **absence** of the package. It
 returns Fluent's canned Teams themes, which any consumer gets for free with
 `<FluentProvider theme={teamsDarkTheme}>`. Shipping a boolean whose `false` branch reproduces
 Fluent's default behavior taxes every consumer with a paragraph of documentation to learn that one
@@ -311,7 +313,7 @@ branch, and `hex_to_LCH('')` NaN-poisons the entire sixteen-stop brand ramp. The
 anywhere in the palette utilities.
 
 Inside a live extension host this never happens. In jsdom, Storybook, or the Playwright live-preview
-technique this repo documents, it does — so the flag may have been serving as an accidental "works
+technique this repo documents, it does - so the flag may have been serving as an accidental "works
 outside VS Code" mode.
 
 That is a bug, not a justification for public API. Increment 1 guards
@@ -320,7 +322,7 @@ flag can be deleted with nothing lost.
 
 ---
 
-## 0010 — The stylesheet injects itself at module scope
+## 0010 - The stylesheet injects itself at module scope
 
 **Status:** Accepted (modified) · **Date:** 2026-08-18
 
@@ -340,7 +342,7 @@ the consumer to import, or have the package inject it?
 
 ### Decision
 
-**C2**, with the injection call at **module scope in the `.` entry** — not inside the provider.
+**C2**, with the injection call at **module scope in the `.` entry** - not inside the provider.
 
 ```ts
 // src/index.ts
@@ -371,12 +373,12 @@ invocation after a `prebuild` script.
 Option A was defended on the grounds that the target consumer would need bundler configuration.
 That turned out to be false: `vscode-cosmosdb` builds its views with Vite, whose config comments
 _"CSS/SCSS handled natively by Vite (no css-loader/sass-loader needed)"_. Option A was therefore
-zero-config for them — which removed the strongest argument **against** A, and left the decision to
+zero-config for them - which removed the strongest argument **against** A, and left the decision to
 rest entirely on the silent-failure mode.
 
 ---
 
-## 0011 — No opt-out from the Fluent overrides
+## 0011 - No opt-out from the Fluent overrides
 
 **Status:** Accepted · **Date:** 2026-08-18
 
@@ -388,7 +390,7 @@ package means adopting Fluent **and** its adaptations as one thing.
 ### Why
 
 Operator position, recorded verbatim in intent: if you use this package you use Fluent, and you
-accept the overrides and style tweaks — the package's job is to make everything better and keep it
+accept the overrides and style tweaks - the package's job is to make everything better and keep it
 theme-responsive. A consumer who wants unadapted Fluent should use Fluent directly, which costs them
 nothing.
 
@@ -398,13 +400,13 @@ keep in sync with the injected copy.
 Note the consequence, which must be stated plainly in the package README: the overrides are
 document-global. They apply to **every** Fluent component in the consumer's webview, including ones
 the consumer rendered without thinking about this package, and including portaled surfaces such as
-dialogs, menus and tooltips. That reach is deliberate — portals are exactly why the escapes are
-class-based rather than provider-scoped — but it is not something a consumer should discover by
+dialogs, menus and tooltips. That reach is deliberate - portals are exactly why the escapes are
+class-based rather than provider-scoped - but it is not something a consumer should discover by
 surprise.
 
 ---
 
-## 0012 — No public CSS custom properties in v1
+## 0012 - No public CSS custom properties in v1
 
 **Status:** Accepted (modified) · **Date:** 2026-08-18
 
@@ -416,7 +418,7 @@ them to something neutral, make them configurable, or leave them behind?
 
 ### History, since it explains the shape
 
-They arrived in a single commit — `55f58811 fix(webviews): adapt Fluent field colors`. Two
+They arrived in a single commit - `55f58811 fix(webviews): adapt Fluent field colors`. Two
 variables, thirteen references, three files, SCSS only. The value is one expression:
 
 ```scss
@@ -424,7 +426,7 @@ var(--vscode-checkbox-border, var(--vscode-input-border, color-mix(in srgb, var(
 ```
 
 Two mechanisms stacked. `var(a, b)` is a fallback chain, because many community themes define only a
-subset of VS Code's tokens. `color-mix(in srgb, X 55%, transparent)` is an alpha multiply — sRGB
+subset of VS Code's tokens. `color-mix(in srgb, X 55%, transparent)` is an alpha multiply - sRGB
 mixing is premultiplied, so the result is exactly `X` at 55% opacity. The 55 and 75 are hand-tuned
 contrast constants. Because the result is translucent it composites against whatever is behind it,
 which is why one declaration is correct on both light and dark themes.
@@ -437,8 +439,8 @@ chain would not be pasted into eight places.
 The package ships **no** public CSS custom properties in v1. Inside the package the value becomes a
 local SCSS variable, which is sufficient because the package compiles its own stylesheet.
 
-The opt-in class that would have replaced them — one extra selector in the existing field
-`:where()` list, letting a non-Fluent control join the field treatment — is **deferred until a
+The opt-in class that would have replaced them - one extra selector in the existing field
+`:where()` list, letting a non-Fluent control join the field treatment - is **deferred until a
 second consumer needs it**.
 
 ### Why deferring is the disciplined choice, and what it costs
@@ -448,7 +450,7 @@ like a Fluent `Textarea`. Shipping public API for one consumer fails condition 3
 
 The cost is accepted knowingly: the extension keeps its own `--documentdb-*` definitions, so the
 formula exists in two places and can drift if the package retunes the constants. That risk is
-bounded — it is one product's internal stylesheet, not published API — and the extension-side
+bounded - it is one product's internal stylesheet, not published API - and the extension-side
 declaration carries a comment pointing at the source of truth.
 
 A pleasant side effect: the `--documentdb-` prefix becomes _correct_ rather than awkward. It stays
@@ -457,7 +459,7 @@ in the product, where a product prefix belongs, and the package has no prefix qu
 ### The rule that survives without the API
 
 When a public custom property is eventually needed, derive its prefix from the package name **minus
-the `vscode-` segment** — `--ext-webview-fluentui-` — and never prefix with `--vscode-`, which is
+the `vscode-` segment** - `--ext-webview-fluentui-` - and never prefix with `--vscode-`, which is
 the namespace VS Code injects several hundred properties into. Suffixes mirror the Fluent token they
 feed, in Fluent's camelCase, so the substitution reads directly.
 
@@ -469,7 +471,7 @@ therefore **lowers** contrast. To be fixed when the rules move.
 
 ---
 
-## 0013 — Monaco theming stays in the extension
+## 0013 - Monaco theming stays in the extension
 
 **Status:** Deferred · **Date:** 2026-08-18
 
@@ -483,7 +485,7 @@ worked on in its own right.
 
 `ThemeState.tsx` imports `monaco-editor/esm/vs/editor/editor.api` for three type aliases, pulling a
 roughly 5 MB peer into a theming package. Deferring removes that peer, those types, the `monaco`
-field on the theme state, and — because `generateMonacoTheme` is their only caller — the 815-entry
+field on the theme state, and - because `generateMonacoTheme` is their only caller - the 815-entry
 token list as well (0008). That is a large surface removed by one deferral.
 
 ### The seam
@@ -511,7 +513,7 @@ is the cleaner shape.
 
 ---
 
-## 0014 — Public naming vocabulary is locked before publish
+## 0014 - Public naming vocabulary is locked before publish
 
 **Status:** Accepted (modified) · **Date:** 2026-08-18
 
@@ -521,12 +523,12 @@ is the cleaner shape.
 | ---------------------- | ----------------------------------------------- |
 | `DynamicThemeProvider` | `VSCodeFluentProvider`                          |
 | `useThemeState`        | `useActiveVSCodeTheme`                          |
-| —                      | `useActiveVSCodeThemeKind` (narrow, for tier 2) |
+| -                      | `useActiveVSCodeThemeKind` (narrow, for tier 2) |
 | `getFluentUiTheme`     | `createVSCodeFluentTheme`                       |
 
 ### Why rename at all
 
-The sibling package paid a rename tax twice — `api` → `webviewIntegration/` → `_integration/`, and
+The sibling package paid a rename tax twice - `api` → `webviewIntegration/` → `_integration/`, and
 `setupTrpc` → `attachTrpc`. Renaming is free before publish and expensive after. Today's only
 consumers are internal.
 
@@ -537,7 +539,7 @@ Three reasons, of which only the third is taste. First, collision: `useThemeStat
 already contain `FluentProvider` and possibly a `ThemeProvider` from another library. Package-level
 names must survive in files the package does not control.
 
-Second, `DynamicThemeProvider` does not say what it does — dynamic relative to what? The actual
+Second, `DynamicThemeProvider` does not say what it does - dynamic relative to what? The actual
 contract is _observe VS Code's theme, produce a Fluent theme_. `VSCodeFluentProvider` names both
 ends, and naming both ends is what makes the contract legible at a glance.
 
@@ -548,14 +550,14 @@ Third, casing: `VSCode`, not `VsCode` or `Vscode`, matching `@vscode/l10n`, the
 
 The proposal said `useVSCodeTheme`. The operator asked for something more explicit about tracking
 the currently active theme and suggested `useCurrentVSCodeTheme`. `Current` was rejected as
-redundant — a hook's return value is always current, which is why the ecosystem writes
-`useMediaQuery` and not `useCurrentMediaQuery` — in favour of `Active`, which carries the same
+redundant - a hook's return value is always current, which is why the ecosystem writes
+`useMediaQuery` and not `useCurrentMediaQuery` - in favour of `Active`, which carries the same
 explicitness while borrowing vocabulary the audience already has: the extension-host API is
 `vscode.window.activeColorTheme`, with `ColorTheme` and `ColorThemeKind`.
 
 ---
 
-## 0015 — The generated CSS module is committed, not gitignored
+## 0015 - The generated CSS module is committed, not gitignored
 
 **Status:** Accepted (modified) · **Date:** 2026-08-18
 
@@ -576,14 +578,14 @@ changes only when the stylesheet does.
 
 ---
 
-## 0016 — The package follows the repo's existing resolution pattern
+## 0016 - The package follows the repo's existing resolution pattern
 
 **Status:** Accepted · **Date:** 2026-08-18
 
 ### Question
 
 `npm run build` is plain `tsc` against the root `tsconfig.json`, which is `"module": "commonjs"` with
-no `moduleResolution` — node10 resolution, so the `exports` field is ignored entirely. The first
+no `moduleResolution` - node10 resolution, so the `exports` field is ignored entirely. The first
 webview that imports the package breaks the build. How is that fixed?
 
 ### What the repo already does
@@ -593,15 +595,15 @@ Not a new question. All five existing workspace packages resolve the same way, a
 
 | Package                            | `main`          | `types`           | `exports`  | `typesVersions` |
 | ---------------------------------- | --------------- | ----------------- | ---------- | --------------- |
-| `@documentdb-js/operator-registry` | `dist/index.js` | `dist/index.d.ts` | —          | —               |
-| `@documentdb-js/schema-analyzer`   | `dist/index.js` | `dist/index.d.ts` | —          | —               |
-| `@documentdb-js/shell-api-types`   | `dist/index.js` | `dist/index.d.ts` | —          | —               |
-| `@documentdb-js/shell-runtime`     | `dist/index.js` | `dist/index.d.ts` | —          | —               |
+| `@documentdb-js/operator-registry` | `dist/index.js` | `dist/index.d.ts` | -          | -               |
+| `@documentdb-js/schema-analyzer`   | `dist/index.js` | `dist/index.d.ts` | -          | -               |
+| `@documentdb-js/shell-api-types`   | `dist/index.js` | `dist/index.d.ts` | -          | -               |
+| `@documentdb-js/shell-runtime`     | `dist/index.js` | `dist/index.d.ts` | -          | -               |
 | `@microsoft/vscode-ext-webview`    | `dist/index.js` | `dist/index.d.ts` | 4 subpaths | **yes**         |
 
 npm workspaces symlinks `node_modules/<name>` to the package folder; the root `tsc` reads `types`
 from its `package.json` and lands on `dist/index.d.ts`. Subpaths, which node10 cannot resolve on its
-own, are covered by `typesVersions` — which is exactly why the sibling has one and the four
+own, are covered by `typesVersions` - which is exactly why the sibling has one and the four
 single-entry packages do not. `prebuild: npm run build --workspaces --if-present` guarantees `dist/`
 exists first.
 
@@ -626,7 +628,7 @@ five siblings or introduces a second way of doing things for one package, and no
 special enough to justify the divergence.
 
 Keeping it in the package also puts the workaround where the constraint is felt, and leaves the root
-config untouched — so the eventual modernisation is a single repo-wide change rather than a cleanup
+config untouched - so the eventual modernisation is a single repo-wide change rather than a cleanup
 that has to reconcile two patterns.
 
 ### The alternative, and what it would have bought
@@ -636,7 +638,7 @@ mainstream monorepo technique and it buys two real things: edits to the package 
 extension without a rebuild, and go-to-definition lands in source rather than a `.d.ts`.
 
 Both are genuine. Neither is a reason to adopt it here, because **all five existing packages already
-pay those costs.** Applying the fix to one package would not remove friction from the repo — it
+pay those costs.** Applying the fix to one package would not remove friction from the repo - it
 would make the ergonomics inconsistent, which is harder to reason about than uniform friction. It
 would also type-check package _source_ rather than the shipped artifact, so a malformed `exports`
 map would surface at `npm run package` instead of `npm run build`, and the extra root-config lines
@@ -658,14 +660,14 @@ The issue to file: _the root `tsconfig.json` is `module: commonjs` with no `modu
 
 ---
 
-## 0017 — Relative imports inside the package are fully specified
+## 0017 - Relative imports inside the package are fully specified
 
 **Status:** Accepted · **Date:** 2026-08-18 · **PR:** #895
 
 ### Question
 
 0005 settled `"module": "esnext"` with `"moduleResolution": "bundler"`. TypeScript then accepts
-extensionless relative specifiers — `from './theme'` — and emits them into the ESM output verbatim.
+extensionless relative specifiers - `from './theme'` - and emits them into the ESM output verbatim.
 Is that shippable?
 
 ### Decision
@@ -678,7 +680,7 @@ TypeScript sources where no such file exists.
 
 `bundler` resolution is a statement about how the **consumer's** bundler resolves, and the
 assumption is wrong for the one that matters. ESM specifiers must be fully specified, and webpack
-enforces it inside a `"type": "module"` package — it refused the package outright on the first
+enforces it inside a `"type": "module"` package - it refused the package outright on the first
 import, with `BREAKING CHANGE: The request './theme' failed to resolve only because it was resolved
 as fully specified`.
 
@@ -693,7 +695,7 @@ ESM package in this repository.
 
 ---
 
-## 0018 — The theme hooks are standalone, not context-backed
+## 0018 - The theme hooks are standalone, not context-backed
 
 **Status:** Accepted (modified) · **Date:** 2026-08-18 · **PR:** #895
 
@@ -710,8 +712,8 @@ and no `ThemeContext` export. `VSCodeFluentProvider` is a hook plus a `FluentPro
 
 ### Why
 
-Invariant I3 says the facade must be assemblable by hand from the public tiers. A tier-2 consumer —
-the one that motivates the whole composable path — **owns their own `FluentProvider` and will not
+Invariant I3 says the facade must be assemblable by hand from the public tiers. A tier-2 consumer -
+the one that motivates the whole composable path - **owns their own `FluentProvider` and will not
 have mounted ours**, so a context-backed hook would return the default state, or throw, for exactly
 the audience it exists to serve. The context was load-bearing only while the provider was the sole
 entry point.
@@ -723,7 +725,7 @@ are cheap and fire only on a theme change, so that part is immaterial.
 
 The part that was **not** immaterial: it also un-shared the derivation each consumer performs. In
 the extension, `MonacoEditor` turns the theme kind into a Monaco theme with ~815 `getPropertyValue`
-lookups, and the Collection View mounts up to five editors — so a theme switch went from ~815
+lookups, and the Collection View mounts up to five editors - so a theme switch went from ~815
 lookups to several thousand, and expanding the enhanced query row cost ~815 per editor. Restored by
 caching on the theme kind in the extension, where the document is shared anyway.
 
@@ -732,7 +734,7 @@ the subscribers compute.
 
 ---
 
-## 0019 — Adapt Fluent by re-pointing tokens, never by out-specifying its classes
+## 0019 - Adapt Fluent by re-pointing tokens, never by out-specifying its classes
 
 **Status:** Accepted · **Date:** 2026-08-18 · **PR:** #895
 
@@ -740,7 +742,7 @@ the subscribers compute.
 
 0010 requires every rule in the injected stylesheet to be wrapped in `:where()`, so a consumer can
 override it. The ProgressBar adaptation, as inherited, declared a `background-image` on
-`.fui-ProgressBar__bar`. Wrapping it drops it to zero specificity — where Fluent's own Griffel class
+`.fui-ProgressBar__bar`. Wrapping it drops it to zero specificity - where Fluent's own Griffel class
 beats it. How is the rule expressed instead?
 
 ### Decision
@@ -755,7 +757,7 @@ all.
 
 ### Why
 
-A property declaration has to win a specificity contest against Griffel to apply — and anything that
+A property declaration has to win a specificity contest against Griffel to apply - and anything that
 beats Griffel also beats the consumer, which contradicts 0010. Custom properties have no such
 problem: a declaration on the element always beats an inherited one from the `FluentProvider`
 ancestor, whatever the selector's specificity. So the token route is the only one that is both
@@ -769,12 +771,12 @@ adaptation re-points.
 ### The risk it accepts
 
 Re-pointing a token is only safe where that token has no other consumer in the subtree. Verified for
-`colorTransparentBackground` inside `.fui-ProgressBar`, where the gradient is its only use — but
+`colorTransparentBackground` inside `.fui-ProgressBar`, where the gradient is its only use - but
 this is a per-case audit, not a free move, and the test is the tripwire if Fluent restructures.
 
 ---
 
-## 0020 — Opaque skeleton stencils stay opaque; `translucent` is what we document
+## 0020 - Opaque skeleton stencils stay opaque; `translucent` is what we document
 
 **Status:** Accepted (modified) · **Date:** 2026-08-18 · **PR:** #895
 
@@ -787,8 +789,8 @@ skeleton. Keep, retune, or remove?
 
 ### Decision
 
-Keep the tokens mapped, but make them **opaque** — `color-mix(in srgb, var(--vscode-foreground) N%,
-var(--vscode-editor-background))` — and document `appearance="translucent"` as the appearance
+Keep the tokens mapped, but make them **opaque** - `color-mix(in srgb, var(--vscode-foreground) N%,
+var(--vscode-editor-background))` - and document `appearance="translucent"` as the appearance
 consumers should use.
 
 ### Why the alpha version could not work
@@ -796,8 +798,8 @@ consumers should use.
 Fluent's wave recipe is not a tint, it is a **replacement**. The resting fill is
 `background-color: Stencil1`; an `::after` of the same size slides across it carrying
 `Stencil1 → Stencil2 → Stencil1`. The sweep is seamless at its own edges only because `Stencil1`
-there paints over an identical fill. Give the tokens an alpha and the sweep _adds_ to the base —
-7% over 7% inside the overlay, 7% outside — so its leading edge becomes a visible step.
+there paints over an identical fill. Give the tokens an alpha and the sweep _adds_ to the base -
+7% over 7% inside the overlay, 7% outside - so its leading edge becomes a visible step.
 
 That is also why translucent skeletons looked correct throughout: their recipe is built for alpha,
 running `transparent → Stencil1Alpha → transparent`, and has no edge to give away.
@@ -815,7 +817,7 @@ else, for two lines and no public surface area.
 ### The limit, stated rather than hidden
 
 An opaque fill must be mixed against the card it sits on, and a theme token cannot know what that
-is. Any value is a visible rectangle on some surface. This is not an unfixed bug — it is what
+is. Any value is a visible rectangle on some surface. This is not an unfixed bug - it is what
 `opaque` means, and it is why the package README tells consumers to pass `translucent`, whose
 `*Alpha` tokens come from Fluent's own light/dark themes and are already theme-kind correct without
 this package touching them.
@@ -827,9 +829,9 @@ survived unseen until a probe rendered one.
 
 ---
 
-## 0021 — The scope gate widens to reusable components, not only VS Code adapters
+## 0021 - The scope gate widens to reusable components, not only VS Code adapters
 
-**Status:** Accepted · **Date:** 2026-08-19 · **PR:** —
+**Status:** Accepted · **Date:** 2026-08-19 · **PR:** -
 
 ### Question
 
@@ -846,12 +848,12 @@ component. Does the gate hold, or is it too narrow?
 
 Too narrow. Condition 1 is relaxed.
 
-> The package ships **reusable components useful to other Fluent UI consumers** — other products and
-> other extensions — not only adapters that patch Fluent's behaviour inside a webview.
+> The package ships **reusable components useful to other Fluent UI consumers** - other products and
+> other extensions - not only adapters that patch Fluent's behaviour inside a webview.
 
 A wizard surface belongs on exactly that basis. Fluent's own surface components, `Dialog` and
 `Drawer`, all assume an overlay above existing application chrome; Fluent ships no surface for a
-wizard that **is** the window — its Dialog guidance points at building "a multi-step wizard within a
+wizard that **is** the window - its Dialog guidance points at building "a multi-step wizard within a
 single dialog" instead. Every consumer needing one otherwise rebuilds the same shell.
 
 Conditions 2, 3 and 4 are unchanged:
@@ -864,7 +866,7 @@ Conditions 2, 3 and 4 are unchanged:
 
 Condition 1 was the strictest of the four and did most of the visible filtering. With it widened,
 **conditions 2, 3 and 4 now carry the whole gate**, and condition 3 becomes the load-bearing one.
-That was already true in practice — 0001 said so, and 0008 and 0012 were both settled by it — but it
+That was already true in practice - 0001 said so, and 0008 and 0012 were both settled by it - but it
 was previously the second line of defence. It is now the first.
 
 The test to ask is therefore no longer "is this a VS Code integration problem?" but **"who is the
@@ -879,16 +881,16 @@ would have let through.
 ### Rejected alternative
 
 Leaving the gate as written and deduplicating the wizard chrome locally in
-`src/webviews/components/`. That is a real option — it costs nothing and breaks nothing — and it was
+`src/webviews/components/`. That is a real option - it costs nothing and breaks nothing - and it was
 named explicitly so the widening could not happen by drift. It was rejected because the duplication
 is not local: `microsoft/vscode-cosmosdb` is a known second consumer of this package, and the
 webview stack it forked from this one has the same shell problem.
 
 ---
 
-## 0022 — `MessageBlock` stays in the extension
+## 0022 - `MessageBlock` stays in the extension
 
-**Status:** Accepted · **Date:** 2026-08-19 · **PR:** —
+**Status:** Accepted · **Date:** 2026-08-19 · **PR:** -
 
 ### Question
 
@@ -899,14 +901,14 @@ the **title** its own line. Where should the component that fixes this live?
 
 ### Decision
 
-Make it a component — `MessageBlock` — but keep it in the **extension**, at
+Make it a component - `MessageBlock` - but keep it in the **extension**, at
 `src/webviews/components/MessageBlock.tsx`. It does not enter the package.
 
 ### Why not the package
 
 The framing that would have carried it into the package is that Fluent has no block-level message
 component and a webview needs one. The honest framing is narrower: its shape follows from how _this
-product_ uses `MessageBar` — as a full-fledged block element inside the content flow rather than a
+product_ uses `MessageBar` - as a full-fledged block element inside the content flow rather than a
 slim strip above it, so it is not competing for vertical space and a stacked title costs nothing.
 That is house style.
 
@@ -919,7 +921,7 @@ gate working.
 
 ### What staying local buys
 
-It can use `vscode.l10n.t()` freely, which nothing in the package may do — the repo's extractor does
+It can use `vscode.l10n.t()` freely, which nothing in the package may do - the repo's extractor does
 not scan `node_modules`, so a package-owned string would silently never be translated in any
 consumer. Its name is also cheap to revisit: `Notice` remains an alternative, and `MessageBox` was
 rejected for carrying the Win32 modal-dialog association.
@@ -938,7 +940,7 @@ written now carry over unchanged.
 
 ---
 
-## 0023 — The README presents theming and components as equal, mixable
+## 0023 - The README presents theming and components as equal, mixable
 
 **Status:** Accepted (modified) · **Date:** 2026-08-20
 
@@ -974,7 +976,7 @@ note at the top of design.md.
 
 ---
 
-## 0024 — The metric card enters, and converges its fork
+## 0024 - The metric card enters, and converges its fork
 
 **Status:** Accepted (modified) · **Date:** 2026-08-21 · **PR:** #895
 
@@ -1030,7 +1032,7 @@ that is a deliberate visual change with its own before-and-after, not a side eff
 **The `filled` card sets no padding and no gap.** `MetricsRow.scss` declares `padding: 16px` and
 `gap: 8px` on `.metricCard`; the measured values are `12px` and `12px`, which are Fluent `Card`'s.
 Griffel's rules win, so those two declarations have never once been painted. The migration inverts
-that — a Griffel rule in the package merged onto `Card` would win — so writing `16 / 8` into the
+that - a Griffel rule in the package merged onto `Card` would win - so writing `16 / 8` into the
 package would paint them for the first time and grow every card from 88px to 92px.
 
 The rejected alternative is shipping `16 / 8` on the grounds that it is what the author wrote and
@@ -1048,7 +1050,7 @@ to be different. `filled` therefore declares neither and inherits `Card`'s; `sub
 design.md §11 shortlisted this candidate as "not self-contained" and stopped. What the shortlist
 missed is that the duplication already exists inside one feature: two files, two stylesheets, two
 byte-identical `.nullValue` rules. Deduplicating them requires choosing a single shape whatever the
-destination, and once that shape exists it satisfies the gate on its own terms — it is layout,
+destination, and once that shape exists it satisfies the gate on its own terms - it is layout,
 loading and unavailable states, and a tooltip contract, with no product string and no opinion about
 numbers.
 
@@ -1078,7 +1080,7 @@ for.
 
 ---
 
-## 0025 — `Announcer` is out of scope for this package
+## 0025 - `Announcer` is out of scope for this package
 
 **Status:** Accepted · **Date:** 2026-08-21 · **PR:** #895
 
@@ -1127,7 +1129,7 @@ it will not survive contact with the next reader.
 
 ---
 
-## 0026 — The focusable badge ships with one naming contract
+## 0026 - The focusable badge ships with one naming contract
 
 **Status:** Accepted (modified) · **Date:** 2026-09-10 · **PR:** #895
 
@@ -1181,7 +1183,7 @@ increment's recorded before/after evidence.
 
 ---
 
-## 0027 — The package is published, not workspace-only
+## 0027 - The package is published, not workspace-only
 
 **Status:** Accepted · **Date:** 2026-09-10 · **PR:** #895
 
@@ -1204,3 +1206,45 @@ the old assumption that nothing has been published cannot justify an API removal
 This decision records the operator's confirmation, not a registry audit. It does not establish
 which versions or commits have been published. No publish, version bump or release workflow change
 was performed when recording it.
+
+---
+
+## 0028 - Full-webview sizing is the container default
+
+**Status:** Accepted · **Date:** 2026-09-10 · **PR:** #895
+
+The operator confirmed that `Container` and its `Wizard` facade should default to a full-webview
+screen using `height: 100vh`. This settles increment 2's root-height question. Requiring a bounded
+parent from every caller was rejected because the existing full-window flows should work directly.
+The body owns scrolling and the footer stays visible. Document padding remains consumer-owned.
+
+Embedding remains an opt-in workaround: supply a bounded parent height and override the root
+height. `Container` supports `style` and `className`; `Wizard` does not forward them, so its README
+documents a dedicated wrapper with a scoped direct-child CSS rule. This rule depends on the current
+root structure. Consumers needing direct control can compose the lower-level components instead.
+No sizing API or runtime behavior was changed. The examples were committed in `5dbf1783`.
+
+---
+
+## 0029 - No external consumers; finalize the API for 1.0.0
+
+**Status:** Accepted · **Date:** 2026-09-10 · **PR:** #895
+
+The operator clarified that the published preview has no external consumers. The existing extension
+uses the workspace package, but there is no external compatibility migration to perform. Breaking
+API changes are permitted while finishing this extraction, including the changes already made to
+`WizardBreadcrumb` and `MetricCard.ariaLabel`.
+
+This clarifies decision 0027's precaution about published consumers; publication alone does not
+establish adoption. The original fork mentioned in the feature README demonstrates reuse potential,
+not an external consumer of the published package.
+
+Once the implementation and acceptance work are complete, bump the package from `0.1.0-preview`
+to `1.0.0`, remove README warnings that permit breaking changes between minor versions, and run
+`npm install` with the repository's pinned npm version to update the lockfile. The pre-1.0 permission
+is not an ongoing waiver of compatibility after the stable release. This authorizes preparation of
+the release version, not a registry publish or a PR-status change.
+
+Computed-accessibility testing is deferred to issue #918 for the broader testing-infrastructure
+evaluation; it does not block this release preparation. API Extractor and Announcer work remain
+separate follow-ups.

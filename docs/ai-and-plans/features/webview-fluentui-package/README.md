@@ -44,7 +44,7 @@ The theming layer fixes that in two moves:
 1. Reads the user's accent color off the DOM and synthesizes a Fluent brand ramp from it through
    LCH/LAB palette math.
 2. Remaps roughly fifty Fluent neutral tokens onto `var(--vscode-*)` with fallback chains, so
-   surfaces track the active theme — including community themes that leave the ideal token
+   surfaces track the active theme - including community themes that leave the ideal token
    undefined.
 
 Plus a stylesheet of component-scoped escapes for the cases where a Fluent recipe cannot be reached
@@ -53,12 +53,12 @@ through tokens at all.
 ## The second consumer already exists, as a fork
 
 The scope gate in decision 0001 asks whether a thing plausibly has two consumers. For the theming
-layer this is not a projection: `microsoft/vscode-cosmosdb` carries a near-identical **copy** of it —
+layer this is not a projection: `microsoft/vscode-cosmosdb` carries a near-identical **copy** of it -
 `src/webviews/theme/DynamicThemeProvider.tsx`, `state/ThemeContext.tsx`, `state/ThemeState.tsx` with
 the same `monaco-editor` type import, `themeGenerator.ts`, and the same `utils/csswg.ts` palette
 math.
 
-The two copies have already drifted — their context exports `getVSCodeTheme` where this one exports
+The two copies have already drifted - their context exports `getVSCodeTheme` where this one exports
 `getVSCodeThemeKind`, and their `WithTheme` takes a defaulted optional prop where this one takes a
 required one. Every fix to one of them is invisible to the other.
 
@@ -69,12 +69,12 @@ peer ranges in design.md §7 are chosen to satisfy both repositories at once.
 
 After increments 1-4:
 
-- `packages/vscode-ext-webview-fluentui/**` — the package
-- `src/webviews/index.tsx` — the consumer wiring, now rendering through `VSCodeFluentProvider`
-- `src/webviews/components/monacoTheme.ts` and `vscodeThemeTokens.ts` — the Monaco derivation and
+- `packages/vscode-ext-webview-fluentui/**` - the package
+- `src/webviews/index.tsx` - the consumer wiring, now rendering through `VSCodeFluentProvider`
+- `src/webviews/components/monacoTheme.ts` and `vscodeThemeTokens.ts` - the Monaco derivation and
   its token list, which stayed behind (decisions 0008, 0013), beside their only consumer
-- `src/webviews/index.scss` — the `--documentdb-*` field stroke aliases, kept extension-side (0012)
-- `src/webviews/slickgrid.scss` — product-specific, moved out of the dissolved `theme/` folder
+- `src/webviews/index.scss` - the `--documentdb-*` field stroke aliases, kept extension-side (0012)
+- `src/webviews/slickgrid.scss` - product-specific, moved out of the dissolved `theme/` folder
 - `packages/vscode-ext-webview-fluentui/src/components/` - `Container`, `StepList`, `StatusList`,
   `Wizard`, `MetricGrid`, `MetricCard`, and `FocusableBadge`, with their supporting components
 - Local Quick Start and Atlas Credentials consume the wizard components; Query Insights and
@@ -82,7 +82,7 @@ After increments 1-4:
 
 `src/webviews/theme/` no longer exists.
 
-## Architecture (intent — code is authoritative for behavior)
+## Architecture (intent - code is authoritative for behavior)
 
 [design.md](./design.md) is the durable document. The load-bearing ideas:
 
@@ -100,7 +100,7 @@ After increments 1-4:
 
 | Date       | PR   | What changed                                                                                                           | Docs                                                                                                             |
 | ---------- | ---- | ---------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------- |
-| 2026-08-18 | —    | Design and decisions settled; increment 1 planned                                                                      | [iterations/01-theme-and-first-component.md](./iterations/01-theme-and-first-component.md)                       |
+| 2026-08-18 | -    | Design and decisions settled; increment 1 planned                                                                      | [iterations/01-theme-and-first-component.md](./iterations/01-theme-and-first-component.md)                       |
 | 2026-08-18 | #895 | Increment 1 implemented and visually verified: package on disk, theming layer and `WizardBreadcrumb` moved, no publish | [iterations/01-theme-and-first-component.md](./iterations/01-theme-and-first-component.md)                       |
 | 2026-08-20 | #895 | Increment 2 completed: shared wizard surface; Local Quick Start and Atlas Credentials migrated                         | [iterations/02-wizard-shell-and-components.md](./iterations/02-wizard-shell-and-components.md)                   |
 | 2026-08-21 | #895 | Increment 3 completed: metric cards, grid and summary-cell convergence                                                 | [iterations/03-metric-card.md](./iterations/03-metric-card.md)                                                   |
@@ -109,21 +109,21 @@ After increments 1-4:
 
 ## Decisions
 
-[decisions.md](./decisions.md) — twenty-seven entries covering scope, layering, module format, styling
+[decisions.md](./decisions.md) - twenty-nine entries covering scope, layering, module format, styling
 delivery, and public naming.
 
 The highest-signal ones, because they reverse what was originally proposed:
 
-- **0009** — the `adaptive` flag is deleted rather than defaulted to `true`
-- **0010** — the stylesheet is injected at module scope rather than imported by the consumer
-- **0012** — no public CSS custom properties ship in v1
+- **0009** - the `adaptive` flag is deleted rather than defaulted to `true`
+- **0010** - the stylesheet is injected at module scope rather than imported by the consumer
+- **0012** - no public CSS custom properties ship in v1
 
 And the four that only implementation could have produced:
 
-- **0017** — `moduleResolution: bundler` emits ESM that no bundler will load
-- **0018** — a context-backed hook cannot serve the composable tier it exists for
-- **0019** — adapt Fluent by re-pointing its tokens, never by out-specifying its classes
-- **0020** — opaque stencils must stay opaque; `translucent` is what consumers should use
+- **0017** - `moduleResolution: bundler` emits ESM that no bundler will load
+- **0018** - a context-backed hook cannot serve the composable tier it exists for
+- **0019** - adapt Fluent by re-pointing its tokens, never by out-specifying its classes
+- **0020** - opaque stencils must stay opaque; `translucent` is what consumers should use
 
 The later increments also settled that `MessageBlock` and `Announcer` stay extension-local,
 components and theming are independently adoptable, badges and metrics share an explicit
@@ -140,6 +140,12 @@ The package is a published preview, not workspace-only. The absence of `private:
 intentional (0027). This records the operator's publishing status; it does not identify a registry
 version or claim that every local change has already been published.
 
+The operator subsequently confirmed there are no external package consumers. Breaking API changes
+are permitted while finalizing this extraction, followed by a `1.0.0` release-version bump (0029).
+The copied theming implementation in the other repository is not adoption of the published package.
+Full-webview sizing with `100vh` is the accepted default (0028); the component READMEs document
+bounded-parent embedding workarounds for both `Container` and `Wizard`.
+
 ## Open gaps
 
 - **Fluent internals coupling.** The overrides key off `fui-*` class names, which are Fluent
@@ -152,12 +158,13 @@ version or claim that every local change has already been published.
   global neutral strokes, `colorSubtleBackgroundSelected`, and high-contrast theme kinds, which
   bypass the generator entirely and fall back to the static Teams themes.
 - **Type-checking resolves built output, not source** (0016). The package must be built before the
-  root `tsc` runs — already guaranteed by the `prebuild` fan-out, and true of the other five
+  root `tsc` runs - already guaranteed by the `prebuild` fan-out, and true of the other five
   workspace packages too. Modernising resolution repo-wide is filed as future work.
 - **Computed-accessibility regression tests remain optional follow-up.** The badge and metric
   suites assert ARIA relationships, with computed names and descriptions checked in the recorded
-  browser measurements. Adding `dom-accessibility-api` still needs operator approval; it was not
-  added by increment 4. Manual acceptance is complete, not blocked on this dependency.
+  browser measurements. Evaluate `dom-accessibility-api` with the broader testing infrastructure
+  in [#918](https://github.com/microsoft/vscode-documentdb/issues/918). Manual acceptance is complete,
+  not blocked on this dependency.
 - **API Extractor remains deferred.** No dependency or lockfile change was made as a side effect
   of the component extractions.
 

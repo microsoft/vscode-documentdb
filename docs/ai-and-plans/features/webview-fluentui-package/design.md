@@ -8,7 +8,7 @@ code:
   - src/webviews/index.tsx
 ---
 
-# `@microsoft/vscode-ext-webview-fluentui` — Design
+# `@microsoft/vscode-ext-webview-fluentui` - Design
 
 > The durable shape of the package. Rationale for individual choices lives in
 > [decisions.md](./decisions.md); where the two disagree, decisions.md wins.
@@ -31,7 +31,7 @@ Two entries.
 
 | Entry          | Contents                                                                                                                                  |
 | -------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
-| `.`            | `VSCodeFluentProvider`, `useActiveVSCodeTheme`, `useActiveVSCodeThemeKind`, `createVSCodeFluentTheme` — and the self-injecting stylesheet |
+| `.`            | `VSCodeFluentProvider`, `useActiveVSCodeTheme`, `useActiveVSCodeThemeKind`, `createVSCodeFluentTheme` - and the self-injecting stylesheet |
 | `./components` | `WizardBreadcrumb` and its types. No theming, no stylesheet.                                                                              |
 
 Not in v1: `./tokens` (0008), `./monaco` (0013), `./styles.css` (0010), `./testing`.
@@ -44,7 +44,7 @@ Not in v1: `./tokens` (0008), `./monaco` (0013), `./styles.css` (0010), `./testi
 | Composable | `useActiveVSCodeThemeKind()` + `createVSCodeFluentTheme()` | consumers owning their own `FluentProvider` |
 | Primitive  | `generateAdaptiveDarkTheme()` and friends                  | consumers post-processing the theme object  |
 
-All three tiers are Fluent-bound — the generators return a Fluent `Theme`. The genuinely
+All three tiers are Fluent-bound - the generators return a Fluent `Theme`. The genuinely
 design-system-neutral pieces, the palette math and the VS Code token list, are internal (0008), so
 there is no tier for non-Fluent consumers and the package name says as much (0002).
 
@@ -88,8 +88,8 @@ that importing `./components` injects no stylesheet.
 packages/vscode-ext-webview-fluentui/
 ├── package.json                    # type: module, two exports, sideEffects: ["./dist/index.js"]
 ├── tsconfig.json                   # esnext + bundler resolution, jsx react-jsx, declaration
-├── jest.config.cjs                 # .cjs — "type": "module" would break module.exports
-├── README.md  LICENSE               # no ADVANCED.md or MIGRATION.md in v1 — nothing to migrate from yet
+├── jest.config.cjs                 # .cjs - "type": "module" would break module.exports
+├── README.md  LICENSE               # no ADVANCED.md or MIGRATION.md in v1 - nothing to migrate from yet
 ├── scripts/
 │   └── build-styles.mjs            # scss → src/styles/generated.ts
 └── src/
@@ -108,8 +108,8 @@ Every folder carries its own `README.md`, as in the sibling package.
 
 ## 5. How the styles reach the page
 
-`src/index.ts` calls `injectStyles()` at module scope. Any import from `.` — facade, hook, or
-generator — brings the sheet. There is no consumer-side import and no opt-out (0010, 0011).
+`src/index.ts` calls `injectStyles()` at module scope. Any import from `.` - facade, hook, or
+generator - brings the sheet. There is no consumer-side import and no opt-out (0010, 0011).
 
 ```ts
 export function injectStyles(): void {
@@ -149,8 +149,8 @@ The root `prebuild` already fans out with `npm run build --workspaces --if-prese
 works with no root-level change.
 
 This is the first real divergence from the sibling package, whose entire build is `tsc -p .`. The
-`package.json` consequences — a `prebuild` step, and `sideEffects: ["./dist/index.js"]` rather than
-`false` — are deliberate and are argued in decisions 0005 and 0010. Everything else about the
+`package.json` consequences - a `prebuild` step, and `sideEffects: ["./dist/index.js"]` rather than
+`false` - are deliberate and are argued in decisions 0005 and 0010. Everything else about the
 `package.json`, including `types` and `typesVersions`, mirrors the sibling exactly (0016).
 
 ## 7. Dependencies
@@ -163,12 +163,12 @@ This is the first real divergence from the sibling package, whose entire build i
 | `@fluentui/react-components` | `~9.74` | `~9.74.4`      | `~9.74.1`       |
 | `@fluentui/react-icons`      | `~2.0`  | `~2.0.320`     | `~2.0.313`      |
 
-`devDependencies`: `sass` (the style build) and `@fluentui/react-progress` — the latter because
+`devDependencies`: `sass` (the style build) and `@fluentui/react-progress` - the latter because
 `fluentOverrides.test.ts` does `require.resolve('@fluentui/react-progress')` and currently works only
 by npm hoisting. In the package it must be declared.
 
 The narrow Fluent range is load-bearing rather than cautious. The overrides key off `fui-*` class
-names and, in one case, the absence of an `aria-valuenow` attribute — Fluent implementation details,
+names and, in one case, the absence of an `aria-valuenow` attribute - Fluent implementation details,
 not public API. A minor Fluent release can restructure them and the overrides will silently stop
 applying, with no build error. The `fluentOverrides` test suite is the tripwire.
 
@@ -179,15 +179,16 @@ defaulting to English. This is not merely tidier: the repo's `npm run l10n` extr
 The workspace manifest currently declares `version: 0.1.0-preview`. The operator confirmed on
 2026-09-10 that the package is already being published, so the absence of `private: true` is
 intentional. Decision 0027 replaces the original workspace-only restriction. Registry versions
-and the publication status of individual commits must be checked separately; public API changes
-must no longer assume there are no published consumers.
+and the publication status of individual commits must be checked separately. The operator later
+confirmed there are no external consumers: decision 0029 permits API changes while finalizing the
+extraction and calls for a `1.0.0` release-version bump after acceptance.
 
 ## 8. Testing
 
 Package tests run under the package's own jest project, registered in the root `jest.config.js`
 `projects` array: jsdom environment, `@swc/jest` transform, CommonJS output (0006).
 
-Type safety is **not** provided by the test run — SWC does not type-check. It comes from
+Type safety is **not** provided by the test run - SWC does not type-check. It comes from
 `tsc -p .` via `npm run build`.
 
 Tests that move with the code: `themeGenerator.test.ts`, and `fluentOverrides.test.ts` with its
@@ -200,17 +201,17 @@ Tests that are new:
 - `getBrandTokensFromPalette` degrades sanely on an unparseable key color (0009).
 
 `WizardBreadcrumb` has no tests today and gains none here. It carries no logic worth asserting, and
-the one new behavior — the overflow-label prop — is a defaulted string.
+the one new behavior - the overflow-label prop - is a defaulted string.
 
 ## 9. How consumers resolve the package (0016)
 
 `npm run build` is plain `tsc` against the root `tsconfig.json`, which is `"module": "commonjs"` with
-no `moduleResolution` — node10 resolution, so the `exports` field is ignored. Left alone, the first
+no `moduleResolution` - node10 resolution, so the `exports` field is ignored. Left alone, the first
 webview importing the package breaks the build.
 
 The package resolves the way all five existing workspace packages do: npm workspaces symlinks it
-into `node_modules`, the root `tsc` reads `types` from its `package.json`, and the one subpath —
-which node10 cannot resolve on its own — is covered by `typesVersions`.
+into `node_modules`, the root `tsc` reads `types` from its `package.json`, and the one subpath -
+which node10 cannot resolve on its own - is covered by `typesVersions`.
 
 ```jsonc
 "types": "./dist/index.d.ts",
@@ -222,12 +223,12 @@ which node10 cannot resolve on its own — is covered by `typesVersions`.
 ```
 
 **No change to the root `tsconfig.json`.** Because resolution lands on `dist/`, the package must be
-built before the root `tsc` runs — which `prebuild: npm run build --workspaces --if-present` already
+built before the root `tsc` runs - which `prebuild: npm run build --workspaces --if-present` already
 guarantees, exactly as it does for the other five.
 
 ## 10. What stays behind in the extension
 
-`src/webviews/theme/` is **dissolved** — a folder for two leftovers is not worth keeping. Its
+`src/webviews/theme/` is **dissolved** - a folder for two leftovers is not worth keeping. Its
 survivors move to where they are used:
 
 | What                                              | Goes to                                           | Why it stays (0013, 0012)         |
@@ -240,14 +241,14 @@ All localized strings stay in the extension, including the `WizardBreadcrumb` ov
 
 ## 11. Acceptance
 
-A green build and a passing suite prove very little here — a wrong token mapping compiles cleanly and
+A green build and a passing suite prove very little here - a wrong token mapping compiles cleanly and
 looks broken. **Increment 1 is not done until the operator has visually verified the webviews.** The
 implementing agent runs the verification commands, then stops and hands over for that check rather
 than declaring completion.
 
 ## 11. Increments
 
-**Increment 1** — package skeleton, theming layer, `WizardBreadcrumb`, initially consumed through
+**Increment 1** - package skeleton, theming layer, `WizardBreadcrumb`, initially consumed through
 the npm workspace without publishing. Implemented in
 [iterations/01-theme-and-first-component.md](./iterations/01-theme-and-first-component.md).
 
