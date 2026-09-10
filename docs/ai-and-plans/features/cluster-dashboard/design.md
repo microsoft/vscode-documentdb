@@ -29,6 +29,10 @@ server/resource facts sit in the animated details disclosure, which also offers 
 See [the current architecture](./README.md#architecture-intent--code-is-authoritative-for-behavior).
 The layout lab and alternate-header toggle are not part of the feature.
 
+**Settled action language (2026-09-10):** Disclosure labels name their content, while commands
+that open another editor use action verbs. Navigation icons describe the destination or movement,
+not the namespace data type. See [decision 0022](./decisions.md#0022-labels-name-content-icons-communicate-navigation).
+
 ---
 
 ## 1. Research summary — what we learned before designing

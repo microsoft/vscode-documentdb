@@ -29,6 +29,7 @@ created: 2026-08-24
 | 0019 | `currentOp` is out of scope for this iteration                | Accepted            | Supersedes 0003 and 0010; makes 0012 moot                                  | 2026-09-08 | #823 |
 | 0020 | Show the dashboard on tree connect by default                 | Accepted            | New entry point, with a persistent opt-out                                 | 2026-09-09 | #823 |
 | 0021 | Unavailable table values are enough for best-effort summaries | Accepted            | Replaces proposed completeness badges and row warning icons with N/A cells | 2026-09-10 | #823 |
+| 0022 | Labels name content; icons communicate navigation             | Accepted            | Replaces generic file and document icons with destination-oriented actions | 2026-09-10 | #823 |
 
 > Entries below are **semantically** immutable: append new entries rather than
 > rewriting old ones, and record reversals as a new entry plus a status change
@@ -860,3 +861,35 @@ The proposed follow-up added warning icons and explicit partial-result labels to
 summaries. The operator instead accepted the available-value sums as good enough for this
 inventory: the table's unavailable values and existing warning provide sufficient context.
 This is an accepted limitation, not a claim that those sums cover every database.
+
+---
+
+## 0022: Labels name content; icons communicate navigation
+
+**Status:** Accepted · **Date:** 2026-09-10 · **Raised by:** Operator
+
+### Decision
+
+Use noun labels for disclosure content and action verbs for commands that open a separate view.
+Use destination-oriented icons for navigation instead of icons that depict the data type.
+
+Concretely:
+
+- The Query Insights accordion is `Stage Details`; its chevron already communicates expansion.
+- The dashboard command is `View Raw Diagnostics`, because it opens read-only output instead of
+  revealing content in place.
+- Collection View commands and the playground CodeLens use the `screen-full` icon instead of the
+  generic `files` icon.
+- Both dashboard row navigation buttons use the expand icon. The accessible labels continue to
+  distinguish `Show collections` from `Open collection`.
+
+### Reasoning
+
+Repeating `Show` in an accordion header adds no information because the control state and chevron
+already describe the interaction. The diagnostics command is different: it opens another editor,
+so `View` describes the result and distinguishes it from the dashboard's `Show details` disclosure.
+
+Likewise, file and document icons describe content rather than destination. The expand and
+`screen-full` icons consistently signal that the action navigates away from the current context.
+Accessible labels carry the precise action, so matching icons can be reused without obscuring the
+difference between drilling into a database and opening a collection.

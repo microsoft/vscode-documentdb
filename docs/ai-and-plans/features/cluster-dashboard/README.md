@@ -57,6 +57,10 @@ None yet. A user-manual page is due before this ships.
   right. Fluent overflow moves Copy, then Shell, into More actions as space contracts. Refresh
   stays visible and re-reads cluster storage and the current inventory; its label remains Refresh.
   The inventory toolbar keeps its existing layout.
+- **Labels name content and icons communicate navigation.** Disclosures use noun labels where the
+  control already communicates expansion. Commands that open another editor use action verbs and
+  destination-oriented icons. Accessible labels preserve the exact row action
+  ([0022](./decisions.md#0022-labels-name-content-icons-communicate-navigation)).
 - **Nothing here reads what anyone is running.** `currentOp` is out of scope for this iteration,
   so no command document, query filter or client address enters the feature at all
   ([0019](./decisions.md#0019--currentop-is-out-of-scope-for-this-iteration)).
@@ -97,6 +101,7 @@ None yet. A user-manual page is due before this ships.
 | 2026-08-24 | Merged current `main`; docs migrated into this layout                              | —                                                                                                                                                                   |
 | 2026-09-07 | Feature set reduced to the inventory; the leftovers of the removed panels swept up | [0015](./decisions.md#0015--storage-refresh-is-explicit-after-initial-load)–[0017](./decisions.md#0017--diagnostics-carry-raw-replies-not-a-second-reading-of-them) |
 | 2026-09-08 | `currentOp` dropped from the iteration, taking the last application data with it   | [0019](./decisions.md#0019--currentop-is-out-of-scope-for-this-iteration)                                                                                           |
+| 2026-09-10 | Action labels and navigation icons aligned across related entry points            | [0022](./decisions.md#0022-labels-name-content-icons-communicate-navigation)                                                                                         |
 
 ## Decisions
 
