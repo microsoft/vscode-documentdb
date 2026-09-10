@@ -10,7 +10,7 @@ code:
 
 # `@microsoft/vscode-ext-webview-fluentui`
 
-**Status:** published preview; increments 1-4 implemented · **Created:** 2026-08-18
+**Status:** 1.0.0 prepared; increments 1-4 implemented and accepted · **Created:** 2026-08-18
 
 > The React theming layer and a small set of components, extracted so other VS Code extensions can
 > make Fluent UI look correct inside a webview without rebuilding it.
@@ -136,12 +136,12 @@ and satisfactory. The review of `b4aee678` also passed `npm run build` and all 1
 across the badge, metric-card and components-entry suites. Detailed browser evidence is in the
 increment 4 work log; no screen-reader transcript or exact operator test matrix was supplied.
 
-The package is a published preview, not workspace-only. The absence of `private: true` is
-intentional (0027). This records the operator's publishing status; it does not identify a registry
-version or claim that every local change has already been published.
+The package manifest is now `1.0.0`, prepared for the stable release. Preview versions were already
+being published; the absence of `private: true` remains intentional (0027). This does not claim
+that `1.0.0` has been published to the registry.
 
 The operator subsequently confirmed there are no external package consumers. Breaking API changes
-are permitted while finalizing this extraction, followed by a `1.0.0` release-version bump (0029).
+were permitted while finalizing this extraction before the `1.0.0` release-version bump (0029).
 The copied theming implementation in the other repository is not adoption of the published package.
 Full-webview sizing with `100vh` is the accepted default (0028); the component READMEs document
 bounded-parent embedding workarounds for both `Container` and `Wizard`.

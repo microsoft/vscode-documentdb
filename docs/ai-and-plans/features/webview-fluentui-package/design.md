@@ -176,7 +176,8 @@ applying, with no build error. The `fluentOverrides` test suite is the tripwire.
 defaulting to English. This is not merely tidier: the repo's `npm run l10n` extractor does not scan
 `node_modules`, so a package-internal string would silently never be translated in any consumer.
 
-The workspace manifest currently declares `version: 0.1.0-preview`. The operator confirmed on
+The workspace manifest now declares `version: 1.0.0`, prepared for release but not published by this
+change. The operator confirmed on
 2026-09-10 that the package is already being published, so the absence of `private: true` is
 intentional. Decision 0027 replaces the original workspace-only restriction. Registry versions
 and the publication status of individual commits must be checked separately. The operator later
