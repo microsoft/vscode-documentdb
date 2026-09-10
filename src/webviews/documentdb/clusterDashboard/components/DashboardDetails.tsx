@@ -204,9 +204,7 @@ export const DashboardDetailsRegion = ({
                                                         size="small"
                                                         className="dashboardDetailCopy"
                                                         icon={<CopyRegular />}
-                                                        onClick={() =>
-                                                            void navigator.clipboard.writeText(detail.value)
-                                                        }
+                                                        onClick={() => void navigator.clipboard.writeText(detail.value)}
                                                     />
                                                 </Tooltip>
                                             )}
