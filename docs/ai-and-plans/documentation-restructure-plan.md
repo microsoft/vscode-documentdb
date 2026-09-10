@@ -220,6 +220,25 @@ the knowledge-base README carries no frontmatter although rule 6 requires
 `kind` and `status` on root documents; and the Prettier tooling change rides in
 this branch rather than its own PR.
 
+### Post-migration change: an iteration template, §6.5 (2026-08-19)
+
+§6 templated the frontmatter, the feature README, `decisions.md` and the root
+README. It never templated the document under `iterations/`, which is the file
+most rounds of work actually produce. The rules said where it goes (rule 2), what
+frontmatter it carries (rule 6), and that it is evidence rather than truth
+(rule 7) — nothing about what belongs inside it.
+
+The gap surfaced during increment 2 of `webview-fluentui-package`. The plan was
+executed in nine commits, and the record of _which commit did what, and which
+alternatives were rejected on the way_, was written only after the fact, at the
+operator's prompting, from a session that happened to still be open. Nothing in
+the knowledge base had asked for it, so nothing had been written during the work.
+
+§6.5 now templates it, and the rule it exists for is the one about deviations:
+**record the alternatives that were rejected, not only the option that shipped.**
+The shipped option is recoverable from the code; the rejected ones are not
+recoverable from anywhere.
+
 ---
 
 ## 1. Context
@@ -617,6 +636,82 @@ area-root research file referenced from a short decision entry.
   for frequently-needed rules, here for why and history.
 - A note that the 2026-08 restructure broke old deep links from GitHub PR
   comments (see §9.3).
+
+### 6.5 An iteration document
+
+§6.1 to §6.4 template the durable files. This templates the one under
+`iterations/`, which the original plan left unspecified: the rules said where an
+iteration file goes and that it is evidence rather than truth, but never what
+belongs inside one. Added 2026-08-19, after the gap surfaced (see §0).
+
+> **Draft.** The placement rule below (progress recorded inline, against each
+> work item) is settled and is what the knowledge-base README states. The rest of
+> this section is a first pass and the operator intends to refine it.
+
+```
+---
+feature: <slug>
+kind: plan
+status: active
+created: YYYY-MM-DD
+---
+
+# <Increment N> — <what this round does>
+
+<the plan itself: whatever the work needs. Work items, open questions, the
+ shape being built. Written before the work starts.>
+
+## <a work item>
+
+<the plan for it, written first>
+
+**Done.** `<commit>` <subject>. What landed, and why.
+
+**Deviation.** What changed from the plan, the alternatives considered, and why
+each was rejected.
+
+---
+
+# Outcome
+
+<written at hand-over: what was verified, what was not>
+
+---
+
+# Lessons for the next <kind of work>
+
+<optional. Only when something generalises past this feature.>
+```
+
+The rules that make it worth writing:
+
+- **Progress is recorded inline, against the work item it belongs to.** Not a
+  work-log chapter, and not a deviations table at the end. A reader following
+  the plan meets what happened to an item where the item is defined, rather than
+  carrying every item in their head until the last page.
+- **The note is written the moment that item is committed.** Not reconstructed at
+  the end. Reconstruction only works while the session that did the work is still
+  open, which is luck rather than method.
+- **Each note carries the commit hash and subject**, what landed, and why.
+  Without the hash a reader has to rebuild the mapping from `git log` and guess.
+- **A deviation from the plan records the alternatives considered and why each
+  was rejected.** This is the load-bearing rule. The option that shipped is
+  already in the code; the ones that were turned down exist nowhere else. "This
+  value renders an empty window in the only host we have" is worth more to the
+  next reader than the line that shipped.
+- **The plan is added to, never rewritten to match what happened.** Editing it
+  destroys the only record that plan and reality ever differed.
+- **The outcome says plainly what was not verified.** Green commands are
+  persuasive well past what they actually prove.
+
+This is also what makes rule 7 worth anything. `iterations/` is evidence only,
+but evidence of the reasoning is far more useful than evidence of the outcome,
+and only these notes carry it.
+
+`features/webview-fluentui-package/iterations/02-wizard-shell-and-components.md`
+is the case that prompted this section, and it is **not** a model for placement:
+it was written before the inline rule was settled and collects its record into a
+trailing chapter. Read it for the content of an entry, not the position.
 
 ---
 

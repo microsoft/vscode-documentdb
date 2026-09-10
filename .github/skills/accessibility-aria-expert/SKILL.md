@@ -19,25 +19,26 @@ Verify and fix accessibility in React/Fluent UI webview components.
 
 ## Core Pattern: Tooltip Accessibility
 
-Tooltips require `aria-label` + `aria-hidden` to avoid double announcements:
+For a badge whose tooltip must be reachable by keyboard, use the package component and keep the
+tooltip as a description:
 
 ```tsx
-<Tooltip content="Detailed explanation">
-  <Badge tabIndex={0} className="focusableBadge" aria-label="Badge text. Detailed explanation">
-    <span aria-hidden="true">Badge text</span>
-  </Badge>
+<Tooltip content="Detailed explanation" relationship="description">
+  <FocusableBadge>Badge text</FocusableBadge>
 </Tooltip>
 ```
 
-- `aria-label`: Full context (visible text + tooltip)
-- `aria-hidden="true"`: Wraps visible text to prevent duplication
-- Screen reader hears: "Badge text. Detailed explanation"
+- The visible content is the name through `aria-labelledby`.
+- Tooltip content is the supplementary description through `aria-describedby`.
+- The badge carries `role="group"`, because ARIA cannot name a role-less element.
+- Browser-computed results do not prove what a real screen reader says.
 
 ## Detection Rules
 
-### 1. Tooltip Without aria-label Context
+### 1. Tooltip Content Never Reaches the Accessibility Tree
 
-❌ **Problem**: Tooltip content inaccessible to screen readers
+❌ **Problem**: the tooltip declares no ARIA relationship, so its content is invisible to assistive
+technology — and the `aria-label` here only restates the visible text
 
 ```tsx
 <Tooltip content="Save document to database">
@@ -45,28 +46,36 @@ Tooltips require `aria-label` + `aria-hidden` to avoid double announcements:
 </Tooltip>
 ```
 
-✅ **Fix**: Include tooltip in aria-label
+✅ **Fix**: declare the relationship and let the tooltip be the description
 
 ```tsx
 <Tooltip content="Save document to database" relationship="description">
-  <Button aria-label="Save document to database">Save</Button>
+  <Button>Save</Button>
 </Tooltip>
 ```
 
-### 2. Missing aria-hidden (Double Announcement)
+`relationship="description"` wires `aria-describedby` to the tooltip. Do **not** also copy the
+tooltip text into `aria-label`: that announces it twice (rule 2). Use `relationship="label"` only
+when the trigger has no visible text of its own.
 
-❌ **Problem**: Screen reader says "Collection scan Collection scan"
+### 2. Composed Badge Name Repeats Its Description
+
+❌ **Problem**: Tooltip details occur in both the name and description
 
 ```tsx
-<Badge aria-label="Collection scan. Query is inefficient">Collection scan</Badge>
+<Tooltip content="Query is inefficient" relationship="description">
+  <Badge tabIndex={0} aria-label="Collection scan. Query is inefficient">
+    <span aria-hidden="true">Collection scan</span>
+  </Badge>
+</Tooltip>
 ```
 
-✅ **Fix**: Wrap visible text
+✅ **Fix**: Let visible content name `FocusableBadge`; keep details in the description
 
 ```tsx
-<Badge aria-label="Collection scan. Query is inefficient">
-  <span aria-hidden="true">Collection scan</span>
-</Badge>
+<Tooltip content="Query is inefficient" relationship="description">
+  <FocusableBadge>Collection scan</FocusableBadge>
+</Tooltip>
 ```
 
 ### 3. Redundant aria-label (NOT Needed)
@@ -237,9 +246,12 @@ useEffect(() => {
 
 **DO use** on:
 
-- Visible text when aria-label provides complete context
 - Decorative icons, spinners, progress bars
 - Visual separators (\`|\`, \`—\`)
+
+**Last resort only**: visible text that a composed `aria-label` already covers. Prefer naming the
+element _from_ its visible content with `aria-labelledby`, which needs no hiding at all — that is
+what `FocusableBadge` and `MetricCard` do.
 
 **DO NOT use** on:
 
@@ -247,18 +259,29 @@ useEffect(() => {
 - Interactive/focusable elements
 - Error messages or alerts
 
-## focusableBadge Pattern
+## FocusableBadge Pattern
 
 For keyboard-accessible badges with tooltips:
 
-1. Import: \`import '../components/focusableBadge/focusableBadge.scss';\`
-2. Apply attributes:
+1. Import `FocusableBadge` from `@microsoft/vscode-ext-webview-fluentui/components`.
+2. Keep `Tooltip` at the call site with `relationship="description"`.
+3. Use `focusable={false}` only for plain badges in a mixed list; never infer focusability from an
+   accessible-name override.
 
 ```tsx
-<Badge tabIndex={0} className="focusableBadge" aria-label="Visible text. Tooltip details">
-  <span aria-hidden="true">Visible text</span>
-</Badge>
+<Tooltip content="Tooltip details" relationship="description">
+  <FocusableBadge>Visible text</FocusableBadge>
+</Tooltip>
 ```
+
+For rich tooltip content that visually repeats the badge name, set the content slot's `aria-label`
+to only the supplementary details. For truncated values, keep the visible label and truncated value
+as the badge name and the full value as the description; do not use `relationship="label"`.
+
+When you name a focusable container yourself rather than using these components, give it a role.
+ARIA forbids naming the `generic` role, so `aria-labelledby` on a bare `div` (or on Fluent's `Badge`
+or `Card`, neither of which sets a role) is a name a conforming screen reader may discard.
+`role="group"` is usually the least-weight role that makes the name legitimate.
 
 ## Screen Reader Announcements
 
@@ -302,12 +325,13 @@ import { Announcer } from '<relative-path>/components/accessibility';
 
 - [ ] Icon-only buttons have `aria-label`
 - [ ] Form inputs have associated labels or `aria-label`
-- [ ] Tooltip content included in `aria-label`
-- [ ] Visible text wrapped in `aria-hidden="true"` when aria-label duplicates it
+- [ ] Tooltips declare a `relationship`; their text is not also copied into `aria-label`
+- [ ] Visible text is not hidden with `aria-hidden` to make room for a composed `aria-label`
 - [ ] Redundant aria-labels removed (identical to visible text)
-- [ ] Visible button labels match accessible name exactly (for voice control)
+- [ ] Visible button labels are contained in the accessible name (for voice control)
 - [ ] Decorative elements have `aria-hidden={true}`
-- [ ] Badges with tooltips use `focusableBadge` class + `tabIndex={0}`
+- [ ] Badges with keyboard-reachable tooltips use `FocusableBadge` + `relationship="description"`
+- [ ] Focusable elements carrying `aria-labelledby` have a role (ARIA cannot name `generic`)
 - [ ] Status updates use `Announcer` component
 - [ ] Focus moves to dialog/modal content when opened
 - [ ] Related controls wrapped in `role="group"` with `aria-labelledby`
@@ -319,4 +343,4 @@ import { Announcer } from '<relative-path>/components/accessibility';
 - [WCAG 2.5.3 Label in Name](https://www.w3.org/WAI/WCAG21/Understanding/label-in-name.html)
 - [WCAG 4.1.2 Name, Role, Value](https://www.w3.org/WAI/WCAG21/Understanding/name-role-value.html)
 - [WCAG 4.1.3 Status Messages](https://www.w3.org/WAI/WCAG21/Understanding/status-messages.html)
-- See `src/webviews/components/focusableBadge/focusableBadge.md` for the Badge pattern
+- See `packages/vscode-ext-webview-fluentui/src/components/FocusableBadge/README.md` for the badge pattern

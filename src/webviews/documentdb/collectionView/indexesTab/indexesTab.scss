@@ -116,7 +116,7 @@
         }
     }
 
-    // Wraps the top-of-dashboard summary cards. The MetricsRow grid itself
+    // Wraps the top-of-dashboard summary cards. The MetricGrid itself
     // has no horizontal padding, so we align it with the table's gutter here.
     .indexMetricsRowContainer {
         flex-shrink: 0;

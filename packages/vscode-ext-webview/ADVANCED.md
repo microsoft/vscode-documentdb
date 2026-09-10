@@ -116,8 +116,8 @@ deprecated in favour of the `trpc` option, but still honored.
 `openWebview` creates a **new** panel on every call, so opening the same logical
 view twice yields two tabs. Many extensions instead want _create-or-reveal_: the
 first call opens the panel, later calls for the same key just bring the existing
-tab to the foreground. The package deliberately does **not** own this — a panel
-registry is consumer state, not transport state — but the returned controller
+tab to the foreground. The package deliberately does **not** own this: a panel
+registry is consumer state, not transport state, but the returned controller
 handle gives you everything needed to implement it in a few lines.
 
 Keep a `Map` from your own key to the live controller, reveal on a hit, and clear
@@ -131,12 +131,12 @@ const openPanels = new Map<string, WebviewController<AppRouter, MyConfig, Router
 function openOrReveal(ctx: vscode.ExtensionContext, key: string, config: MyConfig) {
   const existing = openPanels.get(key);
   if (existing && !existing.isDisposed) {
-    existing.revealToForeground(); // already open — just focus it
+    existing.revealToForeground(); // already open, just focus it
     return existing;
   }
 
   const controller = openWebview<AppRouter, MyConfig, RouterContext>(ctx, {
-    title: `My View — ${key}`,
+    title: `My View (${key})`,
     viewType: 'myView',
     router: appRouter,
     trpc,
@@ -189,7 +189,7 @@ const logger: ProcedureLogger = {
 const logged = publicProcedure.use((opts) => loggingMiddlewareBody(opts, logger));
 ```
 
-Both `onStart` and `onEnd` are optional — implement only the hook you need
+Both `onStart` and `onEnd` are optional; implement only the hook you need
 (`onEnd` alone is the common case).
 
 You can also pass a `ProcedureLogger` as the `telemetry` option to `openWebview`
@@ -198,7 +198,7 @@ dispatch layer without touching procedure definitions. At the dispatch layer the
 transport itself invokes the hooks: `onStart` fires exactly once before each
 query, mutation, and subscription runs, and `onEnd` fires exactly once when it
 completes (success, failure, or cancellation). The two are paired one-to-one even
-when procedure setup fails — an early failure still produces its `onStart` and a
+when procedure setup fails: an early failure still produces its `onStart` and a
 matching `onEnd` with `ok: false`. Because both hooks are independent and
 optional, an `onStart`-only logger receives start events at the dispatch layer,
 and dispatch `onEnd` entries additionally carry a `concurrent` in-flight gauge
@@ -288,8 +288,8 @@ export const stats = trackedProcedure.query(({ ctx }: { ctx: RouterContext }) =>
 When a single tRPC instance is bound to a base context and serves several views,
 procedures narrow `ctx` to their view's `RouterContext` (which declares
 `actionContext`) with a single `ctx as RouterContext`. The root context the
-controller builds does **not** carry `actionContext` — the runner injects it per
-call — so type that root object as `Omit<RouterContext, 'actionContext'>`.
+controller builds does **not** carry `actionContext`: the runner injects it per
+call, so type that root object as `Omit<RouterContext, 'actionContext'>`.
 
 ## The webview event channel
 
@@ -323,7 +323,7 @@ The channel exposes three observe methods, each returning an unsubscribe:
 
 `info` is a `CallInfo` (`{ type, path }`). The channel observes; it does not
 swallow. Your call-site handlers still run and still receive the error.
-**Subscriptions are intentionally _not_ published to the channel** — observe a
+**Subscriptions are intentionally _not_ published to the channel.** Observe a
 subscription's outcome through its own `.subscribe({ onError, onComplete })`
 callbacks. Only query and mutation outcomes flow through `onSuccess` / `onError`
 / `onAborted`, so a subscription's events are never surfaced twice.
@@ -335,7 +335,7 @@ The channel **isolates** a throwing observer: if one of your `onSuccess` /
 cannot break the tRPC call the handler was only observing (the observer-only
 contract). The isolated error is routed to an `onObserverError` sink that
 defaults to `console.error`. Pass your own via `connectTrpc(vscodeApi, {
-onObserverError })` — or the `onObserverError` prop of `WithWebviewContext` — to
+onObserverError })`, or the `onObserverError` prop of `WithWebviewContext`, to
 route observer failures to telemetry:
 
 ```ts
@@ -348,7 +348,7 @@ const { client, events } = connectTrpc<AppRouter>(vscodeApi, {
 ```
 
 `phase` is `'success' | 'error' | 'aborted'` and `info` is the same `CallInfo`
-the observers receive. A throw from the sink itself is also swallowed — nothing
+the observers receive. A throw from the sink itself is also swallowed; nothing
 an observer (or its error sink) does can affect dispatch. The default is
 deliberately quiet (`console.error`, no telemetry) so a generic consumer is not
 opted into events it may not want; wire the sink when you want observer failures

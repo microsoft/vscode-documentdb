@@ -28,15 +28,15 @@ Every webview boots through `src/webviews/index.tsx`:
 
 ```tsx
 root.render(
-  <DynamicThemeProvider useAdaptive={true}>
+  <VSCodeFluentProvider>
     <WithWebviewContext vscodeApi={vscodeApi}>
       <Component />
     </WithWebviewContext>
-  </DynamicThemeProvider>,
+  </VSCodeFluentProvider>,
 );
 ```
 
-- **`DynamicThemeProvider`** — adapts Fluent UI theming to VS Code's active color theme
+- **`VSCodeFluentProvider`** — adapts Fluent UI theming to VS Code's active color theme. Lives in `@microsoft/vscode-ext-webview-fluentui`, not in `src/`; importing it also injects that package's Fluent overrides.
 - **`WithWebviewContext`** — provides `vscodeApi` (postMessage) via React Context
 - **`WebviewRegistry`** — maps webview names → React components (in `_integration/WebviewRegistry`)
 
@@ -170,7 +170,7 @@ return () => {
 
 ## Fluent UI Integration
 
-Use `@fluentui/react-components` (v9), themed via `DynamicThemeProvider`:
+Use `@fluentui/react-components` (v9), themed via `VSCodeFluentProvider`:
 
 | Component                  | Usage                     |
 | -------------------------- | ------------------------- |

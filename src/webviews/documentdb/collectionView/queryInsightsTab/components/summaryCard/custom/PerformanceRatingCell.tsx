@@ -3,15 +3,15 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { Badge, Skeleton, SkeletonItem, Text, tokens, Tooltip } from '@fluentui/react-components';
+import { Skeleton, SkeletonItem, Text, tokens, Tooltip } from '@fluentui/react-components';
 import { InfoRegular, WarningRegular } from '@fluentui/react-icons';
 import { CollapseRelaxed } from '@fluentui/react-motion-components-preview';
+import { FocusableBadge } from '@microsoft/vscode-ext-webview-fluentui/components';
 import * as l10n from '@vscode/l10n';
 import type * as React from 'react';
 import { useMemo } from 'react';
-import '../../../../../../components/focusableBadge/focusableBadge.scss';
 import { type PerformanceDiagnostic } from '../../../../../../documentdb/collectionView/types/queryInsights';
-import { CellBase } from '../CellBase';
+import '../SummaryCard.scss';
 import './PerformanceRatingCell.scss';
 
 export type PerformanceRating = 'poor' | 'fair' | 'good' | 'excellent';
@@ -76,7 +76,7 @@ export const PerformanceRatingCell: React.FC<PerformanceRatingCellProps> = ({
     rating,
     diagnostics,
     visible = true,
-    nullValuePlaceholder = 'N/A',
+    nullValuePlaceholder = l10n.t('N/A'),
 }) => {
     // Stable random widths for badge skeletons — re-randomised each time the skeleton mounts
     const badgeWidths = useMemo(
@@ -126,7 +126,7 @@ export const PerformanceRatingCell: React.FC<PerformanceRatingCellProps> = ({
     );
 
     if (rating === null) {
-        // Explicit null: data unavailable (will use CellBase's nullValuePlaceholder)
+        // Explicit null: data unavailable, so the cell renders nullValuePlaceholder
         customContent = null;
     } else if (rating === undefined) {
         // Undefined: data loading — render a structured skeleton that mirrors the real layout
@@ -170,6 +170,7 @@ export const PerformanceRatingCell: React.FC<PerformanceRatingCellProps> = ({
                                 <Tooltip
                                     key={index}
                                     content={{
+                                        'aria-label': diagnostic.details,
                                         children: (
                                             <div style={{ padding: '8px' }}>
                                                 <div
@@ -192,21 +193,15 @@ export const PerformanceRatingCell: React.FC<PerformanceRatingCellProps> = ({
                                     positioning="above-start"
                                     relationship="description"
                                 >
-                                    {/* Accessibility pattern: aria-label provides full context for screen readers,
-                                        while aria-hidden on children prevents double announcement of visible text.
-                                        Screen readers announce: "message. details" instead of just "message" */}
-                                    <Badge
+                                    <FocusableBadge
                                         appearance="tint"
                                         color={diagnostic.type === 'positive' ? 'success' : 'informative'}
                                         size="small"
                                         shape="rounded"
                                         icon={diagnostic.type === 'negative' ? <WarningRegular /> : <InfoRegular />}
-                                        tabIndex={0}
-                                        className="focusableBadge"
-                                        aria-label={`${diagnostic.message}. ${diagnostic.details}`}
                                     >
-                                        <span aria-hidden="true">{diagnostic.message}</span>
-                                    </Badge>
+                                        {diagnostic.message}
+                                    </FocusableBadge>
                                 </Tooltip>
                             ))}
                         </div>
@@ -216,5 +211,13 @@ export const PerformanceRatingCell: React.FC<PerformanceRatingCellProps> = ({
         );
     }
 
-    return <CellBase label={label} value={customContent} nullValuePlaceholder={nullValuePlaceholder} span="full" />;
+    // Full-span markup, kept here rather than shared: this cell drops the fixed-height value slot,
+    // stretches its children and puts the label on its own line, so it is a different layout that
+    // happened to live in the same file as the single-span one.
+    return (
+        <div className="summaryCell cellSpanFull">
+            <div className="cellLabel">{label}</div>
+            {customContent === null ? <span className="nullValue">{nullValuePlaceholder}</span> : customContent}
+        </div>
+    );
 };

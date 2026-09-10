@@ -33,6 +33,7 @@
 import { Link, MessageBar, MessageBarBody, Skeleton, SkeletonItem, Text, tokens } from '@fluentui/react-components';
 import { ChatMailRegular, InfoRegular, SparkleRegular, WarningRegular } from '@fluentui/react-icons';
 import { CollapseRelaxed, Fade } from '@fluentui/react-motion-components-preview';
+import { MetricGrid } from '@microsoft/vscode-ext-webview-fluentui/components';
 import { useConfiguration } from '@microsoft/vscode-ext-webview/react';
 import * as l10n from '@vscode/l10n';
 import { useCallback, useContext, useEffect, useMemo, useRef, useState, type JSX } from 'react';
@@ -55,7 +56,6 @@ import { extractErrorCode } from '../utils/errorCodeExtractor';
 import { formatSelectivityForDisplay } from '../utils/formatSelectivityForDisplay';
 import { CardStack, FeedbackCard, FeedbackDialog, type CardStackItem } from './components';
 import { CountMetric } from './components/metricsRow/CountMetric';
-import { MetricsRow } from './components/metricsRow/MetricsRow';
 import { TimeMetric } from './components/metricsRow/TimeMetric';
 import {
     GetPerformanceInsightsCard,
@@ -417,7 +417,7 @@ export const QueryInsightsMain = (): JSX.Element => {
     const hasMetricsError = pipeline.kind === 's1Error' || pipeline.kind === 's2Error';
 
     // Value resolution for metric/summary cells. The result drives the cell's
-    // placeholder logic (see MetricBase): `null` → "N/A" (unavailable), `undefined`
+    // placeholder logic (see `MetricCard`): `null` → "N/A" (unavailable), `undefined`
     // → loading skeleton, any other value → displayed as-is.
     //
     //   - hasMetricsError      → null      (Stage 1/2 failed; data is unavailable)
@@ -821,7 +821,7 @@ export const QueryInsightsMain = (): JSX.Element => {
                 {/* Left Column: Metrics and Optimization */}
                 <div className="leftColumn">
                     {/* Metrics Row */}
-                    <MetricsRow>
+                    <MetricGrid>
                         <TimeMetric
                             label={l10n.t('Execution Time')}
                             valueMs={executionTime}
@@ -846,7 +846,7 @@ export const QueryInsightsMain = (): JSX.Element => {
                                 'Number of documents scanned to find matching results. Should be close to documents returned for optimal performance.',
                             )}
                         />
-                    </MetricsRow>
+                    </MetricGrid>
 
                     {/* Optimization Opportunities */}
                     <div className="optimizationSection">
