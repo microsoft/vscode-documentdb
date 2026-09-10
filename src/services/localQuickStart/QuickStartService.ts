@@ -115,8 +115,8 @@ const PROBE_SERVER_SELECTION_TIMEOUT_MS = 3_000;
  * The image ships a native init script + sample-data directory (see
  * `Dockerfile_documentdb_local`). We run that script ONCE via `docker exec` after
  * the gateway is ready, instead of baking `--init-data true` into the run args:
- * the baked flag re-runs the init on every Stop/Start, hits a duplicate-key error,
- * and crashes the container (`set -e`). Exec-once keeps restarts safe while loading
+ * older images re-run the baked flag on every Stop/Start, hit a duplicate-key error,
+ * and crash the container (`set -e`). Exec-once keeps restarts safe while loading
  * the same `sampledb` (users/products/orders/analytics). `-P` is the container's
  * internal gateway port (always {@link QUICK_START_PORT} inside the container,
  * independent of the bound host port).
@@ -786,8 +786,8 @@ export class QuickStartServiceImpl {
                         volumeName: volumeName(alias),
                         dataPath: QUICK_START_DATA_PATH,
                         // Credentials via env-file (§8.2), not CLI args. We also do NOT bake
-                        // `--init-data true`: it re-runs the sample-data init on every
-                        // Stop/Start and crashes on duplicate keys; sample data is seeded
+                        // `--init-data true`: older images re-run it on every
+                        // Stop/Start and crash on duplicate keys; sample data is seeded
                         // once, post-readiness, via `docker exec` (see seedSampleData).
                         environmentFiles: [createdEnvFilePath],
                     },
@@ -1259,7 +1259,9 @@ export class QuickStartServiceImpl {
      * `%VAR%`). {@link ContainerRuntime.execShellInContainer} strong-quotes the script so
      * the host shell passes the `$VAR` references through verbatim and the container's own
      * shell performs the expansion. The interpolated values are all constants — no user
-     * input reaches the script.
+     * input reaches the script. Image 0.116 requires `DOCUMENTDB_PASSWORD` instead of
+     * `-p`. Detect that capability from --help so older image-tag overrides still work,
+     * without retrying a failed initialization that may already have modified data.
      */
     private async seedSampleData(
         containerId: string,
@@ -1267,7 +1269,13 @@ export class QuickStartServiceImpl {
         token: vscode.CancellationToken,
     ): Promise<void> {
         try {
-            const script = `${SAMPLE_DATA_INIT_SCRIPT} -H localhost -P ${QUICK_START_PORT} -u "$USERNAME" -p "$PASSWORD" -d ${SAMPLE_DATA_DIR}`;
+            const initCommand = `${SAMPLE_DATA_INIT_SCRIPT} -H localhost -P ${QUICK_START_PORT} -u "$USERNAME" -d ${SAMPLE_DATA_DIR}`;
+            const script =
+                `init_help="$(${SAMPLE_DATA_INIT_SCRIPT} --help)" || exit $?; ` +
+                `case "$init_help" in ` +
+                `*DOCUMENTDB_PASSWORD*) DOCUMENTDB_PASSWORD="$PASSWORD" ${initCommand} ;; ` +
+                `*) ${initCommand} -p "$PASSWORD" ;; ` +
+                `esac`;
             await this.runtime.execShellInContainer(containerId, script, secrets, token);
         } catch (error) {
             getQuickStartOutputChannel().appendLine(`Sample data load skipped: ${errMessage(error)}`);
