@@ -225,7 +225,7 @@ export const DashboardDetailsRegion = ({
                             disabled={isExportingDiagnostics === true}
                             onClick={onShowRawDiagnostics}
                         >
-                            {l10n.t('Show Raw Diagnostics')}
+                            {l10n.t('View Raw Diagnostics')}
                         </Button>
                     </div>
                 )}

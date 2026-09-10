@@ -234,7 +234,7 @@ export const QueryPlanSummary: React.FC<QueryPlanSummaryProps> = ({
                                             >
                                                 <AccordionItem value="1">
                                                     <AccordionHeader size="small">
-                                                        {l10n.t('Show Stage Details')}
+                                                        {l10n.t('Stage Details')}
                                                     </AccordionHeader>
                                                     <AccordionPanel>
                                                         <div
@@ -371,7 +371,7 @@ export const QueryPlanSummary: React.FC<QueryPlanSummaryProps> = ({
                                     }}
                                 >
                                     <AccordionItem value="1">
-                                        <AccordionHeader size="small">{l10n.t('Show Stage Details')}</AccordionHeader>
+                                        <AccordionHeader size="small">{l10n.t('Stage Details')}</AccordionHeader>
                                         <AccordionPanel>
                                             <div
                                                 style={{
