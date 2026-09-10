@@ -30,8 +30,7 @@ cell inside a card that already has one:
 ### Don't
 
 - Use `''` or `0` to mean "no data". Both are values, and both render as themselves.
-- Reach for `ariaLabel` by default. Read Accessibility first: it changes what the card exposes, and
-  the visible content usually names it better than a composed string does.
+- Compose a second accessible name. The card names itself from its visible label and rendered value.
 - Put spanning logic on the card. Column spans belong to your grid.
 
 ## Anatomy
@@ -90,20 +89,17 @@ pass a node as `value`. That is what the prop is for.
 not its value has resolved. A grid where some cards are reachable by keyboard and others are not is
 harder to use than one where all of them are, because nothing on screen tells you which is which.
 
-**`ariaLabel` is a pass-through, and it is not the default for a reason.** Supplying it hides the
-visible label and value from assistive technology, so the string has to carry both. The two are
-never both active, which is the only way this pattern can go wrong by accident.
+**The visible label and rendered value name the card.** `MetricCard` gives both nodes stable IDs and
+references them with `aria-labelledby`, including for subtle summary cells where a focusable generic
+element would otherwise have no computed name. Loading cards are named by their label; unavailable
+cards include the rendered placeholder.
 
-The case against reaching for it: when a card has a `description`, Fluent's `Tooltip` sets
-`aria-describedby` on it with `relationship="description"`. A card that also folds that explanation
-into its name will have it announced twice, once as the name and once as the description. Leaving
-`ariaLabel` off avoids that, and the visible content names the card perfectly well.
+When `description` is present, Fluent's `Tooltip` supplies it through `aria-describedby`. Rich
+tooltip markup may repeat the label and value visually, but its accessible label contains only the
+explanation, so the name is not repeated in the description.
 
-The case for it: a name composed by the consumer can say things the visible content cannot, such as
-what a truncated value was, or a unit that only the axis label carries.
-
-The component takes no position between those. It is a Preview surface and this is the choice most
-likely to change once there is evidence rather than argument.
+These guarantees are based on browser-computed accessibility names and descriptions. They are not a
+claim about the exact speech or pacing of a real screen reader.
 
 ## The grid's breakpoints are on the viewport
 

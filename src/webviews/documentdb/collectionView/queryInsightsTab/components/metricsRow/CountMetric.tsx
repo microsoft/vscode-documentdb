@@ -7,7 +7,7 @@ import { MetricCard } from '@microsoft/vscode-ext-webview-fluentui/components';
 import * as l10n from '@vscode/l10n';
 import { type JSX } from 'react';
 import { formatCount } from './formatUtils';
-import { composeMetricAriaLabel, type MetricProps } from './metricProps';
+import { type MetricProps } from './metricProps';
 
 /**
  * Specialized metric component for displaying count/integer values.
@@ -89,7 +89,6 @@ export const CountMetric = ({
             loadingPlaceholder={loadingPlaceholder}
             nullValuePlaceholder={nullValuePlaceholder}
             tooltipRepeatsValue
-            ariaLabel={composeMetricAriaLabel(label, formatted, tooltipExplanation)}
         />
     );
 };

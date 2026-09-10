@@ -19,19 +19,18 @@ Verify and fix accessibility in React/Fluent UI webview components.
 
 ## Core Pattern: Tooltip Accessibility
 
-Tooltips require `aria-label` + `aria-hidden` to avoid double announcements:
+For a badge whose tooltip must be reachable by keyboard, use the package component and keep the
+tooltip as a description:
 
 ```tsx
-<Tooltip content="Detailed explanation">
-  <Badge tabIndex={0} className="focusableBadge" aria-label="Badge text. Detailed explanation">
-    <span aria-hidden="true">Badge text</span>
-  </Badge>
+<Tooltip content="Detailed explanation" relationship="description">
+  <FocusableBadge>Badge text</FocusableBadge>
 </Tooltip>
 ```
 
-- `aria-label`: Full context (visible text + tooltip)
-- `aria-hidden="true"`: Wraps visible text to prevent duplication
-- Screen reader hears: "Badge text. Detailed explanation"
+- The visible content is the name through `aria-labelledby`.
+- Tooltip content is the supplementary description through `aria-describedby`.
+- Browser-computed results do not prove what a real screen reader says.
 
 ## Detection Rules
 
@@ -53,20 +52,24 @@ Tooltips require `aria-label` + `aria-hidden` to avoid double announcements:
 </Tooltip>
 ```
 
-### 2. Missing aria-hidden (Double Announcement)
+### 2. Composed Badge Name Repeats Its Description
 
-❌ **Problem**: Screen reader says "Collection scan Collection scan"
+❌ **Problem**: Tooltip details occur in both the name and description
 
 ```tsx
-<Badge aria-label="Collection scan. Query is inefficient">Collection scan</Badge>
+<Tooltip content="Query is inefficient" relationship="description">
+  <Badge tabIndex={0} aria-label="Collection scan. Query is inefficient">
+    <span aria-hidden="true">Collection scan</span>
+  </Badge>
+</Tooltip>
 ```
 
-✅ **Fix**: Wrap visible text
+✅ **Fix**: Let visible content name `FocusableBadge`; keep details in the description
 
 ```tsx
-<Badge aria-label="Collection scan. Query is inefficient">
-  <span aria-hidden="true">Collection scan</span>
-</Badge>
+<Tooltip content="Query is inefficient" relationship="description">
+  <FocusableBadge>Collection scan</FocusableBadge>
+</Tooltip>
 ```
 
 ### 3. Redundant aria-label (NOT Needed)
@@ -251,14 +254,20 @@ useEffect(() => {
 
 For keyboard-accessible badges with tooltips:
 
-1. Import: \`import '../components/focusableBadge/focusableBadge.scss';\`
-2. Apply attributes:
+1. Import `FocusableBadge` from `@microsoft/vscode-ext-webview-fluentui/components`.
+2. Keep `Tooltip` at the call site with `relationship="description"`.
+3. Use `focusable={false}` only for plain badges in a mixed list; never infer focusability from an
+   accessible-name override.
 
 ```tsx
-<Badge tabIndex={0} className="focusableBadge" aria-label="Visible text. Tooltip details">
-  <span aria-hidden="true">Visible text</span>
-</Badge>
+<Tooltip content="Tooltip details" relationship="description">
+  <FocusableBadge>Visible text</FocusableBadge>
+</Tooltip>
 ```
+
+For rich tooltip content that visually repeats the badge name, set the content slot's `aria-label`
+to only the supplementary details. For truncated values, keep the visible label and truncated value
+as the badge name and the full value as the description; do not use `relationship="label"`.
 
 ## Screen Reader Announcements
 
@@ -307,7 +316,7 @@ import { Announcer } from '<relative-path>/components/accessibility';
 - [ ] Redundant aria-labels removed (identical to visible text)
 - [ ] Visible button labels match accessible name exactly (for voice control)
 - [ ] Decorative elements have `aria-hidden={true}`
-- [ ] Badges with tooltips use `focusableBadge` class + `tabIndex={0}`
+- [ ] Badges with keyboard-reachable tooltips use `FocusableBadge` + `relationship="description"`
 - [ ] Status updates use `Announcer` component
 - [ ] Focus moves to dialog/modal content when opened
 - [ ] Related controls wrapped in `role="group"` with `aria-labelledby`
@@ -319,4 +328,4 @@ import { Announcer } from '<relative-path>/components/accessibility';
 - [WCAG 2.5.3 Label in Name](https://www.w3.org/WAI/WCAG21/Understanding/label-in-name.html)
 - [WCAG 4.1.2 Name, Role, Value](https://www.w3.org/WAI/WCAG21/Understanding/name-role-value.html)
 - [WCAG 4.1.3 Status Messages](https://www.w3.org/WAI/WCAG21/Understanding/status-messages.html)
-- See `src/webviews/components/focusableBadge/focusableBadge.md` for the Badge pattern
+- See `packages/vscode-ext-webview-fluentui/src/components/FocusableBadge/README.md` for the badge pattern

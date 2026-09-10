@@ -9,8 +9,8 @@ export { GenericMetric, type GenericMetricProps } from './GenericMetric';
 export { RatioMetric, type RatioMetricProps } from './RatioMetric';
 export { TimeMetric, type TimeMetricProps } from './TimeMetric';
 
-// Shared props and the accessible-name composition every metric uses
-export { composeMetricAriaLabel, type MetricProps } from './metricProps';
+// Shared props
+export { type MetricProps } from './metricProps';
 
 // Formatting utilities (for advanced use cases)
 export { formatCount, formatRatio, formatTime } from './formatUtils';

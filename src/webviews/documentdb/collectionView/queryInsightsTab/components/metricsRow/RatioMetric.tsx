@@ -7,7 +7,7 @@ import { tokens } from '@fluentui/react-components';
 import { MetricCard } from '@microsoft/vscode-ext-webview-fluentui/components';
 import { type JSX } from 'react';
 import { formatRatio } from './formatUtils';
-import { composeMetricAriaLabel, type MetricProps } from './metricProps';
+import { type MetricProps } from './metricProps';
 
 /**
  * Specialized metric component for displaying ratio/percentage values.
@@ -73,7 +73,6 @@ export const RatioMetric = ({
                 description={tooltipExplanation}
                 loadingPlaceholder={loadingPlaceholder}
                 tooltipRepeatsValue
-                ariaLabel={composeMetricAriaLabel(label, undefined, tooltipExplanation)}
             />
         );
     }
@@ -114,8 +113,6 @@ export const RatioMetric = ({
             description={tooltipExplanation}
             loadingPlaceholder={loadingPlaceholder}
             tooltipRepeatsValue
-            // The node form has no text for the name, which is what the un-migrated card did too.
-            ariaLabel={composeMetricAriaLabel(label, showBar ? undefined : formattedValue, tooltipExplanation)}
         />
     );
 };

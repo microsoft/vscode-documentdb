@@ -6,7 +6,7 @@
 import { MetricCard } from '@microsoft/vscode-ext-webview-fluentui/components';
 import * as l10n from '@vscode/l10n';
 import { type JSX } from 'react';
-import { composeMetricAriaLabel, type MetricProps } from './metricProps';
+import { type MetricProps } from './metricProps';
 
 /**
  * Generic metric component for displaying string or number values without special formatting.
@@ -54,7 +54,6 @@ export const GenericMetric = ({
         loadingPlaceholder={loadingPlaceholder}
         nullValuePlaceholder={nullValuePlaceholder}
         tooltipRepeatsValue
-        ariaLabel={composeMetricAriaLabel(label, value, tooltipExplanation)}
     />
 );
 
@@ -70,7 +69,7 @@ export const GenericMetric = ({
  * 2. Extend `MetricProps` with your own value shape.
  * 3. Format the value, preserving `null` and `undefined` unchanged: they select the card's two
  *    placeholder states, and collapsing them makes "loading" and "unavailable" the same picture.
- * 4. Render `MetricCard`, and pass `ariaLabel={composeMetricAriaLabel(...)}`.
+ * 4. Render `MetricCard`; it names itself from the label and formatted value.
  * 5. Export it from `index.ts`.
  *
  * ```typescript
@@ -86,7 +85,6 @@ export const GenericMetric = ({
  *             label={label}
  *             value={value}
  *             description={tooltipExplanation}
- *             ariaLabel={composeMetricAriaLabel(label, value, tooltipExplanation)}
  *         />
  *     );
  * };

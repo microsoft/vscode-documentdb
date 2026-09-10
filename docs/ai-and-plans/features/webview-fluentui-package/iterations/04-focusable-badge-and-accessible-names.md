@@ -13,8 +13,9 @@ created: 2026-08-21
 > way that also affects the metric card. This increment settles the question with evidence, then
 > ships the component the answer implies. **No npm publish.**
 
-**Not started. Depends on [increment 3](./03-metric-card.md) only for its baseline capture**, not for
-its code. Decisions are settled in [decisions.md](../decisions.md); this plan proposes 0026.
+**Implemented; pending operator keyboard and assistive-technology checks. Depends on
+[increment 3](./03-metric-card.md) only for its baseline capture**, not for its code. Decisions are
+settled in [decisions.md](../decisions.md); this increment adds 0026.
 
 ---
 
@@ -427,13 +428,12 @@ Before hand-over, in order: `npm run l10n` → `npm run prettier-fix` → `npm r
 Tests this increment must add:
 
 - `components.test.ts` still passes: importing `./components` injects no stylesheet.
-- `FocusableBadge` sets `tabIndex` and hides its children according to whatever §4 settled, asserted
-  as behaviour and not as an implementation detail.
+- `FocusableBadge` sets `tabIndex` independently of naming and names itself from its visible
+  children through `aria-labelledby`, asserted as behaviour and not as an implementation detail.
 - `FocusableBadge` passes `appearance`, `color`, `shape`, `size` and `className` through to `Badge`,
   and **composes** `className` rather than replacing it, which is what `IndexRowDetails` relies on.
-- The accessible name and description of a badge, and of a metric card, asserted as strings, with the
-  §4.1 redundancy check among them. This is the test that stops the question from being re-litigated,
-  and it exists only if open question 2 is accepted.
+- The emitted name and description relationships of a badge and metric card are asserted without a
+  new dependency. Browser-computed names and descriptions are recorded below.
 
 ### Acceptance
 
@@ -451,5 +451,197 @@ by side, in the work log.
 
 ## Item 0: the measurement
 
-_Not yet taken. The §4.1 assertions, the `name.sources` output, and the resulting contract belong
-here before item 1 begins._
+Taken 2026-09-10 in Chrome through the live preview harness, before implementation. The harness
+mounted the four real consumers and representative `MetricCard`s under `VSCodeFluentProvider`.
+This is browser accessibility-tree evidence, not a real screen-reader transcript.
+
+### Baseline
+
+| Consumer / case                                  | Computed name                                                                                     | Computed description                                                            | Winning name source |
+| ------------------------------------------------ | ------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------- | ------------------- |
+| `IndexPropertiesView`, Partial                   | `Partial. { status: 'active' }`                                                                   | `{ status: 'active' }`                                                          | `aria-label`        |
+| `IndexRowDetails`, ascending key                 | `Field "customerId", ascending index`                                                             | none                                                                            | `aria-label`        |
+| `StageDetailCard`, truncated Index               | `Index: customer_1_createdAt_-1_region_1_status_1_with_a_value_long_enough_to_require_truncation` | none                                                                            | `aria-label`        |
+| `StageDetailCard`, untruncated Direction         | `Direction: forward`                                                                              | none                                                                            | `aria-label`        |
+| `PerformanceRatingCell`, negative diagnostic     | `Collection scan detected. The query examined every document in the collection.`                  | `Collection scan detected The query examined every document in the collection.` | `aria-label`        |
+| `MetricCard`, described                          | `Execution Time: 2.33 ms. Total time taken to execute the query on the server`                    | `Execution Time Total time taken to execute the query on the server 2.33 ms`    | `aria-label`        |
+| `MetricCard`, plain                              | `Documents Returned: 24`                                                                          | none                                                                            | `aria-label`        |
+| `MetricCard`, subtle summary with description    | none                                                                                              | `Index Used The index the planner selected for this query`                      | no name source      |
+| `MetricCard`, subtle summary without description | none                                                                                              | none                                                                            | no name source      |
+
+Chrome reported `aria-label` as the winning source for every named badge and metric card. The
+`relationship="description"` cases were redundant: all or part of the tooltip appeared in both
+the name and description. Summary cells proved the correction to the plan: removing `ariaLabel`
+alone did not produce a name for a focusable generic element.
+
+The two `relationship="label"` badge consumers did not have `aria-labelledby` while their own
+`aria-label` was present, including while focused. Fluent preserved the trigger's existing name.
+This means the plan's predicted superseded source was not the baseline in the installed Fluent
+version. It remains a migration hazard: once the trigger's label is removed, a label relationship
+is free to supply the tooltip as the name. For the truncated stage metric that tooltip contains only
+the full value and would lose the visible metric label.
+
+### Tab order and tooltip access
+
+From the start of the preview, the badge-related stops were: two tooltip-bearing property badges;
+the existing View Raw button; two key badges; truncated and untruncated stage badges; two diagnostic
+badges; then all four metric cards. Plain property badges stayed out of the order. Every badge and
+card stop received `data-fui-focus-visible`, and every description tooltip was connected through
+`aria-describedby` and available on focus.
+
+### Discriminating browser probe
+
+The proposed contract was applied temporarily in the DOM to one property badge and one described
+metric card: `aria-labelledby` referenced the visible name nodes, and the tooltip kept only its
+supplementary text as its accessible label. Chrome computed:
+
+```
+Partial
+  description: { status: 'active' }
+
+Execution Time 2.33 ms
+  description: Total time taken to execute the query on the server
+```
+
+Neither name contained its description. The visible label and value remained in the name, and
+`aria-labelledby` was the non-superseded source in both cases.
+
+### Contract selected
+
+- A focusable badge is named from a wrapper around its visible children via `aria-labelledby`; it
+  has no accessible-name override prop and does not hide those children.
+- Tooltip content is supplementary description. Call sites keep `Tooltip`, use
+  `relationship="description"`, and give rich tooltip content a concise accessible label when its
+  visual title repeats the trigger's name.
+- `focusable` is independent of naming and defaults to `true`. `IndexPropertiesView` passes
+  `focusable={Boolean(tooltip)}` to preserve its mixed-list tab order.
+- `MetricCard` follows the same rule: label and rendered value are its `aria-labelledby` sources;
+  tooltip explanation is its description. Every card remains a tab stop, preserving increment 3
+  and the product's existing order while keeping descriptions keyboard-accessible.
+
+`dom-accessibility-api` was not added because approval was not provided. Browser-computed before
+and after evidence is the name/description oracle for this increment; unit tests cover the emitted
+ARIA relationships and component behavior without claiming jsdom computes the browser result.
+
+## Item 1: decision 0026
+
+Decision 0026 was appended to `decisions.md` after item 0. It records the measured naming contract,
+the independent `focusable` discriminator, the unchanged unconditional focusability of metric
+cards, and the decision not to add `dom-accessibility-api` without approval.
+
+No commit was created because the operator explicitly prohibited commits for this task.
+
+## Item 2: dependency decision
+
+No code. `dom-accessibility-api` and API Extractor were not added. The package manifest and lockfile
+are unchanged.
+
+## Item 3: `FocusableBadge`
+
+Added the component family under the package's `components` entry. The component:
+
+- extends `BadgeProps` while reserving `tabIndex`, `aria-label` and `aria-labelledby` for its
+  contract;
+- forwards appearance, icon, DOM event and ref-capable Badge props;
+- merges its Griffel focus class with the consumer's `className`;
+- uses `createFocusOutlineStyle()` with Fluent's default 2px ring directly outside the badge;
+- names focusable instances from a generated-ID wrapper around the visible children;
+- defaults `focusable` to `true`, with `false` removing only the tab stop and explicit name
+  relationship.
+
+The colocated suite covers default and opt-out focusability, visible-content naming, Tooltip trigger
+integration, class/event/attribute forwarding and all four requested appearance props.
+
+## Item 4: four consumer migrations
+
+All four consumers moved from hand-assembled `Badge` props to `FocusableBadge`:
+
+- `IndexPropertiesView` passes `focusable={Boolean(tooltip)}`, preserving the mixed-list order.
+- `IndexRowDetails` keeps `keyBadge` through class merging and moves its Tooltip from label to
+  description.
+- `StageDetailCard` keeps every badge focusable; a truncated value keeps its visible label and
+  truncated text as the name while the full value becomes the description.
+- `PerformanceRatingCell` keeps its rich tooltip UI, while the tooltip content slot's `aria-label`
+  exposes only diagnostic details as the description.
+
+The old `focusableBadge.scss` and `focusableBadge.md` were deleted. No layout, format string,
+loading/unavailable branch or localized string changed.
+
+## Item 5: `MetricCard` convergence
+
+Removed the provisional `MetricCardProps.ariaLabel` and the extension's
+`composeMetricAriaLabel`. `MetricCard` now gives its label and value slots generated IDs and points
+`aria-labelledby` at both for filled and subtle appearances. Tooltip markup can still repeat its
+title and value visually, but its content slot exposes only `description` to the accessibility
+tree.
+
+Every card remains unconditionally focusable. This preserves increment 3's product tab order and
+keeps tooltip descriptions reachable. Summary cells gain meaningful label-plus-value names; their
+layout and focusability do not change.
+
+## Item 6: documentation and browser after-measurement
+
+Updated the family README, component catalog, package root README, `MetricGrid` accessibility
+guidance, the accessibility skill, active design summary and decision log.
+
+The same Chrome/CDP script, real consumers and values from item 0 produced:
+
+| Consumer / case                  | Before name / description                                   | After name / description                                                            | After source      |
+| -------------------------------- | ----------------------------------------------------------- | ----------------------------------------------------------------------------------- | ----------------- |
+| Property badge, Partial          | `Partial. { status: 'active' }` / `{ status: 'active' }`    | `Partial` / `{ status: 'active' }`                                                  | `aria-labelledby` |
+| Index key, ascending             | `Field "customerId", ascending index` / none                | `customerId↑` / `Field "customerId", ascending index`                               | `aria-labelledby` |
+| Stage metric, truncated Index    | full label and value / none                                 | visible label and truncated value / full value                                      | `aria-labelledby` |
+| Stage metric, Direction          | `Direction: forward` / none                                 | `Direction: forward` / none                                                         | `aria-labelledby` |
+| Negative diagnostic              | message plus details / message plus details                 | `Collection scan detected` / `The query examined every document in the collection.` | `aria-labelledby` |
+| Described metric card            | label, value and explanation / label, explanation and value | `Execution Time 2.33 ms` / `Total time taken to execute the query on the server`    | `aria-labelledby` |
+| Plain metric card                | `Documents Returned: 24` / none                             | `Documents Returned 24` / none                                                      | `aria-labelledby` |
+| Summary cell with description    | none / label plus explanation                               | label plus full value / explanation                                                 | `aria-labelledby` |
+| Summary cell without description | none / none                                                 | `Documents Examined 42` / none                                                      | `aria-labelledby` |
+
+For every after-case, `aria-labelledby` was the non-superseded name source. No name contained its
+description. The truncated stage badge explicitly retained `Index:` in its name; its full value was
+available as the description rather than replacing the name.
+
+Keyboard traversal repeated the original sequence exactly, including plain property badges staying
+out of the order. Every stop received `data-fui-focus-visible`. Tooltip-bearing stops retained
+`aria-describedby`, and their tooltip content was present on focus.
+
+The first implementation preserved the deleted SCSS's thin 1px ring and 4px outside inset. Operator
+review found it visibly weaker and farther from the badge than buttons, dropdowns and toggles. The
+custom width and offset were removed: Fluent's helper now supplies its standard 2px ring at a `-2px`
+computed inset, with no gap between the ring and badge boundary.
+
+The focused browser check confirmed `data-fui-focus-visible`, `-2px` on all four edges, and a
+computed border width of approximately `1.83px` under the integrated browser's scaling (the authored
+Fluent value is `2px`). The temporary style-preview wiring was removed after this measurement.
+
+This was a light-theme browser harness with a fake host, not the real VS Code webview and not a real
+screen reader. The temporary preview component, static page and registry entry were removed after
+capture.
+
+## Item 7: final verification
+
+Case 1 only, per the operator's correction to the old handover ladder:
+
+| Check                                                                                | Result                                                                  |
+| ------------------------------------------------------------------------------------ | ----------------------------------------------------------------------- |
+| `npm run build`                                                                      | passed after implementation and again after final public-type hardening |
+| focused Jest: `FocusableBadge.test.tsx`, `MetricCard.test.tsx`, `components.test.ts` | 3 suites, 18 tests passed                                               |
+| final `MetricCard.test.tsx` rerun                                                    | 1 suite, 12 tests passed                                                |
+| VS Code diagnostics on touched source                                                | none                                                                    |
+| `git diff --check`                                                                   | passed                                                                  |
+| source-only stale-pattern grep                                                       | no old SCSS/markdown imports, class usage or composed helper references |
+
+No TDD-prefixed contract failed. No l10n, formatter, lint, full-suite, package or publish command was
+run because Case 1 explicitly excludes them. No commit, push, publish or PR-status change was made.
+
+Remaining operator checks:
+
+1. In the real extension host, keyboard through the Indexes tab and Query Insights tab in light,
+   dark and high-contrast themes. Confirm tooltip-bearing badges are reached in product order,
+   plain property badges are skipped, every reached badge has a visible outside focus ring, and its
+   tooltip opens on focus.
+2. With the operator's actual screen reader, focus one property badge, one index-key badge, the
+   truncated stage metric, one diagnostic badge, a described metric card and a summary cell. Confirm
+   the name is spoken once, followed by the supplementary description once, and that the truncated
+   metric says both its visible label and full value. No real screen-reader pass was performed here.

@@ -231,14 +231,12 @@ than declaring completion.
 workspace. No publish. Planned in
 [iterations/01-theme-and-first-component.md](./iterations/01-theme-and-first-component.md).
 
-**Increment 2** — undecided, to be discussed once increment 1 lands. The two candidates:
+Later increments are recorded in the iteration plans and decisions log. The two candidates first
+identified after increment 1 both shipped:
 
-- **Focusable badge.** Today it is `focusableBadge.scss` plus a markdown document instructing callers
-  to hand-write `tabIndex={0}`, a class name, a composed `aria-label`, and `aria-hidden` children —
-  there is no `.tsx` in the folder at all. Converting an instruction into an enforced API is the
-  highest-value move available, but it is net-new code rather than an extraction.
-- **Metrics cards.** Zero l10n coupling — every string is already a prop — but not self-contained.
-  `MetricsRow.scss` does `@use '../../queryInsights.scss' as *` and `@extend .baseDataHeader` /
-  `.baseDataValue`, and `MetricBase.tsx` emits five further class names (`tooltipContainer`,
-  `tooltipTitle`, `tooltipBody`, `tooltipValue`, `tooltipInfoIcon`) defined only in that
-  product-level stylesheet. Extracted as-is they render unstyled.
+- **Focusable badge.** Increment 4 replaces the stylesheet and hand-authored accessibility pattern
+  with `FocusableBadge`, Fluent's supported focus outline, and one measured name/description
+  contract. See [decision 0026](./decisions.md#0026--the-focusable-badge-ships-with-one-naming-contract).
+- **Metrics cards.** Increment 3 translated the coupled styles into provider-independent package
+  components and kept formatting in the extension. See
+  [decision 0024](./decisions.md#0024--the-metric-card-enters-and-converges-its-fork).

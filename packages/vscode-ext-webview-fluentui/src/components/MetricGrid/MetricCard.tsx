@@ -13,7 +13,7 @@ import {
     Tooltip,
 } from '@fluentui/react-components';
 import { DataUsageRegular, InfoRegular } from '@fluentui/react-icons';
-import { type JSX, type ReactNode } from 'react';
+import { type JSX, type ReactNode, useId } from 'react';
 import { type MetricCardProps } from './MetricGrid.types.js';
 
 const useStyles = makeStyles({
@@ -99,17 +99,15 @@ export const MetricCard = ({
     nullValuePlaceholder = 'N/A',
     tooltipPositioning = 'below',
     tooltipRepeatsValue = false,
-    ariaLabel,
     className,
     ...rest
 }: MetricCardProps): JSX.Element => {
     const styles = useStyles();
+    const labelId = useId();
+    const valueId = useId();
 
     const hasDescription = description !== undefined && description !== '';
     const valueText = typeof value === 'string' || typeof value === 'number' ? String(value) : '';
-
-    // A supplied name makes the visible content decorative, and the two are never both active.
-    const contentIsDecorative = ariaLabel !== undefined ? true : undefined;
 
     let renderedValue: ReactNode;
     if (value === null) {
@@ -125,16 +123,13 @@ export const MetricCard = ({
 
     const body = (
         <>
-            <div
-                className={mergeClasses(styles.label, hasDescription && styles.labelWithGlyph)}
-                aria-hidden={contentIsDecorative}
-            >
+            <div id={labelId} className={mergeClasses(styles.label, hasDescription && styles.labelWithGlyph)}>
                 {label}
                 {hasDescription && <InfoRegular className={styles.glyph} />}
             </div>
             <div
+                id={valueId}
                 className={mergeClasses(styles.value, size === 'large' ? styles.valueLarge : styles.valueSmall)}
-                aria-hidden={contentIsDecorative}
             >
                 {renderedValue}
             </div>
@@ -144,17 +139,22 @@ export const MetricCard = ({
     const card =
         appearance === 'filled' ? (
             <Card
+                {...rest}
                 appearance="filled"
                 className={mergeClasses(styles.filled, className)}
                 tabIndex={0}
-                aria-label={ariaLabel}
-                {...rest}
+                aria-labelledby={`${labelId} ${valueId}`}
             >
                 {body}
             </Card>
         ) : (
             // eslint-disable-next-line jsx-a11y/no-noninteractive-tabindex -- every card is a tab stop
-            <div className={mergeClasses(styles.subtle, className)} tabIndex={0} aria-label={ariaLabel} {...rest}>
+            <div
+                {...rest}
+                className={mergeClasses(styles.subtle, className)}
+                tabIndex={0}
+                aria-labelledby={`${labelId} ${valueId}`}
+            >
                 {body}
             </div>
         );
@@ -166,6 +166,7 @@ export const MetricCard = ({
     return (
         <Tooltip
             content={{
+                'aria-label': description,
                 children: (
                     <div className={styles.tooltip}>
                         <div className={styles.tooltipTitle}>{label}</div>

@@ -68,18 +68,38 @@ describe('MetricCard value states', () => {
 });
 
 describe('MetricCard accessibility contract', () => {
-    test('children are hidden from assistive technology only when ariaLabel is supplied', async () => {
-        const { root, rerender } = await renderSurface(
-            <MetricCard label="Execution time" value="2.33 ms" ariaLabel="Execution time: 2.33 ms" />,
-        );
-        expect(root.getAttribute('aria-label')).toBe('Execution time: 2.33 ms');
-        expect(slots(root).label.getAttribute('aria-hidden')).toBe('true');
-        expect(slots(root).value.getAttribute('aria-hidden')).toBe('true');
+    test('the visible label and rendered value name every card appearance', async () => {
+        const { root, rerender } = await renderSurface(<MetricCard label="Execution time" value="2.33 ms" />);
+        const assertVisibleName = (card: HTMLElement): void => {
+            const { label, value } = slots(card);
+            expect(card.getAttribute('aria-labelledby')).toBe(`${label.id} ${value.id}`);
+            expect(label.textContent).toBe('Execution time');
+            expect(value.textContent).toBe('2.33 ms');
+            expect(label.getAttribute('aria-hidden')).toBeNull();
+            expect(value.getAttribute('aria-hidden')).toBeNull();
+        };
 
-        await rerender(<MetricCard label="Execution time" value="2.33 ms" />);
+        assertVisibleName(root);
+        await rerender(<MetricCard label="Execution time" value="2.33 ms" appearance="subtle" />);
+        assertVisibleName(root);
         expect(root.getAttribute('aria-label')).toBeNull();
-        expect(slots(root).label.getAttribute('aria-hidden')).toBeNull();
-        expect(slots(root).value.getAttribute('aria-hidden')).toBeNull();
+    });
+
+    test('a rich tooltip exposes only its supplementary explanation as the description', async () => {
+        const { root } = await renderSurface(
+            <MetricCard
+                label="Execution time"
+                value="2.33 ms"
+                description="Total time taken to execute the query on the server"
+                tooltipRepeatsValue
+            />,
+        );
+        const tooltipId = root.getAttribute('aria-describedby');
+        const tooltip = tooltipId === null ? null : document.getElementById(tooltipId);
+
+        expect(tooltip?.getAttribute('aria-label')).toBe('Total time taken to execute the query on the server');
+        expect(tooltip?.textContent).toContain('Execution time');
+        expect(tooltip?.textContent).toContain('2.33 ms');
     });
 
     test('is a tab stop in every configuration', async () => {

@@ -43,13 +43,14 @@ actually house style, with no second consumer. It lives in the extension
 
 ## Contents
 
-| Component                              | What it is                                                                             |
-| -------------------------------------- | -------------------------------------------------------------------------------------- |
-| [`Container`](./Container/README.md)   | the shell of a full-window surface: scrolling header and content, over a pinned footer |
-| [`MetricGrid`](./MetricGrid/README.md) | one measurement per card, in a grid that goes from one column to four                  |
-| [`StepList`](./StepList/README.md)     | a step indicator that collapses into an overflow menu and never hides the current step |
-| [`StatusList`](./StatusList/README.md) | a bordered list of stages, each with a status glyph and a line of evidence             |
-| [`Wizard`](./Wizard/README.md)         | a complete wizard surface in one component                                             |
+| Component                                      | What it is                                                                             |
+| ---------------------------------------------- | -------------------------------------------------------------------------------------- |
+| [`Container`](./Container/README.md)           | the shell of a full-window surface: scrolling header and content, over a pinned footer |
+| [`FocusableBadge`](./FocusableBadge/README.md) | a badge that exposes tooltip-only details to keyboard users                            |
+| [`MetricGrid`](./MetricGrid/README.md)         | one measurement per card, in a grid that goes from one column to four                  |
+| [`StepList`](./StepList/README.md)             | a step indicator that collapses into an overflow menu and never hides the current step |
+| [`StatusList`](./StatusList/README.md)         | a bordered list of stages, each with a status glyph and a line of evidence             |
+| [`Wizard`](./Wizard/README.md)                 | a complete wizard surface in one component                                             |
 
 ## How they compose
 
@@ -69,6 +70,8 @@ Wizard ──> Container ─┬─ ContainerBody ─┬─ ContainerHeader
 StatusList ──> StatusListItem
 
 MetricGrid ──> MetricCard
+
+Tooltip ──> FocusableBadge
 ```
 
 ## Documentation

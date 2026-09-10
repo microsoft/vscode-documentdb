@@ -49,8 +49,6 @@ export const GenericCell = ({
     nullValuePlaceholder = l10n.t('N/A'),
     tooltipExplanation,
 }: GenericCellProps): JSX.Element => (
-    // No `ariaLabel`: a cell is named by its visible content, which is what it has always done.
-    // The metric cards compose one instead, and increment 4 decides which of the two is right.
     <MetricCard
         label={label}
         value={value}

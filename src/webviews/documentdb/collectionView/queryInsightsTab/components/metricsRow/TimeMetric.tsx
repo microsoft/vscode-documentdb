@@ -7,7 +7,7 @@ import { MetricCard } from '@microsoft/vscode-ext-webview-fluentui/components';
 import * as l10n from '@vscode/l10n';
 import { type JSX } from 'react';
 import { formatTime } from './formatUtils';
-import { composeMetricAriaLabel, type MetricProps } from './metricProps';
+import { type MetricProps } from './metricProps';
 
 /**
  * Time metric, formatted in the Datadog / New Relic style:
@@ -49,7 +49,6 @@ export const TimeMetric = ({
             loadingPlaceholder={loadingPlaceholder}
             nullValuePlaceholder={nullValuePlaceholder}
             tooltipRepeatsValue
-            ariaLabel={composeMetricAriaLabel(label, value, tooltipExplanation)}
         />
     );
 };

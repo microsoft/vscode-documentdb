@@ -34,6 +34,7 @@ created: 2026-08-18
 | 0022 | `MessageBlock` stays in the extension                          | Accepted            | Proposal was to ship it from the package                        | 2026-08-19 | —    |     | 0023 | The README presents theming and components as equal, mixable | Accepted (modified) | Reverses §1 of design.md; operator-originated | 2026-08-20 | —    |
 | 0024 | The metric card enters, and converges its fork                 | Accepted (modified) | Three token and geometry mappings corrected by measurement      | 2026-08-21 | #895 |
 | 0025 | `Announcer` is out of scope for this package                   | Accepted            | Accepted as proposed                                            | 2026-08-21 | #895 |
+| 0026 | The focusable badge ships with one naming contract             | Accepted (modified) | Focusability separated from naming after browser measurement    | 2026-09-10 | #895 |
 
 > Entries below are **semantically** immutable: append new entries rather than
 > rewriting old ones, and record reversals as a new entry plus a status change
@@ -1122,5 +1123,59 @@ An open question that resolves to no work should not wait for an increment to ca
 would be re-argued from scratch every time the component list is reviewed, and the argument is not
 cheap: the gate conditions genuinely all pass, so the reason for exclusion has to be written down or
 it will not survive contact with the next reader.
+
+---
+
+## 0026 — The focusable badge ships with one naming contract
+
+**Status:** Accepted (modified) · **Date:** 2026-09-10 · **PR:** #895
+
+### Decision
+
+`FocusableBadge` ships from `./components`. It uses Fluent's supported
+`createFocusOutlineStyle()` helper, passes Badge appearance and DOM props through, and merges the
+consumer's `className`. `Tooltip` remains at each call site so Fluent continues to own its trigger
+ref, events and ARIA relationship.
+
+The component has a `focusable` prop, defaulting to `true`, which only controls `tabIndex`. It is
+independent of accessible naming. This preserves `IndexPropertiesView`'s mixed list: badges with a
+tooltip remain tab stops and plain badges do not.
+
+When focusable, the badge points `aria-labelledby` at a wrapper around its visible children. It does
+not accept an `ariaLabel` override and does not hide the visible content. Tooltip text is a
+description, not part of the name. Rich tooltip content whose visible title repeats the trigger's
+name supplies a concise accessible label containing only the supplementary explanation.
+
+`MetricCard` uses the same contract. Its label and rendered value receive stable IDs and jointly
+name the card through `aria-labelledby`; its tooltip explanation is the description. The
+`ariaLabel` prop and the extension's `composeMetricAriaLabel` helper are deleted. Every metric card
+remains a tab stop.
+
+### Evidence
+
+Chrome's accessibility tree showed that description-tooltip consumers repeated tooltip content in
+both name and description. It also showed that subtle summary cards with no `aria-label` had no
+name at all, despite containing visible label and value nodes. A browser probe using
+`aria-labelledby` produced `Execution Time 2.33 ms` as the name and only the explanatory sentence
+as the description, with label and value preserved.
+
+The installed Fluent version did not attach `aria-labelledby` for a `relationship="label"`
+tooltip while the trigger already had `aria-label`; it preserved the trigger's name. That does not
+make label relationships safe to retain: removing the trigger label lets a truncated-value tooltip
+become the name and lose the visible metric label. Those call sites therefore move to descriptions.
+
+### Changed from the proposal
+
+The proposal made focusability conditional on an optional accessible-name override. That coupled
+two independent concerns and would change the mixed-list tab order when the override was removed.
+The explicit `focusable` prop replaces that discriminator.
+
+The proposal also assumed visible children would name a focusable generic element after
+`ariaLabel` was removed. Chrome disproved that on the summary cells, so both component families use
+explicit `aria-labelledby` relationships instead.
+
+No `dom-accessibility-api` dependency is added without operator approval. Component tests assert
+the emitted contract; Chrome remains the oracle for computed names and descriptions in this
+increment's recorded before/after evidence.
 
 ---

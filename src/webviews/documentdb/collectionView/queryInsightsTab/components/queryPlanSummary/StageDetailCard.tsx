@@ -5,8 +5,8 @@
 
 import { Badge, Card, Text, Tooltip } from '@fluentui/react-components';
 import { WarningRegular } from '@fluentui/react-icons';
+import { FocusableBadge } from '@microsoft/vscode-ext-webview-fluentui/components';
 import type * as React from 'react';
-import '../../../../../components/focusableBadge/focusableBadge.scss';
 import './StageDetailCard.scss';
 
 export type StageType = 'IXSCAN' | 'FETCH' | 'PROJECTION' | 'SORT' | 'COLLSCAN';
@@ -127,31 +127,22 @@ export function StageDetailCard({
                         const isTruncated = valueStr.length > maxLength;
                         const displayValue = isTruncated ? valueStr.substring(0, maxLength) + '...' : valueStr;
 
-                        // Accessibility pattern: aria-label provides full context (including full value
-                        // for truncated text), while aria-hidden on children prevents double announcement.
                         const badgeContent = (
-                            <Badge
+                            <FocusableBadge
                                 key={index}
                                 appearance="outline"
                                 size="small"
                                 shape="rounded"
                                 color="informative"
-                                tabIndex={0}
-                                className="focusableBadge"
-                                aria-label={`${metric.label}: ${valueStr}`}
                             >
-                                <span aria-hidden="true" className="badge-label">
-                                    {metric.label}:&nbsp;
-                                </span>
-                                <span aria-hidden="true" className="badge-value">
-                                    {displayValue}
-                                </span>
-                            </Badge>
+                                <span className="badge-label">{metric.label}:&nbsp;</span>
+                                <span className="badge-value">{displayValue}</span>
+                            </FocusableBadge>
                         );
 
                         // Wrap in tooltip if truncated
                         return isTruncated ? (
-                            <Tooltip key={index} content={valueStr} relationship="label">
+                            <Tooltip key={index} content={valueStr} relationship="description">
                                 {badgeContent}
                             </Tooltip>
                         ) : (

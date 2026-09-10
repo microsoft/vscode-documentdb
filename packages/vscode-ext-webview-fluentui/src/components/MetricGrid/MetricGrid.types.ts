@@ -10,7 +10,10 @@ export interface MetricGridProps extends ComponentPropsWithoutRef<'div'> {
     readonly children: ReactNode;
 }
 
-export interface MetricCardProps extends ComponentPropsWithoutRef<'div'> {
+export interface MetricCardProps extends Omit<
+    ComponentPropsWithoutRef<'div'>,
+    'aria-label' | 'aria-labelledby' | 'tabIndex'
+> {
     /** The caption above the value. */
     readonly label: ReactNode;
     /**
@@ -72,17 +75,4 @@ export interface MetricCardProps extends ComponentPropsWithoutRef<'div'> {
      * @default false
      */
     readonly tooltipRepeatsValue?: boolean;
-    /**
-     * A complete accessible name, composed by the consumer.
-     *
-     * Supplying it makes the visible label and value **decorative**: they are hidden from assistive
-     * technology, so this string must carry everything they say. Omitting it lets the visible
-     * content name the card, which is the simpler contract and usually the right one.
-     *
-     * The card takes no position on which is correct, because the right answer depends on whether
-     * the surface already describes the card some other way. Fluent's `Tooltip` with
-     * `relationship="description"` sets `aria-describedby`, so a card that also composes the
-     * description into this name will have it announced twice.
-     */
-    readonly ariaLabel?: string;
 }
