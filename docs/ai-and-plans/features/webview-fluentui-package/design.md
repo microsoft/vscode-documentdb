@@ -69,6 +69,26 @@ The consumer examples and scroll/landmark constraints live in the
 [Container README](../../../../packages/vscode-ext-webview-fluentui/src/components/Container/README.md#sizing-and-embedding)
 and [Wizard README](../../../../packages/vscode-ext-webview-fluentui/src/components/Wizard/README.md#sizing-and-embedding).
 
+### Wizard sticky chrome
+
+`Wizard.headerBehavior` offers `scroll` (the default) and `sticky-navigation`. In the latter,
+the identifying header fades as it scrolls away, while the navigation pins. Neither mode resizes
+the header. A `sticky-dynamic` variant was explored and abandoned after it caused subtitle
+truncation, layout jumps and scroll oscillation. See
+[decision 0031](./decisions.md#0031---keep-wizard-behavior-to-scrolling-and-sticky-navigation).
+
+The fade uses a named CSS scroll timeline; navigation elevation uses scroll-state queries.
+Reduced motion disables the fade, not the navigation pinning. Focus within the header also
+disables the fade so header actions remain visible while focused. Primary actions belong in
+the pinned footer, and step actions remain with the step heading.
+
+Top navigation paints its background and elevation across the scroll viewport, with its content
+bounded to the wizard column. Sidebar navigation is aligned to the start of its grid area and
+paints only across its own column, avoiding the main content. Both clip elevation below the surface.
+The short border/shadow transitions remain enabled under reduced motion.
+Behavior-level documentation lives in the
+[Wizard README](../../../../packages/vscode-ext-webview-fluentui/src/components/Wizard/README.md#sticky-header-behavior).
+
 ## 3. Layering
 
 ```

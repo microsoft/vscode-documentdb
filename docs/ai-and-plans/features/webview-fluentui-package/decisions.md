@@ -41,6 +41,7 @@ created: 2026-08-18
 | 0028 | Full-webview sizing is the container default                   | Accepted            | Ratifies `100vh`; embedding remains a consumer override                 | 2026-09-10 | #895 |
 | 0029 | No external consumers; finalize the API for 1.0.0              | Accepted            | Clarifies 0027; pre-release API changes need no compatibility migration | 2026-09-10 | #895 |
 | 0030 | Named focusable containers carry `role="group"`                | Accepted            | Corrects 0026 and 0024; found in review, not in the plan                | 2026-09-10 | #895 |
+| 0031 | Keep wizard behavior to scrolling and sticky navigation        | Accepted            | `sticky-dynamic` was tried and abandoned after usability issues         | 2026-09-11 | #895 |
 
 > Entries below are **semantically** immutable: append new entries rather than
 > rewriting old ones, and record reversals as a new entry plus a status change
@@ -1294,3 +1295,29 @@ The computed-accessibility testing that would settle it is deferred to issue #91
 `FocusableBadge focusable={false}` sets no role, no `tabIndex`, no `aria-labelledby`, and no wrapper
 element around its children. It emits the same DOM as a plain Fluent `Badge`, so a consumer can use
 one component across a mixed list without the non-focusable entries diverging from Fluent's markup.
+
+---
+
+## 0031 - Keep wizard behavior to scrolling and sticky navigation
+
+**Status:** Accepted · **Date:** 2026-09-11 · **PR:** #895
+
+### Decision
+
+A single optional `Wizard.headerBehavior` prop offers `scroll` (the default) and
+`sticky-navigation`. The latter fades the identifying header as it scrolls away while keeping
+navigation pinned. Both current consumers use `sticky-navigation`.
+
+The implementation is CSS-only. A named scroll timeline drives the fade, and scroll-state queries
+drive navigation elevation. Focus within the header cancels the fade so controls remain visible;
+reduced motion disables the fade without disabling sticky navigation.
+
+Top navigation paints full-width elevation without widening its content. Sidebar navigation stays
+within its own column so it cannot cover the adjacent content.
+
+### Abandoned experiment
+
+`sticky-dynamic` and a full-header sticky mode were implemented during exploration, then removed.
+The dynamic mode introduced poor truncation for real subtitles, layout jumps and scroll oscillation;
+the full-header modes also complicated focus visibility and reduced-motion behavior. No compatibility
+aliases remain.

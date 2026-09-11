@@ -4,5 +4,5 @@
  *--------------------------------------------------------------------------------------------*/
 
 export { Wizard } from './Wizard.js';
-export { type WizardProps, type WizardStepProps } from './Wizard.types.js';
+export { type WizardHeaderBehavior, type WizardProps, type WizardStepProps } from './Wizard.types.js';
 export { WizardStep } from './WizardStep.js';

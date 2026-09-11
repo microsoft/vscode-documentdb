@@ -10,7 +10,7 @@ code:
 
 # `@microsoft/vscode-ext-webview-fluentui`
 
-**Status:** 1.0.0 prepared; increments 1-4 implemented and accepted · **Created:** 2026-08-18
+**Status:** 1.0.0 prepared; increments 1-5 implemented and accepted · **Created:** 2026-08-18
 
 > The React theming layer and a small set of components, extracted so other VS Code extensions can
 > make Fluent UI look correct inside a webview without rebuilding it.
@@ -98,26 +98,29 @@ After increments 1-4:
 
 ## Timeline
 
-| Date       | PR   | What changed                                                                                                           | Docs                                                                                                             |
-| ---------- | ---- | ---------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------- |
-| 2026-08-18 | -    | Design and decisions settled; increment 1 planned                                                                      | [iterations/01-theme-and-first-component.md](./iterations/01-theme-and-first-component.md)                       |
-| 2026-08-18 | #895 | Increment 1 implemented and visually verified: package on disk, theming layer and `WizardBreadcrumb` moved, no publish | [iterations/01-theme-and-first-component.md](./iterations/01-theme-and-first-component.md)                       |
-| 2026-08-20 | #895 | Increment 2 completed: shared wizard surface; Local Quick Start and Atlas Credentials migrated                         | [iterations/02-wizard-shell-and-components.md](./iterations/02-wizard-shell-and-components.md)                   |
-| 2026-08-21 | #895 | Increment 3 completed: metric cards, grid and summary-cell convergence                                                 | [iterations/03-metric-card.md](./iterations/03-metric-card.md)                                                   |
-| 2026-09-10 | #895 | Increment 4 implemented in `b4aee678`; operator confirmed acceptance tests complete                                    | [iterations/04-focusable-badge-and-accessible-names.md](./iterations/04-focusable-badge-and-accessible-names.md) |
-| 2026-09-10 | #895 | Operator confirmed the package is already being published; workspace-only restriction retired                          | [Decision 0027](./decisions.md#0027--the-package-is-published-not-workspace-only)                                |
-| 2026-09-10 | #895 | Review corrections: `role="group"` on the named containers, repaired decision table, `publishConfig`, a11y skill       | [Decision 0030](./decisions.md#0030---named-focusable-containers-carry-rolegroup)                                |
+| Date       | PR   | What changed                                                                                                                                   | Docs                                                                                                                                                                     |
+| ---------- | ---- | ---------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| 2026-08-18 | -    | Design and decisions settled; increment 1 planned                                                                                              | [iterations/01-theme-and-first-component.md](./iterations/01-theme-and-first-component.md)                                                                               |
+| 2026-08-18 | #895 | Increment 1 implemented and visually verified: package on disk, theming layer and `WizardBreadcrumb` moved, no publish                         | [iterations/01-theme-and-first-component.md](./iterations/01-theme-and-first-component.md)                                                                               |
+| 2026-08-20 | #895 | Increment 2 completed: shared wizard surface; Local Quick Start and Atlas Credentials migrated                                                 | [iterations/02-wizard-shell-and-components.md](./iterations/02-wizard-shell-and-components.md)                                                                           |
+| 2026-08-21 | #895 | Increment 3 completed: metric cards, grid and summary-cell convergence                                                                         | [iterations/03-metric-card.md](./iterations/03-metric-card.md)                                                                                                           |
+| 2026-09-10 | #895 | Increment 4 implemented in `b4aee678`; operator confirmed acceptance tests complete                                                            | [iterations/04-focusable-badge-and-accessible-names.md](./iterations/04-focusable-badge-and-accessible-names.md)                                                         |
+| 2026-09-10 | #895 | Operator confirmed the package is already being published; workspace-only restriction retired                                                  | [Decision 0027](./decisions.md#0027--the-package-is-published-not-workspace-only)                                                                                        |
+| 2026-09-10 | #895 | Review corrections: `role="group"` on the named containers, repaired decision table, `publishConfig`, a11y skill                               | [Decision 0030](./decisions.md#0030---named-focusable-containers-carry-rolegroup)                                                                                        |
+| 2026-09-11 | #895 | Increment 5: add `scroll` and `sticky-navigation` wizard header behaviors; abandon the experimental `sticky-dynamic` mode | [Decision 0031](./decisions.md#0031---keep-wizard-behavior-to-scrolling-and-sticky-navigation) |
 
 ## Decisions
 
-[decisions.md](./decisions.md) - thirty entries covering scope, layering, module format, styling
-delivery, and public naming.
+[decisions.md](./decisions.md) - thirty-one entries covering scope, layering, module format,
+styling delivery, public naming, and the wizard's sticky chrome.
 
 The highest-signal ones, because they reverse what was originally proposed:
 
 - **0009** - the `adaptive` flag is deleted rather than defaulted to `true`
 - **0010** - the stylesheet is injected at module scope rather than imported by the consumer
 - **0012** - no public CSS custom properties ship in v1
+- **0031** - only `scroll` and `sticky-navigation` ship; the experimental `sticky-dynamic` mode
+  was abandoned after it caused layout and usability issues
 
 And the four that only implementation could have produced:
 
@@ -149,6 +152,11 @@ bounded-parent embedding workarounds for both `Container` and `Wizard`.
 
 ## Open gaps
 
+- **Sticky navigation acceptance is partly operator-reported.** The operator confirmed that the
+  current consumers render correctly. The review used browser probes, not an extension-host
+  accessibility session; keyboard and reduced-motion acceptance in the host remains useful.
+  The current two-mode API and abandoned `sticky-dynamic` experiment are recorded in
+  [decision 0031](./decisions.md#0031---keep-wizard-behavior-to-scrolling-and-sticky-navigation).
 - **Fluent internals coupling.** The overrides key off `fui-*` class names, which are Fluent
   implementation details rather than public API. A narrow peer range and the
   `fluentOverrides` test suite are the only tripwires. Increment 1 widened that suite: it now also

@@ -7,17 +7,29 @@ import { afterEach, beforeAll, describe, expect, jest, test } from '@jest/global
 import { act, type ReactElement } from 'react';
 import { ContainerFooter, ContainerHeader } from '../Container/index.js';
 import { cleanupSurfaces, installTestEnvironment, renderSurface } from '../testing/renderSurface.js';
-import { Wizard, WizardStep } from './index.js';
+import { Wizard, WizardStep, type WizardHeaderBehavior } from './index.js';
 
 beforeAll(installTestEnvironment);
 afterEach(cleanupSurfaces);
+
+const stylesFor = (element: Element): string =>
+    [...document.querySelectorAll('style')]
+        .map((style) =>
+            style.textContent !== null && style.textContent !== ''
+                ? style.textContent
+                : [...(style.sheet?.cssRules ?? [])].map((rule) => rule.cssText).join('\n'),
+        )
+        .join('\n')
+        .split('}')
+        .filter((block) => [...element.classList].some((name) => block.includes(`.${name}`)))
+        .join('}');
 
 const wizard = (activeStep: string, onStepChange: (value: string) => void = () => undefined): ReactElement => (
     <Wizard
         activeStep={activeStep}
         onStepChange={onStepChange}
         stepsAriaLabel="Setup steps"
-        header={<ContainerHeader title="DocumentDB Local" />}
+        header={<ContainerHeader title="DocumentDB Local" subtitle="Local development setup" />}
         footer={<ContainerFooter>footer actions</ContainerFooter>}
     >
         <WizardStep value="introduction" label="Introduction">
@@ -100,6 +112,143 @@ describe('Wizard', () => {
 
         expect(root.querySelector('h1')?.textContent).toBe('DocumentDB Local');
         expect(root.textContent).toContain('footer actions');
+    });
+
+    test.each<WizardHeaderBehavior>(['scroll', 'sticky-navigation'])(
+        'applies the %s header behavior to the scroll region',
+        async (headerBehavior) => {
+            const { root } = await renderSurface(
+                <Wizard
+                    activeStep="only"
+                    onStepChange={() => undefined}
+                    stepsAriaLabel="Setup steps"
+                    headerBehavior={headerBehavior}
+                    header={<ContainerHeader title="DocumentDB Local" />}
+                >
+                    <WizardStep value="only" label="Only" />
+                </Wizard>,
+            );
+
+            expect(root.querySelector('[data-header-behavior]')?.getAttribute('data-header-behavior')).toBe(
+                headerBehavior,
+            );
+        },
+    );
+
+    test('sticky-navigation leaves the subtitle in place', async () => {
+        const { root } = await renderSurface(
+            <Wizard
+                activeStep="only"
+                onStepChange={() => undefined}
+                stepsAriaLabel="Setup steps"
+                headerBehavior="sticky-navigation"
+                header={<ContainerHeader title="DocumentDB Local" subtitle="Local development setup" />}
+            >
+                <WizardStep value="only" label="Only" />
+            </Wizard>,
+        );
+
+        const subtitleCopies = Array.from(root.querySelectorAll('span')).filter(
+            (element) => element.textContent === 'Local development setup',
+        );
+        expect(subtitleCopies).toHaveLength(1);
+        expect(subtitleCopies[0].closest('[aria-hidden="true"]')).toBeNull();
+    });
+
+    test('scrolling headers render one subtitle copy', async () => {
+        const { root } = await renderSurface(wizard('introduction'));
+        const subtitleCopies = Array.from(root.querySelectorAll('span')).filter(
+            (element) => element.textContent === 'Local development setup',
+        );
+
+        expect(subtitleCopies).toHaveLength(1);
+    });
+
+    test('sticky-navigation leaves header presentation unchanged', async () => {
+        const surface = (headerBehavior: WizardHeaderBehavior): ReactElement => (
+            <Wizard
+                activeStep="only"
+                onStepChange={() => undefined}
+                stepsAriaLabel="Setup steps"
+                headerBehavior={headerBehavior}
+                header={
+                    <ContainerHeader
+                        media={<svg data-testid="header-media" />}
+                        title="DocumentDB Local"
+                        subtitle="Local development setup"
+                    />
+                }
+            >
+                <WizardStep value="only" label="Only" />
+            </Wizard>
+        );
+        const { root, rerender } = await renderSurface(surface('scroll'));
+        const scrollingClasses = {
+            header: root.querySelector('h1')?.parentElement?.parentElement?.className,
+            media: root.querySelector('[data-testid="header-media"]')?.parentElement?.className,
+            title: root.querySelector('h1')?.className,
+        };
+
+        await rerender(surface('sticky-navigation'));
+
+        expect({
+            header: root.querySelector('h1')?.parentElement?.parentElement?.className,
+            media: root.querySelector('[data-testid="header-media"]')?.parentElement?.className,
+            title: root.querySelector('h1')?.className,
+        }).toEqual(scrollingClasses);
+    });
+
+    test('the header fades on scroll but cancels its fade for focus and reduced motion', async () => {
+        const { root } = await renderSurface(
+            <Wizard
+                activeStep="only"
+                onStepChange={() => undefined}
+                stepsAriaLabel="Setup steps"
+                headerBehavior="sticky-navigation"
+                header={<ContainerHeader title="DocumentDB Local" action={<button>Help</button>} />}
+                footer={
+                    <ContainerFooter>
+                        <button>Continue</button>
+                    </ContainerFooter>
+                }
+            >
+                <WizardStep value="only" label="Only" />
+            </Wizard>,
+        );
+        const scrollRegion = root.querySelector('[data-header-behavior]')!;
+        const fadingHeader = scrollRegion.firstElementChild!.firstElementChild!;
+        const headerStyles = stylesFor(fadingHeader);
+
+        expect(headerStyles).toContain('animation-timeline: --wizard-scroll');
+        expect(headerStyles).toContain('animation-range: 0px 150px');
+        expect(headerStyles).toMatch(/:focus-within\s*\{\s*animation-name: none/);
+        expect(headerStyles).toMatch(/prefers-reduced-motion: reduce[\s\S]*animation-name: none/);
+
+        const help = fadingHeader.querySelector('button')!;
+        help.focus();
+        expect(document.activeElement).toBe(help);
+        const primary = [...root.querySelectorAll('button')].find((button) => button.textContent === 'Continue')!;
+        expect(scrollRegion.contains(primary)).toBe(false);
+    });
+
+    test('sidebar navigation does not stretch or paint over the main content', async () => {
+        const { root } = await renderSurface(
+            <Wizard
+                activeStep="only"
+                onStepChange={() => undefined}
+                stepsAriaLabel="Setup steps"
+                headerBehavior="sticky-navigation"
+                navPosition="start"
+            >
+                <WizardStep value="only" label="Only" />
+            </Wizard>,
+        );
+        const surface = root.querySelector('nav')!.parentElement!;
+        const navigationStyles = stylesFor(surface.parentElement!);
+
+        expect(navigationStyles).toContain('position: sticky');
+        expect(navigationStyles).toContain('align-self: start');
+        expect(stylesFor(surface)).toContain('width: calc(100% + 24px)');
     });
 
     test('ignores a child that is not a WizardStep, rather than rendering it into the step list', async () => {

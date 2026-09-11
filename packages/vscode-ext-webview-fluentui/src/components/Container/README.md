@@ -138,6 +138,10 @@ spent on content.
 A consumer who wants a pinned header puts `ContainerHeader` directly under `Container` instead.
 `flex-shrink: 0` makes that work with no extra API. Both positions are supported.
 
+`ContainerHeader` always uses the same full-size presentation. `Wizard` can fade its surrounding
+header region while pinning the navigation; it does not change the header's sizing or require a
+presentation context. See the [Wizard README](../Wizard/README.md#sticky-header-behavior).
+
 ## Regions, not grid areas on the content
 
 `ContainerNav` and `ContainerMain` look like one nesting level too many until you try the

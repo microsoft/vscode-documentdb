@@ -2370,6 +2370,7 @@ export const LocalQuickStart = (): JSX.Element => {
             <Wizard
                 activeStep={step}
                 onStepChange={goToStep}
+                headerBehavior="sticky-navigation"
                 stepsLocked={stepsLocked}
                 stepsAriaLabel={l10n.t('Setup steps')}
                 overflowAriaLabel={(count) => l10n.t('{0} more steps', String(count))}

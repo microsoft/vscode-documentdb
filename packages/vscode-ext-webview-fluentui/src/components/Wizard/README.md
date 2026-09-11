@@ -35,6 +35,7 @@ you cannot use directly. Compose those yourself when you need a layout a wizard 
 <Wizard
     activeStep={currentStep}
     onStepChange={goToStep}
+    headerBehavior="sticky-navigation"
     stepsLocked={isRunning}
     stepsAriaLabel={l10n.t('Setup steps')}
     header={<ContainerHeader media={<RocketRegular />} title="DocumentDB Local" subtitle="…" />}
@@ -59,6 +60,49 @@ you cannot use directly. Compose those yourself when you need a layout a wizard 
 There is no `WizardHeader` or `WizardFooter`. The slots take `ContainerHeader` and
 `ContainerFooter`, which is fewer names and makes the facade relationship visible in the consumer's
 own code.
+
+## Sticky header behavior
+
+`headerBehavior` controls what remains visible while the wizard body scrolls:
+
+| Value               | The identifying header         | The step indicator |
+| ------------------- | ------------------------------ | ------------------ |
+| `scroll` (default)  | scrolls away                   | scrolls away       |
+| `sticky-navigation` | scrolls away, fading out early | pins               |
+
+Pick `scroll` unless a step's content is long enough that the user loses their place in the flow.
+`sticky-navigation` is the cheapest fix for that, because it keeps the step indicator, which is the
+part that answers "where am I?", and spends no vertical space on the title once it has been read.
+The fade uses the first 150 pixels of scrolling and reaches zero opacity at 65% of that range.
+Header media, title and subtitle keep their normal sizes; there is no condensing presentation.
+
+Navigation gains a bottom border and shadow when there is content above the scroll position.
+The shadow is clipped to the bottom. Top navigation keeps the wizard's normal maximum content
+width while its background and elevation span the scroll viewport, matching `ContainerFooter`.
+With `navPosition="start"`, the background stays within the sidebar so it cannot cover the main content.
+
+### Action buttons
+
+Header actions scroll and fade with the identifying header. While any descendant has focus,
+`:focus-within` disables the fade, restoring full opacity without removing buttons from the tab order
+or accessibility tree. The fade resumes when focus leaves the header. This applies to keyboard
+focus and to pointer interactions that focus a control.
+
+Put primary actions and commands that must remain available in `ContainerFooter`; it stays pinned
+in both modes. `WizardStep.action` stays with the step heading and is not part of the header fade.
+
+### What it costs, and what it never changes
+
+Sticky navigation adds only CSS: a named scroll timeline and scroll-state container queries.
+It adds no scroll listeners, observers or React state. `ContainerBody` retains its existing
+overflow tracking for the footer.
+
+Nothing about the accessible content changes in any mode. The header renders one title and one
+subtitle throughout. Step headings carry a scroll margin to leave room for the pinned navigation.
+
+With `prefers-reduced-motion: reduce`, or without scroll timelines, the identifying header scrolls
+away **without fading** and the navigation still pins. This fallback simply disables the animation.
+The navigation's border and shadow retain their short cosmetic transitions.
 
 ## Sizing and embedding
 

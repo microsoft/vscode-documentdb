@@ -654,6 +654,7 @@ export const AtlasCredentialsView = (): JSX.Element => {
             <Wizard
                 activeStep={phase}
                 onStepChange={goToStep}
+                headerBehavior="sticky-navigation"
                 stepsAriaLabel={l10n.t('Credential setup progress')}
                 overflowAriaLabel={(count) => l10n.t('{0} more steps', String(count))}
                 header={header}

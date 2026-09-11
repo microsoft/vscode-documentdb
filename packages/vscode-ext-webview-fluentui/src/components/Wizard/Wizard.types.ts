@@ -6,6 +6,17 @@
 import { type ReactNode } from 'react';
 import { type ContainerNavPosition } from '../Container/Container.types.js';
 
+/**
+ * What stays visible while a wizard's body scrolls.
+ *
+ * - `scroll` - header and step indicator both scroll away.
+ * - `sticky-navigation` - the header fades out early as it scrolls; the step indicator pins.
+ *
+ * With reduced motion or without scroll timelines, the header scrolls away without fading.
+ * Header actions restore full opacity while focused. The footer remains pinned in both modes.
+ */
+export type WizardHeaderBehavior = 'scroll' | 'sticky-navigation';
+
 export interface WizardProps {
     /** The `value` of the step being shown. */
     readonly activeStep: string;
@@ -13,13 +24,18 @@ export interface WizardProps {
     readonly onStepChange: (value: string) => void;
     /** @default 'top' */
     readonly navPosition?: ContainerNavPosition;
+    /**
+     * How the identifying header and step navigation behave while the body scrolls.
+     * @default 'scroll'
+     */
+    readonly headerBehavior?: WizardHeaderBehavior;
     /** Suppresses back-navigation: work is in flight, or the outcome is already committed. */
     readonly stepsLocked?: boolean;
     /** Accessible name of the step indicator. */
     readonly stepsAriaLabel: string;
     /** Accessible name of the step indicator's "…" overflow button. Defaults to English. */
     readonly overflowAriaLabel?: (count: number) => string;
-    /** A `ContainerHeader`. Scrolls with the content. */
+    /** A `ContainerHeader`. Scrolls away, with an optional fade controlled by {@link WizardProps.headerBehavior}. */
     readonly header?: ReactNode;
     /** A `ContainerFooter`. Pinned, and elevates itself while the content overflows. */
     readonly footer?: ReactNode;
