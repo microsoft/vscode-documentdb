@@ -1,13 +1,14 @@
 # @microsoft/vscode-ext-webview-fluentui
 
-Two things for building [Fluent UI React v9](https://react.fluentui.dev/) webviews inside VS Code,
+Three things for building [Fluent UI React v9](https://react.fluentui.dev/) webviews inside VS Code,
 usable on their own or mixed together: a **theming layer** that makes Fluent track the user's
-active VS Code theme, and a small set of **reusable components** that Fluent itself does not ship.
+active VS Code theme, a small set of **reusable components** that Fluent itself does not ship, and
+**Monaco theming** that paints the editor from the same colors, so the two engines agree.
 
 Its sibling, [`@microsoft/vscode-ext-webview`](../vscode-ext-webview/README.md), carries the
 transport (tRPC over `postMessage`). Neither package in this pairing depends on the other.
 
-## The two things this package does
+## The three things this package does
 
 ### Theming
 
@@ -31,8 +32,22 @@ See [Quick start: components](#quick-start-components) for the common path, and
 [`src/components/README.md`](./src/components/README.md) for the full catalog, how the components
 compose, and how to build a wizard-like surface from `Container` and `StepList` directly.
 
-Both halves are independent: adopting the theming does not require the components, and using a
-component does not require this package's provider.
+### Monaco theming
+
+Monaco ships its own `vs` and `vs-dark` approximations of a VS Code theme, which do not follow the
+user's actual workbench theme. `useVSCodeMonacoTheme()` derives a real one, from the same colors the
+Fluent layer reads - so a Monaco hover widget and a Fluent popover sitting side by side resolve a
+shared surface the same way, including on themes that leave the ideal color unset.
+
+It costs you **no Monaco dependency**: the returned data is structurally assignable to
+`monaco.editor.IStandaloneThemeData`, so you pass it straight to `defineTheme` with no cast, and
+this package never imports `monaco-editor`.
+
+See [Quick start: Monaco](#quick-start-monaco).
+
+All three halves are independent: adopting the theming does not require the components, using a
+component does not require this package's provider, and `./monaco` pulls in neither Fluent nor the
+stylesheet.
 
 ## Install
 
@@ -47,6 +62,10 @@ Peer dependencies, which you already have if you are using Fluent:
 | `react`                      | `>=19`  |
 | `@fluentui/react-components` | `~9.74` |
 | `@fluentui/react-icons`      | `~2.0`  |
+
+`monaco-editor` is deliberately **not** a peer, even though `./monaco` exists. The theme data is
+structurally typed, so there is no version to agree on and consumers who never open an editor carry
+nothing.
 
 The Fluent range is narrow on purpose. The stylesheet keys off `fui-*` class names and, in one
 case, the absence of an `aria-valuenow` attribute. Those are Fluent implementation details rather
@@ -116,6 +135,39 @@ a string owned here could never be translated by a consumer.
 See [`src/components/README.md`](./src/components/README.md) for the full catalog, how the
 components compose, and how to decompose `Wizard` into `Container` and `StepList` when you need a
 layout it does not offer.
+
+## Quick start: Monaco
+
+```tsx
+import { useVSCodeMonacoTheme } from '@microsoft/vscode-ext-webview-fluentui/monaco';
+
+const monaco = useMonaco();
+const monacoTheme = useVSCodeMonacoTheme();
+
+useEffect(() => {
+    if (!monaco) return;
+    monaco.editor.defineTheme(monacoTheme.themeName, monacoTheme.data);
+    monaco.editor.setTheme(monacoTheme.themeName);
+}, [monaco, monacoTheme]);
+```
+
+Applying the theme is left to you, because doing it here would mean depending on Monaco. That is
+the whole boundary: the package works out what the user's colors are, and you decide what Monaco
+does with them.
+
+The returned object's identity is stable until the derived theme actually changes, so that effect
+does not re-run, and Monaco does not repaint, on an unrelated render. It re-derives when the user
+switches themes - including between two dark themes, where the theme _kind_ does not change but
+every color does, and including `workbench.colorCustomizations` edits that change no theme at all.
+
+`createVSCodeMonacoTheme()` is the same derivation without React, and takes `colors` and `rules`
+overrides for consumers who want to post-process. Syntax token colors are **not** derived: `rules`
+is empty by default, so Monaco colorizes syntax from its built-in palette. VS Code publishes no
+TextMate colors as CSS variables, so anything else would be an approximation this package is not in
+a position to choose for you.
+
+See [`src/monaco/README.md`](./src/monaco/README.md) for what is derived, and why the color list is
+shorter than the one VS Code publishes.
 
 ## Theming in detail
 

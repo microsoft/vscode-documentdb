@@ -71,8 +71,9 @@ After increments 1-4:
 
 - `packages/vscode-ext-webview-fluentui/**` - the package
 - `src/webviews/index.tsx` - the consumer wiring, now rendering through `VSCodeFluentProvider`
-- `src/webviews/components/monacoTheme.ts` and `vscodeThemeTokens.ts` - the Monaco derivation and
-  its token list, which stayed behind (decisions 0008, 0013), beside their only consumer
+- `src/webviews/components/MonacoEditor.tsx` - consumes `useVSCodeMonacoTheme()` from the package's
+  `./monaco` entry. The extension's own `monacoTheme.ts` and 832-line `vscodeThemeTokens.ts` are
+  deleted (0032, reversing 0013)
 - `src/webviews/index.scss` - the `--documentdb-*` field stroke aliases, kept extension-side (0012)
 - `src/webviews/slickgrid.scss` - product-specific, moved out of the dissolved `theme/` folder
 - `packages/vscode-ext-webview-fluentui/src/components/` - `Container`, `StepList`, `StatusList`,
@@ -98,21 +99,22 @@ After increments 1-4:
 
 ## Timeline
 
-| Date       | PR   | What changed                                                                                                              | Docs                                                                                                             |
-| ---------- | ---- | ------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------- |
-| 2026-08-18 | -    | Design and decisions settled; increment 1 planned                                                                         | [iterations/01-theme-and-first-component.md](./iterations/01-theme-and-first-component.md)                       |
-| 2026-08-18 | #895 | Increment 1 implemented and visually verified: package on disk, theming layer and `WizardBreadcrumb` moved, no publish    | [iterations/01-theme-and-first-component.md](./iterations/01-theme-and-first-component.md)                       |
-| 2026-08-20 | #895 | Increment 2 completed: shared wizard surface; Local Quick Start and Atlas Credentials migrated                            | [iterations/02-wizard-shell-and-components.md](./iterations/02-wizard-shell-and-components.md)                   |
-| 2026-08-21 | #895 | Increment 3 completed: metric cards, grid and summary-cell convergence                                                    | [iterations/03-metric-card.md](./iterations/03-metric-card.md)                                                   |
-| 2026-09-10 | #895 | Increment 4 implemented in `b4aee678`; operator confirmed acceptance tests complete                                       | [iterations/04-focusable-badge-and-accessible-names.md](./iterations/04-focusable-badge-and-accessible-names.md) |
-| 2026-09-10 | #895 | Operator confirmed the package is already being published; workspace-only restriction retired                             | [Decision 0027](./decisions.md#0027--the-package-is-published-not-workspace-only)                                |
-| 2026-09-10 | #895 | Review corrections: `role="group"` on the named containers, repaired decision table, `publishConfig`, a11y skill          | [Decision 0030](./decisions.md#0030---named-focusable-containers-carry-rolegroup)                                |
-| 2026-09-11 | #895 | Increment 5: add `scroll` and `sticky-navigation` wizard header behaviors; abandon the experimental `sticky-dynamic` mode | [Decision 0031](./decisions.md#0031---keep-wizard-behavior-to-scrolling-and-sticky-navigation)                   |
+| Date       | PR   | What changed                                                                                                                             | Docs                                                                                                             |
+| ---------- | ---- | ---------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------- |
+| 2026-08-18 | -    | Design and decisions settled; increment 1 planned                                                                                        | [iterations/01-theme-and-first-component.md](./iterations/01-theme-and-first-component.md)                       |
+| 2026-08-18 | #895 | Increment 1 implemented and visually verified: package on disk, theming layer and `WizardBreadcrumb` moved, no publish                   | [iterations/01-theme-and-first-component.md](./iterations/01-theme-and-first-component.md)                       |
+| 2026-08-20 | #895 | Increment 2 completed: shared wizard surface; Local Quick Start and Atlas Credentials migrated                                           | [iterations/02-wizard-shell-and-components.md](./iterations/02-wizard-shell-and-components.md)                   |
+| 2026-08-21 | #895 | Increment 3 completed: metric cards, grid and summary-cell convergence                                                                   | [iterations/03-metric-card.md](./iterations/03-metric-card.md)                                                   |
+| 2026-09-10 | #895 | Increment 4 implemented in `b4aee678`; operator confirmed acceptance tests complete                                                      | [iterations/04-focusable-badge-and-accessible-names.md](./iterations/04-focusable-badge-and-accessible-names.md) |
+| 2026-09-10 | #895 | Operator confirmed the package is already being published; workspace-only restriction retired                                            | [Decision 0027](./decisions.md#0027--the-package-is-published-not-workspace-only)                                |
+| 2026-09-10 | #895 | Review corrections: `role="group"` on the named containers, repaired decision table, `publishConfig`, a11y skill                         | [Decision 0030](./decisions.md#0030---named-focusable-containers-carry-rolegroup)                                |
+| 2026-09-11 | #895 | Increment 5: add `scroll` and `sticky-navigation` wizard header behaviors; abandon the experimental `sticky-dynamic` mode                | [Decision 0031](./decisions.md#0031---keep-wizard-behavior-to-scrolling-and-sticky-navigation)                   |
+| 2026-09-11 | #895 | Increment 6: unified Monaco theming through a new `./monaco` entry and a shared internal colour source; 937 lines deleted extension-side | [iterations/06-monaco-theming.md](./iterations/06-monaco-theming.md)                                             |
 
 ## Decisions
 
-[decisions.md](./decisions.md) - thirty-one entries covering scope, layering, module format,
-styling delivery, public naming, and the wizard's sticky chrome.
+[decisions.md](./decisions.md) - thirty-two entries covering scope, layering, module format,
+styling delivery, public naming, the wizard's sticky chrome, and Monaco theming.
 
 The highest-signal ones, because they reverse what was originally proposed:
 

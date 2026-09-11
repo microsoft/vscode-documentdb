@@ -27,14 +27,19 @@ Every addition passes the four-condition scope gate in decision 0001.
 
 ## 2. Public surface
 
-Two entries.
+Three entries.
 
 | Entry          | Contents                                                                                                                                  |
 | -------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
 | `.`            | `VSCodeFluentProvider`, `useActiveVSCodeTheme`, `useActiveVSCodeThemeKind`, `createVSCodeFluentTheme` - and the self-injecting stylesheet |
 | `./components` | `WizardBreadcrumb` and its types. No theming, no stylesheet.                                                                              |
+| `./monaco`     | `createVSCodeMonacoTheme`, `useVSCodeMonacoTheme` and their types. No Fluent, no stylesheet, no `monaco-editor` dependency (0032).        |
 
-Not in v1: `./tokens` (0008), `./monaco` (0013), `./styles.css` (0010), `./testing`.
+Not in v1: `./tokens` (0008), `./styles.css` (0010), `./testing`.
+
+`./monaco` is Fluent-free on purpose. It shares the colour source, not the adaptation - see §3 - and
+its data is structurally assignable to `monaco.editor.IStandaloneThemeData` so that the consumer
+needs no cast and the package needs no Monaco dependency.
 
 ### Three front doors, one implementation
 
@@ -45,8 +50,8 @@ Not in v1: `./tokens` (0008), `./monaco` (0013), `./styles.css` (0010), `./testi
 | Primitive  | `generateAdaptiveDarkTheme()` and friends                  | consumers post-processing the theme object  |
 
 All three tiers are Fluent-bound - the generators return a Fluent `Theme`. The genuinely
-design-system-neutral pieces, the palette math and the VS Code token list, are internal (0008), so
-there is no tier for non-Fluent consumers and the package name says as much (0002).
+design-system-neutral pieces, the palette math and the VS Code colour reader, are internal (0008,
+0032), so there is no tier for non-Fluent consumers and the package name says as much (0002).
 
 The facade is built only from tier 2 and 3 (invariant I3): a consumer assembling it by hand gets an
 identical result.
@@ -93,30 +98,41 @@ Behavior-level documentation lives in the
 
 ```
 components  ──┐   React + Fluent, provider-agnostic
-              ├──> theme/react   React: provider + hooks
-              │        └───────> theme/core    Fluent, no React: theme generators
-              └───────────────-> palette       no Fluent, no React: LCH/LAB colour math
+              ├──> theme/react  ──> theme/core  ──┐  Fluent
+              │                                   ├──> vscode/   colour source: no Fluent, no React
+              └──> monaco/      ─────────────────-┘
+                                    palette       no Fluent, no React
 ```
 
 One-directional, React-free at the bottom (invariant I2). `components/` may not import `theme/` or
-`styles/` (invariant I1), enforced by an ESLint `no-restricted-imports` rule and by a test asserting
-that importing `./components` injects no stylesheet.
+`styles/` (invariant I1), and `monaco/` may not import `theme/`, `components/` or `styles/` (0032).
+Both are enforced by ESLint `no-restricted-imports` rules and by tests asserting that importing
+`./components` or `./monaco` injects no stylesheet.
+
+`vscode/` is the shared colour source - the reader, hex normalisation, the theme-kind vocabulary and
+the change store. Having the Fluent and Monaco derivations read one source at one version is what
+makes their output agree; it is the whole mechanism behind unified colours. It is internal (0008).
 
 ## 4. Repository layout
 
 ```
 packages/vscode-ext-webview-fluentui/
-├── package.json                    # type: module, two exports, sideEffects: ["./dist/index.js"]
+├── package.json                    # type: module, three exports, sideEffects: ["./dist/index.js"]
 ├── tsconfig.json                   # esnext + bundler resolution, jsx react-jsx, declaration
 ├── jest.config.cjs                 # .cjs - "type": "module" would break module.exports
 ├── README.md  LICENSE               # no ADVANCED.md or MIGRATION.md in v1 - nothing to migrate from yet
 ├── scripts/
-│   └── build-styles.mjs            # scss → src/styles/generated.ts
+│   ├── build-styles.mjs            # scss → src/styles/generated.ts
+│   └── build-monaco-color-ids.mjs  # monaco-editor's registerColor calls → src/monaco/core/colorIds.ts
+├── type-tests/                     # tsc-only: proves the Monaco data is assignable, ships nothing
 └── src/
     ├── README.md                   # entry map and import direction
     ├── index.ts                    # entry "."; calls injectStyles() at module scope
     ├── components.ts               # entry "./components"
+    ├── monaco.ts                   # entry "./monaco"
     ├── theme/
+    ├── vscode/                     # internal colour source, shared by theme/ and monaco/
+    ├── monaco/
     ├── styles/
     │   ├── fluentOverrides.scss    # authored normally, with real tooling
     │   ├── generated.ts            # generated, committed (0015)
@@ -183,9 +199,12 @@ This is the first real divergence from the sibling package, whose entire build i
 | `@fluentui/react-components` | `~9.74` | `~9.74.4`      | `~9.74.1`       |
 | `@fluentui/react-icons`      | `~2.0`  | `~2.0.320`     | `~2.0.313`      |
 
-`devDependencies`: `sass` (the style build) and `@fluentui/react-progress` - the latter because
+`devDependencies`: `sass` (the style build), `@fluentui/react-progress` - the latter because
 `fluentOverrides.test.ts` does `require.resolve('@fluentui/react-progress')` and currently works only
-by npm hoisting. In the package it must be declared.
+by npm hoisting - and `monaco-editor`, which the colour-id generator reads and the type-level
+contract test checks against. `monaco-editor` is **not** a peer and not a runtime dependency: the
+Monaco theme data is structurally typed (0032), so a consumer that never touches Monaco pays
+nothing and one that does needs no version agreement with this package.
 
 The narrow Fluent range is load-bearing rather than cautious. The overrides key off `fui-*` class
 names and, in one case, the absence of an `aria-valuenow` attribute - Fluent implementation details,
@@ -231,14 +250,15 @@ no `moduleResolution` - node10 resolution, so the `exports` field is ignored. Le
 webview importing the package breaks the build.
 
 The package resolves the way all five existing workspace packages do: npm workspaces symlinks it
-into `node_modules`, the root `tsc` reads `types` from its `package.json`, and the one subpath -
-which node10 cannot resolve on its own - is covered by `typesVersions`.
+into `node_modules`, the root `tsc` reads `types` from its `package.json`, and the subpaths -
+which node10 cannot resolve on their own - are covered by `typesVersions`.
 
 ```jsonc
 "types": "./dist/index.d.ts",
 "typesVersions": {
     "*": {
-        "components": ["./dist/components.d.ts"]
+        "components": ["./dist/components.d.ts"],
+        "monaco": ["./dist/monaco.d.ts"]
     }
 }
 ```
@@ -252,11 +272,13 @@ guarantees, exactly as it does for the other five.
 `src/webviews/theme/` is **dissolved** - a folder for two leftovers is not worth keeping. Its
 survivors move to where they are used:
 
-| What                                              | Goes to                                           | Why it stays (0013, 0012)         |
-| ------------------------------------------------- | ------------------------------------------------- | --------------------------------- |
-| Monaco theme derivation + the VS Code token list  | beside `src/webviews/components/MonacoEditor.tsx` | Monaco is not Fluent              |
-| `slickgrid.scss`                                  | `src/webviews/`                                   | product-specific                  |
-| `--documentdb-colorInputStroke` and hover variant | `src/webviews/index.scss`                         | no public custom properties in v1 |
+| What                                              | Goes to                   | Why it stays (0013, 0012)         |
+| ------------------------------------------------- | ------------------------- | --------------------------------- |
+| `slickgrid.scss`                                  | `src/webviews/`           | product-specific                  |
+| `--documentdb-colorInputStroke` and hover variant | `src/webviews/index.scss` | no public custom properties in v1 |
+
+The Monaco derivation and the VS Code token list were the third row here. They moved into the
+package in increment 6, and both files are deleted: see 0032.
 
 All localized strings stay in the extension, including the `WizardBreadcrumb` overflow label.
 

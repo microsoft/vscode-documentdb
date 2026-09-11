@@ -21,11 +21,11 @@ status is `Deferred` precisely for this. Adds decision 0032. Depends on nothing 
 
 0013 deferred on three grounds. Two no longer hold, and the third is answered rather than ignored.
 
-| Original ground                                        | Status today                                                                                                      |
-| ------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------- |
-| "a roughly 5 MB peer"                                  | **Gone.** Only three type aliases were ever needed. `IStandaloneThemeData` is a plain structural interface.        |
-| "the token list would have shipped with zero consumers" | **Gone.** The `vscode-cosmosdb` fork carries the same `ThemeState.tsx` with the same `monaco-editor` type import.  |
-| "Monaco is not Fluent" (0002)                          | **Stands**, and draws the boundary in §3 rather than blocking the work.                                            |
+| Original ground                                         | Status today                                                                                                      |
+| ------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------- |
+| "a roughly 5 MB peer"                                   | **Gone.** Only three type aliases were ever needed. `IStandaloneThemeData` is a plain structural interface.       |
+| "the token list would have shipped with zero consumers" | **Gone.** The `vscode-cosmosdb` fork carries the same `ThemeState.tsx` with the same `monaco-editor` type import. |
+| "Monaco is not Fluent" (0002)                           | **Stands**, and draws the boundary in §3 rather than blocking the work.                                           |
 
 ## 2. The defects this fixes
 
@@ -75,11 +75,11 @@ loader configuration, editor lifecycle, the focus-trap and `Announcer` work in `
 
 ### Options considered
 
-| Option                                                     | Verdict      |
-| ---------------------------------------------------------- | ------------ |
-| **A** — `./monaco` subpath in this package                 | **Taken**    |
-| B — a new `@microsoft/vscode-ext-webview-monaco` package    | Rejected     |
-| C — promote `./tokens` (0008) and build a separate package  | Rejected     |
+| Option                                                     | Verdict   |
+| ---------------------------------------------------------- | --------- |
+| **A** — `./monaco` subpath in this package                 | **Taken** |
+| B — a new `@microsoft/vscode-ext-webview-monaco` package   | Rejected  |
+| C — promote `./tokens` (0008) and build a separate package | Rejected  |
 
 Unification requires one source of truth resolved at one version. B and C both put a package
 boundary between the Fluent derivation and the Monaco derivation, which means a semver range
@@ -147,12 +147,12 @@ effect is six lines. Revisit if a second consumer writes the same effect.
 
 Measured against `monaco-editor`'s own `registerColor` calls:
 
-| | Count |
-| --- | --- |
-| Ids the extension reads today | 813 |
-| Ids Monaco actually registers, and can therefore read | **392** |
-| Of those, present in the extension's list | 392 — the Monaco set is a strict subset |
-| Ids read today that are inert inside Monaco | **421** |
+|                                                       | Count                                   |
+| ----------------------------------------------------- | --------------------------------------- |
+| Ids the extension reads today                         | 813                                     |
+| Ids Monaco actually registers, and can therefore read | **392**                                 |
+| Of those, present in the extension's list             | 392 — the Monaco set is a strict subset |
+| Ids read today that are inert inside Monaco           | **421**                                 |
 
 So the curated list is **provably lossless**: every id Monaco can read is included, and the 421
 dropped ones (`activityBar.*`, `titleBar.*`, `welcomePage.*` and friends) have no reader. This is
@@ -191,12 +191,12 @@ version happens to set.
 
 ## 6. Migration
 
-| Step                                                                        | Effect               |
-| --------------------------------------------------------------------------- | -------------------- |
-| Delete `src/webviews/components/vscodeThemeTokens.ts`                       | −832 lines           |
-| Delete `src/webviews/components/monacoTheme.ts`, with its `rgbaToHex` copy  | −100 lines           |
-| Edit `MonacoEditor.tsx` to `useVSCodeMonacoTheme()`                          | ~4 lines changed     |
-| `MonacoAutoHeight`, `QueryEditor`, `JsonInputEditor`, `DataViewPanelJSON`    | untouched            |
+| Step                                                                       | Effect           |
+| -------------------------------------------------------------------------- | ---------------- |
+| Delete `src/webviews/components/vscodeThemeTokens.ts`                      | −832 lines       |
+| Delete `src/webviews/components/monacoTheme.ts`, with its `rgbaToHex` copy | −100 lines       |
+| Edit `MonacoEditor.tsx` to `useVSCodeMonacoTheme()`                        | ~4 lines changed |
+| `MonacoAutoHeight`, `QueryEditor`, `JsonInputEditor`, `DataViewPanelJSON`  | untouched        |
 
 **Visual acceptance is the real cost.** §2(a) means the migration _intends_ to change pixels on
 themes that leave a shared-surface id unpublished. The pass covers Default Dark Modern, Default
@@ -221,17 +221,32 @@ separate conversation from Monaco's internal colours.
 
 One commit each.
 
-| # | Item                                                                                             | Status |
-| - | ------------------------------------------------------------------------------------------------ | ------ |
-| 1 | This plan                                                                                        | done   |
-| 2 | Internal `vscode/` tier: theme kind, colour reader, hex normalisation, change store               | done   |
-| 3 | `./monaco` entry: colour-id list + generator script, theme derivation, hook, `exports` + `typesVersions` | done   |
-| 4 | Migrate the extension consumer; delete both leave-behind files                                   | done   |
-| 5 | Docs: design.md, package README, feature README, decisions 0032, CHANGELOG                        | done   |
+| #   | Item                                                                                                     | Commit      |
+| --- | -------------------------------------------------------------------------------------------------------- | ----------- |
+| 1   | This plan                                                                                                | `2f96979c`  |
+| 2   | Internal `vscode/` tier: theme kind, colour reader, hex normalisation, change store                      | `1bc75367`  |
+| 3   | `./monaco` entry: colour-id list + generator script, theme derivation, hook, `exports` + `typesVersions` | `49591694`  |
+| 4   | Migrate the extension consumer; delete both leave-behind files                                           | `bbbb9320`  |
+| 5   | Docs: design.md, package README, feature README, decision 0032, CHANGELOG                                | this commit |
 
 The colour-id list sits in `monaco/`, not `vscode/`, as the plan first had it: which ids matter is
 Monaco's knowledge, while `vscode/` only knows how to read any id it is given. Keeping the two apart
 is what lets a future non-Monaco consumer reuse the reader without inheriting Monaco's list.
+
+### Found while building
+
+Two things the plan did not anticipate, both recorded because they changed the design rather than
+merely the code.
+
+**Identity stability could not live in a ref.** The plan implied memoising the derived theme against
+a ref holding the previous value. Mutating a ref during render is a React rule violation, caught by
+`react-hooks/refs`. It moved into a module-level snapshot cache keyed by theme name, read through
+`useSyncExternalStore`'s `getSnapshot` - which is strictly better anyway, because it also shares one
+derivation across every editor in the webview rather than per hook instance.
+
+**That cache exposed a gap in the store.** The observer disconnects when the last subscriber leaves,
+so theme changes during that window went uncounted, and a later mount would have been served a stale
+snapshot. The store now bumps its version when observation resumes after a gap.
 
 ## 9. Acceptance
 

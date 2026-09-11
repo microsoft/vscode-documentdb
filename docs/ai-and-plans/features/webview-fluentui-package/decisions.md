@@ -23,7 +23,7 @@ created: 2026-08-18
 | 0010 | The stylesheet injects itself at module scope                  | Accepted (modified) | Proposal was a consumer-side `styles.css` import                        | 2026-08-18 | -    |
 | 0011 | No opt-out from the Fluent overrides                           | Accepted            | Operator-originated; not in the proposal                                | 2026-08-18 | -    |
 | 0012 | No public CSS custom properties in v1                          | Accepted (modified) | Proposal was a neutral or configurable prefix                           | 2026-08-18 | -    |
-| 0013 | Monaco theming stays in the extension                          | Deferred            | Proposal left it open                                                   | 2026-08-18 | -    |
+| 0013 | Monaco theming stays in the extension                          | Superseded by 0032  | Proposal left it open                                                   | 2026-08-18 | -    |
 | 0014 | Public naming vocabulary is locked before publish              | Accepted (modified) | `useVSCodeTheme` → `useActiveVSCodeTheme` after operator review         | 2026-08-18 | -    |
 | 0015 | The generated CSS module is committed, not gitignored          | Accepted (modified) | Reverses the recommendation made during design                          | 2026-08-18 | -    |
 | 0016 | The package follows the repo's existing resolution pattern     | Accepted            | Replaces the proposal's webview-scoped tsconfig                         | 2026-08-18 | -    |
@@ -42,6 +42,7 @@ created: 2026-08-18
 | 0029 | No external consumers; finalize the API for 1.0.0              | Accepted            | Clarifies 0027; pre-release API changes need no compatibility migration | 2026-09-10 | #895 |
 | 0030 | Named focusable containers carry `role="group"`                | Accepted            | Corrects 0026 and 0024; found in review, not in the plan                | 2026-09-10 | #895 |
 | 0031 | Keep wizard behavior to scrolling and sticky navigation        | Accepted            | `sticky-dynamic` was tried and abandoned after usability issues         | 2026-09-11 | #895 |
+| 0032 | Monaco theming ships from `./monaco`, structurally typed       | Accepted            | Takes up 0013's deferral; two of its three grounds had expired          | 2026-09-11 | #895 |
 
 > Entries below are **semantically** immutable: append new entries rather than
 > rewriting old ones, and record reversals as a new entry plus a status change
@@ -477,7 +478,7 @@ therefore **lowers** contrast. To be fixed when the rules move.
 
 ## 0013 - Monaco theming stays in the extension
 
-**Status:** Deferred · **Date:** 2026-08-18
+**Status:** Superseded by [0032](#0032---monaco-theming-ships-from-monaco-structurally-typed) · **Date:** 2026-08-18
 
 ### Decision
 
@@ -1321,3 +1322,87 @@ within its own column so it cannot cover the adjacent content.
 The dynamic mode introduced poor truncation for real subtitles, layout jumps and scroll oscillation;
 the full-header modes also complicated focus visibility and reduced-motion behavior. No compatibility
 aliases remain.
+
+---
+
+## 0032 - Monaco theming ships from `./monaco`, structurally typed
+
+**Status:** Accepted · **Date:** 2026-09-11 · **PR:** #895
+
+### Question
+
+[0013](#0013---monaco-theming-stays-in-the-extension) deferred Monaco theming to the extension and
+named the conditions for taking it up. Have they arrived, and if so does the code belong in this
+package or in a third one?
+
+### Decision
+
+A third public entry, `./monaco`, exporting `createVSCodeMonacoTheme` and `useVSCodeMonacoTheme`.
+The theme data is **structurally typed**, so the package takes no dependency on `monaco-editor` -
+not a peer, not an optional peer, nothing at runtime. `monaco-editor` is a `devDependency` used by
+the colour-id generator and by a type-level test.
+
+Both derivations now sit on a new internal `vscode/` tier: the colour reader, hex normalisation, the
+theme-kind vocabulary and the change store. `theme/core` and `monaco/core` are two consumers of one
+source. `vscode/` is **not** an entry point, so [0008](#0008---the-token-list-and-palette-math-stay-internal)
+still stands.
+
+### Why 0013's grounds expired
+
+| Original ground                                                                    | Status                                                                                                          |
+| ---------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------- |
+| "a roughly 5 MB peer"                                                              | **Gone.** Only three type aliases were ever needed, and `IStandaloneThemeData` is a plain structural interface. |
+| "the token list would have shipped with zero consumers"                            | **Gone.** The `vscode-cosmosdb` fork carries the same derivation with the same `monaco-editor` type import.     |
+| "Monaco is not Fluent" ([0002](#0002---name-microsoftvscode-ext-webview-fluentui)) | **Stands**, and draws the boundary below rather than blocking the work.                                         |
+
+### The boundary, which keeps 0002 intact
+
+> The package owns **what VS Code's colors are**. The consumer owns **what Monaco does with them**.
+
+What ships is not Monaco. It is a second rendering of the same colour source that already feeds the
+Fluent generator; Monaco is only the output shape. 0013's closing paragraph therefore remains
+correct: a Monaco **wrapper component** - loader configuration, editor lifecycle, the focus-trap and
+`Announcer` work in `MonacoEditor.tsx` - is still a third package if it is ever wanted. No applier
+helper ships either, for the same reason.
+
+### Why a subpath here, and not `@microsoft/vscode-ext-webview-monaco`
+
+Unification requires one source of truth resolved at **one version**. A separate package puts a
+semver range between the Fluent derivation and the Monaco derivation, which means the two _can_
+resolve at different versions - reintroducing exactly the drift this extraction exists to kill.
+
+It is also the cheapest thing to reverse, by 0008's own argument: a subpath is one line in
+`exports`, and if a Monaco wrapper package ever happens, `src/monaco/` moves into it wholesale.
+
+### What this fixes, beyond relocating code
+
+A straight move would have carried three defects across.
+
+1. **Divergent fallbacks.** Fluent resolves `colorNeutralBackground1Hover` through a chain of
+   `var(--vscode-*)`; the extension's Monaco derivation dropped any unpublished id and let Monaco's
+   built-in constant answer instead. A Fluent popover and a Monaco hover widget could therefore
+   paint the same surface two different colours. Chains are now applied **only** where Fluent
+   already has one, so this does not become invented policy across 392 ids - for ids Monaco owns
+   outright, such as the cursor, Monaco's own default is the better answer.
+2. **Staleness on a same-kind switch.** The old cache was keyed on the theme kind, so Dark Modern →
+   Dracula changed every colour while the key held. Fluent never had this bug, because its tokens
+   are `var()` strings the browser re-resolves; Monaco's are snapshot hex values. The store watches
+   the root `style` attribute, which is the property write itself.
+3. **Silent red.** Monaco pushes every value through `Color.fromHex`, which yields red on a parse
+   failure. Values that are not valid hex are now dropped rather than passed through.
+
+### The colour-id list is derived, not curated by judgement
+
+Generated from `monaco-editor`'s own `registerColor` calls and committed, by analogy with
+[0015](#0015---the-generated-css-module-is-committed-not-gitignored). Of the 813 ids the extension
+read, 392 are readable by Monaco and the remaining 421 have no reader inside it. The shorter list is
+provably lossless, and halves the per-change lookup cost.
+
+### Consequences
+
+- [0007](#0007---v1-public-entries-are--and-components) is amended: the entries are `.`,
+  `./components` and `./monaco`.
+- A new invariant joins I1: `monaco/` may not import `theme/`, `components/` or `styles/`. Enforced
+  by ESLint and by a test asserting `./monaco` injects no stylesheet.
+- Syntax token colours stay out. `rules` is `[]`; VS Code publishes no TextMate colours as CSS
+  variables, so closing that gap means approximating, which earns its own increment.

@@ -25,9 +25,10 @@ is a facade that cannot be replaced.
 
 ## What is not here
 
-Monaco theming. `getMonacoTheme` and the ~815-entry VS Code token list stayed in the extension:
-Monaco is not Fluent, and its types would drag a 5 MB peer into a theming package. A consumer
-derives Monaco themselves from `useActiveVSCodeThemeKind()`.
+Monaco theming, which lives in [`../monaco/`](../monaco/README.md) and ships from the `./monaco`
+entry. It is a sibling rather than a part of this folder: it reads the same colors, but it produces
+Monaco data rather than a Fluent theme, and it must not pull Fluent in. Both derive from
+[`../vscode/`](../vscode/README.md), which is what keeps them in agreement.
 
 There is also no "use the plain Teams theme instead" switch. That is not a feature of this
 package, it is the absence of it, and any consumer gets it for free from Fluent.
