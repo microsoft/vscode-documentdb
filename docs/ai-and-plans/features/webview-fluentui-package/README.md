@@ -10,7 +10,7 @@ code:
 
 # `@microsoft/vscode-ext-webview-fluentui`
 
-**Status:** 1.0.0 prepared; increments 1-5 implemented and accepted · **Created:** 2026-08-18
+**Status:** 1.1.0 prepared; increments 1-5 implemented and accepted · **Created:** 2026-08-18
 
 > The React theming layer and a small set of components, extracted so other VS Code extensions can
 > make Fluent UI look correct inside a webview without rebuilding it.
@@ -98,16 +98,16 @@ After increments 1-4:
 
 ## Timeline
 
-| Date       | PR   | What changed                                                                                                                                   | Docs                                                                                                                                                                     |
-| ---------- | ---- | ---------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| 2026-08-18 | -    | Design and decisions settled; increment 1 planned                                                                                              | [iterations/01-theme-and-first-component.md](./iterations/01-theme-and-first-component.md)                                                                               |
-| 2026-08-18 | #895 | Increment 1 implemented and visually verified: package on disk, theming layer and `WizardBreadcrumb` moved, no publish                         | [iterations/01-theme-and-first-component.md](./iterations/01-theme-and-first-component.md)                                                                               |
-| 2026-08-20 | #895 | Increment 2 completed: shared wizard surface; Local Quick Start and Atlas Credentials migrated                                                 | [iterations/02-wizard-shell-and-components.md](./iterations/02-wizard-shell-and-components.md)                                                                           |
-| 2026-08-21 | #895 | Increment 3 completed: metric cards, grid and summary-cell convergence                                                                         | [iterations/03-metric-card.md](./iterations/03-metric-card.md)                                                                                                           |
-| 2026-09-10 | #895 | Increment 4 implemented in `b4aee678`; operator confirmed acceptance tests complete                                                            | [iterations/04-focusable-badge-and-accessible-names.md](./iterations/04-focusable-badge-and-accessible-names.md)                                                         |
-| 2026-09-10 | #895 | Operator confirmed the package is already being published; workspace-only restriction retired                                                  | [Decision 0027](./decisions.md#0027--the-package-is-published-not-workspace-only)                                                                                        |
-| 2026-09-10 | #895 | Review corrections: `role="group"` on the named containers, repaired decision table, `publishConfig`, a11y skill                               | [Decision 0030](./decisions.md#0030---named-focusable-containers-carry-rolegroup)                                                                                        |
-| 2026-09-11 | #895 | Increment 5: add `scroll` and `sticky-navigation` wizard header behaviors; abandon the experimental `sticky-dynamic` mode | [Decision 0031](./decisions.md#0031---keep-wizard-behavior-to-scrolling-and-sticky-navigation) |
+| Date       | PR   | What changed                                                                                                              | Docs                                                                                                             |
+| ---------- | ---- | ------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------- |
+| 2026-08-18 | -    | Design and decisions settled; increment 1 planned                                                                         | [iterations/01-theme-and-first-component.md](./iterations/01-theme-and-first-component.md)                       |
+| 2026-08-18 | #895 | Increment 1 implemented and visually verified: package on disk, theming layer and `WizardBreadcrumb` moved, no publish    | [iterations/01-theme-and-first-component.md](./iterations/01-theme-and-first-component.md)                       |
+| 2026-08-20 | #895 | Increment 2 completed: shared wizard surface; Local Quick Start and Atlas Credentials migrated                            | [iterations/02-wizard-shell-and-components.md](./iterations/02-wizard-shell-and-components.md)                   |
+| 2026-08-21 | #895 | Increment 3 completed: metric cards, grid and summary-cell convergence                                                    | [iterations/03-metric-card.md](./iterations/03-metric-card.md)                                                   |
+| 2026-09-10 | #895 | Increment 4 implemented in `b4aee678`; operator confirmed acceptance tests complete                                       | [iterations/04-focusable-badge-and-accessible-names.md](./iterations/04-focusable-badge-and-accessible-names.md) |
+| 2026-09-10 | #895 | Operator confirmed the package is already being published; workspace-only restriction retired                             | [Decision 0027](./decisions.md#0027--the-package-is-published-not-workspace-only)                                |
+| 2026-09-10 | #895 | Review corrections: `role="group"` on the named containers, repaired decision table, `publishConfig`, a11y skill          | [Decision 0030](./decisions.md#0030---named-focusable-containers-carry-rolegroup)                                |
+| 2026-09-11 | #895 | Increment 5: add `scroll` and `sticky-navigation` wizard header behaviors; abandon the experimental `sticky-dynamic` mode | [Decision 0031](./decisions.md#0031---keep-wizard-behavior-to-scrolling-and-sticky-navigation)                   |
 
 ## Decisions
 
@@ -140,9 +140,10 @@ and satisfactory. The review of `b4aee678` also passed `npm run build` and all 1
 across the badge, metric-card and components-entry suites. Detailed browser evidence is in the
 increment 4 work log; no screen-reader transcript or exact operator test matrix was supplied.
 
-The package manifest is now `1.0.0`, prepared for the stable release. Preview versions were already
-being published; the absence of `private: true` remains intentional (0027). This does not claim
-that `1.0.0` has been published to the registry.
+The package manifest is now `1.1.0`. Version `1.0.0` was the initial release; version `1.1.0` adds
+the wizard's `scroll` and `sticky-navigation` header behaviors described in decision 0031. Preview
+versions were already being published; the absence of `private: true` remains intentional (0027).
+This does not claim that `1.1.0` has been published to the registry.
 
 The operator subsequently confirmed there are no external package consumers. Breaking API changes
 were permitted while finalizing this extraction before the `1.0.0` release-version bump (0029).
