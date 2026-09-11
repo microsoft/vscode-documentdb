@@ -8,11 +8,10 @@ import Editor, { loader, useMonaco, type EditorProps, type OnMount } from '@mona
 import * as monacoEditor from 'monaco-editor/esm/vs/editor/editor.api';
 
 import { useUncontrolledFocus } from '@fluentui/react-components';
-import { useActiveVSCodeThemeKind } from '@microsoft/vscode-ext-webview-fluentui';
+import { useVSCodeMonacoTheme } from '@microsoft/vscode-ext-webview-fluentui/monaco';
 import * as l10n from '@vscode/l10n';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Announcer } from './accessibility';
-import { getMonacoTheme } from './monacoTheme';
 
 loader.config({ monaco: monacoEditor });
 
@@ -45,9 +44,7 @@ export interface MonacoEditorProps extends EditorProps {
  */
 export const MonacoEditor = ({ onEscapeEditor, onMount, ...props }: MonacoEditorProps) => {
     const monaco = useMonaco();
-    const themeKind = useActiveVSCodeThemeKind();
-    // The package exposes the active theme kind; deriving Monaco from it is the extension's job.
-    const monacoTheme = useMemo(() => getMonacoTheme(themeKind), [themeKind]);
+    const monacoTheme = useVSCodeMonacoTheme();
     const uncontrolledFocus = useUncontrolledFocus();
 
     // Track whether we should announce the escape hint (once per focus session)
@@ -66,8 +63,8 @@ export const MonacoEditor = ({ onEscapeEditor, onMount, ...props }: MonacoEditor
     }, []);
 
     useEffect(() => {
-        if (monaco && monacoTheme.theme) {
-            monaco.editor.defineTheme(monacoTheme.themeName, monacoTheme.theme);
+        if (monaco) {
+            monaco.editor.defineTheme(monacoTheme.themeName, monacoTheme.data);
             monaco.editor.setTheme(monacoTheme.themeName);
         }
     }, [monaco, monacoTheme]);
