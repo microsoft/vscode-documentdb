@@ -1406,3 +1406,26 @@ provably lossless, and halves the per-change lookup cost.
   by ESLint and by a test asserting `./monaco` injects no stylesheet.
 - Syntax token colours stay out. `rules` is `[]`; VS Code publishes no TextMate colours as CSS
   variables, so closing that gap means approximating, which earns its own increment.
+
+### Review follow-up: first-subscription invalidation (2026-09-11)
+
+The initial review classified a first-subscription race as P2. After discussing user impact,
+the operator accepted **P3 (low priority), a robustness fix rather than a release blocker**.
+A React layout-effect probe reproduced a colour change between the hook's first render and
+subscription: the DOM held `#222222`, while the cached theme still returned `#111111`.
+This proves the timing gap, not its frequency in VS Code; no actual extension-host occurrence
+was observed. Theme colours are normally present before mounting, and later changes are observed.
+
+If that window is hit, Monaco can retain old colours while the surrounding UI updates, until
+another observed theme mutation or reopening the webview. Editing, queries and data are unaffected.
+The limited visual impact and narrow timing window do not justify P2 severity.
+
+**Decision:** increment the store version whenever observation starts, including the first
+subscription. `useSyncExternalStore` rechecks its snapshot after subscribing, so the version
+change forces a fresh DOM read. The existing observer guard prevents extra subscribers from
+invalidating it again; equal theme data still retains its object identity.
+
+Leaving the race alone was reasonable at P3, but the operator chose the small fix now. Polling,
+an always-connected observer, and consumer-side workarounds add unnecessary lifecycle complexity.
+The hook regression changes a colour in a layout effect before subscription; it failed before
+the fix and passed afterward. Existing same-kind switching and identity tests remain in place.

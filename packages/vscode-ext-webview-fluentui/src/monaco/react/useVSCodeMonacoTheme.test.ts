@@ -3,7 +3,7 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { act, createElement, type FunctionComponent } from 'react';
+import { act, createElement, useLayoutEffect, type FunctionComponent } from 'react';
 // eslint-disable-next-line import/no-internal-modules -- react-dom/client is React 19's only root API
 import { createRoot, type Root } from 'react-dom/client';
 import { type VSCodeMonacoTheme } from '../core/types';
@@ -17,11 +17,16 @@ const setColor = (colorId: string, value: string): void =>
     document.documentElement.style.setProperty(`--vscode-${colorId.replace(/\./g, '-')}`, value);
 
 /** Mounts the hook and reports every value it returned, in order. */
-function renderHook(): { results: VSCodeMonacoTheme[]; rerender: () => void; unmount: () => void } {
+function renderHook(beforeSubscribe?: () => void): {
+    results: VSCodeMonacoTheme[];
+    rerender: () => void;
+    unmount: () => void;
+} {
     const results: VSCodeMonacoTheme[] = [];
 
     const Probe: FunctionComponent = () => {
         results.push(useVSCodeMonacoTheme());
+        useLayoutEffect(() => beforeSubscribe?.(), [beforeSubscribe]);
 
         return null;
     };
@@ -55,6 +60,19 @@ describe('useVSCodeMonacoTheme', () => {
         document.documentElement.removeAttribute('style');
         document.body.removeAttribute('data-vscode-theme-kind');
         document.body.removeAttribute('data-vscode-theme-id');
+    });
+
+    it('refreshes colors changed between the first render and initial subscription', () => {
+        setColor('editor.background', '#111111');
+
+        const { results, unmount } = renderHook(() => setColor('editor.background', '#222222'));
+
+        try {
+            expect(results[0].data.colors['editor.background']).toBe('#111111');
+            expect(results.at(-1)?.data.colors['editor.background']).toBe('#222222');
+        } finally {
+            unmount();
+        }
     });
 
     it('derives the theme from the active VS Code theme', () => {

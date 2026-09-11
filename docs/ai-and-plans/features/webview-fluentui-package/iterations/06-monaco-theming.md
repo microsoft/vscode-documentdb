@@ -248,6 +248,15 @@ derivation across every editor in the webview rather than per hook instance.
 so theme changes during that window went uncounted, and a later mount would have been served a stale
 snapshot. The store now bumps its version when observation resumes after a gap.
 
+**Review follow-up (2026-09-11):** the first subscription has the same unobserved window between
+render and subscription. The review initially rated this P2, then downgraded it to **P3 / low
+priority** with the operator: the race was reproduced with a layout effect, not in an actual
+VS Code session, and its impact is stale editor colours rather than editing or data failures.
+The operator requested the small robustness fix without treating it as a release blocker.
+Observation now invalidates the snapshot on every start, including the first. A new hook test
+failed before the fix and passed afterward. See decision 0032's review follow-up for the reasoning
+and rejected alternatives.
+
 ## 9. Acceptance
 
 - [x] `./monaco` type-checks against the real `monaco.editor.defineTheme` signature, asserted by a
