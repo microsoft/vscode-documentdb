@@ -181,8 +181,8 @@ A React-free store in `vscode/`, consumed through `useSyncExternalStore`:
   edits that change no theme at all.
 - `document.body` theme attributes — kind, id, name, class.
 
-Coalesced per animation frame, so a batched attribute rewrite re-derives once. The hook returns the
-**previous object identity** when the newly derived data is structurally equal, so a spurious
+Delivered through one `MutationObserver` callback for a batched attribute rewrite. The hook returns
+the **previous object identity** when the newly derived data is structurally equal, so a spurious
 mutation does not cause a `defineTheme` + `setTheme` round trip and its repaint.
 
 Observing the root `style` attribute rather than keying on `data-vscode-theme-id` is deliberate: it
