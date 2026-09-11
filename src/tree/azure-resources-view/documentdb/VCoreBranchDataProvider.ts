@@ -79,6 +79,7 @@ export class VCoreBranchDataProvider
                     diskSize: documentDbAccount.properties?.storage?.sizeGb,
                     nodeCount: documentDbAccount.properties?.sharding?.shardCount,
                     enableHa: documentDbAccount.properties?.highAvailability?.targetMode !== 'Disabled',
+                    replicaRole: documentDbAccount.properties?.replica?.role,
                     // Tree context (clusterId === treeId after sanitization)
                     treeId: sanitizedId,
                     viewId: Views.AzureResourcesView,

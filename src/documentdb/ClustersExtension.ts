@@ -60,6 +60,7 @@ import {
 import { openLocalQuickStart } from '../commands/localQuickStart/openLocalQuickStart';
 import { newConnection } from '../commands/newConnection/newConnection';
 import { newLocalConnection } from '../commands/newLocalConnection/newLocalConnection';
+import { openClusterDashboard } from '../commands/openClusterDashboard/openClusterDashboard';
 import { openCollectionView, openCollectionViewInternal } from '../commands/openCollectionView/openCollectionView';
 import { openDocumentView } from '../commands/openDocument/openDocument';
 import { openIndexManagementView } from '../commands/openIndexManagementView/openIndexManagementView';
@@ -138,6 +139,7 @@ import {
     registerCommandWithTreeNodeUnwrappingAndModalErrors,
 } from '../utils/commandErrorHandling';
 import { withCommandCorrelation, withTreeNodeCommandCorrelation } from '../utils/commandTelemetry';
+import { registerClusterDashboardContextMenuCommands } from '../webviews/documentdb/clusterDashboard/clusterDashboardController';
 import { PLAYGROUND_FILE_EXTENSION, PLAYGROUND_LANGUAGE_ID, PlaygroundCommandIds } from './playground/constants';
 import { PlaygroundBlockHighlighter } from './playground/PlaygroundBlockHighlighter';
 import { PlaygroundCodeLensProvider } from './playground/PlaygroundCodeLensProvider';
@@ -276,6 +278,7 @@ export class ClustersExtension implements vscode.Disposable {
                 this.registerConnectionsTree(activateContext);
                 this.registerDiscoveryTree(activateContext);
                 this.registerHelpAndFeedbackTree(activateContext);
+                registerClusterDashboardContextMenuCommands(ext.context);
 
                 // Initialize TaskService and TaskProgressReportingService
                 TaskProgressReportingService.attach(TaskService);
@@ -993,6 +996,21 @@ export class ClustersExtension implements vscode.Disposable {
                 registerCommandWithTreeNodeUnwrapping(
                     ShellCommandIds.open,
                     withTreeNodeCommandCorrelation(openInteractiveShell),
+                );
+
+                registerCommandWithTreeNodeUnwrapping(
+                    'vscode-documentdb.command.clusterDashboard.open',
+                    withTreeNodeCommandCorrelation(openClusterDashboard),
+                );
+
+                // Inline button variant — same handler, different activationSource
+                registerCommandWithTreeNodeUnwrapping(
+                    'vscode-documentdb.command.clusterDashboard.open.inline',
+                    withTreeNodeCommandCorrelation((context, node) =>
+                        openClusterDashboard(context, node as ClusterItemBase | DatabaseItem, null, {
+                            activationSource: 'treeNodeInline',
+                        }),
+                    ),
                 );
 
                 // Inline button variant — same handler, different activationSource

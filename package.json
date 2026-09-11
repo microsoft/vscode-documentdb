@@ -696,18 +696,79 @@
         "icon": "$(terminal)"
       },
       {
+        "//": "Cluster Dashboard",
+        "category": "DocumentDB",
+        "command": "vscode-documentdb.command.clusterDashboard.open",
+        "title": "Cluster Dashboard",
+        "icon": "$(graph)"
+      },
+      {
+        "//": "Cluster Dashboard, inline variant. Same handler; a separate id is the only way the inline button and the context-menu entry can be told apart in telemetry.",
+        "command": "vscode-documentdb.command.clusterDashboard.open.inline",
+        "title": "Cluster Dashboard",
+        "icon": "$(graph)"
+      },
+      {
+        "command": "vscode-documentdb.command.clusterDashboard.context.viewCollections",
+        "title": "View Collections"
+      },
+      {
+        "command": "vscode-documentdb.command.clusterDashboard.context.openCollection",
+        "title": "Open Collection"
+      },
+      {
+        "command": "vscode-documentdb.command.clusterDashboard.context.manageIndexes",
+        "title": "Manage Indexes"
+      },
+      {
+        "command": "vscode-documentdb.command.clusterDashboard.context.copyReference",
+        "title": "Copy Reference"
+      },
+      {
+        "command": "vscode-documentdb.command.clusterDashboard.context.openShell",
+        "title": "Open Shell"
+      },
+      {
+        "command": "vscode-documentdb.command.clusterDashboard.context.newPlayground",
+        "title": "New Query Playground"
+      },
+      {
+        "command": "vscode-documentdb.command.clusterDashboard.context.deleteDatabase",
+        "title": "Delete Database"
+      },
+      {
+        "command": "vscode-documentdb.command.clusterDashboard.context.copyCollection",
+        "title": "Copy Collection"
+      },
+      {
+        "command": "vscode-documentdb.command.clusterDashboard.context.pasteCollection",
+        "title": "Paste Collection"
+      },
+      {
+        "command": "vscode-documentdb.command.clusterDashboard.context.exportDocuments",
+        "title": "Export Documents"
+      },
+      {
+        "command": "vscode-documentdb.command.clusterDashboard.context.importDocuments",
+        "title": "Import Documents"
+      },
+      {
+        "command": "vscode-documentdb.command.clusterDashboard.context.deleteCollection",
+        "title": "Delete Collection"
+      },
+      {
         "//": "Open Container View",
         "category": "DocumentDB",
         "command": "vscode-documentdb.command.containerView.open",
         "title": "Open Collection",
-        "icon": "$(files)"
+        "icon": "$(screen-full)"
       },
       {
         "//": "Open Container View (inline button)",
         "category": "DocumentDB",
         "command": "vscode-documentdb.command.containerView.open.inline",
         "title": "Open Collection",
-        "icon": "$(files)"
+        "icon": "$(screen-full)"
       },
       {
         "//": "Manage Indexes",
@@ -830,6 +891,88 @@
       ],
       "editor/context": [],
       "editor/title": [],
+      "webview/context": [
+        {
+          "command": "vscode-documentdb.command.clusterDashboard.context.viewCollections",
+          "when": "webviewId == 'vscode-documentdb-cluster-dashboard' && clusterDashboardNamespace == database",
+          "group": "1_navigation@1"
+        },
+        {
+          "command": "vscode-documentdb.command.clusterDashboard.context.copyReference",
+          "when": "webviewId == 'vscode-documentdb-cluster-dashboard' && clusterDashboardNamespace == database",
+          "group": "2_reference@1"
+        },
+        {
+          "command": "vscode-documentdb.command.clusterDashboard.context.openShell",
+          "when": "webviewId == 'vscode-documentdb-cluster-dashboard' && clusterDashboardNamespace == database",
+          "group": "3_open@1"
+        },
+        {
+          "command": "vscode-documentdb.command.clusterDashboard.context.newPlayground",
+          "when": "webviewId == 'vscode-documentdb-cluster-dashboard' && clusterDashboardNamespace == database",
+          "group": "3_open@2"
+        },
+        {
+          "command": "vscode-documentdb.command.clusterDashboard.context.pasteCollection",
+          "when": "webviewId == 'vscode-documentdb-cluster-dashboard' && clusterDashboardNamespace == database",
+          "group": "4_transfer@1"
+        },
+        {
+          "command": "vscode-documentdb.command.clusterDashboard.context.deleteDatabase",
+          "when": "webviewId == 'vscode-documentdb-cluster-dashboard' && clusterDashboardNamespace == database",
+          "group": "9_delete@1"
+        },
+        {
+          "command": "vscode-documentdb.command.clusterDashboard.context.openCollection",
+          "when": "webviewId == 'vscode-documentdb-cluster-dashboard' && clusterDashboardNamespace == collection",
+          "group": "1_open@1"
+        },
+        {
+          "command": "vscode-documentdb.command.clusterDashboard.context.openShell",
+          "when": "webviewId == 'vscode-documentdb-cluster-dashboard' && clusterDashboardNamespace == collection",
+          "group": "1_open@2"
+        },
+        {
+          "command": "vscode-documentdb.command.clusterDashboard.context.newPlayground",
+          "when": "webviewId == 'vscode-documentdb-cluster-dashboard' && clusterDashboardNamespace == collection",
+          "group": "1_open@3"
+        },
+        {
+          "command": "vscode-documentdb.command.clusterDashboard.context.copyReference",
+          "when": "webviewId == 'vscode-documentdb-cluster-dashboard' && clusterDashboardNamespace == collection",
+          "group": "1_open@4"
+        },
+        {
+          "command": "vscode-documentdb.command.clusterDashboard.context.manageIndexes",
+          "when": "webviewId == 'vscode-documentdb-cluster-dashboard' && clusterDashboardNamespace == collection",
+          "group": "2_indexes@1"
+        },
+        {
+          "command": "vscode-documentdb.command.clusterDashboard.context.copyCollection",
+          "when": "webviewId == 'vscode-documentdb-cluster-dashboard' && clusterDashboardNamespace == collection",
+          "group": "3_transfer@1"
+        },
+        {
+          "command": "vscode-documentdb.command.clusterDashboard.context.pasteCollection",
+          "when": "webviewId == 'vscode-documentdb-cluster-dashboard' && clusterDashboardNamespace == collection",
+          "group": "3_transfer@2"
+        },
+        {
+          "command": "vscode-documentdb.command.clusterDashboard.context.exportDocuments",
+          "when": "webviewId == 'vscode-documentdb-cluster-dashboard' && clusterDashboardNamespace == collection",
+          "group": "3_transfer@3"
+        },
+        {
+          "command": "vscode-documentdb.command.clusterDashboard.context.importDocuments",
+          "when": "webviewId == 'vscode-documentdb-cluster-dashboard' && clusterDashboardNamespace == collection",
+          "group": "3_transfer@4"
+        },
+        {
+          "command": "vscode-documentdb.command.clusterDashboard.context.deleteCollection",
+          "when": "webviewId == 'vscode-documentdb-cluster-dashboard' && clusterDashboardNamespace == collection",
+          "group": "9_delete@1"
+        }
+      ],
       "view/item/context": [
         {
           "command": "vscode-documentdb.command.localQuickStart.start",
@@ -839,7 +982,7 @@
         {
           "command": "vscode-documentdb.command.localQuickStart.stop",
           "when": "view == connectionsView && viewItem =~ /\\btreeItem_quickStartInstance\\b/i && viewItem =~ /\\bstate_running\\b/i",
-          "group": "inline@1"
+          "group": "inline@99"
         },
         {
           "command": "vscode-documentdb.command.localQuickStart.start",
@@ -881,6 +1024,18 @@
           "command": "vscode-documentdb.command.createDatabase",
           "when": "view == connectionsView && viewItem =~ /\\btreeItem_quickStartInstance\\b/i && viewItem =~ /\\bstate_running\\b/i && !listMultiSelection",
           "group": "1@1"
+        },
+        {
+          "//": "[Local Quick Start] Cluster Dashboard (inline)",
+          "command": "vscode-documentdb.command.clusterDashboard.open.inline",
+          "when": "view == connectionsView && viewItem =~ /\\btreeItem_quickStartInstance\\b/i && viewItem =~ /\\bstate_running\\b/i && !listMultiSelection",
+          "group": "inline@5"
+        },
+        {
+          "//": "[Local Quick Start] Cluster Dashboard",
+          "command": "vscode-documentdb.command.clusterDashboard.open",
+          "when": "view == connectionsView && viewItem =~ /\\btreeItem_quickStartInstance\\b/i && viewItem =~ /\\bstate_running\\b/i && !listMultiSelection",
+          "group": "1@2"
         },
         {
           "//": "[Local Quick Start] Open Interactive Shell",
@@ -1090,6 +1245,12 @@
           "group": "inline"
         },
         {
+          "//": "[Account] Cluster Dashboard (inline)",
+          "command": "vscode-documentdb.command.clusterDashboard.open.inline",
+          "when": "view =~ /connectionsView|discoveryView|azure(ResourceGroups|FocusView)/ && viewItem =~ /\\btreeitem_documentdbcluster\\b/i && !listMultiSelection",
+          "group": "inline@5"
+        },
+        {
           "//": "Create database",
           "command": "vscode-documentdb.command.createDatabase",
           "when": "view =~ /connectionsView|discoveryView|azure(ResourceGroups|FocusView)/ && viewItem =~ /\\btreeitem_documentdbcluster\\b/i && !listMultiSelection",
@@ -1108,10 +1269,22 @@
           "group": "5@1"
         },
         {
+          "//": "[Account] Cluster Dashboard",
+          "command": "vscode-documentdb.command.clusterDashboard.open",
+          "when": "view =~ /connectionsView|discoveryView|azure(ResourceGroups|FocusView)/ && viewItem =~ /\\btreeitem_documentdbcluster\\b/i && !listMultiSelection",
+          "group": "1@2"
+        },
+        {
           "//": "[Database] Create collection",
           "command": "vscode-documentdb.command.createCollection",
           "when": "view =~ /connectionsView|discoveryView|azure(ResourceGroups|FocusView)/ && viewItem =~ /\\btreeitem_database\\b/i && viewItem =~ /\\bexperience_(documentDB|mongoRU|mongoDBAtlas)\\b/i && !listMultiSelection",
           "group": "1@1"
+        },
+        {
+          "//": "[Database] Cluster Dashboard (inline)",
+          "command": "vscode-documentdb.command.clusterDashboard.open.inline",
+          "when": "view =~ /connectionsView|discoveryView|azure(ResourceGroups|FocusView)/ && viewItem =~ /\\btreeitem_database\\b/i && !listMultiSelection",
+          "group": "inline@5"
         },
         {
           "//": "[Database] Delete database",
@@ -1124,6 +1297,12 @@
           "command": "vscode-documentdb.command.pasteCollection",
           "when": "view =~ /connectionsView|discoveryView|azure(ResourceGroups|FocusView)/ && viewItem =~ /\\btreeitem_database\\b/i && viewItem =~ /\\bexperience_(documentDB|mongoRU|mongoDBAtlas)\\b/i && !listMultiSelection",
           "group": "1@2"
+        },
+        {
+          "//": "[Database] Cluster Dashboard",
+          "command": "vscode-documentdb.command.clusterDashboard.open",
+          "when": "view =~ /connectionsView|discoveryView|azure(ResourceGroups|FocusView)/ && viewItem =~ /\\btreeitem_database\\b/i && !listMultiSelection",
+          "group": "1@3"
         },
         {
           "//": "[Database] Open Interactive Shell",
@@ -1284,6 +1463,54 @@
       ],
       "explorer/context": [],
       "commandPalette": [
+        {
+          "command": "vscode-documentdb.command.clusterDashboard.context.viewCollections",
+          "when": "never"
+        },
+        {
+          "command": "vscode-documentdb.command.clusterDashboard.context.openCollection",
+          "when": "never"
+        },
+        {
+          "command": "vscode-documentdb.command.clusterDashboard.context.manageIndexes",
+          "when": "never"
+        },
+        {
+          "command": "vscode-documentdb.command.clusterDashboard.context.copyReference",
+          "when": "never"
+        },
+        {
+          "command": "vscode-documentdb.command.clusterDashboard.context.openShell",
+          "when": "never"
+        },
+        {
+          "command": "vscode-documentdb.command.clusterDashboard.context.newPlayground",
+          "when": "never"
+        },
+        {
+          "command": "vscode-documentdb.command.clusterDashboard.context.deleteDatabase",
+          "when": "never"
+        },
+        {
+          "command": "vscode-documentdb.command.clusterDashboard.context.copyCollection",
+          "when": "never"
+        },
+        {
+          "command": "vscode-documentdb.command.clusterDashboard.context.pasteCollection",
+          "when": "never"
+        },
+        {
+          "command": "vscode-documentdb.command.clusterDashboard.context.exportDocuments",
+          "when": "never"
+        },
+        {
+          "command": "vscode-documentdb.command.clusterDashboard.context.importDocuments",
+          "when": "never"
+        },
+        {
+          "command": "vscode-documentdb.command.clusterDashboard.context.deleteCollection",
+          "when": "never"
+        },
         {
           "command": "vscode-documentdb.command.refresh",
           "when": "never"
@@ -1478,6 +1705,14 @@
           "when": "never"
         },
         {
+          "command": "vscode-documentdb.command.clusterDashboard.open",
+          "when": "never"
+        },
+        {
+          "command": "vscode-documentdb.command.clusterDashboard.open.inline",
+          "when": "never"
+        },
+        {
           "command": "vscode-documentdb.command.containerView.open",
           "when": "never"
         },
@@ -1557,6 +1792,12 @@
             "type": "boolean",
             "default": true,
             "description": "Show detailed operation summaries, displaying messages for actions such as database drops, document additions, deletions, or similar events."
+          },
+          "documentDB.userInterface.showDashboardOnConnect": {
+            "order": 11.5,
+            "type": "boolean",
+            "default": true,
+            "description": "Show the Cluster Dashboard when connecting to a cluster by expanding it in the tree view."
           },
           "documentDB.copyPaste.showLargeCollectionWarning": {
             "order": 12,

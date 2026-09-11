@@ -42,6 +42,7 @@ export function openLocalQuickStartWebview(
     const controller = openAppWebview({
         title: vscode.l10n.t('Your own DocumentDB'),
         webviewName: 'localQuickStart',
+        panelViewType: 'vscode-documentdb-local-quick-start',
         config: initialData,
         context: trpcContext,
         viewColumn: vscode.ViewColumn.Active,

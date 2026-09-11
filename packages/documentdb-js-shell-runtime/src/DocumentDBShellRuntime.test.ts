@@ -121,13 +121,13 @@ describe('DocumentDBShellRuntime', () => {
 });
 
 describe('normalizeDirectCommands', () => {
-    describe('single-line input (no transformation)', () => {
-        it('leaves bare use unchanged', () => {
-            expect(normalizeDirectCommands('use mydb')).toBe('use mydb');
+    describe('single-line input', () => {
+        it('rewrites bare use', () => {
+            expect(normalizeDirectCommands('use mydb')).toBe('use("mydb");');
         });
 
-        it('leaves bare show unchanged', () => {
-            expect(normalizeDirectCommands('show dbs')).toBe('show dbs');
+        it('rewrites bare show', () => {
+            expect(normalizeDirectCommands('show dbs')).toBe('show("dbs");');
         });
 
         it('leaves function-call form unchanged', () => {

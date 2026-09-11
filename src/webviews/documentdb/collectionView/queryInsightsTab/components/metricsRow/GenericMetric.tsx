@@ -42,6 +42,9 @@ export const GenericMetric: React.FC<GenericMetricProps> = ({
     label,
     value,
     loadingPlaceholder = 'skeleton',
+    // Declared by `MetricBaseProps` and previously accepted but never forwarded, so a caller
+    // asking for its own "unavailable" text silently got `MetricBase`'s default 'N/A'.
+    nullValuePlaceholder,
     tooltipExplanation,
 }) => {
     return (
@@ -49,6 +52,7 @@ export const GenericMetric: React.FC<GenericMetricProps> = ({
             label={label}
             value={value}
             loadingPlaceholder={loadingPlaceholder}
+            nullValuePlaceholder={nullValuePlaceholder}
             tooltipExplanation={tooltipExplanation}
         />
     );

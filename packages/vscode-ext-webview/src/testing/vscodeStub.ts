@@ -79,6 +79,8 @@ export class MockWebviewPanel {
     public disposed = false;
     private readonly didDispose = new EventEmitter<void>();
 
+    public constructor(public readonly viewType: string) {}
+
     public readonly onDidDispose = (listener: Listener<void>): MockDisposable => this.didDispose.event(listener);
 
     public reveal(_viewColumn?: number, _preserveFocus?: boolean): void {
@@ -101,8 +103,8 @@ export let lastCreatedPanel: MockWebviewPanel | undefined;
 
 /** Stub of the `vscode.window` namespace. */
 export const window = {
-    createWebviewPanel(_viewType: string, _title: string, _viewColumn: unknown, _options: unknown): MockWebviewPanel {
-        lastCreatedPanel = new MockWebviewPanel();
+    createWebviewPanel(viewType: string, _title: string, _viewColumn: unknown, _options: unknown): MockWebviewPanel {
+        lastCreatedPanel = new MockWebviewPanel(viewType);
         return lastCreatedPanel;
     },
 };

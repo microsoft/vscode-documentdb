@@ -180,6 +180,8 @@ describe('DocumentDBShellPty', () => {
             expect(written).toContain('testdb> ');
             expect(written).toContain('Connected to');
             expect(written).toContain('SCRAM');
+            expect(written).toContain('Database: testdb');
+            expect(written).not.toContain('{1}');
         });
 
         it('should show error and stay open on connection failure', async () => {

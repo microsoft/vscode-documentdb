@@ -34,6 +34,7 @@ import { formatUrlForLogging, isSupportedExternalUrl, openUrl } from '../../util
 import { openSurvey, promptAfterActionEventually } from '../../utils/survey';
 import { UsageImpact } from '../../utils/surveyTypes';
 import { atlasCredentialsRouter } from '../documentdb/atlasCredentials/atlasCredentialsRouter';
+import { clusterDashboardRouter } from '../documentdb/clusterDashboard/clusterDashboardRouter';
 import { collectionsViewRouter as collectionViewRouter } from '../documentdb/collectionView/collectionViewRouter';
 import { indexViewRouter } from '../documentdb/collectionView/indexesTab/indexViewRouter';
 import { documentsViewRouter as documentViewRouter } from '../documentdb/documentView/documentsViewRouter';
@@ -271,6 +272,7 @@ const commonRouter = router({
 export const appRouter = router({
     common: commonRouter,
     atlasCredentials: atlasCredentialsRouter,
+    clusterDashboard: clusterDashboardRouter,
     mongoClusters: {
         documentView: documentViewRouter,
         collectionView: collectionViewRouter,

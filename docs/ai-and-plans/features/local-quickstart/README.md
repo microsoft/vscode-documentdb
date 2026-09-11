@@ -76,8 +76,9 @@ regular new-connection wizard instead ([0001](./decisions.md#0001--single-manage
 
 ## Decisions
 
-See [decisions.md](./decisions.md). Three entries: the single-instance model (0001, superseded), its
-reversal to multi-instance (0002), and the Concept F wizard information architecture (0003).
+See [decisions.md](./decisions.md). Four entries: the single-instance model (0001, superseded), its
+reversal to multi-instance (0002), the Concept F wizard information architecture (0003), and the
+managed-node cluster-command context boundary plus its deferred replacement (0004).
 
 ## Open gaps
 

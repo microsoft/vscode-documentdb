@@ -35,6 +35,7 @@ treat `status: historical` or `status: superseded` as current.
 | [webview-ext-package](./features/webview-ext-package/README.md)       | `@microsoft/vscode-ext-webview`: the extracted webview transport package       | published preview |
 | [connections-tree](./features/connections-tree/README.md)             | The Connections view: node item counts, connection load performance            | shipped           |
 | [no-auth](./features/no-auth/README.md)                               | Credential-free connections and connection-string TLS handling                 | shipped           |
+| [cluster-dashboard](./features/cluster-dashboard/README.md)           | Cluster-wide inventory, live operations with kill, and resilience facts        | POC, unmerged     |
 
 Everything else is a single file at this root, such as:
 

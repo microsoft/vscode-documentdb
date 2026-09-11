@@ -19,8 +19,10 @@ import { type EntraIdAuthConfig, type NativeAuthConfig } from '../../documentdb/
 import { type AuthMethodId } from '../../documentdb/auth/AuthMethod';
 import { ShellCommandIds } from '../../documentdb/shell/constants';
 import { ext } from '../../extensionVariables';
+import { SettingsService } from '../../services/SettingsService';
 import { ConnectionDiagnosticsService } from '../../services/connectionDiagnosticsService';
 import { regionToDisplayName } from '../../utils/regionToDisplayName';
+import { withDelayedProgress } from '../../utils/withProgress';
 import { type TreeElement } from '../TreeElement';
 import { type TreeElementWithContextValue } from '../TreeElementWithContextValue';
 import { type TreeElementWithExperience } from '../TreeElementWithExperience';
@@ -113,6 +115,47 @@ export abstract class ClusterItemBase<T extends BaseClusterModel = BaseClusterMo
     protected abstract authenticateAndConnect(): Promise<ClustersClient | null>;
 
     /**
+     * Connects to the cluster, prompting for credentials if they are not cached yet.
+     *
+     * Tree expansion is not the only way a user reaches a cluster: commands such as
+     * *Show Cluster Dashboard* are invoked straight from the context menu on a node that has
+     * never been expanded, where no credentials exist. Refusing those with "not signed in"
+     * and asking the user to go and expand the node first makes them perform the extension's
+     * bookkeeping by hand. This exposes the same authentication the tree performs so a
+     * command can just connect.
+     *
+     * Reuses a cached client when one exists, exactly as `getChildren` does, so calling this
+     * on an already-connected cluster costs nothing.
+     *
+     * @returns A connected client, or `null` when authentication failed or the user cancelled —
+     *          callers should abort quietly in that case, because the flow has already reported
+     *          the reason, or the user asked for nothing to happen.
+     * @throws Any non-cancellation failure from reusing a cached client, so the caller's command
+     *         error handling can report it. Only cancellation is swallowed.
+     */
+    public async connect(): Promise<ClustersClient | null> {
+        if (CredentialCache.hasCredentials(this.cluster.clusterId)) {
+            await this.beforeCachedClientConnect();
+
+            try {
+                return await this.getClientWithProgress(this.cluster.clusterId);
+            } catch (error) {
+                // Cancelling the progress notification is a request for nothing to happen, so it
+                // must not surface as an error dialog. `getChildren` draws the same distinction;
+                // without it, dismissing "Connecting to …" reports the user's own cancellation
+                // back to them as a failure.
+                if (error instanceof UserCancelledError) {
+                    return null;
+                }
+
+                throw error;
+            }
+        }
+
+        return this.authenticateAndConnect();
+    }
+
+    /**
      * Gives subclasses a chance to prepare connection-specific infrastructure
      * before a cached client is reused. For example, Kubernetes ClusterIP
      * connections may need to restore a port-forward tunnel.
@@ -140,20 +183,19 @@ export abstract class ClusterItemBase<T extends BaseClusterModel = BaseClusterMo
      */
     protected async getClientWithProgress(clusterId: string): Promise<ClustersClient> {
         const abortController = new AbortController();
-        return vscode.window.withProgress(
+        const clientPromise = ClustersClient.getClient(clusterId, abortController.signal);
+        return withDelayedProgress(
+            clientPromise,
             {
                 location: vscode.ProgressLocation.Notification,
                 title: l10n.t('Connecting to "{cluster}"…', { cluster: this.cluster.name }),
                 cancellable: true,
             },
-            async (_progress, token) => {
-                token.onCancellationRequested(() => {
-                    ext.outputChannel.debug(
-                        `User cancelled connection attempt for "${this.cluster.name}" via progress notification.`,
-                    );
-                    abortController.abort();
-                });
-                return ClustersClient.getClient(clusterId, abortController.signal);
+            () => {
+                ext.outputChannel.debug(
+                    `User cancelled connection attempt for "${this.cluster.name}" via progress notification.`,
+                );
+                abortController.abort();
             },
         );
     }
@@ -208,6 +250,7 @@ export abstract class ClusterItemBase<T extends BaseClusterModel = BaseClusterMo
     async getChildren(): Promise<TreeElement[]> {
         ext.outputChannel.appendLine(l10n.t('Loading cluster details for "{cluster}"', { cluster: this.cluster.name }));
 
+        const wasConnected = ClustersClient.exists(this.cluster.clusterId);
         let clustersClient: ClustersClient | null;
 
         // Check if credentials are cached, and return the cached client if available
@@ -338,6 +381,12 @@ export abstract class ClusterItemBase<T extends BaseClusterModel = BaseClusterMo
             return this.createErrorRecoveryChildren(true);
         }
 
+        if (!wasConnected && (SettingsService.getSetting<boolean>(ext.settingsKeys.showDashboardOnConnect) ?? true)) {
+            await vscode.commands.executeCommand('vscode-documentdb.command.clusterDashboard.open', this, null, {
+                activationSource: 'autoOpenOnConnect',
+            });
+        }
+
         if (databases.length === 0) {
             return [
                 createGenericElement({
@@ -346,7 +395,7 @@ export abstract class ClusterItemBase<T extends BaseClusterModel = BaseClusterMo
                     label: l10n.t('Create Database…'),
                     iconPath: new vscode.ThemeIcon('plus'),
                     commandId: 'vscode-documentdb.command.createDatabase',
-                    commandArgs: [this],
+                    commandArgs: [this, null, { activationSource: 'treeEmptyPlaceholder' }],
                 }) as TreeElement,
             ];
         }

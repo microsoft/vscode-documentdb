@@ -53,11 +53,16 @@ export interface WebviewControllerOptions<
     title: string;
 
     /**
-     * Identifier for this webview. Used both as the panel `viewType` (prefixed
-     * with `react-webview-`) and as the key passed to the webview's `render()`
-     * entry so it can look up the matching component from its registry.
+     * Key passed to the webview's `render()` entry so it can look up the
+     * matching component from its registry.
      */
     viewType: string;
+
+    /**
+     * Stable VS Code-facing panel identifier. Defaults to the legacy
+     * `react-webview-${viewType}` form when omitted.
+     */
+    panelViewType?: string;
 
     /**
      * The root tRPC router for this application. The controller dispatches
@@ -225,11 +230,16 @@ export class WebviewController<
 
         const viewColumn = options.viewColumn ?? vscode.ViewColumn.One;
 
-        this._panel = vscode.window.createWebviewPanel('react-webview-' + options.viewType, options.title, viewColumn, {
-            enableScripts: true,
-            retainContextWhenHidden: true,
-            localResourceRoots: [vscode.Uri.file(options.extensionContext.extensionPath)],
-        });
+        this._panel = vscode.window.createWebviewPanel(
+            options.panelViewType ?? 'react-webview-' + options.viewType,
+            options.title,
+            viewColumn,
+            {
+                enableScripts: true,
+                retainContextWhenHidden: true,
+                localResourceRoots: [vscode.Uri.file(options.extensionContext.extensionPath)],
+            },
+        );
 
         this._panel.webview.html = this.getDocumentTemplate(this._panel.webview);
         this._panel.iconPath = options.icon;
