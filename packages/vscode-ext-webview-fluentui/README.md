@@ -43,7 +43,8 @@ It costs you **no Monaco dependency**: the returned data is structurally assigna
 `monaco.editor.IStandaloneThemeData`, so you pass it straight to `defineTheme` with no cast, and
 this package never imports `monaco-editor`.
 
-See [Quick start: Monaco](#quick-start-monaco).
+See [Quick start: Monaco](#quick-start-monaco) and the
+[Monaco guide](./src/monaco/README.md) for complete React, customization, and imperative examples.
 
 All three halves are independent: adopting the theming does not require the components, using a
 component does not require this package's provider, and `./monaco` pulls in neither Fluent nor the
@@ -166,8 +167,10 @@ is empty by default, so Monaco colorizes syntax from its built-in palette. VS Co
 TextMate colors as CSS variables, so anything else would be an approximation this package is not in
 a position to choose for you.
 
-See [`src/monaco/README.md`](./src/monaco/README.md) for what is derived, and why the color list is
-shorter than the one VS Code publishes.
+See the [Monaco guide](./src/monaco/README.md) for a complete editor component, custom colors and
+syntax rules, an imperative integration with cleanup, and the API options. Your application still
+owns its Monaco installation and loader/worker setup. The guide also explains what is derived and
+why the color list is shorter than the one VS Code publishes.
 
 ## Theming in detail
 
@@ -254,9 +257,11 @@ Two consequences worth knowing:
 | -------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
 | `.`            | `VSCodeFluentProvider`, `useActiveVSCodeTheme`, `useActiveVSCodeThemeKind`, `createVSCodeFluentTheme`, `generateAdaptive{Light,Dark}Theme` |
 | `./components` | `Container` and its family, `FocusableBadge`, `MetricGrid`, `MetricCard`, `StepList`, `StatusList`, `Wizard`, and their prop types         |
+| `./monaco` | `createVSCodeMonacoTheme`, `useVSCodeMonacoTheme`, `DEFAULT_MONACO_THEME_NAME`, and their option and theme types |
 
-The palette math and the VS Code theme token list are internal. Monaco theming is not part of this
-package: Monaco is not Fluent, and a 5 MB peer has no business in a theming package.
+The palette math and color-ID list are internal. The Monaco entry produces structurally typed
+theme data without a peer or runtime dependency on `monaco-editor`; consumers provide their own
+editor integration.
 
 ## License
 
