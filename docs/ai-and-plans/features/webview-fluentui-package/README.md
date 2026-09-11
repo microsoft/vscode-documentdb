@@ -110,6 +110,7 @@ After increments 1-4:
 | 2026-09-10 | #895 | Review corrections: `role="group"` on the named containers, repaired decision table, `publishConfig`, a11y skill                         | [Decision 0030](./decisions.md#0030---named-focusable-containers-carry-rolegroup)                                |
 | 2026-09-11 | #895 | Increment 5: add `scroll` and `sticky-navigation` wizard header behaviors; abandon the experimental `sticky-dynamic` mode                | [Decision 0031](./decisions.md#0031---keep-wizard-behavior-to-scrolling-and-sticky-navigation)                   |
 | 2026-09-11 | #895 | Increment 6: unified Monaco theming through a new `./monaco` entry and a shared internal colour source; 937 lines deleted extension-side | [iterations/06-monaco-theming.md](./iterations/06-monaco-theming.md)                                             |
+| 2026-09-11 | #895 | Operator confirmed the increment 6 visual acceptance pass across several themes; increment accepted                                      | [Decision 0032](./decisions.md#0032---monaco-theming-ships-from-monaco-structurally-typed)                       |
 
 ## Decisions
 

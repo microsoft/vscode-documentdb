@@ -257,4 +257,8 @@ snapshot. The store now bumps its version when observation resumes after a gap.
 - [x] A same-kind theme switch re-derives the Monaco theme (defect b), asserted in jsdom.
 - [x] Values that are not valid Monaco hex are dropped rather than passed through (defect c).
 - [x] `npm run build` and the full Jest suite pass.
-- [ ] Visual acceptance pass per §6 — **operator**.
+- [x] Visual acceptance pass per §6 - **operator-confirmed on 2026-09-11**, across several themes. No
+      regression found, and the intended change in §2(a) - shared surfaces now agreeing where they
+      previously did not - held up in the editor.
+
+Increment 6 is complete.
