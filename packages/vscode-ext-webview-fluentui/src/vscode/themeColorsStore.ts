@@ -21,12 +21,21 @@ const THEME_ATTRIBUTES = ['data-vscode-theme-kind', 'data-vscode-theme-id', 'dat
 
 let version = 0;
 let observer: MutationObserver | undefined;
+let hasObserved = false;
 const listeners = new Set<() => void>();
 
 function start(): void {
     if (observer || typeof MutationObserver === 'undefined') {
         return;
     }
+
+    // Nothing was watching between the last unsubscribe and now, so the theme may have moved
+    // uncounted. Bump, or a consumer caching on the version would serve a stale snapshot.
+    if (hasObserved) {
+        version++;
+    }
+
+    hasObserved = true;
 
     // A single observer across both nodes, so one theme switch is one callback no matter how
     // many properties and attributes it rewrote.

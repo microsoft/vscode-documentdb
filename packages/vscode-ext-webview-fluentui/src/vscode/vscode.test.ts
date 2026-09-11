@@ -114,4 +114,15 @@ describe('themeColorsStore', () => {
         expect(listener).not.toHaveBeenCalled();
         document.documentElement.removeAttribute('style');
     });
+
+    // Nothing counted the change above, so a consumer caching on the version would serve a stale
+    // snapshot to the next subscriber. Re-subscribing has to invalidate it.
+    it('reports a new version when observation resumes after a gap', () => {
+        const before = getVSCodeThemeColorsVersion();
+        const unsubscribe = subscribeToVSCodeThemeColors(jest.fn());
+
+        expect(getVSCodeThemeColorsVersion()).toBeGreaterThan(before);
+
+        unsubscribe();
+    });
 });

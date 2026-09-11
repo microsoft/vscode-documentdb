@@ -305,4 +305,34 @@ export default ts.config(
             ],
         },
     },
+    // The `./monaco` entry shares the VS Code colour source, not the Fluent adaptation. It must
+    // reach `vscode/` and nothing above it, so that importing it injects no stylesheet and pulls
+    // in no Fluent. See the package's decision 0032.
+    {
+        files: ['packages/vscode-ext-webview-fluentui/src/monaco/**/*.{ts,tsx}'],
+
+        rules: {
+            'no-restricted-imports': [
+                'error',
+                {
+                    patterns: [
+                        {
+                            group: [
+                                '**/theme',
+                                '**/theme/**',
+                                '**/styles',
+                                '**/styles/**',
+                                '**/components',
+                                '**/components/**',
+                                'monaco-editor',
+                                'monaco-editor/**',
+                            ],
+                            message:
+                                'monaco/ must import only vscode/. It takes no dependency on monaco-editor: the theme data is structurally typed, and type-tests/monacoContract.ts proves it.',
+                        },
+                    ],
+                },
+            ],
+        },
+    },
 );
