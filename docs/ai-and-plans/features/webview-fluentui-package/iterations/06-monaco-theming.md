@@ -224,10 +224,14 @@ One commit each.
 | # | Item                                                                                             | Status |
 | - | ------------------------------------------------------------------------------------------------ | ------ |
 | 1 | This plan                                                                                        | done   |
-| 2 | Internal `vscode/` tier: colour-id list + generator script, reader, hex normalisation, change store | done   |
-| 3 | `./monaco` entry: types, `createVSCodeMonacoTheme`, `useVSCodeMonacoTheme`, `exports` + `typesVersions` | done   |
+| 2 | Internal `vscode/` tier: theme kind, colour reader, hex normalisation, change store               | done   |
+| 3 | `./monaco` entry: colour-id list + generator script, theme derivation, hook, `exports` + `typesVersions` | done   |
 | 4 | Migrate the extension consumer; delete both leave-behind files                                   | done   |
 | 5 | Docs: design.md, package README, feature README, decisions 0032, CHANGELOG                        | done   |
+
+The colour-id list sits in `monaco/`, not `vscode/`, as the plan first had it: which ids matter is
+Monaco's knowledge, while `vscode/` only knows how to read any id it is given. Keeping the two apart
+is what lets a future non-Monaco consumer reuse the reader without inheriting Monaco's list.
 
 ## 9. Acceptance
 

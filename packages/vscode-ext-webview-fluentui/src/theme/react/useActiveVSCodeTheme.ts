@@ -5,9 +5,8 @@
 
 import { type Theme } from '@fluentui/react-components';
 import { useEffect, useMemo, useState } from 'react';
+import { DEFAULT_VSCODE_THEME_KIND, readVSCodeThemeKind } from '../../vscode/index.js';
 import { createVSCodeFluentTheme } from '../core/createVSCodeFluentTheme.js';
-
-const DEFAULT_THEME_KIND = 'vscode-light';
 
 /** The active VS Code theme, and the Fluent theme derived from it. */
 export interface VSCodeThemeState {
@@ -16,9 +15,6 @@ export interface VSCodeThemeState {
     /** `undefined` for an unrecognised kind, which `FluentProvider` treats as "use the default". */
     readonly theme: Theme | undefined;
 }
-
-/** Reads the theme kind VS Code publishes on the body element. */
-const readVSCodeThemeKind = (): string => document.body.getAttribute('data-vscode-theme-kind') ?? DEFAULT_THEME_KIND;
 
 /**
  * The theme kind of the user's active VS Code color theme, kept current as they switch themes.
@@ -37,7 +33,7 @@ export function useActiveVSCodeThemeKind(): string {
                     if (mutation.type === 'attributes' && mutation.attributeName === 'data-vscode-theme-kind') {
                         setThemeKind(
                             (mutation.target as HTMLElement).getAttribute('data-vscode-theme-kind') ??
-                                DEFAULT_THEME_KIND,
+                                DEFAULT_VSCODE_THEME_KIND,
                         );
                     }
                 });
