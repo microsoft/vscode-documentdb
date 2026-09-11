@@ -5,7 +5,7 @@ usable on their own or mixed together: a **theming layer** that makes Fluent tra
 active VS Code theme, a small set of **reusable components** that Fluent itself does not ship, and
 **Monaco theming** that paints the editor from the same colors, so the two engines agree.
 
-Its sibling, [`@microsoft/vscode-ext-webview`](../vscode-ext-webview/README.md), carries the
+Its sibling, [`@microsoft/vscode-ext-webview`](https://github.com/microsoft/vscode-documentdb/blob/main/packages/vscode-ext-webview/README.md), carries the
 transport (tRPC over `postMessage`). Neither package in this pairing depends on the other.
 
 ## The three things this package does
@@ -29,7 +29,7 @@ they work with or without this package's theming, and importing them injects no 
 own.
 
 See [Quick start: components](#quick-start-components) for the common path, and
-[`src/components/README.md`](./src/components/README.md) for the full catalog, how the components
+[Component guide](https://github.com/microsoft/vscode-documentdb/blob/main/packages/vscode-ext-webview-fluentui/src/components/README.md) for the full catalog, how the components
 compose, and how to build a wizard-like surface from `Container` and `StepList` directly.
 
 ### Monaco theming
@@ -44,7 +44,7 @@ It costs you **no Monaco dependency**: the returned data is structurally assigna
 this package never imports `monaco-editor`.
 
 See [Quick start: Monaco](#quick-start-monaco) and the
-[Monaco guide](./src/monaco/README.md) for complete React, customization, and imperative examples.
+[Monaco guide](https://github.com/microsoft/vscode-documentdb/blob/main/packages/vscode-ext-webview-fluentui/src/monaco/README.md) for complete React, customization, and imperative examples.
 
 All three halves are independent: adopting the theming does not require the components, using a
 component does not require this package's provider, and `./monaco` pulls in neither Fluent nor the
@@ -133,7 +133,7 @@ None of them carry localized strings: every user-visible string is a prop with a
 The package ships no translations at all, because string extractors do not scan `node_modules`, so
 a string owned here could never be translated by a consumer.
 
-See [`src/components/README.md`](./src/components/README.md) for the full catalog, how the
+See the [Component guide](https://github.com/microsoft/vscode-documentdb/blob/main/packages/vscode-ext-webview-fluentui/src/components/README.md) for the full catalog, how the
 components compose, and how to decompose `Wizard` into `Container` and `StepList` when you need a
 layout it does not offer.
 
@@ -167,7 +167,7 @@ is empty by default, so Monaco colorizes syntax from its built-in palette. VS Co
 TextMate colors as CSS variables, so anything else would be an approximation this package is not in
 a position to choose for you.
 
-See the [Monaco guide](./src/monaco/README.md) for a complete editor component, custom colors and
+See the [Monaco guide](https://github.com/microsoft/vscode-documentdb/blob/main/packages/vscode-ext-webview-fluentui/src/monaco/README.md) for a complete editor component, custom colors and
 syntax rules, an imperative integration with cleanup, and the API options. Your application still
 owns its Monaco installation and loader/worker setup. The guide also explains what is derived and
 why the color list is shorter than the one VS Code publishes.
@@ -257,7 +257,7 @@ Two consequences worth knowing:
 | -------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
 | `.`            | `VSCodeFluentProvider`, `useActiveVSCodeTheme`, `useActiveVSCodeThemeKind`, `createVSCodeFluentTheme`, `generateAdaptive{Light,Dark}Theme` |
 | `./components` | `Container` and its family, `FocusableBadge`, `MetricGrid`, `MetricCard`, `StepList`, `StatusList`, `Wizard`, and their prop types         |
-| `./monaco` | `createVSCodeMonacoTheme`, `useVSCodeMonacoTheme`, `DEFAULT_MONACO_THEME_NAME`, and their option and theme types |
+| `./monaco`     | `createVSCodeMonacoTheme`, `useVSCodeMonacoTheme`, `DEFAULT_MONACO_THEME_NAME`, and their option and theme types                           |
 
 The palette math and color-ID list are internal. The Monaco entry produces structurally typed
 theme data without a peer or runtime dependency on `monaco-editor`; consumers provide their own
