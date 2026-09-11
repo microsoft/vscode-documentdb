@@ -17,12 +17,12 @@ ever want sharing it is a separate package (decisions 0002 and 0013).
 
 ## `core/`: no React
 
-| File                        | What it is                                                        |
-| --------------------------- | ----------------------------------------------------------------- |
-| `colorIds.ts`               | generated, committed: the 392 colour ids Monaco registers          |
-| `fallbackChains.ts`         | where an unpublished id falls back to, and why that list is short  |
+| File                         | What it is                                                        |
+| ---------------------------- | ----------------------------------------------------------------- |
+| `colorIds.ts`                | generated, committed: the 392 colour ids Monaco registers         |
+| `fallbackChains.ts`          | where an unpublished id falls back to, and why that list is short |
 | `createVSCodeMonacoTheme.ts` | the derivation                                                    |
-| `types.ts`                  | the structural mirror of Monaco's theme types                      |
+| `types.ts`                   | the structural mirror of Monaco's theme types                     |
 
 ### Why 392 and not all 813
 

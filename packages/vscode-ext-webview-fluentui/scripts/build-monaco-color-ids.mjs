@@ -18,8 +18,8 @@
  *     node scripts/build-monaco-color-ids.mjs
  */
 
-import { createRequire } from 'node:module';
 import { readdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { createRequire } from 'node:module';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 

@@ -85,7 +85,5 @@ function isSameThemeData(a: VSCodeMonacoThemeData, b: VSCodeMonacoThemeData): bo
 
     const colorIds = Object.keys(a.colors);
 
-    return (
-        colorIds.length === Object.keys(b.colors).length && colorIds.every((id) => a.colors[id] === b.colors[id])
-    );
+    return colorIds.length === Object.keys(b.colors).length && colorIds.every((id) => a.colors[id] === b.colors[id]);
 }

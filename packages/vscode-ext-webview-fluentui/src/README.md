@@ -2,10 +2,10 @@
 
 Entry map and import direction.
 
-| File            | Entry point    | What it is                                                             |
-| --------------- | -------------- | ---------------------------------------------------------------------- |
-| `index.ts`      | `.`            | theming, plus the `injectStyles()` call at module scope                |
-| `components.ts` | `./components` | components only; imports neither `theme/` nor `styles/` (invariant I1) |
+| File            | Entry point    | What it is                                                                               |
+| --------------- | -------------- | ---------------------------------------------------------------------------------------- |
+| `index.ts`      | `.`            | theming, plus the `injectStyles()` call at module scope                                  |
+| `components.ts` | `./components` | components only; imports neither `theme/` nor `styles/` (invariant I1)                   |
 | `monaco.ts`     | `./monaco`     | the active theme shaped for `monaco.editor.defineTheme()`; no `monaco-editor` dependency |
 
 ## Layering
@@ -43,7 +43,7 @@ Three rules make this worth keeping:
 | `vscode/`      | the active theme itself: kind, colour ids, hex normalisation, a change store |
 | `theme/core/`  | Fluent `Theme` generators; no React                                          |
 | `theme/react/` | the hooks that track the active VS Code theme, and the provider facade       |
-| `monaco/`      | the same colour source, shaped for Monaco; no `monaco-editor` dependency      |
+| `monaco/`      | the same colour source, shaped for Monaco; no `monaco-editor` dependency     |
 | `styles/`      | the SCSS escapes, the module generated from them, and the injector           |
 | `components/`  | components, each usable under any `FluentProvider`                           |
 

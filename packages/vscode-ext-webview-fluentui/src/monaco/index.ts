@@ -4,8 +4,8 @@
  *--------------------------------------------------------------------------------------------*/
 
 export {
-    createVSCodeMonacoTheme,
     DEFAULT_MONACO_THEME_NAME,
+    createVSCodeMonacoTheme,
     type CreateVSCodeMonacoThemeOptions,
 } from './core/createVSCodeMonacoTheme.js';
 export {
