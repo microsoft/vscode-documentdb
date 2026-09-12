@@ -211,9 +211,9 @@ names and, in one case, the absence of an `aria-valuenow` attribute - Fluent imp
 not public API. A minor Fluent release can restructure them and the overrides will silently stop
 applying, with no build error. The `fluentOverrides` test suite is the tripwire.
 
-**No `@vscode/l10n`.** `WizardBreadcrumb`'s single internal string becomes an optional prop
-defaulting to English. This is not merely tidier: the repo's `npm run l10n` extractor does not scan
-`node_modules`, so a package-internal string would silently never be translated in any consumer.
+**No `@vscode/l10n`.** `StepList` accepts an optional `overflowAriaLabel(count)` builder and uses an
+English default when the consumer does not supply one. A consumer that ships translations passes a
+localized builder because the repo's `npm run l10n` extractor does not scan `node_modules`.
 
 The workspace manifest now declares `version: 1.0.0`, prepared for release but not published by this
 change. The operator confirmed on
@@ -280,7 +280,8 @@ survivors move to where they are used:
 The Monaco derivation and the VS Code token list were the third row here. They moved into the
 package in increment 6, and both files are deleted: see 0032.
 
-All localized strings stay in the extension, including the `WizardBreadcrumb` overflow label.
+Localized overflow labels stay in the extension and are passed to `StepList` through
+`overflowAriaLabel(count)`.
 
 ## 11. Acceptance
 
