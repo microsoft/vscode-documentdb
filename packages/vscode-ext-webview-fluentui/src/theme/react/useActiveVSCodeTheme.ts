@@ -4,8 +4,13 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { type Theme } from '@fluentui/react-components';
-import { useEffect, useMemo, useState } from 'react';
-import { DEFAULT_VSCODE_THEME_KIND, readVSCodeThemeKind } from '../../vscode/index.js';
+import { useEffect, useMemo, useState, useSyncExternalStore } from 'react';
+import {
+    DEFAULT_VSCODE_THEME_KIND,
+    getVSCodeThemeColorsVersion,
+    readVSCodeThemeKind,
+    subscribeToVSCodeThemeColors,
+} from '../../vscode/index.js';
 import { createVSCodeFluentTheme } from '../core/createVSCodeFluentTheme.js';
 
 /** The active VS Code theme, and the Fluent theme derived from it. */
@@ -57,12 +62,18 @@ export function useActiveVSCodeThemeKind(): string {
 /**
  * The user's active VS Code theme, as a Fluent theme plus the kind it was derived from.
  *
- * This is the facade's own implementation: `VSCodeFluentProvider` is this hook plus a
- * `FluentProvider`, and nothing else.
+ * Theme-kind changes and same-kind color changes both invalidate the generated theme. The latter
+ * matters because the neutral mappings use live CSS variables, but the generated brand ramp is a
+ * fixed color snapshot. `VSCodeFluentProvider` is this hook plus a `FluentProvider`.
  */
 export function useActiveVSCodeTheme(): VSCodeThemeState {
     const themeKind = useActiveVSCodeThemeKind();
-    const theme = useMemo(() => createVSCodeFluentTheme(themeKind), [themeKind]);
+    const themeColorsVersion = useSyncExternalStore(
+        subscribeToVSCodeThemeColors,
+        getVSCodeThemeColorsVersion,
+        getVSCodeThemeColorsVersion,
+    );
+    const theme = useMemo(() => createVSCodeFluentTheme(themeKind), [themeKind, themeColorsVersion]);
 
     return useMemo(() => ({ themeKind, theme }), [themeKind, theme]);
 }

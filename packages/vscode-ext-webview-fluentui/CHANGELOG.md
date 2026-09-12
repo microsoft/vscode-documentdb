@@ -2,6 +2,11 @@
 
 ## 1.1.0
 
+### Fluent theme tracking
+
+- Fixed stale Fluent brand colors when switching between VS Code themes of the same kind or editing `workbench.colorCustomizations` while the webview remains open.
+- Updated the manual `FluentProvider` composition path to use `useActiveVSCodeTheme`, which tracks both theme-kind and color changes.
+
 ### Monaco theming
 
 - Added the `./monaco` entry, exporting `useVSCodeMonacoTheme` and `createVSCodeMonacoTheme`: the user's active VS Code theme, shaped for `monaco.editor.defineTheme()`.

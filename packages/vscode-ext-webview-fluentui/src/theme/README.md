@@ -14,14 +14,15 @@ there. Worth remembering when reading a bug report against a high-contrast theme
 
 ## `react/`: React
 
-`useActiveVSCodeTheme.ts` holds both hooks. They are standalone: they observe
-`data-vscode-theme-kind` on the body element directly rather than reading a context, because a
-consumer using their own `FluentProvider` needs the theme kind without mounting ours.
+`useActiveVSCodeTheme.ts` holds both hooks. They are standalone and read no React context.
+`useActiveVSCodeThemeKind` observes the body theme-kind attribute. `useActiveVSCodeTheme` also
+subscribes to the shared VS Code color store so a same-kind theme switch regenerates the fixed
+brand ramp.
 
 `VSCodeFluentProvider.tsx` is the facade, and it is deliberately thin: one hook and a
-`FluentProvider`. A consumer assembling it by hand from `useActiveVSCodeThemeKind()` and
-`createVSCodeFluentTheme()` gets an identical result. A facade that reaches into private internals
-is a facade that cannot be replaced.
+`FluentProvider`. A consumer that owns a `FluentProvider` can call `useActiveVSCodeTheme()` and pass
+its `theme` to get the same reactive behavior. The lower-level kind hook and theme factory are for
+consumers that provide their own color-change invalidation.
 
 ## What is not here
 

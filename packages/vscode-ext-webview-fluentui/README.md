@@ -88,14 +88,13 @@ createRoot(container).render(
 That covers most consumers: every Fluent component rendered under `VSCodeFluentProvider` now tracks
 the active VS Code theme, including a theme switch while the webview stays open.
 
-Already own a `FluentProvider`? Compose the same result yourself; the provider above is built from
-exactly these two calls and nothing private, so this is not a downgraded path.
+Already own a `FluentProvider`? Use the same reactive theme hook as the provider above. It tracks
+both theme-kind changes and same-kind color changes, including `workbench.colorCustomizations`.
 
 ```tsx
-import { createVSCodeFluentTheme, useActiveVSCodeThemeKind } from '@microsoft/vscode-ext-webview-fluentui';
+import { useActiveVSCodeTheme } from '@microsoft/vscode-ext-webview-fluentui';
 
-const themeKind = useActiveVSCodeThemeKind();
-const theme = useMemo(() => createVSCodeFluentTheme(themeKind), [themeKind]);
+const { theme } = useActiveVSCodeTheme();
 
 return (
     <FluentProvider theme={theme} /* …your own props… */>
@@ -104,7 +103,9 @@ return (
 );
 ```
 
-`useActiveVSCodeTheme()` returns `{ themeKind, theme }` if you want both in one call.
+`useActiveVSCodeTheme()` returns `{ themeKind, theme }`. The lower-level
+`useActiveVSCodeThemeKind()` and `createVSCodeFluentTheme()` remain available for consumers that
+manage their own color-change invalidation.
 
 Post-processing the generated theme, and everything else about the theming, is covered in
 [Theming in detail](#theming-in-detail) below.

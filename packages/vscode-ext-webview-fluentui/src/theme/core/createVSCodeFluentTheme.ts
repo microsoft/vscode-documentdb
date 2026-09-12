@@ -10,9 +10,10 @@ import { generateAdaptiveDarkTheme, generateAdaptiveLightTheme } from './themeGe
  * Builds the Fluent theme for a VS Code theme kind, as read from the `data-vscode-theme-kind`
  * attribute VS Code puts on `document.body`.
  *
- * Use this when you own your own `FluentProvider`: pair it with {@link useActiveVSCodeThemeKind}
- * and pass the result as the provider's theme. `VSCodeFluentProvider` is built from exactly these
- * two pieces and nothing private, so assembling it by hand gives an identical result.
+ * This is a snapshot factory: light and dark themes read the current VS Code button background to
+ * generate a fixed brand ramp. React consumers that need live theme updates should use
+ * `useActiveVSCodeTheme`; use this lower-level function when the caller owns color-change
+ * invalidation.
  *
  * Returns `undefined` for an unrecognised kind, which `FluentProvider` accepts and treats as
  * "use the default theme".
