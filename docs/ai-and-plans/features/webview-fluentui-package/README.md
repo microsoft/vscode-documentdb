@@ -10,7 +10,7 @@ code:
 
 # `@microsoft/vscode-ext-webview-fluentui`
 
-**Status:** 1.1.0 prepared; increments 1-5 implemented and accepted · **Created:** 2026-08-18
+**Status:** 1.1.0 prepared; increments 1-6 implemented and accepted · **Created:** 2026-08-18
 
 > The React theming layer and a small set of components, extracted so other VS Code extensions can
 > make Fluent UI look correct inside a webview without rebuilding it.
@@ -67,7 +67,7 @@ peer ranges in design.md §7 are chosen to satisfy both repositories at once.
 
 ## Code map
 
-After increments 1-4:
+After increments 1-6:
 
 - `packages/vscode-ext-webview-fluentui/**` - the package
 - `src/webviews/index.tsx` - the consumer wiring, now rendering through `VSCodeFluentProvider`

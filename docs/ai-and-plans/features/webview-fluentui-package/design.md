@@ -298,8 +298,20 @@ the npm workspace without publishing. Implemented in
 **Increment 2** - shared wizard components, consumed by Local Quick Start and Atlas Credentials.
 Implemented in [iterations/02-wizard-shell-and-components.md](./iterations/02-wizard-shell-and-components.md).
 
-All four increments are implemented. The operator confirmed increment 4 acceptance tests complete
-on 2026-09-10. Publishing is now established policy under decision 0027, not a deferred increment.
+**Increment 3** - metric cards, metric grids and summary-cell convergence. Implemented in
+[iterations/03-metric-card.md](./iterations/03-metric-card.md).
+
+**Increment 4** - focusable badges and accessible naming contracts. Implemented in
+[iterations/04-focusable-badge-and-accessible-names.md](./iterations/04-focusable-badge-and-accessible-names.md).
+
+**Increment 5** - wizard header behavior with scrolling and sticky navigation. Recorded in
+[decision 0031](./decisions.md#0031---keep-wizard-behavior-to-scrolling-and-sticky-navigation).
+
+**Increment 6** - unified Monaco theming from the package's `./monaco` entry. Implemented in
+[iterations/06-monaco-theming.md](./iterations/06-monaco-theming.md).
+
+All six increments are implemented and accepted. Publishing is established policy under decision
+0027, not a deferred increment.
 
 Later increments are recorded in the iteration plans and decisions log. The two candidates first
 identified after increment 1 both shipped:
