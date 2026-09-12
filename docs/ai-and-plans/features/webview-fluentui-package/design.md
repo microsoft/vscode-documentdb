@@ -215,13 +215,12 @@ applying, with no build error. The `fluentOverrides` test suite is the tripwire.
 English default when the consumer does not supply one. A consumer that ships translations passes a
 localized builder because the repo's `npm run l10n` extractor does not scan `node_modules`.
 
-The workspace manifest now declares `version: 1.0.0`, prepared for release but not published by this
-change. The operator confirmed on
-2026-09-10 that the package is already being published, so the absence of `private: true` is
-intentional. Decision 0027 replaces the original workspace-only restriction. Registry versions
-and the publication status of individual commits must be checked separately. The operator later
-confirmed there are no external consumers: decision 0029 permits API changes while finalizing the
-extraction and calls for a `1.0.0` release-version bump after acceptance.
+The workspace manifest now declares `version: 1.1.0`, prepared for release by this branch. The
+operator confirmed on 2026-09-10 that the package is already being published, so the absence of
+`private: true` is intentional. Decision 0027 replaces the original workspace-only restriction.
+Registry versions and the publication status of individual commits must be checked separately.
+The operator also confirmed there are no external consumers; decision 0029 records the resulting
+latitude to finalize the API before wider adoption.
 
 ## 8. Testing
 
