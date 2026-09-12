@@ -32,7 +32,7 @@ Three entries.
 | Entry          | Contents                                                                                                                                  |
 | -------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
 | `.`            | `VSCodeFluentProvider`, `useActiveVSCodeTheme`, `useActiveVSCodeThemeKind`, `createVSCodeFluentTheme` - and the self-injecting stylesheet |
-| `./components` | `WizardBreadcrumb` and its types. No theming, no stylesheet.                                                                              |
+| `./components` | Container, FocusableBadge, MetricGrid, StatusList, StepList and Wizard families and their types. No theming, no stylesheet.               |
 | `./monaco`     | `createVSCodeMonacoTheme`, `useVSCodeMonacoTheme` and their types. No Fluent, no stylesheet, no `monaco-editor` dependency (0032).        |
 
 Not in v1: `./tokens` (0008), `./styles.css` (0010), `./testing`.
