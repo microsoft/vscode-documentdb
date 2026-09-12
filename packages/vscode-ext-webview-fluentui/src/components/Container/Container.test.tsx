@@ -19,10 +19,11 @@ beforeAll(installTestEnvironment);
 afterEach(cleanupSurfaces);
 
 describe('Container family', () => {
-    test('ContainerFooter elevates only while ContainerBody overflows', async () => {
+    test('ContainerBody preserves its consumer scroll handler while updating footer elevation', async () => {
+        let consumerScrollCount = 0;
         const { root } = await renderSurface(
             <Container>
-                <ContainerBody>
+                <ContainerBody onScroll={() => consumerScrollCount++}>
                     <ContainerMain>content</ContainerMain>
                 </ContainerBody>
                 <ContainerFooter>footer</ContainerFooter>
@@ -37,6 +38,7 @@ describe('Container family', () => {
         await act(async () => {
             scrollArea.dispatchEvent(new Event('scroll'));
         });
+        expect(consumerScrollCount).toBe(1);
         expect(footer.className).not.toBe(flatClassName);
 
         // Scrolled to the bottom: nothing below the fold, so the elevation goes away again.
@@ -44,6 +46,7 @@ describe('Container family', () => {
         await act(async () => {
             scrollArea.dispatchEvent(new Event('scroll'));
         });
+        expect(consumerScrollCount).toBe(2);
         expect(footer.className).toBe(flatClassName);
     });
 

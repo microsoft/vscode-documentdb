@@ -53,6 +53,7 @@ export const ContainerBody = ({
     children,
     className,
     navPosition = 'top',
+    onScroll,
     ...rest
 }: ContainerBodyProps): JSX.Element => {
     const styles = useStyles();
@@ -60,7 +61,15 @@ export const ContainerBody = ({
     const { scrollRef, contentRef, handleScroll } = useOverflowState(setOverflowing);
 
     return (
-        <div className={mergeClasses(styles.scrollArea, className)} ref={scrollRef} onScroll={handleScroll} {...rest}>
+        <div
+            {...rest}
+            className={mergeClasses(styles.scrollArea, className)}
+            ref={scrollRef}
+            onScroll={(event) => {
+                handleScroll();
+                onScroll?.(event);
+            }}
+        >
             <div
                 ref={contentRef}
                 className={mergeClasses(styles.content, navPosition === 'start' ? styles.navStart : styles.navTop)}
