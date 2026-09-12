@@ -6,7 +6,7 @@
 import { act, createElement, type FunctionComponent } from 'react';
 // eslint-disable-next-line import/no-internal-modules -- react-dom/client is React 19's only root API
 import { createRoot, type Root } from 'react-dom/client';
-import { type VSCodeThemeState, useActiveVSCodeTheme } from './useActiveVSCodeTheme';
+import { useActiveVSCodeTheme, type VSCodeThemeState } from './useActiveVSCodeTheme';
 
 declare global {
     var IS_REACT_ACT_ENVIRONMENT: boolean;

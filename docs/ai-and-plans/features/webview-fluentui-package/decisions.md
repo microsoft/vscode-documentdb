@@ -1465,3 +1465,74 @@ detailed review before implementation because the duplicate-observer concern may
 the current observers may be cheap, correctly ordered, and easier to keep separate.
 
 **Resolved in:** [`120ed10a`](https://github.com/microsoft/vscode-documentdb/commit/120ed10a1618a2dd86ccc818aea6600f8d30fa87).
+
+## PR #895 review resolutions (2026-09-12)
+
+The post-review pass raised ten findings after the two inline Copilot comments were resolved. The
+operator selected findings 1 and 6 through 10 for this PR and explicitly left findings 2 through 5
+unchanged. Each selected finding was fixed in its own commit so the rationale and diff remain easy
+to review independently.
+
+### Finding 1: the scroll region had no default keyboard focus target
+
+`ContainerBody` is the only scroll region, and the component accessibility contract already said a
+region without focusable content needs `tabIndex={0}`. The implementation did not provide it, so a
+surface containing only static content could be unreachable for keyboard scrolling.
+
+The component now defaults `tabIndex` to `0` while preserving an explicit consumer override such as
+`-1`. This follows the documented contract without forcing an extra tab stop on consumers that have
+a more specific focus strategy. Tests cover both the default and override paths.
+
+**Resolved in:** [`1106ed2d`](https://github.com/microsoft/vscode-documentdb/commit/1106ed2d462f992015bb24135bcd6bd318f69718).
+
+### Finding 6: the feature index advertised the old prepared version
+
+The top-level feature index said `1.0.0 prepared`, while the package manifest and feature record
+said `1.1.0 prepared`. The index now uses `1.1.0 prepared`. It deliberately does not claim that the
+version is published because registry publication must be verified separately.
+
+**Resolved in:** [`b5f2912e`](https://github.com/microsoft/vscode-documentdb/commit/b5f2912eda9c30fab4b1a845d18928952fdac4d6).
+
+### Finding 7: the public-surface table described a deleted component
+
+The active design still named `WizardBreadcrumb` as the entire `./components` entry. The package
+instead exports the Container, FocusableBadge, MetricGrid, StatusList, StepList and Wizard
+families. The table now names those stable families rather than an obsolete leaf component, while
+retaining the boundary that the subpath imports neither theming nor the stylesheet.
+
+**Resolved in:** [`c92c6092`](https://github.com/microsoft/vscode-documentdb/commit/c92c6092dcdf7ce53ce64450028d05c3e5056c1e).
+
+### Finding 8: the localization boundary named the deleted breadcrumb
+
+The localization section attributed the package's English default to `WizardBreadcrumb`. The
+actual API is `StepList.overflowAriaLabel(count)`: the package supplies an English default and a
+consumer that ships translations supplies a localized builder. Recording that real customization
+point keeps the no-`@vscode/l10n` package boundary accurate and actionable.
+
+**Resolved in:** [`28ac02e7`](https://github.com/microsoft/vscode-documentdb/commit/28ac02e7647dd06cd4e882926550742f51e597cb).
+
+### Finding 9: the release section described the obsolete 1.0.0 state
+
+The active design said the manifest was still `1.0.0` and discussed a future 1.0.0 bump. It now
+states that this branch prepares `1.1.0`, preserves the distinction between a prepared manifest and
+registry publication, and retains decision 0029's rationale about the absence of external
+consumers. This corrects current intent without claiming unverified publication state.
+
+**Resolved in:** [`c2883de9`](https://github.com/microsoft/vscode-documentdb/commit/c2883de92438e52f5516955eb022d6265a2b9b35).
+
+### Finding 10: active records stopped at four or five increments
+
+The design said all four increments were implemented and the feature README status stopped at five,
+while the timeline already recorded increment 5 wizard navigation and increment 6 Monaco theming.
+The active records now say all six increments are implemented and accepted, and the design lists
+increments 3 through 6 with links to their plans or decisions. This keeps the concise status and
+the detailed chronology in agreement.
+
+**Resolved in:** [`d0d14274`](https://github.com/microsoft/vscode-documentdb/commit/d0d14274f2d12d9eaa622022a8eb2dc89a04e0af).
+
+### Intentionally unchanged
+
+Per operator direction, this pass did not change finding 2 (`ContainerSection` controlled
+`aria-labelledby`), finding 3 (`StatusList` controlled role and name), finding 4 (`StatusListItem`
+controlled role), or finding 5 (flattening transitive Monaco fallback chains). They remain review
+observations rather than accepted decisions or resolved work.
