@@ -50,6 +50,22 @@ describe('Container family', () => {
         expect(footer.className).toBe(flatClassName);
     });
 
+    test('ContainerBody is keyboard-focusable by default and accepts an explicit tabIndex', async () => {
+        const defaultBody = await renderSurface(
+            <Container>
+                <ContainerBody>content</ContainerBody>
+            </Container>,
+        );
+        expect(defaultBody.root.firstElementChild?.getAttribute('tabindex')).toBe('0');
+
+        const overriddenBody = await renderSurface(
+            <Container>
+                <ContainerBody tabIndex={-1}>content</ContainerBody>
+            </Container>,
+        );
+        expect(overriddenBody.root.firstElementChild?.getAttribute('tabindex')).toBe('-1');
+    });
+
     const surfaceWithSection = (step: string, focusOnMount: boolean): ReactNode => (
         <Container>
             <ContainerBody>

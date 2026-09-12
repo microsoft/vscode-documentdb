@@ -54,6 +54,7 @@ export const ContainerBody = ({
     className,
     navPosition = 'top',
     onScroll,
+    tabIndex = 0,
     ...rest
 }: ContainerBodyProps): JSX.Element => {
     const styles = useStyles();
@@ -65,6 +66,7 @@ export const ContainerBody = ({
             {...rest}
             className={mergeClasses(styles.scrollArea, className)}
             ref={scrollRef}
+            tabIndex={tabIndex}
             onScroll={(event) => {
                 handleScroll();
                 onScroll?.(event);
