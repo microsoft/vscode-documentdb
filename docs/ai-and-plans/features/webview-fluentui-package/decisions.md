@@ -1323,6 +1323,20 @@ The dynamic mode introduced poor truncation for real subtitles, layout jumps and
 the full-header modes also complicated focus visibility and reduced-motion behavior. No compatibility
 aliases remain.
 
+### Review follow-up: compose controlled DOM event handlers (2026-09-12)
+
+`ContainerBody` originally set its overflow-measurement `onScroll` before spreading inherited div
+props. A consumer-supplied `onScroll` therefore replaced the internal handler and silently disabled
+footer elevation updates.
+
+When a package component owns behavior attached to a DOM event, that handler is controlled in the
+same sense as a controlled ARIA attribute: remove the consumer callback from the pass-through props,
+spread the remaining props first, and install one handler that runs both the internal behavior and
+the consumer callback. Regression tests must supply the consumer callback and assert both effects;
+testing only the no-callback path does not protect the composition contract.
+
+**Resolved in:** [`c116157c`](https://github.com/microsoft/vscode-documentdb/commit/c116157cfa0148c732de73ba07b0cf3b17aabc0c).
+
 ---
 
 ## 0032 - Monaco theming ships from `./monaco`, structurally typed
@@ -1429,3 +1443,25 @@ Leaving the race alone was reasonable at P3, but the operator chose the small fi
 an always-connected observer, and consumer-side workarounds add unnecessary lifecycle complexity.
 The hook regression changes a colour in a layout effect before subscription; it failed before
 the fix and passed afterward. Existing same-kind switching and identity tests remain in place.
+
+### Review correction: Fluent same-kind brand invalidation (2026-09-12)
+
+The earlier analysis above says Fluent never had the same-kind staleness bug because its tokens are
+live `var(--vscode-*)` strings. That is true for the adapted neutral tokens, but not for the brand
+ramp. Light and dark theme generation reads `--vscode-button-background` and converts it into fixed
+hexadecimal values. A same-kind switch or `workbench.colorCustomizations` edit could therefore
+leave Fluent brand colors stale even while the neutral tokens updated.
+
+**Decision:** `useActiveVSCodeTheme` now subscribes to the existing theme color store and includes
+its version in theme memoization. The public manual-composition guidance now directs React
+consumers to this high-level hook. A regression test keeps the theme kind fixed, changes the root
+button color, and asserts that the brand ramp is regenerated; a companion test protects object
+identity when colors have not changed.
+
+An optional future refactor could make the shared store the sole source for both theme kind and
+color invalidation, removing the separate observer used by `useActiveVSCodeThemeKind`. This is
+tracked in [issue #922](https://github.com/microsoft/vscode-documentdb/issues/922). It requires
+detailed review before implementation because the duplicate-observer concern may be a false alarm:
+the current observers may be cheap, correctly ordered, and easier to keep separate.
+
+**Resolved in:** [`120ed10a`](https://github.com/microsoft/vscode-documentdb/commit/120ed10a1618a2dd86ccc818aea6600f8d30fa87).
