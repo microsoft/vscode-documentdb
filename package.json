@@ -75,6 +75,9 @@
     "test": "node -e \"console.log('\\n[vscode-documentdb] Integration tests are deprecated.\\nThe legacy vscode-test based integration test suite is no longer in use and will be replaced with a new framework in the 0.10.0 release.\\nThis command is now a no-op.\\n')\"",
     "prejesttest": "npm run build --workspaces --if-present",
     "jesttest": "jest",
+    "//test:visual": "Webview visual regression suite. Build the bundle first: npm run webpack-dev-wv. See test/webview-harness/README.md.",
+    "test:visual": "playwright test",
+    "test:visual:update": "playwright test --update-snapshots",
     "prewebpack-dev": "npm run build --workspaces --if-present",
     "webpack-dev": "rimraf ./dist && npm run webpack-dev-ext && npm run webpack-dev-wv",
     "prewebpack-prod": "npm run build --workspaces --if-present",
@@ -97,6 +100,7 @@
   },
   "devDependencies": {
     "@eslint/js": "~9.39.1",
+    "@playwright/test": "^1.63.0-alpha-2026-07-29",
     "@pmmmwh/react-refresh-webpack-plugin": "~0.6.1",
     "@swc/cli": "~0.8.0",
     "@swc/core": "~1.15.18",
