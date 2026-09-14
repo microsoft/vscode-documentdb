@@ -1,9 +1,9 @@
-/** @jest-environment jsdom */
-
 /*---------------------------------------------------------------------------------------------
  *  Copyright (c) Microsoft Corporation. All rights reserved.
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
+
+/** @jest-environment jsdom */
 
 import { describe, expect, it } from '@jest/globals';
 import { setImmediate } from 'timers';
