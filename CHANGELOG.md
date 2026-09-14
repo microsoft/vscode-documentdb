@@ -8,8 +8,7 @@
 
 ### Security
 
-- **Dependency Security Updates**: Updates `fast-uri` in the extension and API package to 3.1.7, `postcss-selector-parser` to 7.1.6, `browserslist` to 4.28.9, and `fflate` to 0.8.3, addressing URI, selector parsing, browser query, and archive handling vulnerabilities. [#903](https://github.com/microsoft/vscode-documentdb/pull/903), [#902](https://github.com/microsoft/vscode-documentdb/pull/902), [#900](https://github.com/microsoft/vscode-documentdb/pull/900), [#908](https://github.com/microsoft/vscode-documentdb/pull/908), [#906](https://github.com/microsoft/vscode-documentdb/pull/906)
-- **Connection Dependency Updates**: Updates `ip-address` to 10.7.0 and `@mongodb-js/devtools-proxy-support` to 0.7.21. [#911](https://github.com/microsoft/vscode-documentdb/pull/911)
+- **Dependency Security Updates**: Updates `fast-uri` in the extension and API package to 3.1.7, `postcss-selector-parser` to 7.1.6, and `fflate` to 0.8.3, addressing URI, selector parsing, and archive handling vulnerabilities. [#903](https://github.com/microsoft/vscode-documentdb/pull/903), [#902](https://github.com/microsoft/vscode-documentdb/pull/902), [#900](https://github.com/microsoft/vscode-documentdb/pull/900), [#906](https://github.com/microsoft/vscode-documentdb/pull/906)
 
 ## 0.10.1
 
