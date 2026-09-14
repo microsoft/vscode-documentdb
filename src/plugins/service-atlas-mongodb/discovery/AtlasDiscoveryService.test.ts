@@ -3,6 +3,22 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+jest.mock('@microsoft/vscode-azext-utils', () => ({
+    callWithTelemetryAndErrorHandling: jest.fn(
+        async (
+            _eventName: string,
+            callback: (context: {
+                errorHandling: Record<string, unknown>;
+                telemetry: { properties: Record<string, string>; measurements: Record<string, number> };
+            }) => Promise<unknown>,
+        ): Promise<unknown> =>
+            await callback({
+                errorHandling: {},
+                telemetry: { properties: {}, measurements: {} },
+            }),
+    ),
+}));
+
 const globalStateBacking = new Map<string, unknown>();
 const secretStorageBacking = new Map<string, string>();
 
@@ -62,31 +78,33 @@ const mockListOrganizations = jest.fn();
 const mockListProjects = jest.fn();
 const mockListClusters = jest.fn();
 
-class AtlasApiErrorMock extends Error {
-    constructor(
-        message: string,
-        public readonly statusCode: number,
-        public readonly detail?: string,
-    ) {
-        super(message);
-        this.name = 'AtlasApiError';
-    }
-}
-
-jest.mock('../api/AtlasApiClient', () => ({
-    AtlasApiError: AtlasApiErrorMock,
-    AtlasApiClient: class AtlasApiClientMock {
+jest.mock('../api/AtlasApiClient', () => {
+    class AtlasApiErrorMock extends Error {
         constructor(
-            public readonly session: unknown,
-            public readonly refresher: unknown,
-        ) {}
-        listOrganizations = (...args: unknown[]) => mockListOrganizations(this.session, ...args) as unknown;
-        listProjects = (...args: unknown[]) => mockListProjects(this.session, ...args) as unknown;
-        listClusters = (...args: unknown[]) => mockListClusters(this.session, ...args) as unknown;
-    },
-}));
+            message: string,
+            public readonly statusCode: number,
+            public readonly detail?: string,
+        ) {
+            super(message);
+            this.name = 'AtlasApiError';
+        }
+    }
+    return {
+        AtlasApiError: AtlasApiErrorMock,
+        AtlasApiClient: class AtlasApiClientMock {
+            constructor(
+                public readonly session: unknown,
+                public readonly refresher: unknown,
+            ) {}
+            listOrganizations = (...args: unknown[]) => mockListOrganizations(this.session, ...args) as unknown;
+            listProjects = (...args: unknown[]) => mockListProjects(this.session, ...args) as unknown;
+            listClusters = (...args: unknown[]) => mockListClusters(this.session, ...args) as unknown;
+        },
+    };
+});
 
 import { StorageService } from '../../../services/storageService';
+import { AtlasApiError as AtlasApiErrorMock } from '../api/AtlasApiClient';
 import { AtlasCredentialSessionRegistry } from '../auth/AtlasCredentialSessionRegistry';
 import {
     getAtlasCredential,

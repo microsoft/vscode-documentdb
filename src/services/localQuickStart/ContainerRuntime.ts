@@ -9,7 +9,7 @@
  *
  * - All runtime stdout/stderr/command lines are routed through a single
  *   {@link MaskedChannelWritable} that **line-buffers** and **redacts secrets**
- *   before writing to the "DocumentDB Local Quick Start" OutputChannel (D14):
+ *   before writing to the "DocumentDB Local Setup" OutputChannel (D14):
  *   the generated password must never reach the channel, even when a stream
  *   chunk splits it across a buffer boundary.
  * - `docker run` is detached (D4); because a detached run streams nothing back,
@@ -53,7 +53,7 @@ let outputChannel: vscode.OutputChannel | undefined;
 /** Lazily create the shared OutputChannel. */
 export function getQuickStartOutputChannel(): vscode.OutputChannel {
     if (!outputChannel) {
-        outputChannel = vscode.window.createOutputChannel('DocumentDB Local Quick Start');
+        outputChannel = vscode.window.createOutputChannel('DocumentDB Local Setup');
     }
     return outputChannel;
 }
@@ -270,7 +270,7 @@ class ContainerRuntimeImpl implements IContainerRuntime {
      * Run a `/bin/sh -c <script>` command inside a running container (`docker exec`).
      * Used to seed the image's built-in sample data via its native init script — see
      * {@link QuickStartService} — instead of baking `--init-data true` into the run args
-     * (which re-runs on every restart and crashes the container).
+     * (which re-runs on every restart and crashes older images).
      *
      * The script is passed as a single STRONG-quoted argument (single quotes on bash,
      * double quotes on cmd) so the host shell the command runner spawns through does NOT

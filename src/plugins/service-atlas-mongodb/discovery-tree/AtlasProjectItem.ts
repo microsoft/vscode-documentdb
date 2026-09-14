@@ -15,6 +15,7 @@ import {
     type TreeElementWithContextValue,
 } from '../../../tree/TreeElementWithContextValue';
 import { type TreeElementWithRetryChildren } from '../../../tree/TreeElementWithRetryChildren';
+import { meterSilentCatch } from '../../../utils/accumulatingTelemetry';
 import { escapeMarkdown } from '../../../webviews/utils/escapeMarkdown';
 import { AtlasApiClient } from '../api/AtlasApiClient';
 import { atlasTrace } from '../atlasTrace';
@@ -139,7 +140,10 @@ export class AtlasProjectItem implements TreeElement, TreeElementWithContextValu
         atlasTrace(`project "${this.project.name}": explicit refresh requested`);
         // A transient token failure now throws; swallow it so the refresh still resets the error
         // state and re-runs getChildren, which reclassifies and returns the retry node quietly.
-        await this.discoveryService.sessionRegistry.refreshSession(this.ownerCredentialId).catch(() => undefined);
+        await this.discoveryService.sessionRegistry.refreshSession(this.ownerCredentialId).catch(() => {
+            meterSilentCatch('atlasProject_refreshSession');
+            return undefined;
+        });
         ext.discoveryBranchDataProvider.resetNodeErrorState(this.id);
         ext.discoveryBranchDataProvider.refresh(this);
     }

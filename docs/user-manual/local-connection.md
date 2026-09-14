@@ -12,7 +12,7 @@
 
 You have two main options for connecting to a local instance:
 
-- **Use DocumentDB Local Quick Start:**
+- **Set up DocumentDB Local:**
   [Create and manage the official DocumentDB Local container](./local-quick-start) with Docker Engine or Docker Desktop.
 
 - **Use Preconfigured Options:**

@@ -4,6 +4,9 @@
  *--------------------------------------------------------------------------------------------*/
 
 import * as vscode from 'vscode';
+import { ext } from '../../extensionVariables';
+import { AuthMethodId } from '../auth/AuthMethod';
+import { CredentialCache } from '../CredentialCache';
 import { DocumentDBShellPty, type DocumentDBShellPtyOptions } from './DocumentDBShellPty';
 import { ShellSpinner } from './ShellSpinner';
 
@@ -35,6 +38,21 @@ jest.mock('@microsoft/vscode-azext-utils', () => {
         ),
     };
 });
+
+// Connection failures are logged so they survive in a shared output channel; the extension's
+// output channel is not initialized in unit tests.
+jest.mock('../../extensionVariables', () => ({
+    ext: {
+        outputChannel: {
+            error: jest.fn(),
+            warn: jest.fn(),
+            info: jest.fn(),
+            debug: jest.fn(),
+            trace: jest.fn(),
+            appendLine: jest.fn(),
+        },
+    },
+}));
 
 // Mock ShellSessionManager
 const mockInitialize = jest.fn().mockResolvedValue({
@@ -164,12 +182,36 @@ describe('DocumentDBShellPty', () => {
             expect(written).toContain('SCRAM');
         });
 
-        it('should show error and close on connection failure', async () => {
+        it('should show error and stay open on connection failure', async () => {
             mockInitialize.mockRejectedValue(new Error('Connection refused'));
             pty.open(undefined);
             await new Promise((resolve) => setTimeout(resolve, 10));
             expect(written).toContain('Failed to connect: Connection refused');
-            expect(closeCode).toBe(1);
+            // Closing would dispose the terminal and take the message with it; the prompt lets the
+            // user retry, since evaluate() re-initializes an uninitialized session.
+            expect(closeCode).toBeUndefined();
+            expect(written).toContain('testdb> ');
+        });
+
+        it('redacts cached credentials before logging the failure to the output channel', async () => {
+            CredentialCache.setAuthCredentials(
+                'test-cluster-id',
+                AuthMethodId.NativeAuth,
+                'mongodb://localhost:10260/',
+                { connectionUser: 'qs_user', connectionPassword: 'sup3r-s3cret' },
+            );
+            mockInitialize.mockRejectedValue(
+                new Error('Invalid connection string: mongodb://qs_user:sup3r-s3cret@localhost:10260/'),
+            );
+
+            pty.open(undefined);
+            await new Promise((resolve) => setTimeout(resolve, 10));
+
+            const logged = jest.mocked(ext.outputChannel.error).mock.calls.map(String).join('\n');
+            expect(logged).toContain('[Shell] Failed to connect');
+            expect(logged).not.toContain('sup3r-s3cret');
+
+            CredentialCache.deleteCredentials('test-cluster-id');
         });
     });
 

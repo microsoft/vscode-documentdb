@@ -54,7 +54,7 @@ export class DocumentDBClusterItem extends ClusterItemBase<ConnectionClusterMode
             return undefined;
         }
 
-        await this.ensureConnectionReachable(connectionCredentials.properties);
+        await this.ensureConnectionReachable(connectionCredentials.properties, this.cluster.clusterId);
 
         return {
             connectionString: connectionCredentials.secrets.connectionString,
@@ -99,7 +99,7 @@ export class DocumentDBClusterItem extends ClusterItemBase<ConnectionClusterMode
                 return null;
             }
 
-            await this.ensureConnectionReachable(connectionCredentials.properties);
+            await this.ensureConnectionReachable(connectionCredentials.properties, this.cluster.clusterId);
 
             const connectionString = new DocumentDBConnectionString(connectionCredentials.secrets.connectionString);
 
@@ -371,7 +371,7 @@ export class DocumentDBClusterItem extends ClusterItemBase<ConnectionClusterMode
         const connectionCredentials = await ConnectionStorageService.get(this.storageId, connectionType);
 
         if (connectionCredentials && isConnection(connectionCredentials)) {
-            await this.ensureConnectionReachable(connectionCredentials.properties);
+            await this.ensureConnectionReachable(connectionCredentials.properties, this.cluster.clusterId);
         }
     }
 
@@ -385,10 +385,13 @@ export class DocumentDBClusterItem extends ClusterItemBase<ConnectionClusterMode
      * The call is cheap and a no-op when no provider applies (the common case). Failures propagate to
      * the connect flow's telemetry/error handling.
      *
-     * @see docs/ai-and-plans/PRs/621-kubernetes-discovery/connection-reachability-providers.md
+     * @see docs/ai-and-plans/features/kubernetes-discovery/connection-reachability-providers.md
      */
-    private async ensureConnectionReachable(connectionProperties: Record<string, unknown> | undefined): Promise<void> {
-        await ConnectionReachabilityService.ensureReachable(connectionProperties);
+    private async ensureConnectionReachable(
+        connectionProperties: Record<string, unknown> | undefined,
+        clusterId?: string,
+    ): Promise<void> {
+        await ConnectionReachabilityService.ensureReachable(connectionProperties, clusterId);
     }
 
     /**

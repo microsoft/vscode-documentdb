@@ -6,9 +6,32 @@
 /* Define standard variables and values for this extension to be shared with all webviews */
 
 /*
- * The --documentdb-* aliases used below live in theme/fluentAliases.scss, pulled in by
- * theme/fluentOverrides.scss, which DynamicThemeProvider imports for every webview.
+ * DocumentDB semantic aliases for custom controls that need to look like a Fluent control but
+ * cannot consume a Fluent recipe — MonacoAutoHeight being the one that exists today.
+ *
+ * These are a product-prefixed *copy* of the field stroke expression in
+ * @microsoft/vscode-ext-webview-fluentui (src/styles/fluentOverrides.scss), which is the source of
+ * truth. The package ships no public custom properties, so the value is duplicated here on
+ * purpose; if the package retunes the constants, retune them here too or Fluent inputs and our
+ * hand-rolled controls will drift apart.
+ *
+ * Not design tokens — a named shared subexpression. The var() chain exists because many community
+ * themes define only a subset of VS Code's colors; the color-mix is an alpha multiply (sRGB
+ * mixing is premultiplied), so one declaration is correct on light and dark alike.
  */
+:root {
+    --documentdb-colorInputStroke: var(
+        --vscode-checkbox-border,
+        var(--vscode-input-border, color-mix(in srgb, var(--vscode-foreground) 55%, transparent))
+    );
+    /* Blends toward the foreground rather than replacing the stroke, so hover is never weaker
+       than rest on a theme that defines --vscode-checkbox-border. */
+    --documentdb-colorInputStrokeHover: color-mix(
+        in srgb,
+        var(--vscode-foreground) 45%,
+        var(--documentdb-colorInputStroke)
+    );
+}
 
 .selectionDisabled {
     user-select: none;

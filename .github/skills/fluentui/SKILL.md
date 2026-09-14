@@ -33,6 +33,15 @@ This skill covers multiple FluentUI topics. Load the relevant reference when nee
 - Placing an `<Overflow>` toolbar alongside other elements in a layout
 - Integrating FluentUI components that use Griffel (CSS-in-JS) with SCSS stylesheets
 
+## MessageBar Multiline Layout
+
+`MessageBar` has two independent multiline concerns. When a request says “make the MessageBar multiline,” ask which one is intended when the context does not make it clear:
+
+1. **Responsive actions and icon geometry:** Set `layout="multiline"`. This uses Fluent UI's multiline grid, top-aligns the icon, and moves `MessageBarActions` below the body when needed.
+2. **Title above message:** `MessageBarTitle` is inline by default, even with `layout="multiline"`. Add a named body class with `display: flex`, `flexDirection: 'column'`, and an appropriate `gap` to put the message on the next line.
+
+For the default DocumentDB webview notice with a title and message, use **both**: `layout="multiline"` for the Fluent UI geometry and a named title-and-message body class for the vertical title/message layout. Use a separate generic stacked-body class only when the body contains controls, commands, or multiple content blocks rather than a simple title and message.
+
 ## Critical Rule: Layout Constraints
 
 **The `<Overflow>` component measures its child's `clientWidth` to decide which items to hide.** If the child can grow unconstrained, overflow never triggers.

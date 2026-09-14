@@ -39,6 +39,25 @@ When you run a query in the Query Playground or Interactive Shell, the extension
 
 The Query Playground uses **fresh context** mode by default: each execution starts with a clean slate. The Interactive Shell uses **persistent context** mode: variables, functions, and state carry over between commands within a session.
 
+## Running Several Sessions at Once
+
+You can keep multiple playgrounds and shells open at the same time. How they share worker threads differs between the two surfaces, and that difference is visible when one of them is busy.
+
+**Interactive Shell: one worker per terminal.**
+
+- Each shell terminal gets its own dedicated worker thread. Opening two shells against the same cluster creates two independent workers.
+- A slow operation in one shell does not block another shell.
+- Each shell keeps its own session state, including the current database and any variables you defined.
+
+**Query Playground: one worker per cluster.**
+
+- Playground workers are shared per cluster, so opening several playground tabs against the same server reuses one worker.
+- Only one run at a time is allowed per cluster. Runs are **not** queued: if a playground is already running against that cluster, the extension tells you _"A playground is already running on this cluster. Wait for it to finish."_ and does nothing. Wait for the first run to finish, then run again.
+- Playgrounds connected to different clusters run fully independently, because each cluster gets its own worker.
+- A playground document is bound to one cluster and database at a time. You can rebind it: select the connection indicator (the CodeLens at the top of the file, or the status bar entry) and choose **Connect to a different database…**.
+
+The shell uses per-terminal workers because each session carries independent state that must not leak between terminals. Playground executions always name their target database explicitly and keep no state between runs, so sharing one worker per cluster is safe and avoids the cost of an extra thread per tab.
+
 ## How Autocompletion Works
 
 Autocompletion across all query surfaces (Collection View, Query Playground, Interactive Shell) is powered by two data sources:

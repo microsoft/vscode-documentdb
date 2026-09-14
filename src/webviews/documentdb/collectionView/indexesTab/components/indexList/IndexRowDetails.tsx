@@ -3,12 +3,12 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { Badge, Button, Card, Tooltip } from '@fluentui/react-components';
+import { Button, Card, Tooltip } from '@fluentui/react-components';
 import { EyeRegular } from '@fluentui/react-icons';
+import { FocusableBadge } from '@microsoft/vscode-ext-webview-fluentui/components';
 import * as l10n from '@vscode/l10n';
 import { type JSX } from 'react';
 import { useTrpcClient } from '../../../../../_integration/useTrpcClient';
-import '../../../../../components/focusableBadge/focusableBadge.scss';
 import { type IndexRow } from '../../types';
 import { formatDate, formatOps, formatShellJson } from '../../utils/format';
 import { formatVectorAlgorithm } from '../../utils/vectorIndex';
@@ -121,25 +121,19 @@ export const IndexRowDetails = ({ index }: IndexRowDetailsProps): JSX.Element =>
                             <Tooltip
                                 key={`${field}:${String(direction)}`}
                                 content={description}
-                                relationship="label"
+                                relationship="description"
                                 withArrow
                             >
-                                <Badge
-                                    className="keyBadge focusableBadge"
+                                <FocusableBadge
+                                    className="keyBadge"
                                     appearance="tint"
                                     color="brand"
                                     shape="rounded"
                                     size="medium"
-                                    tabIndex={0}
-                                    aria-label={description}
                                 >
-                                    <span className="keyBadgeField" aria-hidden="true">
-                                        {field}
-                                    </span>
-                                    <span className="keyBadgeDir" aria-hidden="true">
-                                        {glyph}
-                                    </span>
-                                </Badge>
+                                    <span className="keyBadgeField">{field}</span>
+                                    <span className="keyBadgeDir">{glyph}</span>
+                                </FocusableBadge>
                             </Tooltip>
                         );
                     })}

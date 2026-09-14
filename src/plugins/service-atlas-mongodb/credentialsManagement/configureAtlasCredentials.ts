@@ -10,6 +10,7 @@ import {
     type IActionContext,
 } from '@microsoft/vscode-azext-utils';
 import * as l10n from '@vscode/l10n';
+import { randomUUID } from 'crypto';
 import { ext } from '../../../extensionVariables';
 import { type TreeElement } from '../../../tree/TreeElement';
 import { DISCOVERY_PROVIDER_ID } from '../config';
@@ -44,8 +45,11 @@ export async function configureAtlasCredentials(
     const result = await callWithTelemetryAndErrorHandling(
         'serviceDiscovery.configureAtlasCredentials',
         async (telemetryContext: IActionContext) => {
+            const journeyCorrelationId = context.telemetry.properties.journeyCorrelationId ?? randomUUID();
             telemetryContext.telemetry.properties.discoveryProviderId = DISCOVERY_PROVIDER_ID;
             telemetryContext.telemetry.properties.nodeProvided = node ? 'true' : 'false';
+            telemetryContext.telemetry.properties.journeyCorrelationId = journeyCorrelationId;
+            context.telemetry.properties.journeyCorrelationId = journeyCorrelationId;
 
             const wizardContext: AtlasCredentialsManagementWizardContext = {
                 ...telemetryContext,

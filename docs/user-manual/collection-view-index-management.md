@@ -44,7 +44,7 @@ The tab refreshes while an index is creating or building. You can also select **
 2. Choose an index tab:
    - **Standard** for regular indexes on one or more fields.
    - **Wildcard** for an index that covers many fields in documents with variable shapes.
-   - **Vector** for a future vector-index feature. Vector index creation is not currently implemented.
+   - **Vector** for similarity search over embeddings.
 3. Complete the required fields for the selected index type.
 4. Select **Create Index**.
 
@@ -75,5 +75,6 @@ Use this path when you want to inspect or adjust the command before running it. 
 ## Next steps
 
 - [Create Wildcard indexes](./collection-view-wildcard-indexes)
+- [Create Vector indexes](./collection-view-vector-indexes)
 - [Troubleshoot Index Management](./collection-view-index-management-troubleshooting)
 - [Collection View: Querying](./collection-view-querying)

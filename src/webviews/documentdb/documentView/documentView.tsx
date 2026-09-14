@@ -61,8 +61,20 @@ export const DocumentView = (): JSX.Element => {
     const saveButtonRef = useRef<HTMLButtonElement>(null);
 
     const editorRef = useRef<monacoEditor.editor.IStandaloneCodeEditor | null>(null);
-    const getCurrentContent = () => editorRef.current?.getValue() || '';
-    const setContent = (newValue: string) => editorRef.current?.setValue(newValue);
+    // Monaco can mount after the initial document fetch resolves (e.g. fast local emulator
+    // responses beat Monaco's async module load), so we stash the value here and flush it
+    // in handleMonacoEditorMount instead of silently dropping it.
+    const pendingContentRef = useRef<string | null>(null);
+    // Falls back to pending/initial content if called before Monaco has mounted,
+    // so callers (e.g. Save) never operate on an empty string.
+    const getCurrentContent = () => editorRef.current?.getValue() ?? pendingContentRef.current ?? editorContent;
+    const setContent = (newValue: string) => {
+        if (editorRef.current) {
+            editorRef.current.setValue(newValue);
+        } else {
+            pendingContentRef.current = newValue;
+        }
+    };
 
     useSelectiveContextMenuPrevention();
 
@@ -79,11 +91,13 @@ export const DocumentView = (): JSX.Element => {
                 .then((response) => {
                     setContent(response);
                 })
-                .catch((error) => {
+                .catch(async (error) => {
+                    const cause = error instanceof Error ? error.message : String(error);
+                    const explained = await trpcClient.common.explainOperationFailure.query({ message: cause });
                     void trpcClient.common.displayErrorMessage.mutate({
-                        message: l10n.t('Error while loading the document'),
+                        message: explained ?? l10n.t('Error while loading the document'),
                         modal: false,
-                        cause: error instanceof Error ? error.message : String(error),
+                        cause,
                     });
                 })
                 .finally(() => {
@@ -104,6 +118,12 @@ export const DocumentView = (): JSX.Element => {
     ) => {
         // Store the editor instance in ref
         editorRef.current = editor;
+
+        // Flush any content that arrived before the editor finished mounting
+        if (pendingContentRef.current !== null) {
+            editor.setValue(pendingContentRef.current);
+            pendingContentRef.current = null;
+        }
 
         handleResize();
 
@@ -182,11 +202,13 @@ export const DocumentView = (): JSX.Element => {
                 documentLength = response.length ?? 0;
                 setContent(response);
             })
-            .catch((error) => {
+            .catch(async (error) => {
+                const cause = error instanceof Error ? error.message : String(error);
+                const explained = await trpcClient.common.explainOperationFailure.query({ message: cause });
                 void trpcClient.common.displayErrorMessage.mutate({
-                    message: l10n.t('Error while refreshing the document'),
+                    message: explained ?? l10n.t('Error while refreshing the document'),
                     modal: false,
-                    cause: error instanceof Error ? error.message : String(error),
+                    cause,
                 });
             })
             .finally(() => {
@@ -231,11 +253,13 @@ export const DocumentView = (): JSX.Element => {
                 setIsLoading(false);
                 setIsDirty(false);
             })
-            .catch((error) => {
+            .catch(async (error) => {
+                const cause = error instanceof Error ? error.message : String(error);
+                const explained = await trpcClient.common.explainOperationFailure.query({ message: cause });
                 void trpcClient.common.displayErrorMessage.mutate({
-                    message: l10n.t('Error saving the document'),
+                    message: explained ?? l10n.t('Error saving the document'),
                     modal: true, // we want to show the error in a modal dialog as it's an important one, failed to save the document
-                    cause: error instanceof Error ? error.message : String(error),
+                    cause,
                 });
             })
             .finally(() => {
@@ -269,7 +293,8 @@ export const DocumentView = (): JSX.Element => {
             <div className="toolbarContainer">
                 {isLoading && <ProgressBar thickness="large" shape="square" className="progressBar" />}
                 <ToolbarDocuments
-                    disableSaveButton={configuration.mode === 'view' || !isDirty}
+                    disableSaveButton={configuration.mode === 'view' || !isDirty || isLoading}
+                    disableRefreshButton={isLoading}
                     onSaveRequest={handleOnSaveRequest}
                     onValidateRequest={handleOnValidateRequest}
                     onRefreshRequest={handleOnRefreshRequest}

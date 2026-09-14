@@ -35,4 +35,5 @@ Use **Preview as JSON** to verify the generated definition. Use Playground or Sh
 ## Related documentation
 
 - [Manage Indexes in Collection View](./collection-view-index-management)
+- [Vector Indexes in Collection View](./collection-view-vector-indexes)
 - [Troubleshoot Index Management](./collection-view-index-management-troubleshooting)

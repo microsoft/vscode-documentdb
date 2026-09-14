@@ -67,7 +67,9 @@ function ensureInstanceOrExplain(context: IActionContext): boolean {
     const setUpAction = l10n.t('Set up DocumentDB Local');
     void vscode.window
         .showInformationMessage(
-            l10n.t('DocumentDB Local is not set up yet. Run Quick Start to create a local instance first.'),
+            l10n.t(
+                'DocumentDB Local is not set up yet. Run "Set up DocumentDB Local" to create a local instance first.',
+            ),
             setUpAction,
         )
         .then((choice) => {
@@ -114,10 +116,10 @@ export async function deleteQuickStartInstance(context: IActionContext): Promise
 
     const detail = wasRunning
         ? l10n.t(
-              'The container is currently running. It will be stopped and permanently removed. All data, logs, and the auto-generated credentials will be lost. This cannot be undone. You can recreate a fresh instance any time with Quick Start.',
+              'The container is currently running. It will be stopped and permanently removed. All data, logs, and the auto-generated credentials will be lost. This cannot be undone. You can recreate a fresh instance any time with "Set up DocumentDB Local".',
           )
         : l10n.t(
-              'The container and its data volume will be permanently removed. All data, logs, and the auto-generated credentials will be lost. This cannot be undone. You can recreate a fresh instance any time with Quick Start.',
+              'The container and its data volume will be permanently removed. All data, logs, and the auto-generated credentials will be lost. This cannot be undone. You can recreate a fresh instance any time with "Set up DocumentDB Local".',
           );
 
     const confirmed = await getConfirmationAsInSettings(l10n.t('Delete DocumentDB Local container?'), detail, 'delete');
@@ -238,7 +240,9 @@ export function viewQuickStartLogs(_context: IActionContext): void {
         // The channel is now in front of the user, so state there why no container logs follow
         // rather than leaving them staring at unrelated output (#851). A notification would be
         // redundant on top of the surface we just revealed.
-        channel.appendLine(l10n.t('There is no DocumentDB Local container to follow. Run Quick Start to create one.'));
+        channel.appendLine(
+            l10n.t('There is no DocumentDB Local container to follow. Run "Set up DocumentDB Local" to create one.'),
+        );
         return;
     }
     // Cancel any prior follow before starting a new one (see activeLogFollow).

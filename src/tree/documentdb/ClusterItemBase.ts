@@ -23,6 +23,7 @@ import {
 import { type AuthMethodId } from '../../documentdb/auth/AuthMethod';
 import { ShellCommandIds } from '../../documentdb/shell/constants';
 import { ext } from '../../extensionVariables';
+import { ConnectionDiagnosticsService } from '../../services/connectionDiagnosticsService';
 import { regionToDisplayName } from '../../utils/regionToDisplayName';
 import { type TreeElement } from '../TreeElement';
 import { type TreeElementWithContextValue } from '../TreeElementWithContextValue';
@@ -251,6 +252,10 @@ export abstract class ClusterItemBase<T extends BaseClusterModel = BaseClusterMo
                 // the connection without forcing the user to re-enter credentials (the failure may
                 // be transient).
                 const errorMessage = error instanceof Error ? error.message : String(error);
+                const diagnosis = await ConnectionDiagnosticsService.explain({
+                    clusterId: this.cluster.clusterId,
+                    error,
+                });
 
                 void callWithTelemetryAndErrorHandling('connect', (telemetryContext) => {
                     telemetryContext.errorHandling.suppressDisplay = true;
@@ -258,6 +263,7 @@ export abstract class ClusterItemBase<T extends BaseClusterModel = BaseClusterMo
                     telemetryContext.telemetry.properties.source = 'treeExpansion';
                     telemetryContext.telemetry.properties.experience = this.experience.api;
                     telemetryContext.telemetry.properties.failurePhase = 'cachedClientConnect';
+                    telemetryContext.telemetry.properties.diagnosisProviderId = diagnosis?.providerId ?? 'none';
                     throw error;
                 });
 
@@ -268,10 +274,13 @@ export abstract class ClusterItemBase<T extends BaseClusterModel = BaseClusterMo
                     }),
                 );
 
-                void vscode.window.showErrorMessage(vscode.l10n.t('Failed to connect to "{0}"', this.cluster.name), {
-                    modal: true,
-                    detail: errorMessage,
-                });
+                void vscode.window.showErrorMessage(
+                    diagnosis?.message ?? vscode.l10n.t('Failed to connect to "{0}"', this.cluster.name),
+                    {
+                        modal: true,
+                        detail: errorMessage,
+                    },
+                );
 
                 return this.createErrorRecoveryChildren(false);
             }
@@ -300,6 +309,10 @@ export abstract class ClusterItemBase<T extends BaseClusterModel = BaseClusterMo
             databases = await clustersClient.listDatabases();
         } catch (error) {
             const errorMessage = error instanceof Error ? error.message : String(error);
+            const diagnosis = await ConnectionDiagnosticsService.explain({
+                clusterId: this.cluster.clusterId,
+                error,
+            });
 
             // Record failure telemetry, but suppress azext's default (non-modal) notification:
             // this failure blocks the user's interactive expand flow, so we present a modal below
@@ -312,6 +325,7 @@ export abstract class ClusterItemBase<T extends BaseClusterModel = BaseClusterMo
                 telemetryContext.telemetry.properties.source = 'treeExpansion';
                 telemetryContext.telemetry.properties.experience = this.experience.api;
                 telemetryContext.telemetry.properties.failurePhase = 'listDatabases';
+                telemetryContext.telemetry.properties.diagnosisProviderId = diagnosis?.providerId ?? 'none';
                 throw error;
             });
 
@@ -323,7 +337,7 @@ export abstract class ClusterItemBase<T extends BaseClusterModel = BaseClusterMo
             );
 
             void vscode.window.showErrorMessage(
-                vscode.l10n.t('Failed to load databases for "{0}"', this.cluster.name),
+                diagnosis?.message ?? vscode.l10n.t('Failed to load databases for "{0}"', this.cluster.name),
                 { modal: true, detail: errorMessage },
             );
 

@@ -67,7 +67,7 @@ export class AtlasDiscoveryProvider extends Disposable implements DiscoveryProvi
     }
 
     getLearnMoreUrl(): string | undefined {
-        return 'https://www.mongodb.com/docs/atlas/api/';
+        return 'https://aka.ms/vscode-documentdb-atlas-discovery';
     }
 
     async configureCredentials(context: IActionContext, node?: TreeElement): Promise<void> {

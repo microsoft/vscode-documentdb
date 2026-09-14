@@ -18,16 +18,20 @@ import { CredentialCache } from '../../../documentdb/CredentialCache';
 import { DocumentDBConnectionString } from '../../../documentdb/utils/DocumentDBConnectionString';
 import { Views } from '../../../documentdb/Views';
 import { DocumentDBExperience } from '../../../DocumentDBExperiences';
+import { ext } from '../../../extensionVariables';
 import { StorageZone } from '../../../services/connectionStorageService';
-import { QuickStartService } from '../../../services/localQuickStart/QuickStartService';
+import {
+    QuickStartService,
+    type QuickStartConnectionPreflightResult,
+} from '../../../services/localQuickStart/QuickStartService';
 import {
     InstanceState,
-    QUICK_START_PORT,
+    type DockerReadiness,
     type QuickStartStatus,
 } from '../../../services/localQuickStart/quickStartTypes';
 import { getResourcesPath } from '../../../utils/icons';
 import { createGenericElementWithContext } from '../../api/createGenericElementWithContext';
-import { containsRetryNode, createRetryNode } from '../../api/retryNode';
+import { containsRetryNode } from '../../api/retryNode';
 import { ClusterItemBase, type EphemeralClusterCredentials } from '../../documentdb/ClusterItemBase';
 import { type TreeCluster } from '../../models/BaseClusterModel';
 import { type TreeElement } from '../../TreeElement';
@@ -39,6 +43,214 @@ import { buildQuickStartInstanceTreeId, buildQuickStartTreeId } from './quickSta
 
 /** Base context token for the managed-instance row; menus gate on this + a state token. */
 const INSTANCE_CONTEXT = 'treeItem_quickStartInstance';
+
+function createQuickStartAction(
+    parentId: string,
+    idSuffix: string,
+    label: string,
+    iconId: string,
+    commandId: string,
+): TreeElement {
+    return createGenericElementWithContext({
+        id: `${parentId}/${idSuffix}`,
+        contextValue: 'treeItem_quickStartAction',
+        label,
+        iconPath: new vscode.ThemeIcon(iconId),
+        commandId,
+    });
+}
+
+function createQuickStartRetryAction(parentId: string, retryTarget: unknown): TreeElement {
+    return createGenericElementWithContext({
+        id: `${parentId}/retry`,
+        contextValue: 'error',
+        label: l10n.t('Retry setup'),
+        iconPath: new vscode.ThemeIcon('refresh'),
+        commandId: 'vscode-documentdb.command.localQuickStart.open',
+        commandArgs: [retryTarget],
+    });
+}
+
+/**
+ * What the tree shows instead of databases when the container preflight says the instance cannot be
+ * opened. Rendered as rows rather than a dialog: expanding a node is a browse gesture, and a modal
+ * would block the expansion until it is answered and then leave the node empty anyway.
+ */
+function buildPreflightChildren(parentId: string, verdict: QuickStartConnectionPreflightResult): TreeElement[] {
+    const open = 'vscode-documentdb.command.localQuickStart.open';
+    const viewLogs = 'vscode-documentdb.command.localQuickStart.viewLogs';
+
+    switch (verdict) {
+        case 'stopped':
+            return [
+                createQuickStartAction(
+                    parentId,
+                    'preflight/start',
+                    l10n.t('Start container'),
+                    'play',
+                    'vscode-documentdb.command.localQuickStart.start',
+                ),
+            ];
+        case 'missing':
+            return [
+                createQuickStartAction(parentId, 'preflight/recreate', l10n.t('Recreate container'), 'refresh', open),
+            ];
+        case 'dockerUnreachable':
+            return [
+                createQuickStartAction(
+                    parentId,
+                    'preflight/reviewDocker',
+                    l10n.t('Review Docker setup'),
+                    'tools',
+                    open,
+                ),
+                createQuickStartAction(parentId, 'preflight/viewLogs', l10n.t('View setup log'), 'output', viewLogs),
+            ];
+        case 'busy':
+            // Progress belongs on the node itself (see quickStartProgressBridge), not on a child row.
+            return [];
+        default:
+            return [
+                createQuickStartAction(parentId, 'preflight/reviewSetup', l10n.t('Review setup'), 'tools', open),
+                createQuickStartAction(parentId, 'preflight/viewLogs', l10n.t('View setup log'), 'output', viewLogs),
+            ];
+    }
+}
+
+function escapeMarkdown(value: string): string {
+    // Only the characters that would actually change how the tooltip renders; the tooltip is not
+    // trusted, so HTML is inert.
+    return value.replace(/[\\`*_~[\]<>]/g, '\\$&');
+}
+
+function instanceStateLabel(state: InstanceState): string {
+    switch (state) {
+        case InstanceState.NotInstalled:
+            return l10n.t('Not set up');
+        case InstanceState.Provisioning:
+            return l10n.t('Provisioning');
+        case InstanceState.Starting:
+            return l10n.t('Starting');
+        case InstanceState.Running:
+            return l10n.t('Running');
+        case InstanceState.Stopping:
+            return l10n.t('Stopping');
+        case InstanceState.Stopped:
+            return l10n.t('Stopped');
+        case InstanceState.CredentialsMissing:
+            return l10n.t('Credentials missing');
+        default:
+            return l10n.t('Error');
+    }
+}
+
+function dockerEndpointLabel(readiness: DockerReadiness): string {
+    switch (readiness.endpointKind) {
+        case 'unixSocket':
+            return l10n.t('Unix socket');
+        case 'namedPipe':
+            return l10n.t('Named pipe');
+        case 'tcp':
+            return 'TCP';
+        case 'ssh':
+            return 'SSH';
+        default:
+            return l10n.t('Unknown');
+    }
+}
+
+function containerOsLabel(osType: 'linux' | 'windows'): string {
+    return osType === 'windows' ? l10n.t('Windows') : l10n.t('Linux');
+}
+
+function shortenContainerId(containerId: string): string {
+    return /^[0-9a-f]{12,64}$/i.test(containerId) ? containerId.slice(0, 12) : containerId;
+}
+
+function dockerProviderLabel(readiness: DockerReadiness): string {
+    switch (readiness.provider) {
+        case 'dockerDesktop':
+            return l10n.t('Docker Desktop');
+        case 'dockerEngine':
+            return l10n.t('Docker Engine');
+        default:
+            return l10n.t('Unknown');
+    }
+}
+
+// Strings shared with the Quick Start webview are spelled identically on purpose, so each reaches
+// translators once. Bare acronyms (WSL, SSH, TCP) are left alone — there is nothing to translate.
+function executionTargetLabel(readiness: DockerReadiness): string {
+    switch (readiness.executionTarget) {
+        case 'wsl':
+            return 'WSL';
+        case 'ssh':
+            return 'SSH';
+        case 'devContainer':
+            return l10n.t('Dev container');
+        case 'codespaces':
+            return l10n.t('GitHub Codespaces');
+        case 'otherRemote':
+            return l10n.t('Remote');
+        default:
+            return l10n.t('Local');
+    }
+}
+
+/** Hover copy for the not-set-up root: the value proposition plus the one prerequisite. */
+function buildEmptyStateTooltip(): vscode.MarkdownString {
+    const tooltip = new vscode.MarkdownString(`### ${l10n.t('Your own DocumentDB')}\n\n`);
+    tooltip.isTrusted = false;
+    tooltip.appendMarkdown(`${l10n.t('A local DocumentDB instance, set up for you. No configuration required.')}\n\n`);
+    tooltip.appendMarkdown(`- ${l10n.t('Ready in a couple of clicks')}\n`);
+    tooltip.appendMarkdown(`- ${l10n.t('Runs in Docker')}\n`);
+    tooltip.appendMarkdown(`- ${l10n.t('Safe to reset or delete at any time')}\n`);
+    return tooltip;
+}
+
+function buildInstanceTooltip(status: QuickStartStatus, baseTooltip?: vscode.MarkdownString): vscode.MarkdownString {
+    const metadata = status.metadata;
+    const readiness = QuickStartService.getDockerReadinessSnapshot();
+    const tooltip = new vscode.MarkdownString(baseTooltip?.value ?? `### ${l10n.t('DocumentDB Local')}\n\n`);
+    tooltip.isTrusted = false;
+
+    if (!baseTooltip) {
+        tooltip.appendMarkdown(`**${l10n.t('State')}:** ${instanceStateLabel(status.state)}\n\n`);
+        if (metadata) {
+            tooltip.appendMarkdown(`**${l10n.t('Host')}:** localhost:${String(metadata.boundPort)}\n\n`);
+        }
+    }
+
+    if (metadata) {
+        tooltip.appendMarkdown('---\n\n');
+        tooltip.appendMarkdown(
+            `**${l10n.t('Container image')}:** ${escapeMarkdown(metadata.imageRef ?? l10n.t('Unknown'))}\n\n`,
+        );
+        tooltip.appendMarkdown(
+            `**${l10n.t('Container ID')}:** ${escapeMarkdown(shortenContainerId(metadata.containerId))}\n\n`,
+        );
+    }
+
+    if (readiness) {
+        tooltip.appendMarkdown('---\n\n');
+        tooltip.appendMarkdown(`**${l10n.t('Docker provider')}:** ${dockerProviderLabel(readiness)}\n\n`);
+        if (readiness.cliVersion) {
+            tooltip.appendMarkdown(`**${l10n.t('Docker version')}:** ${escapeMarkdown(readiness.cliVersion)}\n\n`);
+        }
+        if (readiness.daemonArchitecture) {
+            tooltip.appendMarkdown(
+                `**${l10n.t('Daemon architecture')}:** ${escapeMarkdown(readiness.daemonArchitecture)}\n\n`,
+            );
+        }
+        if (readiness.osType) {
+            tooltip.appendMarkdown(`**${l10n.t('Container OS')}:** ${containerOsLabel(readiness.osType)}\n\n`);
+        }
+        tooltip.appendMarkdown(`**${l10n.t('Execution target')}:** ${executionTargetLabel(readiness)}\n\n`);
+        tooltip.appendMarkdown(`**${l10n.t('Docker endpoint')}:** ${dockerEndpointLabel(readiness)}\n\n`);
+    }
+
+    return tooltip;
+}
 
 /**
  * Inline managed-instance cluster item (shown only when Running).
@@ -65,13 +277,26 @@ class QuickStartClusterItem extends ClusterItemBase<ConnectionClusterModel> {
     /**
      * Keep the shared cluster presentation (icon, security tooltip) but force the state-aware
      * description — the TLS/SSL badge it would otherwise carry replaces the managed-instance
-     * state label (e.g. "Running · localhost:10260").
+     * state label (e.g. "Running").
      */
     public override getTreeItem(): vscode.TreeItem {
+        const treeItem = buildClusterTreeItem({ id: this.id, contextValue: this.contextValue, cluster: this.cluster });
         return {
-            ...buildClusterTreeItem({ id: this.id, contextValue: this.contextValue, cluster: this.cluster }),
+            ...treeItem,
             description: this.descriptionOverride,
+            tooltip: buildInstanceTooltip(
+                QuickStartService.getStatus(this.alias),
+                treeItem.tooltip instanceof vscode.MarkdownString ? treeItem.tooltip : undefined,
+            ),
         };
+    }
+
+    public override async getChildren(): Promise<TreeElement[]> {
+        const preflight: QuickStartConnectionPreflightResult = await QuickStartService.prepareForConnection(this.alias);
+        if (preflight !== 'ready') {
+            return buildPreflightChildren(this.id, preflight);
+        }
+        return super.getChildren();
     }
 
     public async getCredentials(): Promise<EphemeralClusterCredentials | undefined> {
@@ -121,7 +346,7 @@ class QuickStartClusterItem extends ClusterItemBase<ConnectionClusterModel> {
 }
 
 /**
- * Root node "DocumentDB Local - Quick Start" (WI-6). Renders unconditionally
+ * Root node "Your own DocumentDB" (WI-6). Renders unconditionally
  * (even with zero saved connections — handled in ConnectionsBranchDataProvider).
  *
  * - No managed instance → a rocket empty-state row that opens the Quick Start
@@ -157,14 +382,14 @@ export class LocalQuickStartItem implements TreeElement, TreeElementWithContextV
      */
     private createErrorRecoveryChildren(includeDelete: boolean): TreeElement[] {
         const children: TreeElement[] = [
-            createRetryNode(this.id, this, { commandId: 'vscode-documentdb.command.localQuickStart.open' }),
-            createGenericElementWithContext({
-                id: `${this.id}/viewLogs`,
-                contextValue: 'error',
-                label: l10n.t('Click here to view the setup log'),
-                iconPath: new vscode.ThemeIcon('output'),
-                commandId: 'vscode-documentdb.command.localQuickStart.viewLogs',
-            }),
+            createQuickStartRetryAction(this.id, this),
+            createQuickStartAction(
+                this.id,
+                'viewLogs',
+                l10n.t('View setup log'),
+                'output',
+                'vscode-documentdb.command.localQuickStart.viewLogs',
+            ),
         ];
 
         if (includeDelete) {
@@ -172,7 +397,7 @@ export class LocalQuickStartItem implements TreeElement, TreeElementWithContextV
                 createGenericElementWithContext({
                     id: `${this.id}/delete`,
                     contextValue: 'error',
-                    label: l10n.t('Click here to delete the container and start over'),
+                    label: l10n.t('Delete container'),
                     iconPath: new vscode.ThemeIcon('trash'),
                     commandId: 'vscode-documentdb.command.localQuickStart.delete',
                 }),
@@ -183,32 +408,42 @@ export class LocalQuickStartItem implements TreeElement, TreeElementWithContextV
     }
 
     async getChildren(): Promise<TreeElement[]> {
+        const wasHydrated = QuickStartService.isHydrated;
+        try {
+            await QuickStartService.ensureHydrated();
+        } catch {
+            // Docker may not be installed or running yet, which is precisely the case Quick Start
+            // exists to fix. Render the durable-state row anyway; the service stays un-hydrated, so
+            // the next expansion retries.
+        }
+
         // Never block the row on Docker (review M6): the Connections view re-runs getChildren() on
         // many unrelated events, so the freshness probe is kicked off in the background (rate-limited
         // and de-duplicated by the service) and the row is redrawn by onDidChangeStatus when it lands.
-        QuickStartService.refreshLiveStateInBackground();
+        if (wasHydrated) {
+            QuickStartService.refreshLiveStateInBackground();
+        }
 
         const status: QuickStartStatus = QuickStartService.getStatus();
         const metadata = status.metadata;
 
-        /** Append the in-flight-probe hint so a row rendered from cache says so. */
-        const withRefreshHint = (description: string): string =>
-            QuickStartService.isRefreshingLiveState ? l10n.t('{0} · Refreshing…', description) : description;
-
         // Missing badge (design §6.1): metadata exists but Docker has no container.
         if (metadata && status.missing) {
             return [
-                createGenericElementWithContext({
-                    id: `${this.id}/instance`,
-                    contextValue: createContextValue([INSTANCE_CONTEXT, 'state_missing']),
-                    label: l10n.t('DocumentDB Local'),
-                    description: withRefreshHint(l10n.t('Missing · click to recreate')),
-                    tooltip: l10n.t(
-                        'The container was removed outside VS Code. Click to recreate it (your data is preserved), or use Delete Container to remove it and its data.',
-                    ),
-                    iconPath: new vscode.ThemeIcon('warning', new vscode.ThemeColor('list.warningForeground')),
-                    commandId: 'vscode-documentdb.command.localQuickStart.open',
-                }),
+                createQuickStartAction(
+                    this.id,
+                    'recreate',
+                    l10n.t('Recreate container'),
+                    'refresh',
+                    'vscode-documentdb.command.localQuickStart.open',
+                ),
+                createQuickStartAction(
+                    this.id,
+                    'delete',
+                    l10n.t('Delete container'),
+                    'trash',
+                    'vscode-documentdb.command.localQuickStart.delete',
+                ),
             ];
         }
 
@@ -237,51 +472,42 @@ export class LocalQuickStartItem implements TreeElement, TreeElementWithContextV
                 connectionUser: metadata.username,
             };
             return [
-                new QuickStartClusterItem(
-                    model,
-                    withRefreshHint(l10n.t('Running · localhost:{0}', metadata.boundPort)),
-                    'state_running',
-                    metadata.alias,
-                ),
+                new QuickStartClusterItem(model, instanceStateLabel(status.state), 'state_running', metadata.alias),
             ];
         }
 
         // Non-running managed states render as a non-browsable row carrying the
         // lifecycle menus (a stopped container can't be connected to / browsed).
         if (metadata) {
-            const port = metadata.boundPort;
-            const row = (stateToken: string, description: string, icon: vscode.ThemeIcon): TreeElement =>
-                createGenericElementWithContext({
-                    id: `${this.id}/instance`,
-                    contextValue: createContextValue([INSTANCE_CONTEXT, stateToken]),
-                    label: l10n.t('DocumentDB Local'),
-                    description,
-                    iconPath: icon,
-                });
+            const row = (stateToken: string, description: string, icon: vscode.ThemeIcon): TreeElement => {
+                const id = `${this.id}/instance`;
+                const contextValue = createContextValue([INSTANCE_CONTEXT, stateToken]);
+                return {
+                    id,
+                    getTreeItem: (): vscode.TreeItem => ({
+                        id,
+                        contextValue,
+                        label: l10n.t('DocumentDB Local'),
+                        description,
+                        tooltip: buildInstanceTooltip(status),
+                        iconPath: icon,
+                    }),
+                };
+            };
 
-            const spin = new vscode.ThemeIcon('loading~spin');
+            // Transitional states keep their own contextValue (menus gate on it), but neither the
+            // spinner nor the text: quickStartProgressBridge overlays both. The wording is kept
+            // identical to the overlay so a registration change can't surface a different string.
+            const idle = new vscode.ThemeIcon('circle-outline');
             switch (status.state) {
                 case InstanceState.Starting:
-                    return [row('state_starting', l10n.t('Starting… · localhost:{0}', port), spin)];
+                    return [row('state_starting', l10n.t('Starting…'), idle)];
                 case InstanceState.Stopping:
-                    return [row('state_stopping', l10n.t('Stopping… · localhost:{0}', port), spin)];
+                    return [row('state_stopping', l10n.t('Stopping…'), idle)];
                 case InstanceState.Stopped:
-                    return [
-                        row(
-                            'state_stopped',
-                            withRefreshHint(l10n.t('Stopped · localhost:{0}', port)),
-                            new vscode.ThemeIcon('circle-outline'),
-                        ),
-                    ];
+                    return [row('state_stopped', instanceStateLabel(status.state), idle)];
                 case InstanceState.Error:
-                    return [
-                        row(
-                            'state_error',
-                            status.errorMessage ?? l10n.t('Error · click for details'),
-                            new vscode.ThemeIcon('warning', new vscode.ThemeColor('list.errorForeground')),
-                        ),
-                        ...this.createErrorRecoveryChildren(true),
-                    ];
+                    return this.createErrorRecoveryChildren(true);
                 default:
                     break;
             }
@@ -292,50 +518,54 @@ export class LocalQuickStartItem implements TreeElement, TreeElementWithContextV
         // exposed from this row; the Configure step owns that decision.
         if (status.state === InstanceState.CredentialsMissing) {
             return [
-                createGenericElementWithContext({
-                    id: `${this.id}/instance`,
-                    contextValue: createContextValue([INSTANCE_CONTEXT, 'state_needsAttention']),
-                    label: l10n.t('DocumentDB Local'),
-                    description: l10n.t('Needs attention · review setup'),
-                    tooltip: l10n.t(
-                        'VS Code cannot access the saved credentials for this instance. Review the setup options; your container and data have not been changed.',
-                    ),
-                    iconPath: new vscode.ThemeIcon('warning', new vscode.ThemeColor('list.warningForeground')),
-                    commandId: 'vscode-documentdb.command.localQuickStart.open',
-                }),
+                createQuickStartAction(
+                    this.id,
+                    'reviewSetup',
+                    l10n.t('Review setup'),
+                    'tools',
+                    'vscode-documentdb.command.localQuickStart.open',
+                ),
             ];
         }
 
         if (status.state === InstanceState.Provisioning) {
+            // The one row that still owns its spinner: there is no instance row to attach node
+            // progress to yet, and this mirrors what `ext.state.showCreatingChild` renders.
             return [
                 createGenericElementWithContext({
                     id: `${this.id}/provisioning`,
                     contextValue: 'treeItem_quickStartProvisioning',
-                    label: l10n.t('Provisioning… · localhost:{0}', String(status.port ?? QUICK_START_PORT)),
+                    label: l10n.t('Provisioning…'),
                     iconPath: new vscode.ThemeIcon('loading~spin'),
                 }),
             ];
         }
 
-        // NotInstalled (no metadata) → empty-state row that opens the Quick Start wizard.
-        const children: TreeElement[] = [
-            createGenericElementWithContext({
-                id: `${this.id}/start`,
-                contextValue: 'treeItem_quickStartAction',
-                label: l10n.t('Click here to set up DocumentDB Local'),
-                iconPath: new vscode.ThemeIcon('rocket'),
-                commandId: 'vscode-documentdb.command.localQuickStart.open',
-            }),
-        ];
-
         // A wizard failure that never got as far as creating anything (no metadata) is still
-        // reported here, but as ACTIONABLE recovery nodes rather than the message-only row this
-        // used to push (review N3). There is no container yet, so Delete is not offered.
+        // reported as recovery actions. There is no container yet, so Delete is not offered.
         if (status.state === InstanceState.Error) {
-            children.push(...this.createErrorRecoveryChildren(false));
+            return this.createErrorRecoveryChildren(false);
         }
 
-        return children;
+        // NotInstalled (no metadata) → empty-state row that opens the Quick Start wizard.
+        return [
+            createQuickStartAction(
+                this.id,
+                'start',
+                l10n.t('Set up DocumentDB Local'),
+                'rocket',
+                'vscode-documentdb.command.localQuickStart.open',
+            ),
+        ];
+    }
+
+    /** Explicit node refresh performs a full durable-store and Docker reconciliation. */
+    public async refresh(_context: IActionContext): Promise<void> {
+        // Reconciliation shells out to Docker, so the node carries the wait.
+        await ext.state.runWithTemporaryDescription(this.id, l10n.t('Refreshing…'), () =>
+            QuickStartService.refreshHydratedState(),
+        );
+        ext.connectionsBranchDataProvider.refresh(this);
     }
 
     private iconPath: IconPath = {
@@ -344,12 +574,23 @@ export class LocalQuickStartItem implements TreeElement, TreeElementWithContextV
     };
 
     public getTreeItem(): vscode.TreeItem {
+        // Synchronous in-memory read; onDidChangeStatus refreshes the view, so this re-renders on change.
+        const status = QuickStartService.getStatus();
+        // The pitch is only true until there is something to browse, so it retires with the empty state.
+        // Before hydration nothing is known yet, so the persisted hint stands in and keeps the copy from
+        // appearing for users who already have an instance, only to vanish on first expansion.
+        const isEmptyState = QuickStartService.isHydrated
+            ? !status.metadata && status.state === InstanceState.NotInstalled
+            : !QuickStartService.isLikelyInstalled;
+
         return {
             id: this.id,
             contextValue: this.contextValue,
-            label: l10n.t('DocumentDB Local - Quick Start'),
+            label: l10n.t('Your own DocumentDB'),
+            description: isEmptyState ? l10n.t('zero-config local instance') : undefined,
+            tooltip: isEmptyState ? buildEmptyStateTooltip() : undefined,
             iconPath: this.iconPath,
-            collapsibleState: vscode.TreeItemCollapsibleState.Expanded,
+            collapsibleState: vscode.TreeItemCollapsibleState.Collapsed,
         };
     }
 }

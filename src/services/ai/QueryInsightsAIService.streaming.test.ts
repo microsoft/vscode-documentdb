@@ -48,7 +48,7 @@ const optimizeQueryStreamingMock = jest.fn();
 jest.mock('../../commands/llmEnhancedCommands/indexAdvisorCommands', () => ({
     CommandType: { Find: 'find', Aggregate: 'aggregate', Count: 'count' },
     optimizeQuery: jest.fn(),
-    optimizeQueryStreaming: optimizeQueryStreamingMock,
+    optimizeQueryStreaming: (...args: unknown[]): unknown => optimizeQueryStreamingMock(...args),
 }));
 
 // eslint-disable-next-line import/first

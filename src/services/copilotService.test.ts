@@ -78,7 +78,7 @@ jest.mock('vscode', () => {
             }),
         },
         CancellationTokenSource,
-        lm: { selectChatModels: selectChatModelsMock },
+        lm: { selectChatModels: (...args: unknown[]) => selectChatModelsMock(...args) as unknown },
     };
 });
 

@@ -1,0 +1,544 @@
+---
+feature: index-management
+kind: review
+status: historical
+prs: [732]
+created: 2026-07-20
+---
+
+# PR #732 Review: Index Management tab
+
+Review date: 2026-07-20
+
+PR: https://github.com/microsoft/vscode-documentdb/pull/732
+
+## Severity Summary
+
+| Severity | Count | Notes                                                                                                                                   |
+| -------- | ----: | --------------------------------------------------------------------------------------------------------------------------------------- |
+| Critical |     0 | No extension-wide outage or confirmed broad data-loss path found.                                                                       |
+| High     |     1 | TTL input can be silently converted to a much shorter retention period.                                                                 |
+| Medium   |     4 | Three index correctness/resilience issues plus one voice-control failure on the primary Create Index action.                            |
+| Low      |     5 | One stale-refresh race plus inaccessible tooltip details, progress-bar noise, a missing defense check, and user-visible generated text. |
+
+## Verifier Re-Assessment (independent pass, 2026-07-21)
+
+Every finding below was independently re-verified against the current branch by reading the cited source. **No false alarms were found — all 10 findings are real.** Each finding now carries an inline **Verifier assessment** block with a corrected severity, concrete solution options (with examples), a pro/con evaluation, and a recommended approach. Two additional issues surfaced during the deeper second pass and are recorded in [Deeper Review (Independent Second Pass)](#deeper-review-independent-second-pass).
+
+Severity deltas from the original review:
+
+| Finding  | Original | Verifier severity | Rationale for change                                                                                                                  |
+| -------- | -------- | ----------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
+| HIGH-1   | High     | **Medium**        | Impact is severe (data expiry) but `type="number"` already blocks separators/letters; realistic triggers (exponent/decimal) are rare. |
+| MEDIUM-1 | Medium   | Medium (agree)    | Clear, high-confidence inconsistency with `createIndex`/`dropIndex`.                                                                  |
+| MEDIUM-2 | Medium   | **Low–Medium**    | Real silent-collapse, but low happy-path likelihood.                                                                                  |
+| MEDIUM-3 | Medium   | Medium (agree)    | Auto-poll halts on one transient failure; manual refresh recovers.                                                                    |
+| MEDIUM-4 | Medium   | **Low**           | Valid WCAG 2.5.3 (A) violation, but single control and voice-input-only impact.                                                       |
+| LOW-1..5 | Low      | Low (agree)       | All confirmed; severities unchanged.                                                                                                  |
+
+New deeper-review items: **NEW-1** (shell/playground command loses BSON fidelity, Low), **NEW-2** (`"*"` index-name defense-in-depth, Low/security-adjacent), plus two informational notes.
+
+## Review Scope
+
+The review compared `dev/khelanmodi/index-management-ui` with `origin/main` and used the design context in this folder:
+
+- `feature-01-index-management-overview.md`
+- `reference-01-documentdb-supported-indexes.md`
+- `reference-02-operator-registry-scraper.md`
+
+The intended review bar is the documented **80% happy path**. Deliberately unsupported index types, deep index-build telemetry, stronger typed delete confirmation, and smart JSON completion are not treated as defects. Webview end-to-end test coverage is also explicitly excluded because it is already on the roadmap.
+
+The review focused on user input crossing into server commands, server-result handling, independent failure boundaries, optimistic state, and refresh/polling behavior.
+
+Copilot reviewer feedback was fetched with `gh api` from the PR review, review-comment, and issue-comment endpoints. Copilot submitted [an initial eight-comment review](https://github.com/microsoft/vscode-documentdb/pull/732#pullrequestreview-4421875246) and [a later three-comment review](https://github.com/microsoft/vscode-documentdb/pull/732#pullrequestreview-4735391512). There were no Copilot-authored issue-style PR comments. All 11 inline comments are linked and assessed below, including resolved/outdated threads whose underlying pattern recurs in the current implementation.
+
+## Findings
+
+### HIGH-1: TTL input is truncated instead of validated, which can shorten retention unexpectedly
+
+Files:
+
+- `src/webviews/documentdb/indexView/components/CreateIndexDrawer.tsx:337`
+- `src/webviews/documentdb/indexView/components/CreateIndexDrawer.tsx:368`
+- `src/webviews/documentdb/indexView/indexViewRouter.ts:87`
+
+The drawer validates and serializes the TTL value with `Number.parseInt(ttlSeconds, 10)`. This accepts only the integer prefix rather than validating the complete value. A native `type="number"` input can contain decimal or exponent notation, and the component does not use the input's validity state or otherwise reject those forms. The resulting truncated integer then passes the host's `z.number().int()` validation because the lossy conversion has already happened.
+
+This is higher risk than an ordinary malformed option because a TTL index deletes documents. The UI can submit a valid but materially different retention period from the value the user entered.
+
+Scenario:
+
+1. A user enables TTL and enters `1e3`, intending 1,000 seconds.
+2. The form considers it valid because `Number.parseInt('1e3', 10)` is `1`, which is positive.
+3. The payload contains `expireAfterSeconds: 1`; the router accepts it as an integer.
+4. The server creates a one-second TTL index, making eligible documents expire roughly 1,000 times sooner than intended.
+
+The same issue occurs with decimals: `1.5` is silently sent as `1` rather than being rejected or preserved.
+
+> **Verifier assessment — VERIFIED. Severity: Medium (was High).**
+>
+> Confirmed at [CreateIndexDrawer.tsx:587](../../../../src/webviews/documentdb/indexView/components/CreateIndexDrawer.tsx#L587) (`type="number"`, `min={1}`) with truncating validation/serialization at [line 337](../../../../src/webviews/documentdb/indexView/components/CreateIndexDrawer.tsx#L337) and [line 368](../../../../src/webviews/documentdb/indexView/components/CreateIndexDrawer.tsx#L368). `Number.parseInt('1e3', 10) === 1` and `Number.parseInt('3600.9', 10) === 3600`, and the truncated integer then passes the host's `z.number().int().nonnegative()` at [indexViewRouter.ts:87](../../../../src/webviews/documentdb/indexView/indexViewRouter.ts#L87).
+>
+> **Why downgrade to Medium:** the _impact_ is severe (a TTL index deletes documents), but the _trigger_ requires exponent/decimal text in a whole-seconds field. `type="number"` already yields `''` for thousands separators and letters, which the `ttlSeconds.trim() !== ''` guard blocks. The realistic residual cases are `1.5`→`1` (negligible) and pasted scientific notation (rare). Keep it prominent for impact, but it is not a broad happy-path defect.
+>
+> **Solution options**
+>
+> - **Option A — parse with `Number()` + explicit integrality check (client):**
+>   ```ts
+>   const parsed = Number(ttlSeconds);
+>   const ttlNumberValid = !ttlActive || (ttlSeconds.trim() !== '' && Number.isInteger(parsed) && parsed > 0);
+>   // payload: expireAfterSeconds: Number(ttlSeconds)
+>   ```
+>   _Pros:_ turns silent truncation into a visible validation error; one source of truth; tiny change. _Cons:_ `1e3` (a mathematically integer value) is now rejected — arguably correct, but a power user might expect 1000.
+> - **Option B — native validity + `step={1}` + `valueAsNumber`.** _Pros:_ leans on the browser. _Cons:_ Fluent `Input` does not surface `validity`/`valueAsNumber` cleanly through its `onChange` data; more wiring for marginal gain.
+> - **Option C — tighten the host schema (defense in depth):** `expireAfterSeconds: z.number().int().positive().optional()` (current `.nonnegative()` also permits `0`).
+>
+> **Recommendation: Option A + Option C.** A is the minimal robust client fix; C stops the router from trusting the UI. Avoid B — Fluent's controlled input makes native validity awkward.
+
+> **Resolution (2026-07-21):** Fixed in [`5365d8e3`](https://github.com/microsoft/vscode-documentdb/commit/5365d8e3). The drawer now trims the input, parses it once, and accepts it only when the parsed integer's canonical string exactly matches the trimmed input and is positive. This rejects decimals, exponent notation, signs, leading-zero formatting, and mixed text instead of silently converting them. The validation message states that digits-only positive whole numbers are required, and the host schema now independently requires a positive integer so a crafted payload cannot submit zero.
+
+### MEDIUM-1: Hide and unhide report success when the server returns an error document
+
+Files:
+
+- `src/webviews/documentdb/indexView/indexViewRouter.ts:539`
+- `src/webviews/documentdb/indexView/indexViewRouter.ts:563`
+- `src/documentdb/LlmEnhancedFeatureApis.ts:589`
+
+The lower-level visibility API catches command exceptions and returns a document shaped like `{ ok: 0, errmsg: "..." }`. The tree-view commands already inspect `ok` and `errmsg`, but both new webview mutations discard the returned document and unconditionally return `{ ok: true, cancelled: false }`.
+
+This suppresses the exact server errors that are expected on tiers or engine versions without the required `collMod` support. Because no error reaches the webview, the action appears to finish normally and the subsequent refresh merely shows the unchanged state.
+
+Scenario:
+
+1. A user confirms **Hide** for an index on a cluster that rejects index visibility changes.
+2. `modifyIndexVisibility` catches the server exception and returns `{ ok: 0, errmsg: "Failed to hide index: ..." }`.
+3. The router ignores that result and returns success.
+4. The UI waits for its normal action interval and refreshes without showing the failure.
+5. The index remains visible, leaving the user with no explanation and no reliable indication that the action failed.
+
+> **Verifier assessment — VERIFIED. Severity: Medium (agree).**
+>
+> Confirmed: `modifyIndexVisibility` catches and returns `{ ok: 0, errmsg }` at [LlmEnhancedFeatureApis.ts:655-659](../../../../../../src/documentdb/LlmEnhancedFeatureApis.ts#L655-L659), while the router's `hideIndex`/`unhideIndex` discard the returned `Document` and return `{ ok: true, cancelled: false }` ([indexViewRouter.ts:539](../../../../src/webviews/documentdb/indexView/indexViewRouter.ts#L539), [line 563](../../../../src/webviews/documentdb/indexView/indexViewRouter.ts#L563)). This is a stark inconsistency: sibling `createIndex` ([line 377](../../../../src/webviews/documentdb/indexView/indexViewRouter.ts#L377)) and `dropIndex` ([line 467](../../../../src/webviews/documentdb/indexView/indexViewRouter.ts#L467)) both inspect `result.ok === 0 || result.note` and throw. `handleToggleHidden` awaits the mutation, so the masked failure produces a spinner + refresh showing unchanged state and no error. High-confidence, real finding.
+>
+> **Solution options**
+>
+> - **Option A — inspect the result in each mutation (mirror drop/create):**
+>   ```ts
+>   const result = await client.hideIndex(db, coll, name);
+>   if (result.ok === 0 || result.errmsg) {
+>     throw new Error(typeof result.errmsg === 'string' ? result.errmsg : l10n.t('Failed to hide index.'));
+>   }
+>   ```
+>   _Pros:_ matches the established pattern; local to the new code; does not disturb existing consumers. _Cons:_ duplicated a few lines across two mutations.
+> - **Option B — make `modifyIndexVisibility` re-throw instead of swallowing.** _Pros:_ centralizes. _Cons:_ the tree-view callers already read the returned `{ ok, errmsg }` document, so re-throwing risks regressions there and requires updating those callers.
+>
+> **Recommendation: Option A.** It matches the drop/create contract exactly, is confined to the new router code, and leaves the existing tree-view consumers of `modifyIndexVisibility` untouched.
+
+> **Resolution (2026-07-21):** Fixed in [`d6e437e2`](https://github.com/microsoft/vscode-documentdb/commit/d6e437e2). Both visibility mutations now inspect the returned command document and throw when `ok === 0` or `errmsg` is present, preferring the server's string error and falling back to an action-specific localized message. This mirrors create/drop behavior while preserving the lower-level return-document contract used by existing tree-view callers.
+
+### MEDIUM-2: Duplicate field rows silently collapse into a different index specification
+
+Files:
+
+- `src/webviews/documentdb/indexView/components/CreateIndexDrawer.tsx:356`
+- `src/webviews/documentdb/indexView/indexViewRouter.ts:75`
+- `src/webviews/documentdb/indexView/indexViewRouter.ts:181`
+
+Neither the drawer nor the host schema requires field names to be unique. `buildIndexSpec` then converts the rows into a JavaScript object using `key[entry.field] = ...`, so a later duplicate silently overwrites the earlier entry. The request can therefore succeed while creating a different index from the multi-row configuration shown in the drawer.
+
+Host-side validation matters here even if the UI later disables duplicate choices: the combobox is freeform, and the router is the final boundary before a server command.
+
+Scenario:
+
+1. A user adds two rows for `status`, selecting ascending on the first and descending on the second, and names the index `status_compound`.
+2. The drawer submits two completed rows and treats the request as compound.
+3. Object construction overwrites the first key, producing only `{ status: -1 }`.
+4. The server successfully creates a single-field descending index named `status_compound`.
+5. The success path gives no indication that one configured row was discarded.
+
+The same collapse occurs for names that differ only by surrounding whitespace because the drawer trims each name before submission.
+
+> **Verifier assessment — VERIFIED. Severity: Low–Medium (I lean Low).**
+>
+> Confirmed: `buildIndexSpec` does `key[entry.field] = ...` at [indexViewRouter.ts:181](../../../../src/webviews/documentdb/indexView/indexViewRouter.ts#L181), and neither `CreateIndexInputSchema` ([line 75](../../../../src/webviews/documentdb/indexView/indexViewRouter.ts#L75)) nor the drawer's `completedRows` dedupes. A later duplicate silently overwrites the earlier key. Real, but low happy-path likelihood (a user rarely adds two rows for the same field); impact is "a valid but different index is created without warning," which keeps it above cosmetic.
+>
+> **Solution options**
+>
+> - **Option A — reject duplicates at the router boundary (authoritative):**
+>   ```ts
+>   const CreateIndexInputSchema = z
+>     .object({
+>       /* ... */
+>     })
+>     .superRefine((val, ctx) => {
+>       const seen = new Set<string>();
+>       val.fields.forEach((f, i) => {
+>         const n = f.field.trim();
+>         if (seen.has(n))
+>           ctx.addIssue({ code: 'custom', path: ['fields', i, 'field'], message: 'Duplicate field name.' });
+>         seen.add(n);
+>       });
+>     });
+>   ```
+>   _Pros:_ guarantees correctness regardless of client; the router is the final boundary before the server command. _Cons:_ surfaces as a generic tRPC validation error unless paired with UI feedback.
+> - **Option B — disable/merge duplicate choices in the drawer.** _Pros:_ better inline UX. _Cons:_ insufficient alone (freeform combobox can still submit duplicates).
+>
+> **Recommendation: Option A** (the guarantee), optionally plus B for UX. Choose A because the router must never silently drop a configured row.
+
+> **Resolution (2026-07-21):** Fixed in [`5d19cae3`](https://github.com/microsoft/vscode-documentdb/commit/5d19cae3). The router schema now rejects repeated trimmed field names and attaches the validation issue to the later field row. Enforcing uniqueness at the host boundary prevents `buildIndexSpec` from silently overwriting an earlier key, including for whitespace-equivalent names or crafted webview requests.
+
+### MEDIUM-3: One transient polling failure permanently stops automatic build-state updates
+
+File: `src/webviews/documentdb/indexView/IndexesTab.tsx:162`, `src/webviews/documentdb/indexView/IndexesTab.tsx:275`
+
+The build polling effect schedules one `setTimeout` and relies on a changed `displayIndexes` dependency to run the effect again. A successful refresh installs a new `indexes` array and therefore re-arms the effect. A failed refresh, however, catches the error without changing `indexes` or `pendingCreates`. The timeout has already fired, the dependencies remain unchanged, and no next poll is scheduled.
+
+This lets one local, transient list failure stop the automatic state-resolution feature for the rest of that build. It also contradicts the design note that polling recursively continues until no index is building or creating.
+
+Scenario:
+
+1. A create request succeeds and the optimistic row displays **Creating**.
+2. The first scheduled refresh encounters a temporary connection timeout.
+3. `refresh()` shows a load error but leaves `displayIndexes` unchanged.
+4. The polling effect is not re-run, so no second timeout is installed.
+5. The row remains **Creating** indefinitely even after the server finishes the build, until the user manually refreshes the tab.
+
+The same failure leaves a server-reported **Building** row stale.
+
+> **Verifier assessment — VERIFIED. Severity: Medium (agree; arguably Low–Medium).**
+>
+> Confirmed at [IndexesTab.tsx:273-282](../../../../src/webviews/documentdb/indexView/IndexesTab.tsx#L273-L282): the effect schedules a single `setTimeout` and depends on `[displayIndexes, refresh]`. A successful `refresh` calls `setIndexes(rows)` with a fresh array → `displayIndexes` memo recomputes → effect re-runs → re-arms. A failed `refresh` ([lines 160-183](../../../../src/webviews/documentdb/indexView/IndexesTab.tsx#L160-L183)) catches without touching `indexes`/`pendingCreates`, so `displayIndexes` keeps the same reference and the effect never re-runs — polling halts until a manual refresh. Real; severity tempered because the toolbar refresh recovers it.
+>
+> **Solution options**
+>
+> - **Option A — decouple re-arm from the data via a tick counter:**
+>   ```ts
+>   const [pollTick, setPollTick] = useState(0);
+>   useEffect(() => {
+>     const active = displayIndexes.some((i) => i.state === 'building' || i.state === 'creating');
+>     if (!active) return;
+>     const timer = setTimeout(async () => {
+>       await refresh(); // resolves whether it succeeds or fails
+>       setPollTick((t) => t + 1); // always re-arm
+>     }, BUILD_POLL_INTERVAL_MS);
+>     return () => clearTimeout(timer);
+>   }, [displayIndexes, refresh, pollTick]);
+>   ```
+>   _Pros:_ minimal, idiomatic; guarantees the loop survives transient failures. _Cons:_ one extra harmless render per poll.
+> - **Option B — ref-based recursive `setTimeout` chain outside React state.** _Pros:_ no re-renders. _Cons:_ more code, easy to leak the timer.
+> - **Option C — `setInterval` while active.** _Cons:_ overlapping requests if a refresh outlives the interval (compounds LOW-1).
+>
+> **Recommendation: Option A.** Smallest change that keeps polling alive through failures, and it composes cleanly with the LOW-1 request-generation guard.
+
+> **Resolution (2026-07-21):** Fixed in [`cf0930d7`](https://github.com/microsoft/vscode-documentdb/commit/cf0930d7). The polling effect now advances a generation after every refresh attempt settles, including handled failures, which re-arms the timeout while an index remains active. Cleanup suppresses late state updates, and the next timeout is not scheduled until the previous request completes, avoiding overlapping polls.
+
+### MEDIUM-4: The Create Index button's accessible name omits its visible label
+
+File: `src/webviews/documentdb/collectionView/components/toolbar/ToolbarMainView.tsx:188`
+
+Copilot comment: [Create Index accessible-name mismatch](https://github.com/microsoft/vscode-documentdb/pull/732#discussion_r3351182778)
+
+The primary button visibly says **Create Index**, but `aria-label` replaces its accessible name with **Create a new index**. The visible label does not occur as a contiguous part of that name. This violates the label-in-name expectation and can prevent speech-input users from activating the primary index action with the words shown on screen.
+
+This comment is still open, not outdated, and points to the current line. The concern also matches the repository's accessibility guidance for visible labels and WCAG 2.5.3.
+
+Scenario:
+
+1. A speech-input user opens the Indexes tab and says “Click Create Index,” matching the visible button text.
+2. The accessibility tree exposes the control as “Create a new index.”
+3. Voice matching cannot reliably associate “Create Index” with that accessible name.
+4. The user cannot trigger the tab's primary action by reading its visible label.
+
+> **Verifier assessment — VERIFIED. Severity: Low (downgraded from Medium).**
+>
+> Confirmed at [ToolbarMainView.tsx:188](../../../../src/webviews/documentdb/collectionView/components/toolbar/ToolbarMainView.tsx#L188): `aria-label={l10n.t('Create a new index')}` over visible text `Create Index` ([line 196](../../../../src/webviews/documentdb/collectionView/components/toolbar/ToolbarMainView.tsx#L196)). "Create Index" is not a contiguous substring of the accessible name → WCAG 2.5.3 Label in Name (Level A) violation for speech-input users. Real, but scoped to one control with voice-only impact, so Low.
+>
+> **Solution options**
+>
+> - **Option A — drop the redundant `aria-label`; let the child text be the name:**
+>   ```tsx
+>   <ToolbarButton icon={<AddRegular />} appearance="primary" onClick={...}>
+>     {l10n.t('Create Index')}
+>   </ToolbarButton>
+>   ```
+>   _Pros:_ simplest, self-maintaining, guaranteed match. _Cons:_ none meaningful.
+> - **Option B — set `aria-label` to a string that begins with the visible words**, e.g. `l10n.t('Create Index')`. _Pros:_ allows extra description. _Cons:_ must keep the visible words contiguous or the violation returns.
+>
+> **Recommendation: Option A.** "Create Index" is already descriptive, so the override adds nothing but the violation.
+
+> **Resolution (2026-07-21):** Fixed in [`5f99a411`](https://github.com/microsoft/vscode-documentdb/commit/5f99a411). Removed the redundant `aria-label`, allowing the visible “Create Index” text to supply the button's accessible name. The label now matches exactly for voice control and remains self-maintaining if the visible localized text changes.
+
+### LOW-1: Out-of-order refresh responses can overwrite newer index state
+
+File: `src/webviews/documentdb/indexView/IndexesTab.tsx:162`
+
+`refresh()` has no request generation, cancellation, or in-flight guard. It can be invoked by initial load, the toolbar, build polling, create-failure reconciliation, and delete/hide/unhide completion. If two calls overlap, whichever response arrives last always wins, even when it was requested against older server state.
+
+This is temporary rather than destructive, but it can make a completed operation look as though it reverted and can keep an obsolete row actionable until the next refresh.
+
+Scenario:
+
+1. A slow toolbar refresh starts and reads an index list containing `legacy_1`.
+2. The user deletes `legacy_1`; the mutation succeeds and its follow-up refresh returns the new list first.
+3. The older toolbar request completes last and calls `setIndexes()` with the pre-delete list.
+4. `legacy_1` reappears in the table until another refresh corrects the view.
+
+> **Verifier assessment — VERIFIED. Severity: Low (agree).**
+>
+> Confirmed: `refresh` ([IndexesTab.tsx:160-183](../../../../src/webviews/documentdb/indexView/IndexesTab.tsx#L160-L183)) has no in-flight/generation guard and is invoked from initial load, toolbar, build poll, create-failure reconciliation, and delete/hide/unhide completion. Last response wins. Transient and self-correcting on the next refresh, hence Low.
+>
+> **Solution options**
+>
+> - **Option A — request-generation guard:**
+>   ```ts
+>   const reqId = useRef(0);
+>   const refresh = useCallback(
+>     async () => {
+>       const id = ++reqId.current;
+>       // ...
+>       const rows = await trpcClient.mongoClusters.indexView.listIndexes.query();
+>       if (id === reqId.current) setIndexes(rows); // ignore stale responses
+>     },
+>     [
+>       /* ... */
+>     ],
+>   );
+>   ```
+>   _Pros:_ trivial; fully prevents stale writes. _Cons:_ does not cancel the wasted in-flight request.
+> - **Option B — `AbortController`/`AbortSignal` into the query** (the repo's tRPC layer supports cancellation). _Pros:_ also cancels server-side work. _Cons:_ more plumbing.
+>
+> **Recommendation: Option A** now (fixes the observable bug with minimal surface); adopt B additionally if the list query becomes expensive.
+
+> **Resolution (2026-07-21):** Fixed in [`e860f60f`](https://github.com/microsoft/vscode-documentdb/commit/e860f60f). Each refresh now captures a monotonic generation and may update indexes, report an error, or clear loading state only while it remains the newest request. Older overlapping responses are ignored, preventing stale data and stale request state from replacing the latest view.
+
+### LOW-2: Tooltip-only details use triggers that cannot receive keyboard focus
+
+Files:
+
+- `src/webviews/documentdb/indexView/components/indexList/IndexPropertiesView.tsx:61`
+- `src/webviews/documentdb/indexView/components/indexList/IndexTable.tsx:306`
+
+Copilot comments:
+
+- [Protected Delete tooltip wraps a disabled button](https://github.com/microsoft/vscode-documentdb/pull/732#discussion_r3351182602)
+- [Protected Hide/Unhide tooltip wraps a disabled button](https://github.com/microsoft/vscode-documentdb/pull/732#discussion_r3351182632)
+- [Property badges with tooltips are not keyboard-focusable](https://github.com/microsoft/vscode-documentdb/pull/732#discussion_r3614657951)
+
+The current table repeats two forms of the same accessibility problem. Property badges put the partial-filter, collation, or wildcard value only in a Tooltip around a non-focusable `Badge`. The protected `_id_` actions put the explanation for their disabled state in Tooltips whose direct triggers are disabled buttons; disabled controls do not receive hover or keyboard focus reliably.
+
+The two protected-action comments are resolved and outdated because they targeted an earlier table component, but the replacement `indexList/IndexTable.tsx` has the same structure. The property-badge comment is current and open. Expanded row details provide an alternate route to the property values, which limits this to Low severity, but the compact table affordance itself remains inaccessible to keyboard users.
+
+Scenario:
+
+1. A keyboard user tabs through a row with a `Partial` property badge.
+2. The badge cannot receive focus, so its filter-expression tooltip never opens.
+3. On the `_id_` row, the disabled Delete and Hide buttons also cannot receive focus.
+4. The user cannot discover from those controls why the actions are disabled without finding a separate representation elsewhere.
+
+> **Verifier assessment — VERIFIED. Severity: Low (agree).**
+>
+> Confirmed: disabled `_id_` action buttons are wrapped in Tooltips at [IndexTable.tsx:309-349](../../../../src/webviews/documentdb/indexView/components/indexList/IndexTable.tsx#L309-L349) — a plain `disabled` Button is neither focusable nor reliably hoverable, so the explanation is unreachable by keyboard. Property `Badge`s ([IndexPropertiesView.tsx:58-79](../../../../src/webviews/documentdb/indexView/components/indexList/IndexPropertiesView.tsx#L58-L79)) are non-focusable and carry their value only in a Tooltip. Expanded-row details give an alternate route, so Low.
+>
+> **Solution options**
+>
+> - **Option A — Fluent focusable-disabled + focusable badge trigger:**
+>   ```tsx
+>   // action button: keep it in the tab order while inert
+>   <Button disabledFocusable={isProtected || isPending} ... />
+>   // badge: give the tooltip a focusable trigger
+>   <Tooltip relationship="label" ...>
+>     <span tabIndex={0}>{badge}</span>
+>   </Tooltip>
+>   ```
+>   _Pros:_ preserves the compact affordance and makes the "why disabled" / property detail reachable by keyboard. _Cons:_ adds focus stops.
+> - **Option B — drop the tooltips and rely solely on expanded-row details.** _Pros:_ less clutter. _Cons:_ loses the at-a-glance detail and the disabled-reason.
+>
+> **Recommendation: Option A** for both the action buttons (users need to know _why_ an action is disabled) and the badges (a `label`/`description` Tooltip must have a focusable trigger to reach keyboard users).
+
+> **Resolution (2026-07-21):** Fixed in [`05f41497`](https://github.com/microsoft/vscode-documentdb/commit/05f41497). Property badges with details now reuse the shared focusable-badge styling, enter the tab order, and expose a combined label-plus-detail accessible name without double-announcing the visible label. Protected or pending action buttons now use Fluent's `disabledFocusable`, keeping them inert while allowing keyboard users to focus the tooltip trigger and discover why the action is unavailable.
+
+### LOW-3: The decorative refresh progress bar is exposed to screen readers
+
+File: `src/webviews/documentdb/indexView/IndexesTab.tsx:435`
+
+Copilot comment: [Decorative ProgressBar lacks `aria-hidden`](https://github.com/microsoft/vscode-documentdb/pull/732#discussion_r3351182709)
+
+The Indexes tab's loading/refresh `ProgressBar` has no accessible label and is used only as a visual cue while the existing content remains available. The neighboring CollectionView uses `aria-hidden={true}` for the same pattern. Exposing this unlabeled progressbar role adds a generic announcement without communicating a useful operation or status.
+
+The original thread is resolved and outdated, but the current replacement `IndexesTab` still renders the same unlabeled ProgressBar without `aria-hidden`.
+
+Scenario:
+
+1. A screen-reader user refreshes the index list.
+2. The accessibility tree gains an unlabeled progressbar in addition to the unchanged table content.
+3. The screen reader announces generic progress information that does not identify what is loading.
+4. Repeated build polling can repeat this noise every few seconds.
+
+> **Verifier assessment — VERIFIED. Severity: Low (agree).**
+>
+> Confirmed: the Indexes tab ProgressBar at [IndexesTab.tsx:434-436](../../../../src/webviews/documentdb/indexView/IndexesTab.tsx#L434-L436) omits `aria-hidden`, while the identical CollectionView bar sets `aria-hidden={true}` at [CollectionView.tsx:589](../../../../../../src/webviews/documentdb/collectionView/CollectionView.tsx#L589). Real inconsistency; screen-reader noise only.
+>
+> **Solution options**
+>
+> - **Option A — match CollectionView:** `<ProgressBar ... aria-hidden={true} />`. _Pros:_ consistent; the table content stays available during refresh so nothing is lost. _Cons:_ none for a decorative cue.
+> - **Option B — give it a meaningful `aria-label`/`aria-valuetext`** if you _want_ it announced. _Cons:_ adds repeated announcements during poll.
+>
+> **Recommendation: Option A.** The bar is a decorative refresh cue; matching the sibling's `aria-hidden` is correct and consistent.
+
+> **Resolution (2026-07-21):** Fixed in [`fbe888e3`](https://github.com/microsoft/vscode-documentdb/commit/fbe888e3). The Indexes tab refresh `ProgressBar` now sets `aria-hidden={true}`, matching CollectionView's existing decorative-loading pattern and preventing repeated unlabeled progress announcements during manual refreshes and build polling.
+
+### LOW-4: `unhideIndex` still lacks the `_id_` host-side guard used by sibling mutations
+
+File: `src/webviews/documentdb/indexView/indexViewRouter.ts:543`
+
+Copilot comment: [`unhideIndex` lacks the `_id_` defense check](https://github.com/microsoft/vscode-documentdb/pull/732#discussion_r3351182813)
+
+`dropIndex` and `hideIndex` explicitly reject the protected `_id_` index in the host router, while `unhideIndex` proceeds directly to confirmation and the server call. The normal UI disables this action, so this is not a happy-path failure, but the host boundary is inconsistent and relies entirely on the server to reject an invalid request. It is made less observable by MEDIUM-1, because the current router also ignores a returned `{ ok: 0, errmsg }` result.
+
+The original Copilot thread is resolved and outdated after code movement, but the guard is still absent in the current mutation.
+
+Scenario:
+
+1. A malformed or stale webview request calls `unhideIndex` with `indexName: '_id_'`.
+2. The host shows an Unhide confirmation instead of rejecting the protected index immediately.
+3. The server rejects or ignores the operation.
+4. The router suppresses that returned failure and reports success, leaving an invalid action with no useful feedback.
+
+> **Verifier assessment — VERIFIED. Severity: Low (agree).**
+>
+> Confirmed: `unhideIndex` ([indexViewRouter.ts:543-566](../../../../src/webviews/documentdb/indexView/indexViewRouter.ts#L543-L566)) proceeds straight to confirmation with no `_id_` guard, whereas `dropIndex` ([line 451](../../../../src/webviews/documentdb/indexView/indexViewRouter.ts#L451)) and `hideIndex` ([line 528](../../../../src/webviews/documentdb/indexView/indexViewRouter.ts#L528)) reject `_id_` up front. The UI disables the action, so this is a boundary-consistency gap, made less observable by MEDIUM-1 (a server rejection would be swallowed).
+>
+> **Solution** (single obvious fix, mirrors siblings):
+>
+> ```ts
+> if (input.indexName === '_id_') {
+>   throw new Error(l10n.t('The "_id_" index visibility cannot be changed.'));
+> }
+> ```
+>
+> **Recommendation:** add the guard. Trivial and correct; fixing MEDIUM-1 additionally makes any real server rejection visible, but the fast-fail guard is still the right boundary behavior.
+
+> **Resolution (2026-07-21):** Fixed in [`526bb030`](https://github.com/microsoft/vscode-documentdb/commit/526bb030). `unhideIndex` now rejects `_id_` before confirmation or server access with a localized visibility-specific error, matching the host-side protection already enforced by the sibling drop and hide mutations.
+
+### LOW-5: A scraped typo appears in two user-facing `$maxN` descriptions
+
+Files:
+
+- `packages/documentdb-js-operator-registry/resources/scraped/operator-reference.md:1474`
+- `packages/documentdb-js-operator-registry/resources/scraped/operator-reference.md:2870`
+- `packages/documentdb-js-operator-registry/src/accumulators.ts:103`
+- `packages/documentdb-js-operator-registry/src/expressionOperators.ts:239`
+
+Copilot comments:
+
+- [`$maxN` accumulator description says “opertor”](https://github.com/microsoft/vscode-documentdb/pull/732#discussion_r3614658017)
+- [`$maxN` expression description says “opertor”](https://github.com/microsoft/vscode-documentdb/pull/732#discussion_r3614658056)
+
+Both generated entries contain “The `$maxN` opertor...” instead of “operator.” The duplication comes from the scraped reference, where `$maxN` appears in two categories, so changing only the generated TypeScript would be overwritten on the next generation run. This does not affect behavior, but the generated descriptions are surfaced in completion and hover documentation.
+
+Scenario:
+
+1. A user requests completion or hover help for `$maxN` in an accumulator or expression context.
+2. The extension displays the generated description containing “opertor.”
+3. The same visible typo appears in both contexts and returns after regeneration unless corrected at the scraped/override source.
+
+> **Verifier assessment — VERIFIED. Severity: Low (agree).**
+>
+> Confirmed "opertor" in the scraped source ([operator-reference.md:1474](../../../../../../packages/documentdb-js-operator-registry/resources/scraped/operator-reference.md#L1474), [line 2870](../../../../../../packages/documentdb-js-operator-registry/resources/scraped/operator-reference.md#L2870)), the generated `src` ([accumulators.ts:103](../../../../../../packages/documentdb-js-operator-registry/src/accumulators.ts#L103), [expressionOperators.ts:239](../../../../../../packages/documentdb-js-operator-registry/src/expressionOperators.ts#L239)), and the built `dist`. Because `$maxN` appears in two scraped categories, editing only the generated TS is overwritten on the next generation run.
+>
+> **Solution options**
+>
+> - **Option A — fix the scraped markdown and regenerate.** _Pros:_ quickest. _Cons:_ a fresh scrape from upstream may reintroduce it if upstream still has the typo.
+> - **Option B — add a typo-override/normalization map applied during generation.** _Pros:_ durable across regenerations and re-scrapes. _Cons:_ one small piece of generator machinery.
+>
+> **Recommendation: Option B** if the scrape is re-run from upstream (the generated text is surfaced in hover/completion, so recurrence matters); otherwise Option A is sufficient.
+
+> **Resolution (2026-07-21):** Fixed in [`67b928af`](https://github.com/microsoft/vscode-documentdb/commit/67b928af). Added category-specific `$maxN` description entries to the package's existing hand-maintained override layer, then regenerated both affected TypeScript modules. Keeping the correction in `operator-overrides.md` makes it survive future upstream scrapes while avoiding ad hoc normalization machinery; the package build and all 74 package tests pass.
+
+## Copilot Reviewer Verification
+
+| Copilot comment                                                                                                                                                                                                                                  | Current assessment                                                                                                                             | Severity / finding |
+| ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------- | ------------------ |
+| [Usage tooltip trigger was not focusable](https://github.com/microsoft/vscode-documentdb/pull/732#discussion_r3351182509)                                                                                                                        | Resolved and outdated. The current table shows the usage value directly and no longer wraps it in that Tooltip.                                | No current finding |
+| [Delete tooltip on disabled button](https://github.com/microsoft/vscode-documentdb/pull/732#discussion_r3351182602) and [Hide/Unhide tooltip on disabled button](https://github.com/microsoft/vscode-documentdb/pull/732#discussion_r3351182632) | Original threads are resolved/outdated, but the replacement table repeats the pattern. Combined with the current property-badge comment.       | Low / LOW-2        |
+| [“Created” header displayed usage-window time](https://github.com/microsoft/vscode-documentdb/pull/732#discussion_r3351182666)                                                                                                                   | Resolved and outdated. The current table removed the Created column; `usageSince` is correctly described as “operations since” in row details. | No current finding |
+| [Decorative ProgressBar lacked `aria-hidden`](https://github.com/microsoft/vscode-documentdb/pull/732#discussion_r3351182709)                                                                                                                    | Original thread is resolved/outdated, but the replacement Indexes tab repeats the same ProgressBar pattern.                                    | Low / LOW-3        |
+| [Asc/Desc control's accessible name omitted its visible label](https://github.com/microsoft/vscode-documentdb/pull/732#discussion_r3351182739)                                                                                                   | Resolved and outdated. The old dialog and ToggleButton were replaced by the current drawer and Dropdown.                                       | No current finding |
+| [Create Index accessible name omits visible label](https://github.com/microsoft/vscode-documentdb/pull/732#discussion_r3351182778)                                                                                                               | Verified on the current line; thread remains open and current.                                                                                 | Medium / MEDIUM-4  |
+| [`unhideIndex` lacked the `_id_` guard](https://github.com/microsoft/vscode-documentdb/pull/732#discussion_r3351182813)                                                                                                                          | Original thread is resolved/outdated, but the current router still lacks the guard.                                                            | Low / LOW-4        |
+| [Property badge tooltips are not keyboard-accessible](https://github.com/microsoft/vscode-documentdb/pull/732#discussion_r3614657951)                                                                                                            | Verified on the current line; combined with the related disabled-tooltip findings.                                                             | Low / LOW-2        |
+| [Accumulator typo](https://github.com/microsoft/vscode-documentdb/pull/732#discussion_r3614658017) and [expression typo](https://github.com/microsoft/vscode-documentdb/pull/732#discussion_r3614658056)                                         | Verified; both generated entries originate from duplicated text in the scraped reference.                                                      | Low / LOW-5        |
+
+## Verified Non-Findings
+
+- Failures from optional `collStats` and `$indexStats` calls in the main list are isolated; the index definitions still render without those metrics.
+- The tree-view confirmation-stat helper isolates size and usage calls independently, so failure of one does not discard the other.
+- Create and drop mutations inspect their normalized `{ ok, note }` results and surface failures rather than treating them as success.
+- Collection names and generated create commands are serialized with `JSON.stringify`, so quotes or command-like text in names do not become shell injection.
+- MongoDB API server validation rejects the reserved custom index name `"*"`; it cannot be created and later misinterpreted by `dropIndexes` as the drop-all wildcard.
+- A post-mutation `refresh()` failure does not fall into the delete/hide operation catch: `refresh()` handles its own error. It may show a separate load error, but it does not falsely label the completed mutation as failed.
+
+## Deeper Review (Independent Second Pass)
+
+This pass looked beyond the original findings, tracing the create/prepare/list/poll paths end-to-end and probing the host boundaries and BSON serialization. Two new low-severity issues and two informational notes surfaced; no additional High/Medium defects were found.
+
+### NEW-1 (Low): "Prepare in shell/playground" loses BSON fidelity for advanced options
+
+File: `src/webviews/documentdb/indexView/indexViewRouter.ts:217-225`
+
+`buildCreateIndexShellCommand` calls `buildIndexSpec`, which **parses** `partialFilterExpression`/`collation` from the drawer's raw text into JS objects via the loose shell-BSON parser, then renders the command with `JSON.stringify(options)`. The direct `createIndex` path passes those parsed objects to the driver (serialized as BSON, lossless), but the prepared-command path round-trips through `JSON.stringify`, which is lossy for shell-BSON constructors: a `Date`/`ISODate(...)` becomes a quoted ISO string, a `RegExp`/`/x/` becomes `{}`, and an `ObjectId(...)` becomes `{}`. The prepared command can therefore differ from what a direct submit would create — contradicting the function's own comment that the command is "identical to what the drawer would submit."
+
+- **Impact:** advanced path only (partial filter / collation containing BSON types), so Low.
+- **Suggested fix:** build the command string from the already-validated raw drawer text instead of re-serializing parsed objects, or use a shell-BSON _serializer_ (e.g. EJSON/`util.inspect`-style shell rendering) rather than `JSON.stringify`. Evaluation: rendering from the raw text is the simplest and keeps direct-create and prepared-command in lockstep; a serializer is more work but also fixes any future option that carries BSON types.
+
+> **Resolution (2026-07-21):** Fixed in [`a4cbedac`](https://github.com/microsoft/vscode-documentdb/commit/a4cbedac). Prepared commands still call `buildIndexSpec` first so advanced option text must parse to an object, but they now render the validated, trimmed partial-filter and collation expressions directly instead of JSON-stringifying their parsed BSON values. Ordinary options and collection/key names remain JSON-serialized, preserving escaping while retaining `ObjectId`, date, and regular-expression fidelity.
+
+### NEW-2 (Low, security-adjacent): the create `name` schema does not reject the reserved `"*"`
+
+Files:
+
+- `src/webviews/documentdb/indexView/indexViewRouter.ts:75` (`CreateIndexInputSchema.name` is an unconstrained `z.string()`)
+- `src/webviews/documentdb/indexView/indexViewRouter.ts:451` (`dropIndex` forwards `input.indexName` straight to the server)
+
+The [Verified Non-Findings](#verified-non-findings) section relies on the MongoDB API server rejecting a custom index named `"*"` (which `dropIndexes("*")` treats as "drop all indexes"). That is an **external server-behavior assumption** — not enforced in-repo and not independently verifiable for every DocumentDB engine/version. Because the extension forwards `indexName` verbatim to `dropIndex`, a cheap in-repo guard removes the reliance:
+
+```ts
+// create input
+name: z.string().refine((n) => n.trim() !== '*', { message: 'Reserved index name.' }).optional(),
+// dropIndex mutation
+if (input.indexName === '*') { throw new Error(l10n.t('Invalid index name.')); }
+```
+
+- **Impact:** Low probability, but the worst case (accidental mass index drop) is severe, so it is worth defense-in-depth rather than trusting the server.
+
+> **Resolution (2026-07-21):** Fixed in [`7577a4ac`](https://github.com/microsoft/vscode-documentdb/commit/7577a4ac). Create validation now rejects any custom name whose trimmed value is the reserved `"*"`, and the drop mutation independently rejects the exact wildcard before confirmation or server access. These localized host-side guards remove the dependency on backend-specific index-name validation and prevent the drop-all sentinel from entering the normal single-index flow.
+
+### NEW-3 (Info): host schema permits `expireAfterSeconds: 0`
+
+`CreateIndexInputSchema` uses `z.number().int().nonnegative()`, which allows `0` (immediate expiry). The drawer blocks non-positive values, but a crafted payload could create a zero-second TTL. Tightening to `.positive()` closes this and is the same change recommended in HIGH-1 Option C.
+
+### NEW-4 (Info, not a defect): build detection depends on `getIndexStats`
+
+`listIndexes` isolates `getCollectionStats`/`getIndexStats` failures with `meterSilentCatch` and still renders (matches the reviewer's non-finding). Note that when `$indexStats` is unavailable, `buildingNames` is always empty, so a **server-side** build is never detected and the build poll never starts for it (only optimistic "creating" rows poll). This is an accepted tier limitation, and it means MEDIUM-3's "server-reported Building row stale" case cannot arise on such tiers at all. No action; documented for completeness.
+
+## Validation Performed
+
+- Read all three PR #732 design/context documents in this folder.
+- Reviewed the complete PR file list and commit range against `origin/main`.
+- Traced create, list, delete, hide, and unhide calls from React through the tRPC router into `ClustersClient` / `LlmEnhancedFeatureApis`.
+- Reviewed the shared tree-view confirmation and optional-stat paths.
+- Confirmed directly that `Number.parseInt('1e3', 10)` yields `1` while `Number('1e3')` yields `1000`.
+- Checked MongoDB API documentation and server source for index-name and `dropIndexes` wildcard behavior.
+- Fetched both Copilot reviews and all 11 Copilot inline comments with `gh api`, including GraphQL thread resolution/outdated state.
+- Re-verified every Copilot comment against the current branch instead of assuming early-review comments still matched the rewritten components.
+
+### Verification pass (2026-07-21)
+
+- Independently re-read every cited source line for all 10 findings; confirmed each is real (no false alarms).
+- Cross-checked the `createIndex`/`dropIndex` result-inspection pattern against `hideIndex`/`unhideIndex` to confirm the MEDIUM-1 inconsistency.
+- Traced the React poll effect dependencies to confirm MEDIUM-3's stop-on-failure behavior, and the `refresh` call sites to confirm LOW-1's missing generation guard.
+- Traced the `buildCreateIndexShellCommand` serialization path (NEW-1) and the create/drop `name` handling (NEW-2) as part of the deeper second pass.
+- Added inline severity re-assessments, solution options with examples, pro/con evaluations, and recommendations to every finding.
+
+No source code was changed as part of this review.
