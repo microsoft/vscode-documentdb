@@ -56,9 +56,10 @@ function mockWebview(controller: { panel: { webview: unknown } }): {
 }
 
 function getInitialDataJson(html: string): string {
-    const match = /<script type="application\/json" id="vscode-ext-webview-initial-data" nonce="[^"]+">([\s\S]*?)<\/script>/.exec(
-        html,
-    );
+    const match =
+        /<script type="application\/json" id="vscode-ext-webview-initial-data" nonce="[^"]+">([\s\S]*?)<\/script>/.exec(
+            html,
+        );
     if (!match?.[1]) {
         throw new Error('Missing initial configuration data block');
     }
