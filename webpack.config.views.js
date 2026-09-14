@@ -87,6 +87,10 @@ module.exports = (env, { mode }) => {
                 directory: path.join(__dirname, 'src/webviews/static'),
                 publicPath: '/static',
             },
+            // The webview visual harness serves `dist/` from disk, so the watch build has to land there.
+            devMiddleware: {
+                writeToDisk: true,
+            },
             allowedHosts: 'all',
             headers: {
                 'Access-Control-Allow-Origin': '*',
