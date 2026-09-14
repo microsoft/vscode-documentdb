@@ -1,8 +1,12 @@
+/** @jest-environment jsdom */
+
 /*---------------------------------------------------------------------------------------------
  *  Copyright (c) Microsoft Corporation. All rights reserved.
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+import { describe, expect, it } from '@jest/globals';
+import { setImmediate } from 'timers';
 import * as vscode from 'vscode';
 import { type BaseRouterContext } from '../shared/BaseRouterContext';
 import { initWebviewTrpc } from '../shared/initWebviewTrpc';
@@ -86,6 +90,30 @@ describe('openWebview', () => {
         // so the raw break-out sequence never appears in the document.
         expect(html).not.toContain('<script>alert(1)');
         expect(html).toContain('\\u003c/script');
+    });
+
+    it('preserves apostrophes in collection names as initialization data', (): void => {
+        const config = { collectionName: "customer's-records" };
+        const controller = openWebview(makeContext(), { ...makeOptions(), config });
+        const parsedDocument = new DOMParser().parseFromString(controller.panel.webview.html, 'text/html');
+        const dataBlock = parsedDocument.getElementById('vscode-ext-webview-initial-data');
+
+        expect(dataBlock?.getAttribute('type')).toBe('application/json');
+        const initialData: unknown = JSON.parse(dataBlock?.textContent ?? '{}');
+        expect(initialData).toEqual(
+            expect.objectContaining({ initialData: encodeURIComponent(JSON.stringify(config)) }),
+        );
+        if (typeof initialData !== 'object' || initialData === null || !('initialData' in initialData)) {
+            throw new Error('Missing initial configuration data');
+        }
+        expect(typeof initialData.initialData).toBe('string');
+        expect(JSON.parse(decodeURIComponent(String(initialData.initialData)))).toEqual(config);
+
+        const executableScripts = parsedDocument.querySelectorAll('script:not([type="application/json"])');
+        expect(executableScripts.length).toBeGreaterThan(0);
+        for (const script of executableScripts) {
+            expect(script.textContent).not.toContain(config.collectionName);
+        }
     });
 
     it('reveals the panel via revealToForeground', () => {
