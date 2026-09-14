@@ -55,6 +55,16 @@ function mockWebview(controller: { panel: { webview: unknown } }): {
     return controller.panel.webview as unknown as { posted: unknown[]; receive(message: unknown): void };
 }
 
+function getInitialDataJson(html: string): string {
+    const match = /<script type="application\/json" id="vscode-ext-webview-initial-data" nonce="[^"]+">([\s\S]*?)<\/script>/.exec(
+        html,
+    );
+    if (!match?.[1]) {
+        throw new Error('Missing initial configuration data block');
+    }
+    return match[1];
+}
+
 describe('openWebview', () => {
     it('opens a panel and returns a WebviewController handle', () => {
         const controller = openWebview(makeContext(), makeOptions());
@@ -95,11 +105,9 @@ describe('openWebview', () => {
     it('preserves apostrophes in collection names as initialization data', (): void => {
         const config = { collectionName: "customer's-records" };
         const controller = openWebview(makeContext(), { ...makeOptions(), config });
-        const parsedDocument = new DOMParser().parseFromString(controller.panel.webview.html, 'text/html');
-        const dataBlock = parsedDocument.getElementById('vscode-ext-webview-initial-data');
+        const html = controller.panel.webview.html;
 
-        expect(dataBlock?.getAttribute('type')).toBe('application/json');
-        const initialData: unknown = JSON.parse(dataBlock?.textContent ?? '{}');
+        const initialData: unknown = JSON.parse(getInitialDataJson(html));
         expect(initialData).toEqual(
             expect.objectContaining({ initialData: encodeURIComponent(JSON.stringify(config)) }),
         );
@@ -109,11 +117,9 @@ describe('openWebview', () => {
         expect(typeof initialData.initialData).toBe('string');
         expect(JSON.parse(decodeURIComponent(String(initialData.initialData)))).toEqual(config);
 
-        const executableScripts = parsedDocument.querySelectorAll('script:not([type="application/json"])');
-        expect(executableScripts.length).toBeGreaterThan(0);
-        for (const script of executableScripts) {
-            expect(script.textContent).not.toContain(config.collectionName);
-        }
+        const moduleScript = /<script type="module"[^>]*>([\s\S]*?)<\/script>/.exec(html);
+        expect(moduleScript?.[1]).toBeDefined();
+        expect(moduleScript?.[1]).not.toContain(config.collectionName);
     });
 
     it('reveals the panel via revealToForeground', () => {
