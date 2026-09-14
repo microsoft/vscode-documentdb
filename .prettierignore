@@ -14,3 +14,6 @@ CHANGELOG.md
 # Generated report artifacts. The scrapers rewrite these in their own format, so
 # formatting them here only creates churn between runs.
 **/resources/scraped/
+
+# Compiled from fluentOverrides.scss by the package's prebuild script.
+packages/vscode-ext-webview-fluentui/src/styles/generated.ts

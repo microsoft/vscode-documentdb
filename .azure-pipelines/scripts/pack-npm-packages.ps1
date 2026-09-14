@@ -26,6 +26,7 @@ $ErrorActionPreference = 'Stop'
 # See release-npm-packages.yml for the matching picklist.
 $publishablePackages = @(
     'vscode-ext-webview'
+    'vscode-ext-webview-fluentui'
 )
 
 $npmPackagesDir = Join-Path $OutputDirectory 'npm-packages'
