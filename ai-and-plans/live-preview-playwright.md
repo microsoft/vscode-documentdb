@@ -2,7 +2,7 @@
 kind: practice
 status: active
 created: 2026-08-04
-verified: 2026-08-14
+verified: 2026-08-19
 ---
 
 # Live webview preview + Playwright checks (future work)
@@ -175,6 +175,9 @@ drift into shapes the component never actually receives.
 3. `run_playwright_code` to resize, click through states, and measure.
 4. `screenshot_page` only for questions the tree cannot answer: colour, spacing, weight.
 
+Steps 3 and 4 do not compose. Resizing is for measuring; a screenshot taken after a resize is of a
+layout that no longer matches what the DOM reports. See Gotchas.
+
 ### Assertions worth running
 
 ```js
@@ -203,8 +206,45 @@ Run at a normal width and at roughly 312 px of content width.
 ## Gotchas
 
 **The integrated browser's default viewport is ~548 px.** Wide enough to trip `max-width: 560px`
-media queries, so a "desktop" screenshot may silently be the narrow layout. Call `setViewportSize`
-explicitly and assert `window.innerWidth` before trusting a screenshot.
+media queries, so a "desktop" measurement may silently be the narrow layout. Call `setViewportSize`
+explicitly and assert `window.innerWidth` before trusting **a measurement**.
+
+Do **not** carry that advice over to a screenshot. See the next entry: for a screenshot it is not
+merely useless, it is the cause.
+
+**`setViewportSize` moves the DOM but not the compositor, and screenshots come from the compositor.**
+This one cost most of a session, so it is worth stating exactly.
+
+After `setViewportSize` (or CDP `Emulation.setDeviceMetricsOverride`), `window.innerWidth`,
+`getBoundingClientRect()` and `getComputedStyle()` all report the **emulated** viewport, and media
+queries evaluate against it. The surface that is actually rasterised keeps the **real** window size
+and scale. So the page can report `innerWidth: 880` and `grid-template-columns: 176px 176px 176px
+176px` while the captured image contains a two-column layout.
+
+Two things follow, and the second is the trap:
+
+- Every DOM-side check agrees with itself. `window.innerWidth` is the emulated number, so asserting
+  it proves the emulation took, not that the capture matches.
+- `locator.screenshot()` computes its clip rect from DOM pixels and the surface paints at a
+  different scale, so content silently falls **outside** the rect. A four-card row loses its fourth
+  card, with no error and no visible seam.
+
+The recipe that works:
+
+1. **Do not set a viewport at all** before capturing. Let the DOM and the compositor agree on the
+   real window. Fix the layout by giving the harness element a hardcoded CSS `width` instead, which
+   is a property of the page rather than of the emulation.
+2. **Capture the whole viewport** with `page.screenshot()`, never a clip or a locator, because a
+   full-viewport capture cannot exclude something that is on screen.
+3. **Crop afterwards** by finding the content's bounds in the image itself, for example the
+   bounding box of every pixel that is not the background colour.
+4. **Verify the image, not the DOM.** Decode the PNG onto a `<canvas>` and count the ink clusters,
+   or whatever the shot is supposed to contain. This is the only check that can fail when the
+   capture is wrong.
+
+Viewport-driven media queries are the case with no clean answer: the breakpoint reads the viewport,
+and the viewport is the thing you must not touch. Either arrange for the real window to already sit
+in the band you want, or accept the band it gives you and say so in the caption.
 
 **`box-sizing` is `content-box`.** A `maxWidth: '760px'` element with `padding: '24px'` measures
 808 px. Match a footer or banner to the content column by giving it the same `maxWidth`, not the
@@ -217,6 +257,31 @@ It is a stale-module artefact, not a bug in the change. Hard-navigate to a fresh
 **`page.goto(..., { waitUntil: 'load' })` can time out** when a stubbed tRPC request never settles.
 The page renders fine; only the load event is pending. Catch the timeout and continue, or wait on a
 selector instead.
+
+**A remote workspace mangles query strings, and it fails silently.** `open_browser_page` rewrites
+the URL when the port is forwarded: `?view=localQuickStart&t=2` arrives as
+`?view%3DlocalQuickStart%26t%3D2` — one escaped parameter, not two. `searchParams.get('view')`
+returns `null`, the harness falls through to its default, and **every page renders the same view**.
+A comparison set up this way compares something against itself and agrees perfectly.
+
+Use **one static page per view**, with the name hardcoded, and no query string. If two pages render
+suspiciously identical measurements, check this before believing them.
+
+**Never invent a reply shape for a path the stub does not know.** A blanket
+`else { reply(id, null); complete(id); }` looks harmless and is not: a subscription handler that
+reads the payload throws (`Cannot read properties of null`), which is a crash in the view under
+test caused entirely by the harness. Reply only to paths you have built a real payload for, and
+**leave everything else pending** — an unanswered query is inert, a wrong answer is not.
+
+**The dev-server error overlay silently corrupts measurements.** It mounts as an `<iframe>` inside
+the page, so it changes layout: in one round the footer reported an elevation border and shadow
+while `scrollHeight === clientHeight`, which reads exactly like a real bug in overflow detection. It
+was the overlay adding height. Assert `!document.querySelector('iframe')` — or whatever the page
+should not contain — alongside the numbers, and re-measure after clearing it.
+
+This is also the argument for measuring rather than screenshotting: the screenshot showed a shadow
+and offered no way to tell defect from artefact. The pair of numbers that disagreed is what pointed
+at a third element.
 
 ---
 
@@ -240,9 +305,11 @@ Layout, overflow, focus order, roles and names are genuinely verified. Everythin
 ## Future work
 
 **Ship a committed harness instead of a throwaway.** Each round so far has created and deleted a
-temporary page. A permanent `src/webviews/static/preview.html` taking the view name from a query
-string (`?view=localQuickStart`) would remove the recreate-and-delete cycle. Needs a decision on
-whether it is dev-only or excluded from the packaged extension.
+temporary page. A permanent `src/webviews/static/preview.html` would remove the
+recreate-and-delete cycle. Needs a decision on whether it is dev-only or excluded from the packaged
+extension — and note that the obvious design, `?view=localQuickStart`, is the one thing that cannot
+work: see the query-string gotcha above. Select the view from `location.pathname`, a hash, or a
+generated page per registry key.
 
 **Theme switching.** Drive `data-vscode-theme-kind` and the `--vscode-*` block from a query string
 so dark and high-contrast get the same coverage. This is the largest current gap.
@@ -265,3 +332,10 @@ churn baselines constantly. Revisit only if visual regressions actually start sl
 The technique was first written down in the Local Quick Start design lab handoff, which was deleted
 along with the lab once the redesign shipped. Those files were never committed, so this document is
 the only surviving copy. Do not delete it without moving the recipe somewhere else first.
+
+Exercised again on 2026-08-19 for the wizard-surface extraction
+([webview-fluentui-package increment 2](./features/webview-fluentui-package/iterations/02-wizard-shell-and-components.md)),
+where it was used to compare a mock built from the new components against the un-migrated view, and
+then the migrated views against the recorded baseline. The measurement half carried that work — the
+chrome was verified by comparing `getBoundingClientRect()` and `getComputedStyle()` element by
+element, with screenshots used only for colour and weight. Three gotchas above came from that round.
