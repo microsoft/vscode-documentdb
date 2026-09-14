@@ -182,7 +182,8 @@ a string owned here could never be translated by a consumer.
 
 See the [Component guide](https://github.com/microsoft/vscode-documentdb/blob/main/packages/vscode-ext-webview-fluentui/src/components/README.md) for the full catalog, how the
 components compose, and how to decompose `Wizard` into `Container` and `StepList` when you need a
-layout it does not offer.
+layout it does not offer. The [MetricGrid guide](https://github.com/microsoft/vscode-documentdb/blob/main/packages/vscode-ext-webview-fluentui/src/components/MetricGrid/README.md#consumer-formatting-recipes)
+also links to duration, count, ratio, and composed-grid recipes from the DocumentDB extension.
 
 ## Fluent theming in detail
 

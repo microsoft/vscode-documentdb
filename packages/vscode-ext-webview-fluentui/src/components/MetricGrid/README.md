@@ -83,6 +83,24 @@ behaviour, and the consumer keeps everything that has an opinion about numbers.
 For a figure the type scale cannot express on its own, such as a percentage with a bar under it,
 pass a node as `value`. That is what the prop is for.
 
+## Consumer formatting recipes
+
+The DocumentDB extension keeps its semantic formatters outside this package, but they are useful
+examples of how to build on `MetricCard`:
+
+- [`TimeMetric`](https://github.com/microsoft/vscode-documentdb/blob/main/src/webviews/documentdb/collectionView/queryInsightsTab/components/metricsRow/TimeMetric.tsx)
+  formats a duration while preserving the loading and unavailable states.
+- [`CountMetric`](https://github.com/microsoft/vscode-documentdb/blob/main/src/webviews/documentdb/collectionView/queryInsightsTab/components/metricsRow/CountMetric.tsx)
+  adds grouped and compact count formatting.
+- [`GenericMetric`](https://github.com/microsoft/vscode-documentdb/blob/main/src/webviews/documentdb/collectionView/queryInsightsTab/components/metricsRow/GenericMetric.tsx)
+  passes pre-formatted values through with shared application defaults.
+- [`RatioMetric`](https://github.com/microsoft/vscode-documentdb/blob/main/src/webviews/documentdb/collectionView/queryInsightsTab/components/metricsRow/RatioMetric.tsx)
+  passes a custom value node to render a percentage with a bar beneath it.
+- [`IndexMetricsRow`](https://github.com/microsoft/vscode-documentdb/blob/main/src/webviews/documentdb/collectionView/indexesTab/components/IndexMetricsRow.tsx)
+  composes those consumer-owned wrappers in another dashboard.
+
+These recipes are application code rather than package API, so they may evolve independently.
+
 ## Accessibility
 
 **Every card is a tab stop**, in every configuration, whether or not it has a tooltip and whether or
