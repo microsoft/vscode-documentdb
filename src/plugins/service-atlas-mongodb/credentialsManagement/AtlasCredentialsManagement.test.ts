@@ -31,14 +31,15 @@ jest.mock('@vscode/l10n', () => ({
     ),
 }));
 
-class UserCancelledErrorMock extends Error {}
-class GoBackErrorMock extends Error {}
-
-jest.mock('@microsoft/vscode-azext-utils', () => ({
-    AzureWizardPromptStep: class AzureWizardPromptStep {},
-    UserCancelledError: UserCancelledErrorMock,
-    GoBackError: GoBackErrorMock,
-}));
+jest.mock('@microsoft/vscode-azext-utils', () => {
+    class UserCancelledErrorMock extends Error {}
+    class GoBackErrorMock extends Error {}
+    return {
+        AzureWizardPromptStep: class AzureWizardPromptStep {},
+        UserCancelledError: UserCancelledErrorMock,
+        GoBackError: GoBackErrorMock,
+    };
+});
 
 jest.mock('../../../extensionVariables', () => ({
     ext: {
@@ -81,6 +82,10 @@ jest.mock('../../../webviews/documentdb/atlasCredentials/atlasCredentialsControl
     openAtlasCredentialsWebview: (...args: unknown[]) => mockOpenWebview(...args) as unknown,
 }));
 
+import {
+    GoBackError as GoBackErrorMock,
+    UserCancelledError as UserCancelledErrorMock,
+} from '@microsoft/vscode-azext-utils';
 import * as vscode from 'vscode';
 import { ext } from '../../../extensionVariables';
 import { StorageService } from '../../../services/storageService';

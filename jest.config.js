@@ -1,7 +1,6 @@
-/** @type {import('ts-jest').JestConfigWithTsJest} **/
+/** @type {import('jest').Config} **/
 module.exports = {
     // Limit workers to avoid OOM kills on machines with many cores.
-    // Each ts-jest worker loads the TypeScript compiler and consumes ~500MB+.
     maxWorkers: '25%',
     // Exclude VS Code test binaries downloaded by @vscode/test-electron.
     // They contain package.json files whose "name" fields collide with real
@@ -12,8 +11,34 @@ module.exports = {
             displayName: 'extension',
             testEnvironment: 'node',
             testMatch: ['<rootDir>/src/**/*.test.ts'],
+            // @swc/jest transpiles without type-checking, avoiding ts-jest's
+            // per-worker TypeScript compiler (~500MB+) which was causing OOM in CI.
+            // Options are inlined (not read from .swcrc) because @swc/jest's strict
+            // JSON parser rejects the trailing commas in .swcrc that swc-loader tolerates.
             transform: {
-                '^.+\\.tsx?$': ['ts-jest', {}],
+                '^.+\\.tsx?$': [
+                    '@swc/jest',
+                    {
+                        sourceMaps: 'inline',
+                        module: { type: 'commonjs' },
+                        jsc: {
+                            target: 'es2021',
+                            baseUrl: __dirname,
+                            parser: {
+                                syntax: 'typescript',
+                                tsx: true,
+                                functionBind: false,
+                                decorators: true,
+                                dynamicImport: true,
+                            },
+                            transform: {
+                                react: {
+                                    runtime: 'automatic',
+                                },
+                            },
+                        },
+                    },
+                ],
             },
         },
         '<rootDir>/packages/documentdb-js-schema-analyzer',
