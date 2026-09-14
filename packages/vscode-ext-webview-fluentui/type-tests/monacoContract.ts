@@ -18,12 +18,16 @@
  */
 
 // eslint-disable-next-line import/no-internal-modules
-import type * as monaco from 'monaco-editor/esm/vs/editor/editor.api';
-import type { VSCodeMonacoBaseTheme, VSCodeMonacoThemeData, VSCodeMonacoTokenRule } from '../src/monaco/core/types.js';
+import { type editor as monacoEditor } from 'monaco-editor/esm/vs/editor/editor.api';
+import {
+    type VSCodeMonacoBaseTheme,
+    type VSCodeMonacoThemeData,
+    type VSCodeMonacoTokenRule,
+} from '../src/monaco/core/types.js';
 import { createVSCodeMonacoTheme } from '../src/monaco/index.js';
 
 declare const themeData: VSCodeMonacoThemeData;
-declare const defineTheme: typeof monaco.editor.defineTheme;
+declare const defineTheme: typeof monacoEditor.defineTheme;
 
 /** The contract: what the package produces is what `defineTheme` accepts. */
 export function acceptedByDefineTheme(): void {
@@ -38,7 +42,7 @@ export function acceptedFromDerivation(): void {
 }
 
 /** Field-level equivalence, so a widening on either side is caught rather than absorbed. */
-export declare const baseThemeIsMonacoBuiltin: (value: VSCodeMonacoBaseTheme) => monaco.editor.BuiltinTheme;
-export declare const monacoBuiltinIsBaseTheme: (value: monaco.editor.BuiltinTheme) => VSCodeMonacoBaseTheme;
-export declare const ruleIsMonacoRule: (value: VSCodeMonacoTokenRule) => monaco.editor.ITokenThemeRule;
-export declare const colorsAreMonacoColors: (value: VSCodeMonacoThemeData['colors']) => monaco.editor.IColors;
+export declare const baseThemeIsMonacoBuiltin: (value: VSCodeMonacoBaseTheme) => monacoEditor.BuiltinTheme;
+export declare const monacoBuiltinIsBaseTheme: (value: monacoEditor.BuiltinTheme) => VSCodeMonacoBaseTheme;
+export declare const ruleIsMonacoRule: (value: VSCodeMonacoTokenRule) => monacoEditor.ITokenThemeRule;
+export declare const colorsAreMonacoColors: (value: VSCodeMonacoThemeData['colors']) => monacoEditor.IColors;

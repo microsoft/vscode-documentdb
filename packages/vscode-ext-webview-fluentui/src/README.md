@@ -2,10 +2,10 @@
 
 Entry map and import direction.
 
-| File            | Entry point    | What it is                                                                                       |
-| --------------- | -------------- | ------------------------------------------------------------------------------------------------- |
-| `index.ts`      | `.`            | Fluent theming, plus the `injectStyles()` call at module scope                                   |
-| `components.ts` | `./components` | Fluent-compatible components only; imports neither `theme/` nor `styles/` (invariant I1)         |
+| File            | Entry point    | What it is                                                                                               |
+| --------------- | -------------- | -------------------------------------------------------------------------------------------------------- |
+| `index.ts`      | `.`            | Fluent theming, plus the `injectStyles()` call at module scope                                           |
+| `components.ts` | `./components` | Fluent-compatible components only; imports neither `theme/` nor `styles/` (invariant I1)                 |
 | `monaco.ts`     | `./monaco`     | Monaco theming: the active theme shaped for `monaco.editor.defineTheme()`; no `monaco-editor` dependency |
 
 ## Layering
@@ -37,15 +37,15 @@ Three rules make this worth keeping:
 
 ## Folders
 
-| Folder         | Contents                                                                          |
-| -------------- | ---------------------------------------------------------------------------------- |
-| `palette/`     | LCH/LAB colour math that turns a key colour into a 16-stop brand ramp             |
-| `vscode/`      | the active theme itself: kind, colour ids, hex normalisation, a change store      |
-| `theme/core/`  | Fluent theming: Fluent `Theme` generators; no React                              |
-| `theme/react/` | Fluent theming: the hooks that track the active VS Code theme, and the provider facade |
+| Folder         | Contents                                                                                 |
+| -------------- | ---------------------------------------------------------------------------------------- |
+| `palette/`     | LCH/LAB colour math that turns a key colour into a 16-stop brand ramp                    |
+| `vscode/`      | the active theme itself: kind, colour ids, hex normalisation, a change store             |
+| `theme/core/`  | Fluent theming: Fluent `Theme` generators; no React                                      |
+| `theme/react/` | Fluent theming: the hooks that track the active VS Code theme, and the provider facade   |
 | `monaco/`      | Monaco theming: the same colour source, shaped for Monaco; no `monaco-editor` dependency |
-| `styles/`      | the SCSS escapes, the module generated from them, and the injector               |
-| `components/`  | Fluent-compatible components, each usable under any `FluentProvider`             |
+| `styles/`      | the SCSS escapes, the module generated from them, and the injector                       |
+| `components/`  | Fluent-compatible components, each usable under any `FluentProvider`                     |
 
 `vscode/` is internal and is not an entry point (decision 0008). It exists so that every
 derivation in the package agrees on what the active theme is, rather than each computing its own.
