@@ -3,21 +3,19 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-class MarkdownStringMock {
-    public value = '';
-    public isTrusted = false;
-    public appendMarkdown(text: string): this {
-        this.value += text;
-        return this;
-    }
-}
-
 jest.mock('vscode', () => ({
     TreeItemCollapsibleState: { None: 0, Collapsed: 1, Expanded: 2 },
     ThemeIcon: class ThemeIcon {
         constructor(public readonly id: string) {}
     },
-    MarkdownString: MarkdownStringMock,
+    MarkdownString: class MarkdownStringMock {
+        public value = '';
+        public isTrusted = false;
+        public appendMarkdown(text: string): this {
+            this.value += text;
+            return this;
+        }
+    },
     l10n: {
         t: jest.fn((template: string, ...args: unknown[]) =>
             template.replace(/\{(\d+)\}/g, (_match: string, index: string) => String(args[Number(index)])),
@@ -90,7 +88,7 @@ function buildProject(overrides: Partial<AtlasProject> = {}): AtlasProject {
 
 function tooltipValue(project: AtlasProject, orgName?: string): string {
     const item = new AtlasProjectItem('parent', project, discoveryServiceStub, 'credential-1', orgName);
-    const tooltip = item.getTreeItem().tooltip as unknown as MarkdownStringMock;
+    const tooltip = item.getTreeItem().tooltip as unknown as { value: string };
     return tooltip.value;
 }
 
@@ -125,7 +123,7 @@ describe('AtlasProjectItem tooltip', () => {
 
     it('keeps the tooltip untrusted', () => {
         const item = new AtlasProjectItem('parent', buildProject(), discoveryServiceStub, 'credential-1');
-        const tooltip = item.getTreeItem().tooltip as unknown as MarkdownStringMock;
+        const tooltip = item.getTreeItem().tooltip as unknown as { value: string; isTrusted: boolean };
 
         expect(tooltip.isTrusted).toBe(false);
     });

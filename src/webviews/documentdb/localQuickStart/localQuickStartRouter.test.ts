@@ -23,7 +23,7 @@ jest.mock('vscode', () => ({
 }));
 
 jest.mock('../../../services/localQuickStart/ContainerRuntime', () => ({
-    ContainerRuntime: { isDockerReady: mockIsDockerReady },
+    ContainerRuntime: { isDockerReady: (...args: unknown[]) => mockIsDockerReady(...args) as unknown },
     getQuickStartOutputChannel: () => ({ show: jest.fn() }),
     startDockerProvider: () => mockStartDockerProvider() as unknown,
 }));
@@ -31,13 +31,13 @@ jest.mock('../../../services/localQuickStart/ContainerRuntime', () => ({
 jest.mock('../../../services/localQuickStart/QuickStartService', () => ({
     QuickStartService: {
         discardTimedOutInstance: jest.fn(),
-        checkDockerReadiness: mockIsDockerReady,
-        getStatus: mockGetStatus,
+        checkDockerReadiness: (...args: unknown[]) => mockIsDockerReady(...args) as unknown,
+        getStatus: (...args: unknown[]) => mockGetStatus(...args) as unknown,
         isBusy: false,
         provision: jest.fn(),
-        refreshLiveState: mockRefreshLiveState,
-        canReuseExistingData: mockCanReuseExistingData,
-        suggestPort: mockSuggestPort,
+        refreshLiveState: (...args: unknown[]) => mockRefreshLiveState(...args) as unknown,
+        canReuseExistingData: (...args: unknown[]) => mockCanReuseExistingData(...args) as unknown,
+        suggestPort: (...args: unknown[]) => mockSuggestPort(...args) as unknown,
         checkPort: jest.fn(),
         onDidChangeStatus: (listener: () => void) => {
             statusListeners.add(listener);

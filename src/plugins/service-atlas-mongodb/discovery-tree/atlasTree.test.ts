@@ -6,21 +6,19 @@
 const globalStateBacking = new Map<string, unknown>();
 const secretStorageBacking = new Map<string, string>();
 
-class MarkdownStringMock {
-    public value = '';
-    public isTrusted = false;
-    public appendMarkdown(text: string): this {
-        this.value += text;
-        return this;
-    }
-}
-
 jest.mock('vscode', () => ({
     TreeItemCollapsibleState: { None: 0, Collapsed: 1, Expanded: 2 },
     ThemeIcon: class ThemeIcon {
         constructor(public readonly id: string) {}
     },
-    MarkdownString: MarkdownStringMock,
+    MarkdownString: class MarkdownStringMock {
+        public value = '';
+        public isTrusted = false;
+        public appendMarkdown(text: string): this {
+            this.value += text;
+            return this;
+        }
+    },
     EventEmitter: class EventEmitter {
         public fire(): void {
             // no-op
@@ -456,7 +454,7 @@ describe('AtlasOrganizationItem', () => {
 
         expect(treeItem.description).toBeUndefined();
         expect((treeItem.iconPath as { id: string }).id).toBe('organization');
-        expect((treeItem.tooltip as unknown as MarkdownStringMock).value).toContain('\\*\\*Acme\\*\\*');
+        expect((treeItem.tooltip as unknown as { value: string }).value).toContain('\\*\\*Acme\\*\\*');
     });
 
     it('re-queries the fleet when the organization itself is refreshed', async () => {
