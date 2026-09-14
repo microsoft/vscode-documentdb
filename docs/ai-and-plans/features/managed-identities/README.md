@@ -42,11 +42,11 @@ This is not a Marketplace release version or a claim that the feature shipped in
 
 ## Iterations
 
-| Iteration | Record |
-| --- | --- |
-| Implementation | [Work items and deviations](iterations/01-implementation-log.md) |
-| Code review | [Findings and resolutions](iterations/02-code-review.md) |
-| UX review | [Workflow findings and operator feedback](iterations/03-ux-review.md) |
+| Iteration      | Record                                                                |
+| -------------- | --------------------------------------------------------------------- |
+| Implementation | [Work items and deviations](iterations/01-implementation-log.md)      |
+| Code review    | [Findings and resolutions](iterations/02-code-review.md)              |
+| UX review      | [Workflow findings and operator feedback](iterations/03-ux-review.md) |
 
 Historical records retain their original review baselines and packaging observations. The current
 branch target and preview version are recorded above; the earlier records are not current release guidance.

@@ -36,7 +36,7 @@ treat `status: historical` or `status: superseded` as current.
 | [webview-fluentui-package](./features/webview-fluentui-package/README.md) | `@microsoft/vscode-ext-webview-fluentui`: Fluent theming and reusable components for webviews | 1.1.0 prepared    |
 | [connections-tree](./features/connections-tree/README.md)                 | The Connections view: node item counts, connection load performance                           | shipped           |
 | [no-auth](./features/no-auth/README.md)                                   | Credential-free connections and connection-string TLS handling                                | shipped           |
-| [managed-identities](./features/managed-identities/README.md) | Explicit managed identity authentication from Azure VMs | PR #886 |
+| [managed-identities](./features/managed-identities/README.md)             | Explicit managed identity authentication from Azure VMs                                       | PR #886           |
 
 Everything else is a single file at this root, such as:
 
