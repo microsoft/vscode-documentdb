@@ -5,32 +5,30 @@ usable on their own or mixed together: a **theming layer** that makes Fluent tra
 active VS Code theme, a small set of **reusable components** that Fluent itself does not ship, and
 **Monaco theming** that paints the editor from the same colors, so the two engines agree.
 
+All three were extracted from the webview stack that ships in the battle-tested
+[DocumentDB for VS Code](https://github.com/microsoft/vscode-documentdb) extension, where they
+style the production collection, document, and query views that people use every day. Dropping in
+`VSCodeFluentProvider` is a one-line change; everything past that is optional.
+
 Its sibling, [`@microsoft/vscode-ext-webview`](https://github.com/microsoft/vscode-documentdb/blob/main/packages/vscode-ext-webview/README.md), carries the
 transport (tRPC over `postMessage`). Neither package in this pairing depends on the other.
 
-## The three things this package does
+## Theming
 
-### Theming
+Two theming layers derive from the same live VS Code theme: **Fluent theming**, for every Fluent UI
+component in your webview, and **Monaco theming**, for the Monaco editor. Adopting one never
+requires the other, and both agree on the same colors.
+
+### Fluent theming
 
 Out of the box, Fluent looks like Microsoft Teams: its neutral ramp is a fixed gray produced by
 `createLightTheme`/`createDarkTheme`, and it ignores the user's workbench theme entirely.
 `VSCodeFluentProvider` synthesizes a Fluent theme from the user's live VS Code theme and keeps every
 Fluent component under it in sync as the user switches themes.
 
-See [Quick start: theming](#quick-start-theming) for the common path, and
-[Theming in detail](#theming-in-detail) for the mechanism, the CSP requirement, and edge cases such
-as which `Skeleton` appearance to use.
-
-### Components
-
-`Container`, `FocusableBadge`, `MetricGrid`, `StepList`, `StatusList`, and `Wizard` are reusable
-layout, navigation and data-display components. They style themselves from Fluent `tokens.*`, so
-they work with or without this package's theming, and importing them injects no stylesheet of their
-own.
-
-See [Quick start: components](#quick-start-components) for the common path, and
-[Component guide](https://github.com/microsoft/vscode-documentdb/blob/main/packages/vscode-ext-webview-fluentui/src/components/README.md) for the full catalog, how the components
-compose, and how to build a wizard-like surface from `Container` and `StepList` directly.
+See [Fluent theming quick start](#fluent-theming-quick-start) for the common path, and
+[Fluent theming in detail](#fluent-theming-in-detail) for the mechanism, the CSP requirement, and
+edge cases such as which `Skeleton` appearance to use.
 
 ### Monaco theming
 
@@ -43,8 +41,19 @@ It costs you **no Monaco dependency**: the returned data is structurally assigna
 `monaco.editor.IStandaloneThemeData`, so you pass it straight to `defineTheme` with no cast, and
 this package never imports `monaco-editor`.
 
-See [Quick start: Monaco](#quick-start-monaco) and the
+See [Monaco theming quick start](#monaco-theming-quick-start) and the
 [Monaco guide](https://github.com/microsoft/vscode-documentdb/blob/main/packages/vscode-ext-webview-fluentui/src/monaco/README.md) for complete React, customization, and imperative examples.
+
+## Fluent-compatible components
+
+`Container`, `FocusableBadge`, `MetricGrid`, `StepList`, `StatusList`, and `Wizard` are reusable
+layout, navigation and data-display components, built to work under any Fluent UI v9
+`FluentProvider`. They style themselves from Fluent `tokens.*`, so they work with or without this
+package's theming, and importing them injects no stylesheet of their own.
+
+See [Quick start: Fluent-compatible components](#quick-start-fluent-compatible-components) for the
+common path, and [Component guide](https://github.com/microsoft/vscode-documentdb/blob/main/packages/vscode-ext-webview-fluentui/src/components/README.md) for the full catalog, how the components
+compose, and how to build a wizard-like surface from `Container` and `StepList` directly.
 
 All three halves are independent: adopting the theming does not require the components, using a
 component does not require this package's provider, and `./monaco` pulls in neither Fluent nor the
@@ -74,6 +83,8 @@ than public API. A minor Fluent release can restructure them, and the overrides 
 stop applying.
 
 ## Quick start: theming
+
+### Fluent theming quick start
 
 ```tsx
 import { VSCodeFluentProvider } from '@microsoft/vscode-ext-webview-fluentui';
@@ -108,37 +119,9 @@ return (
 manage their own color-change invalidation.
 
 Post-processing the generated theme, and everything else about the theming, is covered in
-[Theming in detail](#theming-in-detail) below.
+[Fluent theming in detail](#fluent-theming-in-detail) below.
 
-## Quick start: components
-
-```tsx
-import { FocusableBadge, Wizard, WizardStep } from '@microsoft/vscode-ext-webview-fluentui/components';
-```
-
-Six things ship today. `Container` is the shell of a full-window surface: scrolling header and
-content, over a footer pinned to the bottom. `StepList` is a step indicator that collapses into an
-overflow menu and never hides the current step. `StatusList` is a bordered list of stages, each
-with a status glyph and a line of evidence. `Wizard` is all three of those assembled into a
-complete wizard surface, for the common case where you do not want to wire them yourself.
-`MetricGrid` and `MetricCard` are a dashboard strip: one measurement per card, told apart from
-"loading" and "unavailable" without the layout moving, in a grid that goes from one column to four.
-`FocusableBadge` is the exception for a badge whose tooltip-only details must be reachable by
-keyboard; its visible content names it and the tooltip describes it.
-
-Components style themselves from Fluent `tokens.*`, which resolve against whatever
-`FluentProvider` is above them. They work without this package's theming, and importing
-`./components` injects no stylesheet.
-
-None of them carry localized strings: every user-visible string is a prop with an English default.
-The package ships no translations at all, because string extractors do not scan `node_modules`, so
-a string owned here could never be translated by a consumer.
-
-See the [Component guide](https://github.com/microsoft/vscode-documentdb/blob/main/packages/vscode-ext-webview-fluentui/src/components/README.md) for the full catalog, how the
-components compose, and how to decompose `Wizard` into `Container` and `StepList` when you need a
-layout it does not offer.
-
-## Quick start: Monaco
+### Monaco theming quick start
 
 ```tsx
 import { useVSCodeMonacoTheme } from '@microsoft/vscode-ext-webview-fluentui/monaco';
@@ -173,7 +156,35 @@ syntax rules, an imperative integration with cleanup, and the API options. Your 
 owns its Monaco installation and loader/worker setup. The guide also explains what is derived and
 why the color list is shorter than the one VS Code publishes.
 
-## Theming in detail
+## Quick start: Fluent-compatible components
+
+```tsx
+import { FocusableBadge, Wizard, WizardStep } from '@microsoft/vscode-ext-webview-fluentui/components';
+```
+
+Six components ship today, each usable on its own. `Container` is the shell of a full-window surface: scrolling header and
+content, over a footer pinned to the bottom. `StepList` is a step indicator that collapses into an
+overflow menu and never hides the current step. `StatusList` is a bordered list of stages, each
+with a status glyph and a line of evidence. `Wizard` is all three of those assembled into a
+complete wizard surface, for the common case where you do not want to wire them yourself.
+`MetricGrid` and `MetricCard` are a dashboard strip: one measurement per card, told apart from
+"loading" and "unavailable" without the layout moving, in a grid that goes from one column to four.
+`FocusableBadge` is the exception for a badge whose tooltip-only details must be reachable by
+keyboard; its visible content names it and the tooltip describes it.
+
+Components style themselves from Fluent `tokens.*`, which resolve against whatever
+`FluentProvider` is above them. They work without this package's theming, and importing
+`./components` injects no stylesheet.
+
+None of them carry localized strings: every user-visible string is a prop with an English default.
+The package ships no translations at all, because string extractors do not scan `node_modules`, so
+a string owned here could never be translated by a consumer.
+
+See the [Component guide](https://github.com/microsoft/vscode-documentdb/blob/main/packages/vscode-ext-webview-fluentui/src/components/README.md) for the full catalog, how the
+components compose, and how to decompose `Wizard` into `Container` and `StepList` when you need a
+layout it does not offer.
+
+## Fluent theming in detail
 
 Everything past the quick start: the mechanism, the things that surprise people, and the one place
 a Fluent prop choice decides whether the theming can even apply.

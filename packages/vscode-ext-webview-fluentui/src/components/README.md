@@ -1,6 +1,6 @@
 # `components/`
 
-Reusable Fluent UI components, and nothing else.
+Reusable, Fluent-compatible UI components, and nothing else.
 
 ## The one rule
 
