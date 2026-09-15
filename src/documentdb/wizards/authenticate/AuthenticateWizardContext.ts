@@ -5,8 +5,9 @@
 
 import { type IActionContext } from '@microsoft/vscode-azext-utils';
 
-import { type EntraIdAuthConfig, type NativeAuthConfig } from '../../auth/AuthConfig';
+import { type EntraIdAuthConfig, type ManagedIdentityAuthConfig, type NativeAuthConfig } from '../../auth/AuthConfig';
 import { type AuthMethodId } from '../../auth/AuthMethod';
+import { type ManagedIdentityHint } from '../../auth/managedIdentityConnectionString';
 
 export interface AuthenticateWizardContext extends IActionContext {
     /** These values have to be provided for the wizard to function correctly. */
@@ -24,6 +25,10 @@ export interface AuthenticateWizardContext extends IActionContext {
     // structured authentication configurations
     nativeAuthConfig?: NativeAuthConfig;
     entraIdAuthConfig?: EntraIdAuthConfig;
+    /** An empty object selects the system-assigned identity, so absence and `{}` are different. */
+    managedIdentityAuthConfig?: ManagedIdentityAuthConfig;
+    /** Set when the connection string carried managed identity intent (design §5.2). */
+    managedIdentityHint?: ManagedIdentityHint;
 
     /** States whether the username was set during the wizard flow. */
     isUserNameUpdated?: boolean;

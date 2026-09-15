@@ -4,7 +4,11 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { type IActionContext } from '@microsoft/vscode-azext-utils';
-import { type EntraIdAuthConfig, type NativeAuthConfig } from '../../documentdb/auth/AuthConfig';
+import {
+    type EntraIdAuthConfig,
+    type ManagedIdentityAuthConfig,
+    type NativeAuthConfig,
+} from '../../documentdb/auth/AuthConfig';
 import { type AuthMethodId } from '../../documentdb/auth/AuthMethod';
 import { type StorageZone } from '../../services/connectionStorageService';
 
@@ -20,6 +24,8 @@ export interface UpdateCredentialsWizardContext extends IActionContext {
     // structured authentication configurations
     nativeAuthConfig?: NativeAuthConfig;
     entraIdAuthConfig?: EntraIdAuthConfig;
+    /** An empty object selects the system-assigned identity, so absence and `{}` are different. */
+    managedIdentityAuthConfig?: ManagedIdentityAuthConfig;
 
     selectedAuthenticationMethod?: AuthMethodId;
 

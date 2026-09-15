@@ -4,7 +4,11 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { callWithTelemetryAndErrorHandling, type IActionContext } from '@microsoft/vscode-azext-utils';
-import { type EntraIdAuthConfig, type NativeAuthConfig } from '../documentdb/auth/AuthConfig';
+import {
+    type EntraIdAuthConfig,
+    type ManagedIdentityAuthConfig,
+    type NativeAuthConfig,
+} from '../documentdb/auth/AuthConfig';
 import { AuthMethodId } from '../documentdb/auth/AuthMethod';
 import { redactCredentialsFromConnectionString } from '../documentdb/utils/connectionStringHelpers';
 import { DocumentDBConnectionString } from '../documentdb/utils/DocumentDBConnectionString';
@@ -118,6 +122,8 @@ export interface ConnectionSecrets {
     // Structured authentication configurations
     nativeAuthConfig?: NativeAuthConfig;
     entraIdAuthConfig?: EntraIdAuthConfig;
+    /** Present, possibly empty, for managed identity connections. Empty means system-assigned. */
+    managedIdentityAuthConfig?: ManagedIdentityAuthConfig;
 }
 
 /**
@@ -170,6 +176,7 @@ export interface StoredItem {
         connectionString: string;
         nativeAuthConfig?: NativeAuthConfig;
         entraIdAuthConfig?: EntraIdAuthConfig;
+        managedIdentityAuthConfig?: ManagedIdentityAuthConfig;
     };
 }
 
@@ -209,6 +216,9 @@ export type ConnectionItem = StoredItem;
  *
  * Auth config fields are stored individually as flat string values to avoid
  * nested object serialization issues with VS Code SecretStorage.
+ *
+ * Slots are append-only: never reuse or reorder an assigned index. Older extension versions safely
+ * ignore unknown trailing slots, which lets additive fields remain compatible with storage v3.0.
  */
 const enum SecretIndex {
     ConnectionString = 0,
@@ -218,6 +228,30 @@ const enum SecretIndex {
     // Entra ID auth config fields
     EntraIdTenantId = 3,
     EntraIdSubscriptionId = 4,
+    // Managed identity: the client ID of a user-assigned identity, or the system-assigned sentinel
+    ManagedIdentityClientId = 5,
+    ManagedIdentityTenantId = 6,
+}
+
+/**
+ * Marks a managed identity connection that uses the system-assigned identity, which has no client ID.
+ *
+ * The slot cannot simply be left empty: an absent value means "this connection does not use managed
+ * identity at all", and the two must stay distinguishable or the auth method becomes un-inferable
+ * after a window reload. A client ID is a GUID, so it can never collide with this sentinel.
+ */
+const MANAGED_IDENTITY_SYSTEM_ASSIGNED = 'system-assigned';
+
+function reconstructManagedIdentityConfig(
+    storedValue: string | undefined,
+    tenantId: string | undefined,
+): ManagedIdentityAuthConfig | undefined {
+    if (!storedValue) {
+        return undefined;
+    }
+
+    const tenantConfig = tenantId ? { tenantId } : {};
+    return storedValue === MANAGED_IDENTITY_SYSTEM_ASSIGNED ? tenantConfig : { clientId: storedValue, ...tenantConfig };
 }
 
 /**
@@ -1038,6 +1072,14 @@ export class ConnectionStorageService {
             }
         }
 
+        if (item.secrets.managedIdentityAuthConfig) {
+            secretsArray[SecretIndex.ManagedIdentityClientId] =
+                item.secrets.managedIdentityAuthConfig.clientId ?? MANAGED_IDENTITY_SYSTEM_ASSIGNED;
+            if (item.secrets.managedIdentityAuthConfig.tenantId) {
+                secretsArray[SecretIndex.ManagedIdentityTenantId] = item.secrets.managedIdentityAuthConfig.tenantId;
+            }
+        }
+
         return {
             id: item.id,
             name: item.name,
@@ -1083,6 +1125,14 @@ export class ConnectionStorageService {
                 }
                 if (item.secrets.entraIdAuthConfig.subscriptionId) {
                     secretsArray[SecretIndex.EntraIdSubscriptionId] = item.secrets.entraIdAuthConfig.subscriptionId;
+                }
+            }
+
+            if (item.secrets.managedIdentityAuthConfig) {
+                secretsArray[SecretIndex.ManagedIdentityClientId] =
+                    item.secrets.managedIdentityAuthConfig.clientId ?? MANAGED_IDENTITY_SYSTEM_ASSIGNED;
+                if (item.secrets.managedIdentityAuthConfig.tenantId) {
+                    secretsArray[SecretIndex.ManagedIdentityTenantId] = item.secrets.managedIdentityAuthConfig.tenantId;
                 }
             }
         }
@@ -1167,6 +1217,10 @@ export class ConnectionStorageService {
             connectionString: secretsArray[SecretIndex.ConnectionString] ?? '',
             nativeAuthConfig: nativeAuthConfig,
             entraIdAuthConfig: entraIdAuthConfig,
+            managedIdentityAuthConfig: reconstructManagedIdentityConfig(
+                secretsArray[SecretIndex.ManagedIdentityClientId],
+                secretsArray[SecretIndex.ManagedIdentityTenantId],
+            ),
         };
 
         return {

@@ -6,6 +6,11 @@
 import { AzureWizardPromptStep, parseError } from '@microsoft/vscode-azext-utils';
 import * as l10n from '@vscode/l10n';
 import { AuthMethodId } from '../../documentdb/auth/AuthMethod';
+import {
+    detectManagedIdentityHint,
+    managedIdentityConfigFromHint,
+    stripManagedIdentityMarkers,
+} from '../../documentdb/auth/managedIdentityConnectionString';
 import { AzureDomains, hasDomainSuffix } from '../../documentdb/utils/connectionStringHelpers';
 import { DocumentDBConnectionString } from '../../documentdb/utils/DocumentDBConnectionString';
 import { canonicalizeTlsException } from '../../documentdb/utils/tlsException';
@@ -28,8 +33,12 @@ export class PromptConnectionStringStep extends AzureWizardPromptStep<NewConnect
         // 1. Parse the connection string and extract credentials
         const parsedConnectionString = new DocumentDBConnectionString(trimmedConnectionString);
 
+        // Managed identity intent must be read BEFORE the username is cleared below: the client ID
+        // rides in the username position of the documented driver-native form (design §5.2).
+        const managedIdentityHint = detectManagedIdentityHint(parsedConnectionString);
+
         // Extract credentials to structured nativeAuthConfig
-        if (parsedConnectionString.username || parsedConnectionString.password) {
+        if (!managedIdentityHint && (parsedConnectionString.username || parsedConnectionString.password)) {
             context.nativeAuthConfig = {
                 connectionUser: parsedConnectionString.username || '',
                 connectionPassword: parsedConnectionString.password || '',
@@ -43,6 +52,39 @@ export class PromptConnectionStringStep extends AzureWizardPromptStep<NewConnect
         // 2. Remove obsolete authMechanism entry
         if (parsedConnectionString.searchParams.get('authMechanism') === 'SCRAM-SHA-256') {
             parsedConnectionString.searchParams.delete('authMechanism');
+        }
+
+        if (managedIdentityHint) {
+            // The mechanism markers were inputs to a decision, not state: keeping them in the stored
+            // string risks the driver preferring the URL form and taking its own IMDS path (D1).
+            stripManagedIdentityMarkers(parsedConnectionString);
+            context.managedIdentityHint = managedIdentityHint;
+            context.managedIdentityAuthConfig = managedIdentityConfigFromHint(managedIdentityHint);
+            context.nativeAuthConfig = undefined;
+
+            // Only an explicit ENVIRONMENT:azure marker is unambiguous enough to skip the method
+            // prompt. A bare OIDC string with a GUID username is suggestive, not conclusive, so the
+            // user still gets to confirm or switch to interactive Entra ID.
+            if (managedIdentityHint.confidence === 'explicit') {
+                context.selectedAuthenticationMethod = AuthMethodId.ManagedIdentity;
+            }
+
+            if (managedIdentityHint.clientId) {
+                context.valuesToMask.push(managedIdentityHint.clientId);
+            }
+
+            if (managedIdentityHint.suppliedIdentity) {
+                context.valuesToMask.push(managedIdentityHint.suppliedIdentity);
+            }
+
+            context.telemetry.properties.managedIdentityHint = managedIdentityHint.confidence;
+            if (managedIdentityHint.confidence === 'explicit' && !managedIdentityHint.suppliedIdentity) {
+                // The identity step is skipped in this case, so it cannot record these itself.
+                context.telemetry.properties.managedIdentityKind = managedIdentityHint.clientId ? 'user' : 'system';
+                context.telemetry.properties.managedIdentityClientIdSource = managedIdentityHint.clientId
+                    ? 'connectionString'
+                    : 'none';
+            }
         }
 
         context.connectionString = parsedConnectionString.toString();
@@ -65,6 +107,14 @@ export class PromptConnectionStringStep extends AzureWizardPromptStep<NewConnect
 
         if (hasDomainSuffix(AzureDomains.vCore, ...parsedConnectionString.hosts)) {
             supportedAuthMethods.push(AuthMethodId.MicrosoftEntraID);
+            // Managed identity is Entra ID on the wire; wherever one is offered, so is the other.
+            supportedAuthMethods.push(AuthMethodId.ManagedIdentity);
+        }
+
+        if (managedIdentityHint && !supportedAuthMethods.includes(AuthMethodId.ManagedIdentity)) {
+            // An explicit or suggestive driver-native string remains internally consistent even when
+            // a private endpoint or CNAME prevents host-based vCore classification.
+            supportedAuthMethods.push(AuthMethodId.ManagedIdentity);
         }
 
         // Anonymous ("no authentication") connections are always offered.

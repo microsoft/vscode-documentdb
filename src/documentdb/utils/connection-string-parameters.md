@@ -73,6 +73,18 @@ Accepts comma-separated key:value pairs as a single parameter value, not as dupl
 
 **Example**: `?authMechanismProperties=TOKEN_RESOURCE:mongodb://foo,SOME_KEY:value`
 
+#### `ENVIRONMENT` and `TOKEN_RESOURCE` (managed identity)
+
+Azure DocumentDB documents a machine authentication form that carries two properties:
+
+```text
+?authMechanism=MONGODB-OIDC&authMechanismProperties=ENVIRONMENT:azure,TOKEN_RESOURCE:https://ossrdbms-aad.database.windows.net
+```
+
+The extension **produces** this form (see `copyConnectionString`) and **reads** it on paste (see `detectManagedIdentityHint`), but it does not hand it to the driver. On paste, the properties are interpreted, the connection is configured as a managed identity connection, and both `authMechanism` and `authMechanismProperties` are then stripped from the stored string.
+
+That removal is deliberate. `MongoClientOptions.authMechanismProperties` is where the extension supplies its own OIDC callback, and a competing value left in the URL risks the driver preferring the URL form and taking its own instance metadata code path, which reports failures as an opaque HTTP status code.
+
 ## Implications for Deduplication Logic
 
 Based on this research, connection string deduplication should:

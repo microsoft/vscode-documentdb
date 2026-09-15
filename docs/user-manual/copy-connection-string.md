@@ -12,6 +12,7 @@ For most clusters the command copies the string directly (optionally asking whet
 
 - [Standard clusters](#standard-clusters)
 - [Including or omitting the password](#including-or-omitting-the-password)
+- [Managed identity connections](#managed-identity-connections)
 - [Kubernetes port-forwarded targets](#kubernetes-port-forwarded-targets)
   - [Why these targets are special](#why-these-targets-are-special)
   - [The copy options](#the-copy-options)
@@ -29,6 +30,23 @@ When the cluster uses username/password authentication and a password is availab
 - **Copy with password**: the connection string includes the password.
 
 This prompt appears for saved connections and for Kubernetes-discovered targets, which routinely carry a real password.
+
+## Managed identity connections
+
+For a connection that authenticates with a [managed identity](./connect-with-managed-identity), the command copies the form documented by Microsoft Learn:
+
+```text
+mongodb+srv://<client-id>@<cluster>.mongocluster.cosmos.azure.com/?authMechanism=MONGODB-OIDC&authMechanismProperties=ENVIRONMENT:azure,TOKEN_RESOURCE:https://ossrdbms-aad.database.windows.net
+```
+
+For the system-assigned identity the string is the same without the client ID in the user position.
+
+A few things worth knowing:
+
+- **No password prompt appears.** There is no password on this kind of connection, so there is nothing to choose between.
+- **Nothing sensitive is copied.** A client ID is a tenant-scoped identifier, not a credential, so the string is safe to paste into a bug report.
+- **The string works elsewhere on the same Azure VM**, in `mongosh` and in application drivers, because the identity belongs to the machine rather than to the string.
+- **It pastes back into New Connection** in another VS Code window and reproduces the same managed identity connection.
 
 ## Kubernetes port-forwarded targets
 

@@ -5,6 +5,8 @@
 
 import { AzureWizardPromptStep, type IWizardOptions } from '@microsoft/vscode-azext-utils';
 import * as l10n from '@vscode/l10n';
+import { AuthMethodId } from '../../documentdb/auth/AuthMethod';
+import { SelectManagedIdentityStep } from '../../documentdb/wizards/authenticate/SelectManagedIdentityStep';
 import { DocumentDBExperience } from '../../DocumentDBExperiences';
 import { ExecuteStep } from './ExecuteStep';
 import { ConnectionMode, type NewConnectionWizardContext } from './NewConnectionWizardContext';
@@ -69,6 +71,10 @@ export class PromptConnectionModeStep extends AzureWizardPromptStep<NewConnectio
                         new PromptTlsExceptionStep(),
                         new PromptAuthMethodStep(),
                         new PromptTenantStep(),
+                        new SelectManagedIdentityStep<NewConnectionWizardContext>(
+                            (wizardContext) =>
+                                wizardContext.selectedAuthenticationMethod === AuthMethodId.ManagedIdentity,
+                        ),
                         new PromptUsernameStep(),
                         new PromptPasswordStep(),
                     ],

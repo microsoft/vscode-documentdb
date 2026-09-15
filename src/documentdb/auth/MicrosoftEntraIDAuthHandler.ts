@@ -11,6 +11,7 @@ import { type CachedClusterCredentials } from '../CredentialCache';
 import { DocumentDBConnectionString } from '../utils/DocumentDBConnectionString';
 import { resolveAllowInvalidCertificates } from '../utils/tlsException';
 import { type AuthHandler, type AuthHandlerResponse } from './AuthHandler';
+import { DOCUMENTDB_ENTRA_SCOPE } from './entraScopes';
 import { getOidcAllowedHosts } from './oidcAllowedHosts';
 
 /**
@@ -22,7 +23,7 @@ export class MicrosoftEntraIDAuthHandler implements AuthHandler {
     public async configureAuth(): Promise<AuthHandlerResponse> {
         // Get Microsoft Entra ID token
         const session = await getSessionFromVSCode(
-            ['https://ossrdbms-aad.database.windows.net/.default'],
+            [DOCUMENTDB_ENTRA_SCOPE],
             this.clusterCredentials.entraIdConfig?.tenantId,
             {
                 createIfNone: true,

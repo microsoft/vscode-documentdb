@@ -62,9 +62,11 @@ export class ExecuteStep extends AzureWizardExecuteStep<UpdateCredentialsWizardC
                     connectionUser: context.nativeAuthConfig.connectionUser,
                     connectionPassword: context.nativeAuthConfig.connectionPassword,
                 };
+                connectionCredentials.secrets.managedIdentityAuthConfig = undefined;
             } else if (authMethod === AuthMethodId.MicrosoftEntraID && context.entraIdAuthConfig) {
                 // For Entra ID, clear any native auth configs
                 connectionCredentials.secrets.nativeAuthConfig = undefined;
+                connectionCredentials.secrets.managedIdentityAuthConfig = undefined;
 
                 // Update Entra ID auth config from structured config
                 connectionCredentials.secrets.entraIdAuthConfig = {
@@ -74,9 +76,16 @@ export class ExecuteStep extends AzureWizardExecuteStep<UpdateCredentialsWizardC
             } else if (authMethod === AuthMethodId.MicrosoftEntraID) {
                 // For Entra ID without config, clear any native auth configs
                 connectionCredentials.secrets.nativeAuthConfig = undefined;
+                connectionCredentials.secrets.managedIdentityAuthConfig = undefined;
 
                 // Clear any existing Entra ID config if no new config provided
                 connectionCredentials.secrets.entraIdAuthConfig = undefined;
+            } else if (authMethod === AuthMethodId.ManagedIdentity) {
+                // Managed identity carries no user credentials. An empty config is meaningful and
+                // must be written: it selects the system-assigned identity.
+                connectionCredentials.secrets.nativeAuthConfig = undefined;
+                connectionCredentials.secrets.entraIdAuthConfig = undefined;
+                connectionCredentials.secrets.managedIdentityAuthConfig = context.managedIdentityAuthConfig ?? {};
             } else if (authMethod === AuthMethodId.NoAuth) {
                 // "No Authentication" is credential-free. Clear any previously stored native or
                 // Entra ID secrets so that switching an existing Native/Entra connection to NoAuth
@@ -85,6 +94,7 @@ export class ExecuteStep extends AzureWizardExecuteStep<UpdateCredentialsWizardC
                 // to the connection string and exposing them through paths such as migration sharing).
                 connectionCredentials.secrets.nativeAuthConfig = undefined;
                 connectionCredentials.secrets.entraIdAuthConfig = undefined;
+                connectionCredentials.secrets.managedIdentityAuthConfig = undefined;
             }
 
             connectionCredentials.properties.selectedAuthMethod = context.selectedAuthenticationMethod?.toString();

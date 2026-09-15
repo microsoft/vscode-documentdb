@@ -311,4 +311,156 @@ describe('Credential Cache Stability', () => {
             expect(CredentialCache.getConnectionPassword(clusterId)).toBeUndefined();
         });
     });
+
+    describe('Managed identity connections', () => {
+        const clusterId = 'managed-identity-cluster';
+        const clientId = '11111111-2222-3333-4444-555555555555';
+
+        beforeEach(() => {
+            CredentialCache.deleteCredentials(clusterId);
+        });
+
+        function connectionItem(secrets: Record<string, unknown>, selectedAuthMethod?: string) {
+            return {
+                id: clusterId,
+                name: 'my-cluster',
+                properties: {
+                    type: ItemType.Connection,
+                    api: API.DocumentDB,
+                    availableAuthMethods: [AuthMethodId.MicrosoftEntraID, AuthMethodId.ManagedIdentity],
+                    selectedAuthMethod,
+                },
+                secrets: {
+                    connectionString: 'mongodb+srv://my-cluster.mongocluster.cosmos.azure.com/',
+                    ...secrets,
+                },
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            } as any;
+        }
+
+        it('round trips a user-assigned identity through setAuthCredentials', () => {
+            CredentialCache.setAuthCredentials(
+                clusterId,
+                AuthMethodId.ManagedIdentity,
+                'mongodb+srv://my-cluster.mongocluster.cosmos.azure.com/',
+                undefined,
+                undefined,
+                undefined,
+                { clientId },
+            );
+
+            expect(CredentialCache.getManagedIdentityConfig(clusterId)).toEqual({ clientId });
+            expect(CredentialCache.getCredentials(clusterId)?.authMechanism).toBe(AuthMethodId.ManagedIdentity);
+        });
+
+        it('preserves the empty config that means system-assigned', () => {
+            CredentialCache.setFromConnectionItem(
+                connectionItem({ managedIdentityAuthConfig: {} }, AuthMethodId.ManagedIdentity),
+            );
+
+            const config = CredentialCache.getManagedIdentityConfig(clusterId);
+            expect(config).toBeDefined();
+            expect(config).toEqual({});
+        });
+
+        it('honors the persisted method even when an Entra ID config is also stored', () => {
+            // Managed identity connections discovered through ARM legitimately carry tenant and
+            // subscription metadata, so inference alone would resolve them to interactive Entra ID.
+            CredentialCache.setFromConnectionItem(
+                connectionItem(
+                    {
+                        managedIdentityAuthConfig: { clientId },
+                        entraIdAuthConfig: { tenantId: 'tenant-1', subscriptionId: 'sub-1' },
+                    },
+                    AuthMethodId.ManagedIdentity,
+                ),
+            );
+
+            expect(CredentialCache.getCredentials(clusterId)?.authMechanism).toBe(AuthMethodId.ManagedIdentity);
+            expect(CredentialCache.getManagedIdentityConfig(clusterId)).toEqual({ clientId });
+        });
+
+        it('infers managed identity only when no method was persisted', () => {
+            CredentialCache.setFromConnectionItem(connectionItem({ managedIdentityAuthConfig: { clientId } }));
+
+            expect(CredentialCache.getCredentials(clusterId)?.authMechanism).toBe(AuthMethodId.ManagedIdentity);
+        });
+
+        it('clears the managed identity config for an explicit NoAuth connection', () => {
+            CredentialCache.setFromConnectionItem(
+                connectionItem({ managedIdentityAuthConfig: { clientId } }, AuthMethodId.NoAuth),
+            );
+
+            expect(CredentialCache.getManagedIdentityConfig(clusterId)).toBeUndefined();
+        });
+    });
+
+    describe('Regression: existing connections resolve unchanged after the inference ladder change', () => {
+        const clusterId = 'ladder-regression-cluster';
+
+        beforeEach(() => {
+            CredentialCache.deleteCredentials(clusterId);
+        });
+
+        function connectionItem(secrets: Record<string, unknown>, selectedAuthMethod?: string) {
+            return {
+                id: clusterId,
+                name: 'legacy-cluster',
+                properties: {
+                    type: ItemType.Connection,
+                    api: API.DocumentDB,
+                    availableAuthMethods: [AuthMethodId.NativeAuth],
+                    selectedAuthMethod,
+                },
+                secrets: {
+                    connectionString: 'mongodb://legacy-host:27017/',
+                    ...secrets,
+                },
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            } as any;
+        }
+
+        it('stored Native connections still resolve to Native', () => {
+            CredentialCache.setFromConnectionItem(
+                connectionItem(
+                    { nativeAuthConfig: { connectionUser: 'alice', connectionPassword: 'pw' } },
+                    AuthMethodId.NativeAuth,
+                ),
+            );
+
+            expect(CredentialCache.getCredentials(clusterId)?.authMechanism).toBe(AuthMethodId.NativeAuth);
+            expect(CredentialCache.getConnectionUser(clusterId)).toBe('alice');
+        });
+
+        it('stored Entra ID connections still resolve to Entra ID', () => {
+            CredentialCache.setFromConnectionItem(
+                connectionItem({ entraIdAuthConfig: { tenantId: 'tenant-1' } }, AuthMethodId.MicrosoftEntraID),
+            );
+
+            expect(CredentialCache.getCredentials(clusterId)?.authMechanism).toBe(AuthMethodId.MicrosoftEntraID);
+            expect(CredentialCache.getEntraIdConfig(clusterId)).toEqual({ tenantId: 'tenant-1' });
+        });
+
+        it('stored NoAuth connections still resolve to NoAuth', () => {
+            CredentialCache.setFromConnectionItem(connectionItem({}, AuthMethodId.NoAuth));
+
+            expect(CredentialCache.getCredentials(clusterId)?.authMechanism).toBe(AuthMethodId.NoAuth);
+        });
+
+        it('records with no persisted method still fall back to inference', () => {
+            CredentialCache.setFromConnectionItem(
+                connectionItem({ nativeAuthConfig: { connectionUser: 'alice', connectionPassword: 'pw' } }),
+            );
+
+            expect(CredentialCache.getCredentials(clusterId)?.authMechanism).toBe(AuthMethodId.NativeAuth);
+        });
+
+        it('an unrecognized persisted method falls through to inference rather than being trusted', () => {
+            CredentialCache.setFromConnectionItem(
+                connectionItem({ entraIdAuthConfig: { tenantId: 'tenant-1' } }, 'SomeFutureMethod'),
+            );
+
+            expect(CredentialCache.getCredentials(clusterId)?.authMechanism).toBe(AuthMethodId.MicrosoftEntraID);
+        });
+    });
 });
