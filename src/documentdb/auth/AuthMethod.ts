@@ -38,6 +38,8 @@ export interface AuthMethodInfo {
     readonly detail: string;
     /** Optional icon identifier for the authentication method */
     readonly iconName?: string;
+    /** Optional VS Code theme icon identifier for the authentication method */
+    readonly themeIconName?: string;
 }
 
 // Individual auth method definitions
@@ -45,13 +47,14 @@ export const NativeAuthMethod: AuthMethodInfo = {
     id: AuthMethodId.NativeAuth,
     label: vscode.l10n.t('Username and Password'),
     detail: vscode.l10n.t('Authenticate using a username and password'),
+    themeIconName: 'key',
 } as const;
 
 export const MicrosoftEntraIDAuthMethod: AuthMethodInfo = {
     id: AuthMethodId.MicrosoftEntraID,
     label: vscode.l10n.t('Microsoft Entra ID'),
     detail: vscode.l10n.t('Sign in with your account, or use an identity assigned to this machine'),
-    // iconName: 'Microsoft-Entra-ID-BW-icon.svg',
+    themeIconName: 'azure',
 } as const;
 
 export const ManagedIdentityAuthMethod: AuthMethodInfo = {
@@ -64,6 +67,7 @@ export const NoAuthMethod: AuthMethodInfo = {
     id: AuthMethodId.NoAuth,
     label: vscode.l10n.t('No Authentication'),
     detail: vscode.l10n.t('Connect without a username or password'),
+    themeIconName: 'unlock',
 } as const;
 
 // Arrays for different contexts
@@ -128,6 +132,18 @@ export function authMethodsFromString(methods?: string[]): AuthMethodId[] {
     return availableAuthMethods;
 }
 
+function getAuthMethodIconPath(method: AuthMethodInfo): vscode.IconPath | undefined {
+    if (method.themeIconName) {
+        return new vscode.ThemeIcon(method.themeIconName);
+    }
+
+    if (method.iconName) {
+        return getIconPath(method.iconName);
+    }
+
+    return undefined;
+}
+
 /**
  * Create quick pick items from available authentication methods
  */
@@ -151,7 +167,7 @@ export function createAuthMethodQuickPickItems(
         label: method.label,
         detail: method.detail,
         authMethod: method.id,
-        iconPath: method.iconName ? getIconPath(method.iconName) : undefined,
+                iconPath: getAuthMethodIconPath(method),
         alwaysShow: true,
         description:
             showSupportInfo && availableMethods && !availableMethods.includes(method.id)

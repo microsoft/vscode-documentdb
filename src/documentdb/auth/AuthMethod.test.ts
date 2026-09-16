@@ -49,4 +49,14 @@ describe('authentication family quick pick', () => {
         expect(getAuthMethod(AuthMethodId.ManagedIdentity)).toBeDefined();
         expect(getAllAuthMethods().map((method) => method.id)).toContain(AuthMethodId.ManagedIdentity);
     });
+
+    it('renders a familiar icon for each authentication family', () => {
+        const items = createAuthMethodQuickPickItemsWithSupportInfo();
+        const iconId = (method: AuthMethodId): string | undefined =>
+            (items.find((item) => item.authMethod === method)?.iconPath as { id?: string } | undefined)?.id;
+
+        expect(iconId(AuthMethodId.NativeAuth)).toBe('key');
+        expect(iconId(AuthMethodId.MicrosoftEntraID)).toBe('azure');
+        expect(iconId(AuthMethodId.NoAuth)).toBe('unlock');
+    });
 });

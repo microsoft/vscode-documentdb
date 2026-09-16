@@ -218,13 +218,14 @@ export class SelectEntraTokenSourceStep<T extends ManagedIdentitySelectionContex
             items.push({ label: l10n.t('From the connection string'), kind: vscode.QuickPickItemKind.Separator });
             items.push({
                 label: l10n.t('Managed identity  {0}', prefilledClientId),
-                detail: l10n.t('(user-assigned)'),
+                detail: l10n.t('Use the supplied client ID as a user-assigned managed identity'),
                 iconPath: new vscode.ThemeIcon('account'),
                 choice: 'clientId',
                 clientId: prefilledClientId,
             });
         }
 
+        items.push({ label: l10n.t('Microsoft Entra account'), kind: vscode.QuickPickItemKind.Separator });
         items.push({
             label: l10n.t('Sign in with my account'),
             detail: l10n.t('Uses the account you sign in with in Visual Studio Code'),
@@ -233,16 +234,16 @@ export class SelectEntraTokenSourceStep<T extends ManagedIdentitySelectionContex
             alwaysShow: true,
         });
         items.push(
-            { label: l10n.t('This machine'), kind: vscode.QuickPickItemKind.Separator },
+            { label: l10n.t('Managed identity'), kind: vscode.QuickPickItemKind.Separator },
             {
                 label: l10n.t('Use the identity assigned to this machine'),
-                detail: l10n.t('(system-assigned)'),
+                detail: l10n.t('Authenticate without a client ID using the system-assigned option'),
                 iconPath: new vscode.ThemeIcon('device-desktop'),
                 choice: 'systemAssigned',
             },
             {
                 label: l10n.t('Use a different managed identity...'),
-                detail: l10n.t('(user-assigned) Enter a client ID'),
+                detail: l10n.t('Enter the client ID of a user-assigned managed identity'),
                 iconPath: new vscode.ThemeIcon('edit'),
                 choice: 'manual',
                 clientId: suppliedIdentity,
@@ -251,8 +252,9 @@ export class SelectEntraTokenSourceStep<T extends ManagedIdentitySelectionContex
         );
 
         if (showChangeAuthMethod) {
+            items.push({ label: l10n.t('Other options'), kind: vscode.QuickPickItemKind.Separator });
             items.push({
-                label: l10n.t('Use a different authentication method...'),
+                label: l10n.t('Choose a different authentication method...'),
                 detail: l10n.t('This connection string asked for Microsoft Entra ID'),
                 iconPath: new vscode.ThemeIcon('arrow-swap'),
                 choice: 'authMethod',

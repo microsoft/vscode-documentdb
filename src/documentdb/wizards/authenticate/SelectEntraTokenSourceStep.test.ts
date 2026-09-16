@@ -55,6 +55,7 @@ describe('SelectEntraTokenSourceStep.buildItems', () => {
         const firstSelectableItem = items.find((item) => item.kind !== vscode.QuickPickItemKind.Separator);
 
         expect(firstSelectableItem?.label).toBe('Sign in with my account');
+        expect(items[0].label).toBe('Microsoft Entra account');
     });
 
     it('is never a dead end: with nothing known it offers account and both managed identity sources', () => {
@@ -79,7 +80,7 @@ describe('SelectEntraTokenSourceStep.buildItems', () => {
         const manualEntry = items.find((item) => item.choice === 'manual');
 
         expect(manualEntry?.label).toBe('Use a different managed identity...');
-        expect(manualEntry?.detail).toContain('user-assigned');
+        expect(manualEntry?.detail).toBe('Enter the client ID of a user-assigned managed identity');
     });
 
     it('prefills a supplied identity that is not a client ID for correction', () => {
@@ -101,8 +102,18 @@ describe('SelectEntraTokenSourceStep.buildItems', () => {
     it('keeps system-assigned and user-assigned terms searchable in details', () => {
         const items = makeStep().buildItems();
 
-        expect(items.find((item) => item.choice === 'systemAssigned')?.detail).toContain('system-assigned');
+        expect(items.find((item) => item.choice === 'systemAssigned')?.detail).toBe(
+            'Authenticate without a client ID using the system-assigned option',
+        );
         expect(items.find((item) => item.choice === 'manual')?.detail).toContain('user-assigned');
+        expect(items.some((item) => item.label === 'Managed identity')).toBe(true);
+    });
+
+    it('groups the inferred-family escape under other options', () => {
+        const items = makeStep().buildItems(undefined, undefined, true);
+        const otherOptionsIndex = items.findIndex((item) => item.label === 'Other options');
+
+        expect(items[otherOptionsIndex + 1].label).toBe('Choose a different authentication method...');
     });
 });
 
