@@ -25,15 +25,22 @@ interface MockIndex {
     name: string;
     v?: number;
     unique?: boolean;
+    background?: boolean;
+    hidden?: boolean;
     cosmosSearchOptions?: Record<string, unknown>;
 }
 
-function createClient(indexes: MockIndex[], createIndex: jest.Mock = jest.fn()): ClustersClient {
+function createClient(
+    indexes: MockIndex[],
+    createIndex: jest.Mock = jest.fn(),
+    hideIndex: jest.Mock = jest.fn(),
+): ClustersClient {
     return {
         getCollection: jest.fn().mockReturnValue({
             indexes: jest.fn().mockResolvedValue(indexes),
         }),
         createIndex,
+        hideIndex,
     } as unknown as ClustersClient;
 }
 
@@ -80,6 +87,7 @@ describe('DocumentDbIndexService', () => {
 
     it('preserves the name and options when no collision exists', async () => {
         const createIndex = jest.fn().mockResolvedValue({ ok: 1 });
+        const onStart = jest.fn();
         const source = new DocumentDbIndexService(
             createClient([{ key: { email: 1 }, name: 'email_1', v: 2, unique: true }]),
             'sourceDb',
@@ -87,9 +95,11 @@ describe('DocumentDbIndexService', () => {
         );
         const target = new DocumentDbIndexService(createClient([], createIndex), 'targetDb', 'targetCollection');
 
-        const result = await source.copyIndexesTo(target);
+        const result = await source.copyIndexesTo(target, { onStart });
 
+        expect(onStart).toHaveBeenCalledWith(1);
         expect(createIndex).toHaveBeenCalledWith('targetDb', 'targetCollection', {
+            background: true,
             key: { email: 1 },
             name: 'email_1',
             unique: true,
@@ -128,10 +138,103 @@ describe('DocumentDbIndexService', () => {
         await source.copyIndexesTo(target);
 
         expect(createIndex).toHaveBeenCalledWith('targetDb', 'targetCollection', {
+            background: true,
             key: { embedding: 'cosmosSearch' },
             name: 'bookEmbeddingIndex',
             cosmosSearchOptions,
         });
+    });
+
+    it('requests background creation even when the source reports foreground creation', async () => {
+        const createIndex = jest.fn().mockResolvedValue({ ok: 1 });
+        const source = new DocumentDbIndexService(
+            createClient([{ key: { email: 1 }, name: 'email_1', background: false }]),
+            'sourceDb',
+            'sourceCollection',
+        );
+        const target = new DocumentDbIndexService(createClient([], createIndex), 'targetDb', 'targetCollection');
+
+        await source.copyIndexesTo(target);
+
+        expect(createIndex).toHaveBeenCalledWith(
+            'targetDb',
+            'targetCollection',
+            expect.objectContaining({ background: true }),
+        );
+    });
+
+    it('creates a hidden index before hiding it', async () => {
+        const calls: string[] = [];
+        const createIndex = jest.fn().mockImplementation(async () => {
+            calls.push('create');
+            return { ok: 1 };
+        });
+        const hideIndex = jest.fn().mockImplementation(async () => {
+            calls.push('hide');
+            return { ok: 1 };
+        });
+        const source = new DocumentDbIndexService(
+            createClient([{ key: { addedAt: -1 }, name: 'addedAt_-1', hidden: true }]),
+            'sourceDb',
+            'sourceCollection',
+        );
+        const target = new DocumentDbIndexService(
+            createClient([], createIndex, hideIndex),
+            'targetDb',
+            'targetCollection',
+        );
+
+        await source.copyIndexesTo(target);
+
+        expect(createIndex).toHaveBeenCalledWith('targetDb', 'targetCollection', {
+            background: true,
+            key: { addedAt: -1 },
+            name: 'addedAt_-1',
+        });
+        expect(hideIndex).toHaveBeenCalledWith('targetDb', 'targetCollection', 'addedAt_-1');
+        expect(calls).toEqual(['create', 'hide']);
+    });
+
+    it('skips an equivalent target index without changing its visibility', async () => {
+        const createIndex = jest.fn();
+        const hideIndex = jest.fn();
+        const source = new DocumentDbIndexService(
+            createClient([{ key: { addedAt: -1 }, name: 'source_name', hidden: true }]),
+            'sourceDb',
+            'sourceCollection',
+        );
+        const target = new DocumentDbIndexService(
+            createClient([{ key: { addedAt: -1 }, name: 'target_name' }], createIndex, hideIndex),
+            'targetDb',
+            'targetCollection',
+        );
+
+        const result = await source.copyIndexesTo(target);
+
+        expect(result.skippedCount).toBe(1);
+        expect(createIndex).not.toHaveBeenCalled();
+        expect(hideIndex).not.toHaveBeenCalled();
+    });
+
+    it('fails when a newly created index cannot be hidden', async () => {
+        const source = new DocumentDbIndexService(
+            createClient([{ key: { addedAt: -1 }, name: 'addedAt_-1', hidden: true }]),
+            'sourceDb',
+            'sourceCollection',
+        );
+        const target = new DocumentDbIndexService(
+            createClient(
+                [],
+                jest.fn().mockResolvedValue({ ok: 1 }),
+                jest.fn().mockResolvedValue({ ok: 0, errmsg: 'hide failed' }),
+            ),
+            'targetDb',
+            'targetCollection',
+        );
+
+        await expect(source.copyIndexesTo(target)).rejects.toThrow(
+            'Index "addedAt_-1" was created but could not be hidden: hide failed',
+        );
     });
 
     it('adds a suffix when an index name collides with a different definition', async () => {
@@ -156,6 +259,7 @@ describe('DocumentDbIndexService', () => {
         const result = await source.copyIndexesTo(target);
 
         expect(createIndex).toHaveBeenCalledWith('targetDb', 'targetCollection', {
+            background: true,
             key: { email: 1 },
             name: 'shared_copy_2',
         });

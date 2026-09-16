@@ -392,11 +392,13 @@ export class CopyPasteCollectionTask extends Task implements ResourceTrackingTas
         try {
             result = await this.indexServices.source.copyIndexesTo(this.indexServices.target, {
                 signal,
+                onStart: (total) => {
+                    this.updateProgress(0, vscode.l10n.t('Copying {0} indexes...', total.toString()));
+                },
                 onProgress: ({ completed, total, indexName }) => {
-                    this.updateProgress(
-                        0,
+                    ext.outputChannel.trace(
                         vscode.l10n.t(
-                            'Copying indexes: {0}/{1} ({2})',
+                            '[CopyPasteTask] Index copy progress: {0}/{1} ({2}).',
                             completed.toString(),
                             total.toString(),
                             indexName,

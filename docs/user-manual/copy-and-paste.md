@@ -28,7 +28,7 @@ The copy-and-paste process is designed to be efficient for smaller collections b
 3.  **Bulk Write Operation**: Once the buffer is full, the extension performs a bulk write operation to the target collection. This is more efficient than writing documents one at a time.
 4.  **Continuous Cycle**: This process repeats - refilling the buffer from the source and writing to the target - until all documents from the source collection have been copied.
 
-Optionally, the extension can also copy secondary indexes. Indexes are created before document streaming begins. Equivalent indexes already on the target are skipped, while a source index whose name is already used by a different definition receives a suffix. The built-in `_id` index is not copied.
+Optionally, the extension can also copy secondary indexes. Copied indexes are requested as background builds before document streaming begins. Hidden source indexes are created first and then hidden to preserve their visibility state. Equivalent indexes already on the target are skipped without changing their visibility, while a source index whose name is already used by a different definition receives a suffix. The built-in `_id` index is not copied.
 
 The extension reads the source index count only after you choose to copy indexes. If that read fails, the paste operation stops. Document-only copies do not read source indexes. Cancelling during index creation stops before the next index; indexes already created remain on the target.
 

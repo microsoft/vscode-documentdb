@@ -4,7 +4,11 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { type IActionContext } from '@microsoft/vscode-azext-utils';
-import { type DocumentDbIndexService } from '../../data-api/indexes/DocumentDbIndexService';
+import { ext } from '../../../../extensionVariables';
+import {
+    type CopyIndexesOptions,
+    type DocumentDbIndexService,
+} from '../../data-api/indexes/DocumentDbIndexService';
 import { ConflictResolutionStrategy, type DocumentReader } from '../../data-api/types';
 import { type StreamingDocumentWriter } from '../../data-api/writers/StreamingDocumentWriter';
 import { CopyPasteCollectionTask } from './CopyPasteCollectionTask';
@@ -48,12 +52,19 @@ jest.mock('vscode', () => ({
 }));
 
 class TestCopyPasteCollectionTask extends CopyPasteCollectionTask {
+    public readonly progressUpdates: Array<{ progress: number; message?: string }> = [];
+
     public runWorkForTest(signal: AbortSignal, context: IActionContext): Promise<void> {
         return this.doWork(signal, context);
     }
 
     public setSourceDocumentCount(count: number): void {
         (this as unknown as { sourceDocumentCount: number }).sourceDocumentCount = count;
+    }
+
+    protected override updateProgress(progress: number, message?: string): void {
+        this.progressUpdates.push({ progress, message });
+        super.updateProgress(progress, message);
     }
 }
 
@@ -71,6 +82,38 @@ function createContext(): IActionContext {
 }
 
 describe('CopyPasteCollectionTask index phase', () => {
+    it('shows a stable index count and traces per-index progress', async () => {
+        const sourceIndexes = {
+            copyIndexesTo: jest.fn().mockImplementation(
+                async (_target: DocumentDbIndexService, options: CopyIndexesOptions) => {
+                    options.onStart?.(20);
+                    options.onProgress?.({ completed: 1, total: 20, indexName: 'email_1' });
+                    return {
+                        sourceIndexCount: 20,
+                        createdCount: 0,
+                        skippedCount: 1,
+                        renamedCount: 0,
+                        cancelled: false,
+                    };
+                },
+            ),
+        } as unknown as DocumentDbIndexService;
+        const reader = { streamDocuments: jest.fn() } as unknown as DocumentReader;
+        const writer = { streamDocuments: jest.fn() } as unknown as StreamingDocumentWriter;
+        const task = new TestCopyPasteCollectionTask(config, reader, writer, {
+            source: sourceIndexes,
+            target: {} as DocumentDbIndexService,
+            presentationDelayMs: 0,
+        });
+
+        await task.runWorkForTest(new AbortController().signal, createContext());
+
+        expect(task.progressUpdates).toContainEqual({ progress: 0, message: 'Copying 20 indexes...' });
+        expect(ext.outputChannel.trace).toHaveBeenCalledWith(
+            '[CopyPasteTask] Index copy progress: 1/20 (email_1).',
+        );
+    });
+
     it('copies indexes before streaming documents', async () => {
         const calls: string[] = [];
         const sourceIndexes = {

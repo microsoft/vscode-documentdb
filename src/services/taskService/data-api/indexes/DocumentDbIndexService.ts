@@ -24,6 +24,7 @@ export interface IndexCopyResult {
 
 export interface CopyIndexesOptions {
     signal?: AbortSignal;
+    onStart?: (total: number) => void;
     onProgress?: (progress: IndexCopyProgress) => void;
 }
 
@@ -31,6 +32,7 @@ interface IndexDefinition {
     key: Record<string, number | string>;
     name: string;
     options: Document;
+    hidden: boolean;
 }
 
 /**
@@ -53,6 +55,7 @@ export class DocumentDbIndexService {
         options: CopyIndexesOptions = {},
     ): Promise<IndexCopyResult> {
         const sourceIndexes = await this.readCopyableIndexes();
+        options.onStart?.(sourceIndexes.length);
         const targetIndexes = await target.readCopyableIndexes();
         const targetIndexNames = new Set(targetIndexes.map((index) => index.name));
         const targetSignatures = new Set(targetIndexes.map((index) => this.getDefinitionSignature(index)));
@@ -133,6 +136,7 @@ export class DocumentDbIndexService {
     private async createIndex(index: IndexDefinition): Promise<void> {
         const result = await this.client.createIndex(this.databaseName, this.collectionName, {
             ...index.options,
+            background: true,
             key: Object.fromEntries(this.getKeyEntries(index.key)),
             name: index.name,
         });
@@ -140,16 +144,32 @@ export class DocumentDbIndexService {
         if (result.ok === 0 || result.note) {
             throw new Error(typeof result.note === 'string' ? result.note : vscode.l10n.t('Failed to create index.'));
         }
+
+        if (index.hidden) {
+            const visibilityResult = await this.client.hideIndex(this.databaseName, this.collectionName, index.name);
+            if (visibilityResult.ok === 0 || visibilityResult.errmsg) {
+                const errorMessage =
+                    typeof visibilityResult.errmsg === 'string'
+                        ? visibilityResult.errmsg
+                        : vscode.l10n.t('Failed to hide index.');
+                throw new Error(
+                    vscode.l10n.t('Index "{0}" was created but could not be hidden: {1}', index.name, errorMessage),
+                );
+            }
+        }
     }
 
     private toIndexDefinition(index: IndexDescriptionInfo): IndexDefinition {
         const options = Object.fromEntries(
-            Object.entries(index).filter(([property]) => !['key', 'name', 'v', 'ns'].includes(property)),
+            Object.entries(index).filter(
+                ([property]) => !['key', 'name', 'v', 'ns', 'background', 'hidden'].includes(property),
+            ),
         );
         return {
             key: index.key,
             name: index.name ?? this.getGeneratedName(index.key),
             options,
+            hidden: index.hidden === true,
         };
     }
 
