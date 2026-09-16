@@ -102,9 +102,29 @@ needed.
 
 Focused verification: 1 suite, 4 tests covering both tenant steps. `npm run build` passed.
 
+### WI4: Clarify quick-pick groups and authentication icons
+
+**Commit:** `29485da8`, `fix: clarify authentication quick picks`
+
+The identity picker now groups account sign-in under **Microsoft Entra account**, machine choices
+under **Managed identity**, and the inferred-family escape under the conditional **Other options**
+heading. The earlier **This machine** heading was rejected because it described a location rather
+than the authentication concept shared by both identity rows.
+
+System-assigned and user-assigned terminology now appears in complete detail sentences instead of
+standalone parenthetical labels. The pasted candidate says that its supplied client ID will be used
+as a user-assigned managed identity. The no-client-ID choice states that it uses the system-assigned
+option, and manual entry says that it expects a user-assigned managed identity client ID.
+
+The top-level family picker now uses the `key` icon for username/password, the `azure` icon for
+Microsoft Entra ID, and the `unlock` icon for no authentication. Theme icons were chosen over new
+image assets so they follow the active VS Code theme and match existing Azure tree surfaces.
+
+Focused verification: 2 suites, 36 tests. `npm run build` and `git diff --check` passed.
+
 ## Outcome
 
-The implementation now matches the handoff's three dependent stages. Focused tests and a project
-build passed after each work item. Localization generation, formatting, lint, the full Jest suite,
-packaging, and hands-on Azure VM validation were not run because this branch is still in the
-working/draft phase.
+The implementation now matches the handoff's three dependent stages and the operator's follow-up
+quick-pick refinement. Focused tests and a project build passed after each work item. Localization
+generation, formatting, lint, the full Jest suite, packaging, and hands-on Azure VM validation were
+not run because this branch is still in the working/draft phase.

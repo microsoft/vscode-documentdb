@@ -460,16 +460,18 @@ Select the identity to use for this connection
 
 From the connection string
   Managed identity  11111111-2222-3333-4444-555555555555
-    (user-assigned)
-Sign in with my account
-  Uses the account you sign in with in Visual Studio Code
-This machine
+    Use the supplied client ID as a user-assigned managed identity
+Microsoft Entra account
+  Sign in with my account
+    Uses the account you sign in with in Visual Studio Code
+Managed identity
   Use the identity assigned to this machine
-    (system-assigned)
+    Authenticate without a client ID using the system-assigned option
   Use a different managed identity...
-    (user-assigned) Enter a client ID
-Use a different authentication method...
-  This connection string asked for Microsoft Entra ID
+    Enter the client ID of a user-assigned managed identity
+Other options
+  Choose a different authentication method...
+    This connection string asked for Microsoft Entra ID
 ```
 
 - The connection-string candidate and different-authentication-method rows are conditional.
@@ -479,8 +481,14 @@ Use a different authentication method...
   create a second picker variant.
 - The different-authentication-method row appears when OIDC inference skipped the family picker,
   because AzureWizard Back cannot reopen a step that did not prompt.
+- Group headings name authentication concepts rather than locations. System-assigned and
+  user-assigned terminology appears in complete detail sentences so the rows remain understandable
+  without relying on parenthetical fragments.
 - The tenant step runs after this picker. It sees the final stored method and therefore never asks a
   managed identity to choose a tenant.
+
+The top-level family rows use VS Code theme icons: `key` for username/password, `azure` for
+Microsoft Entra ID, and `unlock` for no authentication.
 
 The family picker is shared by seven entry points and omits managed identity as a top-level row in
 all of them. The identity step is registered behind its Entra-family gate in all seven; see
