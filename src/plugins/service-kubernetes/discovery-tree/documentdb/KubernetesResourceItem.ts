@@ -741,9 +741,22 @@ export class KubernetesResourceItem extends ClusterItemBase<KubernetesClusterMod
             await import('../../../../documentdb/wizards/authenticate/ChooseAuthMethodStep');
         const { ProvideUserNameStep } = await import('../../../../documentdb/wizards/authenticate/ProvideUsernameStep');
         const { ProvidePasswordStep } = await import('../../../../documentdb/wizards/authenticate/ProvidePasswordStep');
+        const { SelectEntraTokenSourceStep } =
+            await import('../../../../documentdb/wizards/authenticate/SelectEntraTokenSourceStep');
 
         const wizard = new AzureWizard(wizardContext, {
-            promptSteps: [new ChooseAuthMethodStep(), new ProvideUserNameStep(), new ProvidePasswordStep()],
+            promptSteps: [
+                new ChooseAuthMethodStep(),
+                new SelectEntraTokenSourceStep<AuthenticateWizardContext>(
+                    (context) => context.selectedAuthMethod,
+                    (context, method) => {
+                        context.selectedAuthMethod = method;
+                        context.isAuthMethodUpdated = true;
+                    },
+                ),
+                new ProvideUserNameStep(),
+                new ProvidePasswordStep(),
+            ],
             title: l10n.t('Authenticate to connect with your DocumentDB cluster'),
             showLoadingPrompt: true,
         });

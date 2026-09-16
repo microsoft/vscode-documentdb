@@ -64,10 +64,13 @@ export class PromptConnectionStringStep extends AzureWizardPromptStep<NewConnect
         const hasUsableManagedIdentity =
             authFacts.declaresAzureMachineWorkflow && (!authFacts.username || authFacts.usernameIsGuid);
 
-        if (hasUsableManagedIdentity) {
+        if (authFacts.usesOidc && authFacts.declaresAzureMachineWorkflow) {
             // The mechanism markers were inputs to a decision, not state: keeping them in the stored
             // string risks the driver preferring the URL form and taking its own IMDS path (D1).
             stripManagedIdentityMarkers(parsedConnectionString);
+        }
+
+        if (hasUsableManagedIdentity) {
             context.selectedAuthenticationMethod = AuthMethodId.ManagedIdentity;
             context.managedIdentityAuthConfig = authFacts.username ? { clientId: authFacts.username } : {};
             context.telemetry.properties.managedIdentityKind = authFacts.username ? 'user' : 'system';

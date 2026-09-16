@@ -53,4 +53,21 @@ describe('PromptConnectionStringStep', () => {
         expect(context.managedIdentityAuthConfig).toEqual({ clientId });
         expect(context.connectionStringAuthFacts?.declaresAzureMachineWorkflow).toBe(false);
     });
+
+    it('keeps an unusable machine identity visible for correction without storing machine-flow markers', async () => {
+        const context = makeContext(
+            `mongodb://display-name@private.documentdb.internal:10260/?authMechanism=MONGODB-OIDC&authMechanismProperties=${MANAGED_IDENTITY_AUTH_MECHANISM_PROPERTIES}`,
+        );
+
+        await new PromptConnectionStringStep().prompt(context);
+
+        expect(context.selectedAuthenticationMethod).toBe(AuthMethodId.MicrosoftEntraID);
+        expect(context.connectionStringAuthFacts).toMatchObject({
+            declaresAzureMachineWorkflow: true,
+            username: 'display-name',
+            usernameIsGuid: false,
+        });
+        expect(context.connectionString).not.toContain('authMechanism');
+        expect(context.connectionString).not.toContain('display-name');
+    });
 });

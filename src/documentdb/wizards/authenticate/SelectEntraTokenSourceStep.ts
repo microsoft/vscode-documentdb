@@ -6,7 +6,13 @@
 import { AzureWizardPromptStep, type IActionContext } from '@microsoft/vscode-azext-utils';
 import * as l10n from '@vscode/l10n';
 import * as vscode from 'vscode';
-import { type ManagedIdentityAuthConfig } from '../../auth/AuthConfig';
+import { type EntraIdAuthConfig, type ManagedIdentityAuthConfig } from '../../auth/AuthConfig';
+import {
+    AuthMethodId,
+    authMethodsFromString,
+    createAuthMethodQuickPickItems,
+    isSupportedAuthMethod,
+} from '../../auth/AuthMethod';
 import { type ConnectionStringAuthFacts } from '../../auth/managedIdentityConnectionString';
 
 const GUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -65,11 +71,14 @@ export function normalizeClientId(value: string | undefined): string {
 
 /** The subset of a wizard context this step needs, so it can serve every wizard that offers the method. */
 export interface ManagedIdentitySelectionContext extends IActionContext {
+    entraIdAuthConfig?: EntraIdAuthConfig;
     managedIdentityAuthConfig?: ManagedIdentityAuthConfig;
     connectionStringAuthFacts?: ConnectionStringAuthFacts;
+    availableAuthenticationMethods?: AuthMethodId[];
+    availableAuthMethods?: string[];
 }
 
-type IdentityChoice = 'manual' | 'systemAssigned' | 'clientId';
+type IdentityChoice = 'account' | 'manual' | 'systemAssigned' | 'clientId' | 'authMethod';
 
 interface IdentityQuickPickItem extends vscode.QuickPickItem {
     readonly choice?: IdentityChoice;
@@ -87,8 +96,11 @@ interface IdentityQuickPickItem extends vscode.QuickPickItem {
  * escape hatch as the final fallback. It is never a dead end; with nothing known it still shows both
  * identity options.
  */
-export class SelectManagedIdentityStep<T extends ManagedIdentitySelectionContext> extends AzureWizardPromptStep<T> {
-    constructor(private readonly isManagedIdentitySelected: (context: T) => boolean) {
+export class SelectEntraTokenSourceStep<T extends ManagedIdentitySelectionContext> extends AzureWizardPromptStep<T> {
+    constructor(
+        private readonly getSelectedAuthMethod: (context: T) => AuthMethodId | undefined,
+        private readonly setSelectedAuthMethod: (context: T, method: AuthMethodId) => void,
+    ) {
         super();
     }
 
@@ -97,14 +109,30 @@ export class SelectManagedIdentityStep<T extends ManagedIdentitySelectionContext
         const facts = context.connectionStringAuthFacts;
         const suppliedIdentity = facts?.username && !facts.usernameIsGuid ? facts.username : undefined;
 
-        const selected = await context.ui.showQuickPick(this.buildItems(prefilledClientId, suppliedIdentity), {
-            stepName: 'selectManagedIdentity',
-            placeHolder: l10n.t('Select the managed identity to use'),
-            matchOnDetail: true,
-            suppressPersistence: true,
-        });
+        const selected = await context.ui.showQuickPick(
+            this.buildItems(prefilledClientId, suppliedIdentity, facts?.usesOidc === true),
+            {
+                stepName: 'selectEntraTokenSource',
+                placeHolder: suppliedIdentity
+                    ? l10n.t('Select the identity to use ("{0}" is not a client ID)', suppliedIdentity)
+                    : l10n.t('Select the identity to use for this connection'),
+                matchOnDetail: true,
+                suppressPersistence: true,
+            },
+        );
+
+        if (selected.choice === 'account') {
+            this.applyAuthMethod(context, AuthMethodId.MicrosoftEntraID);
+            return;
+        }
+
+        if (selected.choice === 'authMethod') {
+            await this.selectDifferentAuthMethod(context);
+            return;
+        }
 
         if (selected.choice === 'systemAssigned') {
+            this.applyAuthMethod(context, AuthMethodId.ManagedIdentity);
             const tenantId = context.managedIdentityAuthConfig?.tenantId;
             // A config without a client ID selects the system-assigned identity.
             context.managedIdentityAuthConfig = tenantId ? { tenantId } : {};
@@ -114,6 +142,7 @@ export class SelectManagedIdentityStep<T extends ManagedIdentitySelectionContext
         }
 
         if (selected.choice === 'clientId' && selected.clientId) {
+            this.applyAuthMethod(context, AuthMethodId.ManagedIdentity);
             this.applyClientId(context, selected.clientId, 'connectionString');
             return;
         }
@@ -127,11 +156,16 @@ export class SelectManagedIdentityStep<T extends ManagedIdentitySelectionContext
         });
 
         const normalized = normalizeClientId(clientId);
+        this.applyAuthMethod(context, AuthMethodId.ManagedIdentity);
         this.applyClientId(context, normalized, normalized === selected.clientId ? 'connectionString' : 'prompt');
     }
 
     public shouldPrompt(context: T): boolean {
-        if (!this.isManagedIdentitySelected(context)) {
+        const selectedAuthMethod = this.getSelectedAuthMethod(context);
+        if (
+            selectedAuthMethod !== AuthMethodId.MicrosoftEntraID &&
+            selectedAuthMethod !== AuthMethodId.ManagedIdentity
+        ) {
             return false;
         }
 
@@ -173,47 +207,95 @@ export class SelectManagedIdentityStep<T extends ManagedIdentitySelectionContext
      * usable as a client ID. It is offered for editing rather than dropped, because it is the only
      * evidence of which identity the user meant.
      */
-    public buildItems(prefilledClientId?: string, suppliedIdentity?: string): IdentityQuickPickItem[] {
-        const items: IdentityQuickPickItem[] = [
-            { label: l10n.t('This machine'), kind: vscode.QuickPickItemKind.Separator },
-            {
-                label: l10n.t('System-assigned managed identity'),
-                detail: l10n.t("Use this machine's own identity, no client ID needed"),
-                // Not the 'vm' icon: nothing here verifies that the host is a virtual machine.
-                iconPath: new vscode.ThemeIcon('device-desktop'),
-                choice: 'systemAssigned',
-            },
-        ];
+    public buildItems(
+        prefilledClientId?: string,
+        suppliedIdentity?: string,
+        showChangeAuthMethod: boolean = false,
+    ): IdentityQuickPickItem[] {
+        const items: IdentityQuickPickItem[] = [];
 
         if (prefilledClientId) {
             items.push({ label: l10n.t('From the connection string'), kind: vscode.QuickPickItemKind.Separator });
             items.push({
-                label: prefilledClientId,
+                label: l10n.t('Managed identity  {0}', prefilledClientId),
+                detail: l10n.t('(user-assigned)'),
                 iconPath: new vscode.ThemeIcon('account'),
                 choice: 'clientId',
                 clientId: prefilledClientId,
             });
-        } else if (suppliedIdentity) {
-            items.push({ label: l10n.t('From the connection string'), kind: vscode.QuickPickItemKind.Separator });
-            items.push({
-                label: suppliedIdentity,
-                detail: l10n.t('Not a client ID yet. Select to review or correct this value'),
-                iconPath: new vscode.ThemeIcon('warning'),
-                // 'manual' so the value opens in the editable field instead of being used as-is.
-                choice: 'manual',
-                clientId: suppliedIdentity,
-            });
         }
 
         items.push({
-            label: l10n.t('Enter a client ID'),
-            detail: l10n.t('Type the client ID of a user-assigned managed identity'),
-            iconPath: new vscode.ThemeIcon('edit'),
-            choice: 'manual',
+            label: l10n.t('Sign in with my account'),
+            detail: l10n.t('Uses the account you sign in with in Visual Studio Code'),
+            iconPath: new vscode.ThemeIcon('sign-in'),
+            choice: 'account',
             alwaysShow: true,
         });
+        items.push(
+            { label: l10n.t('This machine'), kind: vscode.QuickPickItemKind.Separator },
+            {
+                label: l10n.t('Use the identity assigned to this machine'),
+                detail: l10n.t('(system-assigned)'),
+                iconPath: new vscode.ThemeIcon('device-desktop'),
+                choice: 'systemAssigned',
+            },
+            {
+                label: l10n.t('Use a different managed identity...'),
+                detail: l10n.t('(user-assigned) Enter a client ID'),
+                iconPath: new vscode.ThemeIcon('edit'),
+                choice: 'manual',
+                clientId: suppliedIdentity,
+                alwaysShow: true,
+            },
+        );
+
+        if (showChangeAuthMethod) {
+            items.push({
+                label: l10n.t('Use a different authentication method...'),
+                detail: l10n.t('This connection string asked for Microsoft Entra ID'),
+                iconPath: new vscode.ThemeIcon('arrow-swap'),
+                choice: 'authMethod',
+                alwaysShow: true,
+            });
+        }
 
         return items;
+    }
+
+    private async selectDifferentAuthMethod(context: T): Promise<void> {
+        const availableMethods =
+            context.availableAuthenticationMethods ?? authMethodsFromString(context.availableAuthMethods);
+        const authMethodItems = createAuthMethodQuickPickItems(availableMethods, { showSupportInfo: true }).filter(
+            (item) => item.authMethod !== AuthMethodId.MicrosoftEntraID,
+        );
+        const selected = await context.ui.showQuickPick(
+            authMethodItems,
+            {
+                placeHolder: l10n.t('Select an authentication method'),
+                matchOnDetail: true,
+                suppressPersistence: true,
+            },
+        );
+
+        if (!isSupportedAuthMethod(selected.authMethod)) {
+            throw new Error(l10n.t('The selected authentication method is not supported.'));
+        }
+
+        this.applyAuthMethod(context, selected.authMethod);
+    }
+
+    private applyAuthMethod(context: T, method: AuthMethodId): void {
+        this.setSelectedAuthMethod(context, method);
+
+        if (method === AuthMethodId.MicrosoftEntraID) {
+            context.managedIdentityAuthConfig = undefined;
+        } else if (method === AuthMethodId.ManagedIdentity) {
+            context.entraIdAuthConfig = undefined;
+        } else {
+            context.entraIdAuthConfig = undefined;
+            context.managedIdentityAuthConfig = undefined;
+        }
     }
 
     private applyClientId(context: T, clientId: string, source: 'connectionString' | 'prompt'): void {

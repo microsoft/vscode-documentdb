@@ -49,8 +49,8 @@ export const NativeAuthMethod: AuthMethodInfo = {
 
 export const MicrosoftEntraIDAuthMethod: AuthMethodInfo = {
     id: AuthMethodId.MicrosoftEntraID,
-    label: vscode.l10n.t('Entra ID for Azure DocumentDB'),
-    detail: vscode.l10n.t('Authenticate using Microsoft Entra ID (Azure AD)'),
+    label: vscode.l10n.t('Microsoft Entra ID'),
+    detail: vscode.l10n.t('Sign in with your account, or use an identity assigned to this machine'),
     // iconName: 'Microsoft-Entra-ID-BW-icon.svg',
 } as const;
 
@@ -73,6 +73,8 @@ const authMethodsArray: AuthMethodInfo[] = [
     ManagedIdentityAuthMethod,
     NoAuthMethod,
 ];
+
+const authFamilyMethodsArray: AuthMethodInfo[] = [NativeAuthMethod, MicrosoftEntraIDAuthMethod, NoAuthMethod];
 
 // Map for efficient lookup
 const authMethodsMap = new Map<AuthMethodId, AuthMethodInfo>(
@@ -139,10 +141,10 @@ export function createAuthMethodQuickPickItems(
 
     if (filterUnsupported && availableMethods) {
         // Discovery scenario: Only show methods that are known to be supported
-        methodsToShow = authMethodsArray.filter((method) => availableMethods.includes(method.id));
+        methodsToShow = authFamilyMethodsArray.filter((method) => availableMethods.includes(method.id));
     } else {
         // Manual/editing scenario: Show all methods, use support info to indicate availability
-        methodsToShow = authMethodsArray;
+        methodsToShow = authFamilyMethodsArray;
     }
 
     return methodsToShow.map((method) => ({

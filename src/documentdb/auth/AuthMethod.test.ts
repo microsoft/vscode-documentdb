@@ -35,3 +35,18 @@ describe('AuthMethod NoAuth support', () => {
         expect(noAuthItem).toBeDefined();
     });
 });
+
+describe('authentication family quick pick', () => {
+    it('presents managed identity under the Microsoft Entra ID family', () => {
+        const items = createAuthMethodQuickPickItemsWithSupportInfo();
+        const entraItem = items.find((item) => item.authMethod === AuthMethodId.MicrosoftEntraID);
+
+        expect(items.some((item) => item.authMethod === AuthMethodId.ManagedIdentity)).toBe(false);
+        expect(entraItem?.detail).toMatch(/identity assigned to this machine/i);
+    });
+
+    it('keeps managed identity available as a stored method', () => {
+        expect(getAuthMethod(AuthMethodId.ManagedIdentity)).toBeDefined();
+        expect(getAllAuthMethods().map((method) => method.id)).toContain(AuthMethodId.ManagedIdentity);
+    });
+});

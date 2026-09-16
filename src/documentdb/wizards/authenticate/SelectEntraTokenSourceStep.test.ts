@@ -26,77 +26,97 @@ jest.mock('@microsoft/vscode-azext-utils', () => ({
 import * as vscode from 'vscode';
 import { AuthMethodId } from '../../auth/AuthMethod';
 import { type AuthenticateWizardContext } from './AuthenticateWizardContext';
-import { groupAsGuid, normalizeClientId, SelectManagedIdentityStep } from './SelectManagedIdentityStep';
+import { groupAsGuid, normalizeClientId, SelectEntraTokenSourceStep } from './SelectEntraTokenSourceStep';
 
 const CLIENT_ID = '11111111-2222-3333-4444-555555555555';
 
-function makeStep(): SelectManagedIdentityStep<AuthenticateWizardContext> {
-    return new SelectManagedIdentityStep<AuthenticateWizardContext>(
-        (context) => context.selectedAuthMethod === AuthMethodId.ManagedIdentity,
+function makeStep(): SelectEntraTokenSourceStep<AuthenticateWizardContext> {
+    return new SelectEntraTokenSourceStep<AuthenticateWizardContext>(
+        (context) => context.selectedAuthMethod,
+        (context, method) => {
+            context.selectedAuthMethod = method;
+        },
     );
 }
 
 function makeContext(overrides: Partial<AuthenticateWizardContext> = {}): AuthenticateWizardContext {
     return {
         selectedAuthMethod: AuthMethodId.ManagedIdentity,
+        valuesToMask: [],
+        telemetry: { properties: {}, measurements: {} },
+        errorHandling: {},
         ...overrides,
     } as AuthenticateWizardContext;
 }
 
-describe('SelectManagedIdentityStep.buildItems', () => {
-    it('puts the system-assigned identity first so it is selected by default', () => {
+describe('SelectEntraTokenSourceStep.buildItems', () => {
+    it('puts account sign-in first when the connection string supplied no candidate', () => {
         const items = makeStep().buildItems();
         const firstSelectableItem = items.find((item) => item.kind !== vscode.QuickPickItemKind.Separator);
 
-        expect(firstSelectableItem?.label).toBe('System-assigned managed identity');
+        expect(firstSelectableItem?.label).toBe('Sign in with my account');
     });
 
-    it('is never a dead end: with nothing known it still offers manual entry and system-assigned', () => {
+    it('is never a dead end: with nothing known it offers account and both managed identity sources', () => {
         const items = makeStep().buildItems();
 
-        expect(items.length).toBeGreaterThanOrEqual(3);
-        expect(items.some((item) => item.label === 'System-assigned managed identity')).toBe(true);
+        expect(items.some((item) => item.choice === 'account')).toBe(true);
+        expect(items.some((item) => item.choice === 'systemAssigned')).toBe(true);
+        expect(items.some((item) => item.choice === 'manual')).toBe(true);
     });
 
-    it('surfaces a client ID that came from the connection string', () => {
+    it('surfaces and highlights a client ID that came from the connection string', () => {
         const items = makeStep().buildItems(CLIENT_ID);
+        const firstSelectableItem = items.find((item) => item.kind !== vscode.QuickPickItemKind.Separator);
 
-        expect(items.filter((item) => item.label === CLIENT_ID)).toHaveLength(1);
+        expect(items.filter((item) => item.label.includes(CLIENT_ID))).toHaveLength(1);
         expect(items.some((item) => item.label === 'From the connection string')).toBe(true);
+        expect(firstSelectableItem?.choice).toBe('clientId');
     });
 
-    it('puts manual entry last and includes detail text', () => {
+    it('includes manual entry with Azure terminology', () => {
         const items = makeStep().buildItems(CLIENT_ID);
-        const manualEntry = items.at(-1);
+        const manualEntry = items.find((item) => item.choice === 'manual');
 
-        expect(items[2].label).toBe('From the connection string');
-        expect(manualEntry?.label).toBe('Enter a client ID');
-        expect(manualEntry?.detail).toBe('Type the client ID of a user-assigned managed identity');
+        expect(manualEntry?.label).toBe('Use a different managed identity...');
+        expect(manualEntry?.detail).toContain('user-assigned');
     });
 
-    it('offers a supplied identity that is not a client ID for editing', () => {
+    it('prefills a supplied identity that is not a client ID for correction', () => {
         const items = makeStep().buildItems(undefined, 'alice');
-        const supplied = items.find((item) => item.label === 'alice');
+        const manualEntry = items.find((item) => item.choice === 'manual');
 
-        expect(supplied).toBeDefined();
-        // 'manual' routes the value into the editable field instead of using it as-is.
-        expect(supplied?.choice).toBe('manual');
-        expect(supplied?.clientId).toBe('alice');
+        expect(manualEntry?.clientId).toBe('alice');
     });
 
-    it('prefers a usable client ID over a supplied identity', () => {
-        const items = makeStep().buildItems(CLIENT_ID, 'alice');
+    it('offers the inferred-family escape only when requested', () => {
+        expect(makeStep().buildItems(undefined, undefined, false).some((item) => item.choice === 'authMethod')).toBe(
+            false,
+        );
+        expect(makeStep().buildItems(undefined, undefined, true).some((item) => item.choice === 'authMethod')).toBe(
+            true,
+        );
+    });
 
-        expect(items.some((item) => item.label === 'alice')).toBe(false);
-        expect(items.some((item) => item.choice === 'clientId')).toBe(true);
+    it('keeps system-assigned and user-assigned terms searchable in details', () => {
+        const items = makeStep().buildItems();
+
+        expect(items.find((item) => item.choice === 'systemAssigned')?.detail).toContain('system-assigned');
+        expect(items.find((item) => item.choice === 'manual')?.detail).toContain('user-assigned');
     });
 });
 
-describe('SelectManagedIdentityStep.shouldPrompt', () => {
+describe('SelectEntraTokenSourceStep.shouldPrompt', () => {
     it('does not prompt when another auth method is selected', () => {
-        const context = makeContext({ selectedAuthMethod: AuthMethodId.MicrosoftEntraID });
+        const context = makeContext({ selectedAuthMethod: AuthMethodId.NativeAuth });
 
         expect(makeStep().shouldPrompt(context)).toBe(false);
+    });
+
+    it('prompts when Microsoft Entra ID is selected and no string settled the token source', () => {
+        const context = makeContext({ selectedAuthMethod: AuthMethodId.MicrosoftEntraID });
+
+        expect(makeStep().shouldPrompt(context)).toBe(true);
     });
 
     it('prompts when managed identity is selected and nothing settled the identity', () => {
@@ -144,7 +164,55 @@ describe('SelectManagedIdentityStep.shouldPrompt', () => {
     });
 });
 
-describe('SelectManagedIdentityStep.validateClientId', () => {
+describe('SelectEntraTokenSourceStep.prompt', () => {
+    it('selects account sign-in and clears a candidate managed identity', async () => {
+        const context = makeContext({
+            managedIdentityAuthConfig: { clientId: CLIENT_ID },
+            ui: { showQuickPick: jest.fn().mockResolvedValue({ choice: 'account' }) } as unknown as AuthenticateWizardContext['ui'],
+        });
+
+        await makeStep().prompt(context);
+
+        expect(context.selectedAuthMethod).toBe(AuthMethodId.MicrosoftEntraID);
+        expect(context.managedIdentityAuthConfig).toBeUndefined();
+    });
+
+    it('selects the machine identity without retaining a client ID', async () => {
+        const context = makeContext({
+            managedIdentityAuthConfig: { clientId: CLIENT_ID },
+            ui: {
+                showQuickPick: jest.fn().mockResolvedValue({ choice: 'systemAssigned' }),
+            } as unknown as AuthenticateWizardContext['ui'],
+        });
+
+        await makeStep().prompt(context);
+
+        expect(context.selectedAuthMethod).toBe(AuthMethodId.ManagedIdentity);
+        expect(context.managedIdentityAuthConfig).toEqual({});
+    });
+
+    it('reopens the family picker without offering the current Entra family', async () => {
+        const showQuickPick = jest
+            .fn()
+            .mockResolvedValueOnce({ choice: 'authMethod' })
+            .mockResolvedValueOnce({ authMethod: AuthMethodId.NoAuth });
+        const context = makeContext({
+            entraIdAuthConfig: { tenantId: 'tenant' },
+            managedIdentityAuthConfig: { clientId: CLIENT_ID },
+            ui: { showQuickPick } as unknown as AuthenticateWizardContext['ui'],
+        });
+
+        await makeStep().prompt(context);
+
+        const familyItems = showQuickPick.mock.calls[1][0] as Array<{ authMethod?: AuthMethodId }>;
+        expect(familyItems.some((item) => item.authMethod === AuthMethodId.MicrosoftEntraID)).toBe(false);
+        expect(context.selectedAuthMethod).toBe(AuthMethodId.NoAuth);
+        expect(context.entraIdAuthConfig).toBeUndefined();
+        expect(context.managedIdentityAuthConfig).toBeUndefined();
+    });
+});
+
+describe('SelectEntraTokenSourceStep.validateClientId', () => {
     it('accepts a GUID', () => {
         expect(makeStep().validateClientId(CLIENT_ID)).toBeUndefined();
     });

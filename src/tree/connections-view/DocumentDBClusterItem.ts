@@ -24,7 +24,7 @@ import { ChooseAuthMethodStep } from '../../documentdb/wizards/authenticate/Choo
 import { ProvidePasswordStep } from '../../documentdb/wizards/authenticate/ProvidePasswordStep';
 import { ProvideUserNameStep } from '../../documentdb/wizards/authenticate/ProvideUsernameStep';
 import { SaveCredentialsStep } from '../../documentdb/wizards/authenticate/SaveCredentialsStep';
-import { SelectManagedIdentityStep } from '../../documentdb/wizards/authenticate/SelectManagedIdentityStep';
+import { SelectEntraTokenSourceStep } from '../../documentdb/wizards/authenticate/SelectEntraTokenSourceStep';
 import { ext } from '../../extensionVariables';
 import { ConnectionReachabilityService } from '../../services/connectionReachabilityService';
 import { ConnectionStorageService, ConnectionType, isConnection } from '../../services/connectionStorageService';
@@ -403,8 +403,12 @@ export class DocumentDBClusterItem extends ClusterItemBase<ConnectionClusterMode
         const wizard = new AzureWizard(wizardContext, {
             promptSteps: [
                 new ChooseAuthMethodStep(),
-                new SelectManagedIdentityStep<AuthenticateWizardContext>(
-                    (context) => context.selectedAuthMethod === AuthMethodId.ManagedIdentity,
+                new SelectEntraTokenSourceStep<AuthenticateWizardContext>(
+                    (context) => context.selectedAuthMethod,
+                    (context, method) => {
+                        context.selectedAuthMethod = method;
+                        context.isAuthMethodUpdated = true;
+                    },
                 ),
                 new ProvideUserNameStep(),
                 new ProvidePasswordStep(),

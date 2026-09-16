@@ -11,7 +11,7 @@ import { CredentialCache } from '../../documentdb/CredentialCache';
 import { AzureDomains, hasDomainSuffix } from '../../documentdb/utils/connectionStringHelpers';
 import { DocumentDBConnectionString } from '../../documentdb/utils/DocumentDBConnectionString';
 import { Views } from '../../documentdb/Views';
-import { SelectManagedIdentityStep } from '../../documentdb/wizards/authenticate/SelectManagedIdentityStep';
+import { SelectEntraTokenSourceStep } from '../../documentdb/wizards/authenticate/SelectEntraTokenSourceStep';
 import { ext } from '../../extensionVariables';
 import { ConnectionStorageService, isConnection } from '../../services/connectionStorageService';
 import { type DocumentDBClusterItem } from '../../tree/connections-view/DocumentDBClusterItem';
@@ -32,7 +32,8 @@ import { type UpdateCredentialsWizardContext } from './UpdateCredentialsWizardCo
  * 1. Loads stored credentials and determines available authentication methods
  * 2. Runs wizard to collect new credentials from user:
  *    - PromptAuthMethodStep: Select authentication method
- *    - PromptTenantStep: Enter tenant ID (if needed)
+ *    - SelectEntraTokenSourceStep: Select account sign-in or a managed identity (if needed)
+ *    - PromptTenantStep: Enter tenant ID for account sign-in (if needed)
  *    - PromptUserNameStep: Enter username (if needed)
  *    - PromptPasswordStep: Enter password (if needed)
  *    - PromptReconnectStepForErrorNodes: Ask to reconnect (only for error nodes)
@@ -97,10 +98,13 @@ export async function updateCredentials(context: IActionContext, node: DocumentD
         title: l10n.t('Update cluster credentials'),
         promptSteps: [
             new PromptAuthMethodStep(),
-            new PromptTenantStep(),
-            new SelectManagedIdentityStep<UpdateCredentialsWizardContext>(
-                (wizardContext) => wizardContext.selectedAuthenticationMethod === AuthMethodId.ManagedIdentity,
+            new SelectEntraTokenSourceStep<UpdateCredentialsWizardContext>(
+                (wizardContext) => wizardContext.selectedAuthenticationMethod,
+                (wizardContext, method) => {
+                    wizardContext.selectedAuthenticationMethod = method;
+                },
             ),
+            new PromptTenantStep(),
             new PromptUserNameStep(),
             new PromptPasswordStep(),
             new PromptReconnectStepForErrorNodes(),

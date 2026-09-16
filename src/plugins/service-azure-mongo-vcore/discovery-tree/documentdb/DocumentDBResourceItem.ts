@@ -21,7 +21,7 @@ import { type AuthenticateWizardContext } from '../../../../documentdb/wizards/a
 import { ChooseAuthMethodStep } from '../../../../documentdb/wizards/authenticate/ChooseAuthMethodStep';
 import { ProvidePasswordStep } from '../../../../documentdb/wizards/authenticate/ProvidePasswordStep';
 import { ProvideUserNameStep } from '../../../../documentdb/wizards/authenticate/ProvideUsernameStep';
-import { SelectManagedIdentityStep } from '../../../../documentdb/wizards/authenticate/SelectManagedIdentityStep';
+import { SelectEntraTokenSourceStep } from '../../../../documentdb/wizards/authenticate/SelectEntraTokenSourceStep';
 import { ext } from '../../../../extensionVariables';
 import { type AzureClusterModel } from '../../../../tree/azure-views/models/AzureClusterModel';
 import { ClusterItemBase, type EphemeralClusterCredentials } from '../../../../tree/documentdb/ClusterItemBase';
@@ -226,8 +226,12 @@ export class DocumentDBResourceItem extends ClusterItemBase<AzureClusterModel> {
         const wizard = new AzureWizard(wizardContext, {
             promptSteps: [
                 new ChooseAuthMethodStep(),
-                new SelectManagedIdentityStep<AuthenticateWizardContext>(
-                    (context) => context.selectedAuthMethod === AuthMethodId.ManagedIdentity,
+                new SelectEntraTokenSourceStep<AuthenticateWizardContext>(
+                    (context) => context.selectedAuthMethod,
+                    (context, method) => {
+                        context.selectedAuthMethod = method;
+                        context.isAuthMethodUpdated = true;
+                    },
                 ),
                 new ProvideUserNameStep(),
                 new ProvidePasswordStep(),
