@@ -7,7 +7,7 @@ import { AzureWizardPromptStep, type IActionContext } from '@microsoft/vscode-az
 import * as l10n from '@vscode/l10n';
 import * as vscode from 'vscode';
 import { type ManagedIdentityAuthConfig } from '../../auth/AuthConfig';
-import { type ManagedIdentityHint } from '../../auth/managedIdentityConnectionString';
+import { type ConnectionStringAuthFacts } from '../../auth/managedIdentityConnectionString';
 
 const GUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const HEX_ONLY_PATTERN = /^[0-9a-f]*$/i;
@@ -66,7 +66,7 @@ export function normalizeClientId(value: string | undefined): string {
 /** The subset of a wizard context this step needs, so it can serve every wizard that offers the method. */
 export interface ManagedIdentitySelectionContext extends IActionContext {
     managedIdentityAuthConfig?: ManagedIdentityAuthConfig;
-    managedIdentityHint?: ManagedIdentityHint;
+    connectionStringAuthFacts?: ConnectionStringAuthFacts;
 }
 
 type IdentityChoice = 'manual' | 'systemAssigned' | 'clientId';
@@ -94,7 +94,8 @@ export class SelectManagedIdentityStep<T extends ManagedIdentitySelectionContext
 
     public async prompt(context: T): Promise<void> {
         const prefilledClientId = context.managedIdentityAuthConfig?.clientId;
-        const suppliedIdentity = context.managedIdentityHint?.suppliedIdentity;
+        const facts = context.connectionStringAuthFacts;
+        const suppliedIdentity = facts?.username && !facts.usernameIsGuid ? facts.username : undefined;
 
         const selected = await context.ui.showQuickPick(this.buildItems(prefilledClientId, suppliedIdentity), {
             stepName: 'selectManagedIdentity',
@@ -134,11 +135,12 @@ export class SelectManagedIdentityStep<T extends ManagedIdentitySelectionContext
             return false;
         }
 
-        const hint = context.managedIdentityHint;
+        const facts = context.connectionStringAuthFacts;
+        if (!facts || !facts.declaresAzureMachineWorkflow) {
+            return true;
+        }
 
-        // A connection string that carried ENVIRONMENT:azure already answered this question, unless
-        // the identity it supplied is not usable as-is and therefore needs the user's review.
-        return hint?.confidence !== 'explicit' || !!hint.suppliedIdentity;
+        return !!facts.username && !facts.usernameIsGuid;
     }
 
     public validateClientId(this: void, value: string | undefined): string | undefined {

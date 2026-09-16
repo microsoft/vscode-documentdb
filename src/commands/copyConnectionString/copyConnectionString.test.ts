@@ -49,8 +49,7 @@ jest.mock('../../extensionVariables', () => ({
 
 import { AuthMethodId } from '../../documentdb/auth/AuthMethod';
 import {
-    detectManagedIdentityHint,
-    managedIdentityConfigFromHint,
+    getConnectionStringAuthFacts,
     stripManagedIdentityMarkers,
 } from '../../documentdb/auth/managedIdentityConnectionString';
 import { DocumentDBConnectionString } from '../../documentdb/utils/DocumentDBConnectionString';
@@ -505,10 +504,14 @@ describe('copyConnectionString', () => {
             const written = mockClipboardWriteText.mock.calls[0][0] as string;
 
             const parsed = new DocumentDBConnectionString(written);
-            const hint = detectManagedIdentityHint(parsed);
+            const facts = getConnectionStringAuthFacts(parsed);
 
-            expect(hint).toEqual({ clientId, confidence: 'explicit' });
-            expect(managedIdentityConfigFromHint(hint!)).toEqual({ clientId });
+            expect(facts).toMatchObject({
+                usesOidc: true,
+                declaresAzureMachineWorkflow: true,
+                username: clientId,
+                usernameIsGuid: true,
+            });
 
             stripManagedIdentityMarkers(parsed);
             expect(parsed.toString()).toContain('retryWrites=true');
@@ -528,10 +531,14 @@ describe('copyConnectionString', () => {
             await copyConnectionString(ctx as any, node as any);
             const written = mockClipboardWriteText.mock.calls[0][0] as string;
 
-            const hint = detectManagedIdentityHint(new DocumentDBConnectionString(written));
+            const facts = getConnectionStringAuthFacts(new DocumentDBConnectionString(written));
 
-            expect(hint?.confidence).toBe('explicit');
-            expect(managedIdentityConfigFromHint(hint!)).toEqual({});
+            expect(facts).toMatchObject({
+                usesOidc: true,
+                declaresAzureMachineWorkflow: true,
+                username: undefined,
+                usernameIsGuid: false,
+            });
         });
     });
 });

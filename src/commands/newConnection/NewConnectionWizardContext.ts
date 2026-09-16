@@ -10,7 +10,7 @@ import {
     type NativeAuthConfig,
 } from '../../documentdb/auth/AuthConfig';
 import { type AuthMethodId } from '../../documentdb/auth/AuthMethod';
-import { type ManagedIdentityHint } from '../../documentdb/auth/managedIdentityConnectionString';
+import { type ConnectionStringAuthFacts } from '../../documentdb/auth/managedIdentityConnectionString';
 import { type DocumentDBConnectionString } from '../../documentdb/utils/DocumentDBConnectionString';
 import { type Experience } from '../../DocumentDBExperiences';
 
@@ -35,8 +35,8 @@ export interface NewConnectionWizardContext extends IActionContext {
     entraIdAuthConfig?: EntraIdAuthConfig;
     /** An empty object selects the system-assigned identity, so absence and `{}` are different. */
     managedIdentityAuthConfig?: ManagedIdentityAuthConfig;
-    /** Set when the pasted connection string carried managed identity intent (design §5.2). */
-    managedIdentityHint?: ManagedIdentityHint;
+    /** Facts read from a pasted connection string before its credentials are stripped. */
+    connectionStringAuthFacts?: ConnectionStringAuthFacts;
 
     // Additional non-secret connection properties supplied by service discovery providers.
     connectionProperties?: Record<string, unknown>;

@@ -104,20 +104,41 @@ describe('SelectManagedIdentityStep.shouldPrompt', () => {
     });
 
     it('skips the prompt when the connection string carried an explicit ENVIRONMENT:azure marker', () => {
-        const context = makeContext({ managedIdentityHint: { clientId: CLIENT_ID, confidence: 'explicit' } });
+        const context = makeContext({
+            connectionStringAuthFacts: {
+                usesOidc: true,
+                declaresAzureMachineWorkflow: true,
+                username: CLIENT_ID,
+                usernameIsGuid: true,
+            },
+        });
 
         expect(makeStep().shouldPrompt(context)).toBe(false);
     });
 
-    it('still prompts for a weak hint, so the user can confirm', () => {
-        const context = makeContext({ managedIdentityHint: { clientId: CLIENT_ID, confidence: 'weak' } });
+    it('still prompts when the string did not declare the Azure machine workflow', () => {
+        const context = makeContext({
+            connectionStringAuthFacts: {
+                usesOidc: true,
+                declaresAzureMachineWorkflow: false,
+                username: CLIENT_ID,
+                usernameIsGuid: true,
+            },
+        });
 
         expect(makeStep().shouldPrompt(context)).toBe(true);
     });
 
-    it('prompts for an explicit hint whose supplied identity is not a client ID', () => {
+    it('prompts for a machine workflow whose supplied identity is not a client ID', () => {
         // Otherwise the pasted selector would be silently replaced by the system-assigned identity.
-        const context = makeContext({ managedIdentityHint: { suppliedIdentity: 'alice', confidence: 'explicit' } });
+        const context = makeContext({
+            connectionStringAuthFacts: {
+                usesOidc: true,
+                declaresAzureMachineWorkflow: true,
+                username: 'alice',
+                usernameIsGuid: false,
+            },
+        });
 
         expect(makeStep().shouldPrompt(context)).toBe(true);
     });

@@ -33,5 +33,24 @@ describe('PromptConnectionStringStep', () => {
         expect(context.selectedAuthenticationMethod).toBe(AuthMethodId.ManagedIdentity);
         expect(context.availableAuthenticationMethods).toContain(AuthMethodId.ManagedIdentity);
         expect(context.managedIdentityAuthConfig).toEqual({ clientId });
+        expect(context.connectionStringAuthFacts).toMatchObject({
+            usesOidc: true,
+            declaresAzureMachineWorkflow: true,
+            username: clientId,
+            usernameIsGuid: true,
+        });
+    });
+
+    it('deduces the Entra family but not the token source from OIDC plus a GUID', async () => {
+        const clientId = '11111111-2222-3333-4444-555555555555';
+        const context = makeContext(
+            `mongodb://${clientId}@private.documentdb.internal:10260/?authMechanism=MONGODB-OIDC`,
+        );
+
+        await new PromptConnectionStringStep().prompt(context);
+
+        expect(context.selectedAuthenticationMethod).toBe(AuthMethodId.MicrosoftEntraID);
+        expect(context.managedIdentityAuthConfig).toEqual({ clientId });
+        expect(context.connectionStringAuthFacts?.declaresAzureMachineWorkflow).toBe(false);
     });
 });

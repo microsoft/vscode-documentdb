@@ -5,9 +5,8 @@
 
 import { DocumentDBConnectionString } from '../utils/DocumentDBConnectionString';
 import {
-    detectManagedIdentityHint,
+    getConnectionStringAuthFacts,
     MANAGED_IDENTITY_AUTH_MECHANISM_PROPERTIES,
-    managedIdentityConfigFromHint,
     stripManagedIdentityMarkers,
 } from './managedIdentityConnectionString';
 
@@ -18,27 +17,38 @@ function parse(uri: string): DocumentDBConnectionString {
     return new DocumentDBConnectionString(uri);
 }
 
-describe('detectManagedIdentityHint', () => {
-    it('reports an explicit hint for the documented driver-native form', () => {
+describe('getConnectionStringAuthFacts', () => {
+    it('reports the documented driver-native form as an Azure machine workflow', () => {
         const cs = parse(
             `mongodb+srv://${CLIENT_ID}@${HOST}/?authMechanism=MONGODB-OIDC&authMechanismProperties=${MANAGED_IDENTITY_AUTH_MECHANISM_PROPERTIES}`,
         );
 
-        expect(detectManagedIdentityHint(cs)).toEqual({ clientId: CLIENT_ID, confidence: 'explicit' });
+        expect(getConnectionStringAuthFacts(cs)).toEqual({
+            usesOidc: true,
+            declaresAzureMachineWorkflow: true,
+            tokenResource: 'https://ossrdbms-aad.database.windows.net',
+            username: CLIENT_ID,
+            usernameIsGuid: true,
+        });
     });
 
-    it('reports an explicit hint without a client ID for a system-assigned identity', () => {
+    it('reports an omitted username for the system-assigned form', () => {
         const cs = parse(
             `mongodb+srv://${HOST}/?authMechanism=MONGODB-OIDC&authMechanismProperties=${MANAGED_IDENTITY_AUTH_MECHANISM_PROPERTIES}`,
         );
 
-        expect(detectManagedIdentityHint(cs)).toEqual({ clientId: undefined, confidence: 'explicit' });
+        expect(getConnectionStringAuthFacts(cs)).toMatchObject({ username: undefined, usernameIsGuid: false });
     });
 
-    it('reports a weak hint for OIDC plus a GUID username without an ENVIRONMENT entry', () => {
+    it('reports OIDC plus a GUID username without assigning confidence', () => {
         const cs = parse(`mongodb+srv://${CLIENT_ID}@${HOST}/?authMechanism=MONGODB-OIDC`);
 
-        expect(detectManagedIdentityHint(cs)).toEqual({ clientId: CLIENT_ID, confidence: 'weak' });
+        expect(getConnectionStringAuthFacts(cs)).toMatchObject({
+            usesOidc: true,
+            declaresAzureMachineWorkflow: false,
+            username: CLIENT_ID,
+            usernameIsGuid: true,
+        });
     });
 
     it('finds ENVIRONMENT:azure among other authMechanismProperties entries', () => {
@@ -46,13 +56,16 @@ describe('detectManagedIdentityHint', () => {
             `mongodb+srv://${HOST}/?authMechanism=MONGODB-OIDC&authMechanismProperties=TOKEN_RESOURCE:https://ossrdbms-aad.database.windows.net,ENVIRONMENT:azure`,
         );
 
-        expect(detectManagedIdentityHint(cs)?.confidence).toBe('explicit');
+        expect(getConnectionStringAuthFacts(cs).declaresAzureMachineWorkflow).toBe(true);
     });
 
     it('is case insensitive on the mechanism and the ENVIRONMENT entry', () => {
         const cs = parse(`mongodb+srv://${HOST}/?authMechanism=mongodb-oidc&authMechanismProperties=Environment:Azure`);
 
-        expect(detectManagedIdentityHint(cs)?.confidence).toBe('explicit');
+        expect(getConnectionStringAuthFacts(cs)).toMatchObject({
+            usesOidc: true,
+            declaresAzureMachineWorkflow: true,
+        });
     });
 
     it('works for a plain mongodb:// host as well as +srv', () => {
@@ -60,7 +73,7 @@ describe('detectManagedIdentityHint', () => {
             `mongodb://${CLIENT_ID}@${HOST}:10260/?authMechanism=MONGODB-OIDC&authMechanismProperties=${MANAGED_IDENTITY_AUTH_MECHANISM_PROPERTIES}`,
         );
 
-        expect(detectManagedIdentityHint(cs)).toEqual({ clientId: CLIENT_ID, confidence: 'explicit' });
+        expect(getConnectionStringAuthFacts(cs)).toMatchObject({ username: CLIENT_ID, usernameIsGuid: true });
     });
 
     it('keeps a username that is not GUID shaped as a supplied identity to review', () => {
@@ -68,29 +81,38 @@ describe('detectManagedIdentityHint', () => {
             `mongodb+srv://alice@${HOST}/?authMechanism=MONGODB-OIDC&authMechanismProperties=${MANAGED_IDENTITY_AUTH_MECHANISM_PROPERTIES}`,
         );
 
-        expect(detectManagedIdentityHint(cs)).toEqual({
-            clientId: undefined,
-            suppliedIdentity: 'alice',
-            confidence: 'explicit',
+        expect(getConnectionStringAuthFacts(cs)).toMatchObject({ username: 'alice', usernameIsGuid: false });
+    });
+
+    it('reports bare OIDC without inventing a token source', () => {
+        const cs = parse(`mongodb+srv://${HOST}/?authMechanism=MONGODB-OIDC`);
+
+        expect(getConnectionStringAuthFacts(cs)).toMatchObject({
+            usesOidc: true,
+            declaresAzureMachineWorkflow: false,
+            username: undefined,
+            usernameIsGuid: false,
         });
     });
 
-    it('returns undefined for interactive Entra ID, which has no identity selector', () => {
-        const cs = parse(`mongodb+srv://${HOST}/?authMechanism=MONGODB-OIDC`);
-
-        expect(detectManagedIdentityHint(cs)).toBeUndefined();
-    });
-
-    it('returns undefined for a plain native-auth connection string', () => {
+    it('reports a plain native-auth connection string without interpreting it as OIDC', () => {
         const cs = parse(`mongodb+srv://alice:secret@${HOST}/?retryWrites=true`);
 
-        expect(detectManagedIdentityHint(cs)).toBeUndefined();
+        expect(getConnectionStringAuthFacts(cs)).toMatchObject({
+            usesOidc: false,
+            declaresAzureMachineWorkflow: false,
+            username: 'alice',
+            usernameIsGuid: false,
+        });
     });
 
-    it('returns undefined when ENVIRONMENT:azure appears without the OIDC mechanism', () => {
+    it('reports ENVIRONMENT:azure independently of the authentication mechanism', () => {
         const cs = parse(`mongodb+srv://${HOST}/?authMechanismProperties=ENVIRONMENT:azure`);
 
-        expect(detectManagedIdentityHint(cs)).toBeUndefined();
+        expect(getConnectionStringAuthFacts(cs)).toMatchObject({
+            usesOidc: false,
+            declaresAzureMachineWorkflow: true,
+        });
     });
 });
 
@@ -107,21 +129,5 @@ describe('stripManagedIdentityMarkers', () => {
         expect(result).not.toContain(CLIENT_ID);
         expect(result).toContain('retryWrites=true');
         expect(result).toContain('appName=demo');
-    });
-});
-
-describe('managedIdentityConfigFromHint', () => {
-    it('maps a client ID through', () => {
-        expect(managedIdentityConfigFromHint({ clientId: CLIENT_ID, confidence: 'explicit' })).toEqual({
-            clientId: CLIENT_ID,
-        });
-    });
-
-    it('maps a missing client ID to an empty object, meaning system-assigned', () => {
-        expect(managedIdentityConfigFromHint({ confidence: 'explicit' })).toEqual({});
-    });
-
-    it('does not store a supplied identity that still needs review', () => {
-        expect(managedIdentityConfigFromHint({ suppliedIdentity: 'alice', confidence: 'explicit' })).toEqual({});
     });
 });

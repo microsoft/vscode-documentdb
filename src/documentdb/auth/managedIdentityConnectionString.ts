@@ -4,7 +4,6 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { type DocumentDBConnectionString } from '../utils/DocumentDBConnectionString';
-import { type ManagedIdentityAuthConfig } from './AuthConfig';
 import { DOCUMENTDB_TOKEN_RESOURCE } from './entraScopes';
 
 /**
@@ -18,49 +17,34 @@ export const MANAGED_IDENTITY_AUTH_MECHANISM_PROPERTIES = `ENVIRONMENT:azure,TOK
 
 const GUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
-export interface ManagedIdentityHint {
-    /** Client ID taken from the username position, when it is GUID-shaped. */
-    readonly clientId?: string;
-    /**
-     * The username position when it holds something that is not GUID-shaped.
-     *
-     * The user asked for *some* identity, so the value must stay visible and editable; treating it
-     * as if no identity had been supplied would silently switch the connection to the
-     * system-assigned identity.
-     */
-    readonly suppliedIdentity?: string;
-    /**
-     * `explicit` when `ENVIRONMENT:azure` was present, so the user's intent is unambiguous and the
-     * identity prompt can be skipped. `weak` when only OIDC plus a GUID-shaped username was found,
-     * which is suggestive but still worth confirming.
-     */
-    readonly confidence: 'explicit' | 'weak';
+/** What the connection string states, without interpreting or recommending an authentication flow. */
+export interface ConnectionStringAuthFacts {
+    readonly usesOidc: boolean;
+    readonly declaresAzureMachineWorkflow: boolean;
+    readonly tokenResource?: string;
+    readonly username?: string;
+    readonly usernameIsGuid: boolean;
 }
 
 /**
- * Reads managed identity intent out of a pasted connection string.
+ * Reads authentication facts out of a pasted connection string.
  *
- * Must be called **before** any credential-stripping, because the client ID rides in the username
+ * Must be called **before** any credential-stripping, because an identity can ride in the username
  * position and is gone once the username is cleared.
  */
-export function detectManagedIdentityHint(cs: DocumentDBConnectionString): ManagedIdentityHint | undefined {
-    if (!usesOidc(cs)) {
-        return undefined;
-    }
+export function getConnectionStringAuthFacts(cs: DocumentDBConnectionString): ConnectionStringAuthFacts {
+    const username = (cs.username ?? '').trim() || undefined;
+    const mechanismProperties = getAuthMechanismProperties(cs);
 
-    const username = (cs.username ?? '').trim();
-    const clientId = GUID_PATTERN.test(username) ? username : undefined;
-    const suppliedIdentity = clientId || username.length === 0 ? undefined : username;
-
-    if (hasAzureEnvironmentProperty(cs)) {
-        return { clientId, suppliedIdentity, confidence: 'explicit' };
-    }
-
-    if (clientId) {
-        return { clientId, confidence: 'weak' };
-    }
-
-    return undefined;
+    return {
+        usesOidc: (cs.searchParams.get('authMechanism') ?? '').trim().toUpperCase() === 'MONGODB-OIDC',
+        declaresAzureMachineWorkflow: mechanismProperties.some(
+            ([key, value]) => key.toUpperCase() === 'ENVIRONMENT' && value.toLowerCase() === 'azure',
+        ),
+        tokenResource: mechanismProperties.find(([key]) => key.toUpperCase() === 'TOKEN_RESOURCE')?.[1],
+        username,
+        usernameIsGuid: username ? GUID_PATTERN.test(username) : false,
+    };
 }
 
 /**
@@ -77,28 +61,20 @@ export function stripManagedIdentityMarkers(cs: DocumentDBConnectionString): voi
     cs.searchParams.delete('authMechanismProperties');
 }
 
-/**
- * Builds the stored configuration for a hint. An empty object means the system-assigned identity.
- *
- * A supplied value that is not GUID-shaped is deliberately not written here: it is a proposal for
- * the identity step to show, not a settled configuration.
- */
-export function managedIdentityConfigFromHint(hint: ManagedIdentityHint): ManagedIdentityAuthConfig {
-    return hint.clientId ? { clientId: hint.clientId } : {};
-}
-
-function usesOidc(cs: DocumentDBConnectionString): boolean {
-    return (cs.searchParams.get('authMechanism') ?? '').trim().toUpperCase() === 'MONGODB-OIDC';
-}
-
-function hasAzureEnvironmentProperty(cs: DocumentDBConnectionString): boolean {
+function getAuthMechanismProperties(cs: DocumentDBConnectionString): Array<[string, string]> {
     const raw = cs.searchParams.get('authMechanismProperties');
     if (!raw) {
-        return false;
+        return [];
     }
 
     return raw
         .split(',')
-        .map((entry) => entry.trim().toLowerCase())
-        .includes(AZURE_ENVIRONMENT_PROPERTY.toLowerCase());
+        .map((entry): [string, string] => {
+            const separatorIndex = entry.indexOf(':');
+            if (separatorIndex < 0) {
+                return [entry.trim(), ''];
+            }
+
+            return [entry.slice(0, separatorIndex).trim(), entry.slice(separatorIndex + 1).trim()];
+        });
 }

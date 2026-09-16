@@ -7,8 +7,7 @@ import { AzureWizardPromptStep, parseError } from '@microsoft/vscode-azext-utils
 import * as l10n from '@vscode/l10n';
 import { AuthMethodId } from '../../documentdb/auth/AuthMethod';
 import {
-    detectManagedIdentityHint,
-    managedIdentityConfigFromHint,
+    getConnectionStringAuthFacts,
     stripManagedIdentityMarkers,
 } from '../../documentdb/auth/managedIdentityConnectionString';
 import { AzureDomains, hasDomainSuffix } from '../../documentdb/utils/connectionStringHelpers';
@@ -33,12 +32,11 @@ export class PromptConnectionStringStep extends AzureWizardPromptStep<NewConnect
         // 1. Parse the connection string and extract credentials
         const parsedConnectionString = new DocumentDBConnectionString(trimmedConnectionString);
 
-        // Managed identity intent must be read BEFORE the username is cleared below: the client ID
-        // rides in the username position of the documented driver-native form (design §5.2).
-        const managedIdentityHint = detectManagedIdentityHint(parsedConnectionString);
+        const authFacts = getConnectionStringAuthFacts(parsedConnectionString);
+        context.connectionStringAuthFacts = authFacts;
 
         // Extract credentials to structured nativeAuthConfig
-        if (!managedIdentityHint && (parsedConnectionString.username || parsedConnectionString.password)) {
+        if (!authFacts.usesOidc && (parsedConnectionString.username || parsedConnectionString.password)) {
             context.nativeAuthConfig = {
                 connectionUser: parsedConnectionString.username || '',
                 connectionPassword: parsedConnectionString.password || '',
@@ -54,37 +52,30 @@ export class PromptConnectionStringStep extends AzureWizardPromptStep<NewConnect
             parsedConnectionString.searchParams.delete('authMechanism');
         }
 
-        if (managedIdentityHint) {
+        if (authFacts.usesOidc) {
+            context.selectedAuthenticationMethod = AuthMethodId.MicrosoftEntraID;
+            context.nativeAuthConfig = undefined;
+
+            if (authFacts.username) {
+                context.valuesToMask.push(authFacts.username);
+            }
+        }
+
+        const hasUsableManagedIdentity =
+            authFacts.declaresAzureMachineWorkflow && (!authFacts.username || authFacts.usernameIsGuid);
+
+        if (hasUsableManagedIdentity) {
             // The mechanism markers were inputs to a decision, not state: keeping them in the stored
             // string risks the driver preferring the URL form and taking its own IMDS path (D1).
             stripManagedIdentityMarkers(parsedConnectionString);
-            context.managedIdentityHint = managedIdentityHint;
-            context.managedIdentityAuthConfig = managedIdentityConfigFromHint(managedIdentityHint);
-            context.nativeAuthConfig = undefined;
-
-            // Only an explicit ENVIRONMENT:azure marker is unambiguous enough to skip the method
-            // prompt. A bare OIDC string with a GUID username is suggestive, not conclusive, so the
-            // user still gets to confirm or switch to interactive Entra ID.
-            if (managedIdentityHint.confidence === 'explicit') {
-                context.selectedAuthenticationMethod = AuthMethodId.ManagedIdentity;
-            }
-
-            if (managedIdentityHint.clientId) {
-                context.valuesToMask.push(managedIdentityHint.clientId);
-            }
-
-            if (managedIdentityHint.suppliedIdentity) {
-                context.valuesToMask.push(managedIdentityHint.suppliedIdentity);
-            }
-
-            context.telemetry.properties.managedIdentityHint = managedIdentityHint.confidence;
-            if (managedIdentityHint.confidence === 'explicit' && !managedIdentityHint.suppliedIdentity) {
-                // The identity step is skipped in this case, so it cannot record these itself.
-                context.telemetry.properties.managedIdentityKind = managedIdentityHint.clientId ? 'user' : 'system';
-                context.telemetry.properties.managedIdentityClientIdSource = managedIdentityHint.clientId
-                    ? 'connectionString'
-                    : 'none';
-            }
+            context.selectedAuthenticationMethod = AuthMethodId.ManagedIdentity;
+            context.managedIdentityAuthConfig = authFacts.username ? { clientId: authFacts.username } : {};
+            context.telemetry.properties.managedIdentityKind = authFacts.username ? 'user' : 'system';
+            context.telemetry.properties.managedIdentityClientIdSource = authFacts.username
+                ? 'connectionString'
+                : 'none';
+        } else if (authFacts.usesOidc && authFacts.usernameIsGuid) {
+            context.managedIdentityAuthConfig = { clientId: authFacts.username };
         }
 
         context.connectionString = parsedConnectionString.toString();
@@ -111,7 +102,7 @@ export class PromptConnectionStringStep extends AzureWizardPromptStep<NewConnect
             supportedAuthMethods.push(AuthMethodId.ManagedIdentity);
         }
 
-        if (managedIdentityHint && !supportedAuthMethods.includes(AuthMethodId.ManagedIdentity)) {
+        if (authFacts.usesOidc && !supportedAuthMethods.includes(AuthMethodId.ManagedIdentity)) {
             // An explicit or suggestive driver-native string remains internally consistent even when
             // a private endpoint or CNAME prevents host-based vCore classification.
             supportedAuthMethods.push(AuthMethodId.ManagedIdentity);
