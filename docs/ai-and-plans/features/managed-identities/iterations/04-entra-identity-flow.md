@@ -41,11 +41,77 @@ forms are D9 through D12 in [decisions.md](../decisions.md).
   connection wizard.
 - Apply the family presentation consistently to all seven authentication entry points.
 
+## Rationale Retained From Design Exploration
+
+The temporary design discussions were deleted after this summary was recorded. The durable points
+below are the parts that are not obvious from the implementation alone.
+
+### The reported incident was ambiguity, not an authentication failure
+
+The tester was running on an Azure VM, and the saved managed identity connection worked. The
+confusing behavior happened while interpreting the pasted URI, before token acquisition.
+
+Microsoft Learn published two forms for the same managed identity scenario. Its Visual Studio Code
+example used OIDC with a GUID username but omitted `authMechanismProperties`; its shell and Compass
+example also supplied `ENVIRONMENT:azure` and `TOKEN_RESOURCE`. A GUID alone cannot distinguish a
+managed identity client ID from an application client ID or Entra object ID. The shorter URI can
+therefore establish the Microsoft Entra ID family, but it cannot establish the token source.
+
+The upstream correction remains precise: make the Visual Studio Code example use the complete form
+already shown for the other clients:
+
+```text
+authMechanismProperties=ENVIRONMENT:azure,TOKEN_RESOURCE:https://ossrdbms-aad.database.windows.net
+```
+
+If the Azure portal also emits the short form, that should be verified separately before including
+it in the same correction request.
+
+### Alternatives considered
+
+| Option | Approach | Decision and reason |
+| ------ | -------- | ------------------- |
+| A | Tune the old flat picker by treating OIDC plus a GUID as managed identity | Rejected. The GUID remains ambiguous, and the UI would still present a token source as a peer authentication family. |
+| B | Separate authentication family from identity selection, using one shared identity picker | **Chosen.** It represents "family known, source unknown" directly and keeps every source reachable without duplicating pickers. |
+| C | Probe IMDS silently and use the result to select or rank the source | Rejected. A successful probe proves availability, not user intent. It duplicates the authoritative credential call, adds link-local traffic and timeout/cache complexity, and can still disagree with the later token request. |
+
+Telemetry was not used to gate this decision. The available signal measured the `weak` or
+`explicit` confidence model being removed, so optimizing the replacement around that aggregate
+would have made the obsolete classification a hidden design dependency.
+
+### The tenant picker is historical compatibility behavior
+
+The tenant step predates managed identity and was created specifically for pasted connection
+strings in commit `ffa5152` (`feat: provide tenantId when entraid + connection string`). Commit
+`4b7e76c` added the Update Credentials twin, and the surrounding multi-account and multi-tenant
+work shipped in 0.5 after issue #276 exposed failures to respect non-default tenant context.
+
+Passing no tenant to `getSessionFromVSCode` is not neutral. It omits the `VSCODE_TENANT:<id>` scope
+constraint, so VS Code can return the account's home-tenant token. That is wrong for a user who is a
+guest in the cluster tenant and typically ends as an opaque server rejection. The tenant also forms
+part of `getConnectionAuthIdentity`; dropping it would collapse otherwise distinct same-host Entra
+connections onto the same duplicate-detection identity.
+
+This history is why the choice was retimed rather than removed. One enumerable tenant is still only
+a suggestion because enumeration covers authenticated tenants, while manual entry may be the only
+route to a guest tenant.
+
+### No client ID is not proof of a system-assigned identity
+
+`new ManagedIdentityCredential()` without a selector means "ask the managed identity endpoint to
+resolve the identity." It can return the sole user-assigned identity on a machine with no
+system-assigned identity, and it fails when several identities make the request ambiguous. The UI
+therefore describes sending no client ID, while the runtime keeps its readable multiple-identities
+error. It must never silently replace an unusable supplied identity with an unselected principal.
+
+This distinction is also why a silent IMDS probe would not settle intent: knowing that some identity
+can issue a token does not prove that it is the identity the user meant to use.
+
 ## Work Items
 
 ### WI1: Replace confidence hints with authentication facts
 
-**Commit:** `6e7b7420`, `refactor: report connection string auth facts`
+**Commit:** `21d2e955`, `refactor: report connection string auth facts`
 
 `ConnectionStringAuthFacts` now reports whether a string uses OIDC, declares the Azure machine
 workflow, supplies a token resource, supplies a username, and whether that username is GUID-shaped.
@@ -60,7 +126,7 @@ Focused verification: 4 suites, 54 tests. `npm run build` passed.
 
 ### WI2: Unify Entra identity selection
 
-**Commit:** `267b738f`, `feat: unify Entra identity selection`
+**Commit:** `3fd88975`, `feat: unify Entra identity selection`
 
 The top-level family picker no longer displays managed identity. Its Microsoft Entra ID detail keeps
 managed identity discoverable and searchable. `SelectManagedIdentityStep` became
@@ -88,7 +154,7 @@ Focused verification: 3 suites, 37 tests. `npm run build` passed.
 
 ### WI3: Keep tenant selection in the sign-in flow
 
-**Commit:** `dab936bb`, `fix: keep tenant selection in sign-in flow`
+**Commit:** `7c5d52d4`, `fix: keep tenant selection in sign-in flow`
 
 Both tenant steps now check sign-in before tenant enumeration. A signed-out user enters the existing
 centralized Azure account-management flow first. After account management, tenant enumeration and
@@ -104,7 +170,7 @@ Focused verification: 1 suite, 4 tests covering both tenant steps. `npm run buil
 
 ### WI4: Clarify quick-pick groups and authentication icons
 
-**Commit:** `29485da8`, `fix: clarify authentication quick picks`
+**Commit:** `f5b2b586`, `fix: clarify authentication quick picks`
 
 The identity picker now groups account sign-in under **Microsoft Entra account**, machine choices
 under **Managed identity**, and the inferred-family escape under the conditional **Other options**
@@ -124,7 +190,7 @@ Focused verification: 2 suites, 36 tests. `npm run build` and `git diff --check`
 
 ### WI5: Add a visible route back to family selection
 
-**Commit:** `f662e726`, `fix: add visible Entra flow back action`
+**Commit:** `a5c9a85c`, `fix: add visible Entra flow back action`
 
 When the user reaches the identity picker by selecting Microsoft Entra ID in a displayed family
 picker, **Other options** now includes **Back to authentication method selection** with an
