@@ -4,13 +4,16 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { VSCodeAzureSubscriptionProvider, type AzureTenant } from '@microsoft/vscode-azext-azureauth';
-import { AzureWizardPromptStep, UserCancelledError } from '@microsoft/vscode-azext-utils';
+import { AzureWizardPromptStep } from '@microsoft/vscode-azext-utils';
 import * as l10n from '@vscode/l10n';
 import * as vscode from 'vscode';
 import { AuthMethodId } from '../../documentdb/auth/AuthMethod';
 import { type AzureSubscriptionProviderWithFilters } from '../../plugins/api-shared/azure/AzureSubscriptionProviderWithFilters';
 import { nonNullValue } from '../../utils/nonNull';
+import { valueOnTimeout } from '../../utils/timeout';
 import { type NewConnectionWizardContext } from './NewConnectionWizardContext';
+
+const TENANT_LOOKUP_TIMEOUT_MS = 5_000;
 
 interface TenantQuickPickItem extends vscode.QuickPickItem {
     tenant?: AzureTenant;
@@ -20,10 +23,18 @@ interface TenantQuickPickItem extends vscode.QuickPickItem {
 
 export class PromptTenantStep extends AzureWizardPromptStep<NewConnectionWizardContext> {
     public async prompt(context: NewConnectionWizardContext): Promise<void> {
+        const subscriptionProvider = new VSCodeAzureSubscriptionProvider();
+        let accountManagementUsed = false;
+
+        if (!(await this.isSignedIn(subscriptionProvider))) {
+            await this.handleSignInToOtherAccounts(context, subscriptionProvider);
+            accountManagementUsed = true;
+        }
+
         // Create async function to provide better loading UX and debugging experience
         const tenantItemsPromise = async (): Promise<TenantQuickPickItem[]> => {
             // Load available tenants from Azure subscription provider
-            const tenants = await this.getAvailableTenants(context);
+            const tenants = await this.getAvailableTenants(subscriptionProvider);
             context.telemetry.measurements.availableTenantsCount = tenants.length;
 
             // Create quick pick items
@@ -62,23 +73,24 @@ export class PromptTenantStep extends AzureWizardPromptStep<NewConnectionWizardC
             return tenantItems;
         };
 
-        const selectedItem = await context.ui.showQuickPick(tenantItemsPromise(), {
-            stepName: 'selectTenant',
-            placeHolder: l10n.t('Select a tenant for Microsoft Entra ID authentication'),
-            suppressPersistence: true,
-            loadingPlaceHolder: l10n.t('Loading Tenants…'),
-            enableGrouping: true,
-            matchOnDescription: true,
-        });
+        let selectedItem: TenantQuickPickItem;
+        do {
+            selectedItem = await context.ui.showQuickPick(tenantItemsPromise(), {
+                stepName: 'selectTenant',
+                placeHolder: l10n.t('Select a tenant for Microsoft Entra ID authentication'),
+                suppressPersistence: true,
+                loadingPlaceHolder: l10n.t('Loading Tenants…'),
+                enableGrouping: true,
+                matchOnDescription: true,
+            });
 
-        if (selectedItem.isSignInOption) {
-            // Handle sign in to other Azure accounts
-            await this.handleSignInToOtherAccounts(context);
-            await this.showRetryInstructions();
+            if (selectedItem.isSignInOption) {
+                await this.handleSignInToOtherAccounts(context, subscriptionProvider);
+                accountManagementUsed = true;
+            }
+        } while (selectedItem.isSignInOption);
 
-            // Exit wizard - user needs to restart the connection flow
-            throw new UserCancelledError('Account management completed');
-        } else if (selectedItem.isCustomOption) {
+        if (selectedItem.isCustomOption) {
             // Show input box for custom tenant ID
             const customTenantId = await context.ui.showInputBox({
                 prompt: l10n.t('Enter the tenant ID (GUID)'),
@@ -105,7 +117,7 @@ export class PromptTenantStep extends AzureWizardPromptStep<NewConnectionWizardC
         }
 
         // Add telemetry - track selection method
-        if (selectedItem.isSignInOption) {
+        if (accountManagementUsed) {
             context.telemetry.properties.tenantSelectionMethod = 'signInTriggered';
         } else if (selectedItem.isCustomOption) {
             context.telemetry.properties.tenantSelectionMethod = 'custom';
@@ -119,11 +131,19 @@ export class PromptTenantStep extends AzureWizardPromptStep<NewConnectionWizardC
         return context.selectedAuthenticationMethod === AuthMethodId.MicrosoftEntraID;
     }
 
-    private async getAvailableTenants(_context: NewConnectionWizardContext): Promise<AzureTenant[]> {
+    private async isSignedIn(subscriptionProvider: VSCodeAzureSubscriptionProvider): Promise<boolean> {
         try {
-            // Create a new Azure subscription provider to get tenants
-            const subscriptionProvider = new VSCodeAzureSubscriptionProvider();
-            const tenants = await subscriptionProvider.getTenants();
+            return await valueOnTimeout(TENANT_LOOKUP_TIMEOUT_MS, true, () => subscriptionProvider.isSignedIn());
+        } catch {
+            return true;
+        }
+    }
+
+    private async getAvailableTenants(subscriptionProvider: VSCodeAzureSubscriptionProvider): Promise<AzureTenant[]> {
+        try {
+            const tenants = await valueOnTimeout(TENANT_LOOKUP_TIMEOUT_MS, [], () =>
+                subscriptionProvider.getTenants(),
+            );
 
             return tenants.sort((a: AzureTenant, b: AzureTenant) => {
                 // Sort by display name if available, otherwise by tenant ID
@@ -179,13 +199,13 @@ export class PromptTenantStep extends AzureWizardPromptStep<NewConnectionWizardC
         return tenantId;
     }
 
-    private async handleSignInToOtherAccounts(context: NewConnectionWizardContext): Promise<void> {
+    private async handleSignInToOtherAccounts(
+        context: NewConnectionWizardContext,
+        subscriptionProvider: VSCodeAzureSubscriptionProvider,
+    ): Promise<void> {
         // Add telemetry for credential configuration activation
         context.telemetry.properties.credentialConfigActivated = 'true';
         context.telemetry.properties.nodeProvided = 'false';
-
-        // Create a new Azure subscription provider to trigger sign-in
-        const subscriptionProvider = new VSCodeAzureSubscriptionProvider();
 
         // Call the credentials management function directly
         const { configureAzureCredentials } = await import('../../plugins/api-shared/azure/credentialsManagement');
@@ -193,19 +213,6 @@ export class PromptTenantStep extends AzureWizardPromptStep<NewConnectionWizardC
             context,
             subscriptionProvider as AzureSubscriptionProviderWithFilters,
             undefined,
-        );
-    }
-
-    private async showRetryInstructions(): Promise<void> {
-        await vscode.window.showInformationMessage(
-            l10n.t('Account Management Completed'),
-            {
-                modal: true,
-                detail: l10n.t(
-                    'The account management flow has completed.\n\nPlease try the connection flow again to see your available tenants.',
-                ),
-            },
-            l10n.t('OK'),
         );
     }
 }
