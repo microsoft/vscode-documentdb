@@ -43,6 +43,7 @@ export class PromptAuthMethodStep extends AzureWizardPromptStep<UpdateCredential
         }
 
         context.selectedAuthenticationMethod = selectedItem.authMethod;
+        context.authenticationMethodPrompted = true;
     }
 
     public shouldPrompt(): boolean {

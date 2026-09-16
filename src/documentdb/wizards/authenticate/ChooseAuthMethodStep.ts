@@ -23,6 +23,7 @@ export class ChooseAuthMethodStep extends AzureWizardPromptStep<AuthenticateWiza
             if (isSupportedAuthMethod(availableMethods[0])) {
                 context.selectedAuthMethod = availableMethods[0];
                 context.isAuthMethodUpdated = true;
+                context.authenticationMethodPrompted = false;
                 return;
             }
 
@@ -62,6 +63,7 @@ export class ChooseAuthMethodStep extends AzureWizardPromptStep<AuthenticateWiza
 
         context.selectedAuthMethod = selectedItem.authMethod;
         context.isAuthMethodUpdated = true;
+        context.authenticationMethodPrompted = true;
     }
 
     public shouldPrompt(context: AuthenticateWizardContext): boolean {

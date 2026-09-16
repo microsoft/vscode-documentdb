@@ -28,6 +28,8 @@ export interface UpdateCredentialsWizardContext extends IActionContext {
     managedIdentityAuthConfig?: ManagedIdentityAuthConfig;
 
     selectedAuthenticationMethod?: AuthMethodId;
+    /** True when the authentication family quick pick was shown in this wizard pass. */
+    authenticationMethodPrompted?: boolean;
 
     /** True when the wizard was triggered from an error/retry node. */
     isErrorState: boolean;

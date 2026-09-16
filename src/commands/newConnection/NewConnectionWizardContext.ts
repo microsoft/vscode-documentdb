@@ -29,6 +29,8 @@ export interface NewConnectionWizardContext extends IActionContext {
 
     availableAuthenticationMethods?: AuthMethodId[];
     selectedAuthenticationMethod?: AuthMethodId;
+    /** True when the authentication family quick pick was shown in this wizard pass. */
+    authenticationMethodPrompted?: boolean;
 
     // Authentication configurations - provided by user input or service discovery
     nativeAuthConfig?: NativeAuthConfig;

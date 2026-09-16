@@ -25,6 +25,7 @@ export class PromptAuthMethodStep extends AzureWizardPromptStep<NewConnectionWiz
         }
 
         context.selectedAuthenticationMethod = selectedItem.authMethod;
+        context.authenticationMethodPrompted = true;
     }
 
     public shouldPrompt(context: NewConnectionWizardContext): boolean {

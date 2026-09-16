@@ -3,7 +3,7 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { AzureWizardPromptStep, type IActionContext } from '@microsoft/vscode-azext-utils';
+import { AzureWizardPromptStep, GoBackError, type IActionContext } from '@microsoft/vscode-azext-utils';
 import * as l10n from '@vscode/l10n';
 import * as vscode from 'vscode';
 import { type EntraIdAuthConfig, type ManagedIdentityAuthConfig } from '../../auth/AuthConfig';
@@ -76,9 +76,10 @@ export interface ManagedIdentitySelectionContext extends IActionContext {
     connectionStringAuthFacts?: ConnectionStringAuthFacts;
     availableAuthenticationMethods?: AuthMethodId[];
     availableAuthMethods?: string[];
+    authenticationMethodPrompted?: boolean;
 }
 
-type IdentityChoice = 'account' | 'manual' | 'systemAssigned' | 'clientId' | 'authMethod';
+type IdentityChoice = 'account' | 'manual' | 'systemAssigned' | 'clientId' | 'authMethod' | 'back';
 
 interface IdentityQuickPickItem extends vscode.QuickPickItem {
     readonly choice?: IdentityChoice;
@@ -86,15 +87,10 @@ interface IdentityQuickPickItem extends vscode.QuickPickItem {
 }
 
 /**
- * Asks which managed identity to authenticate with.
+ * Asks whether to use an account or managed identity within the Microsoft Entra ID family.
  *
- * The instance metadata service cannot disambiguate between several identities assigned to the same
- * machine, so on such a machine the client ID is not a nicety: without it the connection fails with
- * an error that names no cause. That is the incident this feature exists to close.
- *
- * The system-assigned identity is the default choice, followed by known client IDs and the manual
- * escape hatch as the final fallback. It is never a dead end; with nothing known it still shows both
- * identity options.
+ * It is never a dead end: account sign-in and both managed identity routes remain reachable, and
+ * visible navigation is provided whenever the preceding family choice can be revisited.
  */
 export class SelectEntraTokenSourceStep<T extends ManagedIdentitySelectionContext> extends AzureWizardPromptStep<T> {
     constructor(
@@ -110,7 +106,12 @@ export class SelectEntraTokenSourceStep<T extends ManagedIdentitySelectionContex
         const suppliedIdentity = facts?.username && !facts.usernameIsGuid ? facts.username : undefined;
 
         const selected = await context.ui.showQuickPick(
-            this.buildItems(prefilledClientId, suppliedIdentity, facts?.usesOidc === true),
+            this.buildItems(
+                prefilledClientId,
+                suppliedIdentity,
+                facts?.usesOidc === true,
+                context.authenticationMethodPrompted === true,
+            ),
             {
                 stepName: 'selectEntraTokenSource',
                 placeHolder: suppliedIdentity
@@ -129,6 +130,10 @@ export class SelectEntraTokenSourceStep<T extends ManagedIdentitySelectionContex
         if (selected.choice === 'authMethod') {
             await this.selectDifferentAuthMethod(context);
             return;
+        }
+
+        if (selected.choice === 'back') {
+            throw new GoBackError();
         }
 
         if (selected.choice === 'systemAssigned') {
@@ -211,6 +216,7 @@ export class SelectEntraTokenSourceStep<T extends ManagedIdentitySelectionContex
         prefilledClientId?: string,
         suppliedIdentity?: string,
         showChangeAuthMethod: boolean = false,
+        showBack: boolean = false,
     ): IdentityQuickPickItem[] {
         const items: IdentityQuickPickItem[] = [];
 
@@ -251,13 +257,25 @@ export class SelectEntraTokenSourceStep<T extends ManagedIdentitySelectionContex
             },
         );
 
-        if (showChangeAuthMethod) {
+        if (showChangeAuthMethod || showBack) {
             items.push({ label: l10n.t('Other options'), kind: vscode.QuickPickItemKind.Separator });
+        }
+
+        if (showChangeAuthMethod) {
             items.push({
                 label: l10n.t('Choose a different authentication method...'),
                 detail: l10n.t('This connection string asked for Microsoft Entra ID'),
                 iconPath: new vscode.ThemeIcon('arrow-swap'),
                 choice: 'authMethod',
+                alwaysShow: true,
+            });
+        }
+
+        if (showBack) {
+            items.push({
+                label: l10n.t('Back to authentication method selection'),
+                iconPath: new vscode.ThemeIcon('arrow-left'),
+                choice: 'back',
                 alwaysShow: true,
             });
         }

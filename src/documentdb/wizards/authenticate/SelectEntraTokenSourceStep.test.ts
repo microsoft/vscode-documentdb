@@ -21,9 +21,11 @@ jest.mock('@vscode/l10n', () => ({
 
 jest.mock('@microsoft/vscode-azext-utils', () => ({
     AzureWizardPromptStep: class AzureWizardPromptStep {},
+    GoBackError: class GoBackError extends Error {},
 }));
 
 import * as vscode from 'vscode';
+import { GoBackError } from '@microsoft/vscode-azext-utils';
 import { AuthMethodId } from '../../auth/AuthMethod';
 import { type AuthenticateWizardContext } from './AuthenticateWizardContext';
 import { groupAsGuid, normalizeClientId, SelectEntraTokenSourceStep } from './SelectEntraTokenSourceStep';
@@ -115,6 +117,20 @@ describe('SelectEntraTokenSourceStep.buildItems', () => {
 
         expect(items[otherOptionsIndex + 1].label).toBe('Choose a different authentication method...');
     });
+
+    it('offers a visible back action when the authentication family picker was shown', () => {
+        const items = makeStep().buildItems(undefined, undefined, false, true);
+        const otherOptionsIndex = items.findIndex((item) => item.label === 'Other options');
+
+        expect(items[otherOptionsIndex + 1].label).toBe('Back to authentication method selection');
+        expect(items[otherOptionsIndex + 1].choice).toBe('back');
+    });
+
+    it('does not offer back when the family was inferred or auto-selected', () => {
+        const items = makeStep().buildItems();
+
+        expect(items.some((item) => item.choice === 'back')).toBe(false);
+    });
 });
 
 describe('SelectEntraTokenSourceStep.shouldPrompt', () => {
@@ -176,6 +192,17 @@ describe('SelectEntraTokenSourceStep.shouldPrompt', () => {
 });
 
 describe('SelectEntraTokenSourceStep.prompt', () => {
+    it('returns to a family picker that actually prompted', async () => {
+        const context = makeContext({
+            authenticationMethodPrompted: true,
+            ui: {
+                showQuickPick: jest.fn().mockResolvedValue({ choice: 'back' }),
+            } as unknown as AuthenticateWizardContext['ui'],
+        });
+
+        await expect(makeStep().prompt(context)).rejects.toBeInstanceOf(GoBackError);
+    });
+
     it('selects account sign-in and clears a candidate managed identity', async () => {
         const context = makeContext({
             managedIdentityAuthConfig: { clientId: CLIENT_ID },

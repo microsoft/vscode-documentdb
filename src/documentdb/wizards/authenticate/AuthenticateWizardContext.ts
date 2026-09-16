@@ -43,6 +43,8 @@ export interface AuthenticateWizardContext extends IActionContext {
      * The selected authentication method.
      */
     selectedAuthMethod?: AuthMethodId;
+    /** True when the authentication family quick pick was shown in this wizard pass. */
+    authenticationMethodPrompted?: boolean;
 
     aborted?: boolean;
 
