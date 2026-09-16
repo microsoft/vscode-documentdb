@@ -31,6 +31,7 @@ edit to `managed-identities.md` rather than a redesign.
 | D10 | **Confirmed, reversal**      | Managed identity moves under the Microsoft Entra ID family              |
 | D11 | **Confirmed**                | Tenant choice is retimed and account management continues in place      |
 | D12 | **Confirmed**                | Applies the shared family presentation to all seven entry points         |
+| D13 | **Confirmed**                | Adds a visible Back row when the family picker actually prompted         |
 
 ---
 
@@ -582,6 +583,23 @@ would require a temporary rendering variant and leave the product half-migrated.
 is simpler and ensures any entry point that advertises Microsoft Entra ID also asks for its token
 source. Atlas and Kubernetes normally do not advertise Entra today; their gated registration is a
 forward-compatibility guard, not a new capability claim.
+
+## D13. A reachable family choice has a visible Back action
+
+**Decision:** when the authentication family quick pick actually prompted and the user selected
+Microsoft Entra ID, show **Back to authentication method selection** under **Other options** in the
+identity picker. Selecting it raises `GoBackError`, matching Azure account-management navigation.
+
+### Reasoning
+
+The small Back button in the quick-pick title is easy to miss. Azure account management already
+uses visible action rows after a separator, so the authentication flow should use the same pattern
+when the preceding choice is reachable.
+
+The row is conditional on the family picker having displayed, not merely on an Entra method being
+selected. A family inferred from OIDC or auto-selected as the only available method has no prompted
+step for `AzureWizard.goBack()` to return to. Those paths omit the Back row; inferred OIDC keeps the
+inline **Choose a different authentication method...** action required by D10.
 
 ---
 

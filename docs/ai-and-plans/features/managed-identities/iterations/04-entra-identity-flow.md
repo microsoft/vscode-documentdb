@@ -122,6 +122,22 @@ image assets so they follow the active VS Code theme and match existing Azure tr
 
 Focused verification: 2 suites, 36 tests. `npm run build` and `git diff --check` passed.
 
+### WI5: Add a visible route back to family selection
+
+**Commit:** `f662e726`, `fix: add visible Entra flow back action`
+
+When the user reaches the identity picker by selecting Microsoft Entra ID in a displayed family
+picker, **Other options** now includes **Back to authentication method selection** with an
+`arrow-left` icon. It raises `GoBackError`, following the visible action-row pattern used by Azure
+account management instead of relying only on the small Back button in the quick-pick title.
+
+The family picker records whether it actually displayed. The Back row is omitted when OIDC inferred
+the family or a single available method was auto-selected, because `AzureWizard` cannot return to a
+step that did not prompt. Inferred OIDC continues to use the inline **Choose a different
+authentication method...** action.
+
+Focused verification: 1 suite, 32 tests. `npm run build` and `git diff --check` passed.
+
 ## Outcome
 
 The implementation now matches the handoff's three dependent stages and the operator's follow-up

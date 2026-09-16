@@ -470,8 +470,9 @@ Managed identity
   Use a different managed identity...
     Enter the client ID of a user-assigned managed identity
 Other options
-  Choose a different authentication method...
+  Choose a different authentication method...  [when the family was inferred]
     This connection string asked for Microsoft Entra ID
+  Back to authentication method selection      [when the family picker prompted]
 ```
 
 - The connection-string candidate and different-authentication-method rows are conditional.
@@ -481,6 +482,9 @@ Other options
   create a second picker variant.
 - The different-authentication-method row appears when OIDC inference skipped the family picker,
   because AzureWizard Back cannot reopen a step that did not prompt.
+- The visible Back row appears when the family picker did prompt, and raises `GoBackError` to return
+  to it. It is omitted after inference or one-method auto-selection so it never jumps past a skipped
+  family step.
 - Group headings name authentication concepts rather than locations. System-assigned and
   user-assigned terminology appears in complete detail sentences so the rows remain understandable
   without relying on parenthetical fragments.
