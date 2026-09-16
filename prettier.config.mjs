@@ -25,6 +25,15 @@ const config = {
                 tabWidth: 2,
             },
         },
+        {
+            files: ['*.md'],
+            options: {
+                // Fenced code in docs is illustrative and often partial. Formatting it would
+                // also reindent TypeScript samples to the markdown tabWidth, leaving every
+                // example disagreeing with the codebase it documents.
+                embeddedLanguageFormatting: 'off',
+            },
+        },
     ],
 };
 

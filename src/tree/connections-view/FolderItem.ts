@@ -103,6 +103,7 @@ export class FolderItem implements TreeElement, TreeElementWithContextValue {
                     // Connection cluster data
                     clusterId: child.id, // Stable storageId for cache lookups
                     storageId: child.id,
+                    storageZone: this._connectionType,
                     name: child.name,
                     dbExperience: DocumentDBExperience,
                     connectionString: child?.secrets?.connectionString ?? undefined,

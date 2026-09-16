@@ -14,5 +14,13 @@ export interface CreateDatabaseWizardContext extends IActionContext {
     clusterName: string;
     nodeId: string;
 
+    /**
+     * When true, the wizard prompts for an initial collection name.
+     * Required where dropping the last collection also removes the database, as with the MongoDB API
+     * wire protocol as implemented by Atlas. Azure DocumentDB vCore does not need this.
+     */
+    requiresInitialCollection?: boolean;
+
     databaseName?: string;
+    collectionName?: string;
 }

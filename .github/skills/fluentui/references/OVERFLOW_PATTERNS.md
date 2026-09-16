@@ -62,6 +62,7 @@ Two separate toolbars side-by-side:
 ```
 
 CSS (SCSS):
+
 ```scss
 .toolbarMainView {
     display: grid;
@@ -82,12 +83,12 @@ CSS (SCSS):
 
 We tested extensively and found that Flexbox does not work reliably for side-by-side overflow layouts:
 
-| Approach | Result |
-|---|---|
+| Approach                                       | Result                                                                        |
+| ---------------------------------------------- | ----------------------------------------------------------------------------- |
 | Flex row + `margin-right: auto` on first child | Overflow never triggers — second child's `clientWidth` stays at content width |
-| Flex row + `flex-grow: 1` on Overflow child | Same — inline styles work but CSS classes don't (specificity/cascade issue) |
-| Flex row with `min-width: 0` on second child | Overflow triggers but measurement is unreliable |
-| **CSS Grid `auto minmax(0, 1fr)`** | **Works reliably** — Grid enforces a hard width constraint |
+| Flex row + `flex-grow: 1` on Overflow child    | Same — inline styles work but CSS classes don't (specificity/cascade issue)   |
+| Flex row with `min-width: 0` on second child   | Overflow triggers but measurement is unreliable                               |
+| **CSS Grid `auto minmax(0, 1fr)`**             | **Works reliably** — Grid enforces a hard width constraint                    |
 
 The root cause: in a flex row, the Overflow component's `clientWidth` measurement depends on complex interactions between flex item sizing, Griffel's atomic CSS classes, and SCSS stylesheets. CSS Grid avoids this by giving the second column a definite maximum width (`1fr` of remaining space), which the ResizeObserver can reliably observe.
 
@@ -207,11 +208,11 @@ When overflow doesn't work:
 
 ## Key FluentUI Internals
 
-| Component | Renders DOM element? | Key behavior |
-|---|---|---|
-| `<Overflow>` | **No** — clones its child, adds `fui-Overflow` class + ref | Provides OverflowContext |
-| `<OverflowItem>` | **No** — clones its child, adds `data-overflow-item` + `data-overflow-group` attrs + ref | Registers item with manager |
-| `<Toolbar>` | `<div role="toolbar">` with `display: flex; align-items: center` | Provides toolbar ARIA semantics |
-| `useOverflowMenu` | Hook returning `{ ref, isOverflowing, overflowCount }` | Registers the menu with the manager |
-| `useIsOverflowItemVisible` | Hook returning `boolean` | Reads item visibility from OverflowContext |
-| `useIsOverflowGroupVisible` | Hook returning `'visible' \| 'hidden' \| 'overflow'` | Reads group visibility |
+| Component                   | Renders DOM element?                                                                     | Key behavior                               |
+| --------------------------- | ---------------------------------------------------------------------------------------- | ------------------------------------------ |
+| `<Overflow>`                | **No** — clones its child, adds `fui-Overflow` class + ref                               | Provides OverflowContext                   |
+| `<OverflowItem>`            | **No** — clones its child, adds `data-overflow-item` + `data-overflow-group` attrs + ref | Registers item with manager                |
+| `<Toolbar>`                 | `<div role="toolbar">` with `display: flex; align-items: center`                         | Provides toolbar ARIA semantics            |
+| `useOverflowMenu`           | Hook returning `{ ref, isOverflowing, overflowCount }`                                   | Registers the menu with the manager        |
+| `useIsOverflowItemVisible`  | Hook returning `boolean`                                                                 | Reads item visibility from OverflowContext |
+| `useIsOverflowGroupVisible` | Hook returning `'visible' \| 'hidden' \| 'overflow'`                                     | Reads group visibility                     |

@@ -11,7 +11,6 @@ import * as vscode from 'vscode';
 // Lazy-load @kubernetes/client-node to avoid impacting extension startup.
 // Only type imports are used at the top level — they disappear at runtime.
 import {
-    type Configuration,
     type CoreV1Api,
     type KubeConfig,
     type V1Namespace,
@@ -20,13 +19,6 @@ import {
 } from '@kubernetes/client-node';
 import { ext } from '../../extensionVariables';
 import { CREDENTIAL_SECRET_ANNOTATION, DISCOVERY_ANNOTATION, DOCUMENTDB_PORTS } from './config';
-import {
-    createKubernetesApiOperationError,
-    getKubernetesApiErrorMessage,
-    isKubernetesApiTimeoutError,
-    kubernetesApiTimeoutMiddleware,
-    normalizeKubernetesApiError,
-} from './kubernetesApiTimeout';
 import { getSource, readInlineYaml } from './sources/sourceStore';
 
 /**
@@ -38,8 +30,6 @@ import { getSource, readInlineYaml } from './sources/sourceStore';
  */
 // eslint-disable-next-line @typescript-eslint/consistent-type-imports
 type KubernetesClientModule = typeof import('@kubernetes/client-node');
-
-type KubernetesApiClientConstructor<T> = new (configuration: Configuration) => T;
 
 /**
  * Lazily imports `@kubernetes/client-node` with defensive interop and diagnostics.
@@ -103,33 +93,6 @@ async function importKubernetesClient(): Promise<KubernetesClientModule> {
     }
 
     return resolved as KubernetesClientModule;
-}
-
-/**
- * Recreates {@link KubeConfig.makeApiClient} with a request timeout middleware.
- *
- * `@kubernetes/client-node` 1.4.0 does not expose a way to attach middleware to
- * the client returned by `makeApiClient`, so this mirrors its implementation
- * (`baseServer` + kubeconfig authentication) and adds only the 30-second
- * request deadline agreed in #741.
- */
-function createKubernetesApiClient<T>(
-    k8s: KubernetesClientModule,
-    kubeConfig: KubeConfig,
-    apiClientType: KubernetesApiClientConstructor<T>,
-): T {
-    const cluster = kubeConfig.getCurrentCluster();
-    if (!cluster) {
-        throw new Error(vscode.l10n.t('No active Kubernetes cluster was found. Check your kubeconfig and try again.'));
-    }
-
-    const configuration = k8s.createConfiguration({
-        baseServer: new k8s.ServerConfiguration(cluster.server, {}),
-        authMethods: { default: kubeConfig },
-        promiseMiddleware: [kubernetesApiTimeoutMiddleware],
-    });
-
-    return new apiClientType(configuration);
 }
 
 /**
@@ -623,7 +586,7 @@ function getUrlHostname(server: string): string {
 export async function createCoreApi(kubeConfig: KubeConfig, contextName: string): Promise<CoreV1Api> {
     const k8s = await importKubernetesClient();
     kubeConfig.setCurrentContext(contextName);
-    return createKubernetesApiClient(k8s, kubeConfig, k8s.CoreV1Api);
+    return kubeConfig.makeApiClient(k8s.CoreV1Api);
 }
 
 /**
@@ -642,14 +605,12 @@ export async function listNamespaces(coreApi: CoreV1Api): Promise<string[]> {
             .filter((name): name is string => !!name)
             .sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
     } catch (error) {
-        const apiError = normalizeKubernetesApiError(error);
-        const errorMessage = getKubernetesApiErrorMessage(apiError);
-        throw createKubernetesApiOperationError(
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        throw new Error(
             vscode.l10n.t(
                 'Failed to list namespaces: {0}. Check that your credentials are valid and you have the required RBAC permissions.',
                 errorMessage,
             ),
-            apiError,
         );
     }
 }
@@ -661,14 +622,11 @@ function getDkoServiceName(documentDbName: string): string {
 
 function buildDocumentDbConnectionParams(): string {
     const params = new URLSearchParams();
-    // Discovery resolves one reachable gateway endpoint (including localhost
-    // port-forwards), so pin the driver to that endpoint. DocumentDB gateways
-    // identify as isdbgrid and do not advertise a replica-set name or members;
-    // a hardcoded replicaSet would describe a topology discovery cannot verify.
     params.set('directConnection', 'true');
     params.set('authMechanism', 'SCRAM-SHA-256');
     params.set('tls', 'true');
     params.set('tlsAllowInvalidCertificates', 'true');
+    params.set('replicaSet', 'rs0');
     return params.toString();
 }
 
@@ -727,7 +685,7 @@ async function listDkoDocumentDbResources(
 ): Promise<DkoDocumentDbResourceInfo[]> {
     try {
         const k8s = await importKubernetesClient();
-        const customApi = createKubernetesApiClient(k8s, kubeConfig, k8s.CustomObjectsApi);
+        const customApi = kubeConfig.makeApiClient(k8s.CustomObjectsApi);
         const response: unknown = await customApi.listNamespacedCustomObject({
             group: 'documentdb.io',
             version: 'preview',
@@ -793,32 +751,18 @@ async function listDkoDocumentDbResources(
 
         return result.sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true }));
     } catch (error) {
-        if (isDkoCrdUnavailableError(error)) {
+        if (isDkoCrdUnavailableError(error) || options.suppressUnexpectedErrors) {
+            // Treat unavailable DKO metadata as no DKO resources when callers explicitly allow fallback.
             return [];
         }
 
-        const apiError = normalizeKubernetesApiError(error);
-
-        if (options.suppressUnexpectedErrors) {
-            // Credential lookup is best-effort, but a timeout should still be
-            // visible in diagnostics rather than looking like a missing Secret.
-            if (isKubernetesApiTimeoutError(apiError)) {
-                ext.outputChannel.warn(
-                    `[KubernetesDiscovery] ${getKubernetesApiErrorMessage(apiError)} ` +
-                        `while listing DKO resources in namespace "${namespace}".`,
-                );
-            }
-            return [];
-        }
-
-        const errorMessage = getKubernetesApiErrorMessage(apiError);
-        throw createKubernetesApiOperationError(
+        const errorMessage = getKubernetesApiErrorMessage(error);
+        throw new Error(
             vscode.l10n.t(
                 'Failed to list DKO resources in namespace "{0}": {1}. Check that the DocumentDB Kubernetes Operator CRD is installed and that your Kubernetes credentials can list documentdb.io dbs resources.',
                 namespace,
                 errorMessage,
             ),
-            apiError,
         );
     }
 }
@@ -846,6 +790,33 @@ function getKubernetesApiStatusCode(error: unknown): number | undefined {
     }
 
     return undefined;
+}
+
+function getKubernetesApiErrorMessage(error: unknown): string {
+    if (error instanceof Error) {
+        return error.message;
+    }
+
+    if (typeof error === 'string') {
+        return error;
+    }
+
+    if (isRecord(error)) {
+        const message = error.message;
+        if (typeof message === 'string') {
+            return message;
+        }
+
+        const body = error.body;
+        if (typeof body === 'string') {
+            return body;
+        }
+        if (isRecord(body) && typeof body.message === 'string') {
+            return body.message;
+        }
+    }
+
+    return String(error);
 }
 
 function getNumberProperty(record: Record<string, unknown>, propertyName: string): number | undefined {
@@ -978,15 +949,13 @@ export async function listDocumentDBServices(
             return a.displayName.localeCompare(b.displayName, undefined, { numeric: true });
         });
     } catch (error) {
-        const apiError = normalizeKubernetesApiError(error);
-        const errorMessage = getKubernetesApiErrorMessage(apiError);
-        throw createKubernetesApiOperationError(
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        throw new Error(
             vscode.l10n.t(
                 'Failed to list services in namespace "{0}": {1}. Check your RBAC permissions.',
                 namespace,
                 errorMessage,
             ),
-            apiError,
         );
     }
 }
@@ -1216,11 +1185,7 @@ async function getFirstNodeAddress(coreApi: CoreV1Api): Promise<{ address: strin
         if (firstInternalAddress) {
             return { address: firstInternalAddress, isExternal: false };
         }
-    } catch (error) {
-        const apiError = normalizeKubernetesApiError(error);
-        if (isKubernetesApiTimeoutError(apiError)) {
-            throw apiError;
-        }
+    } catch {
         // If we can't list nodes, we can't resolve NodePort addresses.
     }
 
@@ -1263,14 +1228,7 @@ export async function resolveDocumentDBCredentials(
                 connectionParams: buildDocumentDbConnectionParams(),
             };
         }
-    } catch (error) {
-        const apiError = normalizeKubernetesApiError(error);
-        if (isKubernetesApiTimeoutError(apiError)) {
-            ext.outputChannel.warn(
-                `[KubernetesDiscovery] ${getKubernetesApiErrorMessage(apiError)} ` +
-                    `while reading credential Secret "${matchingResource.secretName}" in namespace "${namespace}".`,
-            );
-        }
+    } catch {
         // Secret not found or not readable
     }
 
@@ -1311,14 +1269,7 @@ export async function resolveGenericServiceCredentials(
             const password = Buffer.from(data.password, 'base64').toString('utf-8');
             return { username, password };
         }
-    } catch (error) {
-        const apiError = normalizeKubernetesApiError(error);
-        if (isKubernetesApiTimeoutError(apiError)) {
-            ext.outputChannel.warn(
-                `[KubernetesDiscovery] ${getKubernetesApiErrorMessage(apiError)} ` +
-                    `while reading credential Secret "${secretName}" in namespace "${namespace}".`,
-            );
-        }
+    } catch {
         // Secret not found or not readable — return undefined so UI can prompt later.
     }
 

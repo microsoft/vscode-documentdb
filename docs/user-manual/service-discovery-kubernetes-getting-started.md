@@ -462,7 +462,7 @@ kubectl port-forward pod/<ready-pod-name> 10260:10260 -n documentdb-ns
 In another terminal, connect with `mongosh`:
 
 ```bash
-mongosh 'mongodb://dev_user:<password>@127.0.0.1:10260/?directConnection=true&authMechanism=SCRAM-SHA-256&tls=true&tlsAllowInvalidCertificates=true'
+mongosh 'mongodb://dev_user:<password>@127.0.0.1:10260/?directConnection=true&authMechanism=SCRAM-SHA-256&tls=true&tlsAllowInvalidCertificates=true&replicaSet=rs0'
 ```
 
 For the local setup script, the sample password is `DevPassword123`. For AKS, use the development password you put in the Secret.

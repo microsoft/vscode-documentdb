@@ -133,6 +133,11 @@ export async function copyConnectionString(context: IActionContext, node: Cluste
 function buildParsedConnectionString(credentials: EphemeralClusterCredentials): DocumentDBConnectionString {
     const parsedConnectionString = new DocumentDBConnectionString(credentials.connectionString);
     parsedConnectionString.username = credentials.nativeAuthConfig?.connectionUser ?? '';
+    // Never inherit a password embedded in `credentials.connectionString`: the base string is treated
+    // as password-free and the password is added back ONLY in the with-password branch. Callers are
+    // expected to pass a stripped base, but clearing here makes "copy without password" structurally
+    // safe even if a caller (e.g. an in-memory instance) passes a credential-bearing string.
+    parsedConnectionString.password = '';
 
     if (credentials.selectedAuthMethod === AuthMethodId.MicrosoftEntraID) {
         parsedConnectionString.searchParams.set('authMechanism', 'MONGODB-OIDC');
@@ -171,8 +176,12 @@ function buildKubectlPortForwardCommand(metadata: KubernetesPortForwardMetadata)
 /**
  * Standard copy flow for non-Kubernetes targets (and Kubernetes targets that are not reached
  * through a port-forward tunnel). Preserves the original with/without-password prompt.
+ *
+ * Exported so callers with in-memory (non storage-backed) credentials — e.g. the Local Quick Start
+ * managed instance — can reuse the exact with/without-password QuickPick instead of copying the
+ * password silently (UX review #7).
  */
-async function copyStandardConnectionString(
+export async function copyStandardConnectionString(
     context: IActionContext,
     credentials: EphemeralClusterCredentials,
     isConnectionsView: boolean,

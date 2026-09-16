@@ -11,50 +11,48 @@ import { getDocBase, getDocLink } from './index';
 
 describe('docLinks', () => {
     test('getDocBase returns the expected base URL', () => {
-        expect(getDocBase()).toBe('https://learn.microsoft.com/en-us/azure/documentdb/operators');
+        expect(getDocBase()).toBe('https://learn.microsoft.com/en-us/documentdb/query/operators');
     });
 
     describe('getDocLink', () => {
         test('generates correct URL for comparison query operator', () => {
             const link = getDocLink('$eq', 'query:comparison');
-            expect(link).toBe('https://learn.microsoft.com/en-us/azure/documentdb/operators/comparison-query/$eq');
+            expect(link).toBe('https://learn.microsoft.com/en-us/documentdb/query/operators/comparison-query/$eq');
         });
 
         test('generates correct URL for aggregation stage', () => {
             const link = getDocLink('$match', 'stage');
-            expect(link).toBe('https://learn.microsoft.com/en-us/azure/documentdb/operators/aggregation/$match');
+            expect(link).toBe('https://learn.microsoft.com/en-us/documentdb/query/operators/aggregation/$match');
         });
 
         test('generates correct URL for accumulator', () => {
             const link = getDocLink('$sum', 'accumulator');
-            expect(link).toBe('https://learn.microsoft.com/en-us/azure/documentdb/operators/accumulators/$sum');
+            expect(link).toBe('https://learn.microsoft.com/en-us/documentdb/query/operators/accumulators/$sum');
         });
 
         test('generates correct URL for field update operator', () => {
             const link = getDocLink('$set', 'update:field');
-            expect(link).toBe('https://learn.microsoft.com/en-us/azure/documentdb/operators/field-update/$set');
+            expect(link).toBe('https://learn.microsoft.com/en-us/documentdb/query/operators/field-update/$set');
         });
 
         test('generates correct URL for array expression operator', () => {
             const link = getDocLink('$filter', 'expr:array');
-            expect(link).toBe('https://learn.microsoft.com/en-us/azure/documentdb/operators/array-expression/$filter');
+            expect(link).toBe('https://learn.microsoft.com/en-us/documentdb/query/operators/array-expression/$filter');
         });
 
-        test('generates correct URL for type expression operator (nested dir)', () => {
+        test('generates correct URL for type expression operator', () => {
             const link = getDocLink('$convert', 'expr:type');
-            expect(link).toBe(
-                'https://learn.microsoft.com/en-us/azure/documentdb/operators/aggregation/type-expression/$convert',
-            );
+            expect(link).toBe('https://learn.microsoft.com/en-us/documentdb/query/operators/aggregation/$convert');
         });
 
         test('generates correct URL for window operator', () => {
             const link = getDocLink('$rank', 'window');
-            expect(link).toBe('https://learn.microsoft.com/en-us/azure/documentdb/operators/window-operators/$rank');
+            expect(link).toBe('https://learn.microsoft.com/en-us/documentdb/query/operators/window-operators/$rank');
         });
 
         test('lowercases operator names in URLs', () => {
             const link = getDocLink('$AddFields', 'stage');
-            expect(link).toBe('https://learn.microsoft.com/en-us/azure/documentdb/operators/aggregation/$addfields');
+            expect(link).toBe('https://learn.microsoft.com/en-us/documentdb/query/operators/aggregation/$addfields');
         });
 
         test('returns undefined for unknown meta tag', () => {
@@ -71,12 +69,12 @@ describe('docLinks', () => {
 
         test('generates correct URL for boolean expression operator', () => {
             const link = getDocLink('$and', 'expr:bool');
-            expect(link).toBe('https://learn.microsoft.com/en-us/azure/documentdb/operators/boolean-expression/$and');
+            expect(link).toBe('https://learn.microsoft.com/en-us/documentdb/query/operators/boolean-expression/$and');
         });
 
         test('generates correct URL for comparison expression operator', () => {
             const link = getDocLink('$eq', 'expr:comparison');
-            expect(link).toBe('https://learn.microsoft.com/en-us/azure/documentdb/operators/comparison-expression/$eq');
+            expect(link).toBe('https://learn.microsoft.com/en-us/documentdb/query/operators/comparison-expression/$eq');
         });
     });
 });

@@ -49,23 +49,35 @@ interface OperatorInfo {
     scraperComment?: string;
 }
 
+/**
+ * A single row from the compatibility page's "Index types" or
+ * "Index properties" tables.
+ */
+interface IndexEntry {
+    /** Cleaned display name, e.g. "Single Field", "Wildcard", "TTL". */
+    name: string;
+    /** Description from the table's second column. */
+    description: string;
+    /** Whether DocumentDB supports it (derived from the "Supported" column). */
+    supported: boolean;
+}
+
 // ---------------------------------------------------------------------------
 // Constants
 // ---------------------------------------------------------------------------
 
 const COMPAT_PAGE_URL =
-    'https://raw.githubusercontent.com/MicrosoftDocs/azure-databases-docs/main/articles/documentdb/compatibility-query-language.md';
+    'https://raw.githubusercontent.com/MicrosoftDocs/nosql-docs/main/azure/documentdb/compatibility-query-language.md';
 
-const OPERATOR_DOC_BASE =
-    'https://raw.githubusercontent.com/MicrosoftDocs/azure-databases-docs/main/articles/documentdb/operators';
+const OPERATOR_DOC_BASE = 'https://raw.githubusercontent.com/MicrosoftDocs/nosql-docs/main/documentdb/query/operators';
 
-const DOC_LINK_BASE = 'https://learn.microsoft.com/en-us/azure/documentdb/operators';
+const DOC_LINK_BASE = 'https://learn.microsoft.com/en-us/documentdb/query/operators';
 
 /**
  * Maps category names (as they appear in column 1 of the compat page table)
  * to the docs directory used for per-operator doc pages.
  *
- * This mapping is derived from the operators TOC.yml in the azure-databases-docs repo.
+ * This mapping is derived from the operators TOC.yml in the nosql-docs repo.
  * Category names are trimmed before lookup, so leading/trailing spaces are OK.
  */
 const CATEGORY_TO_DIR: Record<string, string> = {
@@ -102,7 +114,7 @@ const CATEGORY_TO_DIR: Record<string, string> = {
     'Set Expression Operators': 'set-expression',
     'String Expression Operators': 'string-expression',
     'Trigonometry Expression Operators': 'trigonometry-expression',
-    'Type Expression Operators': 'aggregation/type-expression',
+    'Type Expression Operators': 'aggregation',
     'Timestamp Expression Operators': 'timestamp-expression',
     'Variable Expression Operators': 'variable-expression',
     'Text Expression Operator': 'miscellaneous',
@@ -588,6 +600,160 @@ function parseCompatibilityTables(markdown: string): OperatorInfo[] {
 }
 
 // ---------------------------------------------------------------------------
+// Phase 1b: Index types & properties extraction
+// ---------------------------------------------------------------------------
+
+/**
+ * Extracts the Markdown text of a `## <heading>` section, up to the next
+ * `## ` heading (or end of document). Returns undefined if not found.
+ */
+function extractSection(markdown: string, heading: string): string | undefined {
+    const lines = markdown.replace(/\r\n/g, '\n').split('\n');
+    const start = lines.findIndex((l) => l.trim().toLowerCase() === `## ${heading.toLowerCase()}`);
+    if (start === -1) return undefined;
+
+    const body: string[] = [];
+    for (let i = start + 1; i < lines.length; i++) {
+        if (/^##\s/.test(lines[i])) break;
+        body.push(lines[i]);
+    }
+    return body.join('\n');
+}
+
+/**
+ * Parses a simple 3-column Markdown table (Name | Description | Supported)
+ * into rows of trimmed cells. Handles rows that upstream wrapped across two
+ * lines (e.g. the Vector index row) by accumulating physical lines until a
+ * full 3-column row (4 pipes) has been collected.
+ */
+function parseThreeColumnTable(sectionText: string): string[][] {
+    const rows: string[][] = [];
+    let buffer = '';
+
+    for (const raw of sectionText.split('\n')) {
+        const line = raw.trim();
+        if (!line.startsWith('|')) {
+            buffer = '';
+            continue;
+        }
+
+        // Direct concatenation preserves the cell separator: a wrapped row's
+        // continuation line begins with the `|` that terminates the prior cell.
+        buffer += line;
+        if ((buffer.match(/\|/g)?.length ?? 0) < 4) {
+            // Not a complete 3-column row yet — wait for the continuation line.
+            continue;
+        }
+
+        const cells = buffer
+            .split('|')
+            .map((c) => c.trim())
+            .filter((c) => c.length > 0);
+        buffer = '';
+
+        if (cells.length < 3) continue;
+        // Skip the header separator row (| --- | --- | --- |).
+        if (cells.every((c) => /^:?-+:?$/.test(c))) continue;
+        rows.push(cells);
+    }
+
+    return rows;
+}
+
+/** Strips markdown links, keeping the link text: `[text](url)` -> `text`. */
+function stripMarkdownLinks(text: string): string {
+    return text.replace(/\[([^\]]+)\]\([^)]*\)/g, '$1');
+}
+
+/** Cleans an index-type display name: drops the trailing "Index" and any parenthetical. */
+function cleanIndexTypeName(raw: string): string {
+    return raw
+        .replace(/\s*\([^)]*\)/g, '')
+        .replace(/\s+Index(es)?$/i, '')
+        .trim();
+}
+
+/**
+ * Cleans an index-property display name. Prefers a parenthetical acronym when
+ * present (e.g. "time-to-live (TTL)" -> "TTL"), otherwise returns the trimmed
+ * text with any parenthetical removed.
+ */
+function cleanIndexPropertyName(raw: string): string {
+    const acronym = raw.match(/\(([^)]+)\)/);
+    if (acronym) return acronym[1].trim();
+    return raw.replace(/\s*\([^)]*\)/g, '').trim();
+}
+
+/** Returns true when a "Supported" cell indicates support (✅ / "Yes"). */
+function isSupportedCell(cell: string): boolean {
+    const normalized = cell.toLowerCase();
+    return cell.includes('✅') || (normalized.includes('yes') && !normalized.includes('no'));
+}
+
+/**
+ * Parses the "Index types" and "Index properties" sections of the
+ * compatibility page into structured entries.
+ */
+function parseIndexTables(markdown: string): { types: IndexEntry[]; properties: IndexEntry[] } {
+    const parseSection = (heading: string, cleanName: (raw: string) => string): IndexEntry[] => {
+        const section = extractSection(markdown, heading);
+        if (!section) return [];
+
+        const entries: IndexEntry[] = [];
+        for (const cells of parseThreeColumnTable(section)) {
+            const name = cleanName(stripMarkdownLinks(cells[0]));
+            // Skip the header row (first column literally "Index" / "Index Property").
+            if (!name || /^Index( Property)?$/i.test(name)) continue;
+            entries.push({
+                name,
+                description: stripMarkdownLinks(cells[1]).trim(),
+                supported: isSupportedCell(cells[2]),
+            });
+        }
+        return entries;
+    };
+
+    return {
+        types: parseSection('Index types', cleanIndexTypeName),
+        properties: parseSection('Index properties', cleanIndexPropertyName),
+    };
+}
+
+/**
+ * Generates the resources/scraped/index-reference.md dump for index types and
+ * properties.
+ */
+function generateIndexDump(index: { types: IndexEntry[]; properties: IndexEntry[] }): string {
+    const now = new Date().toISOString().split('T')[0];
+    const lines: string[] = [];
+
+    lines.push('# DocumentDB Index Reference');
+    lines.push('');
+    lines.push('<!-- AUTO-GENERATED by scrape-operator-docs.ts -->');
+    lines.push(`<!-- Last scraped: ${now} -->`);
+    lines.push('<!-- Source: https://github.com/MicrosoftDocs/nosql-docs -->');
+    lines.push('');
+
+    const emitTable = (heading: string, entries: IndexEntry[]): void => {
+        lines.push(`## ${heading}`);
+        lines.push('');
+        lines.push('| Name | Description | Supported |');
+        lines.push('| --- | --- | --- |');
+        for (const e of entries) {
+            lines.push(
+                `| ${escapeTableCell(e.name)} | ${escapeTableCell(e.description)} | ${e.supported ? 'Yes' : 'No'} |`,
+            );
+        }
+        lines.push('');
+    };
+
+    emitTable('Index Types', index.types);
+    emitTable('Index Properties', index.properties);
+
+    return lines.join('\n');
+}
+
+// ---------------------------------------------------------------------------
 // Phase 2: Per-operator doc fetching
 // ---------------------------------------------------------------------------
 
@@ -601,8 +767,7 @@ function parseCompatibilityTables(markdown: string): OperatorInfo[] {
  * but lives in comparison-query/).
  */
 async function buildGlobalFileIndex(): Promise<Map<string, string>> {
-    const GITHUB_API_BASE =
-        'https://api.github.com/repos/MicrosoftDocs/azure-databases-docs/contents/articles/documentdb/operators';
+    const GITHUB_API_BASE = 'https://api.github.com/repos/MicrosoftDocs/nosql-docs/contents/documentdb/query/operators';
 
     type GithubEntry = { name: string; type: string };
     const index = new Map<string, string>();
@@ -630,7 +795,8 @@ async function buildGlobalFileIndex(): Promise<Map<string, string>> {
             index.set(file.name.toLowerCase(), dir.name);
         }
 
-        // Also check subdirectories (e.g., aggregation/type-expression/)
+        // Also check any subdirectories (defensive — the operators tree is
+        // currently flat in nosql-docs, but this keeps the crawl future-proof).
         for (const sub of subdirs) {
             await sleep(300);
 
@@ -810,7 +976,7 @@ function generateDump(operators: OperatorInfo[]): string {
     lines.push('');
     lines.push('<!-- AUTO-GENERATED by scrape-operator-docs.ts -->');
     lines.push(`<!-- Last scraped: ${now} -->`);
-    lines.push('<!-- Source: https://github.com/MicrosoftDocs/azure-databases-docs -->');
+    lines.push('<!-- Source: https://github.com/MicrosoftDocs/nosql-docs -->');
     lines.push('');
 
     // Summary table (compact — stays as a table)
@@ -955,7 +1121,18 @@ async function main(): Promise<void> {
     console.log(`  Written to: ${outputPath}`);
     console.log(`  File size: ${(dump.length / 1024).toFixed(1)} KB`);
     console.log('');
-    console.log('Done! Review the generated file and commit it to the repo.');
+
+    // Phase 3b: Parse & generate the index types/properties dump from the same
+    // compatibility page content (no extra fetch needed).
+    console.log('  Phase 3b: Generating scraped/index-reference.md...');
+    const index = parseIndexTables(compatResult.content);
+    console.log(`  Parsed ${index.types.length} index types, ${index.properties.length} index properties`);
+    const indexDump = generateIndexDump(index);
+    const indexOutputPath = path.join(outputDir, 'index-reference.md');
+    fs.writeFileSync(indexOutputPath, indexDump, 'utf-8');
+    console.log(`  Written to: ${indexOutputPath}`);
+    console.log('');
+    console.log('Done! Review the generated files and commit them to the repo.');
 }
 
 main().catch((err) => {

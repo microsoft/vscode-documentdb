@@ -39,7 +39,6 @@ describe('openInteractiveShell', () => {
     let mockShowTerminal: jest.Mock;
     let mockShowInformationMessage: jest.SpyInstance;
     let mockShowErrorMessage: jest.SpyInstance;
-    const mockEnsureConnectionReady = jest.fn();
 
     const mockContext = {
         telemetry: {
@@ -61,7 +60,6 @@ describe('openInteractiveShell', () => {
         mockShowErrorMessage = jest.spyOn(vscode.window, 'showErrorMessage').mockResolvedValue(undefined);
         mockContext.telemetry.properties = {};
         (CredentialCache.hasCredentials as jest.Mock).mockReturnValue(true);
-        mockEnsureConnectionReady.mockResolvedValue(true);
     });
 
     afterEach(() => {
@@ -105,7 +103,6 @@ describe('openInteractiveShell', () => {
                 dbExperience: { api: 'documentDB' },
             },
             experience: { api: 'documentDB' },
-            ensureConnectionReady: mockEnsureConnectionReady,
         };
     }
 
@@ -179,23 +176,6 @@ describe('openInteractiveShell', () => {
         it('should set nodeType to cluster', async () => {
             await openInteractiveShell(mockContext as never, makeClusterNode() as never);
             expect(mockContext.telemetry.properties.nodeType).toBe('cluster');
-        });
-
-        it('should prepare authentication and reachability before opening the terminal', async () => {
-            await openInteractiveShell(mockContext as never, makeClusterNode() as never);
-
-            expect(mockEnsureConnectionReady).toHaveBeenCalledTimes(1);
-            expect(mockEnsureConnectionReady.mock.invocationCallOrder[0]).toBeLessThan(
-                mockCreateTerminal.mock.invocationCallOrder[0],
-            );
-        });
-
-        it('should not open a terminal when connection preparation is cancelled or fails', async () => {
-            mockEnsureConnectionReady.mockResolvedValue(false);
-
-            await openInteractiveShell(mockContext as never, makeClusterNode() as never);
-
-            expect(mockCreateTerminal).not.toHaveBeenCalled();
         });
     });
 

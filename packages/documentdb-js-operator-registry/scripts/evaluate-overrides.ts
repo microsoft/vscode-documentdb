@@ -268,6 +268,7 @@ const CATEGORY_TO_META: Record<string, string> = {
     'Bitwise Query Operators': 'META_QUERY_BITWISE',
     'Projection Operators': 'META_QUERY_PROJECTION',
     'Miscellaneous Query Operators': 'META_QUERY_MISC',
+    'Text Expression Operator': 'META_QUERY_PROJECTION',
     'Field Update Operators': 'META_UPDATE_FIELD',
     'Array Update Operators': 'META_UPDATE_ARRAY',
     'Bitwise Update Operators': 'META_UPDATE_BITWISE',

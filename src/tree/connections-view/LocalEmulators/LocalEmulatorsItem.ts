@@ -65,6 +65,7 @@ export class LocalEmulatorsItem implements TreeElement, TreeElementWithContextVa
                 // Connection cluster data
                 clusterId: connection.id, // Stable storageId for cache lookups
                 storageId: connection.id,
+                storageZone: ConnectionType.Emulators,
                 name: connection.name,
                 dbExperience: DocumentDBExperience,
                 connectionString: connection.secrets.connectionString,

@@ -1,0 +1,145 @@
+/*---------------------------------------------------------------------------------------------
+ *  Copyright (c) Microsoft Corporation. All rights reserved.
+ *  Licensed under the MIT License. See License.txt in the project root for license information.
+ *--------------------------------------------------------------------------------------------*/
+
+import * as vscode from 'vscode';
+import { API } from '../../../DocumentDBExperiences';
+import { ext } from '../../../extensionVariables';
+import { type AtlasAuthMethod } from '../../../plugins/service-atlas-mongodb/auth/AtlasSession';
+import { type AppWebviewController, openAppWebview } from '../../_integration/openAppWebview';
+import { type RouterContext } from './atlasCredentialsRouter';
+
+/**
+ * Configuration passed to the MongoDB Atlas credential webview. Serialised as JSON, so
+ * it carries **no secret material** - only which auth method to render, whether the panel is
+ * adding or updating a credential, and the public identity shown during an update. The entered
+ * credentials travel back to the host through a tRPC mutation.
+ */
+export type AtlasCredentialsWebviewConfig = {
+    /**
+     * Pre-selected auth method. When omitted, the webview opens on its method-choice step so the
+     * whole add flow stays one guided surface.
+     */
+    readonly authMethod?: AtlasAuthMethod;
+    /** `edit` renders "update" wording; the host replaces the secret of an existing credential. */
+    readonly mode: 'add' | 'edit';
+    /** Friendly name of the credential being updated, shown in the edit header. */
+    readonly credentialLabel?: string;
+    /** Existing Public Key or Client ID. Shown read-only while its paired secret is rotated. */
+    readonly credentialIdentity?: string;
+};
+
+/** Options for {@link openAtlasCredentialsWebview}. */
+export interface OpenAtlasCredentialsOptions {
+    /** Pre-selected auth method. Omit to let the user choose inside the webview. */
+    readonly authMethod?: AtlasAuthMethod;
+    /** Existing credential whose secret should be replaced once the new one validates. */
+    readonly credentialId?: string;
+    /** Friendly name persisted with the credential and shown in the panel header. */
+    readonly credentialLabel?: string;
+    /** Existing Public Key or Client ID. Required by the edit flow and safe to show in the webview. */
+    readonly credentialIdentity?: string;
+    /** Correlates the credential panel with the discovery-management flow that opened it. */
+    readonly journeyCorrelationId?: string;
+}
+
+/**
+ * Opens the guided credential-entry webview and resolves once the user either successfully stores
+ * credentials or closes the panel.
+ *
+ * @returns `true` when credentials were validated and stored; `false` when the
+ *          user closed the panel without completing.
+ */
+export function openAtlasCredentialsWebview(options: OpenAtlasCredentialsOptions = {}): Promise<boolean> {
+    return new Promise<boolean>((resolve) => {
+        let settled = false;
+        // Held in an object so the `onCredentialsStored` closure can reference the
+        // controller that is only created further below.
+        const state: {
+            controller?: AppWebviewController<AtlasCredentialsWebviewConfig>;
+            credentialsStored: boolean;
+        } = { credentialsStored: false };
+
+        const finish = (result: boolean): void => {
+            if (settled) {
+                return;
+            }
+            settled = true;
+            resolve(result);
+        };
+
+        const onCredentialPersisted = (): void => finish(true);
+
+        const onCancelled = (): void => {
+            finish(false);
+            // Let the mutation response reach the webview before disposing the panel.
+            setTimeout(() => state.controller?.dispose(), 0);
+        };
+
+        const onCredentialsStored = (): void => {
+            finish(true);
+            // Dispose on the next tick so the mutation's success response is
+            // delivered to the webview before the panel is torn down.
+            setTimeout(() => state.controller?.dispose(), 0);
+        };
+
+        const mode = options.credentialId ? 'edit' : 'add';
+        const title = buildTitle(mode, options.authMethod);
+
+        const context: RouterContext = {
+            dbExperience: API.DocumentDB,
+            webviewName: 'atlasCredentials',
+            credentialId: options.credentialId,
+            credentialLabel: options.credentialLabel,
+            journeyCorrelationId: options.journeyCorrelationId,
+            credentialState: state,
+            onCredentialPersisted,
+            onCancelled,
+            onCredentialsStored,
+        };
+
+        state.controller = openAppWebview<AtlasCredentialsWebviewConfig>({
+            title,
+            webviewName: 'atlasCredentials',
+            config: {
+                authMethod: options.authMethod,
+                mode,
+                credentialLabel: options.credentialLabel,
+                credentialIdentity: options.credentialIdentity,
+            },
+            context,
+            // Give the panel tab the DocumentDB brand icon so it reads as one of the extension's own
+            // surfaces, the same way the collection and document webviews set their own tab icons.
+            icon: {
+                light: vscode.Uri.joinPath(
+                    ext.context.extensionUri,
+                    'resources',
+                    'icons',
+                    'vscode-documentdb-icon-light-themes.svg',
+                ),
+                dark: vscode.Uri.joinPath(
+                    ext.context.extensionUri,
+                    'resources',
+                    'icons',
+                    'vscode-documentdb-icon-dark-themes.svg',
+                ),
+            },
+        });
+
+        state.controller.onDisposed(() => finish(state.credentialsStored));
+    });
+}
+
+function buildTitle(mode: 'add' | 'edit', authMethod: AtlasAuthMethod | undefined): string {
+    if (mode === 'edit') {
+        return vscode.l10n.t('Update MongoDB Atlas Credentials');
+    }
+    if (authMethod === 'apikey') {
+        return vscode.l10n.t('Connect with a MongoDB Atlas API Key');
+    }
+    if (authMethod === 'serviceaccount') {
+        return vscode.l10n.t('Connect with a MongoDB Atlas Service Account');
+    }
+    return vscode.l10n.t('Add a MongoDB Atlas Credential');
+}

@@ -51,14 +51,6 @@ export async function openInteractiveShell(
 
     const connectionInfo = extractConnectionInfo(node);
 
-    // Cluster-level shell actions can be invoked before the node is expanded.
-    // Reuse the cluster's normal authentication and reachability hooks so
-    // source-specific infrastructure (such as a Kubernetes ClusterIP tunnel)
-    // is ready before the shell worker connects.
-    if (isClusterNode(node) && !(await node.ensureConnectionReady())) {
-        return;
-    }
-
     // Verify credentials are available before opening the terminal
     if (!CredentialCache.hasCredentials(connectionInfo.clusterId)) {
         void vscode.window.showErrorMessage(
@@ -165,8 +157,4 @@ function getNodeType(node: ClusterItemBase | DatabaseItem | CollectionItem): str
         return 'database';
     }
     return 'cluster';
-}
-
-function isClusterNode(node: ClusterItemBase | DatabaseItem | CollectionItem): node is ClusterItemBase {
-    return !('databaseInfo' in node);
 }

@@ -31,8 +31,17 @@ describe('ConnectionReachabilityService', () => {
         await ConnectionReachabilityService.ensureReachable({ some: 'props' });
 
         expect(appliesEnsure).toHaveBeenCalledTimes(1);
-        expect(appliesEnsure).toHaveBeenCalledWith({ some: 'props' });
+        expect(appliesEnsure).toHaveBeenCalledWith({ some: 'props' }, undefined);
         expect(skipsEnsure).not.toHaveBeenCalled();
+    });
+
+    it('forwards the clusterId so a provider can record which cluster it prepared', async () => {
+        const ensure = jest.fn().mockResolvedValue(undefined);
+        ConnectionReachabilityService.registerProvider(makeProvider('applies', () => true, ensure));
+
+        await ConnectionReachabilityService.ensureReachable({ some: 'props' }, 'cluster-42');
+
+        expect(ensure).toHaveBeenCalledWith({ some: 'props' }, 'cluster-42');
     });
 
     it('is a no-op when connection properties are undefined', async () => {

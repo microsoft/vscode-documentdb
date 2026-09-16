@@ -1,0 +1,4 @@
+# Stream: stdout from docker info --format {{json .}}.
+# Provenance: Captured 2026-08-03 on WSL2, Ubuntu 20.04.6 LTS; Docker Engine 28.1.1.
+# Redaction: This is the exact consumed structured subset. Machine ID, hostname, paths, counts, timestamps, and resource values were omitted.
+{"OSType":"linux","OperatingSystem":"Ubuntu 20.04.6 LTS","Architecture":"x86_64","ServerVersion":"28.1.1","ServerErrors":[]}

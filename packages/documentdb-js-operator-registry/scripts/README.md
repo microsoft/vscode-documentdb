@@ -4,7 +4,7 @@ Helper scripts for maintaining the `@documentdb-js/operator-registry` package.
 
 ## scrape-operator-docs.ts
 
-Scrapes the DocumentDB compatibility page and per-operator documentation to produce `resources/scraped/operator-reference.md`.
+Scrapes the DocumentDB compatibility page and per-operator documentation to produce `resources/scraped/operator-reference.md` and `resources/scraped/index-reference.md`.
 
 ```bash
 npm run scrape
@@ -12,7 +12,12 @@ npm run scrape
 
 **When to run:** When the upstream DocumentDB documentation changes (new operators, updated descriptions, etc.). This is infrequent — typically once per DocumentDB release.
 
-**Output:** `resources/scraped/operator-reference.md` — a machine-generated Markdown dump of all supported operators, their descriptions, syntax blocks, and doc links.
+**Source:** the public [MicrosoftDocs/nosql-docs](https://github.com/MicrosoftDocs/nosql-docs) repository (`azure/documentdb/compatibility-query-language.md` for the compatibility tables and `documentdb/query/operators/**` for per-operator pages).
+
+**Output:**
+
+- `resources/scraped/operator-reference.md` — a machine-generated Markdown dump of all supported operators, their descriptions, syntax blocks, and doc links.
+- `resources/scraped/index-reference.md` — the supported index types and index properties (name, description, support status), parsed from the compatibility page's `## Index types` and `## Index properties` tables.
 
 ## generate-from-reference.ts
 
@@ -33,10 +38,11 @@ npm run generate
 | File                                        | Purpose                            |
 | ------------------------------------------- | ---------------------------------- |
 | `resources/scraped/operator-reference.md`   | Primary data (machine-generated)   |
+| `resources/scraped/index-reference.md`      | Index types/properties (generated) |
 | `resources/overrides/operator-overrides.md` | Manual overrides (hand-maintained) |
 | `resources/overrides/operator-snippets.md`  | Snippet templates per category     |
 
-**Outputs:** Seven TypeScript files in `src/`:
+**Outputs:** Eight TypeScript files in `src/`:
 
 - `queryOperators.ts` — comparison, logical, element, evaluation, geospatial, array, bitwise, projection, misc query operators
 - `updateOperators.ts` — field, array, and bitwise update operators
@@ -45,6 +51,7 @@ npm run generate
 - `windowOperators.ts` — window function operators
 - `stages.ts` — aggregation pipeline stages
 - `systemVariables.ts` — system variables (`$$NOW`, `$$ROOT`, etc.)
+- `indexReference.ts` — supported index types (`INDEX_TYPES`) and index properties (`INDEX_PROPERTIES`), from `resources/scraped/index-reference.md`
 
 > **Do not edit the generated `src/` files by hand.** Put corrections in the overrides or snippets files instead. The generated files contain a header warning to this effect.
 

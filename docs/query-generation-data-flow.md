@@ -99,6 +99,7 @@ This document describes the data flow for the MongoDB query generation feature, 
 ### Schema Inference Example
 
 #### Customer's Actual Document (Never Sent):
+
 ```json
 {
   "_id": "507f1f77bcf86cd799439011",
@@ -117,6 +118,7 @@ This document describes the data flow for the MongoDB query generation feature, 
 ```
 
 #### Schema Definition Sent to LLM:
+
 ```json
 {
   "collectionName": "users",
@@ -222,10 +224,10 @@ To enable query modification features, we are considering allowing users to prov
 
 #### Privacy Risk Assessment:
 
-| Data Type | Current (v1.0) | Proposed (v2.0) | Risk Level |
-|-----------|----------------|-----------------|------------|
-| Sample document values | ✗ Never sent | ✗ Never sent | None |
-| Schema structure | ✓ Sent | ✓ Sent | Low (metadata only) |
-| Database/collection names | ✓ Sent | ✓ Sent | Low (metadata) |
-| User's natural language input | ✓ Sent | ✓ Sent | Low-Medium (user provided) |
-| Query literals/filters | ✗ Not applicable | ⚠ **Would be sent** | **Medium-High** |
+| Data Type                     | Current (v1.0)   | Proposed (v2.0)     | Risk Level                 |
+| ----------------------------- | ---------------- | ------------------- | -------------------------- |
+| Sample document values        | ✗ Never sent     | ✗ Never sent        | None                       |
+| Schema structure              | ✓ Sent           | ✓ Sent              | Low (metadata only)        |
+| Database/collection names     | ✓ Sent           | ✓ Sent              | Low (metadata)             |
+| User's natural language input | ✓ Sent           | ✓ Sent              | Low-Medium (user provided) |
+| Query literals/filters        | ✗ Not applicable | ⚠ **Would be sent** | **Medium-High**            |

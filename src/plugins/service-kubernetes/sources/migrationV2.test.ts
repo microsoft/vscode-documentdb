@@ -48,7 +48,7 @@ jest.mock('../../../extensionVariables', () => ({
             onDidChange: (): { dispose: () => void } => ({ dispose: (): void => {} }),
         },
         outputChannel: {
-            warn: outputWarn,
+            warn: (...args: unknown[]) => outputWarn(...args) as unknown,
             appendLine: jest.fn(),
             error: jest.fn(),
         },

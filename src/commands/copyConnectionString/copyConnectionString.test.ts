@@ -140,6 +140,47 @@ describe('copyConnectionString', () => {
         expect(ctx.telemetry.properties.passwordIncluded).toBe('false');
     });
 
+    it('T-02b embedded-password base + WITHOUT password -> strips the inherited password (no leak)', async () => {
+        // Regression: some callers (e.g. the in-memory Local Quick Start instance) can pass a base
+        // connectionString that already embeds the password. buildParsedConnectionString must not
+        // inherit it, so "copy without password" is genuinely password-free.
+        mockShowQuickPick.mockResolvedValue({ includePassword: false });
+        const ctx = makeContext();
+        const node = makeNode('connectionsView;treeitem_documentdbcluster', {
+            connectionString: 'mongodb://alice:s3cr3t@127.0.0.1:27017/?directConnection=true',
+            availableAuthMethods: [AuthMethodId.NativeAuth],
+            selectedAuthMethod: AuthMethodId.NativeAuth,
+            nativeAuthConfig: { connectionUser: 'alice', connectionPassword: 's3cr3t' },
+        });
+
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        await copyConnectionString(ctx as any, node as any);
+
+        const written = mockClipboardWriteText.mock.calls[0][0] as string;
+        expect(written).not.toContain('s3cr3t');
+        expect(written).toContain('alice@127.0.0.1');
+        expect(ctx.telemetry.properties.passwordIncluded).toBe('false');
+    });
+
+    it('T-02c embedded-password base + WITH password -> includes the password exactly once', async () => {
+        mockShowQuickPick.mockResolvedValue({ includePassword: true });
+        const ctx = makeContext();
+        const node = makeNode('connectionsView;treeitem_documentdbcluster', {
+            connectionString: 'mongodb://alice:s3cr3t@127.0.0.1:27017/?directConnection=true',
+            availableAuthMethods: [AuthMethodId.NativeAuth],
+            selectedAuthMethod: AuthMethodId.NativeAuth,
+            nativeAuthConfig: { connectionUser: 'alice', connectionPassword: 's3cr3t' },
+        });
+
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        await copyConnectionString(ctx as any, node as any);
+
+        const written = mockClipboardWriteText.mock.calls[0][0] as string;
+        expect(written).toContain('alice:s3cr3t@127.0.0.1');
+        expect(written.match(/s3cr3t/g)?.length).toBe(1);
+        expect(ctx.valuesToMask).toContain('s3cr3t');
+    });
+
     it('T-03 K8s discovery + native + password, picks WITH password -> includes password', async () => {
         mockShowQuickPick.mockResolvedValue({ includePassword: true });
         const ctx = makeContext();

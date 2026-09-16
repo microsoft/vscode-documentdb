@@ -8,7 +8,6 @@ import * as net from 'net';
 import { PassThrough } from 'stream';
 import * as vscode from 'vscode';
 import { ext } from '../../extensionVariables';
-import { getKubernetesApiErrorMessage, normalizeKubernetesApiError } from './kubernetesApiTimeout';
 
 interface TunnelParams {
     /**
@@ -74,12 +73,7 @@ export async function resolveServiceBackend(
     servicePort: number,
     servicePortName?: string,
 ): Promise<{ podName: string; targetPort: number }> {
-    let endpoints: Awaited<ReturnType<CoreV1Api['readNamespacedEndpoints']>>;
-    try {
-        endpoints = await coreApi.readNamespacedEndpoints({ name: serviceName, namespace });
-    } catch (error) {
-        throw normalizeKubernetesApiError(error);
-    }
+    const endpoints = await coreApi.readNamespacedEndpoints({ name: serviceName, namespace });
     const subsets = endpoints.subsets ?? [];
 
     for (const subset of subsets) {
@@ -627,7 +621,7 @@ export class PortForwardTunnelManager implements vscode.Disposable {
                 });
             }
         } catch (err) {
-            const errMsg = getKubernetesApiErrorMessage(err);
+            const errMsg = err instanceof Error ? err.message : String(err);
             ext.outputChannel.appendLine(
                 vscode.l10n.t(
                     'Port-forward backend resolution failed for {0}/{1}: {2}',

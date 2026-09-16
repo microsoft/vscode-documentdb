@@ -8,6 +8,7 @@ import * as l10n from '@vscode/l10n';
 import { AuthMethodId } from '../../documentdb/auth/AuthMethod';
 import { redactCredentialsFromConnectionString } from '../../documentdb/utils/connectionStringHelpers';
 import { DocumentDBConnectionString } from '../../documentdb/utils/DocumentDBConnectionString';
+import { areAllHostsLocal, canonicalizeTlsException } from '../../documentdb/utils/tlsException';
 import { API } from '../../DocumentDBExperiences';
 import { ext } from '../../extensionVariables';
 // FIXME (discovery plugin API coupling): this generic command imports directly from the
@@ -53,7 +54,16 @@ export class ExecuteStep extends AzureWizardExecuteStep<NewConnectionWizardConte
             const api = context.experience?.api ?? API.DocumentDB;
             const parentId = context.parentId;
 
-            const newConnectionString = context.connectionString!.trim();
+            // Canonicalize the TLS exception once more at save time (defense-in-depth) and make it
+            // AUTHORITATIVE: allow-invalid is honored only when EVERY host in the final connection
+            // string is local/private, so a stale wizard choice (e.g. picked for a local host, then
+            // the connection string changed to public via Back-navigation) can never disable
+            // certificate validation for a public host.
+            const canonicalTls = canonicalizeTlsException(context.connectionString!.trim());
+            const newConnectionString = canonicalTls.connectionString;
+            const allowInvalidCertificates =
+                areAllHostsLocal(newConnectionString) &&
+                (canonicalTls.disableEmulatorSecurity || !!context.disableEmulatorSecurity);
 
             const newAuthenticationMethod = context.selectedAuthenticationMethod;
 
@@ -197,6 +207,13 @@ export class ExecuteStep extends AzureWizardExecuteStep<NewConnectionWizardConte
                     parentId: parentId ? parentId : undefined, // Set parent folder ID if in a subfolder
                     availableAuthMethods: newAvailableAuthenticationMethods,
                     selectedAuthMethod: newAuthenticationMethod,
+                    // TLS exception (§7): when the user opted to allow invalid certificates for a
+                    // local/private host, persist it as a non-emulator emulatorConfiguration so the
+                    // connection accepts a self-signed certificate (TLS is keyed off
+                    // disableEmulatorSecurity alone) without being treated as an emulator.
+                    emulatorConfiguration: allowInvalidCertificates
+                        ? { isEmulator: false, disableEmulatorSecurity: true }
+                        : undefined,
                 },
                 secrets: {
                     connectionString: newParsedCS.toString(),
