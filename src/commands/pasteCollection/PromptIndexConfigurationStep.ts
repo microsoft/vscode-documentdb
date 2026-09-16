@@ -5,8 +5,8 @@
 
 import { AzureWizardPromptStep } from '@microsoft/vscode-azext-utils';
 import * as l10n from '@vscode/l10n';
-import { ClustersClient } from '../../documentdb/ClustersClient';
-import { DocumentDbIndexService } from '../../services/taskService/data-api/indexes/DocumentDbIndexService';
+import { DocumentDbCollectionIndexCopier } from '../../services/taskService/data-api/indexes/DocumentDbCollectionIndexCopier';
+import { nonNullValue } from '../../utils/nonNull';
 import { type PasteCollectionWizardContext } from './PasteCollectionWizardContext';
 
 export class PromptIndexConfigurationStep extends AzureWizardPromptStep<PasteCollectionWizardContext> {
@@ -34,12 +34,26 @@ export class PromptIndexConfigurationStep extends AzureWizardPromptStep<PasteCol
 
         context.copyIndexes = selectedItem.id === 'copy';
         if (context.copyIndexes) {
-            const sourceClient = await ClustersClient.getClient(context.sourceConnectionId);
-            context.sourceIndexCount = await new DocumentDbIndexService(
-                sourceClient,
-                context.sourceDatabaseName,
-                context.sourceCollectionName,
-            ).countCopyableIndexes();
+            const targetCollectionName = context.isTargetExistingCollection
+                ? nonNullValue(
+                      context.targetCollectionName,
+                      'targetCollectionName',
+                      'context.targetCollectionName',
+                  )
+                : nonNullValue(context.newCollectionName, 'newCollectionName', 'context.newCollectionName');
+            const indexCopier = new DocumentDbCollectionIndexCopier(
+                {
+                    clusterId: context.sourceConnectionId,
+                    databaseName: context.sourceDatabaseName,
+                    collectionName: context.sourceCollectionName,
+                },
+                {
+                    clusterId: context.targetConnectionId,
+                    databaseName: context.targetDatabaseName,
+                    collectionName: targetCollectionName,
+                },
+            );
+            context.sourceIndexCount = await indexCopier.countSourceIndexes();
             context.telemetry.measurements.sourceIndexCount = context.sourceIndexCount;
         }
     }

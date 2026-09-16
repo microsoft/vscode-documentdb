@@ -7,7 +7,7 @@ import { AzureWizardExecuteStep } from '@microsoft/vscode-azext-utils';
 import * as vscode from 'vscode';
 import { ClustersClient } from '../../documentdb/ClustersClient';
 import { ext } from '../../extensionVariables';
-import { DocumentDbIndexService } from '../../services/taskService/data-api/indexes/DocumentDbIndexService';
+import { DocumentDbCollectionIndexCopier } from '../../services/taskService/data-api/indexes/DocumentDbCollectionIndexCopier';
 import { DocumentDbDocumentReader } from '../../services/taskService/data-api/readers/DocumentDbDocumentReader';
 import { DocumentDbStreamingWriter } from '../../services/taskService/data-api/writers/DocumentDbStreamingWriter';
 import { CopyPasteCollectionTask } from '../../services/taskService/tasks/copy-and-paste/CopyPasteCollectionTask';
@@ -66,15 +66,25 @@ export class ExecuteStep extends AzureWizardExecuteStep<PasteCollectionWizardCon
 
         // Create the document reader and writer instances
         const reader = new DocumentDbDocumentReader(sourceConnectionId, sourceDatabaseName, sourceCollectionName);
-        const sourceClient = await ClustersClient.getClient(sourceConnectionId);
         const targetClient = await ClustersClient.getClient(targetConnectionId);
         const writer = new DocumentDbStreamingWriter(targetClient, targetDatabaseName, finalTargetCollectionName);
+        const indexCopier = context.copyIndexes
+            ? new DocumentDbCollectionIndexCopier(
+                  {
+                      clusterId: sourceConnectionId,
+                      databaseName: sourceDatabaseName,
+                      collectionName: sourceCollectionName,
+                  },
+                  {
+                      clusterId: targetConnectionId,
+                      databaseName: targetDatabaseName,
+                      collectionName: finalTargetCollectionName,
+                  },
+              )
+            : undefined;
 
         // Create the copy-paste task
-        const task = new CopyPasteCollectionTask(config, reader, writer, {
-            source: new DocumentDbIndexService(sourceClient, sourceDatabaseName, sourceCollectionName),
-            target: new DocumentDbIndexService(targetClient, targetDatabaseName, finalTargetCollectionName),
-        });
+        const task = new CopyPasteCollectionTask(config, reader, writer, indexCopier);
 
         // Register task with the task service
         TaskService.registerTask(task);

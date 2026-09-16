@@ -8,7 +8,10 @@ import * as vscode from 'vscode';
 import { ClustersClient } from '../../../../documentdb/ClustersClient';
 import { CredentialCache } from '../../../../documentdb/CredentialCache';
 import { ext } from '../../../../extensionVariables';
-import { type DocumentDbIndexService, type IndexCopyResult } from '../../data-api/indexes/DocumentDbIndexService';
+import {
+    type CollectionIndexCopier,
+    type IndexCopyResult,
+} from '../../data-api/indexes/CollectionIndexCopier';
 import { type DocumentReader } from '../../data-api/types';
 import { type StreamingDocumentWriter, StreamingWriterError } from '../../data-api/writers/StreamingDocumentWriter';
 import { Task } from '../../taskService';
@@ -26,12 +29,6 @@ class SourceValidationError extends Error {
     }
 }
 
-export interface CopyPasteIndexServices {
-    source: DocumentDbIndexService;
-    target: DocumentDbIndexService;
-    presentationDelayMs?: number;
-}
-
 /**
  * Task for copying documents from a source to a target collection.
  *
@@ -46,7 +43,8 @@ export class CopyPasteCollectionTask extends Task implements ResourceTrackingTas
     private readonly config: CopyPasteConfig;
     private readonly documentReader: DocumentReader;
     private readonly documentWriter: StreamingDocumentWriter;
-    private readonly indexServices?: CopyPasteIndexServices;
+    private readonly indexCopier?: CollectionIndexCopier;
+    private readonly indexPresentationDelayMs: number;
     private sourceDocumentCount: number = 0;
     private totalProcessedDocuments: number = 0;
 
@@ -69,13 +67,15 @@ export class CopyPasteCollectionTask extends Task implements ResourceTrackingTas
         config: CopyPasteConfig,
         documentReader: DocumentReader,
         documentWriter: StreamingDocumentWriter,
-        indexServices?: CopyPasteIndexServices,
+        indexCopier?: CollectionIndexCopier,
+        indexPresentationDelayMs: number = CopyPasteCollectionTask.INDEX_PRESENTATION_DELAY_MS,
     ) {
         super();
         this.config = config;
         this.documentReader = documentReader;
         this.documentWriter = documentWriter;
-        this.indexServices = indexServices;
+        this.indexCopier = indexCopier;
+        this.indexPresentationDelayMs = indexPresentationDelayMs;
 
         // Generate a descriptive name for the task
         this.name = vscode.l10n.t(
@@ -381,7 +381,7 @@ export class CopyPasteCollectionTask extends Task implements ResourceTrackingTas
     }
 
     private async copyIndexes(signal: AbortSignal, context?: IActionContext): Promise<void> {
-        if (!this.indexServices) {
+        if (!this.indexCopier) {
             throw new Error(vscode.l10n.t('Index copy services were not configured.'));
         }
 
@@ -390,7 +390,7 @@ export class CopyPasteCollectionTask extends Task implements ResourceTrackingTas
 
         let result: IndexCopyResult;
         try {
-            result = await this.indexServices.source.copyIndexesTo(this.indexServices.target, {
+            result = await this.indexCopier.copyIndexes({
                 signal,
                 onStart: (total) => {
                     this.updateProgress(0, vscode.l10n.t('Copying {0} indexes...', total.toString()));
@@ -450,7 +450,7 @@ export class CopyPasteCollectionTask extends Task implements ResourceTrackingTas
             );
             await this.waitForPresentationDelay(
                 signal,
-                this.indexServices.presentationDelayMs ?? CopyPasteCollectionTask.INDEX_PRESENTATION_DELAY_MS,
+                this.indexPresentationDelayMs,
             );
         }
     }

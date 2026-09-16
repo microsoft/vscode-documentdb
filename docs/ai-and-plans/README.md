@@ -36,6 +36,7 @@ treat `status: historical` or `status: superseded` as current.
 | [webview-fluentui-package](./features/webview-fluentui-package/README.md) | `@microsoft/vscode-ext-webview-fluentui`: Fluent theming and reusable components for webviews | 1.1.0 prepared    |
 | [connections-tree](./features/connections-tree/README.md)                 | The Connections view: node item counts, connection load performance                           | shipped           |
 | [no-auth](./features/no-auth/README.md)                                   | Credential-free connections and connection-string TLS handling                                | shipped           |
+| [copy-paste-collections](./features/copy-paste-collections/README.md)     | Collection copy/paste tasks, document streaming, conflict handling, and optional index copying | active            |
 
 Everything else is a single file at this root, such as:
 

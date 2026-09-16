@@ -3,16 +3,11 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { ClustersClient } from '../../documentdb/ClustersClient';
-import { DocumentDbIndexService } from '../../services/taskService/data-api/indexes/DocumentDbIndexService';
+import { DocumentDbCollectionIndexCopier } from '../../services/taskService/data-api/indexes/DocumentDbCollectionIndexCopier';
 import { type PasteCollectionWizardContext } from './PasteCollectionWizardContext';
 import { PromptIndexConfigurationStep } from './PromptIndexConfigurationStep';
 
-jest.mock('../../documentdb/ClustersClient', () => ({
-    ClustersClient: { getClient: jest.fn() },
-}));
-
-jest.mock('../../services/taskService/data-api/indexes/DocumentDbIndexService');
+jest.mock('../../services/taskService/data-api/indexes/DocumentDbCollectionIndexCopier');
 
 function createContext(selection: 'copy' | 'skip'): PasteCollectionWizardContext {
     return {
@@ -24,6 +19,7 @@ function createContext(selection: 'copy' | 'skip'): PasteCollectionWizardContext
         targetConnectionId: 'target',
         targetConnectionName: 'Target',
         targetDatabaseName: 'database',
+        newCollectionName: 'targetCollection',
         isTargetExistingCollection: false,
         copyIndexes: false,
         telemetry: { properties: {}, measurements: {} },
@@ -44,31 +40,32 @@ describe('PromptIndexConfigurationStep', () => {
         await new PromptIndexConfigurationStep().prompt(context);
 
         expect(context.copyIndexes).toBe(false);
-        expect(ClustersClient.getClient).not.toHaveBeenCalled();
-        expect(DocumentDbIndexService).not.toHaveBeenCalled();
+        expect(DocumentDbCollectionIndexCopier).not.toHaveBeenCalled();
     });
 
     it('counts source indexes when index copy is selected', async () => {
-        const countCopyableIndexes = jest.fn().mockResolvedValue(3);
-        jest.mocked(ClustersClient.getClient).mockResolvedValue({} as never);
-        jest.mocked(DocumentDbIndexService).mockImplementation(
-            () => ({ countCopyableIndexes }) as unknown as DocumentDbIndexService,
+        const countSourceIndexes = jest.fn().mockResolvedValue(3);
+        jest.mocked(DocumentDbCollectionIndexCopier).mockImplementation(
+            () => ({ countSourceIndexes }) as unknown as DocumentDbCollectionIndexCopier,
         );
         const context = createContext('copy');
 
         await new PromptIndexConfigurationStep().prompt(context);
 
         expect(context.copyIndexes).toBe(true);
-        expect(countCopyableIndexes).toHaveBeenCalledTimes(1);
+        expect(DocumentDbCollectionIndexCopier).toHaveBeenCalledWith(
+            { clusterId: 'source', databaseName: 'database', collectionName: 'collection' },
+            { clusterId: 'target', databaseName: 'database', collectionName: 'targetCollection' },
+        );
+        expect(countSourceIndexes).toHaveBeenCalledTimes(1);
         expect(context.sourceIndexCount).toBe(3);
         expect(context.telemetry.measurements.sourceIndexCount).toBe(3);
     });
 
     it('fails the paste flow when selected index counting fails', async () => {
-        const countCopyableIndexes = jest.fn().mockRejectedValue(new Error('count failed'));
-        jest.mocked(ClustersClient.getClient).mockResolvedValue({} as never);
-        jest.mocked(DocumentDbIndexService).mockImplementation(
-            () => ({ countCopyableIndexes }) as unknown as DocumentDbIndexService,
+        const countSourceIndexes = jest.fn().mockRejectedValue(new Error('count failed'));
+        jest.mocked(DocumentDbCollectionIndexCopier).mockImplementation(
+            () => ({ countSourceIndexes }) as unknown as DocumentDbCollectionIndexCopier,
         );
         const context = createContext('copy');
 

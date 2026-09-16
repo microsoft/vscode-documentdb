@@ -3,9 +3,13 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { type ClustersClient } from '../../../../documentdb/ClustersClient';
+import { ClustersClient } from '../../../../documentdb/ClustersClient';
 import { ext } from '../../../../extensionVariables';
-import { DocumentDbIndexService } from './DocumentDbIndexService';
+import { DocumentDbCollectionIndexCopier } from './DocumentDbCollectionIndexCopier';
+
+jest.mock('../../../../documentdb/ClustersClient', () => ({
+    ClustersClient: { getClient: jest.fn() },
+}));
 
 jest.mock('../../../../extensionVariables', () => ({
     ext: {
@@ -44,38 +48,47 @@ function createClient(
     } as unknown as ClustersClient;
 }
 
-describe('DocumentDbIndexService', () => {
+const source = { clusterId: 'source', databaseName: 'sourceDb', collectionName: 'sourceCollection' };
+const target = { clusterId: 'target', databaseName: 'targetDb', collectionName: 'targetCollection' };
+
+function createCopier(
+    sourceClient: ClustersClient,
+    targetClient: ClustersClient = createClient([]),
+): DocumentDbCollectionIndexCopier {
+    jest.mocked(ClustersClient.getClient).mockImplementation(async (clusterId) =>
+        clusterId === source.clusterId ? sourceClient : targetClient,
+    );
+    return new DocumentDbCollectionIndexCopier(source, target);
+}
+
+describe('DocumentDbCollectionIndexCopier', () => {
     beforeEach(() => {
         jest.clearAllMocks();
     });
 
-    it('counts only indexes that can be copied', async () => {
-        const service = new DocumentDbIndexService(
+    it('uses only the source endpoint when counting indexes', async () => {
+        const copier = createCopier(
             createClient([
                 { key: { _id: 1 }, name: '_id_' },
                 { key: { email: 1 }, name: 'email_1', unique: true },
             ]),
-            'sourceDb',
-            'sourceCollection',
         );
 
-        await expect(service.countCopyableIndexes()).resolves.toBe(1);
+        const count = await copier.countSourceIndexes();
+
+        expect(count).toBe(1);
+        expect(ClustersClient.getClient).toHaveBeenCalledWith('source');
+        expect(ClustersClient.getClient).not.toHaveBeenCalledWith('target');
     });
 
     it('skips equivalent definitions even when names differ', async () => {
         const createIndex = jest.fn();
-        const source = new DocumentDbIndexService(
+        const copier = createCopier(
             createClient([{ key: { email: 1 }, name: 'source_name', v: 2, unique: true }]),
-            'sourceDb',
-            'sourceCollection',
-        );
-        const target = new DocumentDbIndexService(
             createClient([{ key: { email: 1 }, name: 'target_name', v: 1, unique: true }], createIndex),
-            'targetDb',
-            'targetCollection',
         );
 
-        await expect(source.copyIndexesTo(target)).resolves.toEqual({
+        await expect(copier.copyIndexes()).resolves.toEqual({
             sourceIndexCount: 1,
             createdCount: 0,
             skippedCount: 1,
@@ -88,14 +101,12 @@ describe('DocumentDbIndexService', () => {
     it('preserves the name and options when no collision exists', async () => {
         const createIndex = jest.fn().mockResolvedValue({ ok: 1 });
         const onStart = jest.fn();
-        const source = new DocumentDbIndexService(
+        const copier = createCopier(
             createClient([{ key: { email: 1 }, name: 'email_1', v: 2, unique: true }]),
-            'sourceDb',
-            'sourceCollection',
+            createClient([], createIndex),
         );
-        const target = new DocumentDbIndexService(createClient([], createIndex), 'targetDb', 'targetCollection');
 
-        const result = await source.copyIndexesTo(target, { onStart });
+        const result = await copier.copyIndexes({ onStart });
 
         expect(onStart).toHaveBeenCalledWith(1);
         expect(createIndex).toHaveBeenCalledWith('targetDb', 'targetCollection', {
@@ -122,7 +133,7 @@ describe('DocumentDbIndexService', () => {
             similarity: 'COS',
             dimensions: 1536,
         };
-        const source = new DocumentDbIndexService(
+        const copier = createCopier(
             createClient([
                 {
                     key: { embedding: 'cosmosSearch' },
@@ -130,12 +141,10 @@ describe('DocumentDbIndexService', () => {
                     cosmosSearchOptions,
                 },
             ]),
-            'sourceDb',
-            'sourceCollection',
+            createClient([], createIndex),
         );
-        const target = new DocumentDbIndexService(createClient([], createIndex), 'targetDb', 'targetCollection');
 
-        await source.copyIndexesTo(target);
+        await copier.copyIndexes();
 
         expect(createIndex).toHaveBeenCalledWith('targetDb', 'targetCollection', {
             background: true,
@@ -147,14 +156,12 @@ describe('DocumentDbIndexService', () => {
 
     it('requests background creation even when the source reports foreground creation', async () => {
         const createIndex = jest.fn().mockResolvedValue({ ok: 1 });
-        const source = new DocumentDbIndexService(
+        const copier = createCopier(
             createClient([{ key: { email: 1 }, name: 'email_1', background: false }]),
-            'sourceDb',
-            'sourceCollection',
+            createClient([], createIndex),
         );
-        const target = new DocumentDbIndexService(createClient([], createIndex), 'targetDb', 'targetCollection');
 
-        await source.copyIndexesTo(target);
+        await copier.copyIndexes();
 
         expect(createIndex).toHaveBeenCalledWith(
             'targetDb',
@@ -173,18 +180,12 @@ describe('DocumentDbIndexService', () => {
             calls.push('hide');
             return { ok: 1 };
         });
-        const source = new DocumentDbIndexService(
+        const copier = createCopier(
             createClient([{ key: { addedAt: -1 }, name: 'addedAt_-1', hidden: true }]),
-            'sourceDb',
-            'sourceCollection',
-        );
-        const target = new DocumentDbIndexService(
             createClient([], createIndex, hideIndex),
-            'targetDb',
-            'targetCollection',
         );
 
-        await source.copyIndexesTo(target);
+        await copier.copyIndexes();
 
         expect(createIndex).toHaveBeenCalledWith('targetDb', 'targetCollection', {
             background: true,
@@ -198,18 +199,12 @@ describe('DocumentDbIndexService', () => {
     it('skips an equivalent target index without changing its visibility', async () => {
         const createIndex = jest.fn();
         const hideIndex = jest.fn();
-        const source = new DocumentDbIndexService(
+        const copier = createCopier(
             createClient([{ key: { addedAt: -1 }, name: 'source_name', hidden: true }]),
-            'sourceDb',
-            'sourceCollection',
-        );
-        const target = new DocumentDbIndexService(
             createClient([{ key: { addedAt: -1 }, name: 'target_name' }], createIndex, hideIndex),
-            'targetDb',
-            'targetCollection',
         );
 
-        const result = await source.copyIndexesTo(target);
+        const result = await copier.copyIndexes();
 
         expect(result.skippedCount).toBe(1);
         expect(createIndex).not.toHaveBeenCalled();
@@ -217,34 +212,24 @@ describe('DocumentDbIndexService', () => {
     });
 
     it('fails when a newly created index cannot be hidden', async () => {
-        const source = new DocumentDbIndexService(
+        const copier = createCopier(
             createClient([{ key: { addedAt: -1 }, name: 'addedAt_-1', hidden: true }]),
-            'sourceDb',
-            'sourceCollection',
-        );
-        const target = new DocumentDbIndexService(
             createClient(
                 [],
                 jest.fn().mockResolvedValue({ ok: 1 }),
                 jest.fn().mockResolvedValue({ ok: 0, errmsg: 'hide failed' }),
             ),
-            'targetDb',
-            'targetCollection',
         );
 
-        await expect(source.copyIndexesTo(target)).rejects.toThrow(
+        await expect(copier.copyIndexes()).rejects.toThrow(
             'Index "addedAt_-1" was created but could not be hidden: hide failed',
         );
     });
 
     it('adds a suffix when an index name collides with a different definition', async () => {
         const createIndex = jest.fn().mockResolvedValue({ ok: 1 });
-        const source = new DocumentDbIndexService(
+        const copier = createCopier(
             createClient([{ key: { email: 1 }, name: 'shared' }]),
-            'sourceDb',
-            'sourceCollection',
-        );
-        const target = new DocumentDbIndexService(
             createClient(
                 [
                     { key: { status: 1 }, name: 'shared' },
@@ -252,11 +237,9 @@ describe('DocumentDbIndexService', () => {
                 ],
                 createIndex,
             ),
-            'targetDb',
-            'targetCollection',
         );
 
-        const result = await source.copyIndexesTo(target);
+        const result = await copier.copyIndexes();
 
         expect(createIndex).toHaveBeenCalledWith('targetDb', 'targetCollection', {
             background: true,
@@ -267,18 +250,12 @@ describe('DocumentDbIndexService', () => {
     });
 
     it('propagates index creation failures', async () => {
-        const source = new DocumentDbIndexService(
+        const copier = createCopier(
             createClient([{ key: { email: 1 }, name: 'email_1' }]),
-            'sourceDb',
-            'sourceCollection',
-        );
-        const target = new DocumentDbIndexService(
             createClient([], jest.fn().mockResolvedValue({ ok: 0, note: 'creation failed' })),
-            'targetDb',
-            'targetCollection',
         );
 
-        await expect(source.copyIndexesTo(target)).rejects.toThrow('creation failed');
+        await expect(copier.copyIndexes()).rejects.toThrow('creation failed');
         expect(ext.outputChannel.error).toHaveBeenCalled();
     });
 
@@ -288,17 +265,15 @@ describe('DocumentDbIndexService', () => {
             controller.abort();
             return { ok: 1 };
         });
-        const source = new DocumentDbIndexService(
+        const copier = createCopier(
             createClient([
                 { key: { email: 1 }, name: 'email_1' },
                 { key: { status: 1 }, name: 'status_1' },
             ]),
-            'sourceDb',
-            'sourceCollection',
+            createClient([], createIndex),
         );
-        const target = new DocumentDbIndexService(createClient([], createIndex), 'targetDb', 'targetCollection');
 
-        const result = await source.copyIndexesTo(target, { signal: controller.signal });
+        const result = await copier.copyIndexes({ signal: controller.signal });
 
         expect(createIndex).toHaveBeenCalledTimes(1);
         expect(result).toMatchObject({ createdCount: 1, cancelled: true });

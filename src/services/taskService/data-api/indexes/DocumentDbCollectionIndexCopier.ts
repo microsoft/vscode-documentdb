@@ -5,27 +5,18 @@
 
 import { type Document, type IndexDescriptionInfo } from 'mongodb';
 import * as vscode from 'vscode';
-import { type ClustersClient } from '../../../../documentdb/ClustersClient';
+import { ClustersClient } from '../../../../documentdb/ClustersClient';
 import { ext } from '../../../../extensionVariables';
+import {
+    type CollectionIndexCopier,
+    type CopyIndexesOptions,
+    type IndexCopyResult,
+} from './CollectionIndexCopier';
 
-export interface IndexCopyProgress {
-    completed: number;
-    total: number;
-    indexName: string;
-}
-
-export interface IndexCopyResult {
-    sourceIndexCount: number;
-    createdCount: number;
-    skippedCount: number;
-    renamedCount: number;
-    cancelled: boolean;
-}
-
-export interface CopyIndexesOptions {
-    signal?: AbortSignal;
-    onStart?: (total: number) => void;
-    onProgress?: (progress: IndexCopyProgress) => void;
+export interface DocumentDbCollectionEndpoint {
+    clusterId: string;
+    databaseName: string;
+    collectionName: string;
 }
 
 interface IndexDefinition {
@@ -36,27 +27,35 @@ interface IndexDefinition {
 }
 
 /**
- * Reads and writes traditional DocumentDB API indexes without exposing driver index definitions
- * to the copy-and-paste task.
+ * Copies indexes between two DocumentDB API collections.
+ *
+ * This class intentionally keeps catalog reading, comparison, naming, and creation together.
+ * Index catalogs are small and bounded, and all of these rules depend on DocumentDB API index
+ * semantics. Splitting them into source and target services would add delegation without creating
+ * a reusable boundary; callers instead depend on the compact `CollectionIndexCopier` contract.
+ * A portable index model should be introduced only when cross-database index migration is required.
  */
-export class DocumentDbIndexService {
+export class DocumentDbCollectionIndexCopier implements CollectionIndexCopier {
     public constructor(
-        private readonly client: ClustersClient,
-        private readonly databaseName: string,
-        private readonly collectionName: string,
+        private readonly source: DocumentDbCollectionEndpoint,
+        private readonly target: DocumentDbCollectionEndpoint,
     ) {}
 
-    public async countCopyableIndexes(): Promise<number> {
-        return (await this.readCopyableIndexes()).length;
+    public async countSourceIndexes(): Promise<number> {
+        const sourceClient = await ClustersClient.getClient(this.source.clusterId);
+        return (await this.readCopyableIndexes(sourceClient, this.source)).length;
     }
 
-    public async copyIndexesTo(
-        target: DocumentDbIndexService,
-        options: CopyIndexesOptions = {},
-    ): Promise<IndexCopyResult> {
-        const sourceIndexes = await this.readCopyableIndexes();
+    public async copyIndexes(options: CopyIndexesOptions = {}): Promise<IndexCopyResult> {
+        const [sourceClient, targetClient] = await Promise.all([
+            ClustersClient.getClient(this.source.clusterId),
+            ClustersClient.getClient(this.target.clusterId),
+        ]);
+
+        // Read both bounded catalogs once so equivalence and name collisions use stable snapshots.
+        const sourceIndexes = await this.readCopyableIndexes(sourceClient, this.source);
         options.onStart?.(sourceIndexes.length);
-        const targetIndexes = await target.readCopyableIndexes();
+        const targetIndexes = await this.readCopyableIndexes(targetClient, this.target);
         const targetIndexNames = new Set(targetIndexes.map((index) => index.name));
         const targetSignatures = new Set(targetIndexes.map((index) => this.getDefinitionSignature(index)));
 
@@ -72,6 +71,7 @@ export class DocumentDbIndexService {
             vscode.l10n.t('[IndexCopy] Found {0} source indexes to evaluate.', sourceIndexes.length.toString()),
         );
 
+        // Create sequentially for deterministic naming, progress, and cancellation between indexes.
         for (const sourceIndex of sourceIndexes) {
             if (options.signal?.aborted) {
                 result.cancelled = true;
@@ -104,7 +104,7 @@ export class DocumentDbIndexService {
             }
 
             try {
-                await target.createIndex({ ...sourceIndex, name: targetName });
+                await this.createIndex(targetClient, this.target, { ...sourceIndex, name: targetName });
             } catch (error) {
                 const errorMessage = error instanceof Error ? error.message : String(error);
                 ext.outputChannel.error(
@@ -128,13 +128,20 @@ export class DocumentDbIndexService {
         return result;
     }
 
-    private async readCopyableIndexes(): Promise<IndexDefinition[]> {
-        const indexes = await this.client.getCollection(this.databaseName, this.collectionName).indexes();
+    private async readCopyableIndexes(
+        client: ClustersClient,
+        endpoint: DocumentDbCollectionEndpoint,
+    ): Promise<IndexDefinition[]> {
+        const indexes = await client.getCollection(endpoint.databaseName, endpoint.collectionName).indexes();
         return indexes.filter((index) => !this.isIdIndex(index)).map((index) => this.toIndexDefinition(index));
     }
 
-    private async createIndex(index: IndexDefinition): Promise<void> {
-        const result = await this.client.createIndex(this.databaseName, this.collectionName, {
+    private async createIndex(
+        client: ClustersClient,
+        endpoint: DocumentDbCollectionEndpoint,
+        index: IndexDefinition,
+    ): Promise<void> {
+        const result = await client.createIndex(endpoint.databaseName, endpoint.collectionName, {
             ...index.options,
             background: true,
             key: Object.fromEntries(this.getKeyEntries(index.key)),
@@ -146,7 +153,7 @@ export class DocumentDbIndexService {
         }
 
         if (index.hidden) {
-            const visibilityResult = await this.client.hideIndex(this.databaseName, this.collectionName, index.name);
+            const visibilityResult = await client.hideIndex(endpoint.databaseName, endpoint.collectionName, index.name);
             if (visibilityResult.ok === 0 || visibilityResult.errmsg) {
                 const errorMessage =
                     typeof visibilityResult.errmsg === 'string'
