@@ -20,13 +20,17 @@ edit to `managed-identities.md` rather than a redesign.
 | D0  | **Confirmed**                | New. Supported-platform claims narrowed to Azure VMs                    |
 | D1  | **Confirmed as proposed**    | Option C. Unchanged, plus an explicit normalisation rule                |
 | D1a | **Confirmed**                | New. `Copy Connection String` behaviour, round-trips with D1            |
-| D2  | **Confirmed, shape changed** | Now follows the Atlas database-user quick pick pattern                  |
+| D2  | **Superseded by D10**        | Identity selection is now part of one Entra-family picker               |
 | D3  | **OPEN**                     | Maintainer sees no benefit in the probe; under discussion               |
 | D4  | **Confirmed, deferred**      | Issue filed **after** this work lands, so progress can inform its scope |
 | D5  | **Confirmed**                | Unchanged                                                               |
 | D6  | **Confirmed, rescoped**      | D6.1 out of scope, D6.2 simplified, D6.3 retargeted to `docs/`          |
 | D7  | **Confirmed**                | Unchanged, not contested                                                |
 | D8  | **Confirmed**                | Keep additive managed identity fields in storage v3.0                   |
+| D9  | **Confirmed**                | Replaces parser confidence with stable connection-string facts          |
+| D10 | **Confirmed, reversal**      | Managed identity moves under the Microsoft Entra ID family              |
+| D11 | **Confirmed**                | Tenant choice is retimed and account management continues in place      |
+| D12 | **Confirmed**                | Applies the shared family presentation to all seven entry points         |
 
 ---
 
@@ -481,6 +485,103 @@ not imply App Service is a supported platform.
 
 The manual checklist exists because the incident can only be closed on real hardware, and the person
 who runs it should not have to reverse-engineer which cases matter.
+
+---
+
+## D9. Connection-string parsing reports facts, not confidence
+
+**Decision:** replace `ManagedIdentityHint.confidence` with `ConnectionStringAuthFacts`. The parser
+reports OIDC use, the Azure machine-workflow declaration, token resource, username, and GUID shape.
+The wizard decides which questions those facts answer.
+
+### Reasoning
+
+`weak` and `explicit` described what the old flat picker should do next, not properties of a
+connection string. The score existed because the old context could express either a fully selected
+method or no selection, but could not express "Microsoft Entra ID family known, token source
+unknown". The two-level flow represents that state directly.
+
+This type is not persisted, so replacing it requires no storage migration. Detection still runs
+before credentials are stripped because the managed identity candidate occupies the username
+position.
+
+### Consequences
+
+- Bare OIDC establishes the Microsoft Entra ID family but does not select account sign-in.
+- OIDC plus a GUID without `ENVIRONMENT:azure` supplies a managed identity candidate and still asks
+  which identity to use.
+- `ENVIRONMENT:azure` plus no username selects this machine's identity without a prompt.
+- `ENVIRONMENT:azure` plus a GUID selects that managed identity without a prompt.
+- A non-GUID machine selector remains visible for correction and never silently changes principal.
+
+## D10. Managed identity is presented inside the Microsoft Entra ID family
+
+**Decision:** the top-level picker contains username/password, Microsoft Entra ID, and no
+authentication. One Entra identity picker then offers account sign-in, a pasted managed identity
+candidate when present, this machine's identity, manual client ID entry, and an inferred-family
+escape.
+
+This supersedes D2's standalone managed identity picker. It does **not** rename or remove
+`AuthMethodId.ManagedIdentity`; stored values, handlers, auth configs, duplicate-detection keys, and
+telemetry retain their current shape.
+
+### Reasoning
+
+Interactive account auth and managed identity both use `MONGODB-OIDC` on the wire. Managed identity
+is a token source within that family, not a peer of the family. The old picker offered methods an
+OIDC string had already ruled out, then asked a second question whose answer could already be in the
+string.
+
+One list avoids scenario-specific variants and keeps manual user-assigned identity entry reachable
+from every Entra-capable path. The Microsoft Entra ID row mentions an identity assigned to this
+machine in its detail, so searching for managed identity still finds the family.
+
+The "Use a different authentication method..." row is required when OIDC inference skipped the
+family picker. AzureWizard Back skips steps that did not prompt, so Back alone cannot reopen an
+inferred family choice.
+
+### Quick-pick activation constraint
+
+The agreed mock placed account sign-in first while highlighting a pasted client ID. The shared Azure
+single-select quick pick cannot activate an arbitrary row. A pasted candidate is therefore placed
+first when present; account sign-in is first otherwise. A custom quick pick was rejected because it
+would bypass the wizard input abstraction solely to preserve visual ordering.
+
+## D11. Tenant selection follows the token-source choice and continues after sign-in
+
+**Decision:** run the tenant step after the Entra identity step. Managed identity skips tenant
+selection; account sign-in keeps it. If the user is signed out, invoke the existing centralized
+Azure account-management flow first. Re-enumerate and continue in the tenant picker after account
+management instead of terminating the parent wizard.
+
+### Reasoning
+
+The tenant choice is required for guest and cross-tenant account access. Omitting it asks VS Code
+for the account's home-tenant token, which can authenticate the wrong tenant and fail with an opaque
+server rejection. The tenant also participates in duplicate identity detection.
+
+The defects were timing and recoverability. Tenant enumeration only sees authenticated tenants, but
+the old flow enumerated before sign-in and exited the connection wizard after account management.
+Keeping account-management error handling at its existing entry point preserves one error boundary.
+
+One enumerable tenant remains a suggestion, not an automatic answer, because manual tenant entry
+must stay reachable for guest access. Enumeration and sign-in-state checks are bounded to five
+seconds; timeout or failure falls back to the picker and manual entry.
+
+## D12. The family presentation applies to all authentication entry points
+
+**Decision:** remove the top-level managed identity row from the shared family builder used by New
+Connection, Update Credentials, Connections reconnect, Azure Resources, vCore Discovery, Atlas
+Discovery, and Kubernetes Discovery. Register the Entra identity step behind its family gate in all
+seven flows.
+
+### Reasoning
+
+All seven method pickers use one shared item builder. Limiting the first change to New Connection
+would require a temporary rendering variant and leave the product half-migrated. The complete change
+is simpler and ensures any entry point that advertises Microsoft Entra ID also asks for its token
+source. Atlas and Kubernetes normally do not advertise Entra today; their gated registration is a
+forward-compatibility guard, not a new capability claim.
 
 ---
 

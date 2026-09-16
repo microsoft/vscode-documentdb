@@ -46,7 +46,10 @@ A few things worth knowing:
 - **No password prompt appears.** There is no password on this kind of connection, so there is nothing to choose between.
 - **Nothing sensitive is copied.** A client ID is a tenant-scoped identifier, not a credential, so the string is safe to paste into a bug report.
 - **The string works elsewhere on the same Azure VM**, in `mongosh` and in application drivers, because the identity belongs to the machine rather than to the string.
-- **It pastes back into New Connection** in another VS Code window and reproduces the same managed identity connection.
+- **It pastes back into New Connection** in another VS Code window and reproduces the same managed
+  identity connection without another identity prompt, because `ENVIRONMENT:azure` states the token
+  source. A shorter OIDC string without that property opens the single Microsoft Entra ID identity
+  list instead.
 
 ## Kubernetes port-forwarded targets
 

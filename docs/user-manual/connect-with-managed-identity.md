@@ -55,17 +55,32 @@ When the extension knows which tenant owns the cluster, which is the case for co
 
 1. In the **Connections** view, select **New Connection**, then **Connection String**.
 2. Paste the connection string of your cluster. You can copy it from the Azure portal.
-3. When asked for an authentication method, choose **Managed Identity (Azure hosted)**.
-4. Choose the identity to use, as described below.
+3. When asked for an authentication method, choose **Microsoft Entra ID**.
+4. In the identity list, choose the identity assigned to this machine, a pasted client ID, or a
+	different managed identity, as described below.
 
-The same option appears in the **Azure Resources** and **Service Discovery** views when you connect to a cluster that allows Microsoft Entra ID, and in **Update Credentials** on an existing connection.
+The same identity list appears in the **Azure Resources** and **Service Discovery** views when you
+connect to a cluster that allows Microsoft Entra ID, and in **Update Credentials** on an existing
+connection.
 
 ## Choosing the identity
 
-The extension asks which identity to authenticate as:
+Microsoft Entra ID connections use one identity list for account sign-in and managed identity:
 
-- **Enter a client ID**: type the client ID of a user-assigned managed identity. It looks like `11111111-2222-3333-4444-555555555555`.
-- **System-assigned managed identity**: use the machine's own identity. No client ID is needed.
+- **Managed identity `<client-id>`**: shown when the pasted connection string supplied a
+	GUID-shaped candidate. Selecting it confirms that the value is the user-assigned managed identity
+	to use.
+- **Sign in with my account**: use an interactive VS Code account instead. The tenant picker follows
+	so you can choose a home or guest organization. Adding another account returns to the same picker
+	without restarting the connection flow.
+- **Use the identity assigned to this machine**: request a token without an identity selector. No
+	client ID is needed.
+- **Use a different managed identity...**: type the client ID of a user-assigned managed identity.
+	It looks like `11111111-2222-3333-4444-555555555555`.
+
+When the connection string declared OIDC and the extension inferred the Microsoft Entra ID family,
+the list also offers **Use a different authentication method...**. This is the route to
+username/password or no authentication when the inferred family was not what you intended.
 
 **If the VM has more than one identity, the client ID is not optional.** The Azure instance metadata service cannot choose between several identities on its own, so a request without a client ID fails. This is the single most common cause of a failed managed identity connection.
 
@@ -81,7 +96,13 @@ A connection string in the form documented by Microsoft Learn is recognized auto
 mongodb+srv://<client-id>@<cluster>.mongocluster.cosmos.azure.com/?authMechanism=MONGODB-OIDC&authMechanismProperties=ENVIRONMENT:azure,TOKEN_RESOURCE:https://ossrdbms-aad.database.windows.net
 ```
 
-When you paste this, the extension selects **Managed Identity**, takes the client ID from the user position, and does not ask you again. Leave the user position empty for the system-assigned identity.
+When you paste this, the extension selects managed identity, takes the client ID from the user
+position, and does not ask you again. Leave the user position empty to request this machine's
+identity without a selector.
+
+If `ENVIRONMENT:azure` is missing, the string establishes only the Microsoft Entra ID family. A
+GUID in the user position is highlighted as a managed identity candidate, but you confirm it in the
+identity list because a GUID alone does not prove which kind of Entra identity it names.
 
 The extension reads those parameters to work out what you meant and then removes them from the stored connection string, so the mechanism is configured in exactly one place.
 
@@ -105,7 +126,7 @@ No password prompt appears, because there is no password to include. See [Copy C
 
 Both methods present a Microsoft Entra ID token to the cluster, and on the wire they are identical. The difference is where the token comes from:
 
-|                              | Entra ID for Azure DocumentDB                 | Managed Identity (Azure hosted)             |
+|                              | Account sign-in                                | Managed identity                            |
 | ---------------------------- | --------------------------------------------- | ------------------------------------------- |
 | Who is authenticated         | The signed-in VS Code user                    | The Azure VM                                |
 | Sign-in prompt               | Yes, the first time                           | Never                                       |

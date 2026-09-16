@@ -7,8 +7,11 @@ prs: [886]
 
 # Managed Identity Support for Azure DocumentDB (vCore)
 
-**Status:** Implemented on `dev/tnaum/managed-identities`, pending validation on the Azure VM repro.
-**Progress:** see [`implementation-log.md`](iterations/01-implementation-log.md) and [`manual-validation-checklist.md`](manual-validation-checklist.md)
+**Status:** Implemented on `dev/tnaum/managed-identities`, with the Entra identity presentation
+revised in [iteration 04](iterations/04-entra-identity-flow.md). Azure VM validation remains pending.
+**Progress:** see the [original implementation log](iterations/01-implementation-log.md), the
+[Entra flow iteration](iterations/04-entra-identity-flow.md), and the
+[manual validation checklist](manual-validation-checklist.md)
 **Owner:** unassigned
 **Branch:** `dev/tnaum/managed-identities`
 **Companion docs:** [`research-findings.md`](research-findings.md) (evidence),
@@ -18,9 +21,10 @@ prs: [886]
 
 ## Summary
 
-Add **Managed Identity** as a first-class, explicitly selectable authentication method, so that
-VS Code running on an **Azure VM** can authenticate to an Azure DocumentDB cluster using that VM's
-managed identity instead of an interactive user sign-in.
+Allow VS Code running on an **Azure VM** to authenticate to an Azure DocumentDB cluster using that
+VM's managed identity instead of an interactive user sign-in. The UI presents both as identity
+choices in the Microsoft Entra ID family. Their persisted method IDs, configurations, token
+handlers, cache identities, and telemetry remain separate.
 
 Today this is impossible: our Entra ID path only ever asks the signed-in VS Code user for a token.
 
@@ -50,12 +54,12 @@ client ID is discarded, because the handler blanks the username before connectin
 The multi-identity ambiguity from the original theory **is** real, and we will meet it as soon as we
 implement this. It is handled explicitly in this design rather than inferred.
 
-### Why our existing Entra ID support is not the thing to change
+### Why the existing Entra token handlers stay separate
 
-The interactive Entra ID path is working and battle-tested, including multi-tenant scenarios. This
-work is purely **additive**: a fourth authentication method alongside it. The only change to the
-existing path is a shared token-resource constant extraction (see WI2). The `expiresInSeconds: 0`
-quirk in that handler is deliberately **left alone**; see
+The interactive Entra ID path is working and battle-tested, including multi-tenant scenarios. The
+presentation now groups account sign-in and managed identity under one family, but this does not
+merge their runtime handlers or stored method values. The `expiresInSeconds: 0` quirk in the
+interactive handler is deliberately **left alone**; see
 [D6.1](decisions.md#d61-token-expiry-and-caching-out-of-scope-dedicated-issue).
 
 ---
@@ -113,6 +117,10 @@ instructions.
 | D5  | No new VS Code settings; per-connection configuration only                                                                                                         | Agreed   |
 | D6  | Token-expiry fix deferred to an issue; error mapping simplified; `docs/` updated                                                                                   | Agreed   |
 | D7  | Unit tests plus a fake identity-endpoint harness plus a manual checklist for the VM repro                                                                          | Agreed   |
+| D9  | Connection strings report stable authentication facts instead of `weak` or `explicit` confidence                                                                  | Agreed   |
+| D10 | Managed identity and account sign-in appear in one Microsoft Entra ID identity picker                                                                              | Agreed   |
+| D11 | Tenant selection follows token-source selection and continues after account management                                                                             | Agreed   |
+| D12 | The family presentation and gated identity step apply to all seven authentication entry points                                                                      | Agreed   |
 
 ---
 
@@ -352,53 +360,59 @@ Behaviour notes:
 
 #### 5.2 Normalisation on paste (input)
 
-New file `src/documentdb/auth/managedIdentityConnectionString.ts`:
+`src/documentdb/auth/managedIdentityConnectionString.ts` reports facts without recommending a
+wizard action:
 
 ```ts
-export interface ManagedIdentityHint {
-  /** Client ID taken from the username position, when it is GUID-shaped. */
-  readonly clientId?: string;
-  /** 'explicit' when ENVIRONMENT:azure was present; 'weak' when only OIDC plus a GUID username was. */
-  readonly confidence: 'explicit' | 'weak';
+export interface ConnectionStringAuthFacts {
+  readonly usesOidc: boolean;
+  readonly declaresAzureMachineWorkflow: boolean;
+  readonly tokenResource?: string;
+  readonly username?: string;
+  readonly usernameIsGuid: boolean;
 }
 
-export function detectManagedIdentityHint(cs: DocumentDBConnectionString): ManagedIdentityHint | undefined;
+export function getConnectionStringAuthFacts(cs: DocumentDBConnectionString): ConnectionStringAuthFacts;
 ```
 
-Detection rules:
+Wizard rules:
 
-| Connection string shape                                                                     | Result                                                                                                                                          |
-| ------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
-| `authMechanism=MONGODB-OIDC` **and** `authMechanismProperties` contains `ENVIRONMENT:azure` | `explicit`. Select Managed Identity, take the client ID from the username, skip the identity prompt.                                            |
-| `authMechanism=MONGODB-OIDC` and a GUID-shaped username, no `ENVIRONMENT`                   | `weak`. Select Managed Identity and prefill the client ID, but still show the prompt so the user can confirm or switch to interactive Entra ID. |
-| Anything else                                                                               | `undefined`. Existing behaviour, unchanged.                                                                                                     |
+| Connection string shape                                                     | Result                                                                                              |
+| --------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------- |
+| OIDC, no `ENVIRONMENT:azure`                                                | Select the Microsoft Entra ID family and ask which identity to use                                 |
+| OIDC plus GUID username, no `ENVIRONMENT:azure`                             | Same, with the GUID highlighted as a managed identity candidate                                    |
+| OIDC plus `ENVIRONMENT:azure`, no username                                  | Select managed identity with no client ID and skip the identity picker                              |
+| OIDC plus `ENVIRONMENT:azure` and a GUID username                           | Select managed identity with that client ID and skip the identity picker                            |
+| OIDC plus `ENVIRONMENT:azure` and a non-GUID username                       | Select the Entra family and ask in the same picker, naming the unusable value in the placeholder    |
+| Anything else                                                               | Keep the existing family-prompt behavior                                                            |
 
-Normalisation, applied once the hint is taken:
+Normalisation for the Azure machine workflow:
 
-1. Set `selectedAuthMethod = AuthMethodId.ManagedIdentity`.
+1. Set `selectedAuthMethod = AuthMethodId.ManagedIdentity` only when the source and identity are
+   fully determined.
 2. Set `managedIdentityAuthConfig` to `{ clientId }`, or `{}` when there was no username.
 3. **Strip `authMechanism`, `authMechanismProperties`, and the username from the stored connection
    string.** They were inputs to a decision; keeping them risks the driver later preferring the URL
    form over `MongoClientOptions` and taking its own IMDS path.
 
-A username that is present but **not** GUID-shaped keeps the method selection, leaves the client ID
-empty, and lets the identity step ask. Do not guess.
+A username that is present but **not** GUID-shaped stays in the facts for the identity picker to
+name, but is removed from the stored string and is never sent to IMDS. Do not guess or silently
+substitute this machine's identity.
 
 > **Ordering constraint.** `PromptConnectionStringStep.prompt()` clears the username unconditionally
 > before any inspection. The hint must be computed **before** that credential-stripping block, or the
 > client ID is gone by the time we look for it. This is the single easiest thing to get wrong in this
 > work item.
 
-If the gap is accepted instead, it must be stated in the user manual, because copy-then-paste between
-two VS Code windows is an obvious thing to try.
+This supersedes the original `ManagedIdentityHint` `weak`/`explicit` model. The reason is recorded in
+[D9](decisions.md#d9-connection-string-parsing-reports-facts-not-confidence).
 
 ### 6. Availability rules
 
-Managed identity is offered wherever interactive Entra ID is offered, because on the wire they are
-the same mechanism and differ only in token source (`research-findings.md` §5.3). It is also offered
-whenever a pasted connection string carries a managed identity hint, even if a private endpoint,
-CNAME, or custom domain prevents host-based vCore classification. The user's explicit string must
-not produce a selected method that is absent from the connection's available methods.
+The Microsoft Entra ID family is offered wherever either interactive Entra ID or managed identity
+is supported, because on the wire they are the same mechanism and differ only in token source
+(`research-findings.md` §5.3). OIDC facts also make that family available when a private endpoint,
+CNAME, or custom domain prevents host-based vCore classification.
 
 **Pasted connection string**, `src/commands/newConnection/PromptConnectionStringStep.ts`:
 
@@ -410,7 +424,7 @@ if (hasDomainSuffix(AzureDomains.vCore, ...parsedConnectionString.hosts)) {
   supportedAuthMethods.push(AuthMethodId.ManagedIdentity);
 }
 
-if (managedIdentityHint && !supportedAuthMethods.includes(AuthMethodId.ManagedIdentity)) {
+if (authFacts.usesOidc && !supportedAuthMethods.includes(AuthMethodId.ManagedIdentity)) {
   supportedAuthMethods.push(AuthMethodId.ManagedIdentity);
 }
 
@@ -433,47 +447,58 @@ so the synthesized entry does not pollute service-side telemetry.
 
 ### 7. Wizard UX
 
-New step `src/documentdb/wizards/authenticate/SelectManagedIdentityStep.ts` (plus a sibling
-registration in the New Connection wizard), shown when
-`selectedAuthMethod === AuthMethodId.ManagedIdentity` and the identity is not already settled by an
-`explicit` hint from §5.2.
+`src/documentdb/wizards/authenticate/SelectEntraTokenSourceStep.ts` is shown when the Microsoft
+Entra ID family is selected and the connection-string facts did not already determine the token
+source. It can set either `MicrosoftEntraID` for account sign-in or `ManagedIdentity` for a machine
+identity. Those stored values remain unchanged.
 
-The system-assigned identity is first, an optional value from the current connection string is grouped
-under its own separator, and the manual escape hatch is last. The step is never a dead end.
+There is one identity list, not separate token-source and system-versus-user-assigned lists. It is
+never a dead end.
 
 ```text
-Select the managed identity to use
+Select the identity to use for this connection
 
-─────────── This machine ─────────────────────────────────────────
-$(vm)       System-assigned managed identity
-            Use the identity built into this Azure VM
-─────────── From the connection string ──────────────────────────
-$(account)  11111111-2222-3333-4444-555555555555
-$(edit)     Enter a client ID
-            Type the client ID of a user-assigned managed identity
+From the connection string
+  Managed identity  11111111-2222-3333-4444-555555555555
+    (user-assigned)
+Sign in with my account
+  Uses the account you sign in with in Visual Studio Code
+This machine
+  Use the identity assigned to this machine
+    (system-assigned)
+  Use a different managed identity...
+    (user-assigned) Enter a client ID
+Use a different authentication method...
+  This connection string asked for Microsoft Entra ID
 ```
 
-- **"Enter a client ID"** opens a GUID-validated input box, exactly as the Atlas step falls through
-  to `ProvideUserNameStep`.
-- **Any other row** writes straight into `context.managedIdentityAuthConfig` (`{}` for
-  system-assigned, `{ clientId }` otherwise) and skips the input box.
-- **Nothing known** still shows the step with the manual entry row, so the list can never be empty.
+- The connection-string candidate and different-authentication-method rows are conditional.
+- Account sign-in and both managed identity routes are always present when the picker appears.
+- Manual client ID entry remains GUID-validated and normalizes missing or misplaced separators.
+- A non-GUID selector changes only the placeholder and prefills manual correction. It does not
+  create a second picker variant.
+- The different-authentication-method row appears when OIDC inference skipped the family picker,
+  because AzureWizard Back cannot reopen a step that did not prompt.
+- The tenant step runs after this picker. It sees the final stored method and therefore never asks a
+  managed identity to choose a tenant.
 
-`buildItems()` mirrors the Atlas implementation closely enough that it is worth reading side by side
-during review.
+The family picker is shared by seven entry points and omits managed identity as a top-level row in
+all of them. The identity step is registered behind its Entra-family gate in all seven; see
+[D12](decisions.md#d12-the-family-presentation-applies-to-all-authentication-entry-points).
 
 #### Source of the "known" rows
 
-v1 ships the system-assigned identity plus an optional client ID parsed from the current connection
-string. The proposed recently-used global-state list was removed before merge because only one entry
-point populated it and its expected usage did not justify the maintenance cost.
+v1 ships this machine's identity plus an optional client ID parsed from the current connection
+string and manual client ID entry. The proposed recently-used global-state list was removed before
+merge because only one entry point populated it and its expected usage did not justify the
+maintenance cost.
 
 ARM enumeration of user-assigned identities, and enumeration of the identities actually assigned to
 this VM, are phase 2. Both are described in the [D2 open item](decisions.md#open-item-needs-a-call);
 the second one depends on IMDS and therefore on the D3 outcome.
 
-`ChooseAuthMethodStep` needs no logic change; it renders whatever is in `availableAuthMethods`. The
-discovery hint that D3's probe was meant to provide lives in the method's static `detail` copy (§1).
+`ChooseAuthMethodStep` needs no inference logic; the shared family builder removes the top-level
+managed identity row. The Microsoft Entra ID family detail keeps managed identity searchable.
 
 ### 8. Storage and credential cache
 
@@ -680,10 +705,10 @@ This alone closes the incident for the reported scenario.
 
 | ID   | Description                                                                                                                                            | Status |
 | ---- | ------------------------------------------------------------------------------------------------------------------------------------------------------ | ------ |
-| WI7  | Implement `detectManagedIdentityHint()` and the normalisation rule (§5.2); wire into `PromptConnectionStringStep` **before** the username is cleared   | ✅     |
+| WI7  | Implement connection-string authentication facts and the normalisation rule (§5.2); read facts **before** the username is cleared                    | ✅     |
 | WI8  | `Copy Connection String`: emit the driver-native form for `ManagedIdentity` (§5.1)                                                                     | ✅     |
 | WI9  | Offer `ManagedIdentity` for vCore hosts in `PromptConnectionStringStep`                                                                                | ✅     |
-| WI10 | Implement `SelectManagedIdentityStep` (§7); register in both wizards; skip on an `explicit` hint; remove the proposed recently-used store before merge | ✅     |
+| WI10 | Implement the identity selector. Superseded by the unified `SelectEntraTokenSourceStep` in iteration 04                                                  | ✅     |
 | WI11 | Extend `ConnectionSecrets`, `CachedClusterCredentials`, `setAuthCredentials()`, `EphemeralClusterCredentials`, `AuthenticateWizardContext`             | ✅     |
 | WI12 | Rework the `setFromConnectionItem()` inference ladder to honour `selectedAuthMethod` for all known methods                                             | ✅     |
 | WI13 | Persist `managedIdentityAuthConfig` (including `{}` for system-assigned) in `ExecuteStep`                                                              | ✅     |
@@ -740,9 +765,9 @@ the VM validation actually taught us, otherwise they will need rewriting.
 ### Unit (Jest)
 
 - `expiresInSecondsFromTimestamp`: timestamp maths, floor at zero, clock-skew tolerance.
-- `detectManagedIdentityHint`: explicit / weak / none, non-GUID username, `ENVIRONMENT:azure` mixed
-  with other `authMechanismProperties` entries, casing variants, and `+srv` versus plain hosts.
-- **Normalisation:** after a hint is applied, the stored connection string retains no
+- `getConnectionStringAuthFacts`: OIDC use, Azure machine-workflow declaration, token resource,
+  non-GUID username, casing variants, and `+srv` versus plain hosts.
+- **Normalisation:** after Azure machine-workflow facts are applied, the stored connection string retains no
   `authMechanism`, no `authMechanismProperties`, and no username, and the config carries the client
   ID (or `{}` for system-assigned).
 - `ManagedIdentityAuthHandler`: with a mocked credential, assert `authMechanism`, `tls`,
@@ -750,13 +775,15 @@ the VM validation actually taught us, otherwise they will need rewriting.
   `authMechanism` are **removed from the returned connection string**.
 - `buildParsedConnectionString`: the copy output for a system-assigned and a user-assigned identity,
   that existing query parameters survive, and that no password is ever added (§5.1).
-- **Round-trip:** copy output fed back through `detectManagedIdentityHint` plus normalisation yields
-  the original config. One test, both directions, so the two halves cannot drift apart unnoticed.
+- **Round-trip:** copy output fed back through `getConnectionStringAuthFacts` plus normalisation
+  yields the original config. One test, both directions, so the two halves cannot drift apart
+  unnoticed.
 - `describeManagedIdentityError`: each mapped condition plus the pass-through fallback.
 - `CredentialCache`: `setAuthCredentials` and `setFromConnectionItem` round trip for
   `ManagedIdentity`, including the system-assigned `{}` case.
-- `SelectManagedIdentityStep.buildItems()`: manual entry is always first, separators appear only for
-  non-empty groups, and the list is never empty.
+- `SelectEntraTokenSourceStep.buildItems()`: a pasted candidate is highlighted when present,
+  account sign-in is first otherwise, both managed identity routes remain reachable, and the list
+  is never empty.
 - **Regression:** `setFromConnectionItem` still resolves existing stored Native / Entra ID / NoAuth
   connections identically after the WI12 ladder change.
 

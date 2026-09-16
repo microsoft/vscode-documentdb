@@ -5,14 +5,15 @@ status: active
 prs: [886]
 code:
   - src/documentdb/auth/ManagedIdentityAuthHandler.ts
-  - src/documentdb/wizards/authenticate/SelectManagedIdentityStep.ts
+  - src/documentdb/wizards/authenticate/SelectEntraTokenSourceStep.ts
 ---
 
 # Managed Identity Authentication
 
-Explicit managed identity authentication for Azure DocumentDB (vCore) connections from VS Code
-running on an Azure VM. System-assigned and user-assigned identities are supported; interactive
-Microsoft Entra ID authentication remains a separate method.
+Managed identity authentication for Azure DocumentDB (vCore) connections from VS Code running on
+an Azure VM. System-assigned and user-assigned identities are supported. The UI presents managed
+identity and interactive account sign-in as identity choices inside the Microsoft Entra ID family,
+while their stored authentication methods and token handlers remain separate.
 
 ## Status
 
@@ -26,7 +27,8 @@ This is not a Marketplace release version or a claim that the feature shipped in
 - [Design](design.md): authentication flow, connection-string handling, storage, shell integration,
   and implementation plan.
 - [Decisions](decisions.md): supported platforms, token acquisition, explicit identity selection,
-  error handling, and rejected alternatives. Consult each entry's status before relying on it.
+  Entra-family presentation, tenant handling, error handling, and rejected alternatives. Consult
+  each entry's status before relying on it.
 - [Research](research-findings.md): historical evidence behind the design.
 - [User guide](../../../user-manual/connect-with-managed-identity.md): setup and connection workflow.
 
@@ -34,8 +36,8 @@ This is not a Marketplace release version or a claim that the feature shipped in
 
 - [ManagedIdentityAuthHandler](../../../../src/documentdb/auth/ManagedIdentityAuthHandler.ts):
   managed identity token acquisition and authentication.
-- [SelectManagedIdentityStep](../../../../src/documentdb/wizards/authenticate/SelectManagedIdentityStep.ts):
-  explicit identity selection in the authentication wizard.
+- [SelectEntraTokenSourceStep](../../../../src/documentdb/wizards/authenticate/SelectEntraTokenSourceStep.ts):
+  account and managed identity selection inside the Microsoft Entra ID family.
 - [Connection strings](../../../../src/documentdb/auth/managedIdentityConnectionString.ts):
   parsing and serialization of managed identity connection settings.
 - [CredentialCache](../../../../src/documentdb/CredentialCache.ts): authentication state for connections.
@@ -47,6 +49,7 @@ This is not a Marketplace release version or a claim that the feature shipped in
 | Implementation | [Work items and deviations](iterations/01-implementation-log.md)      |
 | Code review    | [Findings and resolutions](iterations/02-code-review.md)              |
 | UX review      | [Workflow findings and operator feedback](iterations/03-ux-review.md) |
+| Entra flow     | [Unified identity and tenant flow](iterations/04-entra-identity-flow.md) |
 
 Historical records retain their original review baselines and packaging observations. The current
 branch target and preview version are recorded above; the earlier records are not current release guidance.
