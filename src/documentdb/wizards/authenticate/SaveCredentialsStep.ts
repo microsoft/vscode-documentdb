@@ -33,6 +33,7 @@ export class SaveCredentialsStep extends AzureWizardPromptStep<AuthenticateWizar
         });
 
         context.saveCredentials = selectedItem.id === 'saveCredentials';
+        context.telemetry.properties.saveCredentials = context.saveCredentials ? 'true' : 'false';
     }
 
     public shouldPrompt(context: AuthenticateWizardContext): boolean {

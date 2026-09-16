@@ -66,6 +66,7 @@ export class ExecuteStep extends AzureWizardExecuteStep<NewConnectionWizardConte
                 (canonicalTls.disableEmulatorSecurity || !!context.disableEmulatorSecurity);
 
             const newAuthenticationMethod = context.selectedAuthenticationMethod;
+            context.telemetry.properties.authMethod = newAuthenticationMethod ?? 'unknown';
 
             // Native credentials only apply to the Native authentication method. When a user
             // pastes a connection string that embeds a username/password but then selects a

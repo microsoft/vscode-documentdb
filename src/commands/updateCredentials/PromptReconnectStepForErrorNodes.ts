@@ -39,6 +39,7 @@ export class PromptReconnectStepForErrorNodes<T extends ReconnectContext> extend
         });
 
         context.reconnectAfterError = selectedItem.data;
+        context.telemetry.properties.reconnectAfterCredentialUpdate = selectedItem.data ? 'true' : 'false';
     }
 
     public shouldPrompt(context: T): boolean {

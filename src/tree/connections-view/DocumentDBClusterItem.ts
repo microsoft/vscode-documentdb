@@ -118,6 +118,8 @@ export class DocumentDBClusterItem extends ClusterItemBase<ConnectionClusterMode
             const needsNativeCredentials =
                 authMethod === AuthMethodId.NativeAuth &&
                 (!username || username.length === 0 || !password || password.length === 0);
+            const shouldPromptForCredentials = !authMethod || needsNativeCredentials;
+            context.telemetry.properties.credentialsPrompted = shouldPromptForCredentials ? 'true' : 'false';
 
             if (!authMethod || needsNativeCredentials) {
                 const wizardContext: AuthenticateWizardContext = {
@@ -198,6 +200,8 @@ export class DocumentDBClusterItem extends ClusterItemBase<ConnectionClusterMode
                     }
                 }
             }
+
+            context.telemetry.properties.authMethod = authMethod;
 
             switch (authMethod) {
                 case AuthMethodId.MicrosoftEntraID:
@@ -407,6 +411,14 @@ export class DocumentDBClusterItem extends ClusterItemBase<ConnectionClusterMode
             } catch (error) {
                 if (error instanceof UserCancelledError) {
                     wizardContext.aborted = true;
+                }
+            } finally {
+                context.telemetry.properties.authMethod = wizardContext.selectedAuthMethod ?? 'unknown';
+                context.telemetry.properties.authMethodSelection =
+                    wizardContext.telemetry.properties.authMethodSelection ??
+                    (wizardContext.selectedAuthMethod ? 'existing' : 'unknown');
+                if (wizardContext.saveCredentials !== undefined) {
+                    context.telemetry.properties.saveCredentials = wizardContext.saveCredentials ? 'true' : 'false';
                 }
             }
         });
