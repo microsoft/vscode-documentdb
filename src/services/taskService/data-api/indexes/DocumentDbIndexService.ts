@@ -3,7 +3,7 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { type CreateIndexesOptions, type IndexDescriptionInfo, type IndexSpecification } from 'mongodb';
+import { type Document, type IndexDescriptionInfo } from 'mongodb';
 import * as vscode from 'vscode';
 import { type ClustersClient } from '../../../../documentdb/ClustersClient';
 import { ext } from '../../../../extensionVariables';
@@ -28,9 +28,9 @@ export interface CopyIndexesOptions {
 }
 
 interface IndexDefinition {
-    key: IndexSpecification;
+    key: Record<string, number | string>;
     name: string;
-    options: CreateIndexesOptions;
+    options: Document;
 }
 
 /**
@@ -131,15 +131,21 @@ export class DocumentDbIndexService {
     }
 
     private async createIndex(index: IndexDefinition): Promise<void> {
-        await this.client
-            .getCollection(this.databaseName, this.collectionName)
-            .createIndex(index.key, { ...index.options, name: index.name });
+        const result = await this.client.createIndex(this.databaseName, this.collectionName, {
+            ...index.options,
+            key: Object.fromEntries(this.getKeyEntries(index.key)),
+            name: index.name,
+        });
+
+        if (result.ok === 0 || result.note) {
+            throw new Error(typeof result.note === 'string' ? result.note : vscode.l10n.t('Failed to create index.'));
+        }
     }
 
     private toIndexDefinition(index: IndexDescriptionInfo): IndexDefinition {
         const options = Object.fromEntries(
             Object.entries(index).filter(([property]) => !['key', 'name', 'v', 'ns'].includes(property)),
-        ) as CreateIndexesOptions;
+        );
         return {
             key: index.key,
             name: index.name ?? this.getGeneratedName(index.key),
@@ -190,13 +196,13 @@ export class DocumentDbIndexService {
         return candidate;
     }
 
-    private getGeneratedName(key: IndexSpecification): string {
+    private getGeneratedName(key: Record<string, number | string>): string {
         return this.getKeyEntries(key)
             .map(([field, direction]) => `${field}_${String(direction)}`)
             .join('_');
     }
 
-    private getKeyEntries(key: IndexSpecification): [string, unknown][] {
-        return key instanceof Map ? [...key.entries()] : Object.entries(key);
+    private getKeyEntries(key: Record<string, number | string>): [string, number | string][] {
+        return Object.entries(key);
     }
 }

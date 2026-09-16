@@ -25,14 +25,15 @@ interface MockIndex {
     name: string;
     v?: number;
     unique?: boolean;
+    cosmosSearchOptions?: Record<string, unknown>;
 }
 
 function createClient(indexes: MockIndex[], createIndex: jest.Mock = jest.fn()): ClustersClient {
     return {
         getCollection: jest.fn().mockReturnValue({
             indexes: jest.fn().mockResolvedValue(indexes),
-            createIndex,
         }),
+        createIndex,
     } as unknown as ClustersClient;
 }
 
@@ -78,7 +79,7 @@ describe('DocumentDbIndexService', () => {
     });
 
     it('preserves the name and options when no collision exists', async () => {
-        const createIndex = jest.fn().mockResolvedValue('email_1');
+        const createIndex = jest.fn().mockResolvedValue({ ok: 1 });
         const source = new DocumentDbIndexService(
             createClient([{ key: { email: 1 }, name: 'email_1', v: 2, unique: true }]),
             'sourceDb',
@@ -88,7 +89,11 @@ describe('DocumentDbIndexService', () => {
 
         const result = await source.copyIndexesTo(target);
 
-        expect(createIndex).toHaveBeenCalledWith({ email: 1 }, { name: 'email_1', unique: true });
+        expect(createIndex).toHaveBeenCalledWith('targetDb', 'targetCollection', {
+            key: { email: 1 },
+            name: 'email_1',
+            unique: true,
+        });
         expect(result).toEqual({
             sourceIndexCount: 1,
             createdCount: 1,
@@ -98,8 +103,39 @@ describe('DocumentDbIndexService', () => {
         });
     });
 
+    it('preserves DocumentDB-specific options when creating a vector index', async () => {
+        const createIndex = jest.fn().mockResolvedValue({ ok: 1 });
+        const cosmosSearchOptions = {
+            kind: 'vector-hnsw',
+            m: 16,
+            efConstruction: 64,
+            similarity: 'COS',
+            dimensions: 1536,
+        };
+        const source = new DocumentDbIndexService(
+            createClient([
+                {
+                    key: { embedding: 'cosmosSearch' },
+                    name: 'bookEmbeddingIndex',
+                    cosmosSearchOptions,
+                },
+            ]),
+            'sourceDb',
+            'sourceCollection',
+        );
+        const target = new DocumentDbIndexService(createClient([], createIndex), 'targetDb', 'targetCollection');
+
+        await source.copyIndexesTo(target);
+
+        expect(createIndex).toHaveBeenCalledWith('targetDb', 'targetCollection', {
+            key: { embedding: 'cosmosSearch' },
+            name: 'bookEmbeddingIndex',
+            cosmosSearchOptions,
+        });
+    });
+
     it('adds a suffix when an index name collides with a different definition', async () => {
-        const createIndex = jest.fn().mockResolvedValue('shared_copy_2');
+        const createIndex = jest.fn().mockResolvedValue({ ok: 1 });
         const source = new DocumentDbIndexService(
             createClient([{ key: { email: 1 }, name: 'shared' }]),
             'sourceDb',
@@ -119,7 +155,10 @@ describe('DocumentDbIndexService', () => {
 
         const result = await source.copyIndexesTo(target);
 
-        expect(createIndex).toHaveBeenCalledWith({ email: 1 }, { name: 'shared_copy_2' });
+        expect(createIndex).toHaveBeenCalledWith('targetDb', 'targetCollection', {
+            key: { email: 1 },
+            name: 'shared_copy_2',
+        });
         expect(result.renamedCount).toBe(1);
     });
 
@@ -130,7 +169,7 @@ describe('DocumentDbIndexService', () => {
             'sourceCollection',
         );
         const target = new DocumentDbIndexService(
-            createClient([], jest.fn().mockRejectedValue(new Error('creation failed'))),
+            createClient([], jest.fn().mockResolvedValue({ ok: 0, note: 'creation failed' })),
             'targetDb',
             'targetCollection',
         );
@@ -143,6 +182,7 @@ describe('DocumentDbIndexService', () => {
         const controller = new AbortController();
         const createIndex = jest.fn().mockImplementation(async () => {
             controller.abort();
+            return { ok: 1 };
         });
         const source = new DocumentDbIndexService(
             createClient([
