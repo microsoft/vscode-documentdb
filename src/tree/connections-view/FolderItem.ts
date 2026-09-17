@@ -112,10 +112,6 @@ export class FolderItem implements TreeElement, TreeElementWithContextValue {
                     connectionUser: child.secrets?.nativeAuthConfig?.connectionUser,
                 };
 
-                ext.outputChannel.trace(
-                    `[ConnectionsView/Folder] Created cluster model: name="${model.name}", clusterId="${model.clusterId}", treeId="${model.treeId}", folderId="${this.folderData.id}"`,
-                );
-
                 connectionElements.push(new DocumentDBClusterItem(model));
             }
         }
@@ -136,6 +132,10 @@ export class FolderItem implements TreeElement, TreeElementWithContextValue {
 
         // Return folders first, then connections
         const result = [...folderElements, ...connectionElements];
+
+        ext.outputChannel.trace(
+            `[ConnectionsView/Folder] Loaded child items: ${folderElements.length} folder(s), ${connectionElements.length} connection(s).`,
+        );
 
         // If folder is empty, return a placeholder element with context menu
         if (result.length === 0) {
