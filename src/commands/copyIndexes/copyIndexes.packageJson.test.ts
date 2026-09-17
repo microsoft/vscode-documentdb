@@ -47,6 +47,7 @@ describe('index copy command contributions', () => {
 
         expect(entry?.when).toContain('state_copyable');
         expect(entry?.when).toContain('treeitem_index');
+        expect(entry?.when).not.toContain('!listMultiSelection');
     });
 
     it('gates Paste Indexes on the buffer service context key', () => {

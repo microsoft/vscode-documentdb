@@ -42,8 +42,11 @@ This method avoids loading the entire collection into memory at once, making it 
 Use the Explorer's Indexes nodes when you need to recreate indexes without copying documents:
 
 1. Expand a source collection's **Indexes** node.
-2. To select one ordinary secondary index, right-click it and select **Copy Index**. To select every
-   copyable secondary index, right-click the **Indexes** parent and select **Copy Indexes**.
+2. To select one ordinary secondary index, right-click it and select **Copy Index**. To copy a
+   subset, select multiple index rows, right-click a copyable selected index, and select **Copy
+   Index**. Expanded field rows, `_id`, and non-copyable search entries in the selection are ignored.
+   To select every copyable secondary index, right-click the **Indexes** parent and select **Copy
+   Indexes**.
 3. Expand the target collection, right-click its **Indexes** node, and select **Paste Indexes**.
 4. Review the source, target, selected indexes, exclusions, and any unique or TTL warnings, then
    confirm.

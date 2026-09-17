@@ -50,6 +50,10 @@ export class ConfirmPasteIndexesStep extends AzureWizardPromptStep<PasteIndexesW
 
         if (context.scope.kind === 'index') {
             lines.push(vscode.l10n.t('Index to copy: "{0}"', context.scope.indexName));
+        } else if (context.scope.kind === 'indexes') {
+            lines.push(
+                vscode.l10n.t('Indexes to copy: {0}', context.scope.indexNames.map((name) => `"${name}"`).join(', ')),
+            );
         } else {
             if (context.copyableCount === 0) {
                 lines.push(vscode.l10n.t('There are no copyable secondary indexes in the source collection.'));

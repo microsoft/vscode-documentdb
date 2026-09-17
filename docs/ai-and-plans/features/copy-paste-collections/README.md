@@ -63,8 +63,8 @@ durable intent and rationale. Code and tests remain authoritative for current be
   created and prevents document transfer.
 - Progress, result counts, diagnostics, telemetry, and a cancellation-aware completion pause are
   reported by the task and copier.
-- Dedicated Copy Index uses one stable index name; Copy Indexes retains a live parent scope and
-  resolves the current source catalog at paste time.
+- Dedicated Copy Index uses one stable index name or an immutable selected-name subset; Copy
+  Indexes retains a live parent scope and resolves the current source catalog at paste time.
 - Search catalog entries without ordinary keys remain visible but are classified as not copyable.
   The parent confirmation itemizes known exclusions, including `_id`; search exclusions are
   best-effort when the platform does not support their catalog API.

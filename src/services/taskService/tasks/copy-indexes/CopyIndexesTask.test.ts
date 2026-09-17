@@ -182,6 +182,24 @@ describe('CopyIndexesTask', () => {
         expect(context.telemetry.properties.isCrossDatabase).toBe('false');
     });
 
+    it('records a named subset copy scope', async () => {
+        const copier = {
+            copyIndexes: jest.fn().mockResolvedValue({
+                selectedIndexCount: 2,
+                createdCount: 2,
+                skippedCount: 0,
+                renamedCount: 0,
+                cancelled: false,
+            }),
+        } as unknown as CollectionIndexCopier;
+        const task = new TestCopyIndexesTask({ ...config, sourceIndexNames: ['email_1', 'region_1'] }, copier);
+        const context = createContext();
+
+        await task.runWorkForTest(new AbortController().signal, context);
+
+        expect(context.telemetry.properties.copyScope).toBe('indexes');
+    });
+
     it('reports cancellation with partial progress', async () => {
         const copier = {
             copyIndexes: jest.fn().mockImplementation(async (options: CopyIndexesOptions) => {

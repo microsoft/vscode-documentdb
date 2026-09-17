@@ -11,33 +11,61 @@ import {
     type CopiedIndexScope,
     type CopiedIndexSelection,
 } from '../../services/CopyPasteBufferService';
-import { type IndexItem } from '../../tree/documentdb/IndexItem';
+import { type TreeElement } from '../../tree/TreeElement';
+import { IndexItem } from '../../tree/documentdb/IndexItem';
 import { type IndexesItem } from '../../tree/documentdb/IndexesItem';
 
-export async function copyIndex(context: IActionContext, node: IndexItem): Promise<void> {
-    if (!node) {
+export async function copyIndex(
+    context: IActionContext,
+    clickedNode: IndexItem,
+    selectedItems?: TreeElement[],
+): Promise<void> {
+    if (!clickedNode) {
         throw new Error(vscode.l10n.t('No index selected.'));
     }
 
-    const exclusionReason = getIndexExclusionReason(node.indexInfo);
+    const exclusionReason = getIndexExclusionReason(clickedNode.indexInfo);
     if (exclusionReason === 'builtInId') {
         throw new Error(vscode.l10n.t('The built-in _id index cannot be copied.'));
     }
     if (exclusionReason === 'notCopyable') {
         throw new Error(
-            vscode.l10n.t('The selected {0} index is not supported by Copy/Paste Indexes.', node.indexInfo.type),
+            vscode.l10n.t('The selected {0} index is not supported by Copy/Paste Indexes.', clickedNode.indexInfo.type),
         );
     }
 
-    await storeAndNotify(
-        context,
-        createSelection(node, { kind: 'index', indexName: node.indexInfo.name }),
-        vscode.l10n.t(
-            'Index "{0}" from collection "{1}" is ready to paste.',
-            node.indexInfo.name,
-            node.collectionInfo.name,
-        ),
-    );
+    const selectedIndexNodes: IndexItem[] = [];
+    for (const item of selectedItems?.length ? selectedItems : [clickedNode]) {
+        if (item instanceof IndexItem && getIndexExclusionReason(item.indexInfo) === undefined) {
+            selectedIndexNodes.push(item);
+        }
+    }
+    const crossCollectionIndex = selectedIndexNodes.find((item) => !hasSameSource(clickedNode, item));
+    if (crossCollectionIndex) {
+        throw new Error(vscode.l10n.t('Select indexes from only one collection before copying.'));
+    }
+
+    const indexNames = [...new Set(selectedIndexNodes.map((item) => item.indexInfo.name))];
+    if (indexNames.length === 0) {
+        throw new Error(vscode.l10n.t('No copyable indexes are selected.'));
+    }
+
+    const scope: CopiedIndexScope =
+        indexNames.length === 1 ? { kind: 'index', indexName: indexNames[0] } : { kind: 'indexes', indexNames };
+    const message =
+        indexNames.length === 1
+            ? vscode.l10n.t(
+                  'Index "{0}" from collection "{1}" is ready to paste.',
+                  indexNames[0],
+                  clickedNode.collectionInfo.name,
+              )
+            : vscode.l10n.t(
+                  '{0} indexes from collection "{1}" are ready to paste.',
+                  indexNames.length.toString(),
+                  clickedNode.collectionInfo.name,
+              );
+
+    await storeAndNotify(context, createSelection(clickedNode, scope), message);
 }
 
 export async function copyIndexes(context: IActionContext, node: IndexesItem): Promise<void> {
@@ -59,6 +87,14 @@ interface IndexSourceNode {
     readonly cluster: { readonly clusterId: string; readonly name: string };
     readonly databaseInfo: { readonly name: string };
     readonly collectionInfo: { readonly name: string };
+}
+
+function hasSameSource(left: IndexSourceNode, right: IndexSourceNode): boolean {
+    return (
+        left.cluster.clusterId === right.cluster.clusterId &&
+        left.databaseInfo.name === right.databaseInfo.name &&
+        left.collectionInfo.name === right.collectionInfo.name
+    );
 }
 
 function createSelection(node: IndexSourceNode, scope: CopiedIndexScope): CopiedIndexSelection {

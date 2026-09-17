@@ -44,19 +44,34 @@ describe('CopyPasteBufferService', () => {
         expect(CopyPasteBufferService.getIndexes()?.source.collectionName).toBe('collection');
     });
 
-    it.each<CopiedIndexScope>([{ kind: 'index', indexName: 'email_1' }, { kind: 'allIndexes' }])(
-        'round-trips $kind scope and sets the context key',
-        async (scope) => {
-            await CopyPasteBufferService.setIndexes(createSelection(scope));
+    it.each<CopiedIndexScope>([
+        { kind: 'index', indexName: 'email_1' },
+        { kind: 'indexes', indexNames: ['email_1', 'region_1'] },
+        { kind: 'allIndexes' },
+    ])('round-trips $kind scope and sets the context key', async (scope) => {
+        await CopyPasteBufferService.setIndexes(createSelection(scope));
 
-            expect(CopyPasteBufferService.getIndexes()?.scope).toEqual(scope);
-            expect(vscode.commands.executeCommand).toHaveBeenCalledWith(
-                'setContext',
-                'documentdb.hasCopiedIndexes',
-                true,
-            );
-        },
-    );
+        expect(CopyPasteBufferService.getIndexes()?.scope).toEqual(scope);
+        expect(vscode.commands.executeCommand).toHaveBeenCalledWith('setContext', 'documentdb.hasCopiedIndexes', true);
+    });
+
+    it('clones selected index name arrays on set and get', async () => {
+        const indexNames = ['email_1', 'region_1'];
+        await CopyPasteBufferService.setIndexes(createSelection({ kind: 'indexes', indexNames }));
+
+        indexNames.push('changed_1');
+        const firstRead = CopyPasteBufferService.getIndexes();
+        if (firstRead?.scope.kind !== 'indexes') {
+            throw new Error('Expected a copied indexes scope.');
+        }
+        expect(firstRead.scope.indexNames).toEqual(['email_1', 'region_1']);
+
+        (firstRead.scope.indexNames as string[]).push('changed_2');
+        expect(CopyPasteBufferService.getIndexes()?.scope).toEqual({
+            kind: 'indexes',
+            indexNames: ['email_1', 'region_1'],
+        });
+    });
 
     it('replaces the previous index selection', async () => {
         await CopyPasteBufferService.setIndexes(createSelection({ kind: 'index', indexName: 'email_1' }));

@@ -5,7 +5,10 @@
 
 import * as vscode from 'vscode';
 
-export type CopiedIndexScope = { readonly kind: 'index'; readonly indexName: string } | { readonly kind: 'allIndexes' };
+export type CopiedIndexScope =
+    | { readonly kind: 'index'; readonly indexName: string }
+    | { readonly kind: 'indexes'; readonly indexNames: readonly string[] }
+    | { readonly kind: 'allIndexes' };
 
 export interface CopiedIndexSelection {
     readonly source: {
@@ -42,7 +45,10 @@ class CopyPasteBufferServiceImpl {
         return {
             source: { ...selection.source },
             sourceConnectionName: selection.sourceConnectionName,
-            scope: { ...selection.scope },
+            scope:
+                selection.scope.kind === 'indexes'
+                    ? { kind: 'indexes', indexNames: [...selection.scope.indexNames] }
+                    : { ...selection.scope },
         };
     }
 }

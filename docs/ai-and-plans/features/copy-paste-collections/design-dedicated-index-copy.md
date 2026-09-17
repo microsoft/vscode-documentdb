@@ -42,6 +42,7 @@ workflow. The collection flow needs internal adaptations, not a redesign.
 ### Included
 
 - Copy one secondary index by selecting an `IndexItem`.
+- Copy a selected subset of secondary indexes from one collection using VS Code tree multi-selection.
 - Copy all secondary indexes by selecting an `IndexesItem`.
 - Paste into an existing target collection through its `IndexesItem`.
 - Copy across collections, databases, and connected clusters supported by the same
@@ -66,8 +67,6 @@ workflow. The collection flow needs internal adaptations, not a redesign.
   catalog entries it cannot create; see "Index copyability".
 - Exclusion reporting or count changes in the Paste Collection confirmation. Scoped out
   deliberately; see "Known gaps".
-- VS Code tree multi-selection. In the first version, users copy one child or all children from the
-  parent.
 - Selecting an arbitrary subset in a picker.
 - Creating a target collection as part of Paste Indexes. The target is always an existing
   `IndexesItem`.
@@ -88,6 +87,23 @@ workflow. The collection flow needs internal adaptations, not a redesign.
 
 The `_id` node and non-copyable entries do not offer **Copy Index…**; they are gated out by the
 `state_copyable` context value described under "Command and menu integration".
+
+### Copy selected indexes
+
+1. The user selects two or more index rows from one collection and invokes **Copy Index…** on a
+   copyable selected index.
+2. The command receives the right-clicked item and VS Code's selected-items array, matching the
+   existing Move to Folder command pattern.
+3. It retains copyable `IndexItem` nodes from the same collection and records their names as a
+   snapshot subset. Expanded index-field rows, `_id`, and keyless non-copyable entries are ignored.
+4. If copyable indexes from more than one collection are selected, the command rejects the
+   selection rather than silently choosing one source descriptor.
+5. Paste validates every retained name and shows only the selected names and their applicable
+   unique or TTL warnings.
+
+The right-clicked node controls menu eligibility. Right-clicking an expanded field row does not
+offer **Copy Index…**; right-clicking a copyable index while field rows are also selected offers the
+command and ignores those rows.
 
 #### Notification button label
 
@@ -537,6 +553,7 @@ Proposed stored shape:
 ```typescript
 export type CopiedIndexScope =
     | { readonly kind: 'index'; readonly indexName: string }
+  | { readonly kind: 'indexes'; readonly indexNames: readonly string[] }
     | { readonly kind: 'allIndexes' };
 
 export interface CopiedIndexSelection {
@@ -551,9 +568,9 @@ export interface CopiedIndexSelection {
 ```
 
 `CopiedIndexScope` is a discriminated union here even though the copier contract has none. That is
-deliberate: the buffer is presentation-layer state and genuinely has two different intents to
-record — a specific index the user pointed at, versus a live reference to a parent. The wizard
-collapses that intent into the copier's `sourceIndexNames` argument at call time.
+deliberate: the buffer is presentation-layer state and genuinely has three different intents to
+record — one specific index, a snapshot of selected names, or a live reference to a parent. The
+wizard collapses that intent into the copier's `sourceIndexNames` argument at call time.
 
 Only `clusterId` is used for client lookup. `treeId` is intentionally absent because it changes when
 a connection moves between folders and because copied state can outlive a particular tree-node
@@ -621,8 +638,11 @@ Add commands:
 - `vscode-documentdb.command.copyIndexes`;
 - `vscode-documentdb.command.pasteIndexes`.
 
-Register them with `registerCommandWithTreeNodeUnwrapping` and
-`withTreeNodeCommandCorrelation`, matching the other index tree commands.
+Register Paste Indexes and the parent Copy Indexes command with
+`registerCommandWithTreeNodeUnwrapping` and `withTreeNodeCommandCorrelation`, matching the other
+index tree commands. Register Copy Index with plain `registerCommand` and `withCommandCorrelation`
+so VS Code's `(clickedItem, selectedItems[])` multi-selection arguments are preserved, matching
+Move to Folder.
 
 Follow the repository's one-folder-per-command convention: `src/commands/copyIndexes/` holds both
 copy commands, since they share the descriptor-building and notification code, and
@@ -642,12 +662,14 @@ hidden indexes, which carry `state_hidden` and are copyable.
 
 ### Menu entries
 
-- **Copy Index…** on `treeItem_index`, gated by `state_copyable`;
+- **Copy Index…** on `treeItem_index`, gated by `state_copyable` and available during
+  multi-selection;
 - **Copy Indexes…** on `treeItem_indexes`;
 - **Paste Indexes…** on `treeItem_indexes`, gated by `documentdb.hasCopiedIndexes`.
 
-Retain the existing view and experience gates and `!listMultiSelection`. Put copy and paste near the
-other constructive Indexes actions, before hide/unhide/delete operations.
+Retain the existing view and experience gates. Retain `!listMultiSelection` for parent copy and
+paste, but omit it from **Copy Index…**. Put copy and paste near the other constructive Indexes
+actions, before hide/unhide/delete operations.
 
 ### Command palette
 
@@ -676,7 +698,8 @@ because they come from different layers:
 
 - `catalogCount`, `copyableCount`, and `excluded` — computed by the wizard from `ClustersClient`;
 - `uniqueIndexNames` and `ttlIndexNames` — selection-scoped names returned by `getSourceIndexSummary`;
-- `sourceIndexNames` — `undefined` for a parent copy, a one-element array for a single-index copy.
+- `sourceIndexNames` — `undefined` for a parent copy, a one-element array for a single-index copy,
+  or the validated selected-name array for a multi-index copy.
 
 The catalog fields describe the entire classified catalog in both scopes. They are displayed only
 for a parent copy. A single-index confirmation uses the validated selected name and its warning
@@ -720,7 +743,8 @@ Always show:
 
 - source connection, database, and collection;
 - target connection, database, and collection;
-- whether one named index or the collection's copyable secondary indexes were selected.
+- whether one named index, a named subset, or the collection's copyable secondary indexes were
+  selected.
 
 For **Copy Index**, show only the validated selected index name and its applicable warnings. Do not
 show a whole-collection denominator, unrelated index names, or any catalog exclusion line. If the
@@ -821,7 +845,7 @@ Command wrappers provide duration, result, cancellation, and errors. Add only do
 
 Copy commands:
 
-- property `copyScope`: `index` or `allIndexes`;
+- property `copyScope`: `index`, `indexes`, or `allIndexes`;
 - property `copyCancelled`: whether **Cancel Copy** was chosen.
 
 Paste Indexes wizard:
@@ -925,6 +949,9 @@ Do not test rollback on a failing `setContext`; see "Context key handling".
 Test:
 
 - Copy Index stores an `index` scope with a stable descriptor;
+- Copy Index stores an `indexes` scope for multiple selected copyable indexes, ignoring expanded
+  field rows, `_id`, and keyless non-copyable entries;
+- multi-selected copyable indexes from different collections are rejected;
 - Copy Indexes stores `allIndexes` without expanding or retaining children;
 - `_id` and non-copyable index commands are unavailable or rejected defensively;
 - Paste without copied state is actionable;
@@ -933,6 +960,7 @@ Test:
 - stale single-index selections clear only the index buffer;
 - a successful paste leaves the buffer intact;
 - an `index` scope passes a one-element `sourceIndexNames`, and `allIndexes` passes `undefined`;
+- an `indexes` scope validates and passes every selected name;
 - a single-index confirmation shows only its selected name and applicable warnings, with no
   catalog-wide count, unrelated names, or exclusion line;
 - a parent-copy confirmation renders `{copyableCount} of {catalogCount} will be copied`;
@@ -1009,6 +1037,7 @@ the meantime. Decision entries are semantically immutable: append, never rewrite
 | 0022     | Leave the buffer intact after a successful paste                                               |
 | 0023     | Add a dedicated `CopyIndexesTask` rather than reusing `CopyPasteCollectionTask`                |
 | 0024     | Preserve collection-copy behavior and summary count while adapting the shared copier contract  |
+| 0025     | Reuse the cluster multi-selection invocation pattern while filtering index-specific child rows |
 
 0013 is the most important entry to write well. Record that an earlier draft put classification
 inside `CollectionIndexCopier`, that it was backed out, and the two concrete defects that forced the
@@ -1149,9 +1178,9 @@ This design update is a handoff to implementation, not approval to mark a PR rea
 - A non-copyable entry is explained in the tree and itemized with its reason in the parent-copy
   confirmation, whose `{copyableCount} of {catalogCount}` numbers describe the classified catalog,
   subject to the documented best-effort reads and live-reference timing.
-- Single-index confirmation shows only the selected index and applicable warnings, without
-  whole-catalog counts or unrelated exclusions. Dedicated unique/TTL warnings describe risks to
-  existing target data; collection-copy warnings stay unchanged.
+- Single-index and selected-subset confirmations show only selected indexes and applicable warnings,
+  without whole-catalog counts or unrelated exclusions. Dedicated unique/TTL warnings describe
+  risks to existing target data; collection-copy warnings stay unchanged.
 - An empty or failed search-index read retains known exclusions such as `_id` for parent copy.
 - No user-facing string promises to copy "all" indexes.
 - The `Support coming soon` placeholder is gone and entries without a `key` are not expandable.

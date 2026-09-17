@@ -70,28 +70,25 @@ export class LoadSourceIndexesStep extends AzureWizardPromptStep<PasteIndexesWiz
                 .filter((entry) => entry.reason !== undefined)
                 .map((entry) => ({ name: entry.index.name, type: entry.index.type, reason: entry.reason! }));
 
-            if (context.scope.kind === 'index') {
-                const selectedIndexName = context.scope.indexName;
-                const selected = classified.find((entry) => entry.index.name === selectedIndexName);
-                if (!selected) {
+            const selectedIndexNames = this.getSelectedIndexNames(context);
+            if (selectedIndexNames !== undefined) {
+                const selectedEntries = selectedIndexNames.map((name) =>
+                    classified.find((entry) => entry.index.name === name),
+                );
+                const missingNames = selectedIndexNames.filter((_name, index) => selectedEntries[index] === undefined);
+                if (missingNames.length > 0) {
                     await CopyPasteBufferService.clearIndexes();
-                    throw new Error(
-                        vscode.l10n.t(
-                            'The copied index "{0}" no longer exists. Copy the index again.',
-                            selectedIndexName,
-                        ),
-                    );
+                    throw new Error(this.getMissingIndexesMessage(missingNames));
                 }
-                if (selected.reason !== undefined) {
+
+                const unsupportedNames = selectedEntries
+                    .filter((entry) => entry?.reason !== undefined)
+                    .map((entry) => entry!.index.name);
+                if (unsupportedNames.length > 0) {
                     await CopyPasteBufferService.clearIndexes();
-                    throw new Error(
-                        vscode.l10n.t(
-                            'The copied index "{0}" is no longer supported by Copy/Paste Indexes. Copy a supported index instead.',
-                            selectedIndexName,
-                        ),
-                    );
+                    throw new Error(this.getUnsupportedIndexesMessage(unsupportedNames));
                 }
-                context.sourceIndexNames = [selectedIndexName];
+                context.sourceIndexNames = selectedIndexNames;
             } else {
                 context.sourceIndexNames = undefined;
             }
@@ -116,6 +113,38 @@ export class LoadSourceIndexesStep extends AzureWizardPromptStep<PasteIndexesWiz
         }
 
         throw new SourceIndexesLoadedError();
+    }
+
+    private getSelectedIndexNames(context: PasteIndexesWizardContext): readonly string[] | undefined {
+        switch (context.scope.kind) {
+            case 'index':
+                return [context.scope.indexName];
+            case 'indexes':
+                return context.scope.indexNames;
+            case 'allIndexes':
+                return undefined;
+        }
+    }
+
+    private getMissingIndexesMessage(indexNames: readonly string[]): string {
+        return indexNames.length === 1
+            ? vscode.l10n.t('The copied index "{0}" no longer exists. Copy the index again.', indexNames[0])
+            : vscode.l10n.t(
+                  'The copied indexes no longer exist: {0}. Copy the indexes again.',
+                  indexNames.map((name) => `"${name}"`).join(', '),
+              );
+    }
+
+    private getUnsupportedIndexesMessage(indexNames: readonly string[]): string {
+        return indexNames.length === 1
+            ? vscode.l10n.t(
+                  'The copied index "{0}" is no longer supported by Copy/Paste Indexes. Copy a supported index instead.',
+                  indexNames[0],
+              )
+            : vscode.l10n.t(
+                  'The copied indexes are no longer supported by Copy/Paste Indexes: {0}. Copy supported indexes instead.',
+                  indexNames.map((name) => `"${name}"`).join(', '),
+              );
     }
 
     private async waitForCatalog<T>(operation: Promise<T>, signal: AbortSignal): Promise<T> {

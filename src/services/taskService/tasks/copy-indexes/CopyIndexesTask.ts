@@ -70,7 +70,12 @@ export class CopyIndexesTask extends Task implements ResourceTrackingTask {
     }
 
     protected async doWork(signal: AbortSignal, context?: IActionContext): Promise<void> {
-        const copyScope = this.config.sourceIndexNames === undefined ? 'allIndexes' : 'index';
+        const copyScope =
+            this.config.sourceIndexNames === undefined
+                ? 'allIndexes'
+                : this.config.sourceIndexNames.length === 1
+                  ? 'index'
+                  : 'indexes';
         let total = 0;
         let completed = 0;
 

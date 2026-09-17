@@ -36,6 +36,7 @@ created: 2026-09-16
 | 0022 | Keep copied index state after a successful paste               | Accepted            | Matches reusable collection-copy behavior                            | 2026-09-17 | #930 |
 | 0023 | Use a dedicated task for index-only copy                       | Accepted            | Rejected reusing document-transfer orchestration                     | 2026-09-17 | #930 |
 | 0024 | Preserve collection-copy behavior while adapting contracts     | Accepted            | Rejected count and prompt-order redesigns                            | 2026-09-17 | #930 |
+| 0025 | Filter index tree multi-selection into one source subset       | Accepted            | Extended the first version after validating the cluster move pattern | 2026-09-17 | #930 |
 
 > Entries below are semantically immutable. Append a new decision rather than rewriting an old one,
 > and record a reversal as a new entry plus a status change in the table.
@@ -577,3 +578,45 @@ display. The factual word “all” could be removed without any of those behavi
 
 Collection copy omits `sourceIndexNames` and remains independent from the index buffer. Its known
 catalog-count mismatch with search indexes is documented but deferred.
+
+## 0025 — Filter index tree multi-selection into one source subset
+
+**Status:** Accepted · **Date:** 2026-09-17 · **Raised by:** implementation UX validation
+
+### Question
+
+Should Copy Index support VS Code tree multi-selection in the same way that Move to Folder supports
+multiple selected clusters and folders, including selections that contain expanded index-field
+rows?
+
+### Decision
+
+Yes. Register Copy Index as a plain correlated command so VS Code supplies the right-clicked item and
+the selected-items array. Retain only copyable `IndexItem` instances from the right-clicked index's
+collection. Ignore expanded field rows, `_id`, and keyless non-copyable entries. Reject copyable
+indexes from another collection.
+
+### Reasoning
+
+The existing Move to Folder command proves the invocation contract and avoids inventing a picker.
+Index selections need stricter domain filtering because expanded field rows are selectable tree
+elements but are not indexes, and the buffer has one stable source collection descriptor. Silently
+discarding valid indexes from another collection would make the resulting paste surprising, while
+rejecting the selection tells the user how to correct it.
+
+### Alternatives considered
+
+- **Keep one-or-all only.** Simpler, but leaves the context menu empty during a natural VS Code
+  workflow and forces repeated copy/paste operations.
+- **Remove only `!listMultiSelection`.** Rejected because the existing tree-node unwrapping handler
+  would receive only the clicked index and silently ignore the rest.
+- **Accept indexes across collections.** Rejected because one copied selection cannot truthfully
+  carry one source descriptor or resolve one catalog for several collections.
+- **Treat non-index rows as an error.** Rejected because selecting expanded field rows is easy and
+  they can be safely ignored without changing the requested index subset.
+
+### Consequence
+
+The buffer gains an immutable `indexes` scope containing selected names. Paste validates every name
+and scopes confirmation, warnings, progress, and telemetry to that subset. The parent Copy Indexes
+command retains live all-index semantics.

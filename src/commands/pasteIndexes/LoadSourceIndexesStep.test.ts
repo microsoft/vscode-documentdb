@@ -143,6 +143,39 @@ describe('LoadSourceIndexesStep', () => {
         });
     });
 
+    it('passes every validated selected name to the summary', async () => {
+        listIndexes.mockResolvedValue([
+            { name: '_id_', type: 'traditional', key: { _id: 1 } },
+            { name: 'email_1', type: 'traditional', key: { email: 1 }, unique: true },
+            { name: 'region_1', type: 'traditional', key: { region: 1 } },
+        ]);
+        const getSourceIndexSummary = jest.fn().mockResolvedValue({
+            count: 3,
+            uniqueIndexNames: ['email_1'],
+            ttlIndexNames: [],
+        });
+        const context = createContext({ kind: 'indexes', indexNames: ['email_1', 'region_1'] }, {
+            getSourceIndexSummary,
+        } as unknown as CollectionIndexCopier);
+
+        await new LoadSourceIndexesStep().prompt(context);
+
+        expect(context.sourceIndexNames).toEqual(['email_1', 'region_1']);
+        expect(getSourceIndexSummary).toHaveBeenCalledWith({
+            sourceIndexNames: ['email_1', 'region_1'],
+            signal: expect.any(AbortSignal),
+        });
+    });
+
+    it('clears a subset when any selected index is missing', async () => {
+        const context = createContext({ kind: 'indexes', indexNames: ['email_1', 'missing_1'] }, {
+            getSourceIndexSummary: jest.fn(),
+        } as unknown as CollectionIndexCopier);
+
+        await expect(new LoadSourceIndexesStep().prompt(context)).rejects.toThrow('"missing_1"');
+        expect(CopyPasteBufferService.clearIndexes).toHaveBeenCalledTimes(1);
+    });
+
     it('reports a deleted selected index as missing and clears stale state', async () => {
         const context = createContext({ kind: 'index', indexName: 'missing' }, {
             getSourceIndexSummary: jest.fn(),

@@ -74,9 +74,10 @@ The target collection is created by the document writer during task initializati
 runs after initialization and before document streaming. An index creation failure fails the task;
 indexes already created are not rolled back.
 
-For dedicated index-only paste, `CopyIndexesTask` passes one selected name or omits the restriction
-for the live parent scope. It maps evaluated indexes to determinate progress and uses the same
-comparison, naming, creation, visibility, and cancellation path shown above.
+For dedicated index-only paste, `CopyIndexesTask` passes one selected name, a selected-name subset,
+or omits the restriction for the live parent scope. It maps evaluated indexes to determinate
+progress and uses the same comparison, naming, creation, visibility, and cancellation path shown
+above.
 
 ## Counting behavior
 

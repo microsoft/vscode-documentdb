@@ -6,7 +6,7 @@
 import { AzureWizard, type IActionContext } from '@microsoft/vscode-azext-utils';
 import * as vscode from 'vscode';
 import { CredentialCache } from '../../documentdb/CredentialCache';
-import { CopyPasteBufferService } from '../../services/CopyPasteBufferService';
+import { CopyPasteBufferService, type CopiedIndexSelection } from '../../services/CopyPasteBufferService';
 import { createIndexCopier } from '../../services/taskService/data-api/indexes/createIndexCopier';
 import { type IndexesItem } from '../../tree/documentdb/IndexesItem';
 import { ConfirmPasteIndexesStep } from './ConfirmPasteIndexesStep';
@@ -52,7 +52,7 @@ export async function pasteIndexes(context: IActionContext, targetNode: IndexesI
         targetIndexesId: targetNode.id,
         scope: copied.scope,
         indexCopier: createIndexCopier(copied.source, target),
-        sourceIndexNames: copied.scope.kind === 'index' ? [copied.scope.indexName] : undefined,
+        sourceIndexNames: getSourceIndexNames(copied.scope),
         catalogCount: 0,
         copyableCount: 0,
         copyableIndexNames: [],
@@ -68,4 +68,15 @@ export async function pasteIndexes(context: IActionContext, targetNode: IndexesI
 
     await wizard.prompt();
     await wizard.execute();
+}
+
+function getSourceIndexNames(scope: CopiedIndexSelection['scope']): readonly string[] | undefined {
+    switch (scope.kind) {
+        case 'index':
+            return [scope.indexName];
+        case 'indexes':
+            return scope.indexNames;
+        case 'allIndexes':
+            return undefined;
+    }
 }

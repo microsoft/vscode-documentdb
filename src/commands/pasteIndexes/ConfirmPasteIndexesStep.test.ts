@@ -71,6 +71,21 @@ describe('ConfirmPasteIndexesStep', () => {
         expect(options.detail).not.toContain('generated');
     });
 
+    it('shows only selected names and warnings for a multi-index copy', async () => {
+        const context = createContext({ kind: 'indexes', indexNames: ['email_1', 'expires_1'] });
+        context.uniqueIndexNames = ['email_1'];
+        context.ttlIndexNames = ['expires_1'];
+
+        await new ConfirmPasteIndexesStep().prompt(context);
+
+        const options = showWarningMessage.mock.calls[0][1];
+        expect(options.detail).toContain('Indexes to copy: "email_1", "expires_1"');
+        expect(options.detail).toContain('existing target documents contain duplicate values');
+        expect(options.detail).toContain('may delete expired documents already in the target collection');
+        expect(options.detail).not.toContain('2 of 4');
+        expect(options.detail).not.toContain('Not copied:');
+    });
+
     it('uses dedicated TTL wording about existing target data', async () => {
         const context = createContext({ kind: 'index', indexName: 'expires_1' });
         context.ttlIndexNames = ['expires_1'];

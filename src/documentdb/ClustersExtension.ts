@@ -926,10 +926,7 @@ export class ClustersExtension implements vscode.Disposable {
 
                 registerCommandWithTreeNodeUnwrapping('vscode-documentdb.command.copyCollection', copyCollection);
                 registerCommandWithTreeNodeUnwrapping('vscode-documentdb.command.pasteCollection', pasteCollection);
-                registerCommandWithTreeNodeUnwrapping(
-                    'vscode-documentdb.command.copyIndex',
-                    withTreeNodeCommandCorrelation(copyIndex),
-                );
+                registerCommand('vscode-documentdb.command.copyIndex', withCommandCorrelation(copyIndex));
                 registerCommandWithTreeNodeUnwrapping(
                     'vscode-documentdb.command.copyIndexes',
                     withTreeNodeCommandCorrelation(copyIndexes),

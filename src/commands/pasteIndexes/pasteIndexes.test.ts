@@ -80,6 +80,21 @@ describe('pasteIndexes', () => {
         expect(CopyPasteBufferService.clearIndexes).not.toHaveBeenCalled();
     });
 
+    it('passes a copied subset into the wizard', async () => {
+        jest.mocked(CopyPasteBufferService.getIndexes).mockReturnValue({
+            source: { clusterId: 'source', databaseName: 'sourceDb', collectionName: 'sourceCollection' },
+            sourceConnectionName: 'Source',
+            scope: { kind: 'indexes', indexNames: ['email_1', 'region_1'] },
+        });
+
+        await pasteIndexes(createContext(), targetNode);
+
+        expect(AzureWizard).toHaveBeenCalledWith(
+            expect.objectContaining({ sourceIndexNames: ['email_1', 'region_1'] }),
+            expect.any(Object),
+        );
+    });
+
     it('clears a copied selection whose source connection is stale', async () => {
         jest.mocked(CopyPasteBufferService.getIndexes).mockReturnValue({
             source: { clusterId: 'source', databaseName: 'sourceDb', collectionName: 'sourceCollection' },
