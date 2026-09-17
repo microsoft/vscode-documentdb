@@ -3,6 +3,10 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+/** @jest-environment jsdom */
+
+import { describe, expect, it } from '@jest/globals';
+import { setImmediate } from 'timers';
 import * as vscode from 'vscode';
 import { type BaseRouterContext } from '../shared/BaseRouterContext';
 import { initWebviewTrpc } from '../shared/initWebviewTrpc';
@@ -51,6 +55,17 @@ function mockWebview(controller: { panel: { webview: unknown } }): {
     return controller.panel.webview as unknown as { posted: unknown[]; receive(message: unknown): void };
 }
 
+function getInitialDataJson(html: string): string {
+    const match =
+        /<script type="application\/json" id="vscode-ext-webview-initial-data" nonce="[^"]+">([\s\S]*?)<\/script>/.exec(
+            html,
+        );
+    if (!match?.[1]) {
+        throw new Error('Missing initial configuration data block');
+    }
+    return match[1];
+}
+
 describe('openWebview', () => {
     it('opens a panel and returns a WebviewController handle', () => {
         const controller = openWebview(makeContext(), makeOptions());
@@ -86,6 +101,26 @@ describe('openWebview', () => {
         // so the raw break-out sequence never appears in the document.
         expect(html).not.toContain('<script>alert(1)');
         expect(html).toContain('\\u003c/script');
+    });
+
+    it('preserves apostrophes in collection names as initialization data', (): void => {
+        const config = { collectionName: "customer's-records" };
+        const controller = openWebview(makeContext(), { ...makeOptions(), config });
+        const html = controller.panel.webview.html;
+
+        const initialData: unknown = JSON.parse(getInitialDataJson(html));
+        expect(initialData).toEqual(
+            expect.objectContaining({ initialData: encodeURIComponent(JSON.stringify(config)) }),
+        );
+        if (typeof initialData !== 'object' || initialData === null || !('initialData' in initialData)) {
+            throw new Error('Missing initial configuration data');
+        }
+        expect(typeof initialData.initialData).toBe('string');
+        expect(JSON.parse(decodeURIComponent(String(initialData.initialData)))).toEqual(config);
+
+        const moduleScript = /<script type="module"[^>]*>([\s\S]*?)<\/script>/.exec(html);
+        expect(moduleScript?.[1]).toBeDefined();
+        expect(moduleScript?.[1]).not.toContain(config.collectionName);
     });
 
     it('reveals the panel via revealToForeground', () => {
