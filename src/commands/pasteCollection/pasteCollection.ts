@@ -12,6 +12,7 @@ import { ConflictResolutionStrategy } from '../../services/taskService/tasks/cop
 import { CollectionItem } from '../../tree/documentdb/CollectionItem';
 import { DatabaseItem } from '../../tree/documentdb/DatabaseItem';
 import { ConfirmOperationStep } from './ConfirmOperationStep';
+import { CountSourceIndexesStep } from './CountSourceIndexesStep';
 import { ExecuteStep } from './ExecuteStep';
 import { LargeCollectionWarningStep } from './LargeCollectionWarningStep';
 import { type PasteCollectionWizardContext } from './PasteCollectionWizardContext';
@@ -176,6 +177,8 @@ export async function pasteCollection(
     }
 
     promptSteps.push(new PromptIndexConfigurationStep());
+
+    promptSteps.push(new CountSourceIndexesStep());
 
     promptSteps.push(new ConfirmOperationStep());
 

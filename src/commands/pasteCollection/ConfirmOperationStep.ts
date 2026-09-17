@@ -7,7 +7,6 @@ import { AzureWizardPromptStep } from '@microsoft/vscode-azext-utils';
 import * as l10n from '@vscode/l10n';
 import * as vscode from 'vscode';
 import { ConflictResolutionStrategy } from '../../services/taskService/tasks/copy-and-paste/copyPasteConfig';
-import { nonNullValue } from '../../utils/nonNull';
 import { type PasteCollectionWizardContext } from './PasteCollectionWizardContext';
 
 export class ConfirmOperationStep extends AzureWizardPromptStep<PasteCollectionWizardContext> {
@@ -22,14 +21,10 @@ export class ConfirmOperationStep extends AzureWizardPromptStep<PasteCollectionW
 
         const conflictStrategy = this.formatConflictStrategy(context.conflictResolutionStrategy!);
         const indexesSetting = context.copyIndexes ? l10n.t('Yes') : l10n.t('No');
-        const indexesSummary = context.copyIndexes
+        const indexesSummary = context.copyIndexes && context.sourceIndexCount !== undefined
             ? l10n.t('Copy Indexes: {yesNoValue} ({indexCount} available)', {
                   yesNoValue: indexesSetting,
-                  indexCount: nonNullValue(
-                      context.sourceIndexCount,
-                      'sourceIndexCount',
-                      'context.sourceIndexCount',
-                  ).toLocaleString(),
+                  indexCount: context.sourceIndexCount.toLocaleString(),
               })
             : l10n.t('Copy Indexes: {yesNoValue}', { yesNoValue: indexesSetting });
 

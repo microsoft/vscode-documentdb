@@ -41,9 +41,9 @@ export class DocumentDbCollectionIndexCopier implements CollectionIndexCopier {
         private readonly target: DocumentDbCollectionEndpoint,
     ) {}
 
-    public async countSourceIndexes(): Promise<number> {
-        const sourceClient = await ClustersClient.getClient(this.source.clusterId);
-        return (await this.readCopyableIndexes(sourceClient, this.source)).length;
+    public async countSourceIndexes(signal?: AbortSignal): Promise<number> {
+        const sourceClient = await ClustersClient.getClient(this.source.clusterId, signal);
+        return (await this.readCopyableIndexes(sourceClient, this.source, signal)).length;
     }
 
     public async copyIndexes(options: CopyIndexesOptions = {}): Promise<IndexCopyResult> {
@@ -133,9 +133,38 @@ export class DocumentDbCollectionIndexCopier implements CollectionIndexCopier {
     private async readCopyableIndexes(
         client: ClustersClient,
         endpoint: DocumentDbCollectionEndpoint,
+        signal?: AbortSignal,
     ): Promise<IndexDefinition[]> {
-        const indexes = await client.getCollection(endpoint.databaseName, endpoint.collectionName).indexes();
+        if (signal?.aborted) {
+            throw signal.reason ?? new Error('Operation aborted');
+        }
+
+        const indexes = await this.waitForOperation(
+            client.getCollection(endpoint.databaseName, endpoint.collectionName).indexes(),
+            signal,
+        );
         return indexes.filter((index) => !this.isIdIndex(index)).map((index) => this.toIndexDefinition(index));
+    }
+
+    private async waitForOperation<T>(operation: Promise<T>, signal?: AbortSignal): Promise<T> {
+        if (!signal) {
+            return operation;
+        }
+
+        return new Promise<T>((resolve, reject) => {
+            const onAbort = (): void => reject(signal.reason ?? new Error('Operation aborted'));
+            signal.addEventListener('abort', onAbort, { once: true });
+            void operation.then(
+                (result) => {
+                    signal.removeEventListener('abort', onAbort);
+                    resolve(result);
+                },
+                (error: unknown) => {
+                    signal.removeEventListener('abort', onAbort);
+                    reject(error);
+                },
+            );
+        });
     }
 
     private async createIndex(

@@ -67,18 +67,36 @@ describe('DocumentDbCollectionIndexCopier', () => {
     });
 
     it('uses only the source endpoint when counting indexes', async () => {
-        const copier = createCopier(
-            createClient([
+        const indexes = jest.fn().mockResolvedValue([
                 { key: { _id: 1 }, name: '_id_' },
                 { key: { email: 1 }, name: 'email_1', unique: true },
-            ]),
-        );
+        ]);
+        const sourceClient = {
+            getCollection: jest.fn().mockReturnValue({ indexes }),
+        } as unknown as ClustersClient;
+        const copier = createCopier(sourceClient);
+        const signal = new AbortController().signal;
 
-        const count = await copier.countSourceIndexes();
+        const count = await copier.countSourceIndexes(signal);
 
         expect(count).toBe(1);
-        expect(ClustersClient.getClient).toHaveBeenCalledWith('source');
+        expect(ClustersClient.getClient).toHaveBeenCalledWith('source', signal);
         expect(ClustersClient.getClient).not.toHaveBeenCalledWith('target');
+        expect(indexes).toHaveBeenCalledWith();
+    });
+
+    it('stops waiting for source indexes when counting is cancelled', async () => {
+        const controller = new AbortController();
+        const indexes = jest.fn().mockReturnValue(new Promise(() => undefined));
+        const sourceClient = {
+            getCollection: jest.fn().mockReturnValue({ indexes }),
+        } as unknown as ClustersClient;
+        const copier = createCopier(sourceClient);
+        const countPromise = copier.countSourceIndexes(controller.signal);
+
+        controller.abort();
+
+        await expect(countPromise).rejects.toMatchObject({ name: 'AbortError' });
     });
 
     it('skips equivalent definitions even when names differ', async () => {

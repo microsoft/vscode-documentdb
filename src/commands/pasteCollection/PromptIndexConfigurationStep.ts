@@ -6,7 +6,6 @@
 import { AzureWizardPromptStep } from '@microsoft/vscode-azext-utils';
 import * as l10n from '@vscode/l10n';
 import { type PasteCollectionWizardContext } from './PasteCollectionWizardContext';
-import { createIndexCopier } from './createIndexCopier';
 
 export class PromptIndexConfigurationStep extends AzureWizardPromptStep<PasteCollectionWizardContext> {
     public async prompt(context: PasteCollectionWizardContext): Promise<void> {
@@ -32,10 +31,8 @@ export class PromptIndexConfigurationStep extends AzureWizardPromptStep<PasteCol
         });
 
         context.copyIndexes = selectedItem.id === 'copy';
-        if (context.copyIndexes) {
-            const indexCopier = createIndexCopier(context);
-            context.sourceIndexCount = await indexCopier.countSourceIndexes();
-            context.telemetry.measurements.sourceIndexCount = context.sourceIndexCount;
+        if (!context.copyIndexes) {
+            context.sourceIndexCount = undefined;
         }
     }
 
