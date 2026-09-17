@@ -9,22 +9,25 @@ import * as l10n from '@vscode/l10n';
 import * as vscode from 'vscode';
 import { AuthMethodId } from '../../documentdb/auth/AuthMethod';
 import { type AzureSubscriptionProviderWithFilters } from '../../plugins/api-shared/azure/AzureSubscriptionProviderWithFilters';
+import { traceTenantLookup, type TenantLookupResult } from '../../plugins/api-shared/azure/traceTenantLookup';
 import { nonNullValue } from '../../utils/nonNull';
-import { valueOnTimeout } from '../../utils/timeout';
 import { type NewConnectionWizardContext } from './NewConnectionWizardContext';
 
 const TENANT_LOOKUP_TIMEOUT_MS = 5_000;
+const TENANT_RETRY_TIMEOUT_MS = 30_000;
 
 interface TenantQuickPickItem extends vscode.QuickPickItem {
     tenant?: AzureTenant;
     isCustomOption?: boolean;
     isSignInOption?: boolean;
+    isRetryOption?: boolean;
 }
 
 export class PromptTenantStep extends AzureWizardPromptStep<NewConnectionWizardContext> {
     public async prompt(context: NewConnectionWizardContext): Promise<void> {
         const subscriptionProvider = new VSCodeAzureSubscriptionProvider();
         let accountManagementUsed = false;
+        let lookupTimeoutMs = TENANT_LOOKUP_TIMEOUT_MS;
 
         if (!(await this.isSignedIn(subscriptionProvider))) {
             await this.handleSignInToOtherAccounts(context, subscriptionProvider);
@@ -34,7 +37,7 @@ export class PromptTenantStep extends AzureWizardPromptStep<NewConnectionWizardC
         // Create async function to provide better loading UX and debugging experience
         const tenantItemsPromise = async (): Promise<TenantQuickPickItem[]> => {
             // Load available tenants from Azure subscription provider
-            const tenants = await this.getAvailableTenants(subscriptionProvider);
+            const { tenants, status } = await this.getAvailableTenants(subscriptionProvider, lookupTimeoutMs);
             context.telemetry.measurements.availableTenantsCount = tenants.length;
 
             // Create quick pick items
@@ -56,6 +59,22 @@ export class PromptTenantStep extends AzureWizardPromptStep<NewConnectionWizardC
                 },
                 { label: '', kind: vscode.QuickPickItemKind.Separator },
             ];
+
+            if (tenants.length === 0) {
+                const detail =
+                    status === 'timeout'
+                        ? l10n.t('Loading tenants timed out after {0} seconds.', lookupTimeoutMs / 1000)
+                        : status === 'error'
+                          ? l10n.t('Unable to load tenants. See the DocumentDB for VS Code output for details.')
+                          : l10n.t('No tenants were returned for the available Azure accounts.');
+                tenantItems.unshift({
+                    label: l10n.t('Retry loading tenants'),
+                    detail,
+                    iconPath: new vscode.ThemeIcon('refresh'),
+                    isRetryOption: true,
+                    alwaysShow: true,
+                });
+            }
 
             // Add available tenants to the list, grouped by account
             tenants.forEach((tenant) => {
@@ -88,7 +107,10 @@ export class PromptTenantStep extends AzureWizardPromptStep<NewConnectionWizardC
                 await this.handleSignInToOtherAccounts(context, subscriptionProvider);
                 accountManagementUsed = true;
             }
-        } while (selectedItem.isSignInOption);
+            if (selectedItem.isRetryOption) {
+                lookupTimeoutMs = TENANT_RETRY_TIMEOUT_MS;
+            }
+        } while (selectedItem.isSignInOption || selectedItem.isRetryOption);
 
         if (selectedItem.isCustomOption) {
             // Show input box for custom tenant ID
@@ -133,26 +155,44 @@ export class PromptTenantStep extends AzureWizardPromptStep<NewConnectionWizardC
 
     private async isSignedIn(subscriptionProvider: VSCodeAzureSubscriptionProvider): Promise<boolean> {
         try {
-            return await valueOnTimeout(TENANT_LOOKUP_TIMEOUT_MS, true, () => subscriptionProvider.isSignedIn());
+            return await traceTenantLookup('newConnection.isSignedIn', () => subscriptionProvider.isSignedIn(), {
+                timeoutMs: TENANT_LOOKUP_TIMEOUT_MS,
+                fallbackValue: true,
+            });
         } catch {
             return true;
         }
     }
 
-    private async getAvailableTenants(subscriptionProvider: VSCodeAzureSubscriptionProvider): Promise<AzureTenant[]> {
+    private async getAvailableTenants(
+        subscriptionProvider: VSCodeAzureSubscriptionProvider,
+        timeoutMs: number,
+    ): Promise<TenantLookupResult> {
+        let timedOut = false;
         try {
-            const tenants = await valueOnTimeout(TENANT_LOOKUP_TIMEOUT_MS, [], () => subscriptionProvider.getTenants());
+            const tenants = await traceTenantLookup(
+                'newConnection.getTenants',
+                () => subscriptionProvider.getTenants(),
+                {
+                    timeoutMs,
+                    fallbackValue: [],
+                    onTimeout: () => {
+                        timedOut = true;
+                    },
+                },
+            );
 
-            return tenants.sort((a: AzureTenant, b: AzureTenant) => {
+            tenants.sort((a: AzureTenant, b: AzureTenant) => {
                 // Sort by display name if available, otherwise by tenant ID
                 const aName = a.displayName || a.tenantId || '';
                 const bName = b.displayName || b.tenantId || '';
                 return aName.localeCompare(bName, undefined, { numeric: true });
             });
+            return { tenants, status: timedOut ? 'timeout' : 'success' };
         } catch {
             // If we can't load tenants, just return empty array
             // User can still use custom tenant ID option
-            return [];
+            return { tenants: [], status: 'error' };
         }
     }
 

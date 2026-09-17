@@ -571,8 +571,11 @@ the old flow enumerated before sign-in and exited the connection wizard after ac
 Keeping account-management error handling at its existing entry point preserves one error boundary.
 
 One enumerable tenant remains a suggestion, not an automatic answer, because manual tenant entry
-must stay reachable for guest access. Enumeration and sign-in-state checks are bounded to five
-seconds; timeout or failure falls back to the picker and manual entry.
+must stay reachable for guest access. Initial enumeration and sign-in-state checks are bounded to
+five seconds. An empty tenant picker distinguishes timeout, failure, and a successful empty result,
+and offers an explicit retry with a 30-second deadline alongside manual entry and account management.
+Retry is user-triggered, not automatic; late results do not replace the active picker. Tenant lookup
+diagnostics record timing and safe result/error classifications in the DocumentDB output channel.
 
 ## D12. The family presentation applies to all authentication entry points
 

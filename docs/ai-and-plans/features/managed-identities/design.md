@@ -501,6 +501,9 @@ Other options
   without relying on parenthetical fragments.
 - The tenant step runs after this picker. It sees the final stored method and therefore never asks a
   managed identity to choose a tenant.
+- Empty tenant lists distinguish timeout, provider failure, and successful empty enumeration. An
+  explicit retry increases the initial five-second lookup deadline to 30 seconds, without removing
+  manual tenant entry or account management. Late responses are logged but do not replace the picker.
 
 The top-level family rows use VS Code theme icons: `key` for username/password, `azure` for
 Microsoft Entra ID, and `unlock` for no authentication.

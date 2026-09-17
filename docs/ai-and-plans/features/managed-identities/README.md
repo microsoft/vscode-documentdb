@@ -15,6 +15,10 @@ an Azure VM. System-assigned and user-assigned identities are supported. The UI 
 identity and interactive account sign-in as identity choices inside the Microsoft Entra ID family,
 while their stored authentication methods and token handlers remain separate.
 
+Interactive account tenant selection reports empty, failed, and timed-out lookups separately.
+The initial lookup allows five seconds; an explicit retry allows 30 seconds. Manual tenant entry
+and account management remain available. See D11 in [Decisions](decisions.md).
+
 ## Status
 
 Implemented in [PR #886](https://github.com/microsoft/vscode-documentdb/pull/886), targeting `main`.
