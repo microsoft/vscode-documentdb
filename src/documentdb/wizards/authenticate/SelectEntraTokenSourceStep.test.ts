@@ -44,6 +44,7 @@ function makeStep(): SelectEntraTokenSourceStep<AuthenticateWizardContext> {
 function makeContext(overrides: Partial<AuthenticateWizardContext> = {}): AuthenticateWizardContext {
     return {
         selectedAuthMethod: AuthMethodId.ManagedIdentity,
+        availableAuthMethods: [AuthMethodId.MicrosoftEntraID, AuthMethodId.ManagedIdentity],
         valuesToMask: [],
         telemetry: { properties: {}, measurements: {} },
         errorHandling: {},
@@ -136,6 +137,15 @@ describe('SelectEntraTokenSourceStep.buildItems', () => {
 describe('SelectEntraTokenSourceStep.shouldPrompt', () => {
     it('does not prompt when another auth method is selected', () => {
         const context = makeContext({ selectedAuthMethod: AuthMethodId.NativeAuth });
+
+        expect(makeStep().shouldPrompt(context)).toBe(false);
+    });
+
+    it('does not prompt when managed identity is not available for the cluster', () => {
+        const context = makeContext({
+            selectedAuthMethod: AuthMethodId.MicrosoftEntraID,
+            availableAuthMethods: [AuthMethodId.MicrosoftEntraID],
+        });
 
         expect(makeStep().shouldPrompt(context)).toBe(false);
     });

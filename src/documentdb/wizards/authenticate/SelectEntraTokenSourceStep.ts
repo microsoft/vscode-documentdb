@@ -174,6 +174,12 @@ export class SelectEntraTokenSourceStep<T extends ManagedIdentitySelectionContex
             return false;
         }
 
+        const availableMethods =
+            context.availableAuthenticationMethods ?? authMethodsFromString(context.availableAuthMethods);
+        if (!availableMethods.includes(AuthMethodId.ManagedIdentity)) {
+            return false;
+        }
+
         const facts = context.connectionStringAuthFacts;
         if (!facts || !facts.declaresAzureMachineWorkflow) {
             return true;
