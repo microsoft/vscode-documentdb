@@ -22,14 +22,14 @@ than duplicated as separate feedback.
 
 ## Feedback summary
 
-| ID  | Essential feedback                                                                                                                                                                                                                                                                                                  | Decision                                                                                | Confidence | Status                                            |
-| --- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------- | ---------- | ------------------------------------------------- |
-| F1  | Cancellation must cover index client acquisition and catalog reads, and an abort must remain cancellation rather than an index-copy failure. First inspect the repository's existing connection-cancellation approach. After the fix is pushed, open an issue to revisit cancellable connection attempts generally. | Implement and add focused cancellation tests.                                           | 90%        | Completed in `e02d58b3`; follow-up issue pending. |
-| F2  | Source index-summary failures must stop the wizard early and explain why; continuing with an unknown count is incorrect.                                                                                                                                                                                            | Restore fail-fast behavior and align user-facing documentation.                         | 95%        | Completed in `60c56ac0`.                          |
-| F3  | The feature design document names an older method. Feature intent documents are allowed to lag implementation and should not shadow-track APIs under CONTRIBUTING section 5.4.                                                                                                                                      | No code or document change; record and explain the decision in the thread.              | 95%        | Completed without code changes.                   |
-| F4  | The implementation README's current contract snippet is stale.                                                                                                                                                                                                                                                      | Update the implementation-oriented README because it explicitly describes current code. | 99%        | Completed in `60c56ac0`.                          |
-| F5  | Authentication and credential-update telemetry is unrelated to index copying and was included accidentally.                                                                                                                                                                                                         | Remove all remaining auth telemetry changes and their dedicated tests.                  | 99%        | Completed in `495c22d2` and `ef89f674`.           |
-| F6  | The reviewer requested changes and specifically asked that all unrelated telemetry be reverted because auth telemetry belongs in another PR.                                                                                                                                                                        | Satisfied by F5, then request re-review after all discussions are addressed.            | 99%        | Telemetry removal completed; re-review pending.   |
+| ID  | Essential feedback                                                                                                                                                                                                                                                                                                  | Decision                                                                                | Confidence | Status                                                |
+| --- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------- | ---------- | ----------------------------------------------------- |
+| F1  | Cancellation must cover index client acquisition and catalog reads, and an abort must remain cancellation rather than an index-copy failure. First inspect the repository's existing connection-cancellation approach. After the fix is pushed, open an issue to revisit cancellable connection attempts generally. | Implement and add focused cancellation tests.                                           | 90%        | Completed in `e02d58b3`; follow-up issue #928 opened. |
+| F2  | Source index-summary failures must stop the wizard early and explain why; continuing with an unknown count is incorrect.                                                                                                                                                                                            | Restore fail-fast behavior and align user-facing documentation.                         | 95%        | Completed in `60c56ac0`.                              |
+| F3  | The feature design document names an older method. Feature intent documents are allowed to lag implementation and should not shadow-track APIs under CONTRIBUTING section 5.4.                                                                                                                                      | No code or document change; record and explain the decision in the thread.              | 95%        | Completed without code changes.                       |
+| F4  | The implementation README's current contract snippet is stale.                                                                                                                                                                                                                                                      | Update the implementation-oriented README because it explicitly describes current code. | 99%        | Completed in `60c56ac0`.                              |
+| F5  | Authentication and credential-update telemetry is unrelated to index copying and was included accidentally.                                                                                                                                                                                                         | Remove all remaining auth telemetry changes and their dedicated tests.                  | 99%        | Completed in `495c22d2` and `ef89f674`.               |
+| F6  | The reviewer requested changes and specifically asked that all unrelated telemetry be reverted because auth telemetry belongs in another PR.                                                                                                                                                                        | Satisfied by F5, then request re-review after all discussions are addressed.            | 99%        | Telemetry removal completed; re-review pending.       |
 
 ## Discussion references
 
@@ -96,6 +96,12 @@ Focused verification:
   - passed: 1 suite, 7 tests
 - The auth-related working-tree diff against `origin/main` is empty.
 
+GitHub responses: [scope discussion](https://github.com/microsoft/vscode-documentdb/pull/848#discussion_r4036078220),
+[new-connection prompt](https://github.com/microsoft/vscode-documentdb/pull/848#discussion_r4035935706),
+[new-connection execution](https://github.com/microsoft/vscode-documentdb/pull/848#discussion_r4035935644),
+[update-credentials auth method](https://github.com/microsoft/vscode-documentdb/pull/848#discussion_r4036078553),
+and [update-credentials reconnect](https://github.com/microsoft/vscode-documentdb/pull/848#discussion_r4036078895).
+
 ### Work item 2 - fail fast when index summary loading fails
 
 Completed in [`60c56ac0`](https://github.com/microsoft/vscode-documentdb/commit/60c56ac04ef52760d4a5656717202b86abbe0d46).
@@ -113,6 +119,9 @@ Focused verification:
 - `npm run build` - passed
 - Prettier check for the four touched files - passed
 
+GitHub responses: [fail-fast behavior](https://github.com/microsoft/vscode-documentdb/pull/848#discussion_r4036104694)
+and [implementation README](https://github.com/microsoft/vscode-documentdb/pull/848#discussion_r4036106949).
+
 ### Work item 3 - preserve the intent-level design document
 
 The no-change decision was first recorded in
@@ -123,6 +132,8 @@ exact behavior and are updated when a decision, constraint, or intended design c
 known statement becomes materially misleading. The copier boundary and flow are unchanged here;
 renaming the method in this document would shadow-track an implementation detail. The
 implementation-oriented indexes README was corrected in work item 2 instead.
+
+GitHub response: [design documentation discussion](https://github.com/microsoft/vscode-documentdb/pull/848#discussion_r4036118049).
 
 ### Work item 4 - cancel index client and catalog loading
 
@@ -139,3 +150,7 @@ Focused verification:
 - Index copier and copy/paste task suites - passed: 2 suites, 20 tests
 - `src/documentdb/ClustersClient.test.ts` - passed: 1 suite, 1 test
 - `npm run build` - passed
+
+Follow-up: [#928 - Audit and harden cancellable connection attempts](https://github.com/microsoft/vscode-documentdb/issues/928).
+
+GitHub response: [cancellation discussion](https://github.com/microsoft/vscode-documentdb/pull/848#discussion_r4036152687).
