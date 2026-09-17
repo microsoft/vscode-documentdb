@@ -87,7 +87,10 @@ export async function getManagedIdentityAccessToken(
             identityHeaderConfigured: !!process.env.IDENTITY_HEADER,
             msiSecretConfigured: !!process.env.MSI_SECRET,
             proxyConfigured: !!(
-                process.env.HTTPS_PROXY || process.env.HTTP_PROXY || process.env.https_proxy || process.env.http_proxy
+                process.env.HTTPS_PROXY ||
+                process.env.HTTP_PROXY ||
+                process.env.https_proxy ||
+                process.env.http_proxy
             ),
             noProxyConfigured: !!(process.env.NO_PROXY || process.env.no_proxy),
         },

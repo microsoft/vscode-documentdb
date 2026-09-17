@@ -10,17 +10,27 @@ import { PromptConnectionStringStep } from './PromptConnectionStringStep';
 
 const mockInfo = jest.fn();
 jest.mock('../../extensionVariables', () => ({
-    ext: { outputChannel: { info: (...args: unknown[]): void => { mockInfo(...args); } } },
+    ext: {
+        outputChannel: {
+            info: (...args: unknown[]): void => {
+                mockInfo(...args);
+            },
+        },
+    },
 }));
 
-beforeEach(() => { jest.clearAllMocks(); });
-afterEach(() => {
+beforeEach(() => {
+    jest.clearAllMocks();
+});
+function expectPrivateInferenceOutput(): void {
     const output = JSON.stringify(mockInfo.mock.calls);
     expect(output).toContain('connectionStringAuthInference');
     for (const secret of ['11111111-2222-3333-4444-555555555555', 'private.documentdb.internal', 'display-name']) {
         expect(output).not.toContain(secret);
     }
-});
+}
+
+afterEach(expectPrivateInferenceOutput);
 
 function makeContext(connectionString: string): NewConnectionWizardContext {
     return {

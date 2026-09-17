@@ -56,16 +56,24 @@ export function verifyManagedIdentityTenant(
     correlationId: string,
 ): void {
     if (!clusterTenantId) {
-        traceAuthFlow('managedIdentity.tenantCheck', { outcome: 'skipped', reason: 'clusterTenantUnknown' }, correlationId);
+        traceAuthFlow(
+            'managedIdentity.tenantCheck',
+            { outcome: 'skipped', reason: 'clusterTenantUnknown' },
+            correlationId,
+        );
         return;
     }
 
     const identityTenantId = readTenantIdFromAccessToken(accessToken);
     if (!identityTenantId || identityTenantId.toLowerCase() === clusterTenantId.toLowerCase()) {
-        traceAuthFlow('managedIdentity.tenantCheck', {
-            outcome: identityTenantId ? 'matched' : 'skipped',
-            reason: identityTenantId ? 'sameTenant' : 'tokenTenantUnavailable',
-        }, correlationId);
+        traceAuthFlow(
+            'managedIdentity.tenantCheck',
+            {
+                outcome: identityTenantId ? 'matched' : 'skipped',
+                reason: identityTenantId ? 'sameTenant' : 'tokenTenantUnavailable',
+            },
+            correlationId,
+        );
         return;
     }
 

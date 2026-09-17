@@ -10,8 +10,8 @@ import * as vscode from 'vscode';
 import { AuthMethodId } from '../../documentdb/auth/AuthMethod';
 import { type AzureSubscriptionProviderWithFilters } from '../../plugins/api-shared/azure/AzureSubscriptionProviderWithFilters';
 import { traceTenantLookup, type TenantLookupResult } from '../../plugins/api-shared/azure/traceTenantLookup';
-import { nonNullValue } from '../../utils/nonNull';
 import { traceAuthFlow } from '../../utils/authTrace';
+import { nonNullValue } from '../../utils/nonNull';
 import { type NewConnectionWizardContext } from './NewConnectionWizardContext';
 
 const TENANT_LOOKUP_TIMEOUT_MS = 5_000;
@@ -91,7 +91,9 @@ export class PromptTenantStep extends AzureWizardPromptStep<NewConnectionWizardC
             });
 
             traceAuthFlow('newConnection.tenantPicker.ready', {
-                status, tenantCount: tenants.length, timeoutMs: lookupTimeoutMs,
+                status,
+                tenantCount: tenants.length,
+                timeoutMs: lookupTimeoutMs,
                 options: tenants.length ? 'manual,manageAccounts,tenant' : 'retry,manual,manageAccounts',
             });
             return tenantItems;
@@ -109,8 +111,13 @@ export class PromptTenantStep extends AzureWizardPromptStep<NewConnectionWizardC
             });
 
             traceAuthFlow('newConnection.tenantPicker.selection', {
-                choice: selectedItem.isRetryOption ? 'retry' : selectedItem.isSignInOption ? 'manageAccounts'
-                    : selectedItem.isCustomOption ? 'manual' : 'tenant',
+                choice: selectedItem.isRetryOption
+                    ? 'retry'
+                    : selectedItem.isSignInOption
+                      ? 'manageAccounts'
+                      : selectedItem.isCustomOption
+                        ? 'manual'
+                        : 'tenant',
             });
             if (selectedItem.isSignInOption) {
                 await this.handleSignInToOtherAccounts(context, subscriptionProvider);

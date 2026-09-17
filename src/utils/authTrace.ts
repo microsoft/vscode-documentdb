@@ -1,19 +1,50 @@
+/*---------------------------------------------------------------------------------------------
+ *  Copyright (c) Microsoft Corporation. All rights reserved.
+ *  Licensed under the MIT License. See License.txt in the project root for license information.
+ *--------------------------------------------------------------------------------------------*/
+
 import * as l10n from '@vscode/l10n';
 import { randomUUID } from 'crypto';
 import { ext } from '../extensionVariables';
 
 const knownErrorNames = new Set([
-    'Error', 'TypeError', 'RangeError', 'ReferenceError', 'SyntaxError', 'RestError', 'NotSignedInError',
-    'AuthenticationError', 'AuthenticationRequiredError', 'CredentialUnavailableError',
-    'AggregateAuthenticationError', 'AbortError', 'UserCancelledError', 'GoBackError',
+    'Error',
+    'TypeError',
+    'RangeError',
+    'ReferenceError',
+    'SyntaxError',
+    'RestError',
+    'NotSignedInError',
+    'AuthenticationError',
+    'AuthenticationRequiredError',
+    'CredentialUnavailableError',
+    'AggregateAuthenticationError',
+    'AbortError',
+    'UserCancelledError',
+    'GoBackError',
 ]);
 
 const knownErrorCodes = new Set([
-    'ENOTFOUND', 'EAI_AGAIN', 'ECONNRESET', 'ECONNREFUSED', 'ETIMEDOUT', 'ENETUNREACH', 'EHOSTUNREACH',
-    'CERT_HAS_EXPIRED', 'UNABLE_TO_VERIFY_LEAF_SIGNATURE', 'SELF_SIGNED_CERT_IN_CHAIN',
-    'REQUEST_SEND_ERROR', 'PARSE_ERROR', 'InvalidAuthenticationToken', 'ExpiredAuthenticationToken',
-    'AuthenticationFailed', 'AuthorizationFailed', 'InteractionRequiredAuthError',
-    'interaction_required', 'consent_required', 'invalid_grant',
+    'ENOTFOUND',
+    'EAI_AGAIN',
+    'ECONNRESET',
+    'ECONNREFUSED',
+    'ETIMEDOUT',
+    'ENETUNREACH',
+    'EHOSTUNREACH',
+    'CERT_HAS_EXPIRED',
+    'UNABLE_TO_VERIFY_LEAF_SIGNATURE',
+    'SELF_SIGNED_CERT_IN_CHAIN',
+    'REQUEST_SEND_ERROR',
+    'PARSE_ERROR',
+    'InvalidAuthenticationToken',
+    'ExpiredAuthenticationToken',
+    'AuthenticationFailed',
+    'AuthorizationFailed',
+    'InteractionRequiredAuthError',
+    'interaction_required',
+    'consent_required',
+    'invalid_grant',
 ]);
 
 export function describeAuthError(error: unknown): string {

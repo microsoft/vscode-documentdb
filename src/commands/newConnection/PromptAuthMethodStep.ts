@@ -24,12 +24,13 @@ export class PromptAuthMethodStep extends AzureWizardPromptStep<NewConnectionWiz
         });
         const selectedItem = await traceAuthOperation(
             'newConnection.authMethodPicker',
-            () => context.ui.showQuickPick(quickPickItems, {
-                placeHolder: vscode.l10n.t('Select an authentication method'),
-                stepName: 'selectAuthMethod',
-                ignoreFocusOut: true,
-                suppressPersistence: true,
-            }),
+            () =>
+                context.ui.showQuickPick(quickPickItems, {
+                    placeHolder: vscode.l10n.t('Select an authentication method'),
+                    stepName: 'selectAuthMethod',
+                    ignoreFocusOut: true,
+                    suppressPersistence: true,
+                }),
             { options: quickPickItems.map((item) => item.authMethod).join(','), reason: 'noMethodSelected' },
         );
         if (!selectedItem) {

@@ -39,7 +39,8 @@ export class ChooseAuthMethodStep extends AzureWizardPromptStep<AuthenticateWiza
             context.telemetry.properties.authMethod = availableFamilies[0];
             context.telemetry.properties.authMethodSelectionSource = 'autoSelected';
             traceAuthFlow('authenticate.authMethodPicker.skipped', {
-                reason: 'singleSupportedFamily', method: availableFamilies[0],
+                reason: 'singleSupportedFamily',
+                method: availableFamilies[0],
             });
             context.selectedAuthMethod = availableFamilies[0];
             context.isAuthMethodUpdated = true;
@@ -67,14 +68,15 @@ export class ChooseAuthMethodStep extends AzureWizardPromptStep<AuthenticateWiza
 
         const selectedItem = await traceAuthOperation(
             'authenticate.authMethodPicker',
-            () => context.ui.showQuickPick(quickPickItems, {
-                placeHolder: l10n.t('Select an authentication method for "{resourceName}"', {
-                    resourceName: context.resourceName,
+            () =>
+                context.ui.showQuickPick(quickPickItems, {
+                    placeHolder: l10n.t('Select an authentication method for "{resourceName}"', {
+                        resourceName: context.resourceName,
+                    }),
+                    title: l10n.t('Authenticate to connect with your DocumentDB cluster'),
+                    suppressPersistence: true,
+                    ignoreFocusOut: true,
                 }),
-                title: l10n.t('Authenticate to connect with your DocumentDB cluster'),
-                suppressPersistence: true,
-                ignoreFocusOut: true,
-            }),
             {
                 options: quickPickItems.map((item) => item.authMethod ?? 'unsupported').join(','),
                 unknownMethodCount: unknownMethodIds.length,

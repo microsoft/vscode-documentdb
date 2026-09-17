@@ -42,12 +42,13 @@ export class PromptAuthMethodStep extends AzureWizardPromptStep<UpdateCredential
         });
         const selectedItem = await traceAuthOperation(
             'updateCredentials.authMethodPicker',
-            () => context.ui.showQuickPick(quickPickItems, {
-                placeHolder: l10n.t('Select an authentication method'),
-                stepName: 'selectAuthMethod',
-                suppressPersistence: true,
-                ignoreFocusOut: true,
-            }),
+            () =>
+                context.ui.showQuickPick(quickPickItems, {
+                    placeHolder: l10n.t('Select an authentication method'),
+                    stepName: 'selectAuthMethod',
+                    suppressPersistence: true,
+                    ignoreFocusOut: true,
+                }),
             { options: quickPickItems.map((item) => item.authMethod).join(','), reason: 'credentialsBeingUpdated' },
         );
         if (!selectedItem) {

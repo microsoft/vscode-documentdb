@@ -17,17 +17,23 @@ jest.mock('@vscode/l10n', () => ({
 
 const mockOutputChannel = { info: jest.fn(), error: jest.fn() };
 jest.mock('../../../extensionVariables', () => ({
-    ext: { get outputChannel(): typeof mockOutputChannel { return mockOutputChannel; } },
+    ext: {
+        get outputChannel(): typeof mockOutputChannel {
+            return mockOutputChannel;
+        },
+    },
 }));
-beforeEach(() => { jest.clearAllMocks(); });
+beforeEach(() => {
+    jest.clearAllMocks();
+});
 
 jest.mock('@microsoft/vscode-azext-utils', () => ({
     AzureWizardPromptStep: class AzureWizardPromptStep {},
 }));
 
-import { AuthMethodId } from '../../auth/AuthMethod';
 import { PromptAuthMethodStep as NewConnectionAuthStep } from '../../../commands/newConnection/PromptAuthMethodStep';
 import { PromptAuthMethodStep as UpdateCredentialsAuthStep } from '../../../commands/updateCredentials/PromptAuthMethodStep';
+import { AuthMethodId } from '../../auth/AuthMethod';
 import { type AuthenticateWizardContext } from './AuthenticateWizardContext';
 import { ChooseAuthMethodStep } from './ChooseAuthMethodStep';
 
@@ -45,43 +51,54 @@ describe('ChooseAuthMethodStep authentication families', () => {
         expect(context.selectedAuthMethod).toBe(AuthMethodId.MicrosoftEntraID);
         expect(context.authenticationMethodPrompted).toBe(false);
         expect(context.telemetry.properties).toMatchObject({
-            authMethod: AuthMethodId.MicrosoftEntraID, authMethodSelectionSource: 'autoSelected',
+            authMethod: AuthMethodId.MicrosoftEntraID,
+            authMethodSelectionSource: 'autoSelected',
         });
         expect(showQuickPick).not.toHaveBeenCalled();
         expect(JSON.stringify(mockOutputChannel.info.mock.calls)).toContain('singleSupportedFamily');
     });
 
-    it.each([['newConnection', new NewConnectionAuthStep()], ['updateCredentials', new UpdateCredentialsAuthStep()]])(
-        'traces %s picker options and selection', async (source, step) => {
-            const context = {
-                telemetry: { properties: {}, measurements: {} },
-                availableAuthenticationMethods: [AuthMethodId.NativeAuth, AuthMethodId.MicrosoftEntraID, AuthMethodId.ManagedIdentity],
-                ui: { showQuickPick: jest.fn().mockResolvedValue({ authMethod: AuthMethodId.MicrosoftEntraID }) },
-            };
+    it.each([
+        ['newConnection', new NewConnectionAuthStep()],
+        ['updateCredentials', new UpdateCredentialsAuthStep()],
+    ])('traces %s picker options and selection', async (source, step) => {
+        const context = {
+            telemetry: { properties: {}, measurements: {} },
+            availableAuthenticationMethods: [
+                AuthMethodId.NativeAuth,
+                AuthMethodId.MicrosoftEntraID,
+                AuthMethodId.ManagedIdentity,
+            ],
+            ui: { showQuickPick: jest.fn().mockResolvedValue({ authMethod: AuthMethodId.MicrosoftEntraID }) },
+        };
 
-            await step.prompt(context as never);
+        await step.prompt(context as never);
 
-            expect(context.telemetry.properties).toMatchObject({
-                authMethod: AuthMethodId.MicrosoftEntraID, authMethodSelectionSource: 'prompt',
-            });
+        expect(context.telemetry.properties).toMatchObject({
+            authMethod: AuthMethodId.MicrosoftEntraID,
+            authMethodSelectionSource: 'prompt',
+        });
 
-            const output = JSON.stringify(mockOutputChannel.info.mock.calls);
-            expect(output).toContain(`${source}.authMethodPicker`);
-            expect(output).toContain('NativeAuth,MicrosoftEntraID,NoAuth');
-            expect(output).toContain(`${source}.authMethodSelected`);
-        },
-    );
+        const output = JSON.stringify(mockOutputChannel.info.mock.calls);
+        expect(output).toContain(`${source}.authMethodPicker`);
+        expect(output).toContain('NativeAuth,MicrosoftEntraID,NoAuth');
+        expect(output).toContain(`${source}.authMethodSelected`);
+    });
 
     it('traces a family picker skipped because inference already chose the method', () => {
         const step = new NewConnectionAuthStep();
-        const context = { selectedAuthenticationMethod: AuthMethodId.ManagedIdentity, telemetry: { properties: {}, measurements: {} } };
+        const context = {
+            selectedAuthenticationMethod: AuthMethodId.ManagedIdentity,
+            telemetry: { properties: {}, measurements: {} },
+        };
         expect(step.shouldPrompt(context as never)).toBe(false);
         expect(mockOutputChannel.info).not.toHaveBeenCalled();
 
         step.configureBeforePrompt(context as never);
 
         expect(context.telemetry.properties).toMatchObject({
-            authMethod: AuthMethodId.ManagedIdentity, authMethodSelectionSource: 'preselected',
+            authMethod: AuthMethodId.ManagedIdentity,
+            authMethodSelectionSource: 'preselected',
         });
         expect(mockOutputChannel.info).toHaveBeenCalledTimes(1);
         expect(JSON.stringify(mockOutputChannel.info.mock.calls)).toContain('methodAlreadySelectedOrInferred');

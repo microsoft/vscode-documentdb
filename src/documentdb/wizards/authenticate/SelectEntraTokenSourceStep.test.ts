@@ -9,15 +9,23 @@ function interpolate(message: string, ...args: unknown[]): string {
 
 const mockOutputChannel = { info: jest.fn(), error: jest.fn() };
 jest.mock('../../../extensionVariables', () => ({
-    ext: { get outputChannel(): typeof mockOutputChannel { return mockOutputChannel; } },
+    ext: {
+        get outputChannel(): typeof mockOutputChannel {
+            return mockOutputChannel;
+        },
+    },
 }));
 
-beforeEach(() => { jest.clearAllMocks(); });
-afterEach(() => {
+beforeEach(() => {
+    jest.clearAllMocks();
+});
+function expectPrivateIdentityOutput(): void {
     const output = JSON.stringify([mockOutputChannel.info.mock.calls, mockOutputChannel.error.mock.calls]);
     expect(output).not.toContain('11111111-2222-3333-4444-555555555555');
     expect(output).not.toContain('alice');
-});
+}
+
+afterEach(expectPrivateIdentityOutput);
 
 jest.mock('vscode', () => ({
     ThemeIcon: class ThemeIcon {
@@ -151,9 +159,11 @@ describe('SelectEntraTokenSourceStep.buildItems', () => {
 });
 
 describe('SelectEntraTokenSourceStep.shouldPrompt', () => {
-    afterEach(() => {
+    function expectSilentEligibilityCheck(): void {
         expect(mockOutputChannel.info).not.toHaveBeenCalled();
-    });
+    }
+
+    afterEach(expectSilentEligibilityCheck);
 
     it('does not prompt when another auth method is selected', () => {
         const context = makeContext({ selectedAuthMethod: AuthMethodId.NativeAuth });
@@ -226,16 +236,30 @@ describe('SelectEntraTokenSourceStep.configureBeforePrompt', () => {
         ['nonEntraAuthMethod', { selectedAuthMethod: AuthMethodId.NativeAuth }, false],
         ['managedIdentityUnavailable', { availableAuthMethods: [AuthMethodId.MicrosoftEntraID] }, false],
         ['noExplicitMachineWorkflow', {}, true],
-        ['explicitMachineWorkflow', {
-            connectionStringAuthFacts: {
-                usesOidc: true, declaresAzureMachineWorkflow: true, username: CLIENT_ID, usernameIsGuid: true,
+        [
+            'explicitMachineWorkflow',
+            {
+                connectionStringAuthFacts: {
+                    usesOidc: true,
+                    declaresAzureMachineWorkflow: true,
+                    username: CLIENT_ID,
+                    usernameIsGuid: true,
+                },
             },
-        }, false],
-        ['suppliedIdentityNotClientId', {
-            connectionStringAuthFacts: {
-                usesOidc: true, declaresAzureMachineWorkflow: true, username: 'alice', usernameIsGuid: false,
+            false,
+        ],
+        [
+            'suppliedIdentityNotClientId',
+            {
+                connectionStringAuthFacts: {
+                    usesOidc: true,
+                    declaresAzureMachineWorkflow: true,
+                    username: 'alice',
+                    usernameIsGuid: false,
+                },
             },
-        }, true],
+            true,
+        ],
     ])('logs %s only when reached', (reason, overrides, shouldPrompt) => {
         const step = makeStep();
         const context = makeContext(overrides);
@@ -280,7 +304,9 @@ describe('SelectEntraTokenSourceStep.configureBeforePrompt', () => {
 describe('SelectEntraTokenSourceStep.prompt', () => {
     it('traces cancellation without logging error messages', async () => {
         const context = makeContext({
-            ui: { showQuickPick: jest.fn().mockRejectedValue(new Error('secret-token')) } as unknown as AuthenticateWizardContext['ui'],
+            ui: {
+                showQuickPick: jest.fn().mockRejectedValue(new Error('secret-token')),
+            } as unknown as AuthenticateWizardContext['ui'],
         });
 
         await expect(makeStep().prompt(context)).rejects.toThrow('secret-token');
@@ -366,7 +392,9 @@ describe('SelectEntraTokenSourceStep.prompt', () => {
         expect(context.entraIdAuthConfig).toBeUndefined();
         expect(context.managedIdentityAuthConfig).toBeUndefined();
         expect(context.telemetry.properties).toMatchObject({
-            authMethod: AuthMethodId.NoAuth, authMethodSelectionSource: 'prompt', entraIdentityChoice: 'authMethod',
+            authMethod: AuthMethodId.NoAuth,
+            authMethodSelectionSource: 'prompt',
+            entraIdentityChoice: 'authMethod',
         });
     });
 
@@ -408,7 +436,9 @@ describe('SelectEntraTokenSourceStep shared telemetry', () => {
         const context = makeContext({
             managedIdentityAuthConfig: { clientId: CLIENT_ID },
             ui: {
-                showQuickPick: jest.fn().mockResolvedValue({ choice, clientId: choice === 'clientId' ? CLIENT_ID : undefined }),
+                showQuickPick: jest
+                    .fn()
+                    .mockResolvedValue({ choice, clientId: choice === 'clientId' ? CLIENT_ID : undefined }),
                 showInputBox: jest.fn().mockResolvedValue(CLIENT_ID),
             } as unknown as AuthenticateWizardContext['ui'],
         });
@@ -430,7 +460,8 @@ describe('SelectEntraTokenSourceStep shared telemetry', () => {
         const context = makeContext({
             managedIdentityAuthConfig: { clientId: CLIENT_ID },
             ui: {
-                showQuickPick: jest.fn()
+                showQuickPick: jest
+                    .fn()
                     .mockResolvedValueOnce({ choice: 'clientId', clientId: CLIENT_ID })
                     .mockResolvedValueOnce({ choice: 'account' }),
             } as unknown as AuthenticateWizardContext['ui'],
@@ -457,7 +488,10 @@ describe('SelectEntraTokenSourceStep shared telemetry', () => {
         const context = makeContext({
             managedIdentityAuthConfig: { clientId: CLIENT_ID },
             connectionStringAuthFacts: {
-                usesOidc: true, declaresAzureMachineWorkflow: true, username: CLIENT_ID, usernameIsGuid: true,
+                usesOidc: true,
+                declaresAzureMachineWorkflow: true,
+                username: CLIENT_ID,
+                usernameIsGuid: true,
             },
         });
 

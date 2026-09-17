@@ -136,20 +136,23 @@ export class SelectEntraTokenSourceStep<T extends ManagedIdentitySelectionContex
             delete context.telemetry.properties.entraIdentityChoice;
             selected = await traceAuthOperation(
                 'identityPicker',
-                () => context.ui.showQuickPick(items, {
-                    stepName: 'selectEntraTokenSource',
-                    placeHolder: suppliedIdentity
-                        ? l10n.t('Select the identity to use ("{0}" is not a client ID)', suppliedIdentity)
-                        : l10n.t('Select the identity to use for this connection'),
-                    matchOnDetail: true,
-                    suppressPersistence: true,
-                }),
+                () =>
+                    context.ui.showQuickPick(items, {
+                        stepName: 'selectEntraTokenSource',
+                        placeHolder: suppliedIdentity
+                            ? l10n.t('Select the identity to use ("{0}" is not a client ID)', suppliedIdentity)
+                            : l10n.t('Select the identity to use for this connection'),
+                        matchOnDetail: true,
+                        suppressPersistence: true,
+                    }),
                 {
                     options: items.flatMap((item) => (item.choice ? [item.choice] : [])).join(','),
                     baseOptionsReason: 'accountAndBothManagedIdentityRoutesAlwaysAvailable',
                     clientIdOptionReason: prefilledClientId ? 'configuredCandidate' : 'noCandidate',
                     changeAuthMethodReason: facts?.usesOidc ? 'oidcDeclared' : 'oidcNotDeclared',
-                    backOptionReason: context.authenticationMethodPrompted ? 'familyPickerShown' : 'familyPickerSkipped',
+                    backOptionReason: context.authenticationMethodPrompted
+                        ? 'familyPickerShown'
+                        : 'familyPickerSkipped',
                     manualInputPrefilled: !!suppliedIdentity,
                 },
             );
@@ -177,7 +180,10 @@ export class SelectEntraTokenSourceStep<T extends ManagedIdentitySelectionContex
             context.managedIdentityAuthConfig = tenantId ? { tenantId } : {};
             context.telemetry.properties.managedIdentityKind = 'system';
             context.telemetry.properties.managedIdentityClientIdSource = 'none';
-            traceAuthFlow('identityPicker.managedIdentityConfigured', { identityKind: 'systemAssigned', source: 'none' });
+            traceAuthFlow('identityPicker.managedIdentityConfigured', {
+                identityKind: 'systemAssigned',
+                source: 'none',
+            });
             return;
         }
 
@@ -189,13 +195,14 @@ export class SelectEntraTokenSourceStep<T extends ManagedIdentitySelectionContex
 
         const clientId = await traceAuthOperation(
             'identityPicker.clientIdInput',
-            () => context.ui.showInputBox({
-                prompt: l10n.t('Enter the client ID of the user-assigned managed identity.'),
-                placeHolder: l10n.t('For example, {0}', CLIENT_ID_EXAMPLE),
-                value: selected.clientId ?? prefilledClientId,
-                ignoreFocusOut: true,
-                validateInput: (value?: string) => this.validateClientId(value),
-            }),
+            () =>
+                context.ui.showInputBox({
+                    prompt: l10n.t('Enter the client ID of the user-assigned managed identity.'),
+                    placeHolder: l10n.t('For example, {0}', CLIENT_ID_EXAMPLE),
+                    value: selected.clientId ?? prefilledClientId,
+                    ignoreFocusOut: true,
+                    validateInput: (value?: string) => this.validateClientId(value),
+                }),
             { prefilled: !!(selected.clientId ?? prefilledClientId) },
         );
 
@@ -213,11 +220,18 @@ export class SelectEntraTokenSourceStep<T extends ManagedIdentitySelectionContex
         context.telemetry.properties.entraIdentitySkipReason = decision.shouldPrompt ? undefined : decision.reason;
         delete context.telemetry.properties.entraIdentityChoice;
         if (!decision.shouldPrompt) {
-            context.telemetry.properties.managedIdentityKind = method === AuthMethodId.ManagedIdentity
-                ? context.managedIdentityAuthConfig?.clientId ? 'user' : 'system' : undefined;
+            context.telemetry.properties.managedIdentityKind =
+                method === AuthMethodId.ManagedIdentity
+                    ? context.managedIdentityAuthConfig?.clientId
+                        ? 'user'
+                        : 'system'
+                    : undefined;
             context.telemetry.properties.managedIdentityClientIdSource =
                 method === AuthMethodId.ManagedIdentity && facts?.declaresAzureMachineWorkflow
-                    ? facts.username ? 'connectionString' : 'none' : undefined;
+                    ? facts.username
+                        ? 'connectionString'
+                        : 'none'
+                    : undefined;
         }
         traceAuthFlow(decision.shouldPrompt ? 'identityPicker.required' : 'identityPicker.skipped', {
             reason: decision.reason,
@@ -378,12 +392,13 @@ export class SelectEntraTokenSourceStep<T extends ManagedIdentitySelectionContex
         try {
             selected = await traceAuthOperation(
                 'identityPicker.changeAuthMethod',
-                () => context.ui.showQuickPick(authMethodItems, {
-                    stepName: 'selectDifferentAuthMethod',
-                    placeHolder: l10n.t('Select an authentication method'),
-                    matchOnDetail: true,
-                    suppressPersistence: true,
-                }),
+                () =>
+                    context.ui.showQuickPick(authMethodItems, {
+                        stepName: 'selectDifferentAuthMethod',
+                        placeHolder: l10n.t('Select an authentication method'),
+                        matchOnDetail: true,
+                        suppressPersistence: true,
+                    }),
                 {
                     options: authMethodItems.flatMap((item) => (item.authMethod ? [item.authMethod] : [])).join(','),
                     returnOption: true,

@@ -7,7 +7,11 @@ import { getManagedIdentityAccessToken } from './managedIdentityTokenProvider';
 
 const mockOutputChannel = { info: jest.fn(), error: jest.fn() };
 jest.mock('../../extensionVariables', () => ({
-    ext: { get outputChannel(): typeof mockOutputChannel { return mockOutputChannel; } },
+    ext: {
+        get outputChannel(): typeof mockOutputChannel {
+            return mockOutputChannel;
+        },
+    },
 }));
 jest.mock('./managedIdentityTelemetry', () => ({
     reportManagedIdentityTokenFailure: jest.fn(),
@@ -16,6 +20,12 @@ jest.mock('./managedIdentityTelemetry', () => ({
 
 function output(): string {
     return JSON.stringify([mockOutputChannel.info.mock.calls, mockOutputChannel.error.mock.calls]);
+}
+
+function expectPrivateTokenOutput(): void {
+    for (const secret of ['sensitive-client', 'sensitive-tenant', 'sensitive-token', 'sensitive-endpoint']) {
+        expect(output()).not.toContain(secret);
+    }
 }
 
 const mockGetToken = jest.fn();
@@ -36,11 +46,7 @@ describe('getManagedIdentityAccessToken', () => {
         });
     });
 
-    afterEach(() => {
-        for (const secret of ['sensitive-client', 'sensitive-tenant', 'sensitive-token', 'sensitive-endpoint']) {
-            expect(output()).not.toContain(secret);
-        }
-    });
+    afterEach(expectPrivateTokenOutput);
 
     it('constructs one credential for concurrent first requests to the same identity', async () => {
         const clientId = 'abcdefab-1234-5678-90ab-abcdefabcdef';
@@ -73,8 +79,11 @@ describe('getManagedIdentityAccessToken', () => {
         try {
             await getManagedIdentityAccessToken(['scope'], 'sensitive-client', 'sensitive-tenant');
         } finally {
-            if (original === undefined) { delete process.env.IDENTITY_ENDPOINT; }
-            else { process.env.IDENTITY_ENDPOINT = original; }
+            if (original === undefined) {
+                delete process.env.IDENTITY_ENDPOINT;
+            } else {
+                process.env.IDENTITY_ENDPOINT = original;
+            }
         }
 
         expect(output()).toContain('identityEndpointConfigured');
@@ -104,16 +113,20 @@ describe('getManagedIdentityAccessToken', () => {
         expect(output()).toContain('emptyTokenResponse');
     });
 
-    it.each([['sensitive-tenant', 'matched'], ['other-sensitive-tenant', 'tenantMismatch']])(
-        'traces tenant verification for %s without token contents', async (clusterTenant, outcome) => {
-            const token = `header.${Buffer.from(JSON.stringify({ tid: 'sensitive-tenant' })).toString('base64url')}.signature`;
-            mockGetToken.mockResolvedValueOnce({ token, expiresOnTimestamp: Date.now() + 60_000 });
-            const request = getManagedIdentityAccessToken(['scope'], 'sensitive-client', clusterTenant);
-            if (outcome === 'matched') { await request; }
-            else { await expect(request).rejects.toThrow(); }
+    it.each([
+        ['sensitive-tenant', 'matched'],
+        ['other-sensitive-tenant', 'tenantMismatch'],
+    ])('traces tenant verification for %s without token contents', async (clusterTenant, outcome) => {
+        const token = `header.${Buffer.from(JSON.stringify({ tid: 'sensitive-tenant' })).toString('base64url')}.signature`;
+        mockGetToken.mockResolvedValueOnce({ token, expiresOnTimestamp: Date.now() + 60_000 });
+        const request = getManagedIdentityAccessToken(['scope'], 'sensitive-client', clusterTenant);
+        if (outcome === 'matched') {
+            await request;
+        } else {
+            await expect(request).rejects.toThrow();
+        }
 
-            expect(output()).toContain(outcome);
-            expect(output()).not.toContain(token);
-        },
-    );
+        expect(output()).toContain(outcome);
+        expect(output()).not.toContain(token);
+    });
 });

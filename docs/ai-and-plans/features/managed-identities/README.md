@@ -44,16 +44,16 @@ Authentication steps add properties to the existing wizard/command telemetry con
 per-interaction events, reporting helper, event history, or correlation IDs are created. Existing
 journey/connection correlation, result, duration, and cancellation handling remain unchanged.
 
-| Shared property | Meaning |
-| --- | --- |
-| `authFlowOrigin` | `newConnection`, `updateCredentials`, `savedConnection`, `azureResources`, `azureDiscovery`, `atlasDiscovery`, or `kubernetesDiscovery` |
-| `authMethod` | Latest resolved `AuthMethodId`, including the final account versus managed identity choice |
-| `authMethodSelectionSource` | `prompt`, `autoSelected` (one supported family), or `preselected` (known before the family step) |
-| `entraIdentityPrompted` | Whether the current identity step prompts (`true`/`false`); evaluated only when reached |
-| `entraIdentitySkipReason` | Why the identity picker is skipped, such as `explicitMachineWorkflow` or `managedIdentityUnavailable` |
-| `entraIdentityChoice` | Latest identity-picker choice: `account`, `systemAssigned`, `clientId`, `manual`, `authMethod`, or `back` |
-| `managedIdentityKind` | Existing `system`/`user` dimension when managed identity is resolved |
-| `managedIdentityClientIdSource` | Existing `none`, `connectionString`, or `prompt` dimension when known |
+| Shared property                 | Meaning                                                                                                                                 |
+| ------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
+| `authFlowOrigin`                | `newConnection`, `updateCredentials`, `savedConnection`, `azureResources`, `azureDiscovery`, `atlasDiscovery`, or `kubernetesDiscovery` |
+| `authMethod`                    | Latest resolved `AuthMethodId`, including the final account versus managed identity choice                                              |
+| `authMethodSelectionSource`     | `prompt`, `autoSelected` (one supported family), or `preselected` (known before the family step)                                        |
+| `entraIdentityPrompted`         | Whether the current identity step prompts (`true`/`false`); evaluated only when reached                                                 |
+| `entraIdentitySkipReason`       | Why the identity picker is skipped, such as `explicitMachineWorkflow` or `managedIdentityUnavailable`                                   |
+| `entraIdentityChoice`           | Latest identity-picker choice: `account`, `systemAssigned`, `clientId`, `manual`, `authMethod`, or `back`                               |
+| `managedIdentityKind`           | Existing `system`/`user` dimension when managed identity is resolved                                                                    |
+| `managedIdentityClientIdSource` | Existing `none`, `connectionString`, or `prompt` dimension when known                                                                   |
 
 Existing `connectionMode`, tenant counts, and tenant-selection properties remain available. New
 Connection and Update Credentials enrich their command event; resource authentication enriches

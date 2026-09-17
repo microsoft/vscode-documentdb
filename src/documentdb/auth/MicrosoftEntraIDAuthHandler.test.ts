@@ -6,7 +6,11 @@
 const getSessionFromVSCode = jest.fn();
 const mockOutputChannel = { info: jest.fn(), error: jest.fn() };
 jest.mock('../../extensionVariables', () => ({
-    ext: { get outputChannel(): typeof mockOutputChannel { return mockOutputChannel; } },
+    ext: {
+        get outputChannel(): typeof mockOutputChannel {
+            return mockOutputChannel;
+        },
+    },
 }));
 
 jest.mock('@microsoft/vscode-azext-azureauth/out/src/getSessionFromVSCode', () => ({

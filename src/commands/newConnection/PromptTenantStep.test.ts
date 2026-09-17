@@ -89,6 +89,12 @@ function makeFallbackContext(): IActionContext {
     );
 }
 
+function expectPrivateTenantOutput(): void {
+    for (const sensitiveValue of [TENANT_ID, tenant.displayName, tenant.defaultDomain, tenant.account.label]) {
+        expect(outputText()).not.toContain(sensitiveValue);
+    }
+}
+
 describe.each([
     ['new connection', () => new NewConnectionPromptTenantStep()],
     ['update credentials', () => new UpdateCredentialsPromptTenantStep()],
@@ -102,9 +108,7 @@ describe.each([
 
     afterEach(() => {
         jest.useRealTimers();
-        for (const sensitiveValue of [TENANT_ID, tenant.displayName, tenant.defaultDomain, tenant.account.label]) {
-            expect(outputText()).not.toContain(sensitiveValue);
-        }
+        expectPrivateTenantOutput();
     });
 
     it('keeps look-ahead silent and logs the current tenant gate only when reached', () => {
@@ -199,9 +203,7 @@ describe.each([
         await makeStep().prompt(makeFallbackContext() as never);
 
         expect(outputText()).toContain('failed in');
-        expect(outputText()).toContain(
-            'type=RestError; code=AuthorizationFailed; httpStatus=403; aadsts=AADSTS65001',
-        );
+        expect(outputText()).toContain('type=RestError; code=AuthorizationFailed; httpStatus=403; aadsts=AADSTS65001');
         expect(outputText()).not.toContain('secret-token');
         expect(mockOutputChannel.warn).not.toHaveBeenCalled();
     });
@@ -303,7 +305,8 @@ describe.each([
         mockGetTenants
             .mockReturnValueOnce(new Promise<(typeof tenant)[]>(() => {}))
             .mockImplementationOnce(() => new Promise((resolve) => setTimeout(() => resolve([tenant]), 29_000)));
-        const showQuickPick = jest.fn()
+        const showQuickPick = jest
+            .fn()
             .mockImplementationOnce(async (itemsPromise: Promise<{ isRetryOption?: boolean; detail?: string }[]>) => {
                 const items = await itemsPromise;
                 const retry = items.find((item) => item.isRetryOption);
@@ -331,18 +334,28 @@ describe.each([
     it('keeps manual entry, account management, and retry available after a retry timeout', async () => {
         jest.useFakeTimers();
         mockGetTenants.mockReturnValue(new Promise<(typeof tenant)[]>(() => {}));
-        const showQuickPick = jest.fn()
+        const showQuickPick = jest
+            .fn()
             .mockImplementationOnce(async (itemsPromise: Promise<{ isRetryOption?: boolean }[]>) =>
                 (await itemsPromise).find((item) => item.isRetryOption),
             )
-            .mockImplementationOnce(async (itemsPromise: Promise<{
-                isRetryOption?: boolean; isCustomOption?: boolean; isSignInOption?: boolean; detail?: string;
-            }[]>) => {
-                const items = await itemsPromise;
-                expect(items.find((item) => item.isRetryOption)?.detail).toContain('timed out after 30 seconds');
-                expect(items.some((item) => item.isSignInOption)).toBe(true);
-                return items.find((item) => item.isCustomOption);
-            });
+            .mockImplementationOnce(
+                async (
+                    itemsPromise: Promise<
+                        {
+                            isRetryOption?: boolean;
+                            isCustomOption?: boolean;
+                            isSignInOption?: boolean;
+                            detail?: string;
+                        }[]
+                    >,
+                ) => {
+                    const items = await itemsPromise;
+                    expect(items.find((item) => item.isRetryOption)?.detail).toContain('timed out after 30 seconds');
+                    expect(items.some((item) => item.isSignInOption)).toBe(true);
+                    return items.find((item) => item.isCustomOption);
+                },
+            );
         const prompt = makeStep().prompt(makeContext(showQuickPick) as never);
 
         await jest.advanceTimersByTimeAsync(35_000);
@@ -360,13 +373,21 @@ describe.each([
         } else {
             mockGetTenants.mockResolvedValueOnce([]);
         }
-        const showQuickPick = jest.fn().mockImplementation(async (itemsPromise: Promise<{
-            isRetryOption?: boolean; isCustomOption?: boolean; detail?: string;
-        }[]>) => {
-            const items = await itemsPromise;
-            expect(items.find((item) => item.isRetryOption)?.detail).toContain(detail);
-            return items.find((item) => item.isCustomOption);
-        });
+        const showQuickPick = jest.fn().mockImplementation(
+            async (
+                itemsPromise: Promise<
+                    {
+                        isRetryOption?: boolean;
+                        isCustomOption?: boolean;
+                        detail?: string;
+                    }[]
+                >,
+            ) => {
+                const items = await itemsPromise;
+                expect(items.find((item) => item.isRetryOption)?.detail).toContain(detail);
+                return items.find((item) => item.isCustomOption);
+            },
+        );
 
         await makeStep().prompt(makeContext(showQuickPick) as never);
         expect(mockGetTenants).toHaveBeenCalledTimes(1);

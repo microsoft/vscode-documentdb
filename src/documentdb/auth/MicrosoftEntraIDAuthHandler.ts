@@ -23,13 +23,14 @@ export class MicrosoftEntraIDAuthHandler implements AuthHandler {
 
     public async configureAuth(): Promise<AuthHandlerResponse> {
         // Get Microsoft Entra ID token
-        const session = await traceAuthOperation('interactiveEntra.getSession', () => getSessionFromVSCode(
-            [DOCUMENTDB_ENTRA_SCOPE],
-            this.clusterCredentials.entraIdConfig?.tenantId,
-            {
-                createIfNone: true,
-            },
-        ), { tenantSpecified: !!this.clusterCredentials.entraIdConfig?.tenantId, createIfNone: true });
+        const session = await traceAuthOperation(
+            'interactiveEntra.getSession',
+            () =>
+                getSessionFromVSCode([DOCUMENTDB_ENTRA_SCOPE], this.clusterCredentials.entraIdConfig?.tenantId, {
+                    createIfNone: true,
+                }),
+            { tenantSpecified: !!this.clusterCredentials.entraIdConfig?.tenantId, createIfNone: true },
+        );
 
         if (!session) {
             traceAuthFlow('interactiveEntra.sessionUnavailable', { reason: 'noSessionReturned' });
