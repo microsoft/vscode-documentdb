@@ -8,10 +8,10 @@ import * as l10n from '@vscode/l10n';
 import * as vscode from 'vscode';
 import { ConflictResolutionStrategy } from '../../services/taskService/tasks/copy-and-paste/copyPasteConfig';
 import { type PasteCollectionWizardContext } from './PasteCollectionWizardContext';
+import { formatIndexCopyWarnings } from './formatIndexCopyWarnings';
 
 export class ConfirmOperationStep extends AzureWizardPromptStep<PasteCollectionWizardContext> {
-    public async prompt(context: PasteCollectionWizardContext): Promise<void> {
-        const operationTitle = context.isTargetExistingCollection ? l10n.t('Copy-and-Merge') : l10n.t('Copy-and-Paste');
+    public async prompt(context: PasteCollectionWizardContext): Promise<void> {        const operationTitle = context.isTargetExistingCollection ? l10n.t('Copy-and-Merge') : l10n.t('Copy-and-Paste');
 
         const targetCollection = context.isTargetExistingCollection
             ? context.targetCollectionName
@@ -35,10 +35,12 @@ export class ConfirmOperationStep extends AzureWizardPromptStep<PasteCollectionW
             : l10n.t(
                   'This operation will copy all documents from the source to the target collection. Large collections may take several minutes to complete.',
               );
+        const indexWarnings = context.copyIndexes
+            ? formatIndexCopyWarnings(context.sourceUniqueIndexNames, context.sourceTtlIndexNames)
+            : [];
 
         // Combine all parts
-        const confirmationMessage = [
-            l10n.t('Source:'),
+        const confirmationMessage = [            l10n.t('Source:'),
             ' • ' +
                 l10n.t('Collection: "{collectionName}"', { collectionName: context.sourceCollectionName }) +
                 (context.sourceCollectionSize
@@ -64,10 +66,10 @@ export class ConfirmOperationStep extends AzureWizardPromptStep<PasteCollectionW
             ' • ' + indexesSummary,
             '',
             warningText,
+            ...indexWarnings,
         ].join('\n');
 
-        const actionButton = context.isTargetExistingCollection
-            ? l10n.t('Start Copy-and-Merge')
+        const actionButton = context.isTargetExistingCollection            ? l10n.t('Start Copy-and-Merge')
             : l10n.t('Start Copy-and-Paste');
 
         const confirmation = context.isTargetExistingCollection

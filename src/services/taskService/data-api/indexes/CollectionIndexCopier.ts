@@ -17,16 +17,21 @@ export interface IndexCopyResult {
     cancelled: boolean;
 }
 
+export interface SourceIndexSummary {
+    count: number;
+    uniqueIndexNames: string[];
+    ttlIndexNames: string[];
+}
+
 export interface CopyIndexesOptions {
     signal?: AbortSignal;
-    onStart?: (total: number) => void;
-    onProgress?: (progress: IndexCopyProgress) => void;
+    onStart?: (total: number) => void;    onProgress?: (progress: IndexCopyProgress) => void;
 }
 
 /**
  * Copies indexes between two collections understood by one database-specific implementation.
  */
 export interface CollectionIndexCopier {
-    countSourceIndexes(signal?: AbortSignal): Promise<number>;
+    getSourceIndexSummary(signal?: AbortSignal): Promise<SourceIndexSummary>;
     copyIndexes(options?: CopyIndexesOptions): Promise<IndexCopyResult>;
 }

@@ -17,10 +17,11 @@ jest.mock('./createIndexCopier');
 function createContext(copyIndexes: boolean = true): PasteCollectionWizardContext {
     return {
         copyIndexes,
+        sourceUniqueIndexNames: [],
+        sourceTtlIndexNames: [],
         telemetry: { properties: {}, measurements: {} },
         ui: {
-            showQuickPick: jest.fn().mockImplementation(async (items: Promise<never>) => items),
-        },
+            showQuickPick: jest.fn().mockImplementation(async (items: Promise<never>) => items),        },
     } as unknown as PasteCollectionWizardContext;
 }
 
@@ -30,30 +31,34 @@ describe('CountSourceIndexesStep', () => {
     });
 
     it('shows a loading pick and records the source index count', async () => {
-        const countSourceIndexes = jest.fn().mockResolvedValue(3);
+        const getSourceIndexSummary = jest.fn().mockResolvedValue({
+            count: 3,
+            uniqueIndexNames: ['email_1'],
+            ttlIndexNames: ['expiresAt_1'],
+        });
         jest.mocked(createIndexCopier).mockReturnValue(
-            { countSourceIndexes } as unknown as ReturnType<typeof createIndexCopier>,
+            { getSourceIndexSummary } as unknown as ReturnType<typeof createIndexCopier>,
         );
         const context = createContext();
-
         await new CountSourceIndexesStep().prompt(context);
 
         expect(context.ui.showQuickPick).toHaveBeenCalledWith(expect.any(Promise), {
             loadingPlaceHolder: 'Counting source indexes…',
             suppressPersistence: true,
         });
-        expect(countSourceIndexes).toHaveBeenCalledWith(expect.any(AbortSignal));
+        expect(getSourceIndexSummary).toHaveBeenCalledWith(expect.any(AbortSignal));
         expect(context.sourceIndexCount).toBe(3);
+        expect(context.sourceUniqueIndexNames).toEqual(['email_1']);
+        expect(context.sourceTtlIndexNames).toEqual(['expiresAt_1']);
         expect(context.telemetry.measurements.sourceIndexCount).toBe(3);
     });
 
     it('continues with an unknown count when counting fails', async () => {
-        const countSourceIndexes = jest.fn().mockRejectedValue(new Error('count failed'));
+        const getSourceIndexSummary = jest.fn().mockRejectedValue(new Error('count failed'));
         jest.mocked(createIndexCopier).mockReturnValue(
-            { countSourceIndexes } as unknown as ReturnType<typeof createIndexCopier>,
+            { getSourceIndexSummary } as unknown as ReturnType<typeof createIndexCopier>,
         );
         const context = createContext();
-
         await expect(new CountSourceIndexesStep().prompt(context)).resolves.toBeUndefined();
 
         expect(context.sourceIndexCount).toBeUndefined();
@@ -67,19 +72,18 @@ describe('CountSourceIndexesStep', () => {
 
     it('aborts the count when the loading pick is cancelled', async () => {
         let receivedSignal: AbortSignal | undefined;
-        const countSourceIndexes = jest.fn().mockImplementation(
+        const getSourceIndexSummary = jest.fn().mockImplementation(
             (signal: AbortSignal) =>
-                new Promise<number>((_resolve, reject) => {
+                new Promise((_resolve, reject) => {
                     receivedSignal = signal;
                     signal.addEventListener('abort', () => reject(new Error('aborted')), { once: true });
                 }),
         );
         jest.mocked(createIndexCopier).mockReturnValue(
-            { countSourceIndexes } as unknown as ReturnType<typeof createIndexCopier>,
+            { getSourceIndexSummary } as unknown as ReturnType<typeof createIndexCopier>,
         );
         const context = createContext();
-        jest.mocked(context.ui.showQuickPick).mockImplementation(async (items: Promise<never>) => {
-            void items.catch(() => undefined);
+        jest.mocked(context.ui.showQuickPick).mockImplementation(async (items: Promise<never>) => {            void items.catch(() => undefined);
             throw new Error('cancelled');
         });
 

@@ -46,18 +46,21 @@ export class CountSourceIndexesStep extends AzureWizardPromptStep<PasteCollectio
         signal: AbortSignal,
     ): Promise<never> {
         try {
-            context.sourceIndexCount = await createIndexCopier(context).countSourceIndexes(signal);
+            const summary = await createIndexCopier(context).getSourceIndexSummary(signal);
+            context.sourceIndexCount = summary.count;
+            context.sourceUniqueIndexNames = summary.uniqueIndexNames;
+            context.sourceTtlIndexNames = summary.ttlIndexNames;
             context.telemetry.measurements.sourceIndexCount = context.sourceIndexCount;
         } catch (error) {
-            if (signal.aborted) {
-                throw error;
+            if (signal.aborted) {                throw error;
             }
 
             context.sourceIndexCount = undefined;
+            context.sourceUniqueIndexNames = [];
+            context.sourceTtlIndexNames = [];
             context.telemetry.properties.sourceIndexCountError = error instanceof Error ? error.name : 'UnknownError';
             const errorMessage = error instanceof Error ? error.message : String(error);
-            ext.outputChannel.warn(vscode.l10n.t('[IndexCopy] Failed to count source indexes: {0}', errorMessage));
-        }
+            ext.outputChannel.warn(vscode.l10n.t('[IndexCopy] Failed to count source indexes: {0}', errorMessage));        }
 
         throw new IndexCountCompleteError();
     }

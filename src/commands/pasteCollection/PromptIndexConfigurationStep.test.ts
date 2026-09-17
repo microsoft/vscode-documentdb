@@ -19,10 +19,11 @@ function createContext(selection: 'copy' | 'skip'): PasteCollectionWizardContext
         newCollectionName: 'targetCollection',
         isTargetExistingCollection: false,
         copyIndexes: false,
+        sourceUniqueIndexNames: [],
+        sourceTtlIndexNames: [],
         telemetry: { properties: {}, measurements: {} },
         ui: {
-            showQuickPick: jest.fn().mockResolvedValue({ id: selection }),
-        },
+            showQuickPick: jest.fn().mockResolvedValue({ id: selection }),        },
     } as unknown as PasteCollectionWizardContext;
 }
 
@@ -50,9 +51,13 @@ describe('PromptIndexConfigurationStep', () => {
     it('clears a previously loaded count when index copying is disabled', async () => {
         const context = createContext('skip');
         context.sourceIndexCount = 3;
+        context.sourceUniqueIndexNames = ['email_1'];
+        context.sourceTtlIndexNames = ['expiresAt_1'];
 
         await new PromptIndexConfigurationStep().prompt(context);
 
         expect(context.sourceIndexCount).toBeUndefined();
+        expect(context.sourceUniqueIndexNames).toEqual([]);
+        expect(context.sourceTtlIndexNames).toEqual([]);
     });
 });

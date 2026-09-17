@@ -11,10 +11,10 @@ import {
     type CollectionIndexCopier,
     type CopyIndexesOptions,
     type IndexCopyResult,
+    type SourceIndexSummary,
 } from './CollectionIndexCopier';
 
-export interface DocumentDbCollectionEndpoint {
-    clusterId: string;
+export interface DocumentDbCollectionEndpoint {    clusterId: string;
     databaseName: string;
     collectionName: string;
 }
@@ -41,13 +41,19 @@ export class DocumentDbCollectionIndexCopier implements CollectionIndexCopier {
         private readonly target: DocumentDbCollectionEndpoint,
     ) {}
 
-    public async countSourceIndexes(signal?: AbortSignal): Promise<number> {
+    public async getSourceIndexSummary(signal?: AbortSignal): Promise<SourceIndexSummary> {
         const sourceClient = await ClustersClient.getClient(this.source.clusterId, signal);
-        return (await this.readCopyableIndexes(sourceClient, this.source, signal)).length;
+        const indexes = await this.readCopyableIndexes(sourceClient, this.source, signal);
+        return {
+            count: indexes.length,
+            uniqueIndexNames: indexes.filter((index) => index.options.unique === true).map((index) => index.name),
+            ttlIndexNames: indexes
+                .filter((index) => Object.hasOwn(index.options, 'expireAfterSeconds'))
+                .map((index) => index.name),
+        };
     }
 
-    public async copyIndexes(options: CopyIndexesOptions = {}): Promise<IndexCopyResult> {
-        const [sourceClient, targetClient] = await Promise.all([
+    public async copyIndexes(options: CopyIndexesOptions = {}): Promise<IndexCopyResult> {        const [sourceClient, targetClient] = await Promise.all([
             ClustersClient.getClient(this.source.clusterId),
             ClustersClient.getClient(this.target.clusterId),
         ]);

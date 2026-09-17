@@ -33,9 +33,10 @@ export class PromptIndexConfigurationStep extends AzureWizardPromptStep<PasteCol
         context.copyIndexes = selectedItem.id === 'copy';
         if (!context.copyIndexes) {
             context.sourceIndexCount = undefined;
+            context.sourceUniqueIndexNames = [];
+            context.sourceTtlIndexNames = [];
         }
     }
-
     public shouldPrompt(): boolean {
         return true;
     }
