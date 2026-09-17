@@ -10,6 +10,7 @@ import {
     AuthMethodId,
     authMethodsFromString,
     createAuthMethodQuickPickItems,
+    getAuthMethodFamily,
     isSupportedAuthMethod,
 } from '../../auth/AuthMethod';
 import { type AuthenticateWizardContext } from './AuthenticateWizardContext';
@@ -17,21 +18,22 @@ import { type AuthenticateWizardContext } from './AuthenticateWizardContext';
 export class ChooseAuthMethodStep extends AzureWizardPromptStep<AuthenticateWizardContext> {
     public async prompt(context: AuthenticateWizardContext): Promise<void> {
         const availableMethods = context.availableAuthMethods ?? [AuthMethodId.NativeAuth];
+        const supportedMethods = authMethodsFromString(availableMethods);
+        const availableFamilies = [...new Set(supportedMethods.map(getAuthMethodFamily))];
 
-        // If there's only one method available, auto-select it
-        if (availableMethods.length === 1) {
-            if (isSupportedAuthMethod(availableMethods[0])) {
-                context.selectedAuthMethod = availableMethods[0];
-                context.isAuthMethodUpdated = true;
-                context.authenticationMethodPrompted = false;
-                return;
-            }
-
+        if (availableMethods.length === 1 && !isSupportedAuthMethod(availableMethods[0])) {
             throw new Error(l10n.t('Unsupported authentication method: {0}', availableMethods[0]));
         }
 
+        if (supportedMethods.length === availableMethods.length && availableFamilies.length === 1) {
+            context.selectedAuthMethod = availableFamilies[0];
+            context.isAuthMethodUpdated = true;
+            context.authenticationMethodPrompted = false;
+            return;
+        }
+
         // Create quick pick items for each auth method - show all methods with support info
-        const quickPickItems = createAuthMethodQuickPickItems(authMethodsFromString(availableMethods), {
+        const quickPickItems = createAuthMethodQuickPickItems(supportedMethods, {
             showSupportInfo: true,
             filterUnsupported: false,
         });

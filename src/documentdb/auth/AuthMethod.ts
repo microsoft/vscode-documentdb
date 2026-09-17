@@ -98,6 +98,10 @@ export function getAuthMethod(id: AuthMethodId): AuthMethodInfo {
     return method;
 }
 
+export function getAuthMethodFamily(id: AuthMethodId): AuthMethodId {
+    return id === AuthMethodId.ManagedIdentity ? AuthMethodId.MicrosoftEntraID : id;
+}
+
 /**
  * @param method - The authentication method string to check
  * @returns True if the method is a known AuthMethodId, false otherwise
@@ -151,7 +155,7 @@ export function createAuthMethodQuickPickItems(
     availableMethods?: AuthMethodId[],
     options: { showSupportInfo?: boolean; filterUnsupported?: boolean } = {},
 ): Array<vscode.QuickPickItem & { authMethod?: AuthMethodId }> {
-    const { showSupportInfo = false, filterUnsupported = false } = options;
+    const { filterUnsupported = false } = options;
 
     let methodsToShow: AuthMethodInfo[];
 
@@ -167,12 +171,8 @@ export function createAuthMethodQuickPickItems(
         label: method.label,
         detail: method.detail,
         authMethod: method.id,
-                iconPath: getAuthMethodIconPath(method),
+        iconPath: getAuthMethodIconPath(method),
         alwaysShow: true,
-        description:
-            showSupportInfo && availableMethods && !availableMethods.includes(method.id)
-                ? vscode.l10n.t('Cluster support unknown $(info)')
-                : undefined,
     }));
 }
 

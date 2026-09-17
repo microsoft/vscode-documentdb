@@ -6,9 +6,11 @@
 import {
     AuthMethodId,
     authMethodFromString,
+    createAuthMethodQuickPickItems,
     createAuthMethodQuickPickItemsWithSupportInfo,
     getAllAuthMethods,
     getAuthMethod,
+    getAuthMethodFamily,
     isSupportedAuthMethod,
 } from './AuthMethod';
 
@@ -33,6 +35,17 @@ describe('AuthMethod NoAuth support', () => {
         const items = createAuthMethodQuickPickItemsWithSupportInfo();
         const noAuthItem = items.find((item) => item.authMethod === AuthMethodId.NoAuth);
         expect(noAuthItem).toBeDefined();
+    });
+
+    it('groups managed identity into the Microsoft Entra ID family', () => {
+        expect(getAuthMethodFamily(AuthMethodId.ManagedIdentity)).toBe(AuthMethodId.MicrosoftEntraID);
+        expect(getAuthMethodFamily(AuthMethodId.NativeAuth)).toBe(AuthMethodId.NativeAuth);
+    });
+
+    it('does not annotate methods with unknown cluster support', () => {
+        const items = createAuthMethodQuickPickItems([AuthMethodId.MicrosoftEntraID], { showSupportInfo: true });
+
+        expect(items.every((item) => item.description === undefined)).toBe(true);
     });
 });
 
