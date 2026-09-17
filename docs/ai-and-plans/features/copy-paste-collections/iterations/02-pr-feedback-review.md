@@ -26,7 +26,7 @@ than duplicated as separate feedback.
 | --- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------- | ---------- | ----------------------------------------------- |
 | F1  | Cancellation must cover index client acquisition and catalog reads, and an abort must remain cancellation rather than an index-copy failure. First inspect the repository's existing connection-cancellation approach. After the fix is pushed, open an issue to revisit cancellable connection attempts generally. | Implement and add focused cancellation tests.                                           | 90%        | Planned                                         |
 | F2  | Source index-summary failures must stop the wizard early and explain why; continuing with an unknown count is incorrect.                                                                                                                                                                                            | Restore fail-fast behavior and align user-facing documentation.                         | 95%        | Completed in `60c56ac0`.                        |
-| F3  | The feature design document names an older method. Feature intent documents are allowed to lag implementation and should not shadow-track APIs under CONTRIBUTING section 5.4.                                                                                                                                      | No code or document change; record and explain the decision in the thread.              | 95%        | Planned                                         |
+| F3  | The feature design document names an older method. Feature intent documents are allowed to lag implementation and should not shadow-track APIs under CONTRIBUTING section 5.4.                                                                                                                                      | No code or document change; record and explain the decision in the thread.              | 95%        | Completed without code changes.                 |
 | F4  | The implementation README's current contract snippet is stale.                                                                                                                                                                                                                                                      | Update the implementation-oriented README because it explicitly describes current code. | 99%        | Completed in `60c56ac0`.                        |
 | F5  | Authentication and credential-update telemetry is unrelated to index copying and was included accidentally.                                                                                                                                                                                                         | Remove all remaining auth telemetry changes and their dedicated tests.                  | 99%        | Completed in `495c22d2` and `ef89f674`.         |
 | F6  | The reviewer requested changes and specifically asked that all unrelated telemetry be reverted because auth telemetry belongs in another PR.                                                                                                                                                                        | Satisfied by F5, then request re-review after all discussions are addressed.            | 99%        | Telemetry removal completed; re-review pending. |
@@ -112,3 +112,14 @@ Focused verification:
   - passed: 1 suite, 4 tests
 - `npm run build` - passed
 - Prettier check for the four touched files - passed
+
+### Work item 3 - preserve the intent-level design document
+
+The no-change decision was first recorded in
+[`f4d89e2d`](https://github.com/microsoft/vscode-documentdb/commit/f4d89e2d68dcb215b59684a49f346dbb202bb3dc).
+
+CONTRIBUTING section 5.4 says feature `README.md` and `design.md` files record intent rather than
+exact behavior and are updated when a decision, constraint, or intended design changes, or when a
+known statement becomes materially misleading. The copier boundary and flow are unchanged here;
+renaming the method in this document would shadow-track an implementation detail. The
+implementation-oriented indexes README was corrected in work item 2 instead.
