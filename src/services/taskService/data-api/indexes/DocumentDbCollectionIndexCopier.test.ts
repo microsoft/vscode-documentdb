@@ -105,6 +105,25 @@ describe('DocumentDbCollectionIndexCopier', () => {
         await expect(countPromise).rejects.toMatchObject({ name: 'AbortError' });
     });
 
+    it.each(['source', 'target'] as const)('stops waiting for %s indexes when copying is cancelled', async (side) => {
+        const controller = new AbortController();
+        const pendingIndexes = jest.fn().mockReturnValue(new Promise(() => undefined));
+        const pendingClient = {
+            getCollection: jest.fn().mockReturnValue({ indexes: pendingIndexes }),
+        } as unknown as ClustersClient;
+        const sourceClient = side === 'source' ? pendingClient : createClient([]);
+        const targetClient = side === 'target' ? pendingClient : createClient([]);
+        const copier = createCopier(sourceClient, targetClient);
+        const copyPromise = copier.copyIndexes({ signal: controller.signal });
+
+        expect(ClustersClient.getClient).toHaveBeenCalledWith('source', controller.signal);
+        expect(ClustersClient.getClient).toHaveBeenCalledWith('target', controller.signal);
+
+        controller.abort();
+
+        await expect(copyPromise).rejects.toMatchObject({ name: 'AbortError' });
+    });
+
     it('skips equivalent definitions even when names differ', async () => {
         const createIndex = jest.fn();
         const copier = createCopier(

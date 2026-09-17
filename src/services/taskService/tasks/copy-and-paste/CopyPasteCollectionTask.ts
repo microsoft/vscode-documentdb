@@ -404,6 +404,10 @@ export class CopyPasteCollectionTask extends Task implements ResourceTrackingTas
                 },
             });
         } catch (error) {
+            if (signal.aborted) {
+                throw error;
+            }
+
             const errorMessage = error instanceof Error ? error.message : String(error);
             if (context) {
                 context.telemetry.properties.indexCopyFailed = 'true';

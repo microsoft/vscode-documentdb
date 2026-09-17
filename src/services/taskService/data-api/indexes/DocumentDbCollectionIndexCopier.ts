@@ -56,14 +56,14 @@ export class DocumentDbCollectionIndexCopier implements CollectionIndexCopier {
 
     public async copyIndexes(options: CopyIndexesOptions = {}): Promise<IndexCopyResult> {
         const [sourceClient, targetClient] = await Promise.all([
-            ClustersClient.getClient(this.source.clusterId),
-            ClustersClient.getClient(this.target.clusterId),
+            ClustersClient.getClient(this.source.clusterId, options.signal),
+            ClustersClient.getClient(this.target.clusterId, options.signal),
         ]);
 
         // Read both bounded catalogs once so equivalence and name collisions use stable snapshots.
-        const sourceIndexes = await this.readCopyableIndexes(sourceClient, this.source);
+        const sourceIndexes = await this.readCopyableIndexes(sourceClient, this.source, options.signal);
         options.onStart?.(sourceIndexes.length);
-        const targetIndexes = await this.readCopyableIndexes(targetClient, this.target);
+        const targetIndexes = await this.readCopyableIndexes(targetClient, this.target, options.signal);
         const targetIndexNames = new Set(targetIndexes.map((index) => index.name));
         const targetSignatures = new Set(targetIndexes.map((index) => this.getDefinitionSignature(index)));
 

@@ -152,6 +152,29 @@ describe('CopyPasteCollectionTask index phase', () => {
         expect(context.telemetry.properties.indexCopyError).toBe('copyIndexesFailed');
     });
 
+    it('preserves cancellation without recording an index-copy failure', async () => {
+        const controller = new AbortController();
+        const abortError = new Error('aborted');
+        abortError.name = 'AbortError';
+        const indexCopier = {
+            copyIndexes: jest.fn().mockImplementation(async () => {
+                controller.abort();
+                throw abortError;
+            }),
+        } as unknown as CollectionIndexCopier;
+        const reader = { streamDocuments: jest.fn() } as unknown as DocumentReader;
+        const writer = { streamDocuments: jest.fn() } as unknown as StreamingDocumentWriter;
+        const context = createContext();
+        const task = new TestCopyPasteCollectionTask(config, reader, writer, indexCopier, 0);
+        task.setSourceDocumentCount(1);
+
+        await expect(task.runWorkForTest(controller.signal, context)).rejects.toBe(abortError);
+
+        expect(reader.streamDocuments).not.toHaveBeenCalled();
+        expect(context.telemetry.properties.indexCopyFailed).toBeUndefined();
+        expect(context.telemetry.properties.indexCopyError).toBeUndefined();
+    });
+
     it('copies indexes when the source collection is empty', async () => {
         const indexCopier = {
             copyIndexes: jest.fn().mockResolvedValue({
