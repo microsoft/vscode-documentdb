@@ -91,7 +91,7 @@ export class RUBranchDataProvider
 
                 cache.set(resourceId, cluster);
             });
-            ext.outputChannel.trace(`[AzureResourcesView/RU] Cached metadata for ${accounts.length} account(s).`);
+            ext.outputChannel.trace(`[AzureResourcesView/RU] Cached metadata for ${ruAccounts.length} account(s).`);
             return cache;
         },
         updateItem: (item, metadata) => {
