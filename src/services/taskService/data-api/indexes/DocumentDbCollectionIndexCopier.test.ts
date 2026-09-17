@@ -420,10 +420,7 @@ describe('DocumentDbCollectionIndexCopier', () => {
 
     it('preserves the generated fallback name when selecting an unnamed ordinary index', async () => {
         const createIndex = jest.fn().mockResolvedValue({ ok: 1 });
-        const copier = createCopier(
-            createClient([{ key: { email: 1, region: -1 } }]),
-            createClient([], createIndex),
-        );
+        const copier = createCopier(createClient([{ key: { email: 1, region: -1 } }]), createClient([], createIndex));
 
         await copier.copyIndexes({ sourceIndexNames: ['email_1_region_-1'] });
 

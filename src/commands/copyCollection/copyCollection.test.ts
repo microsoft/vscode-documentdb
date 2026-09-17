@@ -1,3 +1,8 @@
+/*---------------------------------------------------------------------------------------------
+ *  Copyright (c) Microsoft Corporation. All rights reserved.
+ *  Licensed under the MIT License. See License.txt in the project root for license information.
+ *--------------------------------------------------------------------------------------------*/
+
 import { type IActionContext, openUrl } from '@microsoft/vscode-azext-utils';
 import { window } from 'vscode';
 import { ext } from '../../extensionVariables';
@@ -37,12 +42,7 @@ describe('copyCollection notification', () => {
 
         await copyCollection(context, node);
 
-        expect(showInformationMessage).toHaveBeenCalledWith(
-            expect.any(String),
-            'OK',
-            'Cancel Copy',
-            'Learn More',
-        );
+        expect(showInformationMessage).toHaveBeenCalledWith(expect.any(String), 'OK', 'Cancel Copy', 'Learn More');
         expect(ext.copiedCollectionNode).toBeUndefined();
         expect(context.telemetry.properties.copiedCollectionUndone).toBe('true');
     });

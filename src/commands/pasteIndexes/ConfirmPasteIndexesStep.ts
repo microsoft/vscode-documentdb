@@ -1,3 +1,8 @@
+/*---------------------------------------------------------------------------------------------
+ *  Copyright (c) Microsoft Corporation. All rights reserved.
+ *  Licensed under the MIT License. See License.txt in the project root for license information.
+ *--------------------------------------------------------------------------------------------*/
+
 import { AzureWizardPromptStep, UserCancelledError } from '@microsoft/vscode-azext-utils';
 import * as vscode from 'vscode';
 import { type ExcludedSourceIndex, type PasteIndexesWizardContext } from './PasteIndexesWizardContext';
@@ -58,7 +63,9 @@ export class ConfirmPasteIndexesStep extends AzureWizardPromptStep<PasteIndexesW
                 );
             }
             if (context.copyableIndexNames.length > 0 && context.copyableIndexNames.length <= 10) {
-                lines.push(vscode.l10n.t('Copying: {0}', context.copyableIndexNames.map((name) => `"${name}"`).join(', ')));
+                lines.push(
+                    vscode.l10n.t('Copying: {0}', context.copyableIndexNames.map((name) => `"${name}"`).join(', ')),
+                );
             }
             if (context.excluded.length > 0) {
                 lines.push(

@@ -1,3 +1,8 @@
+/*---------------------------------------------------------------------------------------------
+ *  Copyright (c) Microsoft Corporation. All rights reserved.
+ *  Licensed under the MIT License. See License.txt in the project root for license information.
+ *--------------------------------------------------------------------------------------------*/
+
 import * as vscode from 'vscode';
 import { type CollectionIndexCopier } from '../../services/taskService/data-api/indexes/CollectionIndexCopier';
 import { ConfirmPasteIndexesStep } from './ConfirmPasteIndexesStep';
@@ -44,7 +49,9 @@ describe('ConfirmPasteIndexesStep', () => {
 
         const options = showInformationMessage.mock.calls[0][1];
         expect(options.detail).toContain('2 of 4 indexes will be copied.');
-        expect(options.detail).toContain('"_id_" (the target\'s own _id index already exists or is created automatically)');
+        expect(options.detail).toContain(
+            '"_id_" (the target\'s own _id index already exists or is created automatically)',
+        );
         expect(options.detail).toContain('"search" (search index - recreate it manually on the target)');
         expect(options.detail).toContain('Search-index exclusions are best-effort');
     });

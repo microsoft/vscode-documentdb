@@ -10,32 +10,32 @@ created: 2026-09-16
 > Durable architecture and behavior decisions for collection copy/paste. Entries 0004–0011 were
 > preserved from the original root-level index-copy plan when this feature folder was established.
 
-| #    | Decision                                                       | Status              | Changed from the proposal?                                           | Date       | PR  |
-| ---- | -------------------------------------------------------------- | ------------------- | -------------------------------------------------------------------- | ---------- | --- |
-| 0001 | Keep implementation documentation beside the Task Service code | Accepted            | Added by the maintainer after recalling the historical documentation | 2026-09-16 | —   |
-| 0002 | Use one optional `CollectionIndexCopier` at the task boundary  | Accepted            | Chosen after rejecting the more elaborate migration pipeline         | 2026-09-16 | —   |
-| 0003 | Defer a portable index model until cross-database migration    | Accepted            | Simplified from the proposed reader/planner/writer architecture      | 2026-09-16 | —   |
-| 0004 | Keep index processing bounded and sequential                   | Accepted            | Migrated from the original implementation plan                       | 2026-09-16 | —   |
-| 0005 | Copy indexes before document streaming                         | Accepted            | Migrated from the original implementation plan                       | 2026-09-16 | —   |
-| 0006 | Exclude the built-in `_id` index                               | Superseded by D0012 | Migrated from the original implementation plan                       | 2026-09-16 | —   |
-| 0007 | Compare definitions before names                               | Accepted            | Migrated from the original implementation plan                       | 2026-09-16 | —   |
-| 0008 | Preserve index creation failures                               | Accepted            | Migrated from the original implementation plan                       | 2026-09-16 | —   |
-| 0009 | Count indexes only after the user chooses to copy them         | Accepted            | Migrated from the original implementation plan                       | 2026-09-16 | —   |
-| 0010 | Do not roll back indexes after cancellation                    | Accepted            | Migrated from the original implementation plan                       | 2026-09-16 | —   |
-| 0011 | Keep the index completion pause presentation-only              | Accepted            | Migrated from the original implementation plan                       | 2026-09-16 | —   |
-| 0012 | Include `_id` in the source catalog count                      | Accepted            | Supersedes the counting portion of decision 0006                     | 2026-09-17 | —   |
+| #    | Decision                                                       | Status              | Changed from the proposal?                                           | Date       | PR   |
+| ---- | -------------------------------------------------------------- | ------------------- | -------------------------------------------------------------------- | ---------- | ---- |
+| 0001 | Keep implementation documentation beside the Task Service code | Accepted            | Added by the maintainer after recalling the historical documentation | 2026-09-16 | —    |
+| 0002 | Use one optional `CollectionIndexCopier` at the task boundary  | Accepted            | Chosen after rejecting the more elaborate migration pipeline         | 2026-09-16 | —    |
+| 0003 | Defer a portable index model until cross-database migration    | Accepted            | Simplified from the proposed reader/planner/writer architecture      | 2026-09-16 | —    |
+| 0004 | Keep index processing bounded and sequential                   | Accepted            | Migrated from the original implementation plan                       | 2026-09-16 | —    |
+| 0005 | Copy indexes before document streaming                         | Accepted            | Migrated from the original implementation plan                       | 2026-09-16 | —    |
+| 0006 | Exclude the built-in `_id` index                               | Superseded by D0012 | Migrated from the original implementation plan                       | 2026-09-16 | —    |
+| 0007 | Compare definitions before names                               | Accepted            | Migrated from the original implementation plan                       | 2026-09-16 | —    |
+| 0008 | Preserve index creation failures                               | Accepted            | Migrated from the original implementation plan                       | 2026-09-16 | —    |
+| 0009 | Count indexes only after the user chooses to copy them         | Accepted            | Migrated from the original implementation plan                       | 2026-09-16 | —    |
+| 0010 | Do not roll back indexes after cancellation                    | Accepted            | Migrated from the original implementation plan                       | 2026-09-16 | —    |
+| 0011 | Keep the index completion pause presentation-only              | Accepted            | Migrated from the original implementation plan                       | 2026-09-16 | —    |
+| 0012 | Include `_id` in the source catalog count                      | Accepted            | Supersedes the counting portion of decision 0006                     | 2026-09-17 | —    |
 | 0013 | Keep copyability classification in the presentation layer      | Accepted            | Reversed an earlier draft that placed it in the copier               | 2026-09-17 | #930 |
 | 0014 | Express all indexes as an omitted name restriction             | Accepted            | Simplified an earlier discriminated copier selection                 | 2026-09-17 | #930 |
-| 0015 | Classify copyability from the presence of an index key          | Accepted            | Avoids incomplete vendor-specific type checks                        | 2026-09-17 | #930 |
+| 0015 | Classify copyability from the presence of an index key         | Accepted            | Avoids incomplete vendor-specific type checks                        | 2026-09-17 | #930 |
 | 0016 | Keep exclusion reasons generic                                 | Accepted            | Avoids coupling behavior to Atlas-specific terminology               | 2026-09-17 | #930 |
-| 0017 | Scope confirmation detail to the user's selection               | Accepted            | Whole-catalog detail was rejected for single-index copy              | 2026-09-17 | #930 |
-| 0018 | Remove the unsupported search-index placeholder                 | Accepted            | Removed a promise for work that is not planned                       | 2026-09-17 | #930 |
-| 0019 | Name notification cancellation Cancel Copy                      | Accepted            | Replaced the misleading Undo label                                   | 2026-09-17 | #930 |
-| 0020 | Store copied indexes in CopyPasteBufferService                  | Accepted            | Rejected adding more global extension state                          | 2026-09-17 | #930 |
-| 0021 | Do not roll back buffer state after a setContext failure         | Accepted            | Rejected handling an unreachable production failure                 | 2026-09-17 | #930 |
-| 0022 | Keep copied index state after a successful paste                 | Accepted            | Matches reusable collection-copy behavior                            | 2026-09-17 | #930 |
-| 0023 | Use a dedicated task for index-only copy                         | Accepted            | Rejected reusing document-transfer orchestration                     | 2026-09-17 | #930 |
-| 0024 | Preserve collection-copy behavior while adapting contracts      | Accepted            | Rejected count and prompt-order redesigns                            | 2026-09-17 | #930 |
+| 0017 | Scope confirmation detail to the user's selection              | Accepted            | Whole-catalog detail was rejected for single-index copy              | 2026-09-17 | #930 |
+| 0018 | Remove the unsupported search-index placeholder                | Accepted            | Removed a promise for work that is not planned                       | 2026-09-17 | #930 |
+| 0019 | Name notification cancellation Cancel Copy                     | Accepted            | Replaced the misleading Undo label                                   | 2026-09-17 | #930 |
+| 0020 | Store copied indexes in CopyPasteBufferService                 | Accepted            | Rejected adding more global extension state                          | 2026-09-17 | #930 |
+| 0021 | Do not roll back buffer state after a setContext failure       | Accepted            | Rejected handling an unreachable production failure                  | 2026-09-17 | #930 |
+| 0022 | Keep copied index state after a successful paste               | Accepted            | Matches reusable collection-copy behavior                            | 2026-09-17 | #930 |
+| 0023 | Use a dedicated task for index-only copy                       | Accepted            | Rejected reusing document-transfer orchestration                     | 2026-09-17 | #930 |
+| 0024 | Preserve collection-copy behavior while adapting contracts     | Accepted            | Rejected count and prompt-order redesigns                            | 2026-09-17 | #930 |
 
 > Entries below are semantically immutable. Append a new decision rather than rewriting an old one,
 > and record a reversal as a new entry plus a status change in the table.

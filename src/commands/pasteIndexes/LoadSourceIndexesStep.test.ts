@@ -1,3 +1,8 @@
+/*---------------------------------------------------------------------------------------------
+ *  Copyright (c) Microsoft Corporation. All rights reserved.
+ *  Licensed under the MIT License. See License.txt in the project root for license information.
+ *--------------------------------------------------------------------------------------------*/
+
 import { ClustersClient } from '../../documentdb/ClustersClient';
 import { CredentialCache } from '../../documentdb/CredentialCache';
 import { CopyPasteBufferService, type CopiedIndexScope } from '../../services/CopyPasteBufferService';
@@ -6,7 +11,7 @@ import { LoadSourceIndexesStep } from './LoadSourceIndexesStep';
 import { type PasteIndexesWizardContext } from './PasteIndexesWizardContext';
 
 jest.mock('../../documentdb/ClustersClient', () => {
-    const actual = jest.requireActual('../../documentdb/ClustersClient') as object;
+    const actual = jest.requireActual('../../documentdb/ClustersClient');
     return { ...actual, ClustersClient: { getClient: jest.fn() } };
 });
 
@@ -68,10 +73,9 @@ describe('LoadSourceIndexesStep', () => {
             uniqueIndexNames: ['email_1'],
             ttlIndexNames: [],
         });
-        const context = createContext(
-            { kind: 'allIndexes' },
-            { getSourceIndexSummary } as unknown as CollectionIndexCopier,
-        );
+        const context = createContext({ kind: 'allIndexes' }, {
+            getSourceIndexSummary,
+        } as unknown as CollectionIndexCopier);
 
         await new LoadSourceIndexesStep().prompt(context);
 
@@ -95,11 +99,12 @@ describe('LoadSourceIndexesStep', () => {
 
     it('retains ordinary counts and _id exclusion when the advisory search read fails', async () => {
         listSearchIndexesForAtlas.mockRejectedValue(new Error('unsupported'));
-        const getSourceIndexSummary = jest.fn().mockResolvedValue({ count: 2, uniqueIndexNames: [], ttlIndexNames: [] });
-        const context = createContext(
-            { kind: 'allIndexes' },
-            { getSourceIndexSummary } as unknown as CollectionIndexCopier,
-        );
+        const getSourceIndexSummary = jest
+            .fn()
+            .mockResolvedValue({ count: 2, uniqueIndexNames: [], ttlIndexNames: [] });
+        const context = createContext({ kind: 'allIndexes' }, {
+            getSourceIndexSummary,
+        } as unknown as CollectionIndexCopier);
 
         await new LoadSourceIndexesStep().prompt(context);
 
@@ -109,10 +114,9 @@ describe('LoadSourceIndexesStep', () => {
     });
 
     it('reports a keyless selected index as unsupported and clears stale state', async () => {
-        const context = createContext(
-            { kind: 'index', indexName: 'search' },
-            { getSourceIndexSummary: jest.fn() } as unknown as CollectionIndexCopier,
-        );
+        const context = createContext({ kind: 'index', indexName: 'search' }, {
+            getSourceIndexSummary: jest.fn(),
+        } as unknown as CollectionIndexCopier);
 
         await expect(new LoadSourceIndexesStep().prompt(context)).rejects.toThrow(
             'index "search" is no longer supported',
@@ -126,10 +130,9 @@ describe('LoadSourceIndexesStep', () => {
             uniqueIndexNames: ['email_1'],
             ttlIndexNames: [],
         });
-        const context = createContext(
-            { kind: 'index', indexName: 'email_1' },
-            { getSourceIndexSummary } as unknown as CollectionIndexCopier,
-        );
+        const context = createContext({ kind: 'index', indexName: 'email_1' }, {
+            getSourceIndexSummary,
+        } as unknown as CollectionIndexCopier);
 
         await new LoadSourceIndexesStep().prompt(context);
 
@@ -141,10 +144,9 @@ describe('LoadSourceIndexesStep', () => {
     });
 
     it('reports a deleted selected index as missing and clears stale state', async () => {
-        const context = createContext(
-            { kind: 'index', indexName: 'missing' },
-            { getSourceIndexSummary: jest.fn() } as unknown as CollectionIndexCopier,
-        );
+        const context = createContext({ kind: 'index', indexName: 'missing' }, {
+            getSourceIndexSummary: jest.fn(),
+        } as unknown as CollectionIndexCopier);
 
         await expect(new LoadSourceIndexesStep().prompt(context)).rejects.toThrow('index "missing" no longer exists');
         expect(CopyPasteBufferService.clearIndexes).toHaveBeenCalledTimes(1);
@@ -154,10 +156,9 @@ describe('LoadSourceIndexesStep', () => {
         jest.mocked(ClustersClient.getClient).mockResolvedValue({
             listCollections: jest.fn().mockResolvedValue([]),
         } as unknown as ClustersClient);
-        const context = createContext(
-            { kind: 'allIndexes' },
-            { getSourceIndexSummary: jest.fn() } as unknown as CollectionIndexCopier,
-        );
+        const context = createContext({ kind: 'allIndexes' }, {
+            getSourceIndexSummary: jest.fn(),
+        } as unknown as CollectionIndexCopier);
 
         await expect(new LoadSourceIndexesStep().prompt(context)).rejects.toThrow('source collection');
         expect(CopyPasteBufferService.clearIndexes).toHaveBeenCalledTimes(1);

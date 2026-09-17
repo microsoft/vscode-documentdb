@@ -1,9 +1,10 @@
+/*---------------------------------------------------------------------------------------------
+ *  Copyright (c) Microsoft Corporation. All rights reserved.
+ *  Licensed under the MIT License. See License.txt in the project root for license information.
+ *--------------------------------------------------------------------------------------------*/
+
 import * as vscode from 'vscode';
-import {
-    CopyPasteBufferService,
-    type CopiedIndexScope,
-    type CopiedIndexSelection,
-} from './CopyPasteBufferService';
+import { CopyPasteBufferService, type CopiedIndexScope, type CopiedIndexSelection } from './CopyPasteBufferService';
 
 jest.mock('vscode', () => ({
     commands: { executeCommand: jest.fn().mockResolvedValue(undefined) },
@@ -43,19 +44,19 @@ describe('CopyPasteBufferService', () => {
         expect(CopyPasteBufferService.getIndexes()?.source.collectionName).toBe('collection');
     });
 
-    it.each<CopiedIndexScope>([
-        { kind: 'index', indexName: 'email_1' },
-        { kind: 'allIndexes' },
-    ])('round-trips $kind scope and sets the context key', async (scope) => {
-        await CopyPasteBufferService.setIndexes(createSelection(scope));
+    it.each<CopiedIndexScope>([{ kind: 'index', indexName: 'email_1' }, { kind: 'allIndexes' }])(
+        'round-trips $kind scope and sets the context key',
+        async (scope) => {
+            await CopyPasteBufferService.setIndexes(createSelection(scope));
 
-        expect(CopyPasteBufferService.getIndexes()?.scope).toEqual(scope);
-        expect(vscode.commands.executeCommand).toHaveBeenCalledWith(
-            'setContext',
-            'documentdb.hasCopiedIndexes',
-            true,
-        );
-    });
+            expect(CopyPasteBufferService.getIndexes()?.scope).toEqual(scope);
+            expect(vscode.commands.executeCommand).toHaveBeenCalledWith(
+                'setContext',
+                'documentdb.hasCopiedIndexes',
+                true,
+            );
+        },
+    );
 
     it('replaces the previous index selection', async () => {
         await CopyPasteBufferService.setIndexes(createSelection({ kind: 'index', indexName: 'email_1' }));

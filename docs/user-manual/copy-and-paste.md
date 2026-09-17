@@ -43,10 +43,10 @@ Use the Explorer's Indexes nodes when you need to recreate indexes without copyi
 
 1. Expand a source collection's **Indexes** node.
 2. To select one ordinary secondary index, right-click it and select **Copy Index**. To select every
-  copyable secondary index, right-click the **Indexes** parent and select **Copy Indexes**.
+   copyable secondary index, right-click the **Indexes** parent and select **Copy Indexes**.
 3. Expand the target collection, right-click its **Indexes** node, and select **Paste Indexes**.
 4. Review the source, target, selected indexes, exclusions, and any unique or TTL warnings, then
-  confirm.
+   confirm.
 
 The built-in `_id` index is not copied. Search and vector search catalog entries that do not have an
 ordinary index definition are shown as not copyable; recreate those manually on the target. This is

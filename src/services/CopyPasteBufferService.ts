@@ -1,8 +1,11 @@
+/*---------------------------------------------------------------------------------------------
+ *  Copyright (c) Microsoft Corporation. All rights reserved.
+ *  Licensed under the MIT License. See License.txt in the project root for license information.
+ *--------------------------------------------------------------------------------------------*/
+
 import * as vscode from 'vscode';
 
-export type CopiedIndexScope =
-    | { readonly kind: 'index'; readonly indexName: string }
-    | { readonly kind: 'allIndexes' };
+export type CopiedIndexScope = { readonly kind: 'index'; readonly indexName: string } | { readonly kind: 'allIndexes' };
 
 export interface CopiedIndexSelection {
     readonly source: {

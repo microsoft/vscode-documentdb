@@ -1,3 +1,8 @@
+/*---------------------------------------------------------------------------------------------
+ *  Copyright (c) Microsoft Corporation. All rights reserved.
+ *  Licensed under the MIT License. See License.txt in the project root for license information.
+ *--------------------------------------------------------------------------------------------*/
+
 import { type IActionContext } from '@microsoft/vscode-azext-utils';
 import { ext } from '../../extensionVariables';
 import { type CollectionIndexCopier } from '../../services/taskService/data-api/indexes/CollectionIndexCopier';
@@ -20,15 +25,15 @@ jest.mock('../../services/taskService/tasks/copy-indexes/CopyIndexesTask', () =>
     CopyIndexesTask: jest.fn(() => fakeTask),
 }));
 jest.mock('../../services/taskService/taskService', () => {
-    const actual = jest.requireActual('../../services/taskService/taskService') as object;
+    const actual = jest.requireActual('../../services/taskService/taskService');
     return { ...actual, TaskService: { registerTask: jest.fn() } };
 });
 jest.mock('../../extensionVariables', () => ({
     ext: {
         state: {
             notifyChildrenChanged: jest.fn(),
-            runWithTemporaryDescription: jest.fn(
-                (_id: string, _description: string, callback: () => Promise<void>) => callback(),
+            runWithTemporaryDescription: jest.fn((_id: string, _description: string, callback: () => Promise<void>) =>
+                callback(),
             ),
         },
     },

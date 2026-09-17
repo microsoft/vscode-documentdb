@@ -103,8 +103,8 @@ for the explicit cross-database revisit condition.
   creation
 - `createIndexCopier.ts` — endpoint-based construction shared by both wizards
 - `DocumentDbCollectionIndexCopier.test.ts` — source-only counting, equivalence, options, vector
-    indexes, source-name filtering, background creation, hidden indexes, collisions, failures, and
-    cancellation
+  indexes, source-name filtering, background creation, hidden indexes, collisions, failures, and
+  cancellation
 
 ## Related documentation
 

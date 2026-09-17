@@ -1,3 +1,8 @@
+/*---------------------------------------------------------------------------------------------
+ *  Copyright (c) Microsoft Corporation. All rights reserved.
+ *  Licensed under the MIT License. See License.txt in the project root for license information.
+ *--------------------------------------------------------------------------------------------*/
+
 import { type IActionContext } from '@microsoft/vscode-azext-utils';
 import * as vscode from 'vscode';
 import { ClustersClient } from '../../../../documentdb/ClustersClient';
@@ -91,7 +96,8 @@ export class CopyIndexesTask extends Task implements ResourceTrackingTask {
                 },
                 onProgress: (progress) => {
                     completed = progress.completed;
-                    const percentage = progress.total === 0 ? 100 : Math.floor((progress.completed / progress.total) * 100);
+                    const percentage =
+                        progress.total === 0 ? 100 : Math.floor((progress.completed / progress.total) * 100);
                     this.updateProgress(
                         percentage,
                         vscode.l10n.t(

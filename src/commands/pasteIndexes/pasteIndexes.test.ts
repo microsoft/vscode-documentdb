@@ -1,3 +1,8 @@
+/*---------------------------------------------------------------------------------------------
+ *  Copyright (c) Microsoft Corporation. All rights reserved.
+ *  Licensed under the MIT License. See License.txt in the project root for license information.
+ *--------------------------------------------------------------------------------------------*/
+
 import { AzureWizard, type IActionContext } from '@microsoft/vscode-azext-utils';
 import { CredentialCache } from '../../documentdb/CredentialCache';
 import { CopyPasteBufferService } from '../../services/CopyPasteBufferService';
@@ -83,7 +88,9 @@ describe('pasteIndexes', () => {
         });
         jest.mocked(CredentialCache.hasCredentials).mockReturnValue(false);
 
-        await expect(pasteIndexes(createContext(), targetNode)).rejects.toThrow('source connection is no longer available');
+        await expect(pasteIndexes(createContext(), targetNode)).rejects.toThrow(
+            'source connection is no longer available',
+        );
         expect(CopyPasteBufferService.clearIndexes).toHaveBeenCalledTimes(1);
     });
 });

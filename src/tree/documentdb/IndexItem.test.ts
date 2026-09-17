@@ -1,3 +1,8 @@
+/*---------------------------------------------------------------------------------------------
+ *  Copyright (c) Microsoft Corporation. All rights reserved.
+ *  Licensed under the MIT License. See License.txt in the project root for license information.
+ *--------------------------------------------------------------------------------------------*/
+
 import * as vscode from 'vscode';
 import { type CollectionItemModel, type DatabaseItemModel, type IndexItemModel } from '../../documentdb/ClustersClient';
 import { type Experience } from '../../DocumentDBExperiences';
@@ -43,7 +48,13 @@ describe('IndexItem copy presentation', () => {
     });
 
     it('explains and collapses a keyless vector search index', async () => {
-        const item = createItem({ type: 'vectorSearch', key: undefined, hidden: true, status: 'READY', queryable: true });
+        const item = createItem({
+            type: 'vectorSearch',
+            key: undefined,
+            hidden: true,
+            status: 'READY',
+            queryable: true,
+        });
         const treeItem = item.getTreeItem();
         const tooltip = treeItem.tooltip as vscode.MarkdownString;
 

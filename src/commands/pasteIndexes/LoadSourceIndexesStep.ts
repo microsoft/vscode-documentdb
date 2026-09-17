@@ -1,3 +1,8 @@
+/*---------------------------------------------------------------------------------------------
+ *  Copyright (c) Microsoft Corporation. All rights reserved.
+ *  Licensed under the MIT License. See License.txt in the project root for license information.
+ *--------------------------------------------------------------------------------------------*/
+
 import { AzureWizardPromptStep } from '@microsoft/vscode-azext-utils';
 import * as vscode from 'vscode';
 import { ClustersClient, getIndexExclusionReason } from '../../documentdb/ClustersClient';
@@ -116,7 +121,8 @@ export class LoadSourceIndexesStep extends AzureWizardPromptStep<PasteIndexesWiz
     private async waitForCatalog<T>(operation: Promise<T>, signal: AbortSignal): Promise<T> {
         signal.throwIfAborted();
         return new Promise<T>((resolve, reject) => {
-            const onAbort = (): void => reject(signal.reason instanceof Error ? signal.reason : new Error('Operation aborted'));
+            const onAbort = (): void =>
+                reject(signal.reason instanceof Error ? signal.reason : new Error('Operation aborted'));
             signal.addEventListener('abort', onAbort, { once: true });
             void operation.then(
                 (result) => {
@@ -125,7 +131,7 @@ export class LoadSourceIndexesStep extends AzureWizardPromptStep<PasteIndexesWiz
                 },
                 (error: unknown) => {
                     signal.removeEventListener('abort', onAbort);
-                    reject(error);
+                    reject(error instanceof Error ? error : new Error(String(error)));
                 },
             );
         });

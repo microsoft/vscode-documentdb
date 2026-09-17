@@ -52,14 +52,15 @@ export class IndexItem implements TreeElement, TreeElementWithExperience, TreeEl
             return [];
         }
 
-        return Object.entries(this.indexInfo.key).map(([key, value]) =>
-            createGenericElement({
-                contextValue: key,
-                id: `${this.id}/${key}`,
-                label: key,
-                description: value === -1 ? 'desc' : value === 1 ? 'asc' : value.toString(),
-                iconPath: new vscode.ThemeIcon('combine'),
-            }) as TreeElement,
+        return Object.entries(this.indexInfo.key).map(
+            ([key, value]) =>
+                createGenericElement({
+                    contextValue: key,
+                    id: `${this.id}/${key}`,
+                    label: key,
+                    description: value === -1 ? 'desc' : value === 1 ? 'asc' : value.toString(),
+                    iconPath: new vscode.ThemeIcon('combine'),
+                }) as TreeElement,
         );
     }
 

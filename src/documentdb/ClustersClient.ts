@@ -743,7 +743,7 @@ export class ClustersClient {
                 type: index.type === 'vectorSearch' ? 'vectorSearch' : 'search',
                 fields: index.fields as unknown[] | undefined,
             }));
-        } catch (error) {
+        } catch {
             if (signal?.aborted) {
                 throw signal.reason instanceof Error ? signal.reason : new Error('Operation aborted');
             }

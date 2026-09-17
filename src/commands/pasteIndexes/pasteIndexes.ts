@@ -1,3 +1,8 @@
+/*---------------------------------------------------------------------------------------------
+ *  Copyright (c) Microsoft Corporation. All rights reserved.
+ *  Licensed under the MIT License. See License.txt in the project root for license information.
+ *--------------------------------------------------------------------------------------------*/
+
 import { AzureWizard, type IActionContext } from '@microsoft/vscode-azext-utils';
 import * as vscode from 'vscode';
 import { CredentialCache } from '../../documentdb/CredentialCache';
@@ -20,7 +25,9 @@ export async function pasteIndexes(context: IActionContext, targetNode: IndexesI
     }
     if (!CredentialCache.hasCredentials(copied.source.clusterId)) {
         await CopyPasteBufferService.clearIndexes();
-        throw new Error(vscode.l10n.t('The source connection is no longer available. Reconnect and copy the indexes again.'));
+        throw new Error(
+            vscode.l10n.t('The source connection is no longer available. Reconnect and copy the indexes again.'),
+        );
     }
 
     const target = {
