@@ -5,7 +5,12 @@
 
 import { createContextValue, createGenericElement } from '@microsoft/vscode-azext-utils';
 import * as vscode from 'vscode';
-import { type CollectionItemModel, type DatabaseItemModel, type IndexItemModel } from '../../documentdb/ClustersClient';
+import {
+    type CollectionItemModel,
+    type DatabaseItemModel,
+    getIndexExclusionReason,
+    type IndexItemModel,
+} from '../../documentdb/ClustersClient';
 import { type Experience } from '../../DocumentDBExperiences';
 import { type BaseClusterModel, type TreeCluster } from '../models/BaseClusterModel';
 import { type TreeElement } from '../TreeElement';
@@ -28,9 +33,13 @@ export class IndexItem implements TreeElement, TreeElementWithExperience, TreeEl
         this.id = `${cluster.treeId}/${databaseInfo.name}/${collectionInfo.name}/indexes/${indexInfo.name}`;
         this.experience = cluster.dbExperience;
         const contextValues = ['treeItem_index'];
-        if (this.indexInfo.name === '_id_') {
+        const exclusionReason = getIndexExclusionReason(this.indexInfo);
+        if (exclusionReason === 'builtInId') {
             contextValues.push('state_default');
-        } else if (this.indexInfo.hidden) {
+        } else if (exclusionReason === undefined) {
+            contextValues.push('state_copyable');
+        }
+        if (this.indexInfo.hidden) {
             contextValues.push('state_hidden');
         }
         this.experienceContextValue = `experience_${this.experience.api}`;
@@ -39,30 +48,19 @@ export class IndexItem implements TreeElement, TreeElementWithExperience, TreeEl
     }
 
     async getChildren(): Promise<TreeElement[]> {
-        // Use key if available, otherwise show not supported and will be handled in the future (for search indexes)
-        if (this.indexInfo.key) {
-            return Object.keys(this.indexInfo.key).map((key) => {
-                const value = this.indexInfo.key![key];
-
-                return createGenericElement({
-                    contextValue: key,
-                    id: `${this.id}/${key}`,
-                    label: key,
-                    description: value === -1 ? 'desc' : value === 1 ? 'asc' : value.toString(),
-                    iconPath: new vscode.ThemeIcon('combine'),
-                }) as TreeElement;
-            });
-        } else {
-            return [
-                createGenericElement({
-                    contextValue: 'indexField',
-                    id: `${this.id}/notSupported`,
-                    label: 'Support coming soon',
-                    description: '',
-                    iconPath: new vscode.ThemeIcon('combine'),
-                }) as TreeElement,
-            ];
+        if (!this.indexInfo.key) {
+            return [];
         }
+
+        return Object.entries(this.indexInfo.key).map(([key, value]) =>
+            createGenericElement({
+                contextValue: key,
+                id: `${this.id}/${key}`,
+                label: key,
+                description: value === -1 ? 'desc' : value === 1 ? 'asc' : value.toString(),
+                iconPath: new vscode.ThemeIcon('combine'),
+            }) as TreeElement,
+        );
     }
 
     getTreeItem(): vscode.TreeItem {
@@ -70,11 +68,29 @@ export class IndexItem implements TreeElement, TreeElementWithExperience, TreeEl
             id: this.id,
             contextValue: this.contextValue,
             label: this.indexInfo.name,
-            description: this.indexInfo.hidden ? `(${vscode.l10n.t('hidden')})` : undefined,
+            description: this.getDescription(),
             tooltip: this.buildTooltip(),
             iconPath: new vscode.ThemeIcon('combine'), // TODO: create our onw icon here, this one's shape can change
-            collapsibleState: vscode.TreeItemCollapsibleState.Collapsed,
+            collapsibleState: this.indexInfo.key
+                ? vscode.TreeItemCollapsibleState.Collapsed
+                : vscode.TreeItemCollapsibleState.None,
         };
+    }
+
+    private getDescription(): string | undefined {
+        const descriptions: string[] = [];
+        if (this.indexInfo.key === undefined) {
+            descriptions.push(this.getIndexTypeLabel());
+        }
+        if (this.indexInfo.hidden) {
+            descriptions.push(vscode.l10n.t('hidden'));
+        }
+
+        return descriptions.length > 0 ? `(${descriptions.join(', ')})` : undefined;
+    }
+
+    private getIndexTypeLabel(): string {
+        return this.indexInfo.type === 'vectorSearch' ? vscode.l10n.t('vector search') : this.indexInfo.type;
     }
 
     private buildTooltip(): vscode.MarkdownString {
@@ -98,6 +114,12 @@ export class IndexItem implements TreeElement, TreeElementWithExperience, TreeEl
         }
         if (badges.length > 0) {
             md.appendMarkdown(`${badges.join(' | ')}\n\n`);
+        }
+
+        if (this.indexInfo.key === undefined) {
+            md.appendMarkdown(
+                `${vscode.l10n.t('This {0} index cannot be copied by Copy/Paste Indexes.', this.getIndexTypeLabel())}\n\n`,
+            );
         }
 
         md.appendMarkdown('---\n\n');
