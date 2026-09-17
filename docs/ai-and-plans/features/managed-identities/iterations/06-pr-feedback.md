@@ -132,7 +132,18 @@ Scope: N5-N10. Align documentation with implemented diagnostics, localize worker
 replace the nested shell label expression with explicit control flow. Regenerate localization after
 the source strings are settled.
 
-**Status:** Planned.
+**Status:** Completed in
+[`a2e97d90`](https://github.com/microsoft/vscode-documentdb/commit/a2e97d90).
+
+The manual checklist now expects the generic cluster authentication failure the driver actually
+returns for an unregistered identity. The user guide distinguishes endpoint and known-tenant
+diagnostics from cluster rejection, and records real Azure VM validation as pending. Playground and
+Shell reuse the existing localized `Failed to obtain Entra ID token.` string. The shell connection
+summary now selects all four authentication labels through an explicit switch, with table-driven
+coverage.
+
+No localization key was added or changed because both worker paths reuse an existing key. The shell
+PTY suite passes (45 tests), and `npm run build` passes.
 
 ### W4 - Authentication terminology and wizard routing
 
