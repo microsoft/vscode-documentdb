@@ -152,6 +152,33 @@ describe('CopyIndexesTask', () => {
         );
     });
 
+    it('records same-connection and same-database telemetry', async () => {
+        const copier = {
+            copyIndexes: jest.fn().mockResolvedValue({
+                selectedIndexCount: 0,
+                createdCount: 0,
+                skippedCount: 0,
+                renamedCount: 0,
+                cancelled: false,
+            }),
+        } as unknown as CollectionIndexCopier;
+        const sameLocationConfig: CopyIndexesConfig = {
+            ...config,
+            target: {
+                clusterId: config.source.clusterId,
+                databaseName: config.source.databaseName,
+                collectionName: 'otherCollection',
+            },
+        };
+        const task = new TestCopyIndexesTask(sameLocationConfig, copier);
+        const context = createContext();
+
+        await task.runWorkForTest(new AbortController().signal, context);
+
+        expect(context.telemetry.properties.isCrossConnection).toBe('false');
+        expect(context.telemetry.properties.isCrossDatabase).toBe('false');
+    });
+
     it('reports cancellation with partial progress', async () => {
         const copier = {
             copyIndexes: jest.fn().mockImplementation(async (options: CopyIndexesOptions) => {
