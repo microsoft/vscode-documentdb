@@ -76,6 +76,19 @@ describe('CopyIndexesTask', () => {
         expect(context.telemetry.properties.sourceClusterDisconnected).toBe('true');
     });
 
+    it('rejects a missing source collection', async () => {
+        jest.mocked(ClustersClient.getClient).mockResolvedValue({
+            listCollections: jest.fn().mockResolvedValue([]),
+        } as unknown as ClustersClient);
+        const context = createContext();
+        const task = new TestCopyIndexesTask(config, {} as CollectionIndexCopier);
+
+        await expect(task.runInitializeForTest(new AbortController().signal, context)).rejects.toThrow(
+            'source collection "sourceCollection" no longer exists',
+        );
+        expect(context.telemetry.properties.sourceCollectionNotFound).toBe('true');
+    });
+
     it('maps created and skipped indexes to determinate progress and telemetry', async () => {
         const copier = {
             copyIndexes: jest.fn().mockImplementation(async (options: CopyIndexesOptions) => {
@@ -134,6 +147,9 @@ describe('CopyIndexesTask', () => {
 
         expect(task.progressUpdates.every((update) => update.progress === 100)).toBe(true);
         expect(context.telemetry.properties.copyScope).toBe('allIndexes');
+        expect(copier.copyIndexes).toHaveBeenCalledWith(
+            expect.objectContaining({ sourceIndexNames: undefined }),
+        );
     });
 
     it('reports cancellation with partial progress', async () => {

@@ -74,4 +74,32 @@ describe('ConfirmPasteIndexesStep', () => {
             'may delete expired documents already in the target collection',
         );
     });
+
+    it('omits the exclusion line when the parent catalog has no exclusions', async () => {
+        const context = createContext({ kind: 'allIndexes' });
+        context.catalogCount = 2;
+        context.excluded = [];
+
+        await new ConfirmPasteIndexesStep().prompt(context);
+
+        expect(showInformationMessage.mock.calls[0][1].detail).toContain('2 of 2 indexes will be copied.');
+        expect(showInformationMessage.mock.calls[0][1].detail).not.toContain('Not copied:');
+    });
+
+    it('reports an empty parent selection with its known exclusions', async () => {
+        const context = createContext({ kind: 'allIndexes' });
+        context.copyableCount = 0;
+        context.copyableIndexNames = [];
+
+        await new ConfirmPasteIndexesStep().prompt(context);
+
+        expect(showInformationMessage.mock.calls[0][1].detail).toContain('0 of 4 indexes will be copied.');
+        expect(showInformationMessage.mock.calls[0][1].detail).toContain('Not copied:');
+    });
+
+    it('cancels before execution when confirmation is dismissed', async () => {
+        showInformationMessage.mockResolvedValue(undefined);
+
+        await expect(new ConfirmPasteIndexesStep().prompt(createContext({ kind: 'allIndexes' }))).rejects.toThrow();
+    });
 });

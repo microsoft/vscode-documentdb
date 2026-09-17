@@ -120,6 +120,26 @@ describe('LoadSourceIndexesStep', () => {
         expect(CopyPasteBufferService.clearIndexes).toHaveBeenCalledTimes(1);
     });
 
+    it('passes one validated selected name to the summary', async () => {
+        const getSourceIndexSummary = jest.fn().mockResolvedValue({
+            count: 2,
+            uniqueIndexNames: ['email_1'],
+            ttlIndexNames: [],
+        });
+        const context = createContext(
+            { kind: 'index', indexName: 'email_1' },
+            { getSourceIndexSummary } as unknown as CollectionIndexCopier,
+        );
+
+        await new LoadSourceIndexesStep().prompt(context);
+
+        expect(context.sourceIndexNames).toEqual(['email_1']);
+        expect(getSourceIndexSummary).toHaveBeenCalledWith({
+            sourceIndexNames: ['email_1'],
+            signal: expect.any(AbortSignal),
+        });
+    });
+
     it('reports a deleted selected index as missing and clears stale state', async () => {
         const context = createContext(
             { kind: 'index', indexName: 'missing' },
@@ -127,6 +147,19 @@ describe('LoadSourceIndexesStep', () => {
         );
 
         await expect(new LoadSourceIndexesStep().prompt(context)).rejects.toThrow('index "missing" no longer exists');
+        expect(CopyPasteBufferService.clearIndexes).toHaveBeenCalledTimes(1);
+    });
+
+    it('clears stale state when the source collection no longer exists', async () => {
+        jest.mocked(ClustersClient.getClient).mockResolvedValue({
+            listCollections: jest.fn().mockResolvedValue([]),
+        } as unknown as ClustersClient);
+        const context = createContext(
+            { kind: 'allIndexes' },
+            { getSourceIndexSummary: jest.fn() } as unknown as CollectionIndexCopier,
+        );
+
+        await expect(new LoadSourceIndexesStep().prompt(context)).rejects.toThrow('source collection');
         expect(CopyPasteBufferService.clearIndexes).toHaveBeenCalledTimes(1);
     });
 });

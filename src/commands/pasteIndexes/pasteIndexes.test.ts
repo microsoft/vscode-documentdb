@@ -74,4 +74,16 @@ describe('pasteIndexes', () => {
         );
         expect(CopyPasteBufferService.clearIndexes).not.toHaveBeenCalled();
     });
+
+    it('clears a copied selection whose source connection is stale', async () => {
+        jest.mocked(CopyPasteBufferService.getIndexes).mockReturnValue({
+            source: { clusterId: 'source', databaseName: 'sourceDb', collectionName: 'sourceCollection' },
+            sourceConnectionName: 'Source',
+            scope: { kind: 'allIndexes' },
+        });
+        jest.mocked(CredentialCache.hasCredentials).mockReturnValue(false);
+
+        await expect(pasteIndexes(createContext(), targetNode)).rejects.toThrow('source connection is no longer available');
+        expect(CopyPasteBufferService.clearIndexes).toHaveBeenCalledTimes(1);
+    });
 });
