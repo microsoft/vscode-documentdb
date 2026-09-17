@@ -95,7 +95,17 @@ technical detail already lives in an earlier review file.
 Scope: N1, N2, and N4. Add focused regression coverage for the non-OIDC environment marker,
 case-insensitive GUID identity, and concurrent credential initialization.
 
-**Status:** Planned.
+**Status:** Completed in
+[`e700683b`](https://github.com/microsoft/vscode-documentdb/commit/e700683b).
+
+The connection-string prompt now requires OIDC, `ENVIRONMENT:azure`, and a usable identity selector
+before choosing managed identity; the named predicate requirements also make the decision readable.
+Duplicate keys lowercase tenant and client GUIDs because hexadecimal casing is not identity. The
+credential provider rechecks its cache after the dynamic import, so the first resumed continuation
+stores the credential and concurrent continuations reuse it instead of constructing duplicates.
+
+Focused tests cover the non-OIDC marker, both GUID discriminators, and simultaneous first token
+requests. `npm run build` and all three focused suites pass (3 suites, 7 tests).
 
 ### W2 - Telemetry semantics
 
