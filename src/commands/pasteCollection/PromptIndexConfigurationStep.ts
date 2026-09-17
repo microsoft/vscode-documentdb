@@ -5,9 +5,8 @@
 
 import { AzureWizardPromptStep } from '@microsoft/vscode-azext-utils';
 import * as l10n from '@vscode/l10n';
-import { DocumentDbCollectionIndexCopier } from '../../services/taskService/data-api/indexes/DocumentDbCollectionIndexCopier';
-import { nonNullValue } from '../../utils/nonNull';
 import { type PasteCollectionWizardContext } from './PasteCollectionWizardContext';
+import { createIndexCopier } from './createIndexCopier';
 
 export class PromptIndexConfigurationStep extends AzureWizardPromptStep<PasteCollectionWizardContext> {
     public async prompt(context: PasteCollectionWizardContext): Promise<void> {
@@ -34,25 +33,7 @@ export class PromptIndexConfigurationStep extends AzureWizardPromptStep<PasteCol
 
         context.copyIndexes = selectedItem.id === 'copy';
         if (context.copyIndexes) {
-            const targetCollectionName = context.isTargetExistingCollection
-                ? nonNullValue(
-                      context.targetCollectionName,
-                      'targetCollectionName',
-                      'context.targetCollectionName',
-                  )
-                : nonNullValue(context.newCollectionName, 'newCollectionName', 'context.newCollectionName');
-            const indexCopier = new DocumentDbCollectionIndexCopier(
-                {
-                    clusterId: context.sourceConnectionId,
-                    databaseName: context.sourceDatabaseName,
-                    collectionName: context.sourceCollectionName,
-                },
-                {
-                    clusterId: context.targetConnectionId,
-                    databaseName: context.targetDatabaseName,
-                    collectionName: targetCollectionName,
-                },
-            );
+            const indexCopier = createIndexCopier(context);
             context.sourceIndexCount = await indexCopier.countSourceIndexes();
             context.telemetry.measurements.sourceIndexCount = context.sourceIndexCount;
         }

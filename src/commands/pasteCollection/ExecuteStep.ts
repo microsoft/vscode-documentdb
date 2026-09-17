@@ -7,7 +7,6 @@ import { AzureWizardExecuteStep } from '@microsoft/vscode-azext-utils';
 import * as vscode from 'vscode';
 import { ClustersClient } from '../../documentdb/ClustersClient';
 import { ext } from '../../extensionVariables';
-import { DocumentDbCollectionIndexCopier } from '../../services/taskService/data-api/indexes/DocumentDbCollectionIndexCopier';
 import { DocumentDbDocumentReader } from '../../services/taskService/data-api/readers/DocumentDbDocumentReader';
 import { DocumentDbStreamingWriter } from '../../services/taskService/data-api/writers/DocumentDbStreamingWriter';
 import { CopyPasteCollectionTask } from '../../services/taskService/tasks/copy-and-paste/CopyPasteCollectionTask';
@@ -16,6 +15,7 @@ import { isTerminalState, TaskService, TaskState, type Task } from '../../servic
 import { DatabaseItem } from '../../tree/documentdb/DatabaseItem';
 import { nonNullValue } from '../../utils/nonNull';
 import { type PasteCollectionWizardContext } from './PasteCollectionWizardContext';
+import { createIndexCopier } from './createIndexCopier';
 
 export class ExecuteStep extends AzureWizardExecuteStep<PasteCollectionWizardContext> {
     public priority: number = 100;
@@ -68,20 +68,7 @@ export class ExecuteStep extends AzureWizardExecuteStep<PasteCollectionWizardCon
         const reader = new DocumentDbDocumentReader(sourceConnectionId, sourceDatabaseName, sourceCollectionName);
         const targetClient = await ClustersClient.getClient(targetConnectionId);
         const writer = new DocumentDbStreamingWriter(targetClient, targetDatabaseName, finalTargetCollectionName);
-        const indexCopier = context.copyIndexes
-            ? new DocumentDbCollectionIndexCopier(
-                  {
-                      clusterId: sourceConnectionId,
-                      databaseName: sourceDatabaseName,
-                      collectionName: sourceCollectionName,
-                  },
-                  {
-                      clusterId: targetConnectionId,
-                      databaseName: targetDatabaseName,
-                      collectionName: finalTargetCollectionName,
-                  },
-              )
-            : undefined;
+        const indexCopier = context.copyIndexes ? createIndexCopier(context) : undefined;
 
         // Create the copy-paste task
         const task = new CopyPasteCollectionTask(config, reader, writer, indexCopier);
