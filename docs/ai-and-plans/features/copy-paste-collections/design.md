@@ -4,9 +4,13 @@ kind: design
 status: active
 created: 2026-09-16
 code:
+    - src/commands/copyIndexes/**
     - src/commands/pasteCollection/**
+    - src/commands/pasteIndexes/**
+    - src/services/CopyPasteBufferService.ts
     - src/services/taskService/data-api/**
     - src/services/taskService/tasks/copy-and-paste/**
+    - src/services/taskService/tasks/copy-indexes/**
 ---
 
 # Copy and Paste Collections Design
@@ -82,7 +86,7 @@ The task will receive one optional copier:
 
 ```typescript
 export interface CollectionIndexCopier {
-    getSourceIndexSummary(signal?: AbortSignal): Promise<SourceIndexSummary>;
+    getSourceIndexSummary(options?: GetSourceIndexSummaryOptions): Promise<SourceIndexSummary>;
 
     copyIndexes(options?: CopyIndexesOptions): Promise<IndexCopyResult>;
 }
@@ -120,6 +124,40 @@ flowchart LR
 `DocumentDbCollectionIndexCopier` is DocumentDB API-specific and owns two `ClustersClient`-backed
 collection endpoints. This removes concrete index types from the task without introducing a generic
 index model before one is required.
+
+Both operations accept an optional readonly source-name restriction. Omission means all copyable
+secondary definitions. The copied-index buffer retains the presentation distinction between one
+named index and a live parent selection, then the Paste Indexes wizard collapses it into that
+contract.
+
+Copyability classification is intentionally outside this boundary. The tree and dedicated wizard
+classify the full `IndexItemModel` catalog, including search entries; the copier reads only ordinary
+driver definitions it can compare and create.
+
+## Dedicated index-only flow
+
+```mermaid
+flowchart LR
+    Copy[Copy Index or Copy Indexes]
+    Buffer[CopyPasteBufferService]
+    Wizard[Paste Indexes Wizard]
+    Task[CopyIndexesTask]
+    Copier[CollectionIndexCopier]
+
+    Copy --> Buffer
+    Buffer --> Wizard
+    Wizard --> Task
+    Task --> Copier
+```
+
+The buffer stores stable `clusterId`, database, and collection descriptors, never tree nodes or
+`treeId`. The target Indexes node comes from the live paste command, so its current `treeId` is valid
+for temporary annotation and refresh. Database access and resource tracking use `clusterId` on both
+sides.
+
+The dedicated task does not create collections or transfer documents. It maps each evaluated index,
+including skips, to determinate progress. Cancellation stops before the next index and does not roll
+back completed creation. Successful paste leaves the buffer intact for reuse.
 
 ## Execution order
 

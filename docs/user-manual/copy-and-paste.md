@@ -11,6 +11,7 @@ The **Copy and Paste** feature in DocumentDB for VS Code provides a convenient w
 **Table of Contents**
 
 - [How It Works](#how-it-works)
+- [Copy and Paste Indexes Without Documents](#copy-and-paste-indexes-without-documents)
 - [Important Considerations](#important-considerations)
 - [Step-by-Step Guide](#step-by-step-guide)
   - [Flow 1: Paste into a Database (Create a New Collection)](#flow-1-paste-into-a-database-create-a-new-collection)
@@ -35,6 +36,26 @@ The extension reads the source index summary only after you choose to copy index
 Cancelling during index creation stops before the next index; indexes already created remain on the target. An index creation failure also leaves indexes already created on the target and stops before any documents are copied. The failure notification includes the index and server reason and links to the output log. Retry the paste and choose **No, only copy documents** when the source contains an index that the target cannot recreate.
 
 This method avoids loading the entire collection into memory at once, making it suitable for collections that are moderately sized.
+
+## Copy and Paste Indexes Without Documents
+
+Use the Explorer's Indexes nodes when you need to recreate indexes without copying documents:
+
+1. Expand a source collection's **Indexes** node.
+2. To select one ordinary secondary index, right-click it and select **Copy Index**. To select every
+  copyable secondary index, right-click the **Indexes** parent and select **Copy Indexes**.
+3. Expand the target collection, right-click its **Indexes** node, and select **Paste Indexes**.
+4. Review the source, target, selected indexes, exclusions, and any unique or TTL warnings, then
+  confirm.
+
+The built-in `_id` index is not copied. Search and vector search catalog entries that do not have an
+ordinary index definition are shown as not copyable; recreate those manually on the target. This is
+different from an ordinary DocumentDB vector index, which has a key definition and can be copied.
+
+Equivalent target definitions are skipped. If a name is already used by a different definition,
+the copied index receives a deterministic suffix. Cancellation leaves indexes already created on
+the target. A successful paste keeps the source selection available so you can paste it into another
+target; use **Cancel Copy** or copy another index selection to replace it.
 
 ## Important Considerations
 
