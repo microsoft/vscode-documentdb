@@ -504,6 +504,10 @@ Other options
 - Empty tenant lists distinguish timeout, provider failure, and successful empty enumeration. An
   explicit retry increases the initial five-second lookup deadline to 30 seconds, without removing
   manual tenant entry or account management. Late responses are logged but do not replace the picker.
+- Persistent Info-level diagnostics describe offered option IDs and gating reasons, not customer
+  labels or input values. Token diagnostics cover credential reuse, SDK calls, endpoint-setting
+  presence, and tenant checks using safe classifications and operation correlation IDs. This adds
+  observability without probing the environment or changing authentication behavior.
 
 The top-level family rows use VS Code theme icons: `key` for username/password, `azure` for
 Microsoft Entra ID, and `unlock` for no authentication.

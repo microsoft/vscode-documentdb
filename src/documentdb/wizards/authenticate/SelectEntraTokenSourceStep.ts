@@ -6,6 +6,7 @@
 import { AzureWizardPromptStep, GoBackError, type IActionContext } from '@microsoft/vscode-azext-utils';
 import * as l10n from '@vscode/l10n';
 import * as vscode from 'vscode';
+import { traceAuthFlow, traceAuthOperation } from '../../../utils/authTrace';
 import { type EntraIdAuthConfig, type ManagedIdentityAuthConfig } from '../../auth/AuthConfig';
 import {
     AuthMethodId,
@@ -112,22 +113,32 @@ export class SelectEntraTokenSourceStep<T extends ManagedIdentitySelectionContex
 
         let selected: IdentityQuickPickItem;
         do {
-            selected = await context.ui.showQuickPick(
-                this.buildItems(
-                    prefilledClientId,
-                    suppliedIdentity,
-                    facts?.usesOidc === true,
-                    context.authenticationMethodPrompted === true,
-                ),
-                {
+            const items = this.buildItems(
+                prefilledClientId,
+                suppliedIdentity,
+                facts?.usesOidc === true,
+                context.authenticationMethodPrompted === true,
+            );
+            selected = await traceAuthOperation(
+                'identityPicker',
+                () => context.ui.showQuickPick(items, {
                     stepName: 'selectEntraTokenSource',
                     placeHolder: suppliedIdentity
                         ? l10n.t('Select the identity to use ("{0}" is not a client ID)', suppliedIdentity)
                         : l10n.t('Select the identity to use for this connection'),
                     matchOnDetail: true,
                     suppressPersistence: true,
+                }),
+                {
+                    options: items.flatMap((item) => (item.choice ? [item.choice] : [])).join(','),
+                    baseOptionsReason: 'accountAndBothManagedIdentityRoutesAlwaysAvailable',
+                    clientIdOptionReason: prefilledClientId ? 'configuredCandidate' : 'noCandidate',
+                    changeAuthMethodReason: facts?.usesOidc ? 'oidcDeclared' : 'oidcNotDeclared',
+                    backOptionReason: context.authenticationMethodPrompted ? 'familyPickerShown' : 'familyPickerSkipped',
+                    manualInputPrefilled: !!suppliedIdentity,
                 },
             );
+            traceAuthFlow('identityPicker.selection', { choice: selected.choice ?? 'none' });
 
             if (selected.choice === 'authMethod' && (await this.selectDifferentAuthMethod(context))) {
                 return;
@@ -150,6 +161,7 @@ export class SelectEntraTokenSourceStep<T extends ManagedIdentitySelectionContex
             context.managedIdentityAuthConfig = tenantId ? { tenantId } : {};
             context.telemetry.properties.managedIdentityKind = 'system';
             context.telemetry.properties.managedIdentityClientIdSource = 'none';
+            traceAuthFlow('identityPicker.managedIdentityConfigured', { identityKind: 'systemAssigned', source: 'none' });
             return;
         }
 
@@ -159,13 +171,17 @@ export class SelectEntraTokenSourceStep<T extends ManagedIdentitySelectionContex
             return;
         }
 
-        const clientId = await context.ui.showInputBox({
-            prompt: l10n.t('Enter the client ID of the user-assigned managed identity.'),
-            placeHolder: l10n.t('For example, {0}', CLIENT_ID_EXAMPLE),
-            value: selected.clientId ?? prefilledClientId,
-            ignoreFocusOut: true,
-            validateInput: (value?: string) => this.validateClientId(value),
-        });
+        const clientId = await traceAuthOperation(
+            'identityPicker.clientIdInput',
+            () => context.ui.showInputBox({
+                prompt: l10n.t('Enter the client ID of the user-assigned managed identity.'),
+                placeHolder: l10n.t('For example, {0}', CLIENT_ID_EXAMPLE),
+                value: selected.clientId ?? prefilledClientId,
+                ignoreFocusOut: true,
+                validateInput: (value?: string) => this.validateClientId(value),
+            }),
+            { prefilled: !!(selected.clientId ?? prefilledClientId) },
+        );
 
         const normalized = normalizeClientId(clientId);
         this.applyAuthMethod(context, AuthMethodId.ManagedIdentity);
@@ -178,21 +194,29 @@ export class SelectEntraTokenSourceStep<T extends ManagedIdentitySelectionContex
             selectedAuthMethod !== AuthMethodId.MicrosoftEntraID &&
             selectedAuthMethod !== AuthMethodId.ManagedIdentity
         ) {
+            traceAuthFlow('identityPicker.skipped', { reason: 'nonEntraAuthMethod', method: selectedAuthMethod ?? 'none' });
             return false;
         }
 
         const availableMethods =
             context.availableAuthenticationMethods ?? authMethodsFromString(context.availableAuthMethods);
         if (!availableMethods.includes(AuthMethodId.ManagedIdentity)) {
+            traceAuthFlow('identityPicker.skipped', { reason: 'managedIdentityUnavailable' });
             return false;
         }
 
         const facts = context.connectionStringAuthFacts;
         if (!facts || !facts.declaresAzureMachineWorkflow) {
+            traceAuthFlow('identityPicker.required', { reason: 'noExplicitMachineWorkflow' });
             return true;
         }
 
-        return !!facts.username && !facts.usernameIsGuid;
+        const needsCorrection = !!facts.username && !facts.usernameIsGuid;
+        traceAuthFlow(needsCorrection ? 'identityPicker.required' : 'identityPicker.skipped', {
+            reason: needsCorrection ? 'suppliedIdentityNotClientId' : 'explicitMachineWorkflow',
+            suppliedIdentity: needsCorrection ? 'unrecognized' : facts.username ? 'clientId' : 'absent',
+        });
+        return needsCorrection;
     }
 
     public validateClientId(this: void, value: string | undefined): string | undefined {
@@ -314,12 +338,20 @@ export class SelectEntraTokenSourceStep<T extends ManagedIdentitySelectionContex
 
         let selected: AuthMethodQuickPickItem;
         try {
-            selected = await context.ui.showQuickPick(authMethodItems, {
-                stepName: 'selectDifferentAuthMethod',
-                placeHolder: l10n.t('Select an authentication method'),
-                matchOnDetail: true,
-                suppressPersistence: true,
-            });
+            selected = await traceAuthOperation(
+                'identityPicker.changeAuthMethod',
+                () => context.ui.showQuickPick(authMethodItems, {
+                    stepName: 'selectDifferentAuthMethod',
+                    placeHolder: l10n.t('Select an authentication method'),
+                    matchOnDetail: true,
+                    suppressPersistence: true,
+                }),
+                {
+                    options: authMethodItems.flatMap((item) => (item.authMethod ? [item.authMethod] : [])).join(','),
+                    returnOption: true,
+                    reason: 'changeAuthMethodSelected',
+                },
+            );
         } catch (error) {
             if (error instanceof GoBackError) {
                 return false;
@@ -328,6 +360,7 @@ export class SelectEntraTokenSourceStep<T extends ManagedIdentitySelectionContex
         }
 
         if (selected.returnToIdentityChoices) {
+            traceAuthFlow('identityPicker.changeAuthMethod.selection', { choice: 'returnToIdentityChoices' });
             return false;
         }
 
@@ -340,6 +373,7 @@ export class SelectEntraTokenSourceStep<T extends ManagedIdentitySelectionContex
     }
 
     private applyAuthMethod(context: T, method: AuthMethodId): void {
+        traceAuthFlow('identityPicker.authMethodApplied', { method });
         this.setSelectedAuthMethod(context, method);
 
         if (method === AuthMethodId.MicrosoftEntraID) {
@@ -353,6 +387,7 @@ export class SelectEntraTokenSourceStep<T extends ManagedIdentitySelectionContex
     }
 
     private applyClientId(context: T, clientId: string, source: 'connectionString' | 'prompt'): void {
+        traceAuthFlow('identityPicker.managedIdentityConfigured', { identityKind: 'userAssigned', source });
         context.managedIdentityAuthConfig = { ...context.managedIdentityAuthConfig, clientId };
         context.valuesToMask.push(clientId);
         context.telemetry.properties.managedIdentityKind = 'user';

@@ -5,6 +5,7 @@
 
 import { randomUUID } from 'crypto';
 import { type MongoClientOptions, type OIDCResponse } from 'mongodb';
+import { traceAuthFlow, traceAuthOperation } from '../../utils/authTrace';
 import { type CachedClusterCredentials } from '../CredentialCache';
 import { DocumentDBConnectionString } from '../utils/DocumentDBConnectionString';
 import { resolveAllowInvalidCertificates } from '../utils/tlsException';
@@ -46,6 +47,11 @@ export class ManagedIdentityAuthHandler implements AuthHandler {
     public async configureAuth(): Promise<AuthHandlerResponse> {
         const clientId = this.clusterCredentials.managedIdentityConfig?.clientId;
         const tenantId = this.clusterCredentials.managedIdentityConfig?.tenantId;
+        traceAuthFlow('managedIdentity.configureOidc', {
+            identityKind: clientId ? 'userAssigned' : 'systemAssigned',
+            clusterTenantKnown: !!tenantId,
+            tokenAcquisition: 'deferredUntilDriverCallback',
+        }, this.tokenCorrelationId);
 
         const dbConnectionString = new DocumentDBConnectionString(this.clusterCredentials.connectionString);
         dbConnectionString.username = '';
@@ -62,12 +68,12 @@ export class ManagedIdentityAuthHandler implements AuthHandler {
             authMechanismProperties: {
                 ALLOWED_HOSTS: getOidcAllowedHosts(this.clusterCredentials.connectionString),
                 OIDC_CALLBACK: async (): Promise<OIDCResponse> => {
-                    const token = await getManagedIdentityAccessToken(
+                    const token = await traceAuthOperation('managedIdentity.oidcCallback', () => getManagedIdentityAccessToken(
                         [DOCUMENTDB_ENTRA_SCOPE],
                         clientId,
                         tenantId,
                         this.tokenCorrelationId,
-                    );
+                    ), {}, this.tokenCorrelationId);
 
                     return {
                         accessToken: token.accessToken,

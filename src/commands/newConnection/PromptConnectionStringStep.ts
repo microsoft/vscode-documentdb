@@ -13,6 +13,7 @@ import {
 import { AzureDomains, hasDomainSuffix } from '../../documentdb/utils/connectionStringHelpers';
 import { DocumentDBConnectionString } from '../../documentdb/utils/DocumentDBConnectionString';
 import { canonicalizeTlsException } from '../../documentdb/utils/tlsException';
+import { traceAuthFlow } from '../../utils/authTrace';
 import { type NewConnectionWizardContext } from './NewConnectionWizardContext';
 
 export class PromptConnectionStringStep extends AzureWizardPromptStep<NewConnectionWizardContext> {
@@ -119,6 +120,16 @@ export class PromptConnectionStringStep extends AzureWizardPromptStep<NewConnect
         supportedAuthMethods.push(AuthMethodId.NoAuth);
 
         context.availableAuthenticationMethods = supportedAuthMethods;
+        traceAuthFlow('newConnection.connectionStringAuthInference', {
+            usesOidc: authFacts.usesOidc,
+            declaresMachineWorkflow: authFacts.declaresAzureMachineWorkflow,
+            suppliedIdentityPresent: !!authFacts.username,
+            suppliedIdentityIsGuid: authFacts.usernameIsGuid,
+            usableManagedIdentity: hasUsableManagedIdentity,
+            selectedMethod: context.selectedAuthenticationMethod ?? 'none',
+            supportedMethods: supportedAuthMethods.join(','),
+            entraHostRecognized: hasDomainSuffix(AzureDomains.vCore, ...parsedConnectionString.hosts),
+        });
     }
 
     //eslint-disable-next-line @typescript-eslint/require-await

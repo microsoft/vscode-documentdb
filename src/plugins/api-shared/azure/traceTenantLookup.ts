@@ -2,6 +2,7 @@ import { type AzureTenant } from '@microsoft/vscode-azext-azureauth';
 import * as l10n from '@vscode/l10n';
 import { randomUUID } from 'crypto';
 import { ext } from '../../../extensionVariables';
+import { describeAuthError } from '../../../utils/authTrace';
 import { valueOnTimeout } from '../../../utils/timeout';
 
 interface LookupTimeout<T> {
@@ -13,62 +14,6 @@ interface LookupTimeout<T> {
 export interface TenantLookupResult {
     tenants: AzureTenant[];
     status: 'success' | 'timeout' | 'error';
-}
-
-const knownErrorNames = new Set([
-    'Error',
-    'TypeError',
-    'RangeError',
-    'ReferenceError',
-    'SyntaxError',
-    'RestError',
-    'NotSignedInError',
-    'AuthenticationError',
-    'AuthenticationRequiredError',
-    'CredentialUnavailableError',
-    'AggregateAuthenticationError',
-    'AbortError',
-    'UserCancelledError',
-]);
-
-const knownErrorCodes = new Set([
-    'ENOTFOUND',
-    'EAI_AGAIN',
-    'ECONNRESET',
-    'ECONNREFUSED',
-    'ETIMEDOUT',
-    'ENETUNREACH',
-    'EHOSTUNREACH',
-    'CERT_HAS_EXPIRED',
-    'UNABLE_TO_VERIFY_LEAF_SIGNATURE',
-    'SELF_SIGNED_CERT_IN_CHAIN',
-    'REQUEST_SEND_ERROR',
-    'PARSE_ERROR',
-    'InvalidAuthenticationToken',
-    'ExpiredAuthenticationToken',
-    'AuthenticationFailed',
-    'AuthorizationFailed',
-    'InteractionRequiredAuthError',
-    'interaction_required',
-    'consent_required',
-    'invalid_grant',
-]);
-
-function describeLookupError(error: unknown): string {
-    const errorName = error instanceof Error && knownErrorNames.has(error.name) ? error.name : 'unknown';
-    const errorCode =
-        typeof error === 'object' && error !== null && 'code' in error && typeof error.code === 'string'
-            ? error.code
-            : undefined;
-    const code = errorCode && knownErrorCodes.has(errorCode) ? errorCode : 'unknown';
-    const statusCode =
-        typeof error === 'object' && error !== null && 'statusCode' in error ? error.statusCode : undefined;
-    const httpStatus =
-        typeof statusCode === 'number' && Number.isInteger(statusCode) && statusCode >= 100 && statusCode <= 599
-            ? statusCode
-            : 'unknown';
-    const aadstsCode = error instanceof Error ? /\bAADSTS\d{5,9}\b/.exec(error.message)?.[0] : undefined;
-    return `type=${errorName}; code=${code}; httpStatus=${httpStatus}; aadsts=${aadstsCode ?? 'none'}`;
 }
 
 export async function traceTenantLookup<T extends boolean | AzureTenant[]>(
@@ -113,9 +58,9 @@ export async function traceTenantLookup<T extends boolean | AzureTenant[]>(
                           '{0}: failed after timeout in {1} ms; {2}.',
                           label,
                           Date.now() - startTime,
-                          describeLookupError(error),
+                          describeAuthError(error),
                       )
-                    : l10n.t('{0}: failed in {1} ms; {2}.', label, Date.now() - startTime, describeLookupError(error)),
+                    : l10n.t('{0}: failed in {1} ms; {2}.', label, Date.now() - startTime, describeAuthError(error)),
             );
             throw error;
         }

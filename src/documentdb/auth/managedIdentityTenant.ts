@@ -3,6 +3,7 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+import { traceAuthFlow } from '../../utils/authTrace';
 import { describeManagedIdentityTenantMismatch } from './managedIdentityErrors';
 import { reportManagedIdentityFailureReason } from './managedIdentityTelemetry';
 
@@ -55,14 +56,20 @@ export function verifyManagedIdentityTenant(
     correlationId: string,
 ): void {
     if (!clusterTenantId) {
+        traceAuthFlow('managedIdentity.tenantCheck', { outcome: 'skipped', reason: 'clusterTenantUnknown' }, correlationId);
         return;
     }
 
     const identityTenantId = readTenantIdFromAccessToken(accessToken);
     if (!identityTenantId || identityTenantId.toLowerCase() === clusterTenantId.toLowerCase()) {
+        traceAuthFlow('managedIdentity.tenantCheck', {
+            outcome: identityTenantId ? 'matched' : 'skipped',
+            reason: identityTenantId ? 'sameTenant' : 'tokenTenantUnavailable',
+        }, correlationId);
         return;
     }
 
+    traceAuthFlow('managedIdentity.tenantCheck', { outcome: 'failed', reason: 'tenantMismatch' }, correlationId);
     reportManagedIdentityFailureReason('tenantMismatch', clientId, correlationId);
     throw new Error(describeManagedIdentityTenantMismatch(identityTenantId, clusterTenantId));
 }

@@ -7,6 +7,18 @@ function interpolate(message: string, ...args: unknown[]): string {
     return message.replace(/\{(\d+)\}/g, (_match, index: string) => String(args[Number(index)]));
 }
 
+const mockOutputChannel = { info: jest.fn(), error: jest.fn() };
+jest.mock('../../../extensionVariables', () => ({
+    ext: { get outputChannel(): typeof mockOutputChannel { return mockOutputChannel; } },
+}));
+
+beforeEach(() => { jest.clearAllMocks(); });
+afterEach(() => {
+    const output = JSON.stringify([mockOutputChannel.info.mock.calls, mockOutputChannel.error.mock.calls]);
+    expect(output).not.toContain('11111111-2222-3333-4444-555555555555');
+    expect(output).not.toContain('alice');
+});
+
 jest.mock('vscode', () => ({
     ThemeIcon: class ThemeIcon {
         constructor(public readonly id: string) {}
@@ -143,6 +155,7 @@ describe('SelectEntraTokenSourceStep.shouldPrompt', () => {
         const context = makeContext({ selectedAuthMethod: AuthMethodId.NativeAuth });
 
         expect(makeStep().shouldPrompt(context)).toBe(false);
+        expect(JSON.stringify(mockOutputChannel.info.mock.calls)).toContain('nonEntraAuthMethod');
     });
 
     it('does not prompt when managed identity is not available for the cluster', () => {
@@ -175,6 +188,7 @@ describe('SelectEntraTokenSourceStep.shouldPrompt', () => {
         });
 
         expect(makeStep().shouldPrompt(context)).toBe(false);
+        expect(JSON.stringify(mockOutputChannel.info.mock.calls)).toContain('explicitMachineWorkflow');
     });
 
     it('still prompts when the string did not declare the Azure machine workflow', () => {
@@ -206,6 +220,17 @@ describe('SelectEntraTokenSourceStep.shouldPrompt', () => {
 });
 
 describe('SelectEntraTokenSourceStep.prompt', () => {
+    it('traces cancellation without logging error messages', async () => {
+        const context = makeContext({
+            ui: { showQuickPick: jest.fn().mockRejectedValue(new Error('secret-token')) } as unknown as AuthenticateWizardContext['ui'],
+        });
+
+        await expect(makeStep().prompt(context)).rejects.toThrow('secret-token');
+
+        expect(JSON.stringify(mockOutputChannel.error.mock.calls)).toContain('identityPicker');
+        expect(JSON.stringify(mockOutputChannel.error.mock.calls)).not.toContain('secret-token');
+    });
+
     it('returns to a family picker that actually prompted', async () => {
         const context = makeContext({
             authenticationMethodPrompted: true,
@@ -229,6 +254,10 @@ describe('SelectEntraTokenSourceStep.prompt', () => {
 
         expect(context.selectedAuthMethod).toBe(AuthMethodId.MicrosoftEntraID);
         expect(context.managedIdentityAuthConfig).toBeUndefined();
+        const output = JSON.stringify(mockOutputChannel.info.mock.calls);
+        expect(output).toContain('clientId,account,systemAssigned,manual');
+        expect(output).toContain('configuredCandidate');
+        expect(output).toContain('identityPicker.selection');
     });
 
     it('selects the machine identity without retaining a client ID', async () => {

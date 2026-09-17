@@ -4,6 +4,9 @@
  *--------------------------------------------------------------------------------------------*/
 
 const reportManagedIdentityFailureReason = jest.fn();
+jest.mock('../../extensionVariables', () => ({
+    ext: { outputChannel: { info: jest.fn(), error: jest.fn() } },
+}));
 jest.mock('./managedIdentityTelemetry', () => ({
     reportManagedIdentityFailureReason: (...args: unknown[]) => reportManagedIdentityFailureReason(...args),
 }));

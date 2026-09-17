@@ -5,6 +5,7 @@
 
 import { AzureWizardPromptStep } from '@microsoft/vscode-azext-utils';
 import * as l10n from '@vscode/l10n';
+import { traceAuthFlow, traceAuthOperation } from '../../../utils/authTrace';
 
 import {
     AuthMethodId,
@@ -26,6 +27,9 @@ export class ChooseAuthMethodStep extends AzureWizardPromptStep<AuthenticateWiza
         }
 
         if (supportedMethods.length === availableMethods.length && availableFamilies.length === 1) {
+            traceAuthFlow('authenticate.authMethodPicker.skipped', {
+                reason: 'singleSupportedFamily', method: availableFamilies[0],
+            });
             context.selectedAuthMethod = availableFamilies[0];
             context.isAuthMethodUpdated = true;
             context.authenticationMethodPrompted = false;
@@ -50,13 +54,17 @@ export class ChooseAuthMethodStep extends AzureWizardPromptStep<AuthenticateWiza
             });
         }
 
-        const selectedItem = await context.ui.showQuickPick(quickPickItems, {
+        const selectedItem = await traceAuthOperation('authenticate.authMethodPicker', () => context.ui.showQuickPick(quickPickItems, {
             placeHolder: l10n.t('Select an authentication method for "{resourceName}"', {
                 resourceName: context.resourceName,
             }),
             title: l10n.t('Authenticate to connect with your DocumentDB cluster'),
             suppressPersistence: true,
             ignoreFocusOut: true,
+        }), {
+            options: quickPickItems.map((item) => item.authMethod ?? 'unsupported').join(','),
+            unknownMethodCount: unknownMethodIds.length,
+            reason: 'multipleOrUnknownFamilies',
         });
 
         if (isSupportedAuthMethod(selectedItem.authMethod) === false) {
@@ -64,11 +72,16 @@ export class ChooseAuthMethodStep extends AzureWizardPromptStep<AuthenticateWiza
         }
 
         context.selectedAuthMethod = selectedItem.authMethod;
+        traceAuthFlow('authenticate.authMethodSelected', { method: selectedItem.authMethod });
         context.isAuthMethodUpdated = true;
         context.authenticationMethodPrompted = true;
     }
 
     public shouldPrompt(context: AuthenticateWizardContext): boolean {
+        traceAuthFlow('authenticate.authMethodGate', {
+            skipped: !!context.selectedAuthMethod,
+            reason: context.selectedAuthMethod ? 'methodAlreadySelected' : 'noMethodSelected',
+        });
         return !context.selectedAuthMethod;
     }
 }

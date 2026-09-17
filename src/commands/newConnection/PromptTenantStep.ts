@@ -11,6 +11,7 @@ import { AuthMethodId } from '../../documentdb/auth/AuthMethod';
 import { type AzureSubscriptionProviderWithFilters } from '../../plugins/api-shared/azure/AzureSubscriptionProviderWithFilters';
 import { traceTenantLookup, type TenantLookupResult } from '../../plugins/api-shared/azure/traceTenantLookup';
 import { nonNullValue } from '../../utils/nonNull';
+import { traceAuthFlow } from '../../utils/authTrace';
 import { type NewConnectionWizardContext } from './NewConnectionWizardContext';
 
 const TENANT_LOOKUP_TIMEOUT_MS = 5_000;
@@ -89,6 +90,10 @@ export class PromptTenantStep extends AzureWizardPromptStep<NewConnectionWizardC
                 tenantItems.push(item);
             });
 
+            traceAuthFlow('newConnection.tenantPicker.ready', {
+                status, tenantCount: tenants.length, timeoutMs: lookupTimeoutMs,
+                options: tenants.length ? 'manual,manageAccounts,tenant' : 'retry,manual,manageAccounts',
+            });
             return tenantItems;
         };
 
@@ -103,6 +108,10 @@ export class PromptTenantStep extends AzureWizardPromptStep<NewConnectionWizardC
                 matchOnDescription: true,
             });
 
+            traceAuthFlow('newConnection.tenantPicker.selection', {
+                choice: selectedItem.isRetryOption ? 'retry' : selectedItem.isSignInOption ? 'manageAccounts'
+                    : selectedItem.isCustomOption ? 'manual' : 'tenant',
+            });
             if (selectedItem.isSignInOption) {
                 await this.handleSignInToOtherAccounts(context, subscriptionProvider);
                 accountManagementUsed = true;
@@ -149,6 +158,10 @@ export class PromptTenantStep extends AzureWizardPromptStep<NewConnectionWizardC
     }
 
     public shouldPrompt(context: NewConnectionWizardContext): boolean {
+        traceAuthFlow('newConnection.tenantPicker.gate', {
+            skipped: context.selectedAuthenticationMethod !== AuthMethodId.MicrosoftEntraID,
+            reason: context.selectedAuthenticationMethod === AuthMethodId.MicrosoftEntraID ? 'interactiveEntra' : 'notInteractiveEntra',
+        });
         // Only show this step if Microsoft Entra ID authentication is selected
         return context.selectedAuthenticationMethod === AuthMethodId.MicrosoftEntraID;
     }

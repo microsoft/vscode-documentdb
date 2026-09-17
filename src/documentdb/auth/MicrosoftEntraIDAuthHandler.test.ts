@@ -4,6 +4,10 @@
  *--------------------------------------------------------------------------------------------*/
 
 const getSessionFromVSCode = jest.fn();
+const mockOutputChannel = { info: jest.fn(), error: jest.fn() };
+jest.mock('../../extensionVariables', () => ({
+    ext: { get outputChannel(): typeof mockOutputChannel { return mockOutputChannel; } },
+}));
 
 jest.mock('@microsoft/vscode-azext-azureauth/out/src/getSessionFromVSCode', () => ({
     getSessionFromVSCode: (...args: unknown[]) => getSessionFromVSCode(...args),
@@ -25,6 +29,7 @@ function buildCredentials(connectionString: string): CachedClusterCredentials {
 
 describe('MicrosoftEntraIDAuthHandler', () => {
     beforeEach(() => {
+        jest.clearAllMocks();
         getSessionFromVSCode.mockReset();
         getSessionFromVSCode.mockResolvedValue({ accessToken: 'access-token' });
     });
@@ -41,5 +46,19 @@ describe('MicrosoftEntraIDAuthHandler', () => {
         expect(result.connectionString).not.toContain('authMechanismProperties');
         expect(result.connectionString).toContain('retryWrites=true');
         expect(result.options.authMechanismProperties).toHaveProperty('OIDC_CALLBACK');
+        const output = JSON.stringify(mockOutputChannel.info.mock.calls);
+        expect(output).toContain('interactiveEntra.getSession');
+        expect(output).not.toContain('access-token');
+        expect(output).not.toContain('my-cluster');
+    });
+
+    it('logs interactive authentication failure without the raw message', async () => {
+        getSessionFromVSCode.mockRejectedValueOnce(new Error('secret-token'));
+        const handler = new MicrosoftEntraIDAuthHandler(buildCredentials('mongodb://localhost:27017/'));
+
+        await expect(handler.configureAuth()).rejects.toThrow('secret-token');
+
+        expect(JSON.stringify(mockOutputChannel.error.mock.calls)).toContain('interactiveEntra.getSession');
+        expect(JSON.stringify(mockOutputChannel.error.mock.calls)).not.toContain('secret-token');
     });
 });

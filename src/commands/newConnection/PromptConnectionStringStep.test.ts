@@ -8,6 +8,20 @@ import { MANAGED_IDENTITY_AUTH_MECHANISM_PROPERTIES } from '../../documentdb/aut
 import { type NewConnectionWizardContext } from './NewConnectionWizardContext';
 import { PromptConnectionStringStep } from './PromptConnectionStringStep';
 
+const mockInfo = jest.fn();
+jest.mock('../../extensionVariables', () => ({
+    ext: { outputChannel: { info: (...args: unknown[]): void => { mockInfo(...args); } } },
+}));
+
+beforeEach(() => { jest.clearAllMocks(); });
+afterEach(() => {
+    const output = JSON.stringify(mockInfo.mock.calls);
+    expect(output).toContain('connectionStringAuthInference');
+    for (const secret of ['11111111-2222-3333-4444-555555555555', 'private.documentdb.internal', 'display-name']) {
+        expect(output).not.toContain(secret);
+    }
+});
+
 function makeContext(connectionString: string): NewConnectionWizardContext {
     return {
         parentId: '',

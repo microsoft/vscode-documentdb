@@ -10,6 +10,10 @@ import { expiresInSecondsFromTimestamp, ManagedIdentityAuthHandler } from './Man
 
 const getManagedIdentityAccessToken = jest.fn();
 
+jest.mock('../../extensionVariables', () => ({
+    ext: { outputChannel: { info: jest.fn(), error: jest.fn() } },
+}));
+
 jest.mock('./managedIdentityTokenProvider', () => ({
     getManagedIdentityAccessToken: (...args: unknown[]) => getManagedIdentityAccessToken(...args),
 }));

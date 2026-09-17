@@ -19,6 +19,21 @@ Interactive account tenant selection reports empty, failed, and timed-out lookup
 The initial lookup allows five seconds; an explicit retry allows 30 seconds. Manual tenant entry
 and account management remain available. See D11 in [Decisions](decisions.md).
 
+## Troubleshooting Output
+
+Use **Output > DocumentDB for VS Code** at the default Info level. `Authentication` entries record
+family and identity picker option IDs, selections, skip reasons, connection-string inference,
+interactive session acquisition, and managed identity credential reuse, SDK loading, token requests,
+and tenant-check outcomes. `Azure tenant lookup` entries distinguish empty results, failures,
+timeouts, and late responses. Operation IDs correlate start/completion/failure entries; managed
+identity callbacks and token-provider stages share a correlation ID, including shell/playground requests.
+
+Environment diagnostics report platform/architecture and only the presence of relevant endpoint,
+header/secret, and proxy settings. They do not identify the SDK-selected endpoint or claim an SDK
+token-cache hit. New trace entries omit account labels, tenant/client IDs, connection strings,
+environment values, tokens, claims, and raw exception messages. Error output uses allowlisted codes
+and existing managed identity failure categories. Picker durations include time spent choosing.
+
 ## Status
 
 Implemented in [PR #886](https://github.com/microsoft/vscode-documentdb/pull/886), targeting `main`.
