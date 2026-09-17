@@ -117,6 +117,10 @@ export class SelectEntraTokenSourceStep<T extends ManagedIdentitySelectionContex
     }
 
     public async prompt(context: T): Promise<void> {
+        context.telemetry.properties.entraIdentityPrompted = 'true';
+        delete context.telemetry.properties.entraIdentitySkipReason;
+        delete context.telemetry.properties.managedIdentityKind;
+        delete context.telemetry.properties.managedIdentityClientIdSource;
         const prefilledClientId = context.managedIdentityAuthConfig?.clientId;
         const facts = context.connectionStringAuthFacts;
         const suppliedIdentity = facts?.username && !facts.usernameIsGuid ? facts.username : undefined;
@@ -129,6 +133,7 @@ export class SelectEntraTokenSourceStep<T extends ManagedIdentitySelectionContex
                 facts?.usesOidc === true,
                 context.authenticationMethodPrompted === true,
             );
+            delete context.telemetry.properties.entraIdentityChoice;
             selected = await traceAuthOperation(
                 'identityPicker',
                 () => context.ui.showQuickPick(items, {
@@ -148,6 +153,7 @@ export class SelectEntraTokenSourceStep<T extends ManagedIdentitySelectionContex
                     manualInputPrefilled: !!suppliedIdentity,
                 },
             );
+            context.telemetry.properties.entraIdentityChoice = selected.choice;
             traceAuthFlow('identityPicker.selection', { choice: selected.choice ?? 'none' });
 
             if (selected.choice === 'authMethod' && (await this.selectDifferentAuthMethod(context))) {
@@ -201,6 +207,18 @@ export class SelectEntraTokenSourceStep<T extends ManagedIdentitySelectionContex
     public configureBeforePrompt(context: T): void {
         const decision = this.getPromptDecision(context);
         const facts = context.connectionStringAuthFacts;
+        const method = this.getSelectedAuthMethod(context);
+        context.telemetry.properties.authMethod = method;
+        context.telemetry.properties.entraIdentityPrompted = decision.shouldPrompt ? 'true' : 'false';
+        context.telemetry.properties.entraIdentitySkipReason = decision.shouldPrompt ? undefined : decision.reason;
+        delete context.telemetry.properties.entraIdentityChoice;
+        if (!decision.shouldPrompt) {
+            context.telemetry.properties.managedIdentityKind = method === AuthMethodId.ManagedIdentity
+                ? context.managedIdentityAuthConfig?.clientId ? 'user' : 'system' : undefined;
+            context.telemetry.properties.managedIdentityClientIdSource =
+                method === AuthMethodId.ManagedIdentity && facts?.declaresAzureMachineWorkflow
+                    ? facts.username ? 'connectionString' : 'none' : undefined;
+        }
         traceAuthFlow(decision.shouldPrompt ? 'identityPicker.required' : 'identityPicker.skipped', {
             reason: decision.reason,
             method: this.getSelectedAuthMethod(context) ?? 'none',
@@ -395,6 +413,13 @@ export class SelectEntraTokenSourceStep<T extends ManagedIdentitySelectionContex
     private applyAuthMethod(context: T, method: AuthMethodId): void {
         traceAuthFlow('identityPicker.authMethodApplied', { method });
         this.setSelectedAuthMethod(context, method);
+        context.telemetry.properties.authMethod = method;
+        context.telemetry.properties.authMethodSelectionSource = 'prompt';
+
+        if (method !== AuthMethodId.ManagedIdentity) {
+            delete context.telemetry.properties.managedIdentityKind;
+            delete context.telemetry.properties.managedIdentityClientIdSource;
+        }
 
         if (method === AuthMethodId.MicrosoftEntraID) {
             context.managedIdentityAuthConfig = undefined;

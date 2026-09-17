@@ -44,6 +44,7 @@ import { type UpdateCredentialsWizardContext } from './UpdateCredentialsWizardCo
  * not to reconnect, the error state is preserved and the node remains as an error node.
  */
 export async function updateCredentials(context: IActionContext, node: DocumentDBClusterItem): Promise<void> {
+    context.telemetry.properties.authFlowOrigin = 'updateCredentials';
     if (!node) {
         throw new Error(l10n.t('No node selected.'));
     }

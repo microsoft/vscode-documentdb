@@ -359,6 +359,7 @@ export class AtlasClusterItem extends ClusterItemBase<AtlasClusterModel> {
      * Prompts the user for credentials using a wizard.
      */
     private async promptForCredentials(wizardContext: AuthenticateWizardContext): Promise<boolean> {
+        wizardContext.telemetry.properties.authFlowOrigin = 'atlasDiscovery';
         const wizard = new AzureWizard(wizardContext, {
             promptSteps: [
                 new ChooseAuthMethodStep(),

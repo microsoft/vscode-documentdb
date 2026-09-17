@@ -44,6 +44,9 @@ describe('ChooseAuthMethodStep authentication families', () => {
 
         expect(context.selectedAuthMethod).toBe(AuthMethodId.MicrosoftEntraID);
         expect(context.authenticationMethodPrompted).toBe(false);
+        expect(context.telemetry.properties).toMatchObject({
+            authMethod: AuthMethodId.MicrosoftEntraID, authMethodSelectionSource: 'autoSelected',
+        });
         expect(showQuickPick).not.toHaveBeenCalled();
         expect(JSON.stringify(mockOutputChannel.info.mock.calls)).toContain('singleSupportedFamily');
     });
@@ -51,11 +54,16 @@ describe('ChooseAuthMethodStep authentication families', () => {
     it.each([['newConnection', new NewConnectionAuthStep()], ['updateCredentials', new UpdateCredentialsAuthStep()]])(
         'traces %s picker options and selection', async (source, step) => {
             const context = {
+                telemetry: { properties: {}, measurements: {} },
                 availableAuthenticationMethods: [AuthMethodId.NativeAuth, AuthMethodId.MicrosoftEntraID, AuthMethodId.ManagedIdentity],
                 ui: { showQuickPick: jest.fn().mockResolvedValue({ authMethod: AuthMethodId.MicrosoftEntraID }) },
             };
 
             await step.prompt(context as never);
+
+            expect(context.telemetry.properties).toMatchObject({
+                authMethod: AuthMethodId.MicrosoftEntraID, authMethodSelectionSource: 'prompt',
+            });
 
             const output = JSON.stringify(mockOutputChannel.info.mock.calls);
             expect(output).toContain(`${source}.authMethodPicker`);
@@ -66,14 +74,56 @@ describe('ChooseAuthMethodStep authentication families', () => {
 
     it('traces a family picker skipped because inference already chose the method', () => {
         const step = new NewConnectionAuthStep();
-        const context = { selectedAuthenticationMethod: AuthMethodId.ManagedIdentity };
+        const context = { selectedAuthenticationMethod: AuthMethodId.ManagedIdentity, telemetry: { properties: {}, measurements: {} } };
         expect(step.shouldPrompt(context as never)).toBe(false);
         expect(mockOutputChannel.info).not.toHaveBeenCalled();
 
         step.configureBeforePrompt(context as never);
 
+        expect(context.telemetry.properties).toMatchObject({
+            authMethod: AuthMethodId.ManagedIdentity, authMethodSelectionSource: 'preselected',
+        });
         expect(mockOutputChannel.info).toHaveBeenCalledTimes(1);
         expect(JSON.stringify(mockOutputChannel.info.mock.calls)).toContain('methodAlreadySelectedOrInferred');
+    });
+
+    it.each([
+        ['new connection', () => new NewConnectionAuthStep()],
+        ['update credentials', () => new UpdateCredentialsAuthStep()],
+        ['reconnect', () => new ChooseAuthMethodStep()],
+    ])('clears stale %s selection telemetry before a canceled re-prompt', async (_name, makeStep) => {
+        const error = new Error('private cancellation detail');
+        const context = {
+            telemetry: {
+                properties: {
+                    authFlowOrigin: 'test',
+                    authMethod: AuthMethodId.ManagedIdentity,
+                    authMethodSelectionSource: 'prompt',
+                    entraIdentityChoice: 'clientId',
+                    entraIdentityPrompted: 'true',
+                    entraIdentitySkipReason: 'oldReason',
+                    managedIdentityKind: 'user',
+                    managedIdentityClientIdSource: 'prompt',
+                },
+                measurements: {},
+            },
+            availableAuthMethods: [AuthMethodId.NativeAuth, AuthMethodId.MicrosoftEntraID],
+            ui: { showQuickPick: jest.fn().mockRejectedValue(error) },
+        };
+
+        await expect(makeStep().prompt(context as never)).rejects.toBe(error);
+
+        expect(context.telemetry.properties.authFlowOrigin).toBe('test');
+        expect(context.telemetry.properties).toMatchObject({
+            authMethod: undefined,
+            authMethodSelectionSource: undefined,
+            entraIdentityChoice: undefined,
+            entraIdentityPrompted: undefined,
+            entraIdentitySkipReason: undefined,
+            managedIdentityKind: undefined,
+            managedIdentityClientIdSource: undefined,
+        });
+        expect(JSON.stringify(context.telemetry)).not.toContain('private');
     });
 
     it.each([
@@ -82,6 +132,7 @@ describe('ChooseAuthMethodStep authentication families', () => {
     ])('keeps %s look-ahead silent and logs only when reached', (_name, makeStep) => {
         const step = makeStep();
         const context = {
+            telemetry: { properties: {}, measurements: {} },
             selectedAuthenticationMethod: undefined as AuthMethodId | undefined,
             selectedAuthMethod: undefined as AuthMethodId | undefined,
         };

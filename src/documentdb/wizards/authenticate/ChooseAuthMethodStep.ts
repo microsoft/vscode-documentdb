@@ -18,6 +18,15 @@ import { type AuthenticateWizardContext } from './AuthenticateWizardContext';
 
 export class ChooseAuthMethodStep extends AzureWizardPromptStep<AuthenticateWizardContext> {
     public async prompt(context: AuthenticateWizardContext): Promise<void> {
+        Object.assign(context.telemetry.properties, {
+            authMethod: undefined,
+            authMethodSelectionSource: undefined,
+            entraIdentityChoice: undefined,
+            entraIdentityPrompted: undefined,
+            entraIdentitySkipReason: undefined,
+            managedIdentityKind: undefined,
+            managedIdentityClientIdSource: undefined,
+        });
         const availableMethods = context.availableAuthMethods ?? [AuthMethodId.NativeAuth];
         const supportedMethods = authMethodsFromString(availableMethods);
         const availableFamilies = [...new Set(supportedMethods.map(getAuthMethodFamily))];
@@ -27,6 +36,8 @@ export class ChooseAuthMethodStep extends AzureWizardPromptStep<AuthenticateWiza
         }
 
         if (supportedMethods.length === availableMethods.length && availableFamilies.length === 1) {
+            context.telemetry.properties.authMethod = availableFamilies[0];
+            context.telemetry.properties.authMethodSelectionSource = 'autoSelected';
             traceAuthFlow('authenticate.authMethodPicker.skipped', {
                 reason: 'singleSupportedFamily', method: availableFamilies[0],
             });
@@ -54,23 +65,28 @@ export class ChooseAuthMethodStep extends AzureWizardPromptStep<AuthenticateWiza
             });
         }
 
-        const selectedItem = await traceAuthOperation('authenticate.authMethodPicker', () => context.ui.showQuickPick(quickPickItems, {
-            placeHolder: l10n.t('Select an authentication method for "{resourceName}"', {
-                resourceName: context.resourceName,
+        const selectedItem = await traceAuthOperation(
+            'authenticate.authMethodPicker',
+            () => context.ui.showQuickPick(quickPickItems, {
+                placeHolder: l10n.t('Select an authentication method for "{resourceName}"', {
+                    resourceName: context.resourceName,
+                }),
+                title: l10n.t('Authenticate to connect with your DocumentDB cluster'),
+                suppressPersistence: true,
+                ignoreFocusOut: true,
             }),
-            title: l10n.t('Authenticate to connect with your DocumentDB cluster'),
-            suppressPersistence: true,
-            ignoreFocusOut: true,
-        }), {
-            options: quickPickItems.map((item) => item.authMethod ?? 'unsupported').join(','),
-            unknownMethodCount: unknownMethodIds.length,
-            reason: 'multipleOrUnknownFamilies',
-        });
-
+            {
+                options: quickPickItems.map((item) => item.authMethod ?? 'unsupported').join(','),
+                unknownMethodCount: unknownMethodIds.length,
+                reason: 'multipleOrUnknownFamilies',
+            },
+        );
         if (isSupportedAuthMethod(selectedItem.authMethod) === false) {
             throw new Error(l10n.t('The selected authentication method is not supported.'));
         }
 
+        context.telemetry.properties.authMethod = selectedItem.authMethod;
+        context.telemetry.properties.authMethodSelectionSource = 'prompt';
         context.selectedAuthMethod = selectedItem.authMethod;
         traceAuthFlow('authenticate.authMethodSelected', { method: selectedItem.authMethod });
         context.isAuthMethodUpdated = true;
@@ -78,6 +94,10 @@ export class ChooseAuthMethodStep extends AzureWizardPromptStep<AuthenticateWiza
     }
 
     public configureBeforePrompt(context: AuthenticateWizardContext): void {
+        if (!this.shouldPrompt(context)) {
+            context.telemetry.properties.authMethod = context.selectedAuthMethod;
+            context.telemetry.properties.authMethodSelectionSource = 'preselected';
+        }
         traceAuthFlow('authenticate.authMethodGate', {
             skipped: !this.shouldPrompt(context),
             reason: context.selectedAuthMethod ? 'methodAlreadySelected' : 'noMethodSelected',

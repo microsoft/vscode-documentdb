@@ -736,6 +736,7 @@ export class KubernetesResourceItem extends ClusterItemBase<KubernetesClusterMod
     }
 
     private async promptForCredentials(wizardContext: AuthenticateWizardContext): Promise<boolean> {
+        wizardContext.telemetry.properties.authFlowOrigin = 'kubernetesDiscovery';
         const { AzureWizard } = await import('@microsoft/vscode-azext-utils');
         const { ChooseAuthMethodStep } =
             await import('../../../../documentdb/wizards/authenticate/ChooseAuthMethodStep');

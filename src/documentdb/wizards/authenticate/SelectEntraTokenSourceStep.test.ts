@@ -242,9 +242,15 @@ describe('SelectEntraTokenSourceStep.configureBeforePrompt', () => {
         expect(step.shouldPrompt(context)).toBe(shouldPrompt);
         expect(step.shouldPrompt(context)).toBe(shouldPrompt);
         expect(mockOutputChannel.info).not.toHaveBeenCalled();
+        expect(context.telemetry.properties).toEqual({});
 
         step.configureBeforePrompt(context);
         expect(step.shouldPrompt(context)).toBe(shouldPrompt);
+
+        expect(context.telemetry.properties.entraIdentityPrompted).toBe(shouldPrompt ? 'true' : 'false');
+        expect(context.telemetry.properties.entraIdentitySkipReason).toBe(shouldPrompt ? undefined : reason);
+        expect(JSON.stringify(context.telemetry)).not.toContain(CLIENT_ID);
+        expect(JSON.stringify(context.telemetry)).not.toContain('alice');
 
         expect(mockOutputChannel.info).toHaveBeenCalledTimes(1);
         const output = mockOutputChannel.info.mock.calls[0][0];
@@ -306,6 +312,12 @@ describe('SelectEntraTokenSourceStep.prompt', () => {
 
         expect(context.selectedAuthMethod).toBe(AuthMethodId.MicrosoftEntraID);
         expect(context.managedIdentityAuthConfig).toBeUndefined();
+        expect(context.telemetry.properties).toMatchObject({
+            authMethod: AuthMethodId.MicrosoftEntraID,
+            authMethodSelectionSource: 'prompt',
+            entraIdentityPrompted: 'true',
+            entraIdentityChoice: 'account',
+        });
         const output = JSON.stringify(mockOutputChannel.info.mock.calls);
         expect(output).toContain('clientId,account,systemAssigned,manual');
         expect(output).toContain('configuredCandidate');
@@ -324,6 +336,12 @@ describe('SelectEntraTokenSourceStep.prompt', () => {
 
         expect(context.selectedAuthMethod).toBe(AuthMethodId.ManagedIdentity);
         expect(context.managedIdentityAuthConfig).toEqual({});
+        expect(context.telemetry.properties).toMatchObject({
+            authMethod: AuthMethodId.ManagedIdentity,
+            entraIdentityChoice: 'systemAssigned',
+            managedIdentityKind: 'system',
+            managedIdentityClientIdSource: 'none',
+        });
     });
 
     it('selects another authentication family and offers a local return to the identity choices', async () => {
@@ -347,6 +365,9 @@ describe('SelectEntraTokenSourceStep.prompt', () => {
         expect(context.selectedAuthMethod).toBe(AuthMethodId.NoAuth);
         expect(context.entraIdAuthConfig).toBeUndefined();
         expect(context.managedIdentityAuthConfig).toBeUndefined();
+        expect(context.telemetry.properties).toMatchObject({
+            authMethod: AuthMethodId.NoAuth, authMethodSelectionSource: 'prompt', entraIdentityChoice: 'authMethod',
+        });
     });
 
     it('returns from the nested picker to the Microsoft Entra ID identity choices', async () => {
@@ -379,6 +400,96 @@ describe('SelectEntraTokenSourceStep.prompt', () => {
 
         expect(showQuickPick).toHaveBeenCalledTimes(3);
         expect(context.selectedAuthMethod).toBe(AuthMethodId.MicrosoftEntraID);
+    });
+});
+
+describe('SelectEntraTokenSourceStep shared telemetry', () => {
+    it.each(['clientId', 'manual'])('records %s selection without the client ID', async (choice) => {
+        const context = makeContext({
+            managedIdentityAuthConfig: { clientId: CLIENT_ID },
+            ui: {
+                showQuickPick: jest.fn().mockResolvedValue({ choice, clientId: choice === 'clientId' ? CLIENT_ID : undefined }),
+                showInputBox: jest.fn().mockResolvedValue(CLIENT_ID),
+            } as unknown as AuthenticateWizardContext['ui'],
+        });
+
+        await makeStep().prompt(context);
+
+        expect(context.telemetry.properties).toMatchObject({
+            authMethod: AuthMethodId.ManagedIdentity,
+            authMethodSelectionSource: 'prompt',
+            entraIdentityChoice: choice,
+            entraIdentityPrompted: 'true',
+            managedIdentityKind: 'user',
+            managedIdentityClientIdSource: choice === 'clientId' ? 'connectionString' : 'prompt',
+        });
+        expect(JSON.stringify(context.telemetry)).not.toContain(CLIENT_ID);
+    });
+
+    it('replaces the shared summary when switching from managed identity to account sign-in', async () => {
+        const context = makeContext({
+            managedIdentityAuthConfig: { clientId: CLIENT_ID },
+            ui: {
+                showQuickPick: jest.fn()
+                    .mockResolvedValueOnce({ choice: 'clientId', clientId: CLIENT_ID })
+                    .mockResolvedValueOnce({ choice: 'account' }),
+            } as unknown as AuthenticateWizardContext['ui'],
+        });
+        context.telemetry.properties.authFlowOrigin = 'updateCredentials';
+        const step = makeStep();
+
+        await step.prompt(context);
+        expect(context.telemetry.properties.managedIdentityKind).toBe('user');
+        await step.prompt(context);
+
+        expect(context.telemetry.properties).toMatchObject({
+            authFlowOrigin: 'updateCredentials',
+            authMethod: AuthMethodId.MicrosoftEntraID,
+            authMethodSelectionSource: 'prompt',
+            entraIdentityChoice: 'account',
+        });
+        expect(context.telemetry.properties.managedIdentityKind).toBeUndefined();
+        expect(context.telemetry.properties.managedIdentityClientIdSource).toBeUndefined();
+        expect(JSON.stringify(context.telemetry)).not.toContain(CLIENT_ID);
+    });
+
+    it('records a connection-string identity when the identity prompt is skipped', () => {
+        const context = makeContext({
+            managedIdentityAuthConfig: { clientId: CLIENT_ID },
+            connectionStringAuthFacts: {
+                usesOidc: true, declaresAzureMachineWorkflow: true, username: CLIENT_ID, usernameIsGuid: true,
+            },
+        });
+
+        makeStep().configureBeforePrompt(context);
+
+        expect(context.telemetry.properties).toMatchObject({
+            authMethod: AuthMethodId.ManagedIdentity,
+            entraIdentityPrompted: 'false',
+            entraIdentitySkipReason: 'explicitMachineWorkflow',
+            managedIdentityKind: 'user',
+            managedIdentityClientIdSource: 'connectionString',
+        });
+        expect(JSON.stringify(context.telemetry)).not.toContain(CLIENT_ID);
+    });
+
+    it('keeps manual-entry cancellation distinct from a completed user-assigned selection', async () => {
+        const error = new Error('private cancellation detail');
+        const context = makeContext({
+            ui: {
+                showQuickPick: jest.fn().mockResolvedValue({ choice: 'manual' }),
+                showInputBox: jest.fn().mockRejectedValue(error),
+            } as unknown as AuthenticateWizardContext['ui'],
+        });
+        context.telemetry.properties.managedIdentityKind = 'user';
+        context.telemetry.properties.managedIdentityClientIdSource = 'connectionString';
+
+        await expect(makeStep().prompt(context)).rejects.toBe(error);
+
+        expect(context.telemetry.properties.entraIdentityChoice).toBe('manual');
+        expect(context.telemetry.properties.managedIdentityKind).toBeUndefined();
+        expect(context.telemetry.properties.managedIdentityClientIdSource).toBeUndefined();
+        expect(JSON.stringify(context.telemetry)).not.toContain('private');
     });
 });
 

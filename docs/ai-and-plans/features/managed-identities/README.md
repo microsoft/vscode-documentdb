@@ -38,6 +38,34 @@ token-cache hit. New trace entries omit account labels, tenant/client IDs, conne
 environment values, tokens, claims, and raw exception messages. Error output uses allowlisted codes
 and existing managed identity failure categories. Picker durations include time spent choosing.
 
+## Wizard Telemetry
+
+Authentication steps add properties to the existing wizard/command telemetry context. No extra
+per-interaction events, reporting helper, event history, or correlation IDs are created. Existing
+journey/connection correlation, result, duration, and cancellation handling remain unchanged.
+
+| Shared property | Meaning |
+| --- | --- |
+| `authFlowOrigin` | `newConnection`, `updateCredentials`, `savedConnection`, `azureResources`, `azureDiscovery`, `atlasDiscovery`, or `kubernetesDiscovery` |
+| `authMethod` | Latest resolved `AuthMethodId`, including the final account versus managed identity choice |
+| `authMethodSelectionSource` | `prompt`, `autoSelected` (one supported family), or `preselected` (known before the family step) |
+| `entraIdentityPrompted` | Whether the current identity step prompts (`true`/`false`); evaluated only when reached |
+| `entraIdentitySkipReason` | Why the identity picker is skipped, such as `explicitMachineWorkflow` or `managedIdentityUnavailable` |
+| `entraIdentityChoice` | Latest identity-picker choice: `account`, `systemAssigned`, `clientId`, `manual`, `authMethod`, or `back` |
+| `managedIdentityKind` | Existing `system`/`user` dimension when managed identity is resolved |
+| `managedIdentityClientIdSource` | Existing `none`, `connectionString`, or `prompt` dimension when known |
+
+Existing `connectionMode`, tenant counts, and tenant-selection properties remain available. New
+Connection and Update Credentials enrich their command event; resource authentication enriches
+the existing connect context shared by its wizard. These are summaries, not a chronological history.
+Use the existing operation result and last-step fields when analyzing cancellation or failure.
+
+Starting a new family choice clears stale selection fields; switching away from managed identity
+clears its dimensions. Manual entry records `entraIdentityChoice=manual` before asking for a client
+ID, but user-assigned dimensions are only set after completion. The added fields contain categories,
+not client/tenant IDs, account labels, connection strings, or input values. Detailed troubleshooting
+continues to use Output tracing, which is unchanged.
+
 ## Status
 
 Implemented in [PR #886](https://github.com/microsoft/vscode-documentdb/pull/886), targeting `main`.

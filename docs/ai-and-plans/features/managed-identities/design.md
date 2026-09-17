@@ -511,6 +511,10 @@ Other options
 - Gate diagnostics run in `configureBeforePrompt()`, when the wizard reaches the step. Keep
   `shouldPrompt()` side-effect free: AzureWizard also evaluates it for pending steps while computing
   titles and step counts, before the inputs needed for a final authentication decision are available.
+- Selection telemetry enriches the existing wizard/command event with `authFlowOrigin`, resolved
+  method, selection source, and identity-choice details. No per-interaction events, reporting helper,
+  or new correlation IDs are added. Summaries replace prior choices; detailed chronology stays in
+  Output tracing. Re-prompting clears stale selection fields, and values are categories, never input.
 
 The top-level family rows use VS Code theme icons: `key` for username/password, `azure` for
 Microsoft Entra ID, and `unlock` for no authentication.
