@@ -45,11 +45,11 @@ shipped in `0.10.2`.
 
 ## Iterations
 
-| Iteration      | Record                                                                |
-| -------------- | --------------------------------------------------------------------- |
-| Implementation | [Work items and deviations](iterations/01-implementation-log.md)      |
-| Code review    | [Findings and resolutions](iterations/02-code-review.md)              |
-| UX review      | [Workflow findings and operator feedback](iterations/03-ux-review.md) |
+| Iteration      | Record                                                                   |
+| -------------- | ------------------------------------------------------------------------ |
+| Implementation | [Work items and deviations](iterations/01-implementation-log.md)         |
+| Code review    | [Findings and resolutions](iterations/02-code-review.md)                 |
+| UX review      | [Workflow findings and operator feedback](iterations/03-ux-review.md)    |
 | Entra flow     | [Unified identity and tenant flow](iterations/04-entra-identity-flow.md) |
 
 Historical records retain their original review baselines and packaging observations. The current

@@ -57,7 +57,7 @@ When the extension knows which tenant owns the cluster, which is the case for co
 2. Paste the connection string of your cluster. You can copy it from the Azure portal.
 3. When asked for an authentication method, choose **Microsoft Entra ID**.
 4. In the identity list, choose the identity assigned to this machine, a pasted client ID, or a
-	different managed identity, as described below.
+   different managed identity, as described below.
 
 The same identity list appears in the **Azure Resources** and **Service Discovery** views when you
 connect to a cluster that allows Microsoft Entra ID, and in **Update Credentials** on an existing
@@ -68,15 +68,15 @@ connection.
 Microsoft Entra ID connections use one identity list for account sign-in and managed identity:
 
 - **Managed identity `<client-id>`**: shown when the pasted connection string supplied a
-	GUID-shaped candidate. Selecting it confirms that the value is the user-assigned managed identity
-	to use.
+  GUID-shaped candidate. Selecting it confirms that the value is the user-assigned managed identity
+  to use.
 - **Sign in with my account**: use an interactive VS Code account instead. The tenant picker follows
-	so you can choose a home or guest organization. Adding another account returns to the same picker
-	without restarting the connection flow.
+  so you can choose a home or guest organization. Adding another account returns to the same picker
+  without restarting the connection flow.
 - **Use the identity assigned to this machine**: request a token without an identity selector. No
-	client ID is needed.
+  client ID is needed.
 - **Use a different managed identity...**: type the client ID of a user-assigned managed identity.
-	It looks like `11111111-2222-3333-4444-555555555555`.
+  It looks like `11111111-2222-3333-4444-555555555555`.
 
 When the connection string declared OIDC and the extension inferred the Microsoft Entra ID family,
 the list also offers **Use a different authentication method...**. This is the route to
@@ -126,7 +126,7 @@ No password prompt appears, because there is no password to include. See [Copy C
 
 Both methods present a Microsoft Entra ID token to the cluster, and on the wire they are identical. The difference is where the token comes from:
 
-|                              | Account sign-in                                | Managed identity                            |
+|                              | Account sign-in                               | Managed identity                            |
 | ---------------------------- | --------------------------------------------- | ------------------------------------------- |
 | Who is authenticated         | The signed-in VS Code user                    | The Azure VM                                |
 | Sign-in prompt               | Yes, the first time                           | Never                                       |

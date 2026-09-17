@@ -15,23 +15,23 @@ reviewed them; this file records the confirmed position, what changed from the p
 reasoning. Rejected alternatives are kept so that reversing any one of them is a small, well-scoped
 edit to `managed-identities.md` rather than a redesign.
 
-| ID  | Status                       | Changed from the proposal?                                              |
-| --- | ---------------------------- | ----------------------------------------------------------------------- |
-| D0  | **Confirmed**                | New. Supported-platform claims narrowed to Azure VMs                    |
-| D1  | **Confirmed as proposed**    | Option C. Unchanged, plus an explicit normalisation rule                |
-| D1a | **Confirmed**                | New. `Copy Connection String` behaviour, round-trips with D1            |
-| D2  | **Superseded by D10**        | Identity selection is now part of one Entra-family picker               |
-| D3  | **OPEN**                     | Maintainer sees no benefit in the probe; under discussion               |
-| D4  | **Confirmed, deferred**      | Issue filed **after** this work lands, so progress can inform its scope |
-| D5  | **Confirmed**                | Unchanged                                                               |
-| D6  | **Confirmed, rescoped**      | D6.1 out of scope, D6.2 simplified, D6.3 retargeted to `docs/`          |
-| D7  | **Confirmed**                | Unchanged, not contested                                                |
-| D8  | **Confirmed**                | Keep additive managed identity fields in storage v3.0                   |
-| D9  | **Confirmed**                | Replaces parser confidence with stable connection-string facts          |
-| D10 | **Confirmed, reversal**      | Managed identity moves under the Microsoft Entra ID family              |
-| D11 | **Confirmed**                | Tenant choice is retimed and account management continues in place      |
-| D12 | **Confirmed**                | Applies the shared family presentation to all seven entry points         |
-| D13 | **Confirmed**                | Adds a visible Back row when the family picker actually prompted         |
+| ID  | Status                    | Changed from the proposal?                                              |
+| --- | ------------------------- | ----------------------------------------------------------------------- |
+| D0  | **Confirmed**             | New. Supported-platform claims narrowed to Azure VMs                    |
+| D1  | **Confirmed as proposed** | Option C. Unchanged, plus an explicit normalisation rule                |
+| D1a | **Confirmed**             | New. `Copy Connection String` behaviour, round-trips with D1            |
+| D2  | **Superseded by D10**     | Identity selection is now part of one Entra-family picker               |
+| D3  | **OPEN**                  | Maintainer sees no benefit in the probe; under discussion               |
+| D4  | **Confirmed, deferred**   | Issue filed **after** this work lands, so progress can inform its scope |
+| D5  | **Confirmed**             | Unchanged                                                               |
+| D6  | **Confirmed, rescoped**   | D6.1 out of scope, D6.2 simplified, D6.3 retargeted to `docs/`          |
+| D7  | **Confirmed**             | Unchanged, not contested                                                |
+| D8  | **Confirmed**             | Keep additive managed identity fields in storage v3.0                   |
+| D9  | **Confirmed**             | Replaces parser confidence with stable connection-string facts          |
+| D10 | **Confirmed, reversal**   | Managed identity moves under the Microsoft Entra ID family              |
+| D11 | **Confirmed**             | Tenant choice is retimed and account management continues in place      |
+| D12 | **Confirmed**             | Applies the shared family presentation to all seven entry points        |
+| D13 | **Confirmed**             | Adds a visible Back row when the family picker actually prompted        |
 
 ---
 

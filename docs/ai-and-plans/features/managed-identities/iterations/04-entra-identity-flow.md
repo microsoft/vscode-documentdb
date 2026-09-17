@@ -69,11 +69,11 @@ it in the same correction request.
 
 ### Alternatives considered
 
-| Option | Approach | Decision and reason |
-| ------ | -------- | ------------------- |
-| A | Tune the old flat picker by treating OIDC plus a GUID as managed identity | Rejected. The GUID remains ambiguous, and the UI would still present a token source as a peer authentication family. |
-| B | Separate authentication family from identity selection, using one shared identity picker | **Chosen.** It represents "family known, source unknown" directly and keeps every source reachable without duplicating pickers. |
-| C | Probe IMDS silently and use the result to select or rank the source | Rejected. A successful probe proves availability, not user intent. It duplicates the authoritative credential call, adds link-local traffic and timeout/cache complexity, and can still disagree with the later token request. |
+| Option | Approach                                                                                 | Decision and reason                                                                                                                                                                                                            |
+| ------ | ---------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| A      | Tune the old flat picker by treating OIDC plus a GUID as managed identity                | Rejected. The GUID remains ambiguous, and the UI would still present a token source as a peer authentication family.                                                                                                           |
+| B      | Separate authentication family from identity selection, using one shared identity picker | **Chosen.** It represents "family known, source unknown" directly and keeps every source reachable without duplicating pickers.                                                                                                |
+| C      | Probe IMDS silently and use the result to select or rank the source                      | Rejected. A successful probe proves availability, not user intent. It duplicates the authoritative credential call, adds link-local traffic and timeout/cache complexity, and can still disagree with the later token request. |
 
 Telemetry was not used to gate this decision. The available signal measured the `weak` or
 `explicit` confidence model being removed, so optimizing the replacement around that aggregate

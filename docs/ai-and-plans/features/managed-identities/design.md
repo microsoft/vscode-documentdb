@@ -117,10 +117,10 @@ instructions.
 | D5  | No new VS Code settings; per-connection configuration only                                                                                                         | Agreed   |
 | D6  | Token-expiry fix deferred to an issue; error mapping simplified; `docs/` updated                                                                                   | Agreed   |
 | D7  | Unit tests plus a fake identity-endpoint harness plus a manual checklist for the VM repro                                                                          | Agreed   |
-| D9  | Connection strings report stable authentication facts instead of `weak` or `explicit` confidence                                                                  | Agreed   |
+| D9  | Connection strings report stable authentication facts instead of `weak` or `explicit` confidence                                                                   | Agreed   |
 | D10 | Managed identity and account sign-in appear in one Microsoft Entra ID identity picker                                                                              | Agreed   |
 | D11 | Tenant selection follows token-source selection and continues after account management                                                                             | Agreed   |
-| D12 | The family presentation and gated identity step apply to all seven authentication entry points                                                                      | Agreed   |
+| D12 | The family presentation and gated identity step apply to all seven authentication entry points                                                                     | Agreed   |
 
 ---
 
@@ -377,14 +377,14 @@ export function getConnectionStringAuthFacts(cs: DocumentDBConnectionString): Co
 
 Wizard rules:
 
-| Connection string shape                                                     | Result                                                                                              |
-| --------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------- |
-| OIDC, no `ENVIRONMENT:azure`                                                | Select the Microsoft Entra ID family and ask which identity to use                                 |
-| OIDC plus GUID username, no `ENVIRONMENT:azure`                             | Same, with the GUID highlighted as a managed identity candidate                                    |
-| OIDC plus `ENVIRONMENT:azure`, no username                                  | Select managed identity with no client ID and skip the identity picker                              |
-| OIDC plus `ENVIRONMENT:azure` and a GUID username                           | Select managed identity with that client ID and skip the identity picker                            |
-| OIDC plus `ENVIRONMENT:azure` and a non-GUID username                       | Select the Entra family and ask in the same picker, naming the unusable value in the placeholder    |
-| Anything else                                                               | Keep the existing family-prompt behavior                                                            |
+| Connection string shape                               | Result                                                                                           |
+| ----------------------------------------------------- | ------------------------------------------------------------------------------------------------ |
+| OIDC, no `ENVIRONMENT:azure`                          | Select the Microsoft Entra ID family and ask which identity to use                               |
+| OIDC plus GUID username, no `ENVIRONMENT:azure`       | Same, with the GUID highlighted as a managed identity candidate                                  |
+| OIDC plus `ENVIRONMENT:azure`, no username            | Select managed identity with no client ID and skip the identity picker                           |
+| OIDC plus `ENVIRONMENT:azure` and a GUID username     | Select managed identity with that client ID and skip the identity picker                         |
+| OIDC plus `ENVIRONMENT:azure` and a non-GUID username | Select the Entra family and ask in the same picker, naming the unusable value in the placeholder |
+| Anything else                                         | Keep the existing family-prompt behavior                                                         |
 
 Normalisation for the Azure machine workflow:
 
@@ -715,15 +715,15 @@ This alone closes the incident for the reported scenario.
 
 ### Phase 2: connection creation and persistence
 
-| ID   | Description                                                                                                                                            | Status |
-| ---- | ------------------------------------------------------------------------------------------------------------------------------------------------------ | ------ |
-| WI7  | Implement connection-string authentication facts and the normalisation rule (§5.2); read facts **before** the username is cleared                    | ✅     |
-| WI8  | `Copy Connection String`: emit the driver-native form for `ManagedIdentity` (§5.1)                                                                     | ✅     |
-| WI9  | Offer `ManagedIdentity` for vCore hosts in `PromptConnectionStringStep`                                                                                | ✅     |
-| WI10 | Implement the identity selector. Superseded by the unified `SelectEntraTokenSourceStep` in iteration 04                                                  | ✅     |
-| WI11 | Extend `ConnectionSecrets`, `CachedClusterCredentials`, `setAuthCredentials()`, `EphemeralClusterCredentials`, `AuthenticateWizardContext`             | ✅     |
-| WI12 | Rework the `setFromConnectionItem()` inference ladder to honour `selectedAuthMethod` for all known methods                                             | ✅     |
-| WI13 | Persist `managedIdentityAuthConfig` (including `{}` for system-assigned) in `ExecuteStep`                                                              | ✅     |
+| ID   | Description                                                                                                                                | Status |
+| ---- | ------------------------------------------------------------------------------------------------------------------------------------------ | ------ |
+| WI7  | Implement connection-string authentication facts and the normalisation rule (§5.2); read facts **before** the username is cleared          | ✅     |
+| WI8  | `Copy Connection String`: emit the driver-native form for `ManagedIdentity` (§5.1)                                                         | ✅     |
+| WI9  | Offer `ManagedIdentity` for vCore hosts in `PromptConnectionStringStep`                                                                    | ✅     |
+| WI10 | Implement the identity selector. Superseded by the unified `SelectEntraTokenSourceStep` in iteration 04                                    | ✅     |
+| WI11 | Extend `ConnectionSecrets`, `CachedClusterCredentials`, `setAuthCredentials()`, `EphemeralClusterCredentials`, `AuthenticateWizardContext` | ✅     |
+| WI12 | Rework the `setFromConnectionItem()` inference ladder to honour `selectedAuthMethod` for all known methods                                 | ✅     |
+| WI13 | Persist `managedIdentityAuthConfig` (including `{}` for system-assigned) in `ExecuteStep`                                                  | ✅     |
 
 ### Phase 3: validation harness
 
