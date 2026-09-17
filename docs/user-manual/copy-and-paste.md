@@ -30,7 +30,9 @@ The copy-and-paste process is designed to be efficient for smaller collections b
 
 Optionally, the extension can also copy secondary indexes. Copied indexes are requested as background builds before document streaming begins. Hidden source indexes are created first and then hidden to preserve their visibility state. Equivalent indexes already on the target are skipped without changing their visibility, while a source index whose name is already used by a different definition receives a suffix. The built-in `_id` index is not copied.
 
-The extension reads the source index count only after you choose to copy indexes. If that read fails, the paste operation stops. Document-only copies do not read source indexes. Cancelling during index creation stops before the next index; indexes already created remain on the target.
+The extension reads the source index count only after you choose to copy indexes. If that read fails, the confirmation omits the count and the paste can continue. Document-only copies do not read source indexes.
+
+Cancelling during index creation stops before the next index; indexes already created remain on the target. An index creation failure also leaves indexes already created on the target and stops before any documents are copied. The failure notification includes the index and server reason and links to the output log. Retry the paste and choose **No, only copy documents** when the source contains an index that the target cannot recreate.
 
 This method avoids loading the entire collection into memory at once, making it suitable for collections that are moderately sized.
 

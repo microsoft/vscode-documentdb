@@ -47,8 +47,9 @@ durable intent and rationale. Code and tests remain authoritative for current be
 - Indexes are copied sequentially after target creation and before document streaming.
 - Equivalent definitions are skipped regardless of name. A conflicting name receives deterministic
   `_copy`, `_copy_2`, and later suffixes.
-- DocumentDB API options, including vector index options, are preserved. Builds request background
-  creation, and hidden indexes are hidden after creation.
+- Supported DocumentDB API options, including vector index options, are preserved. Builds always
+  request background creation, and `hidden` is applied separately after creation rather than copied
+  as a creation option. Other server-normalized index shapes are not yet proven to round-trip.
 - Creation failures fail the task before document transfer. Cancellation keeps indexes already
   created and prevents document transfer.
 - Progress, result counts, diagnostics, telemetry, and a cancellation-aware completion pause are
