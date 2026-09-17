@@ -104,6 +104,15 @@ export class CopyIndexesTask extends Task implements ResourceTrackingTask {
                 },
             });
         } catch (error) {
+            if (signal.aborted) {
+                if (context) {
+                    context.telemetry.properties.indexCopyCancelled = 'true';
+                    context.telemetry.properties.indexCopyFailed = 'false';
+                    context.telemetry.measurements.selectedIndexCount = total;
+                }
+                throw error;
+            }
+
             if (context) {
                 context.telemetry.properties.indexCopyFailed = 'true';
                 context.telemetry.properties.indexCopyError = error instanceof Error ? error.name : 'UnknownError';

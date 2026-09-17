@@ -180,6 +180,27 @@ describe('CopyIndexesTask', () => {
         expect(ext.outputChannel.warn).toHaveBeenCalled();
     });
 
+    it('preserves a signal-driven cancellation without classifying it as a copy failure', async () => {
+        const controller = new AbortController();
+        const cancellation = new Error('cancelled');
+        cancellation.name = 'AbortError';
+        const copier = {
+            copyIndexes: jest.fn().mockImplementation(async (options: CopyIndexesOptions) => {
+                options.onStart?.(3);
+                controller.abort(cancellation);
+                throw cancellation;
+            }),
+        } as unknown as CollectionIndexCopier;
+        const task = new TestCopyIndexesTask(config, copier);
+        const context = createContext();
+
+        await expect(task.runWorkForTest(controller.signal, context)).rejects.toBe(cancellation);
+        expect(context.telemetry.properties.indexCopyCancelled).toBe('true');
+        expect(context.telemetry.properties.indexCopyFailed).toBe('false');
+        expect(context.telemetry.properties.indexCopyError).toBeUndefined();
+        expect(context.telemetry.measurements.selectedIndexCount).toBe(3);
+    });
+
     it('preserves the copier failure as the cause and classifies telemetry', async () => {
         const cause = new Error('create failed');
         cause.name = 'IndexCreationError';
