@@ -4,6 +4,7 @@ kind: review
 status: active
 prs: [848]
 created: 2026-09-16
+verified: 2026-09-17
 code:
     - src/commands/pasteCollection/**
     - src/services/taskService/data-api/indexes/**
@@ -98,6 +99,11 @@ therefore untranslatable, and the bundle carries a dead entry.
 No hand-editing. The bundle is generated; regenerating it fixes the missing key and the orphan in
 one step. Folded into the pre-PR check described under M5.
 
+### Implementation record
+
+Completed in `e78c0d2b`. `npm run l10n` regenerated the bundle, adding the new index-copy strings
+and removing obsolete entries. No deviation; the generated file was not edited by hand.
+
 ---
 
 ## H2 — Unproven round-trip for server-normalized index shapes (High)
@@ -172,6 +178,12 @@ as well.
 Fail on `ok !== 1` only, and log `note` at warn level. The shared-API change is out of scope for this
 PR; the local check is where the bug is.
 
+### Implementation record
+
+Completed in `acd176b0`. Successful responses with a `note` now continue and write the note to the
+output channel; a focused regression covers `ok: 1` with `"all indexes already exist"`. No
+deviation. Changing the shared API remained rejected because it would widen the regression surface.
+
 ---
 
 ## M2 — The user is told the phase failed, but never why (Medium)
@@ -194,6 +206,13 @@ open.
 Put the index name and the server reason in the thrown message **and** add a **Show Output** action
 to the failure notification. This is the message the H2 ruling leans on: it has to tell the user that
 index copying specifically failed, so that retrying without indexes is the obvious next move.
+
+### Implementation record
+
+Completed in `396ee40b`. Copier errors now retain the target index name and server reason, and the
+task includes that detail in its final failure. The proposed task-layer notification hook was not
+added because the shared failed-task notifier already offered **Show Output** and opened the
+extension output channel; duplicating that behavior in this task was rejected.
 
 ---
 
@@ -237,6 +256,20 @@ degrade the confirmation text rather than discard the user's wizard progress. Ei
 `PromptIndexConfigurationStep.test.ts` needs updating with it — the
 `fails the paste flow when selected index counting fails` contract is being deliberately reversed.
 
+### Implementation record
+
+Completed in `e6cc35b7`, with lint-driven cancellation normalization in `3f0fb1d6`. Counting moved
+to `CountSourceIndexesStep`, which renders a loading quick pick, degrades failures to an unknown
+count, and records details in the output channel. Cancellation is passed to client acquisition and
+stops awaiting the catalog read.
+
+Deviation: the installed driver does not accept an `AbortSignal` for `indexes()`, so an already
+issued catalog request cannot be terminated at the transport layer. The step races that request
+against abort instead. Dropping cancellation from the contract was considered and rejected because
+it would leave the wizard waiting after dismissal. A direct confirmation-dialog unit test was also
+attempted, then skipped after three unrelated VS Code mock-constructor failures; the loading-step,
+summary, and warning formatter tests cover the underlying state and text without that brittle mock.
+
 ---
 
 ## M4 — `unique` and TTL indexes are created before the documents they constrain (Medium)
@@ -271,6 +304,13 @@ ordering change and no hard block: the user can still proceed, and if the warnin
 have the same escape hatch as in H2 — run the paste again without indexes. Decision 0005 stays as it
 is; this consequence should be appended to it in `decisions.md`.
 
+### Implementation record
+
+Completed in `662f4456`. One source-catalog summary now returns the count plus unique and TTL index
+names; the confirmation lists those names in separate warnings, and decision 0005 records the
+consequences. This deliberately evolved the count-only method instead of adding a second catalog
+read. A separate warning lookup was considered and rejected because it would duplicate network I/O.
+
 ---
 
 ## M5 — Prettier reports 6 unformatted files (Medium)
@@ -283,6 +323,12 @@ is; this consequence should be appended to it in `decisions.md`.
 Not fixed piecemeal. `npm run prettier-fix` runs as part of one full Case 2 pass at hand-over,
 together with `npm run l10n` (H1), `npm run lint`, the full Jest suite, `npm run build`, and
 `npm run package`.
+
+### Implementation record
+
+Completed in `b4876a2c`. The repository-wide formatter output was committed as one mechanical
+change, including formatting inherited from the branch outside the index-copy files. No formatter
+changes were split into the behavioral commits.
 
 ---
 
@@ -327,6 +373,11 @@ passes `'context.targetCollectionName'` as the property path for `newCollectionN
 Extract a single `createIndexCopier(context)` helper in the command folder. With M3 adding a third
 construction site, the duplication would otherwise triple.
 
+### Implementation record
+
+Completed in `7e29627d`. Both prompting and execution now use `createIndexCopier(context)`, with
+direct tests for new and existing target collection resolution. No deviation.
+
 ---
 
 ## L4 — Telemetry naming inconsistency (Low)
@@ -341,6 +392,11 @@ Re-checked against the working branch at review time: `ConfirmOperationStep.ts:9
 `copyIndexesEnabled` while `CopyPasteCollectionTask.ts:207` writes `copyIndexes`, and
 `sourceIndexCount` is still set at `PromptIndexConfigurationStep.ts:57` and again at
 `ConfirmOperationStep.ts:96`. Not yet addressed. Pick one property name and set the measurement once.
+
+### Implementation record
+
+Completed in `70083d53`. Both events use `copyIndexes`, and only the loading step records
+`sourceIndexCount`. No deviation.
 
 ---
 
@@ -362,6 +418,12 @@ cardinality bounded and make the data groupable, which free text is not.
 Replace the message with a codename or `error.name`, consistent with the majority convention. Full
 detail stays in the output channel, which M2 makes reachable from the failure notification.
 
+### Implementation record
+
+Completed in `9545ae60`. Telemetry now records the bounded codename `copyIndexesFailed`; the detailed
+server text remains in the user-facing error and output channel. `error.name` was considered but
+rejected because the wrapped errors are usually the non-specific name `Error`.
+
 ---
 
 ## P1 — No iteration or pre-review artifact existed for this PR (Process)
@@ -376,6 +438,11 @@ during it; CONTRIBUTING §6 expects the AI pre-review file in the same folder.
 This is the first file in `iterations/`. It covers the review half only; there is no retrospective
 plan document and one will not be reconstructed.
 
+### Implementation record
+
+Completed in `6fb24ac2`, which committed this review artifact. No retrospective plan was added, as
+decided.
+
 ---
 
 ## P2 — The working tree is not clean (Process)
@@ -385,6 +452,11 @@ Seven files carry uncommitted trailing-newline fixes, including three feature do
 ### Decision — commit before pushing
 
 So that the reviewed tree matches the PR.
+
+### Implementation record
+
+Completed in `7c6639ea`. The tracked formatting and final-newline cleanup was committed separately
+from behavioral changes. No unrelated untracked files were included.
 
 ---
 
@@ -403,6 +475,12 @@ Correct the README sentence to name `background` and `hidden` as intentional exc
 failure case to the user manual, together with the "retry without indexes" recovery that H2 relies
 on.
 
+### Implementation record
+
+Completed in `6d6fa22c`. The feature README now bounds the fidelity claim, and the user guide covers
+count-read degradation, partial index state after failure, detailed diagnostics, and retrying
+without indexes. No deviation.
+
 ---
 
 ## Suggested order
@@ -420,3 +498,21 @@ Accepted without change: **H2**, **L1**, **L2**.
 
 Follow-up, not blocking: fixture tests for text, geospatial, wildcard, partial, and collation index
 round-trips (see H2).
+
+## Outcome
+
+All fix rulings were implemented and committed separately. H2, L1, and L2 remain accepted without
+code changes. Verification completed on 2026-09-17:
+
+- `npm run l10n` — passed; bundle regenerated.
+- `npm run prettier-fix` — passed; formatter output committed in `b4876a2c`.
+- `npm run lint` — passed with the existing `eslint-env` migration warning for
+  `webpack.config.views.js`.
+- `npx jest --no-coverage` — passed: 246 suites, 3,722 tests, and 4 snapshots.
+- `npm run build` — passed.
+- `npm run package` — passed; produced `vscode-documentdb-0.10.2.vsix`. Webpack reported its
+  existing dynamic dependency and bundle-size warnings.
+
+The final diff audit found no unaddressed review finding. The M5 formatter commit also reformatted
+three authentication telemetry tests already present on the branch; those changes are mechanical
+and do not alter behavior.
