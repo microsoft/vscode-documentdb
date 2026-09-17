@@ -290,9 +290,7 @@ describe('DocumentDbCollectionIndexCopier', () => {
         );
 
         await expect(copier.copyIndexes()).resolves.toMatchObject({ createdCount: 1 });
-        expect(ext.outputChannel.warn).toHaveBeenCalledWith(
-            '[IndexCopy] Index "email_1": all indexes already exist',
-        );
+        expect(ext.outputChannel.warn).toHaveBeenCalledWith('[IndexCopy] Index "email_1": all indexes already exist');
     });
 
     it('stops after the current index when cancelled', async () => {

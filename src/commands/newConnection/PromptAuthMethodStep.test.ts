@@ -4,8 +4,8 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { AuthMethodId } from '../../documentdb/auth/AuthMethod';
-import { PromptAuthMethodStep } from './PromptAuthMethodStep';
 import { type NewConnectionWizardContext } from './NewConnectionWizardContext';
+import { PromptAuthMethodStep } from './PromptAuthMethodStep';
 
 function createContext(authMethod: AuthMethodId): NewConnectionWizardContext {
     return {

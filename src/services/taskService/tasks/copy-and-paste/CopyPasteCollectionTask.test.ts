@@ -5,10 +5,7 @@
 
 import { type IActionContext } from '@microsoft/vscode-azext-utils';
 import { ext } from '../../../../extensionVariables';
-import {
-    type CollectionIndexCopier,
-    type CopyIndexesOptions,
-} from '../../data-api/indexes/CollectionIndexCopier';
+import { type CollectionIndexCopier, type CopyIndexesOptions } from '../../data-api/indexes/CollectionIndexCopier';
 import { ConflictResolutionStrategy, type DocumentReader } from '../../data-api/types';
 import { type StreamingDocumentWriter } from '../../data-api/writers/StreamingDocumentWriter';
 import { CopyPasteCollectionTask } from './CopyPasteCollectionTask';
@@ -84,19 +81,17 @@ function createContext(): IActionContext {
 describe('CopyPasteCollectionTask index phase', () => {
     it('shows a stable index count and traces per-index progress', async () => {
         const indexCopier = {
-            copyIndexes: jest.fn().mockImplementation(
-                async (options: CopyIndexesOptions) => {
-                    options.onStart?.(20);
-                    options.onProgress?.({ completed: 1, total: 20, indexName: 'email_1' });
-                    return {
-                        sourceIndexCount: 20,
-                        createdCount: 0,
-                        skippedCount: 1,
-                        renamedCount: 0,
-                        cancelled: false,
-                    };
-                },
-            ),
+            copyIndexes: jest.fn().mockImplementation(async (options: CopyIndexesOptions) => {
+                options.onStart?.(20);
+                options.onProgress?.({ completed: 1, total: 20, indexName: 'email_1' });
+                return {
+                    sourceIndexCount: 20,
+                    createdCount: 0,
+                    skippedCount: 1,
+                    renamedCount: 0,
+                    cancelled: false,
+                };
+            }),
         } as unknown as CollectionIndexCopier;
         const reader = { streamDocuments: jest.fn() } as unknown as DocumentReader;
         const writer = { streamDocuments: jest.fn() } as unknown as StreamingDocumentWriter;
@@ -105,9 +100,7 @@ describe('CopyPasteCollectionTask index phase', () => {
         await task.runWorkForTest(new AbortController().signal, createContext());
 
         expect(task.progressUpdates).toContainEqual({ progress: 0, message: 'Copying 20 indexes...' });
-        expect(ext.outputChannel.trace).toHaveBeenCalledWith(
-            '[CopyPasteTask] Index copy progress: 1/20 (email_1).',
-        );
+        expect(ext.outputChannel.trace).toHaveBeenCalledWith('[CopyPasteTask] Index copy progress: 1/20 (email_1).');
     });
 
     it('copies indexes before streaming documents', async () => {

@@ -92,9 +92,9 @@ for the explicit cross-database revisit condition.
 
 - `CollectionIndexCopier.ts` — provider-neutral task contract and shared progress/result types
 - `DocumentDbCollectionIndexCopier.ts` — DocumentDB API endpoint ownership, index comparison, and
-    creation
+  creation
 - `DocumentDbCollectionIndexCopier.test.ts` — source-only counting, equivalence, options, vector
-    indexes, background creation, hidden indexes, collisions, failures, and cancellation
+  indexes, background creation, hidden indexes, collisions, failures, and cancellation
 
 ## Related documentation
 

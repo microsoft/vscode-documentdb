@@ -8,10 +8,7 @@ import * as vscode from 'vscode';
 import { ClustersClient } from '../../../../documentdb/ClustersClient';
 import { CredentialCache } from '../../../../documentdb/CredentialCache';
 import { ext } from '../../../../extensionVariables';
-import {
-    type CollectionIndexCopier,
-    type IndexCopyResult,
-} from '../../data-api/indexes/CollectionIndexCopier';
+import { type CollectionIndexCopier, type IndexCopyResult } from '../../data-api/indexes/CollectionIndexCopier';
 import { type DocumentReader } from '../../data-api/types';
 import { type StreamingDocumentWriter, StreamingWriterError } from '../../data-api/writers/StreamingDocumentWriter';
 import { Task } from '../../taskService';
@@ -451,10 +448,7 @@ export class CopyPasteCollectionTask extends Task implements ResourceTrackingTas
                     result.createdCount.toString(),
                 ),
             );
-            await this.waitForPresentationDelay(
-                signal,
-                this.indexPresentationDelayMs,
-            );
+            await this.waitForPresentationDelay(signal, this.indexPresentationDelayMs);
         }
     }
 

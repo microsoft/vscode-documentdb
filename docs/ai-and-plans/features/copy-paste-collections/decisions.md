@@ -10,19 +10,19 @@ created: 2026-09-16
 > Durable architecture and behavior decisions for collection copy/paste. Entries 0004–0011 were
 > preserved from the original root-level index-copy plan when this feature folder was established.
 
-| #    | Decision                                                       | Status   | Changed from the proposal?                                            | Date       | PR |
-| ---- | -------------------------------------------------------------- | -------- | --------------------------------------------------------------------- | ---------- | -- |
-| 0001 | Keep implementation documentation beside the Task Service code | Accepted | Added by the maintainer after recalling the historical documentation | 2026-09-16 | —  |
-| 0002 | Use one optional `CollectionIndexCopier` at the task boundary   | Accepted | Chosen after rejecting the more elaborate migration pipeline          | 2026-09-16 | —  |
-| 0003 | Defer a portable index model until cross-database migration     | Accepted | Simplified from the proposed reader/planner/writer architecture        | 2026-09-16 | —  |
-| 0004 | Keep index processing bounded and sequential                    | Accepted | Migrated from the original implementation plan                        | 2026-09-16 | —  |
-| 0005 | Copy indexes before document streaming                          | Accepted | Migrated from the original implementation plan                        | 2026-09-16 | —  |
-| 0006 | Exclude the built-in `_id` index                                | Accepted | Migrated from the original implementation plan                        | 2026-09-16 | —  |
-| 0007 | Compare definitions before names                                | Accepted | Migrated from the original implementation plan                        | 2026-09-16 | —  |
-| 0008 | Preserve index creation failures                                | Accepted | Migrated from the original implementation plan                        | 2026-09-16 | —  |
-| 0009 | Count indexes only after the user chooses to copy them           | Accepted | Migrated from the original implementation plan                        | 2026-09-16 | —  |
-| 0010 | Do not roll back indexes after cancellation                     | Accepted | Migrated from the original implementation plan                        | 2026-09-16 | —  |
-| 0011 | Keep the index completion pause presentation-only               | Accepted | Migrated from the original implementation plan                        | 2026-09-16 | —  |
+| #    | Decision                                                       | Status   | Changed from the proposal?                                           | Date       | PR  |
+| ---- | -------------------------------------------------------------- | -------- | -------------------------------------------------------------------- | ---------- | --- |
+| 0001 | Keep implementation documentation beside the Task Service code | Accepted | Added by the maintainer after recalling the historical documentation | 2026-09-16 | —   |
+| 0002 | Use one optional `CollectionIndexCopier` at the task boundary  | Accepted | Chosen after rejecting the more elaborate migration pipeline         | 2026-09-16 | —   |
+| 0003 | Defer a portable index model until cross-database migration    | Accepted | Simplified from the proposed reader/planner/writer architecture      | 2026-09-16 | —   |
+| 0004 | Keep index processing bounded and sequential                   | Accepted | Migrated from the original implementation plan                       | 2026-09-16 | —   |
+| 0005 | Copy indexes before document streaming                         | Accepted | Migrated from the original implementation plan                       | 2026-09-16 | —   |
+| 0006 | Exclude the built-in `_id` index                               | Accepted | Migrated from the original implementation plan                       | 2026-09-16 | —   |
+| 0007 | Compare definitions before names                               | Accepted | Migrated from the original implementation plan                       | 2026-09-16 | —   |
+| 0008 | Preserve index creation failures                               | Accepted | Migrated from the original implementation plan                       | 2026-09-16 | —   |
+| 0009 | Count indexes only after the user chooses to copy them         | Accepted | Migrated from the original implementation plan                       | 2026-09-16 | —   |
+| 0010 | Do not roll back indexes after cancellation                    | Accepted | Migrated from the original implementation plan                       | 2026-09-16 | —   |
+| 0011 | Keep the index completion pause presentation-only              | Accepted | Migrated from the original implementation plan                       | 2026-09-16 | —   |
 
 > Entries below are semantically immutable. Append a new decision rather than rewriting an old one,
 > and record a reversal as a new entry plus a status change in the table.

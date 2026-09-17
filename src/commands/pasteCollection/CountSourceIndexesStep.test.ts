@@ -37,9 +37,9 @@ describe('CountSourceIndexesStep', () => {
             uniqueIndexNames: ['email_1'],
             ttlIndexNames: ['expiresAt_1'],
         });
-        jest.mocked(createIndexCopier).mockReturnValue(
-            { getSourceIndexSummary } as unknown as ReturnType<typeof createIndexCopier>,
-        );
+        jest.mocked(createIndexCopier).mockReturnValue({ getSourceIndexSummary } as unknown as ReturnType<
+            typeof createIndexCopier
+        >);
         const context = createContext();
 
         await new CountSourceIndexesStep().prompt(context);
@@ -57,9 +57,9 @@ describe('CountSourceIndexesStep', () => {
 
     it('continues with an unknown count when counting fails', async () => {
         const getSourceIndexSummary = jest.fn().mockRejectedValue(new Error('count failed'));
-        jest.mocked(createIndexCopier).mockReturnValue(
-            { getSourceIndexSummary } as unknown as ReturnType<typeof createIndexCopier>,
-        );
+        jest.mocked(createIndexCopier).mockReturnValue({ getSourceIndexSummary } as unknown as ReturnType<
+            typeof createIndexCopier
+        >);
         const context = createContext();
 
         await expect(new CountSourceIndexesStep().prompt(context)).resolves.toBeUndefined();
@@ -82,9 +82,9 @@ describe('CountSourceIndexesStep', () => {
                     signal.addEventListener('abort', () => reject(new Error('aborted')), { once: true });
                 }),
         );
-        jest.mocked(createIndexCopier).mockReturnValue(
-            { getSourceIndexSummary } as unknown as ReturnType<typeof createIndexCopier>,
-        );
+        jest.mocked(createIndexCopier).mockReturnValue({ getSourceIndexSummary } as unknown as ReturnType<
+            typeof createIndexCopier
+        >);
         const context = createContext();
         jest.mocked(context.ui.showQuickPick).mockImplementation(async (items: Promise<never>) => {
             void items.catch(() => undefined);

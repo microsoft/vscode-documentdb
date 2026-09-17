@@ -41,10 +41,7 @@ export class CountSourceIndexesStep extends AzureWizardPromptStep<PasteCollectio
         return context.copyIndexes;
     }
 
-    private async loadSourceIndexCount(
-        context: PasteCollectionWizardContext,
-        signal: AbortSignal,
-    ): Promise<never> {
+    private async loadSourceIndexCount(context: PasteCollectionWizardContext, signal: AbortSignal): Promise<never> {
         try {
             const summary = await createIndexCopier(context).getSourceIndexSummary(signal);
             context.sourceIndexCount = summary.count;

@@ -22,12 +22,13 @@ export class ConfirmOperationStep extends AzureWizardPromptStep<PasteCollectionW
 
         const conflictStrategy = this.formatConflictStrategy(context.conflictResolutionStrategy!);
         const indexesSetting = context.copyIndexes ? l10n.t('Yes') : l10n.t('No');
-        const indexesSummary = context.copyIndexes && context.sourceIndexCount !== undefined
-            ? l10n.t('Copy Indexes: {yesNoValue} ({indexCount} available)', {
-                  yesNoValue: indexesSetting,
-                  indexCount: context.sourceIndexCount.toLocaleString(),
-              })
-            : l10n.t('Copy Indexes: {yesNoValue}', { yesNoValue: indexesSetting });
+        const indexesSummary =
+            context.copyIndexes && context.sourceIndexCount !== undefined
+                ? l10n.t('Copy Indexes: {yesNoValue} ({indexCount} available)', {
+                      yesNoValue: indexesSetting,
+                      indexCount: context.sourceIndexCount.toLocaleString(),
+                  })
+                : l10n.t('Copy Indexes: {yesNoValue}', { yesNoValue: indexesSetting });
 
         const warningText = context.isTargetExistingCollection
             ? l10n.t(

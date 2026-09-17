@@ -14,8 +14,8 @@ import { type CopyPasteConfig } from '../../services/taskService/tasks/copy-and-
 import { isTerminalState, TaskService, TaskState, type Task } from '../../services/taskService/taskService';
 import { DatabaseItem } from '../../tree/documentdb/DatabaseItem';
 import { nonNullValue } from '../../utils/nonNull';
-import { type PasteCollectionWizardContext } from './PasteCollectionWizardContext';
 import { createIndexCopier } from './createIndexCopier';
+import { type PasteCollectionWizardContext } from './PasteCollectionWizardContext';
 
 export class ExecuteStep extends AzureWizardExecuteStep<PasteCollectionWizardContext> {
     public priority: number = 100;
