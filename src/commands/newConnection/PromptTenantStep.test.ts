@@ -35,8 +35,8 @@ jest.mock('../../plugins/api-shared/azure/credentialsManagement', () => ({
 }));
 
 import { type IActionContext } from '@microsoft/vscode-azext-utils';
-import { PromptTenantStep as NewConnectionPromptTenantStep } from './PromptTenantStep';
 import { PromptTenantStep as UpdateCredentialsPromptTenantStep } from '../updateCredentials/PromptTenantStep';
+import { PromptTenantStep as NewConnectionPromptTenantStep } from './PromptTenantStep';
 
 const TENANT_ID = '11111111-2222-3333-4444-555555555555';
 const tenant = {

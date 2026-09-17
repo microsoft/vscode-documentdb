@@ -26,8 +26,7 @@ export function buildSavedConnectionSecrets(input: SavedConnectionSecretsInput):
                       connectionPassword: input.password ?? '',
                   }
                 : undefined,
-        entraIdAuthConfig:
-            input.authMethod === AuthMethodId.MicrosoftEntraID ? input.entraIdAuthConfig : undefined,
+        entraIdAuthConfig: input.authMethod === AuthMethodId.MicrosoftEntraID ? input.entraIdAuthConfig : undefined,
         managedIdentityAuthConfig:
             input.authMethod === AuthMethodId.ManagedIdentity ? (input.managedIdentityAuthConfig ?? {}) : undefined,
     };

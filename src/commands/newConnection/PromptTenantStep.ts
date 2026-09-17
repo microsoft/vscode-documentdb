@@ -141,9 +141,7 @@ export class PromptTenantStep extends AzureWizardPromptStep<NewConnectionWizardC
 
     private async getAvailableTenants(subscriptionProvider: VSCodeAzureSubscriptionProvider): Promise<AzureTenant[]> {
         try {
-            const tenants = await valueOnTimeout(TENANT_LOOKUP_TIMEOUT_MS, [], () =>
-                subscriptionProvider.getTenants(),
-            );
+            const tenants = await valueOnTimeout(TENANT_LOOKUP_TIMEOUT_MS, [], () => subscriptionProvider.getTenants());
 
             return tenants.sort((a: AzureTenant, b: AzureTenant) => {
                 // Sort by display name if available, otherwise by tenant ID

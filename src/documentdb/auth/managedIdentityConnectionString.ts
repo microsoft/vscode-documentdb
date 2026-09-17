@@ -67,14 +67,12 @@ function getAuthMechanismProperties(cs: DocumentDBConnectionString): Array<[stri
         return [];
     }
 
-    return raw
-        .split(',')
-        .map((entry): [string, string] => {
-            const separatorIndex = entry.indexOf(':');
-            if (separatorIndex < 0) {
-                return [entry.trim(), ''];
-            }
+    return raw.split(',').map((entry): [string, string] => {
+        const separatorIndex = entry.indexOf(':');
+        if (separatorIndex < 0) {
+            return [entry.trim(), ''];
+        }
 
-            return [entry.slice(0, separatorIndex).trim(), entry.slice(separatorIndex + 1).trim()];
-        });
+        return [entry.slice(0, separatorIndex).trim(), entry.slice(separatorIndex + 1).trim()];
+    });
 }

@@ -295,15 +295,12 @@ export class SelectEntraTokenSourceStep<T extends ManagedIdentitySelectionContex
         const authMethodItems = createAuthMethodQuickPickItems(availableMethods, { showSupportInfo: true }).filter(
             (item) => item.authMethod !== AuthMethodId.MicrosoftEntraID,
         );
-        const selected = await context.ui.showQuickPick(
-            authMethodItems,
-            {
-                stepName: 'selectDifferentAuthMethod',
-                placeHolder: l10n.t('Select an authentication method'),
-                matchOnDetail: true,
-                suppressPersistence: true,
-            },
-        );
+        const selected = await context.ui.showQuickPick(authMethodItems, {
+            stepName: 'selectDifferentAuthMethod',
+            placeHolder: l10n.t('Select an authentication method'),
+            matchOnDetail: true,
+            suppressPersistence: true,
+        });
 
         if (!isSupportedAuthMethod(selected.authMethod)) {
             throw new Error(l10n.t('The selected authentication method is not supported.'));

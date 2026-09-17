@@ -24,8 +24,8 @@ jest.mock('@microsoft/vscode-azext-utils', () => ({
     GoBackError: class GoBackError extends Error {},
 }));
 
-import * as vscode from 'vscode';
 import { GoBackError } from '@microsoft/vscode-azext-utils';
+import * as vscode from 'vscode';
 import { AuthMethodId } from '../../auth/AuthMethod';
 import { type AuthenticateWizardContext } from './AuthenticateWizardContext';
 import { groupAsGuid, normalizeClientId, SelectEntraTokenSourceStep } from './SelectEntraTokenSourceStep';
@@ -94,12 +94,16 @@ describe('SelectEntraTokenSourceStep.buildItems', () => {
     });
 
     it('offers the inferred-family escape only when requested', () => {
-        expect(makeStep().buildItems(undefined, undefined, false).some((item) => item.choice === 'authMethod')).toBe(
-            false,
-        );
-        expect(makeStep().buildItems(undefined, undefined, true).some((item) => item.choice === 'authMethod')).toBe(
-            true,
-        );
+        expect(
+            makeStep()
+                .buildItems(undefined, undefined, false)
+                .some((item) => item.choice === 'authMethod'),
+        ).toBe(false);
+        expect(
+            makeStep()
+                .buildItems(undefined, undefined, true)
+                .some((item) => item.choice === 'authMethod'),
+        ).toBe(true);
     });
 
     it('keeps system-assigned and user-assigned terms searchable in details', () => {
@@ -216,7 +220,9 @@ describe('SelectEntraTokenSourceStep.prompt', () => {
     it('selects account sign-in and clears a candidate managed identity', async () => {
         const context = makeContext({
             managedIdentityAuthConfig: { clientId: CLIENT_ID },
-            ui: { showQuickPick: jest.fn().mockResolvedValue({ choice: 'account' }) } as unknown as AuthenticateWizardContext['ui'],
+            ui: {
+                showQuickPick: jest.fn().mockResolvedValue({ choice: 'account' }),
+            } as unknown as AuthenticateWizardContext['ui'],
         });
 
         await makeStep().prompt(context);

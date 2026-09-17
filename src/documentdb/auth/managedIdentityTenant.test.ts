@@ -78,11 +78,7 @@ describe('verifyManagedIdentityTenant', () => {
             ),
         ).toThrow();
 
-        expect(reportManagedIdentityFailureReason).toHaveBeenCalledWith(
-            'tenantMismatch',
-            CLIENT_ID,
-            CORRELATION_ID,
-        );
+        expect(reportManagedIdentityFailureReason).toHaveBeenCalledWith('tenantMismatch', CLIENT_ID, CORRELATION_ID);
     });
 
     it('accepts a matching tenant', () => {
