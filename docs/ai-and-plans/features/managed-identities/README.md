@@ -51,6 +51,7 @@ shipped in `0.10.2`.
 | Code review    | [Findings and resolutions](iterations/02-code-review.md)                 |
 | UX review      | [Workflow findings and operator feedback](iterations/03-ux-review.md)    |
 | Entra flow     | [Unified identity and tenant flow](iterations/04-entra-identity-flow.md) |
+| PR feedback    | [Review discussions and resolutions](iterations/06-pr-feedback.md)       |
 
 Historical records retain their original review baselines and packaging observations. The current
 branch target and preview version are recorded above; the earlier records are not current release guidance.
