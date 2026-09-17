@@ -39,6 +39,7 @@ export class MicrosoftEntraIDAuthHandler implements AuthHandler {
         dbConnectionString.username = ''; // required to move forward with Entra ID
         dbConnectionString.password = ''; // required to move forward with Entra ID
         dbConnectionString.searchParams.delete('authMechanism');
+        dbConnectionString.searchParams.delete('authMechanismProperties');
         dbConnectionString.searchParams.delete('tls');
 
         // Configure MongoDB client options for OIDC
