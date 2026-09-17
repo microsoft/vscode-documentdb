@@ -93,7 +93,9 @@ describe('ConfirmPasteIndexesStep', () => {
 
         await new ConfirmPasteIndexesStep().prompt(context);
 
-        expect(showInformationMessage.mock.calls[0][1].detail).toContain('0 of 4 indexes will be copied.');
+        expect(showInformationMessage.mock.calls[0][1].detail).toContain(
+            'There are no copyable secondary indexes in the source collection.',
+        );
         expect(showInformationMessage.mock.calls[0][1].detail).toContain('Not copied:');
     });
 
