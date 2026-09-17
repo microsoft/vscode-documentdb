@@ -3,6 +3,7 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+import { randomUUID } from 'crypto';
 import { type MongoClientOptions, type OIDCResponse } from 'mongodb';
 import { type CachedClusterCredentials } from '../CredentialCache';
 import { DocumentDBConnectionString } from '../utils/DocumentDBConnectionString';
@@ -38,6 +39,8 @@ export function expiresInSecondsFromTimestamp(expiresOnTimestamp: number, now: n
  * multiple-identity case this feature exists to fix.
  */
 export class ManagedIdentityAuthHandler implements AuthHandler {
+    private readonly tokenCorrelationId = randomUUID();
+
     constructor(private readonly clusterCredentials: CachedClusterCredentials) {}
 
     public async configureAuth(): Promise<AuthHandlerResponse> {
@@ -59,7 +62,12 @@ export class ManagedIdentityAuthHandler implements AuthHandler {
             authMechanismProperties: {
                 ALLOWED_HOSTS: getOidcAllowedHosts(this.clusterCredentials.connectionString),
                 OIDC_CALLBACK: async (): Promise<OIDCResponse> => {
-                    const token = await getManagedIdentityAccessToken([DOCUMENTDB_ENTRA_SCOPE], clientId, tenantId);
+                    const token = await getManagedIdentityAccessToken(
+                        [DOCUMENTDB_ENTRA_SCOPE],
+                        clientId,
+                        tenantId,
+                        this.tokenCorrelationId,
+                    );
 
                     return {
                         accessToken: token.accessToken,

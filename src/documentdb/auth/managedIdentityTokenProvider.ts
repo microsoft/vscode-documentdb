@@ -4,6 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { type TokenCredential } from '@azure/identity';
+import { randomUUID } from 'crypto';
 import { describeManagedIdentityError } from './managedIdentityErrors';
 import { reportManagedIdentityTokenFailure } from './managedIdentityTelemetry';
 import { verifyManagedIdentityTenant } from './managedIdentityTenant';
@@ -29,23 +30,25 @@ export async function getManagedIdentityAccessToken(
     scopes: string[],
     clientId: string | undefined,
     clusterTenantId?: string,
+    correlationId?: string,
 ): Promise<{ accessToken: string; expiresOnTimestamp: number }> {
+    const tokenCorrelationId = correlationId ?? randomUUID();
     const credential = await getCredential(clientId);
 
     let token: { token: string; expiresOnTimestamp: number } | null;
     try {
         token = await credential.getToken(scopes);
     } catch (error) {
-        reportManagedIdentityTokenFailure(error, clientId);
+        reportManagedIdentityTokenFailure(error, clientId, tokenCorrelationId);
         throw new Error(describeManagedIdentityError(error, clientId));
     }
 
     if (!token) {
-        reportManagedIdentityTokenFailure(undefined, clientId);
+        reportManagedIdentityTokenFailure(undefined, clientId, tokenCorrelationId);
         throw new Error(describeManagedIdentityError(undefined, clientId));
     }
 
-    verifyManagedIdentityTenant(token.token, clusterTenantId, clientId);
+    verifyManagedIdentityTenant(token.token, clusterTenantId, clientId, tokenCorrelationId);
 
     return { accessToken: token.token, expiresOnTimestamp: token.expiresOnTimestamp };
 }

@@ -99,6 +99,7 @@ describe('ManagedIdentityAuthHandler', () => {
             ['https://ossrdbms-aad.database.windows.net/.default'],
             undefined,
             undefined,
+            expect.any(String),
         );
     });
 
@@ -115,6 +116,7 @@ describe('ManagedIdentityAuthHandler', () => {
             ['https://ossrdbms-aad.database.windows.net/.default'],
             clientId,
             'cluster-tenant',
+            expect.any(String),
         );
     });
 
@@ -126,6 +128,16 @@ describe('ManagedIdentityAuthHandler', () => {
 
         expect(response.accessToken).toBe('a-token');
         expect(response.expiresInSeconds).toBeGreaterThan(0);
+    });
+
+    it('reuses one token correlation ID across OIDC callback retries', async () => {
+        const handler = new ManagedIdentityAuthHandler(buildCredentials());
+
+        const { options } = await handler.configureAuth();
+        await invokeOidcCallback(options);
+        await invokeOidcCallback(options);
+
+        expect(getManagedIdentityAccessToken.mock.calls[0][3]).toBe(getManagedIdentityAccessToken.mock.calls[1][3]);
     });
 
     it('propagates the provider readable failure', async () => {

@@ -4,6 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import * as l10n from '@vscode/l10n';
+import { randomUUID } from 'crypto';
 import * as vscode from 'vscode';
 import { ext } from '../../extensionVariables';
 import { getBatchSizeSetting } from '../../utils/workspacUtils';
@@ -73,6 +74,7 @@ export class ShellSessionManager implements vscode.Disposable {
     private readonly _workerManager: WorkerSessionManager;
     private readonly _connectionInfo: ShellConnectionInfo;
     private readonly _callbacks: ShellSessionCallbacks | undefined;
+    private readonly _managedIdentityTokenCorrelationId = randomUUID();
     private _initialized = false;
     /** Cached initialization promise to prevent concurrent init calls. */
     private _initPromise: Promise<ShellConnectionMetadata> | undefined;
@@ -330,8 +332,14 @@ export class ShellSessionManager implements vscode.Disposable {
 
             if (msg.source === 'managedIdentity') {
                 const { getManagedIdentityAccessToken } = await import('../auth/managedIdentityTokenProvider');
-                accessToken = (await getManagedIdentityAccessToken(msg.scopes as string[], msg.clientId, msg.tenantId))
-                    .accessToken;
+                accessToken = (
+                    await getManagedIdentityAccessToken(
+                        msg.scopes as string[],
+                        msg.clientId,
+                        msg.tenantId,
+                        this._managedIdentityTokenCorrelationId,
+                    )
+                ).accessToken;
             } else {
                 const { getSessionFromVSCode } = await import(
                     // eslint-disable-next-line import/no-internal-modules

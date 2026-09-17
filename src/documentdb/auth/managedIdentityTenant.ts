@@ -52,6 +52,7 @@ export function verifyManagedIdentityTenant(
     accessToken: string,
     clusterTenantId: string | undefined,
     clientId: string | undefined,
+    correlationId: string,
 ): void {
     if (!clusterTenantId) {
         return;
@@ -62,6 +63,6 @@ export function verifyManagedIdentityTenant(
         return;
     }
 
-    reportManagedIdentityFailureReason('tenantMismatch', clientId);
+    reportManagedIdentityFailureReason('tenantMismatch', clientId, correlationId);
     throw new Error(describeManagedIdentityTenantMismatch(identityTenantId, clusterTenantId));
 }
