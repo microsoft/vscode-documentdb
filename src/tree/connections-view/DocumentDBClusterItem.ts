@@ -33,6 +33,7 @@ import { type TreeCluster } from '../models/BaseClusterModel';
 import { type TreeElementWithStorageId } from '../TreeElementWithStorageId';
 import { buildClusterTreeItem } from './clusterItemPresentation';
 import { resolveStorageZone, type ConnectionClusterModel } from './models/ConnectionClusterModel';
+import { buildSavedConnectionSecrets } from './savedConnectionSecrets';
 
 export class DocumentDBClusterItem extends ClusterItemBase<ConnectionClusterModel> implements TreeElementWithStorageId {
     public override readonly cluster: TreeCluster<ConnectionClusterModel>;
@@ -177,18 +178,14 @@ export class DocumentDBClusterItem extends ClusterItemBase<ConnectionClusterMode
                     const connection = await ConnectionStorageService.get(this.storageId, connectionType);
                     if (connection && isConnection(connection)) {
                         connection.properties.selectedAuthMethod = authMethod;
-                        connection.secrets = {
+                        connection.secrets = buildSavedConnectionSecrets({
                             connectionString: connectionString.toString(),
-                            // Populate nativeAuthConfig configuration
-                            nativeAuthConfig:
-                                authMethod === AuthMethodId.NativeAuth && (username || password)
-                                    ? {
-                                          connectionUser: username ?? '',
-                                          connectionPassword: password ?? '',
-                                      }
-                                    : undefined,
-                            managedIdentityAuthConfig: managedIdentityAuthConfig,
-                        };
+                            authMethod,
+                            username,
+                            password,
+                            entraIdAuthConfig: connectionCredentials.secrets.entraIdAuthConfig,
+                            managedIdentityAuthConfig,
+                        });
                         try {
                             await ConnectionStorageService.save(connectionType, connection, true);
                         } catch (pushError) {
