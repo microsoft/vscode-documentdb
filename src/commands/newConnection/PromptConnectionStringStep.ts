@@ -61,8 +61,12 @@ export class PromptConnectionStringStep extends AzureWizardPromptStep<NewConnect
             }
         }
 
+        // A managed identity declaration needs the OIDC mechanism, the Azure environment marker,
+        // and either no username (system assigned) or a GUID username (user assigned).
         const hasUsableManagedIdentity =
-            authFacts.declaresAzureMachineWorkflow && (!authFacts.username || authFacts.usernameIsGuid);
+            authFacts.usesOidc &&
+            authFacts.declaresAzureMachineWorkflow &&
+            (!authFacts.username || authFacts.usernameIsGuid);
 
         if (authFacts.usesOidc && authFacts.declaresAzureMachineWorkflow) {
             // The mechanism markers were inputs to a decision, not state: keeping them in the stored

@@ -62,6 +62,11 @@ async function getCredential(clientId: string | undefined): Promise<TokenCredent
 
     // Dynamic import: @azure/identity pulls in MSAL and must stay out of the activation path.
     const { ManagedIdentityCredential } = await import('@azure/identity');
+    const cachedAfterImport = credentialsByClientId.get(key);
+    if (cachedAfterImport) {
+        return cachedAfterImport;
+    }
+
     const credential = clientId ? new ManagedIdentityCredential({ clientId }) : new ManagedIdentityCredential();
     credentialsByClientId.set(key, credential);
     return credential;

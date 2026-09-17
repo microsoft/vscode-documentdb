@@ -32,10 +32,10 @@ export function getConnectionAuthIdentity(input: ConnectionAuthIdentityInput): s
         case AuthMethodId.MicrosoftEntraID:
             // The signed-in user is not known until a token is acquired; the tenant is the only
             // durable part of the choice, and an unspecified tenant is itself a distinct choice.
-            return `entraId:${input.entraIdAuthConfig?.tenantId ?? ''}`;
+            return `entraId:${input.entraIdAuthConfig?.tenantId?.toLowerCase() ?? ''}`;
         case AuthMethodId.ManagedIdentity:
             // An absent client ID is meaningful: it selects the system-assigned identity.
-            return `managedIdentity:${input.managedIdentityAuthConfig?.clientId ?? 'system-assigned'}`;
+            return `managedIdentity:${input.managedIdentityAuthConfig?.clientId?.toLowerCase() ?? 'system-assigned'}`;
         default:
             return 'none';
     }

@@ -54,6 +54,22 @@ describe('PromptConnectionStringStep', () => {
         expect(context.connectionStringAuthFacts?.declaresAzureMachineWorkflow).toBe(false);
     });
 
+    it('does not infer managed identity from ENVIRONMENT:azure without OIDC', async () => {
+        const context = makeContext(
+            `mongodb://private.documentdb.internal:10260/?authMechanismProperties=${MANAGED_IDENTITY_AUTH_MECHANISM_PROPERTIES}`,
+        );
+
+        await new PromptConnectionStringStep().prompt(context);
+
+        expect(context.selectedAuthenticationMethod).toBeUndefined();
+        expect(context.managedIdentityAuthConfig).toBeUndefined();
+        expect(context.availableAuthenticationMethods).not.toContain(AuthMethodId.ManagedIdentity);
+        expect(context.connectionStringAuthFacts).toMatchObject({
+            usesOidc: false,
+            declaresAzureMachineWorkflow: true,
+        });
+    });
+
     it('keeps an unusable machine identity visible for correction without storing machine-flow markers', async () => {
         const context = makeContext(
             `mongodb://display-name@private.documentdb.internal:10260/?authMechanism=MONGODB-OIDC&authMechanismProperties=${MANAGED_IDENTITY_AUTH_MECHANISM_PROPERTIES}`,
