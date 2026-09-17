@@ -151,13 +151,37 @@ Scope: N11-N14. Separate the broad Microsoft Entra ID family label from the narr
 account method in code and UI, then verify whether Atlas and Kubernetes can reach the identity
 picker after the existing `shouldPrompt` gate.
 
-**Status:** Analysis in progress.
+**Status:** Completed in
+[`b03b51a2`](https://github.com/microsoft/vscode-documentdb/commit/b03b51a2), with analysis-only
+outcomes for N13 and N14.
+
+`EntraIdAuthConfig` now documents that it belongs to interactive account sign-in, while managed
+identity has its own config despite sharing the Microsoft Entra ID protocol family. The historical
+type and storage field names remain unchanged. A source-wide type rename was assessed at 75 percent
+confidence and skipped under the review threshold: it would touch about 40 files without changing
+behavior and could blur persisted/public names. Method-specific shell and connection messages now
+say `Microsoft Entra account`; the top-level family remains `Microsoft Entra ID`.
+
+Atlas and Kubernetes both provide only `NativeAuth` in their real credential contexts.
+`SelectEntraTokenSourceStep.shouldPrompt` requires `ManagedIdentity` availability, so it returns
+false for both paths before rendering UI. This is the deliberate uniform-wizard composition chosen
+for R6 in iteration 05 and implemented in
+[`cb646654`](https://github.com/microsoft/vscode-documentdb/commit/cb646654); no further code change
+is needed. The shell PTY suite passes (45 tests), and `npm run build` passes.
 
 ### W5 - Saved-secret helper rationale
 
 Scope: N15. Explain the existing helper boundary without modifying it.
 
-**Status:** Analysis in progress.
+**Status:** Completed as analysis only; no implementation commit, as requested in the review thread.
+
+`buildSavedConnectionSecrets` was extracted in
+[`d607683a`](https://github.com/microsoft/vscode-documentdb/commit/d607683a) after the save-credentials
+path dropped `entraIdAuthConfig`. The surrounding tree item has no practical unit harness, while the
+pure helper has focused tests proving both sides of the invariant: preserve the selected method's
+configuration and clear stale configuration from other methods. Inlining the sole call would not
+reduce runtime complexity, but it would move that regression-prone decision back into an untested
+tree-item branch. The helper therefore remains unchanged.
 
 ## Outcome
 
