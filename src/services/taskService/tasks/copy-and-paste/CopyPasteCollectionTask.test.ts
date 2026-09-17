@@ -156,6 +156,7 @@ describe('CopyPasteCollectionTask index phase', () => {
         );
         expect(reader.streamDocuments).not.toHaveBeenCalled();
         expect(context.telemetry.properties.indexCopyFailed).toBe('true');
+        expect(context.telemetry.properties.indexCopyError).toBe('copyIndexesFailed');
     });
 
     it('copies indexes when the source collection is empty', async () => {

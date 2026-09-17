@@ -410,7 +410,7 @@ export class CopyPasteCollectionTask extends Task implements ResourceTrackingTas
             const errorMessage = error instanceof Error ? error.message : String(error);
             if (context) {
                 context.telemetry.properties.indexCopyFailed = 'true';
-                context.telemetry.properties.indexCopyError = errorMessage;
+                context.telemetry.properties.indexCopyError = 'copyIndexesFailed';
             }
             throw new Error(vscode.l10n.t('Failed to copy indexes before copying documents: {0}', errorMessage), {
                 cause: error,
