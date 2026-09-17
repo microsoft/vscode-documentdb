@@ -28,7 +28,8 @@ index definitions private. The task receives neither clients nor index definitio
 `DocumentDbCollectionIndexCopier` owns:
 
 - reading the collection's index catalog through `ClustersClient`;
-- excluding the built-in `_id` index;
+- including the built-in `_id` index in the source catalog summary count;
+- excluding the built-in `_id` index from copying and copy progress;
 - preserving key order and supported index options, including DocumentDB vector options;
 - comparing definitions independently of names and mutable visibility;
 - skipping equivalent target definitions;
@@ -75,7 +76,8 @@ indexes already created are not rolled back.
 
 The paste wizard asks whether indexes should be copied before constructing a service to count them.
 If the user chooses document-only paste, no index API is called. This ordering is a product invariant,
-not just an optimization.
+not just an optimization. The displayed count includes every source catalog entry, including `_id`;
+the copy operation still processes only secondary indexes.
 
 ## Boundary scope
 

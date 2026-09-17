@@ -10,19 +10,20 @@ created: 2026-09-16
 > Durable architecture and behavior decisions for collection copy/paste. Entries 0004–0011 were
 > preserved from the original root-level index-copy plan when this feature folder was established.
 
-| #    | Decision                                                       | Status   | Changed from the proposal?                                           | Date       | PR  |
-| ---- | -------------------------------------------------------------- | -------- | -------------------------------------------------------------------- | ---------- | --- |
-| 0001 | Keep implementation documentation beside the Task Service code | Accepted | Added by the maintainer after recalling the historical documentation | 2026-09-16 | —   |
-| 0002 | Use one optional `CollectionIndexCopier` at the task boundary  | Accepted | Chosen after rejecting the more elaborate migration pipeline         | 2026-09-16 | —   |
-| 0003 | Defer a portable index model until cross-database migration    | Accepted | Simplified from the proposed reader/planner/writer architecture      | 2026-09-16 | —   |
-| 0004 | Keep index processing bounded and sequential                   | Accepted | Migrated from the original implementation plan                       | 2026-09-16 | —   |
-| 0005 | Copy indexes before document streaming                         | Accepted | Migrated from the original implementation plan                       | 2026-09-16 | —   |
-| 0006 | Exclude the built-in `_id` index                               | Accepted | Migrated from the original implementation plan                       | 2026-09-16 | —   |
-| 0007 | Compare definitions before names                               | Accepted | Migrated from the original implementation plan                       | 2026-09-16 | —   |
-| 0008 | Preserve index creation failures                               | Accepted | Migrated from the original implementation plan                       | 2026-09-16 | —   |
-| 0009 | Count indexes only after the user chooses to copy them         | Accepted | Migrated from the original implementation plan                       | 2026-09-16 | —   |
-| 0010 | Do not roll back indexes after cancellation                    | Accepted | Migrated from the original implementation plan                       | 2026-09-16 | —   |
-| 0011 | Keep the index completion pause presentation-only              | Accepted | Migrated from the original implementation plan                       | 2026-09-16 | —   |
+| #    | Decision                                                       | Status              | Changed from the proposal?                                           | Date       | PR  |
+| ---- | -------------------------------------------------------------- | ------------------- | -------------------------------------------------------------------- | ---------- | --- |
+| 0001 | Keep implementation documentation beside the Task Service code | Accepted            | Added by the maintainer after recalling the historical documentation | 2026-09-16 | —   |
+| 0002 | Use one optional `CollectionIndexCopier` at the task boundary  | Accepted            | Chosen after rejecting the more elaborate migration pipeline         | 2026-09-16 | —   |
+| 0003 | Defer a portable index model until cross-database migration    | Accepted            | Simplified from the proposed reader/planner/writer architecture      | 2026-09-16 | —   |
+| 0004 | Keep index processing bounded and sequential                   | Accepted            | Migrated from the original implementation plan                       | 2026-09-16 | —   |
+| 0005 | Copy indexes before document streaming                         | Accepted            | Migrated from the original implementation plan                       | 2026-09-16 | —   |
+| 0006 | Exclude the built-in `_id` index                               | Superseded by D0012 | Migrated from the original implementation plan                       | 2026-09-16 | —   |
+| 0007 | Compare definitions before names                               | Accepted            | Migrated from the original implementation plan                       | 2026-09-16 | —   |
+| 0008 | Preserve index creation failures                               | Accepted            | Migrated from the original implementation plan                       | 2026-09-16 | —   |
+| 0009 | Count indexes only after the user chooses to copy them         | Accepted            | Migrated from the original implementation plan                       | 2026-09-16 | —   |
+| 0010 | Do not roll back indexes after cancellation                    | Accepted            | Migrated from the original implementation plan                       | 2026-09-16 | —   |
+| 0011 | Keep the index completion pause presentation-only              | Accepted            | Migrated from the original implementation plan                       | 2026-09-16 | —   |
+| 0012 | Include `_id` in the source catalog count                      | Accepted            | Supersedes the counting portion of decision 0006                     | 2026-09-17 | —   |
 
 > Entries below are semantically immutable. Append a new decision rather than rewriting an old one,
 > and record a reversal as a new entry plus a status change in the table.
@@ -147,7 +148,7 @@ document transfer can evolve independently through `DocumentReader` and `Streami
 
 ## 0004 — Keep index processing bounded and sequential
 
-**Status:** Accepted · **Date:** 2026-09-16 · **Raised by:** original index-copy implementation
+**Status:** Superseded by D0012 · **Date:** 2026-09-16 · **Raised by:** original index-copy implementation
 
 ### Decision
 
@@ -182,7 +183,7 @@ indexes so the user can proceed or restart without index copying; index ordering
 
 ## 0006 — Exclude the built-in `_id` index
 
-**Status:** Accepted · **Date:** 2026-09-16 · **Raised by:** original index-copy implementation
+**Status:** Superseded by D0012 · **Date:** 2026-09-16 · **Raised by:** original index-copy implementation
 
 ### Decision
 
@@ -192,6 +193,8 @@ Do not count or copy the source collection's built-in `_id` index.
 
 Every target collection already has this index. Excluding it makes the wizard count describe only
 secondary indexes that can actually be recreated.
+
+The copy exclusion remains in force. Decision 0012 supersedes only the wizard counting behavior.
 
 ## 0007 — Compare definitions before names
 
@@ -267,3 +270,17 @@ The delay is cancellation-aware and does not run when every source definition wa
 
 Index creation can complete between progress-notification refreshes. A short presentation delay
 makes the phase visible without changing database behavior or delaying no-op copies.
+
+## 0012 — Include `_id` in the source catalog count
+
+**Status:** Accepted · **Date:** 2026-09-17 · **Raised by:** maintainer
+
+### Decision
+
+Include the built-in `_id` index in the source index count shown by the paste wizard. Continue to
+exclude it from the set of indexes recreated on the target and from copy progress totals.
+
+### Reasoning
+
+Users expect the displayed count to match the collection's complete index catalog. Omitting the
+built-in index makes the count consistently appear one lower than the count they can inspect.

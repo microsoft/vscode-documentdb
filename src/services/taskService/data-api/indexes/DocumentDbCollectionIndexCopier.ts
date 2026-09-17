@@ -44,11 +44,16 @@ export class DocumentDbCollectionIndexCopier implements CollectionIndexCopier {
 
     public async getSourceIndexSummary(signal?: AbortSignal): Promise<SourceIndexSummary> {
         const sourceClient = await ClustersClient.getClient(this.source.clusterId, signal);
-        const indexes = await this.readCopyableIndexes(sourceClient, this.source, signal);
+        const indexes = await this.readIndexes(sourceClient, this.source, signal);
+        const copyableIndexes = indexes
+            .filter((index) => !this.isIdIndex(index))
+            .map((index) => this.toIndexDefinition(index));
         return {
             count: indexes.length,
-            uniqueIndexNames: indexes.filter((index) => index.options.unique === true).map((index) => index.name),
-            ttlIndexNames: indexes
+            uniqueIndexNames: copyableIndexes
+                .filter((index) => index.options.unique === true)
+                .map((index) => index.name),
+            ttlIndexNames: copyableIndexes
                 .filter((index) => Object.hasOwn(index.options, 'expireAfterSeconds'))
                 .map((index) => index.name),
         };
@@ -143,15 +148,23 @@ export class DocumentDbCollectionIndexCopier implements CollectionIndexCopier {
         endpoint: DocumentDbCollectionEndpoint,
         signal?: AbortSignal,
     ): Promise<IndexDefinition[]> {
+        const indexes = await this.readIndexes(client, endpoint, signal);
+        return indexes.filter((index) => !this.isIdIndex(index)).map((index) => this.toIndexDefinition(index));
+    }
+
+    private async readIndexes(
+        client: ClustersClient,
+        endpoint: DocumentDbCollectionEndpoint,
+        signal?: AbortSignal,
+    ): Promise<IndexDescriptionInfo[]> {
         if (signal?.aborted) {
             throw this.getAbortError(signal);
         }
 
-        const indexes = await this.waitForOperation(
+        return this.waitForOperation(
             client.getCollection(endpoint.databaseName, endpoint.collectionName).indexes(),
             signal,
         );
-        return indexes.filter((index) => !this.isIdIndex(index)).map((index) => this.toIndexDefinition(index));
     }
 
     private async waitForOperation<T>(operation: Promise<T>, signal?: AbortSignal): Promise<T> {

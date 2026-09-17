@@ -71,9 +71,10 @@ This is a useful database boundary for the data plane: the task coordinates opaq
 implementation owns source and target endpoint descriptors and the complete comparison and creation
 algorithm. Source index counting acquires only the source client; copying acquires both clients.
 
-The copier contains DocumentDB API details such as `_id` exclusion, ordered key definitions, vector
-options, background creation, and create-then-hide behavior. Neither the task nor the shared copier
-contract exposes those definitions.
+The source summary counts the complete catalog, including `_id`, so the wizard matches the count a
+user can inspect. The copier excludes `_id` from recreation and contains DocumentDB API details such
+as ordered key definitions, vector options, background creation, and create-then-hide behavior.
+Neither the task nor the shared copier contract exposes those definitions.
 
 ## Chosen boundary
 
@@ -81,7 +82,7 @@ The task will receive one optional copier:
 
 ```typescript
 export interface CollectionIndexCopier {
-    countSourceIndexes(signal?: AbortSignal): Promise<number>;
+    getSourceIndexSummary(signal?: AbortSignal): Promise<SourceIndexSummary>;
 
     copyIndexes(options?: CopyIndexesOptions): Promise<IndexCopyResult>;
 }

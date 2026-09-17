@@ -43,7 +43,8 @@ durable intent and rationale. Code and tests remain authoritative for current be
 - The wizard offers index copying separately from document conflict handling.
 - Source indexes are counted only after the user selects **Copy indexes**; document-only paste never
   reads the index catalog.
-- The built-in `_id` index is excluded from the count and copy operation.
+- The source catalog count includes the built-in `_id` index, but `_id` is excluded from the copy
+  operation and its progress totals.
 - Indexes are copied sequentially after target creation and before document streaming.
 - Equivalent definitions are skipped regardless of name. A conflicting name receives deterministic
   `_copy`, `_copy_2`, and later suffixes.

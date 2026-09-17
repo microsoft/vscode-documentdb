@@ -67,7 +67,7 @@ describe('DocumentDbCollectionIndexCopier', () => {
         jest.clearAllMocks();
     });
 
-    it('summarizes copyable source indexes and their document-affecting options', async () => {
+    it('counts all source indexes and summarizes copyable document-affecting options', async () => {
         const indexes = jest.fn().mockResolvedValue([
             { key: { _id: 1 }, name: '_id_' },
             { key: { email: 1 }, name: 'email_1', unique: true },
@@ -82,7 +82,7 @@ describe('DocumentDbCollectionIndexCopier', () => {
         const summary = await copier.getSourceIndexSummary(signal);
 
         expect(summary).toEqual({
-            count: 2,
+            count: 3,
             uniqueIndexNames: ['email_1'],
             ttlIndexNames: ['expiresAt_1'],
         });
