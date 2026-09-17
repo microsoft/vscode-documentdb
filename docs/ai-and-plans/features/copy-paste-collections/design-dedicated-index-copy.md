@@ -1047,5 +1047,3 @@ it is not a separate branch.
 - The decisions listed under "Decisions to record" are appended to `decisions.md` with their
   reasoning, decision 0013 records why classification was kept out of the copier, and decisions 0009
   and 0012 are explicitly addressed rather than silently changed.
-- The decisions listed under "Decisions to record" are appended to `decisions.md` with their
-  reasoning, and decisions 0009 and 0012 are explicitly confirmed rather than silently changed.
