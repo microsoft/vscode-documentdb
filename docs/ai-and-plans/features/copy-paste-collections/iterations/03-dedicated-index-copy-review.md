@@ -98,3 +98,22 @@ The full handoff gate completed on 2026-09-17:
 Packaging reported the existing Express dynamic-dependency warning, webview asset-size
 recommendations, and an available `@vscode/vsce` update. No source or tracked generated changes
 remain from packaging.
+
+## Post-review workflow correction
+
+UX validation found that right-clicking a multi-selection produced no index context menu because
+**Copy Index...** was gated by `!listMultiSelection`. Commit `0a5a717e` applies the established
+Move to Folder invocation pattern: plain command registration preserves `(clickedItem,
+selectedItems[])`, then index-specific filtering retains copyable `IndexItem` nodes from one source
+collection. Expanded field rows, `_id`, and keyless non-copyable entries are ignored; copyable
+indexes from another collection are rejected rather than silently omitted.
+
+Focused verification after the correction:
+
+- `npm run prettier-fix` - passed.
+- `npm run l10n` - passed; extracted 2,360 strings and merged 2,471 keys.
+- `npm run lint` - passed with zero errors and the existing `webpack.config.views.js` deprecation
+  notice.
+- Seven focused suites passed: 54 tests covering buffer immutability, mixed tree selections,
+  manifest gating, subset validation and confirmation, wizard initialization, and task telemetry.
+- `npm run build` - passed with no diagnostics.
