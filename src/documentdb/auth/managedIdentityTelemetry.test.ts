@@ -29,6 +29,7 @@ describe('managed identity telemetry', () => {
         reportManagedIdentityFailureReason('endpointUnreachable', undefined, 'correlation-id');
 
         expect(emittedProperties).toMatchObject({
+            result: 'Failed',
             managedIdentityFailureReason: 'endpointUnreachable',
             managedIdentityKind: 'system',
             managedIdentityTokenCorrelationId: 'correlation-id',

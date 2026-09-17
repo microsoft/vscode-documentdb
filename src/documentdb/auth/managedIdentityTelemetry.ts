@@ -32,6 +32,7 @@ export function reportManagedIdentityFailureReason(
 ): void {
     void callWithTelemetryAndErrorHandling('connect.managedIdentityToken', (context) => {
         context.errorHandling.suppressDisplay = true;
+        context.telemetry.properties.result = 'Failed';
         context.telemetry.properties.managedIdentityFailureReason = reason;
         context.telemetry.properties.managedIdentityKind = clientId ? 'user' : 'system';
         context.telemetry.properties.managedIdentityTokenCorrelationId = correlationId;
