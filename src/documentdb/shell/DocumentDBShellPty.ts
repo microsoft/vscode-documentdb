@@ -490,7 +490,7 @@ export class DocumentDBShellPty implements vscode.Pseudoterminal {
             let authLabel: string;
             switch (metadata.authMechanism) {
                 case 'MicrosoftEntraID':
-                    authLabel = l10n.t('Entra ID');
+                    authLabel = l10n.t('Microsoft Entra account');
                     break;
                 case 'ManagedIdentity':
                     authLabel = l10n.t('Managed Identity');

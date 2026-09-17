@@ -292,7 +292,7 @@ export class KubernetesResourceItem extends ClusterItemBase<KubernetesClusterMod
 
             switch (selectedAuthMethod) {
                 case AuthMethodId.MicrosoftEntraID:
-                    ext.outputChannel.append(l10n.t('Connecting to the cluster using Entra ID…'));
+                    ext.outputChannel.append(l10n.t('Connecting to the cluster using a Microsoft Entra account…'));
                     break;
                 default:
                     ext.outputChannel.append(

@@ -17,8 +17,11 @@ export interface NativeAuthConfig {
 }
 
 /**
- * Configuration for Entra ID (Azure Active Directory) authentication.
- * Supports both explicit tenant specification and tenant discovery scenarios.
+ * Configuration for interactive Microsoft Entra account authentication.
+ *
+ * Managed identity also uses Microsoft Entra ID on the wire, but has a separate
+ * `ManagedIdentityAuthConfig`. The historical `EntraId` name here and in storage refers only to
+ * account sign-in and is retained for storage compatibility.
  */
 export interface EntraIdAuthConfig {
     /**

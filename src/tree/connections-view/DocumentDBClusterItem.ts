@@ -209,7 +209,7 @@ export class DocumentDBClusterItem extends ClusterItemBase<ConnectionClusterMode
 
             switch (authMethod) {
                 case AuthMethodId.MicrosoftEntraID:
-                    ext.outputChannel.append(l10n.t('Connecting to the cluster using Entra ID…'));
+                    ext.outputChannel.append(l10n.t('Connecting to the cluster using a Microsoft Entra account…'));
                     break;
                 case AuthMethodId.ManagedIdentity:
                     ext.outputChannel.append(l10n.t('Connecting to the cluster using a managed identity…'));

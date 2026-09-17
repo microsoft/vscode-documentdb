@@ -184,7 +184,7 @@ describe('DocumentDBShellPty', () => {
 
         it.each([
             ['NativeAuth', 'SCRAM'],
-            ['MicrosoftEntraID', 'Entra ID'],
+            ['MicrosoftEntraID', 'Microsoft Entra account'],
             ['ManagedIdentity', 'Managed Identity'],
             ['NoAuth', 'No Authentication'],
         ] as const)('should display the %s authentication label', async (authMechanism, expectedLabel) => {
