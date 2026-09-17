@@ -113,7 +113,18 @@ Scope: N3. Trace `callWithTelemetryAndErrorHandling` through the installed libra
 telemetry skill. Change code only if the result override is proven stable; file a repository issue
 if the problem affects other non-throwing failure events or the skill guidance.
 
-**Status:** Analysis in progress.
+**Status:** Completed in
+[`c5151cd1`](https://github.com/microsoft/vscode-documentdb/commit/c5151cd1).
+
+The installed `@microsoft/vscode-azext-utils` implementation initializes `result` to `Succeeded`,
+awaits the callback, changes the result automatically only when the callback throws, and emits the
+same context from `finally`. `handleTelemetry` does not restore `Succeeded`, so a callback-assigned
+`Failed` value is stable and is the intended representation of a recovered, non-throwing failure.
+
+The repository telemetry skill already documents this exact exception. Existing discovery and
+Kubernetes paths also assign `Failed` before returning recovery UI, so there is no wider library,
+codebase-pattern, or skill defect to track. No issue was filed. The managed identity event now sets
+`result = 'Failed'`, its focused test asserts the value, and both that test and `npm run build` pass.
 
 ### W3 - User-facing accuracy and localization
 
