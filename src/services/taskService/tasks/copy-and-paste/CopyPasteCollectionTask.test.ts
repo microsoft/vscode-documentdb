@@ -152,7 +152,7 @@ describe('CopyPasteCollectionTask index phase', () => {
         task.setSourceDocumentCount(1);
 
         await expect(task.runWorkForTest(new AbortController().signal, context)).rejects.toThrow(
-            'Failed to copy indexes before copying documents.',
+            'Failed to copy indexes before copying documents: index creation failed',
         );
         expect(reader.streamDocuments).not.toHaveBeenCalled();
         expect(context.telemetry.properties.indexCopyFailed).toBe('true');

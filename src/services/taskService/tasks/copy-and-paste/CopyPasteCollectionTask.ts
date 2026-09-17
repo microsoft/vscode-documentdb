@@ -407,11 +407,14 @@ export class CopyPasteCollectionTask extends Task implements ResourceTrackingTas
                 },
             });
         } catch (error) {
+            const errorMessage = error instanceof Error ? error.message : String(error);
             if (context) {
                 context.telemetry.properties.indexCopyFailed = 'true';
-                context.telemetry.properties.indexCopyError = error instanceof Error ? error.message : String(error);
+                context.telemetry.properties.indexCopyError = errorMessage;
             }
-            throw new Error(vscode.l10n.t('Failed to copy indexes before copying documents.'), { cause: error });
+            throw new Error(vscode.l10n.t('Failed to copy indexes before copying documents: {0}', errorMessage), {
+                cause: error,
+            });
         }
 
         if (context) {

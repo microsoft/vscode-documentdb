@@ -255,7 +255,7 @@ describe('DocumentDbCollectionIndexCopier', () => {
             createClient([], jest.fn().mockResolvedValue({ ok: 0, note: 'creation failed' })),
         );
 
-        await expect(copier.copyIndexes()).rejects.toThrow('creation failed');
+        await expect(copier.copyIndexes()).rejects.toThrow('Failed to copy index "email_1": creation failed');
         expect(ext.outputChannel.error).toHaveBeenCalled();
     });
 

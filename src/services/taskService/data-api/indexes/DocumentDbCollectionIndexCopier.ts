@@ -110,7 +110,9 @@ export class DocumentDbCollectionIndexCopier implements CollectionIndexCopier {
                 ext.outputChannel.error(
                     vscode.l10n.t('[IndexCopy] Failed to create index "{0}": {1}', targetName, errorMessage),
                 );
-                throw error;
+                throw new Error(vscode.l10n.t('Failed to copy index "{0}": {1}', targetName, errorMessage), {
+                    cause: error,
+                });
             }
 
             result.createdCount++;
