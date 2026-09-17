@@ -144,7 +144,7 @@ export class DocumentDbCollectionIndexCopier implements CollectionIndexCopier {
         signal?: AbortSignal,
     ): Promise<IndexDefinition[]> {
         if (signal?.aborted) {
-            throw signal.reason ?? new Error('Operation aborted');
+            throw this.getAbortError(signal);
         }
 
         const indexes = await this.waitForOperation(
@@ -160,7 +160,7 @@ export class DocumentDbCollectionIndexCopier implements CollectionIndexCopier {
         }
 
         return new Promise<T>((resolve, reject) => {
-            const onAbort = (): void => reject(signal.reason ?? new Error('Operation aborted'));
+            const onAbort = (): void => reject(this.getAbortError(signal));
             signal.addEventListener('abort', onAbort, { once: true });
             void operation.then(
                 (result) => {
@@ -169,10 +169,20 @@ export class DocumentDbCollectionIndexCopier implements CollectionIndexCopier {
                 },
                 (error: unknown) => {
                     signal.removeEventListener('abort', onAbort);
-                    reject(error);
+                    reject(error instanceof Error ? error : new Error(String(error)));
                 },
             );
         });
+    }
+
+    private getAbortError(signal: AbortSignal): Error {
+        if (signal.reason instanceof Error) {
+            return signal.reason;
+        }
+
+        const error = new Error('Operation aborted');
+        error.name = 'AbortError';
+        return error;
     }
 
     private async createIndex(
