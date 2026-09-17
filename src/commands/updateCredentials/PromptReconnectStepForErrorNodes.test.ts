@@ -74,7 +74,6 @@ describe('PromptReconnectStepForErrorNodes', () => {
             await step.prompt(context);
 
             expect(context.reconnectAfterError).toBe(true);
-            expect(context.telemetry.properties.reconnectAfterCredentialUpdate).toBe('true');
             expect(mockShowQuickPick).toHaveBeenCalledTimes(1);
         });
 
@@ -88,7 +87,6 @@ describe('PromptReconnectStepForErrorNodes', () => {
             await step.prompt(context);
 
             expect(context.reconnectAfterError).toBe(false);
-            expect(context.telemetry.properties.reconnectAfterCredentialUpdate).toBe('false');
             expect(mockShowQuickPick).toHaveBeenCalledTimes(1);
         });
 

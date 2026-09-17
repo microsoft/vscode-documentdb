@@ -42,12 +42,7 @@ export class PromptAuthMethodStep extends AzureWizardPromptStep<UpdateCredential
             throw new Error(l10n.t('No authentication method selected.'));
         }
 
-        const previousAuthMethod = context.selectedAuthenticationMethod;
         context.selectedAuthenticationMethod = selectedItem.authMethod;
-        context.telemetry.properties.previousAuthMethod = previousAuthMethod ?? 'unknown';
-        context.telemetry.properties.authMethod = selectedItem.authMethod;
-        context.telemetry.properties.authMethodChanged =
-            previousAuthMethod !== selectedItem.authMethod ? 'true' : 'false';
     }
 
     public shouldPrompt(): boolean {
