@@ -4,6 +4,7 @@ kind: review
 status: active
 prs: [848]
 created: 2026-09-17
+verified: 2026-09-17
 code:
     - src/commands/pasteCollection/**
     - src/documentdb/ClustersClient.ts
@@ -29,7 +30,7 @@ than duplicated as separate feedback.
 | F3  | The feature design document names an older method. Feature intent documents are allowed to lag implementation and should not shadow-track APIs under CONTRIBUTING section 5.4.                                                                                                                                      | No code or document change; record and explain the decision in the thread.              | 95%        | Completed without code changes.                       |
 | F4  | The implementation README's current contract snippet is stale.                                                                                                                                                                                                                                                      | Update the implementation-oriented README because it explicitly describes current code. | 99%        | Completed in `60c56ac0`.                              |
 | F5  | Authentication and credential-update telemetry is unrelated to index copying and was included accidentally.                                                                                                                                                                                                         | Remove all remaining auth telemetry changes and their dedicated tests.                  | 99%        | Completed in `495c22d2` and `ef89f674`.               |
-| F6  | The reviewer requested changes and specifically asked that all unrelated telemetry be reverted because auth telemetry belongs in another PR.                                                                                                                                                                        | Satisfied by F5, then request re-review after all discussions are addressed.            | 99%        | Telemetry removal completed; re-review pending.       |
+| F6  | The reviewer requested changes and specifically asked that all unrelated telemetry be reverted because auth telemetry belongs in another PR.                                                                                                                                                                        | Satisfied by F5, then request re-review after all discussions are addressed.            | 99%        | Completed; all discussions resolved.                  |
 
 ## Discussion references
 
@@ -154,3 +155,25 @@ Focused verification:
 Follow-up: [#928 - Audit and harden cancellable connection attempts](https://github.com/microsoft/vscode-documentdb/issues/928).
 
 GitHub response: [cancellation discussion](https://github.com/microsoft/vscode-documentdb/pull/848#discussion_r4036152687).
+
+### Work item 5 - refresh generated localization
+
+Completed in [`02fb88d9`](https://github.com/microsoft/vscode-documentdb/commit/02fb88d9aa255a8de6a9519c518df3145eddfe88).
+
+The Case 2 localization pass added the generated bundle entry for the new fail-fast source-index
+message. The bundle was regenerated with `npm run l10n` and was not edited by hand.
+
+## Final PR verification
+
+The CONTRIBUTING Case 2 handoff gate completed on 2026-09-17:
+
+- `npm run l10n` - passed; generated one bundle entry committed in `02fb88d9`
+- `npm run prettier-fix` - passed
+- `npm run lint` - passed with the existing ESLint deprecation warning
+- `npx jest --no-coverage` - passed: 243 suites, 3,715 tests, 4 snapshots
+- `npm run build` - passed
+- `npm run package` - passed; produced `vscode-documentdb-0.10.2.vsix` (9.06 MB)
+
+Packaging reported the existing dynamic Express dependency warning, webview bundle-size warnings,
+and an available `@vscode/vsce` upgrade. No feedback item remains below the 80% confidence threshold,
+and all nine inline discussions are resolved.
