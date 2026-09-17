@@ -114,7 +114,7 @@ export interface FindQueryParams {
 
 export interface IndexItemModel {
     name: string;
-    type: 'traditional' | 'search';
+    type: 'traditional' | 'search' | 'vectorSearch';
     key?: {
         [key: string]: number | string;
     };
@@ -130,6 +130,16 @@ export interface IndexItemModel {
     queryable?: boolean;
     fields?: unknown[];
     [key: string]: unknown; // Allow additional index properties
+}
+
+export type IndexExclusionReason = 'builtInId' | 'notCopyable';
+
+export function getIndexExclusionReason(index: IndexItemModel): IndexExclusionReason | undefined {
+    if (index.key && Object.keys(index.key).length === 1 && Object.prototype.hasOwnProperty.call(index.key, '_id')) {
+        return 'builtInId';
+    }
+
+    return index.key === undefined ? 'notCopyable' : undefined;
 }
 
 export function isBulkWriteError(error: unknown): error is MongoBulkWriteError {
@@ -724,7 +734,7 @@ export class ClustersClient {
             return searchIndexes.map((index: Document) => ({
                 ...index,
                 name: (index.name as string | undefined) ?? 'search_idx_' + (i++).toString(),
-                type: ((index.type as string | undefined) ?? 'search') as 'traditional' | 'search',
+                type: index.type === 'vectorSearch' ? 'vectorSearch' : 'search',
                 fields: index.fields as unknown[] | undefined,
             }));
         } catch {
