@@ -13,7 +13,7 @@ jest.mock('../../../../documentdb/ClustersClient', () => ({
 
 jest.mock('../../../../extensionVariables', () => ({
     ext: {
-        outputChannel: { trace: jest.fn(), debug: jest.fn(), error: jest.fn() },
+        outputChannel: { trace: jest.fn(), debug: jest.fn(), error: jest.fn(), warn: jest.fn() },
     },
 }));
 
@@ -257,6 +257,18 @@ describe('DocumentDbCollectionIndexCopier', () => {
 
         await expect(copier.copyIndexes()).rejects.toThrow('Failed to copy index "email_1": creation failed');
         expect(ext.outputChannel.error).toHaveBeenCalled();
+    });
+
+    it('logs a successful createIndexes note without treating it as a failure', async () => {
+        const copier = createCopier(
+            createClient([{ key: { email: 1 }, name: 'email_1' }]),
+            createClient([], jest.fn().mockResolvedValue({ ok: 1, note: 'all indexes already exist' })),
+        );
+
+        await expect(copier.copyIndexes()).resolves.toMatchObject({ createdCount: 1 });
+        expect(ext.outputChannel.warn).toHaveBeenCalledWith(
+            '[IndexCopy] Index "email_1": all indexes already exist',
+        );
     });
 
     it('stops after the current index when cancelled', async () => {

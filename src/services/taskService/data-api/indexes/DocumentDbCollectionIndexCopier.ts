@@ -150,7 +150,11 @@ export class DocumentDbCollectionIndexCopier implements CollectionIndexCopier {
             name: index.name,
         });
 
-        if (result.ok === 0 || result.note) {
+        if (typeof result.note === 'string') {
+            ext.outputChannel.warn(vscode.l10n.t('[IndexCopy] Index "{0}": {1}', index.name, result.note));
+        }
+
+        if (result.ok !== 1) {
             throw new Error(typeof result.note === 'string' ? result.note : vscode.l10n.t('Failed to create index.'));
         }
 
