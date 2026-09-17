@@ -21,7 +21,8 @@ function createContext(copyIndexes: boolean = true): PasteCollectionWizardContex
         sourceTtlIndexNames: [],
         telemetry: { properties: {}, measurements: {} },
         ui: {
-            showQuickPick: jest.fn().mockImplementation(async (items: Promise<never>) => items),        },
+            showQuickPick: jest.fn().mockImplementation(async (items: Promise<never>) => items),
+        },
     } as unknown as PasteCollectionWizardContext;
 }
 
@@ -40,6 +41,7 @@ describe('CountSourceIndexesStep', () => {
             { getSourceIndexSummary } as unknown as ReturnType<typeof createIndexCopier>,
         );
         const context = createContext();
+
         await new CountSourceIndexesStep().prompt(context);
 
         expect(context.ui.showQuickPick).toHaveBeenCalledWith(expect.any(Promise), {
@@ -59,6 +61,7 @@ describe('CountSourceIndexesStep', () => {
             { getSourceIndexSummary } as unknown as ReturnType<typeof createIndexCopier>,
         );
         const context = createContext();
+
         await expect(new CountSourceIndexesStep().prompt(context)).resolves.toBeUndefined();
 
         expect(context.sourceIndexCount).toBeUndefined();
@@ -83,7 +86,8 @@ describe('CountSourceIndexesStep', () => {
             { getSourceIndexSummary } as unknown as ReturnType<typeof createIndexCopier>,
         );
         const context = createContext();
-        jest.mocked(context.ui.showQuickPick).mockImplementation(async (items: Promise<never>) => {            void items.catch(() => undefined);
+        jest.mocked(context.ui.showQuickPick).mockImplementation(async (items: Promise<never>) => {
+            void items.catch(() => undefined);
             throw new Error('cancelled');
         });
 

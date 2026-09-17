@@ -123,7 +123,8 @@ export async function pasteCollection(
         sourceTtlIndexNames: [],
     };
 
-    // Check for circular dependency when pasting into the same collection    if (
+    // Check for circular dependency when pasting into the same collection
+    if (
         isTargetExistingCollection &&
         wizardContext.sourceConnectionId === wizardContext.targetConnectionId &&
         wizardContext.sourceDatabaseName === wizardContext.targetDatabaseName &&

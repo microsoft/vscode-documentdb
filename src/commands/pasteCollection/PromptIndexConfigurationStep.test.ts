@@ -23,7 +23,8 @@ function createContext(selection: 'copy' | 'skip'): PasteCollectionWizardContext
         sourceTtlIndexNames: [],
         telemetry: { properties: {}, measurements: {} },
         ui: {
-            showQuickPick: jest.fn().mockResolvedValue({ id: selection }),        },
+            showQuickPick: jest.fn().mockResolvedValue({ id: selection }),
+        },
     } as unknown as PasteCollectionWizardContext;
 }
 

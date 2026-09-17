@@ -14,7 +14,8 @@ import {
     type SourceIndexSummary,
 } from './CollectionIndexCopier';
 
-export interface DocumentDbCollectionEndpoint {    clusterId: string;
+export interface DocumentDbCollectionEndpoint {
+    clusterId: string;
     databaseName: string;
     collectionName: string;
 }
@@ -53,7 +54,8 @@ export class DocumentDbCollectionIndexCopier implements CollectionIndexCopier {
         };
     }
 
-    public async copyIndexes(options: CopyIndexesOptions = {}): Promise<IndexCopyResult> {        const [sourceClient, targetClient] = await Promise.all([
+    public async copyIndexes(options: CopyIndexesOptions = {}): Promise<IndexCopyResult> {
+        const [sourceClient, targetClient] = await Promise.all([
             ClustersClient.getClient(this.source.clusterId),
             ClustersClient.getClient(this.target.clusterId),
         ]);

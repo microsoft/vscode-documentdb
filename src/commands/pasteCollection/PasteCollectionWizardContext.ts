@@ -25,7 +25,8 @@ export interface PasteCollectionWizardContext extends IActionContext {
     sourceTtlIndexNames: string[];
 
     // Target details
-    targetNode: CollectionItem | DatabaseItem;    /**
+    targetNode: CollectionItem | DatabaseItem;
+    /**
      * Target cluster's stable identifier (cluster.clusterId).
      * Used for credential and client cache lookups.
      * ⚠️ Use cluster.clusterId, NOT treeId.

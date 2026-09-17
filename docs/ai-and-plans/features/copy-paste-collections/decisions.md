@@ -85,6 +85,7 @@ unique and TTL indexes so the confirmation can warn about their document-copy co
 reading the catalog twice.
 
 ### Rejected alternatives
+
 - **Keep `source.copyIndexesTo(target)`.** This leaves concrete database types in the task contract
   and makes the source service responsible for invoking private behavior on another service.
 - **Give the task generic index readers and writers.** This forces the task or a shared layer to own
@@ -182,6 +183,7 @@ indexes so the user can proceed or restart without index copying; index ordering
 ## 0006 — Exclude the built-in `_id` index
 
 **Status:** Accepted · **Date:** 2026-09-16 · **Raised by:** original index-copy implementation
+
 ### Decision
 
 Do not count or copy the source collection's built-in `_id` index.

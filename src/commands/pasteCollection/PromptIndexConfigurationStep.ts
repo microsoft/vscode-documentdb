@@ -37,6 +37,7 @@ export class PromptIndexConfigurationStep extends AzureWizardPromptStep<PasteCol
             context.sourceTtlIndexNames = [];
         }
     }
+
     public shouldPrompt(): boolean {
         return true;
     }

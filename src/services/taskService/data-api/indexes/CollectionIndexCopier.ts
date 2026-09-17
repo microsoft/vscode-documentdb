@@ -25,7 +25,8 @@ export interface SourceIndexSummary {
 
 export interface CopyIndexesOptions {
     signal?: AbortSignal;
-    onStart?: (total: number) => void;    onProgress?: (progress: IndexCopyProgress) => void;
+    onStart?: (total: number) => void;
+    onProgress?: (progress: IndexCopyProgress) => void;
 }
 
 /**

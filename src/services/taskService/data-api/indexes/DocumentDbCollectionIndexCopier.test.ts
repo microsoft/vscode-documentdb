@@ -32,7 +32,8 @@ interface MockIndex {
     expireAfterSeconds?: number;
     background?: boolean;
     hidden?: boolean;
-    cosmosSearchOptions?: Record<string, unknown>;}
+    cosmosSearchOptions?: Record<string, unknown>;
+}
 
 function createClient(
     indexes: MockIndex[],
@@ -73,7 +74,8 @@ describe('DocumentDbCollectionIndexCopier', () => {
             { key: { expiresAt: 1 }, name: 'expiresAt_1', expireAfterSeconds: 0 },
         ]);
         const sourceClient = {
-            getCollection: jest.fn().mockReturnValue({ indexes }),        } as unknown as ClustersClient;
+            getCollection: jest.fn().mockReturnValue({ indexes }),
+        } as unknown as ClustersClient;
         const copier = createCopier(sourceClient);
         const signal = new AbortController().signal;
 
@@ -86,7 +88,8 @@ describe('DocumentDbCollectionIndexCopier', () => {
         });
         expect(ClustersClient.getClient).toHaveBeenCalledWith('source', signal);
         expect(ClustersClient.getClient).not.toHaveBeenCalledWith('target');
-        expect(indexes).toHaveBeenCalledWith();    });
+        expect(indexes).toHaveBeenCalledWith();
+    });
 
     it('stops waiting for source indexes when counting is cancelled', async () => {
         const controller = new AbortController();
@@ -98,6 +101,7 @@ describe('DocumentDbCollectionIndexCopier', () => {
         const countPromise = copier.getSourceIndexSummary(controller.signal);
 
         controller.abort();
+
         await expect(countPromise).rejects.toMatchObject({ name: 'AbortError' });
     });
 
