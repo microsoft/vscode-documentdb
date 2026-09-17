@@ -29,9 +29,13 @@ Add a dedicated workflow for copying secondary indexes without copying documents
 - **Paste Indexes…** on a target Indexes parent.
 
 The feature must build on the index-copy implementation already used by Copy and Paste Collection.
-It must not introduce a second catalog comparison or index creation path. It also provides an
-opportunity to move transient copy state out of the global `ext` namespace and behind a service
-with an explicit contract.
+It must not introduce a second catalog comparison or index creation path. New copied-index state
+belongs behind a service with an explicit contract; migrating existing collection copy state out of
+the global `ext` namespace is deferred.
+
+Add dedicated index copy and paste using the existing copier, preserve collection-copy behavior,
+and make only the supporting contract, tree, notification, and test changes required for that
+workflow. The collection flow needs internal adaptations, not a redesign.
 
 ## Product scope
 
@@ -51,7 +55,8 @@ with an explicit contract.
 - Improve the `IndexItem` tooltip so a non-copyable entry explains itself, and remove the
   placeholder `Support coming soon` child node.
 - Remove the false promise in the Paste Collection prompt that "all" secondary index definitions are
-  copied. This is a one-string correction and nothing more; see "Known gaps".
+  copied. Keep its existing counts and warnings; see "Known gaps". The shared-contract adaptations
+  and explicitly listed notification and command-palette fixes remain in scope.
 
 ### Not included
 
@@ -77,8 +82,8 @@ with an explicit contract.
 2. The command records a stable source collection descriptor and the selected index name.
 3. A notification says that the index is ready to paste and offers **Cancel Copy**.
 4. The user invokes **Paste Indexes…** on another collection's Indexes node.
-5. A confirmation shows the source, target, selected count, names, excluded entries, and any unique
-   or TTL warnings.
+5. A confirmation shows the source, target, the one selected index name, and its applicable unique
+  or TTL warnings. It shows no whole-collection count or unrelated excluded entries.
 6. A background task copies the index and shows determinate progress.
 
 The `_id` node and non-copyable entries do not offer **Copy Index…**; they are gated out by the
@@ -153,7 +158,7 @@ Paste Indexes must:
 
 A successful Paste Indexes leaves the buffer intact, matching Copy Collection: the source stays
 marked so the user can paste the same selection into several targets without re-copying. The buffer
-is replaced only by another copy command, cleared by **Cancel Copy**, or cleared by validation when
+is replaced only by another index copy command, cleared by **Cancel Copy**, or cleared by validation when
 the source can no longer be resolved. Write this down in the feature README so it is not
 re-litigated at implementation time.
 
@@ -178,8 +183,8 @@ not be typed, because the tree holds `IndexItemModel` while the copier holds the
 
 | Layer                                           | Knows about                                                                  | Owns                                                                                   |
 | ----------------------------------------------- | ---------------------------------------------------------------------------- | -------------------------------------------------------------------------------------- |
-| Tree, commands, paste wizard — `IndexItemModel` | the full user-visible catalog, including search indexes and future additions | classification, menu gating, exclusion warnings, resolving a parent selection to names |
-| `CollectionIndexCopier` — provider-neutral      | ordinary copyable index definitions only                                     | comparison, naming, creation; accepts an optional name list                            |
+| Tree, commands, paste wizard — `IndexItemModel` | the full user-visible catalog, including search indexes and future additions | classification, menu gating, confirmation; passes a name only for a single-index copy |
+| `CollectionIndexCopier` — provider-neutral      | the ordinary driver catalog, including `_id`, and copyable secondary definitions | catalog counting, comparison, naming, creation; accepts an optional name list         |
 
 The practical consequence: the copier keeps reading only the driver's `collection.indexes()`. It
 gains no search-catalog read, no classification, and no change to `toIndexDefinition()`. Everything
@@ -401,27 +406,32 @@ move stays reviewable.
 `getSourceIndexSummary` accepts the same optional name list so the dedicated wizard can scope its
 unique and TTL warnings to what will actually be copied.
 
-The summary describes only what the copier can see:
+Keep the existing summary fields and their collection-copy behavior:
 
 ```typescript
 export interface SourceIndexSummary {
-    readonly copyableCount: number;
-    readonly uniqueIndexNames: readonly string[];
-    readonly ttlIndexNames: readonly string[];
+  count: number;
+  uniqueIndexNames: string[];
+  ttlIndexNames: string[];
 }
 ```
 
-No `catalogCount` and no `excluded` field. Catalog-level counts and exclusions are computed by the
-paste wizard from `ClustersClient`, where the full user-visible catalog is known; see "Paste
-wizard". Keeping them out of the summary is what stops the presentation layer's superset from
-leaking into the contract.
+`count` remains the size of the unfiltered ordinary driver catalog, including `_id` and excluding
+search indexes, even when `sourceIndexNames` is supplied. The name filter validates the selection
+and scopes `uniqueIndexNames` and `ttlIndexNames`; it does not change `count`. Warning names always
+exclude `_id`.
 
-Rename `count` to `copyableCount` in the same change as its callers and tests, and change its
-meaning to exclude `_id`. The old field counted every driver-visible entry including `_id`, which
-no caller actually wanted. Decision 0012 concerned what the **Paste Collection confirmation
-displays**, not what the contract returns; that display is unchanged by this plan, so 0012 is
-unaffected — `ConfirmOperationStep` keeps rendering the same number it does today. Do not introduce
-a deprecated alias.
+Do not rename `count`, change its meaning, or add `copyableCount`, `catalogCount`, or `excluded` to
+this contract. The dedicated wizard already computes its own catalog counts and exclusions from
+`ClustersClient`, and ignores the summary's `count`. The copier needs no search-catalog read or
+presentation-layer classification.
+
+An earlier draft changed `count` to an `_id`-free `copyableCount` while promising unchanged
+collection reporting. That contradicted the current caller, which displays `summary.count`
+directly. Preserve the existing field and its semantics instead. `CountSourceIndexesStep` adapts
+the call from `getSourceIndexSummary(signal)` to `getSourceIndexSummary({ signal })`, still omits
+`sourceIndexNames`, and keeps assigning `summary.count` to `context.sourceIndexCount`. Its displayed
+count and telemetry measurement remain unchanged, preserving decision 0012 without an extra read.
 
 `getSourceIndexSummary` fails on an unresolved name exactly as `copyIndexes` does, so
 `LoadSourceIndexesStep` gets validation without duplicating rules. There is an unavoidable
@@ -461,6 +471,12 @@ scale for that task, and its existing presentation-only pause remains unchanged.
 
 In other words, the regular task consumes copier progress for orchestration and diagnostics but does
 not expose determinate index-by-index progress to the user.
+
+Preserve the rest of the collection workflow as well: target creation or merge, document conflict
+handling, source validation, and the existing unique/TTL warnings. Indexes still run after the
+target exists and before document streaming, including for an empty source collection. Index failure
+or cancellation prevents document streaming; already-created indexes remain. A separately copied
+index selection must never restrict this flow. See the Paste Collection regression checklist below.
 
 ### Dedicated index-copy presentation
 
@@ -659,8 +675,12 @@ for values that must survive back navigation. It carries both the catalog view a
 because they come from different layers:
 
 - `catalogCount`, `copyableCount`, and `excluded` — computed by the wizard from `ClustersClient`;
-- `uniqueIndexNames` and `ttlIndexNames` — returned by `getSourceIndexSummary`;
+- `uniqueIndexNames` and `ttlIndexNames` — selection-scoped names returned by `getSourceIndexSummary`;
 - `sourceIndexNames` — `undefined` for a parent copy, a one-element array for a single-index copy.
+
+The catalog fields describe the entire classified catalog in both scopes. They are displayed only
+for a parent copy. A single-index confirmation uses the validated selected name and its warning
+names, never the catalog counts or exclusions. The summary's `count` is not used by this wizard.
 
 ### LoadSourceIndexesStep
 
@@ -670,14 +690,16 @@ from `CountSourceIndexesStep`:
 1. The **classified read**, straight off `ClustersClient` — `listIndexes()` plus
    `listSearchIndexesForAtlas()`, the same pair `IndexesItem.fetchIndexes()` uses. Apply
    `getIndexExclusionReason()` to produce `catalogCount`, `copyableCount`, and the `excluded` list.
-   Using the same pair as the tree is what makes the displayed numbers reconcile with what the user
-   sees.
+  These are catalog-wide values, not selection counts. Using the same pair as the tree is what
+  makes the parent-copy confirmation reconcile with the catalog the user sees, subject to the
+  best-effort search read and live-reference timing described above.
 2. The **copier summary**, `getSourceIndexSummary({ sourceIndexNames, signal })`, for the unique and
    TTL warning names.
 
-Display always uses the classified read. `SourceIndexSummary.copyableCount` describes the same set
-and should agree with it, but it is not what gets rendered — the wizard is the layer that knows the
-full catalog, so it owns every number the user sees.
+The parent-copy display uses only the classified read for its counts and exclusions. A single-index
+copy resolves and validates its selected name against that read, but renders no catalog-wide
+numbers. Do not compare these counts with `SourceIndexSummary.count`: that field has deliberately
+different semantics and exists to preserve the collection flow.
 
 Also:
 
@@ -689,17 +711,26 @@ Also:
 - clear the buffer only for confirmed stale-source errors, not transient network failures;
 - never fail the step because the search-index read returned empty or threw —
   `listSearchIndexesForAtlas()` returns `[]` on every platform without `$listSearchIndexes`, which is
-  most of them. Degrade to no exclusion line.
+  most of them. Omit unavailable search entries, but retain ordinary-catalog counts and known
+  exclusions such as `_id`. An empty search result must not erase those exclusions.
 
 ### ConfirmPasteIndexesStep
 
-Show:
+Always show:
 
 - source connection, database, and collection;
 - target connection, database, and collection;
-- whether one named index or the collection's copyable secondary indexes were selected;
+- whether one named index or the collection's copyable secondary indexes were selected.
+
+For **Copy Index**, show only the validated selected index name and its applicable warnings. Do not
+show a whole-collection denominator, unrelated index names, or any catalog exclusion line. If the
+selected entry is missing or no longer copyable, fail validation rather than showing a reduced
+selection.
+
+For **Copy Indexes** from the parent, show:
+
 - the count as `{copyableCount} of {catalogCount} will be copied`;
-- resolved names where the list remains readable;
+- resolved copyable names where the list remains readable;
 - when `excluded` is non-empty, one warning line itemizing every excluded entry with its reason,
   including `_id`:
 
@@ -710,14 +741,21 @@ Show:
 
   Itemizing `_id` is deliberate: it is the difference between a number the user can verify and a
   number they must trust, and the phrasing must cover both an existing target and one created
-  automatically.
+  automatically. Omit this line only when there are no known exclusions, not merely because the
+  search-index read was empty or failed. Indicate that search-index exclusions are best-effort.
 
-- existing unique and TTL warnings through `formatIndexCopyWarnings`;
-- a warning that equivalent indexes are skipped, name collisions are renamed, and cancellation does
-  not roll back indexes already created.
+For both scopes, show a warning that equivalent indexes are skipped, name collisions are renamed,
+and cancellation does not roll back indexes already created.
 
-A single-index selection cannot contain `_id` or a non-copyable entry, because `state_copyable`
-gates the command, so in that case the exclusion list is normally empty.
+Use dedicated index-only warning wording in this step, based on the selection-scoped names from the
+summary:
+
+- Unique: `Creating unique indexes ({0}) may fail if existing target documents contain duplicate values.`
+- TTL: `TTL indexes ({0}) may delete expired documents already in the target collection, including after this task finishes.`
+
+Keep `formatIndexCopyWarnings` and its collection-copy callers unchanged. Its warnings about copied
+documents and generated IDs belong to that workflow, not this one. The dedicated warning text must
+not imply that documents are being transferred.
 
 Use a modal warning when unique or TTL indexes are selected; otherwise use a modal information
 confirmation.
@@ -789,7 +827,8 @@ Copy commands:
 Paste Indexes wizard:
 
 - measurements `catalogIndexCount`, `copyableIndexCount`, and `excludedIndexCount` from the
-  classified read. This is now the only place the extension learns how often real users hit
+  full classified catalog in either scope, even though single-index confirmation does not display
+  these values. This is now the only place the extension learns how often real users hit
   non-copyable entries, which is the evidence needed to decide whether copying search indexes is
   ever worth building. Lower volume than the collection flow would have given, but the same signal,
   and it cannot be backfilled later.
@@ -806,7 +845,9 @@ None of the index-copy telemetry has shipped yet, so names can be corrected free
 Rename `sourceIndexCount` to `selectedIndexCount`, reconcile `copyIndexesEnabled` with
 `copyIndexes`, and drop the duplicated `sourceIndexCount` measurement rather than carrying these as
 separate follow-ups. The `sourceIndexCount` measurement recorded in `CountSourceIndexesStep` keeps
-its current meaning, since the collection flow is otherwise untouched.
+its current name and catalog-inclusive value from `summary.count`; do not remove it along with
+duplicate task-level measurements. Internal telemetry adaptations do not change collection-copy
+behavior.
 
 Do not duplicate duration, result, or generic error telemetry already emitted by command and task
 frameworks. Do not record connection, database, collection, or index names.
@@ -845,11 +886,13 @@ Add focused tests proving:
 - target comparison uses the whole target catalog excluding `_id`;
 - `onStart` is called once with the resolved copyable total;
 - `onProgress` is monotonic and fires once for created and skipped indexes;
-- unnamed indexes do not affect totals, results, or callbacks;
+- unselected indexes do not affect copy totals, results, or callbacks;
+- existing fallback-name behavior for unnamed ordinary indexes is preserved;
 - cancellation emits no callback for unreached work;
 - existing equivalence, deterministic rename, vector option, hidden-state, and error tests pass with
   a name list supplied;
-- `getSourceIndexSummary` returns a `_id`-free `copyableCount` and selection-scoped warning names.
+- `getSourceIndexSummary.count` remains the unfiltered driver-catalog size, including `_id`, with
+  or without a supplied name list, while warning names are selection-scoped and exclude `_id`.
 
 The copier has **no** test for search indexes, exclusions, or classification. If such a test seems
 necessary, the layering has been violated; see "Where classification belongs".
@@ -890,13 +933,18 @@ Test:
 - stale single-index selections clear only the index buffer;
 - a successful paste leaves the buffer intact;
 - an `index` scope passes a one-element `sourceIndexNames`, and `allIndexes` passes `undefined`;
-- the confirmation renders `{copyableCount} of {catalogCount} will be copied`;
-- the exclusion line itemizes `_id` with wording valid for both an existing and a newly created
-  target, and names a non-copyable entry with its reason;
-- no exclusion line is rendered when nothing is excluded;
-- an empty or failed search-index read degrades to no exclusion line and does not fail the step;
+- a single-index confirmation shows only its selected name and applicable warnings, with no
+  catalog-wide count, unrelated names, or exclusion line;
+- a parent-copy confirmation renders `{copyableCount} of {catalogCount} will be copied`;
+- the parent-copy exclusion line itemizes `_id` with wording valid for both an existing and a
+  newly created target, and names a non-copyable entry with its reason;
+- no parent-copy exclusion line is rendered when nothing is excluded;
+- an empty or failed search-index read does not fail the step and retains ordinary-catalog counts
+  and known exclusions, including the parent-copy `_id` warning;
 - a non-copyable single-index selection is reported as "not supported", not "missing";
 - unique and TTL selections use warning confirmation;
+- dedicated unique/TTL warnings describe existing target data, never document transfer or generated
+  IDs, and are scoped to the selected indexes;
 - cancellation before execution creates no task.
 
 ### Dedicated task
@@ -916,8 +964,29 @@ plan; stop for an explicit behavior decision.
 
 ### Paste Collection
 
-The collection flow is untouched apart from one string. Confirm its existing tests still pass and
-add nothing new beyond asserting that the prompt no longer promises "all".
+Preserve existing behavior while adapting the shared contract, factory calls, task result fields,
+and telemetry. Reuse and supplement existing tests rather than creating another parallel suite.
+The regression checklist is:
+
+- Documents-only paste performs no index catalog read, summary request, or index copy.
+- The index summary is read only after opting in; summary failures still stop prompting.
+- `CountSourceIndexesStep` passes `{ signal }` without a name filter, still reads `summary.count`,
+  and preserves the displayed catalog-inclusive count and its `sourceIndexCount` measurement.
+- Target creation or existing-target merge behavior and document conflict handling are unchanged;
+  the target exists before index creation starts.
+- Indexes are copied before document streaming, including when the source collection has no
+  documents.
+- Index creation failure or cancellation prevents document streaming, preserves original failure
+  causes, and leaves already-created indexes on the target.
+- Collection copy omits `sourceIndexNames` and processes every copyable secondary index, even when
+  the independent index buffer contains a single-index selection. Index buffer mutations do not
+  erase or change collection copy state.
+- Existing unique/TTL warnings, equivalence and rename behavior, vector options, hidden-state
+  handling, document-focused progress, and the cancellation-aware presentation pause are unchanged.
+- The prompt no longer promises "all" secondary definitions; the notification uses **Cancel Copy**
+  and **Learn More**; the two collection commands are hidden from the command palette.
+- Task measurements use the agreed result-field rename without changing the collection wizard's
+  catalog count.
 
 ## Decisions to record
 
@@ -932,14 +1001,14 @@ the meantime. Decision entries are semantically immutable: append, never rewrite
 | 0014     | Express "all indexes" as an omitted `sourceIndexNames`, not a discriminated union           |
 | 0015     | Classify on the absence of `key`, never on `type === 'search'`                              |
 | 0016     | Keep the exclusion vocabulary generic (`notCopyable`, not `atlasSearchIndex`)               |
-| 0017     | Itemize excluded entries, including `_id`, in the dedicated Paste Indexes confirmation      |
+| 0017     | Itemize catalog exclusions for parent copy; single-index confirmation shows only its selection |
 | 0018     | Remove the `Support coming soon` placeholder instead of implementing it                     |
 | 0019     | Label the copy notification **Cancel Copy** rather than **Undo**                            |
 | 0020     | Own transient copied state in `CopyPasteBufferService`, not `ext`                           |
 | 0021     | Do not add rollback behavior for a failing `setContext`                                     |
 | 0022     | Leave the buffer intact after a successful paste                                            |
 | 0023     | Add a dedicated `CopyIndexesTask` rather than reusing `CopyPasteCollectionTask`             |
-| 0024     | Scope Paste Collection reporting out, correcting only the false "all" promise               |
+| 0024     | Preserve collection-copy behavior and summary count while adapting the shared copier contract |
 
 0013 is the most important entry to write well. Record that an earlier draft put classification
 inside `CollectionIndexCopier`, that it was backed out, and the two concrete defects that forced the
@@ -951,14 +1020,19 @@ Two existing entries need attention rather than a new number:
 
 - **0012** (include `_id` in the source catalog count) is **untouched**. It concerns what the Paste
   Collection confirmation displays, and that display does not change. Note in 0024's reasoning that
-  revisiting the count was considered and deferred, so nobody assumes 0012 was silently overturned
-  by the `copyableCount` rename in the contract.
+  the proposed `count` to `copyableCount` change was rejected because the collection caller displays
+  the summary directly. Preserve `SourceIndexSummary.count` and its existing semantics; the
+  dedicated wizard owns its separate counts.
 - **0009** (count indexes only after the user chooses to copy them) is **reaffirmed**. Note in
   0024's reasoning that adding counts to the prompt step was considered and rejected, so the
   question does not get reopened.
 
 Each entry needs the question it answers, the decision, the reasoning, and the consequence — not
 just the one-line summary. The value of this file is the reasoning, not the verdict.
+
+Record the single-index confirmation decision in 0017: whole-catalog counts and unrelated
+exclusions were rejected because the user selected one index, not its siblings. In 0024, distinguish
+preserved behavior from the necessary internal adaptations and explicitly scoped text/menu fixes.
 
 ## Known gaps
 
@@ -988,17 +1062,18 @@ stay catalog-inclusive per decision 0012 or drop `_id`.
 1. Add the copyability predicate and exclusion reasons next to `IndexItemModel`, widen
    `IndexItemModel.type` to include `vectorSearch`, and remove the unsound cast in
    `listSearchIndexesForAtlas`. Do not touch the copier in this step.
-2. Add `sourceIndexNames` to `CollectionIndexCopier`, rename `SourceIndexSummary.count` to a
-   `_id`-free `copyableCount`, apply the `selectedIndexCount` rename, and document the callback
-   guarantees.
+2. Add `sourceIndexNames` and the summary options object to `CollectionIndexCopier`, preserving
+  `SourceIndexSummary.count` and its catalog-inclusive semantics. Apply the task result's
+  `selectedIndexCount` rename and document the callback guarantees.
 3. Implement name filtering and validation in `DocumentDbCollectionIndexCopier`; update its focused
    tests first. The copier gains no new read and no classification.
 4. Move `createIndexCopier()` next to the copier, change it to take two endpoints, and adapt the
    paste-collection call site.
-5. Update `CopyPasteCollectionTask` and the paste-collection summary call site for the renamed
-   field, preserving existing user-visible behavior, and apply the telemetry renames.
-6. Correct the `PromptIndexConfigurationStep` string so it no longer promises "all". Nothing else in
-   the collection flow changes.
+5. Update `CopyPasteCollectionTask` for the renamed result field and task telemetry. Adapt the
+  paste-collection summary call to `{ signal }`, preserving its `summary.count` assignment,
+  displayed count, and wizard telemetry. Run the focused collection regression tests.
+6. Correct the `PromptIndexConfigurationStep` string so it no longer promises "all". Leave the
+  collection confirmation's counts and unique/TTL warnings unchanged.
 7. Update `IndexItem`: `state_copyable` context value, non-copyable row description, enriched
    tooltip, removal of the `Support coming soon` child, and `collapsibleState: None` for entries
    without a `key`.
@@ -1009,15 +1084,29 @@ stay catalog-inclusive per decision 0012 or drop `_id`.
 10. Rename the Copy Collection notification button from **Undo** to **Cancel Copy** and correct
     `Learn more` to `Learn More`.
 11. Add the Paste Indexes wizard under `src/commands/pasteIndexes/`, including the classified read,
-    the `x of z` count, the exclusion line, and reuse of the existing unique/TTL warning formatter.
+    parent-only `x of z` count and exclusion line, single-index confirmation scoped to its selected
+    name, and dedicated unique/TTL warning text about existing target data.
 12. Add `CopyIndexesTask`, visible progress mapping, resource tracking, annotations, and refresh.
-13. Add predicate, command, wizard, and task tests.
-14. Record the decisions listed above in `decisions.md`, update the feature README, colocated indexes
-    README, and user documentation, and run `npm run l10n` once the user-facing strings are final.
+13. Add predicate, command, wizard, and task tests, including the collection regression checklist.
+14. Record the decisions listed above in `decisions.md`, update the feature README and `design.md`,
+  colocated indexes README, and user documentation. Follow the verification gates below.
 
 This ships as a **single PR**. Steps 1–6 form a coherent first half that leaves the tree compiling
 and the collection flow behaviorally unchanged, which makes a useful review checkpoint even though
 it is not a separate branch.
+
+## Verification and handoff
+
+Follow `.github/copilot-instructions.md` rather than introducing a separate gate for this feature:
+
+- While implementing, committing, pushing, or working on a draft PR, use Case 1: `npm run build`
+  and `npx jest --no-coverage <path>` for the touched behavior, including collection regressions.
+  Do not run localization generation, formatting, lint, or packaging at this stage.
+- Only when marking a PR ready for review, run the full Case 2 list in that file, including
+  `npm run l10n` for the changed user-facing strings and the required AI pre-review. Do not mark
+  ready until those gates pass. With no PR, remain on Case 1.
+
+This design update is a handoff to implementation, not approval to mark a PR ready for review.
 
 ## Acceptance criteria
 
@@ -1029,13 +1118,22 @@ it is not a separate branch.
   additional catalog read, and `toIndexDefinition()` is unchanged.
 - Existing collection copy omits `sourceIndexNames`, copies all copyable secondary indexes, and does
   not show determinate per-index progress.
+- Collection summary counts retain their existing meaning, including `_id`; documents-only paste
+  performs no index reads, and collection copy state stays independent of copied-index state.
+- Collection target creation, conflict handling, index-before-document ordering, failure and
+  cancellation behavior, warnings, and presentation pause satisfy the regression checklist.
 - Dedicated index copy shows monotonic determinate progress based on evaluated selected indexes.
 - Both workflows use the same DocumentDB API comparison, naming, creation, hidden-state, and
   cancellation implementation.
 - Copied index state lives in `CopyPasteBufferService`, not `ext`, and contains no tree nodes or
   `treeId` values.
-- A non-copyable entry is explained in the tree and itemized with its reason in the dedicated Paste
-  Indexes confirmation, whose `{copyableCount} of {catalogCount}` numbers reconcile with the tree.
+- A non-copyable entry is explained in the tree and itemized with its reason in the parent-copy
+  confirmation, whose `{copyableCount} of {catalogCount}` numbers describe the classified catalog,
+  subject to the documented best-effort reads and live-reference timing.
+- Single-index confirmation shows only the selected index and applicable warnings, without
+  whole-catalog counts or unrelated exclusions. Dedicated unique/TTL warnings describe risks to
+  existing target data; collection-copy warnings stay unchanged.
+- An empty or failed search-index read retains known exclusions such as `_id` for parent copy.
 - No user-facing string promises to copy "all" indexes.
 - The `Support coming soon` placeholder is gone and entries without a `key` are not expandable.
 - Both copy notifications offer **Cancel Copy** rather than **Undo**, and all three new commands are
@@ -1043,7 +1141,8 @@ it is not a separate branch.
 - Equivalent definitions are skipped, conflicting names are deterministically renamed, and partial
   work is not rolled back.
 - Focused tests cover classification, name filtering, callback guarantees, service state and context
-  key wiring, stale sources, progress, cancellation, refresh, and existing special index options.
+  key wiring, stale sources, progress, cancellation, refresh, existing special index options, and
+  collection-flow regressions.
 - The decisions listed under "Decisions to record" are appended to `decisions.md` with their
   reasoning, decision 0013 records why classification was kept out of the copier, and decisions 0009
   and 0012 are explicitly addressed rather than silently changed.
