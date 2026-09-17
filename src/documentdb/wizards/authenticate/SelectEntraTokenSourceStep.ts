@@ -298,6 +298,7 @@ export class SelectEntraTokenSourceStep<T extends ManagedIdentitySelectionContex
         const selected = await context.ui.showQuickPick(
             authMethodItems,
             {
+                stepName: 'selectDifferentAuthMethod',
                 placeHolder: l10n.t('Select an authentication method'),
                 matchOnDetail: true,
                 suppressPersistence: true,

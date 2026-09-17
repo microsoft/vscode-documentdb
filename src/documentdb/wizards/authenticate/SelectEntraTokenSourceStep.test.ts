@@ -253,7 +253,9 @@ describe('SelectEntraTokenSourceStep.prompt', () => {
         await makeStep().prompt(context);
 
         const familyItems = showQuickPick.mock.calls[1][0] as Array<{ authMethod?: AuthMethodId }>;
+        const familyOptions = showQuickPick.mock.calls[1][1] as { stepName?: string };
         expect(familyItems.some((item) => item.authMethod === AuthMethodId.MicrosoftEntraID)).toBe(false);
+        expect(familyOptions.stepName).toBe('selectDifferentAuthMethod');
         expect(context.selectedAuthMethod).toBe(AuthMethodId.NoAuth);
         expect(context.entraIdAuthConfig).toBeUndefined();
         expect(context.managedIdentityAuthConfig).toBeUndefined();
