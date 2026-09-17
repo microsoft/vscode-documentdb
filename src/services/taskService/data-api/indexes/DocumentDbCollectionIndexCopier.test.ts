@@ -91,6 +91,30 @@ describe('DocumentDbCollectionIndexCopier', () => {
         expect(indexes).toHaveBeenCalledWith();
     });
 
+    it('keeps the catalog count while scoping summary warnings to selected names', async () => {
+        const copier = createCopier(
+            createClient([
+                { key: { _id: 1 }, name: '_id_' },
+                { key: { email: 1 }, name: 'email_1', unique: true },
+                { key: { expiresAt: 1 }, name: 'expiresAt_1', expireAfterSeconds: 0 },
+            ]),
+        );
+
+        await expect(copier.getSourceIndexSummary({ sourceIndexNames: ['expiresAt_1'] })).resolves.toEqual({
+            count: 3,
+            uniqueIndexNames: [],
+            ttlIndexNames: ['expiresAt_1'],
+        });
+    });
+
+    it('rejects unresolved names when summarizing', async () => {
+        const copier = createCopier(createClient([{ key: { email: 1 }, name: 'email_1', unique: true }]));
+
+        await expect(copier.getSourceIndexSummary({ sourceIndexNames: ['missing_1'] })).rejects.toThrow(
+            'Source indexes were not found: "missing_1".',
+        );
+    });
+
     it('stops waiting for source indexes when counting is cancelled', async () => {
         const controller = new AbortController();
         const indexes = jest.fn().mockReturnValue(new Promise(() => undefined));
@@ -165,6 +189,84 @@ describe('DocumentDbCollectionIndexCopier', () => {
             renamedCount: 0,
             cancelled: false,
         });
+    });
+
+    it('copies selected indexes in source catalog order', async () => {
+        const createIndex = jest.fn().mockResolvedValue({ ok: 1 });
+        const onStart = jest.fn();
+        const onProgress = jest.fn();
+        const copier = createCopier(
+            createClient([
+                { key: { _id: 1 }, name: '_id_' },
+                { key: { email: 1 }, name: 'email_1' },
+                { key: { status: 1 }, name: 'status_1' },
+                { key: { region: 1 }, name: 'region_1' },
+            ]),
+            createClient([], createIndex),
+        );
+
+        const result = await copier.copyIndexes({
+            sourceIndexNames: ['status_1', 'email_1'],
+            onStart,
+            onProgress,
+        });
+
+        expect(createIndex.mock.calls.map((call) => call[2].name)).toEqual(['email_1', 'status_1']);
+        expect(onStart).toHaveBeenCalledTimes(1);
+        expect(onStart).toHaveBeenCalledWith(2);
+        expect(onProgress.mock.calls.map((call) => call[0])).toEqual([
+            { completed: 1, total: 2, indexName: 'email_1' },
+            { completed: 2, total: 2, indexName: 'status_1' },
+        ]);
+        expect(result).toMatchObject({ selectedIndexCount: 2, createdCount: 2, skippedCount: 0 });
+    });
+
+    it('rejects the built-in _id index and unresolved names before reading the target catalog', async () => {
+        const targetIndexes = jest.fn().mockResolvedValue([]);
+        const targetClient = {
+            getCollection: jest.fn().mockReturnValue({ indexes: targetIndexes }),
+            createIndex: jest.fn(),
+        } as unknown as ClustersClient;
+        const copier = createCopier(createClient([{ key: { _id: 1 }, name: '_id_' }]), targetClient);
+
+        await expect(copier.copyIndexes({ sourceIndexNames: ['_id_'] })).rejects.toThrow(
+            'Source indexes were not found: "_id_".',
+        );
+        expect(targetIndexes).not.toHaveBeenCalled();
+        expect(targetClient.createIndex).not.toHaveBeenCalled();
+    });
+
+    it('rejects duplicate names before connecting to either cluster', async () => {
+        const copier = createCopier(createClient([{ key: { email: 1 }, name: 'email_1' }]));
+
+        await expect(copier.copyIndexes({ sourceIndexNames: ['email_1', 'email_1'] })).rejects.toThrow(
+            'Source index names must be unique.',
+        );
+        expect(ClustersClient.getClient).not.toHaveBeenCalled();
+    });
+
+    it('compares selected indexes against the whole target catalog excluding _id', async () => {
+        const createIndex = jest.fn();
+        const copier = createCopier(
+            createClient([
+                { key: { email: 1 }, name: 'email_1' },
+                { key: { status: 1 }, name: 'status_1', unique: true },
+            ]),
+            createClient(
+                [
+                    { key: { _id: 1 }, name: '_id_' },
+                    { key: { status: 1 }, name: 'existing_status', unique: true },
+                ],
+                createIndex,
+            ),
+        );
+
+        await expect(copier.copyIndexes({ sourceIndexNames: ['status_1'] })).resolves.toMatchObject({
+            selectedIndexCount: 1,
+            createdCount: 0,
+            skippedCount: 1,
+        });
+        expect(createIndex).not.toHaveBeenCalled();
     });
 
     it('preserves DocumentDB-specific options when creating a vector index', async () => {
@@ -314,6 +416,7 @@ describe('DocumentDbCollectionIndexCopier', () => {
 
     it('stops after the current index when cancelled', async () => {
         const controller = new AbortController();
+        const onProgress = jest.fn();
         const createIndex = jest.fn().mockImplementation(async () => {
             controller.abort();
             return { ok: 1 };
@@ -326,9 +429,11 @@ describe('DocumentDbCollectionIndexCopier', () => {
             createClient([], createIndex),
         );
 
-        const result = await copier.copyIndexes({ signal: controller.signal });
+        const result = await copier.copyIndexes({ signal: controller.signal, onProgress });
 
         expect(createIndex).toHaveBeenCalledTimes(1);
         expect(result).toMatchObject({ createdCount: 1, cancelled: true });
+        expect(onProgress).toHaveBeenCalledTimes(1);
+        expect(onProgress).toHaveBeenCalledWith({ completed: 1, total: 2, indexName: 'email_1' });
     });
 });

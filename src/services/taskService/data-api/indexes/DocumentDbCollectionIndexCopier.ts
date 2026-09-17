@@ -44,30 +44,34 @@ export class DocumentDbCollectionIndexCopier implements CollectionIndexCopier {
     ) {}
 
     public async getSourceIndexSummary(options: GetSourceIndexSummaryOptions = {}): Promise<SourceIndexSummary> {
+        const requestedNames = this.getRequestedNames(options.sourceIndexNames);
         const sourceClient = await ClustersClient.getClient(this.source.clusterId, options.signal);
         const indexes = await this.readIndexes(sourceClient, this.source, options.signal);
         const copyableIndexes = indexes
             .filter((index) => !this.isIdIndex(index))
             .map((index) => this.toIndexDefinition(index));
+        const selectedIndexes = this.selectSourceIndexes(copyableIndexes, requestedNames);
         return {
             count: indexes.length,
-            uniqueIndexNames: copyableIndexes
+            uniqueIndexNames: selectedIndexes
                 .filter((index) => index.options.unique === true)
                 .map((index) => index.name),
-            ttlIndexNames: copyableIndexes
+            ttlIndexNames: selectedIndexes
                 .filter((index) => Object.hasOwn(index.options, 'expireAfterSeconds'))
                 .map((index) => index.name),
         };
     }
 
     public async copyIndexes(options: CopyIndexesOptions = {}): Promise<IndexCopyResult> {
+        const requestedNames = this.getRequestedNames(options.sourceIndexNames);
         const [sourceClient, targetClient] = await Promise.all([
             ClustersClient.getClient(this.source.clusterId, options.signal),
             ClustersClient.getClient(this.target.clusterId, options.signal),
         ]);
 
         // Read both bounded catalogs once so equivalence and name collisions use stable snapshots.
-        const sourceIndexes = await this.readCopyableIndexes(sourceClient, this.source, options.signal);
+        const copyableSourceIndexes = await this.readCopyableIndexes(sourceClient, this.source, options.signal);
+        const sourceIndexes = this.selectSourceIndexes(copyableSourceIndexes, requestedNames);
         options.onStart?.(sourceIndexes.length);
         const targetIndexes = await this.readCopyableIndexes(targetClient, this.target, options.signal);
         const targetIndexNames = new Set(targetIndexes.map((index) => index.name));
@@ -142,6 +146,45 @@ export class DocumentDbCollectionIndexCopier implements CollectionIndexCopier {
 
         result.cancelled = result.cancelled || options.signal?.aborted === true;
         return result;
+    }
+
+    private getRequestedNames(sourceIndexNames?: readonly string[]): ReadonlySet<string> | undefined {
+        if (sourceIndexNames === undefined) {
+            return undefined;
+        }
+
+        const requestedNames = new Set(sourceIndexNames);
+        if (requestedNames.size !== sourceIndexNames.length) {
+            throw new Error(vscode.l10n.t('Source index names must be unique.'));
+        }
+
+        return requestedNames;
+    }
+
+    private selectSourceIndexes(
+        sourceIndexes: readonly IndexDefinition[],
+        requestedNames?: ReadonlySet<string>,
+    ): IndexDefinition[] {
+        if (requestedNames === undefined) {
+            return [...sourceIndexes];
+        }
+
+        const unresolvedNames = new Set(requestedNames);
+        const selectedIndexes = sourceIndexes.filter((index) => {
+            if (!requestedNames.has(index.name)) {
+                return false;
+            }
+
+            unresolvedNames.delete(index.name);
+            return true;
+        });
+
+        if (unresolvedNames.size > 0) {
+            const names = [...unresolvedNames].map((name) => `"${name}"`).join(', ');
+            throw new Error(vscode.l10n.t('Source indexes were not found: {0}.', names));
+        }
+
+        return selectedIndexes;
     }
 
     private async readCopyableIndexes(
