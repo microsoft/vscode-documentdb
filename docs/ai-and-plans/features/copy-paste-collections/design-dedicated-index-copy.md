@@ -1067,6 +1067,7 @@ stay catalog-inclusive per decision 0012 or drop `_id`.
 | 2    | Complete | `8db355fe` | Extended the provider-neutral contract with optional source names and summary options, renamed the result count, and documented callback timing. Direct callers were adapted without changing collection-copy behavior. The implementation followed the design without deviation. |
 | 3    | Complete | `433512be` | Applied source-name filtering after the ordinary source read, preserving source order and full target comparison. Duplicate and unresolved names fail before target work, summaries retain catalog-inclusive counts, and callbacks cover only selected work. The implementation followed the design without deviation. |
 | 4    | Complete | `e08245e7` | Moved endpoint-based copier construction beside the data API implementation and retained a thin paste-collection context adapter. Existing and newly created target-name resolution remain unchanged. The implementation followed the design without deviation. |
+| 5    | Complete | `0b9e2b51` | Completed collection-task adaptation by recording `selectedIndexCount`, omitting source names for collection copy, and proving documents-only work does not invoke the copier. Existing ordering and progress behavior remain unchanged. The implementation followed the design without deviation. |
 
 1. Add the copyability predicate and exclusion reasons next to `IndexItemModel`, widen
    `IndexItemModel.type` to include `vectorSearch`, and remove the unsound cast in

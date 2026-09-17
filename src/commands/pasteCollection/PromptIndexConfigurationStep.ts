@@ -13,7 +13,7 @@ export class PromptIndexConfigurationStep extends AzureWizardPromptStep<PasteCol
             {
                 id: 'copy',
                 label: l10n.t('Yes, copy indexes'),
-                detail: l10n.t('Copy all secondary index definitions from source to target collection.'),
+                detail: l10n.t("Copy the source collection's secondary index definitions."),
                 alwaysShow: true,
             },
             {

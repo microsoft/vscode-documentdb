@@ -47,6 +47,15 @@ describe('PromptIndexConfigurationStep', () => {
         await new PromptIndexConfigurationStep().prompt(context);
 
         expect(context.copyIndexes).toBe(true);
+        expect(context.ui.showQuickPick).toHaveBeenCalledWith(
+            expect.arrayContaining([
+                expect.objectContaining({
+                    id: 'copy',
+                    detail: "Copy the source collection's secondary index definitions.",
+                }),
+            ]),
+            expect.any(Object),
+        );
     });
 
     it('clears a previously loaded count when index copying is disabled', async () => {
