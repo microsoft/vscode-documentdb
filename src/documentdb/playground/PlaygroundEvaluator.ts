@@ -366,7 +366,7 @@ export class PlaygroundEvaluator implements vscode.Disposable {
                 });
 
                 if (!session) {
-                    throw new Error('Failed to obtain Entra ID session');
+                    throw new Error(l10n.t('Failed to obtain Entra ID token.'));
                 }
 
                 accessToken = session.accessToken;

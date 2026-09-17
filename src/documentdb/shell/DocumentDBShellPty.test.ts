@@ -182,6 +182,24 @@ describe('DocumentDBShellPty', () => {
             expect(written).toContain('SCRAM');
         });
 
+        it.each([
+            ['NativeAuth', 'SCRAM'],
+            ['MicrosoftEntraID', 'Entra ID'],
+            ['ManagedIdentity', 'Managed Identity'],
+            ['NoAuth', 'No Authentication'],
+        ] as const)('should display the %s authentication label', async (authMechanism, expectedLabel) => {
+            mockInitialize.mockResolvedValueOnce({
+                host: 'test-host.documents.azure.com:10255',
+                authMechanism,
+                isEmulator: false,
+            });
+
+            pty.open(undefined);
+            await new Promise((resolve) => setTimeout(resolve, 10));
+
+            expect(written).toContain(`Authentication: ${expectedLabel}`);
+        });
+
         it('should show error and stay open on connection failure', async () => {
             mockInitialize.mockRejectedValue(new Error('Connection refused'));
             pty.open(undefined);

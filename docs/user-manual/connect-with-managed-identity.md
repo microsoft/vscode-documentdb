@@ -29,11 +29,14 @@ Four things have to be in place, and all four are outside VS Code:
 3. The cluster allows Microsoft Entra ID authentication.
 4. The VM and the cluster are **in the same Microsoft Entra tenant**. See [the next section but one](#the-identity-and-the-cluster-must-be-in-the-same-tenant).
 
-If any of these is missing, the connection fails with a message naming which one.
+If any of these is missing, the connection fails. The extension identifies failures reported by the
+managed identity endpoint and known tenant mismatches. If the cluster does not recognize the
+identity, the server returns a generic authentication error instead.
 
 ## Supported environments
 
-**Azure VMs only.** That is what this feature is designed for, documented for, and tested against.
+**Azure VMs only.** This feature is designed and documented for Azure VMs. Validation against a real
+Azure VM is still pending.
 
 The underlying credential library also works on App Service, Container Apps, Azure Arc enabled servers and AKS, and nothing here deliberately blocks those. They are simply not scenarios the extension claims or verifies, so treat success there as a bonus rather than a guarantee.
 
