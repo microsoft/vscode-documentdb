@@ -69,6 +69,7 @@ import {
     openInteractiveShellWithInput,
 } from '../commands/openInteractiveShell/openInteractiveShell';
 import { pasteCollection } from '../commands/pasteCollection/pasteCollection';
+import { pasteIndexes } from '../commands/pasteIndexes/pasteIndexes';
 import { connectPlayground, showConnectionInfo } from '../commands/playground/connectDatabase';
 import { disposeEvaluators, shutdownOrphanedEvaluators } from '../commands/playground/executePlaygroundCode';
 import { newPlayground, newPlaygroundWithContent } from '../commands/playground/newPlayground';
@@ -932,6 +933,10 @@ export class ClustersExtension implements vscode.Disposable {
                 registerCommandWithTreeNodeUnwrapping(
                     'vscode-documentdb.command.copyIndexes',
                     withTreeNodeCommandCorrelation(copyIndexes),
+                );
+                registerCommandWithTreeNodeUnwrapping(
+                    'vscode-documentdb.command.pasteIndexes',
+                    withTreeNodeCommandCorrelation(pasteIndexes),
                 );
 
                 // using registerCommand instead of vscode.commands.registerCommand for better telemetry:
