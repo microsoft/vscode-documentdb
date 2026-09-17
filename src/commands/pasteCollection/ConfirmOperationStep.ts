@@ -11,11 +11,11 @@ import { type PasteCollectionWizardContext } from './PasteCollectionWizardContex
 import { formatIndexCopyWarnings } from './formatIndexCopyWarnings';
 
 export class ConfirmOperationStep extends AzureWizardPromptStep<PasteCollectionWizardContext> {
-    public async prompt(context: PasteCollectionWizardContext): Promise<void> {        const operationTitle = context.isTargetExistingCollection ? l10n.t('Copy-and-Merge') : l10n.t('Copy-and-Paste');
+    public async prompt(context: PasteCollectionWizardContext): Promise<void> {
+        const operationTitle = context.isTargetExistingCollection ? l10n.t('Copy-and-Merge') : l10n.t('Copy-and-Paste');
 
         const targetCollection = context.isTargetExistingCollection
-            ? context.targetCollectionName
-            : context.newCollectionName;
+            ? context.targetCollectionName            : context.newCollectionName;
 
         const targetCollectionAnnotation = context.isTargetExistingCollection ? l10n.t('⚠️ existing collection') : '';
 
@@ -40,11 +40,11 @@ export class ConfirmOperationStep extends AzureWizardPromptStep<PasteCollectionW
             : [];
 
         // Combine all parts
-        const confirmationMessage = [            l10n.t('Source:'),
+        const confirmationMessage = [
+            l10n.t('Source:'),
             ' • ' +
                 l10n.t('Collection: "{collectionName}"', { collectionName: context.sourceCollectionName }) +
-                (context.sourceCollectionSize
-                    ? '\n   • ' +
+                (context.sourceCollectionSize                    ? '\n   • ' +
                       l10n.t('Approx. Size: {count} documents', {
                           count: context.sourceCollectionSize.toLocaleString(),
                       })
@@ -69,11 +69,11 @@ export class ConfirmOperationStep extends AzureWizardPromptStep<PasteCollectionW
             ...indexWarnings,
         ].join('\n');
 
-        const actionButton = context.isTargetExistingCollection            ? l10n.t('Start Copy-and-Merge')
+        const actionButton = context.isTargetExistingCollection
+            ? l10n.t('Start Copy-and-Merge')
             : l10n.t('Start Copy-and-Paste');
 
-        const confirmation = context.isTargetExistingCollection
-            ? await vscode.window.showWarningMessage(
+        const confirmation = context.isTargetExistingCollection            ? await vscode.window.showWarningMessage(
                   operationTitle,
                   { modal: true, detail: confirmationMessage },
                   actionButton,
@@ -88,14 +88,10 @@ export class ConfirmOperationStep extends AzureWizardPromptStep<PasteCollectionW
         context.telemetry.properties.operationConfirmed = confirmation === actionButton ? 'true' : 'false';
         context.telemetry.properties.operationType = context.isTargetExistingCollection ? 'merge' : 'paste';
         context.telemetry.properties.conflictResolutionStrategy = context.conflictResolutionStrategy;
-        context.telemetry.properties.copyIndexesEnabled = context.copyIndexes ? 'true' : 'false';
-        if (context.sourceIndexCount !== undefined) {
-            context.telemetry.measurements.sourceIndexCount = context.sourceIndexCount;
-        }
+        context.telemetry.properties.copyIndexes = context.copyIndexes ? 'true' : 'false';
 
         // Record measurements for operation scope
-        if (context.sourceCollectionSize) {
-            context.telemetry.measurements.sourceCollectionSize = context.sourceCollectionSize;
+        if (context.sourceCollectionSize) {            context.telemetry.measurements.sourceCollectionSize = context.sourceCollectionSize;
         }
 
         if (confirmation !== actionButton) {
