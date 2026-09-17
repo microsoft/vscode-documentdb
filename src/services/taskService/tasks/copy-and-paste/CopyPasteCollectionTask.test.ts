@@ -96,11 +96,17 @@ describe('CopyPasteCollectionTask index phase', () => {
         const reader = { streamDocuments: jest.fn() } as unknown as DocumentReader;
         const writer = { streamDocuments: jest.fn() } as unknown as StreamingDocumentWriter;
         const task = new TestCopyPasteCollectionTask(config, reader, writer, indexCopier, 0);
+        const context = createContext();
 
-        await task.runWorkForTest(new AbortController().signal, createContext());
+        await task.runWorkForTest(new AbortController().signal, context);
 
         expect(task.progressUpdates).toContainEqual({ progress: 0, message: 'Copying 20 indexes...' });
         expect(ext.outputChannel.trace).toHaveBeenCalledWith('[CopyPasteTask] Index copy progress: 1/20 (email_1).');
+        expect(indexCopier.copyIndexes).toHaveBeenCalledWith(
+            expect.not.objectContaining({ sourceIndexNames: expect.anything() }),
+        );
+        expect(context.telemetry.measurements.selectedIndexCount).toBe(20);
+        expect(context.telemetry.measurements.sourceIndexCount).toBeUndefined();
     });
 
     it('copies indexes before streaming documents', async () => {
@@ -192,6 +198,18 @@ describe('CopyPasteCollectionTask index phase', () => {
         await task.runWorkForTest(new AbortController().signal, createContext());
 
         expect(indexCopier.copyIndexes).toHaveBeenCalled();
+        expect(reader.streamDocuments).not.toHaveBeenCalled();
+    });
+
+    it('does not access indexes when index copying is disabled', async () => {
+        const indexCopier = { copyIndexes: jest.fn() } as unknown as CollectionIndexCopier;
+        const reader = { streamDocuments: jest.fn() } as unknown as DocumentReader;
+        const writer = { streamDocuments: jest.fn() } as unknown as StreamingDocumentWriter;
+        const task = new TestCopyPasteCollectionTask({ ...config, copyIndexes: false }, reader, writer, indexCopier, 0);
+
+        await task.runWorkForTest(new AbortController().signal, createContext());
+
+        expect(indexCopier.copyIndexes).not.toHaveBeenCalled();
         expect(reader.streamDocuments).not.toHaveBeenCalled();
     });
 });
