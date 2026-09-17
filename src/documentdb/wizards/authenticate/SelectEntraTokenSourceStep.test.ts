@@ -245,7 +245,7 @@ describe('SelectEntraTokenSourceStep.prompt', () => {
         expect(context.managedIdentityAuthConfig).toEqual({});
     });
 
-    it('reopens the family picker without offering the current Entra family', async () => {
+    it('selects another authentication family and offers a local return to the identity choices', async () => {
         const showQuickPick = jest
             .fn()
             .mockResolvedValueOnce({ choice: 'authMethod' })
@@ -258,13 +258,46 @@ describe('SelectEntraTokenSourceStep.prompt', () => {
 
         await makeStep().prompt(context);
 
-        const familyItems = showQuickPick.mock.calls[1][0] as Array<{ authMethod?: AuthMethodId }>;
+        const familyItems = showQuickPick.mock.calls[1][0] as Array<{ label: string; authMethod?: AuthMethodId }>;
         const familyOptions = showQuickPick.mock.calls[1][1] as { stepName?: string };
         expect(familyItems.some((item) => item.authMethod === AuthMethodId.MicrosoftEntraID)).toBe(false);
+        expect(familyItems.some((item) => item.label === 'Back to Microsoft Entra ID identity choices')).toBe(true);
         expect(familyOptions.stepName).toBe('selectDifferentAuthMethod');
         expect(context.selectedAuthMethod).toBe(AuthMethodId.NoAuth);
         expect(context.entraIdAuthConfig).toBeUndefined();
         expect(context.managedIdentityAuthConfig).toBeUndefined();
+    });
+
+    it('returns from the nested picker to the Microsoft Entra ID identity choices', async () => {
+        const showQuickPick = jest
+            .fn()
+            .mockResolvedValueOnce({ choice: 'authMethod' })
+            .mockResolvedValueOnce({ returnToIdentityChoices: true })
+            .mockResolvedValueOnce({ choice: 'account' });
+        const context = makeContext({
+            ui: { showQuickPick } as unknown as AuthenticateWizardContext['ui'],
+        });
+
+        await makeStep().prompt(context);
+
+        expect(showQuickPick).toHaveBeenCalledTimes(3);
+        expect(context.selectedAuthMethod).toBe(AuthMethodId.MicrosoftEntraID);
+    });
+
+    it('keeps the nested picker Back arrow within the identity step', async () => {
+        const showQuickPick = jest
+            .fn()
+            .mockResolvedValueOnce({ choice: 'authMethod' })
+            .mockRejectedValueOnce(new GoBackError())
+            .mockResolvedValueOnce({ choice: 'account' });
+        const context = makeContext({
+            ui: { showQuickPick } as unknown as AuthenticateWizardContext['ui'],
+        });
+
+        await makeStep().prompt(context);
+
+        expect(showQuickPick).toHaveBeenCalledTimes(3);
+        expect(context.selectedAuthMethod).toBe(AuthMethodId.MicrosoftEntraID);
     });
 });
 

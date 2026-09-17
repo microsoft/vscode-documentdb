@@ -475,6 +475,14 @@ Other options
   Back to authentication method selection      [when the family picker prompted]
 ```
 
+The nested authentication-method picker opened by **Choose a different authentication method...**
+contains its own **Other options** group:
+
+```text
+Other options
+  Back to Microsoft Entra ID identity choices
+```
+
 - The connection-string candidate and different-authentication-method rows are conditional.
 - Account sign-in and both managed identity routes are always present when the picker appears.
 - Manual client ID entry remains GUID-validated and normalizes missing or misplaced separators.
@@ -482,6 +490,9 @@ Other options
   create a second picker variant.
 - The different-authentication-method row appears when OIDC inference skipped the family picker,
   because AzureWizard Back cannot reopen a step that did not prompt.
+- The nested authentication-method picker handles both its visible return row and its title-bar Back
+  locally. Both reopen the Entra identity choices instead of raising `GoBackError`, which would skip
+  the unprompted family step and land on connection-string entry.
 - The visible Back row appears when the family picker did prompt, and raises `GoBackError` to return
   to it. It is omitted after inference or one-method auto-selection so it never jumps past a skipped
   family step.

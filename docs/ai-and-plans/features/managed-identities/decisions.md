@@ -541,6 +541,11 @@ The "Use a different authentication method..." row is required when OIDC inferen
 family picker. AzureWizard Back skips steps that did not prompt, so Back alone cannot reopen an
 inferred family choice.
 
+The nested authentication-method picker has an **Other options** group containing **Back to
+Microsoft Entra ID identity choices**. Its title-bar Back performs the same local return. Neither
+route raises `GoBackError`: doing so would ask AzureWizard to navigate past the family step that
+inference skipped and unexpectedly return to connection-string entry.
+
 ### Quick-pick activation constraint
 
 The agreed mock placed account sign-in first while highlighting a pasted client ID. The shared Azure

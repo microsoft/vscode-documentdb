@@ -86,6 +86,11 @@ interface IdentityQuickPickItem extends vscode.QuickPickItem {
     readonly clientId?: string;
 }
 
+interface AuthMethodQuickPickItem extends vscode.QuickPickItem {
+    readonly authMethod?: AuthMethodId;
+    readonly returnToIdentityChoices?: boolean;
+}
+
 /**
  * Asks whether to use an account or managed identity within the Microsoft Entra ID family.
  *
@@ -105,30 +110,32 @@ export class SelectEntraTokenSourceStep<T extends ManagedIdentitySelectionContex
         const facts = context.connectionStringAuthFacts;
         const suppliedIdentity = facts?.username && !facts.usernameIsGuid ? facts.username : undefined;
 
-        const selected = await context.ui.showQuickPick(
-            this.buildItems(
-                prefilledClientId,
-                suppliedIdentity,
-                facts?.usesOidc === true,
-                context.authenticationMethodPrompted === true,
-            ),
-            {
-                stepName: 'selectEntraTokenSource',
-                placeHolder: suppliedIdentity
-                    ? l10n.t('Select the identity to use ("{0}" is not a client ID)', suppliedIdentity)
-                    : l10n.t('Select the identity to use for this connection'),
-                matchOnDetail: true,
-                suppressPersistence: true,
-            },
-        );
+        let selected: IdentityQuickPickItem;
+        do {
+            selected = await context.ui.showQuickPick(
+                this.buildItems(
+                    prefilledClientId,
+                    suppliedIdentity,
+                    facts?.usesOidc === true,
+                    context.authenticationMethodPrompted === true,
+                ),
+                {
+                    stepName: 'selectEntraTokenSource',
+                    placeHolder: suppliedIdentity
+                        ? l10n.t('Select the identity to use ("{0}" is not a client ID)', suppliedIdentity)
+                        : l10n.t('Select the identity to use for this connection'),
+                    matchOnDetail: true,
+                    suppressPersistence: true,
+                },
+            );
+
+            if (selected.choice === 'authMethod' && (await this.selectDifferentAuthMethod(context))) {
+                return;
+            }
+        } while (selected.choice === 'authMethod');
 
         if (selected.choice === 'account') {
             this.applyAuthMethod(context, AuthMethodId.MicrosoftEntraID);
-            return;
-        }
-
-        if (selected.choice === 'authMethod') {
-            await this.selectDifferentAuthMethod(context);
             return;
         }
 
@@ -289,24 +296,47 @@ export class SelectEntraTokenSourceStep<T extends ManagedIdentitySelectionContex
         return items;
     }
 
-    private async selectDifferentAuthMethod(context: T): Promise<void> {
+    private async selectDifferentAuthMethod(context: T): Promise<boolean> {
         const availableMethods =
             context.availableAuthenticationMethods ?? authMethodsFromString(context.availableAuthMethods);
-        const authMethodItems = createAuthMethodQuickPickItems(availableMethods, { showSupportInfo: true }).filter(
-            (item) => item.authMethod !== AuthMethodId.MicrosoftEntraID,
-        );
-        const selected = await context.ui.showQuickPick(authMethodItems, {
-            stepName: 'selectDifferentAuthMethod',
-            placeHolder: l10n.t('Select an authentication method'),
-            matchOnDetail: true,
-            suppressPersistence: true,
-        });
+        const authMethodItems: AuthMethodQuickPickItem[] = [
+            ...createAuthMethodQuickPickItems(availableMethods, { showSupportInfo: true }).filter(
+                (item) => item.authMethod !== AuthMethodId.MicrosoftEntraID,
+            ),
+            { label: l10n.t('Other options'), kind: vscode.QuickPickItemKind.Separator },
+            {
+                label: l10n.t('Back to Microsoft Entra ID identity choices'),
+                iconPath: new vscode.ThemeIcon('arrow-left'),
+                returnToIdentityChoices: true,
+                alwaysShow: true,
+            },
+        ];
+
+        let selected: AuthMethodQuickPickItem;
+        try {
+            selected = await context.ui.showQuickPick(authMethodItems, {
+                stepName: 'selectDifferentAuthMethod',
+                placeHolder: l10n.t('Select an authentication method'),
+                matchOnDetail: true,
+                suppressPersistence: true,
+            });
+        } catch (error) {
+            if (error instanceof GoBackError) {
+                return false;
+            }
+            throw error;
+        }
+
+        if (selected.returnToIdentityChoices) {
+            return false;
+        }
 
         if (!isSupportedAuthMethod(selected.authMethod)) {
             throw new Error(l10n.t('The selected authentication method is not supported.'));
         }
 
         this.applyAuthMethod(context, selected.authMethod);
+        return true;
     }
 
     private applyAuthMethod(context: T, method: AuthMethodId): void {
