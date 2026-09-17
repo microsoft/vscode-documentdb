@@ -1070,6 +1070,7 @@ stay catalog-inclusive per decision 0012 or drop `_id`.
 | 5    | Complete | `0b9e2b51` | Completed collection-task adaptation by recording `selectedIndexCount`, omitting source names for collection copy, and proving documents-only work does not invoke the copier. Existing ordering and progress behavior remain unchanged. The implementation followed the design without deviation. |
 | 6    | Complete | `dc6dd8dd` | Replaced the false promise to copy “all” secondary index definitions with neutral wording and left the collection confirmation’s catalog-inclusive count and warning behavior unchanged. The implementation followed the design without deviation. |
 | 7    | Complete | `6b12b427` | Added positive copyability state for ordinary secondary indexes, explained keyless search entries in descriptions and tooltips, and removed their placeholder child and expand affordance. Hidden and type descriptions are merged. The implementation followed the design without deviation. |
+| 8    | Complete | `f606ab61` | Added `CopyPasteBufferService` with stable typed descriptors, defensive snapshots, replacement semantics, and awaited synchronization of `documentdb.hasCopiedIndexes`. The service remains independent from `ext` and tree nodes. The implementation followed the design without deviation. |
 
 1. Add the copyability predicate and exclusion reasons next to `IndexItemModel`, widen
    `IndexItemModel.type` to include `vectorSearch`, and remove the unsound cast in

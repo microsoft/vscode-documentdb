@@ -31,6 +31,7 @@ import { renameConnection } from '../commands/connections-view/renameConnection/
 import { renameFolder } from '../commands/connections-view/renameFolder/renameFolder';
 import { copyCollection } from '../commands/copyCollection/copyCollection';
 import { copyAzureConnectionString } from '../commands/copyConnectionString/copyConnectionString';
+import { copyIndex, copyIndexes } from '../commands/copyIndexes/copyIndexes';
 import { copyReference } from '../commands/copyReference/copyReference';
 import { createCollection } from '../commands/createCollection/createCollection';
 import { createAzureDatabase } from '../commands/createDatabase/createDatabase';
@@ -924,6 +925,14 @@ export class ClustersExtension implements vscode.Disposable {
 
                 registerCommandWithTreeNodeUnwrapping('vscode-documentdb.command.copyCollection', copyCollection);
                 registerCommandWithTreeNodeUnwrapping('vscode-documentdb.command.pasteCollection', pasteCollection);
+                registerCommandWithTreeNodeUnwrapping(
+                    'vscode-documentdb.command.copyIndex',
+                    withTreeNodeCommandCorrelation(copyIndex),
+                );
+                registerCommandWithTreeNodeUnwrapping(
+                    'vscode-documentdb.command.copyIndexes',
+                    withTreeNodeCommandCorrelation(copyIndexes),
+                );
 
                 // using registerCommand instead of vscode.commands.registerCommand for better telemetry:
                 // https://github.com/microsoft/vscode-azuretools/tree/main/utils#telemetry-and-error-handling
