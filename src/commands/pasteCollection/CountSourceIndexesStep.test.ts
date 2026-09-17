@@ -4,6 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { ext } from '../../extensionVariables';
+import { type GetSourceIndexSummaryOptions } from '../../services/taskService/data-api/indexes/CollectionIndexCopier';
 import { CountSourceIndexesStep } from './CountSourceIndexesStep';
 import { type PasteCollectionWizardContext } from './PasteCollectionWizardContext';
 import { createIndexCopier } from './createIndexCopier';
@@ -48,7 +49,7 @@ describe('CountSourceIndexesStep', () => {
             loadingPlaceHolder: 'Counting source indexes…',
             suppressPersistence: true,
         });
-        expect(getSourceIndexSummary).toHaveBeenCalledWith(expect.any(AbortSignal));
+        expect(getSourceIndexSummary).toHaveBeenCalledWith({ signal: expect.any(AbortSignal) });
         expect(context.sourceIndexCount).toBe(3);
         expect(context.sourceUniqueIndexNames).toEqual(['email_1']);
         expect(context.sourceTtlIndexNames).toEqual(['expiresAt_1']);
@@ -78,10 +79,10 @@ describe('CountSourceIndexesStep', () => {
     it('aborts the count when the loading pick is cancelled', async () => {
         let receivedSignal: AbortSignal | undefined;
         const getSourceIndexSummary = jest.fn().mockImplementation(
-            (signal: AbortSignal) =>
+            (options: GetSourceIndexSummaryOptions) =>
                 new Promise((_resolve, reject) => {
-                    receivedSignal = signal;
-                    signal.addEventListener('abort', () => reject(new Error('aborted')), { once: true });
+                    receivedSignal = options.signal;
+                    options.signal?.addEventListener('abort', () => reject(new Error('aborted')), { once: true });
                 }),
         );
         jest.mocked(createIndexCopier).mockReturnValue({ getSourceIndexSummary } as unknown as ReturnType<

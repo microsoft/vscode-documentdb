@@ -85,7 +85,7 @@ describe('CopyPasteCollectionTask index phase', () => {
                 options.onStart?.(20);
                 options.onProgress?.({ completed: 1, total: 20, indexName: 'email_1' });
                 return {
-                    sourceIndexCount: 20,
+                    selectedIndexCount: 20,
                     createdCount: 0,
                     skippedCount: 1,
                     renamedCount: 0,
@@ -108,7 +108,7 @@ describe('CopyPasteCollectionTask index phase', () => {
         const indexCopier = {
             copyIndexes: jest.fn().mockImplementation(async () => {
                 calls.push('indexes');
-                return { sourceIndexCount: 1, createdCount: 1, skippedCount: 0, renamedCount: 0, cancelled: false };
+                return { selectedIndexCount: 1, createdCount: 1, skippedCount: 0, renamedCount: 0, cancelled: false };
             }),
         } as unknown as CollectionIndexCopier;
         const reader = {
@@ -178,7 +178,7 @@ describe('CopyPasteCollectionTask index phase', () => {
     it('copies indexes when the source collection is empty', async () => {
         const indexCopier = {
             copyIndexes: jest.fn().mockResolvedValue({
-                sourceIndexCount: 1,
+                selectedIndexCount: 1,
                 createdCount: 1,
                 skippedCount: 0,
                 renamedCount: 0,

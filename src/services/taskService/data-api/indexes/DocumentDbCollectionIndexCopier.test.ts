@@ -79,7 +79,7 @@ describe('DocumentDbCollectionIndexCopier', () => {
         const copier = createCopier(sourceClient);
         const signal = new AbortController().signal;
 
-        const summary = await copier.getSourceIndexSummary(signal);
+        const summary = await copier.getSourceIndexSummary({ signal });
 
         expect(summary).toEqual({
             count: 3,
@@ -98,7 +98,7 @@ describe('DocumentDbCollectionIndexCopier', () => {
             getCollection: jest.fn().mockReturnValue({ indexes }),
         } as unknown as ClustersClient;
         const copier = createCopier(sourceClient);
-        const countPromise = copier.getSourceIndexSummary(controller.signal);
+        const countPromise = copier.getSourceIndexSummary({ signal: controller.signal });
 
         controller.abort();
 
@@ -132,7 +132,7 @@ describe('DocumentDbCollectionIndexCopier', () => {
         );
 
         await expect(copier.copyIndexes()).resolves.toEqual({
-            sourceIndexCount: 1,
+            selectedIndexCount: 1,
             createdCount: 0,
             skippedCount: 1,
             renamedCount: 0,
@@ -159,7 +159,7 @@ describe('DocumentDbCollectionIndexCopier', () => {
             unique: true,
         });
         expect(result).toEqual({
-            sourceIndexCount: 1,
+            selectedIndexCount: 1,
             createdCount: 1,
             skippedCount: 0,
             renamedCount: 0,

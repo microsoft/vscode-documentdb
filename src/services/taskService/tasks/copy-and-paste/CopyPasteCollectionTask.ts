@@ -419,7 +419,7 @@ export class CopyPasteCollectionTask extends Task implements ResourceTrackingTas
         }
 
         if (context) {
-            context.telemetry.measurements.sourceIndexCount = result.sourceIndexCount;
+            context.telemetry.measurements.sourceIndexCount = result.selectedIndexCount;
             context.telemetry.measurements.createdIndexCount = result.createdCount;
             context.telemetry.measurements.skippedIndexCount = result.skippedCount;
             context.telemetry.measurements.renamedIndexCount = result.renamedCount;

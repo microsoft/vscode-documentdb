@@ -10,6 +10,7 @@ import { ext } from '../../../../extensionVariables';
 import {
     type CollectionIndexCopier,
     type CopyIndexesOptions,
+    type GetSourceIndexSummaryOptions,
     type IndexCopyResult,
     type SourceIndexSummary,
 } from './CollectionIndexCopier';
@@ -42,9 +43,9 @@ export class DocumentDbCollectionIndexCopier implements CollectionIndexCopier {
         private readonly target: DocumentDbCollectionEndpoint,
     ) {}
 
-    public async getSourceIndexSummary(signal?: AbortSignal): Promise<SourceIndexSummary> {
-        const sourceClient = await ClustersClient.getClient(this.source.clusterId, signal);
-        const indexes = await this.readIndexes(sourceClient, this.source, signal);
+    public async getSourceIndexSummary(options: GetSourceIndexSummaryOptions = {}): Promise<SourceIndexSummary> {
+        const sourceClient = await ClustersClient.getClient(this.source.clusterId, options.signal);
+        const indexes = await this.readIndexes(sourceClient, this.source, options.signal);
         const copyableIndexes = indexes
             .filter((index) => !this.isIdIndex(index))
             .map((index) => this.toIndexDefinition(index));
@@ -73,7 +74,7 @@ export class DocumentDbCollectionIndexCopier implements CollectionIndexCopier {
         const targetSignatures = new Set(targetIndexes.map((index) => this.getDefinitionSignature(index)));
 
         const result: IndexCopyResult = {
-            sourceIndexCount: sourceIndexes.length,
+            selectedIndexCount: sourceIndexes.length,
             createdCount: 0,
             skippedCount: 0,
             renamedCount: 0,

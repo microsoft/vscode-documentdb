@@ -1059,6 +1059,12 @@ stay catalog-inclusive per decision 0012 or drop `_id`.
 
 ## Implementation sequence
 
+### Work item log
+
+| Item | Status   | Commit     | Implementation note |
+| ---- | -------- | ---------- | ------------------- |
+| 1    | Complete | `d08e6fd7` | Added presentation-layer classification for `_id` and keyless entries, widened Atlas `vectorSearch` typing, and covered ordinary vector and hidden indexes. The implementation followed the design without deviation. |
+
 1. Add the copyability predicate and exclusion reasons next to `IndexItemModel`, widen
    `IndexItemModel.type` to include `vectorSearch`, and remove the unsound cast in
    `listSearchIndexesForAtlas`. Do not touch the copier in this step.
