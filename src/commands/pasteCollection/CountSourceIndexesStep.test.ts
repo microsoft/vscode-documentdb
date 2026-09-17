@@ -55,14 +55,16 @@ describe('CountSourceIndexesStep', () => {
         expect(context.telemetry.measurements.sourceIndexCount).toBe(3);
     });
 
-    it('continues with an unknown count when counting fails', async () => {
+    it('aborts with the reason when counting fails', async () => {
         const getSourceIndexSummary = jest.fn().mockRejectedValue(new Error('count failed'));
         jest.mocked(createIndexCopier).mockReturnValue({ getSourceIndexSummary } as unknown as ReturnType<
             typeof createIndexCopier
         >);
         const context = createContext();
 
-        await expect(new CountSourceIndexesStep().prompt(context)).resolves.toBeUndefined();
+        await expect(new CountSourceIndexesStep().prompt(context)).rejects.toThrow(
+            'Failed to read source indexes: count failed',
+        );
 
         expect(context.sourceIndexCount).toBeUndefined();
         expect(context.telemetry.properties.sourceIndexCountError).toBe('Error');

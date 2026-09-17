@@ -5,7 +5,6 @@
 
 import { AzureWizardPromptStep } from '@microsoft/vscode-azext-utils';
 import * as l10n from '@vscode/l10n';
-import * as vscode from 'vscode';
 import { ext } from '../../extensionVariables';
 import { type PasteCollectionWizardContext } from './PasteCollectionWizardContext';
 import { createIndexCopier } from './createIndexCopier';
@@ -58,7 +57,8 @@ export class CountSourceIndexesStep extends AzureWizardPromptStep<PasteCollectio
             context.sourceTtlIndexNames = [];
             context.telemetry.properties.sourceIndexCountError = error instanceof Error ? error.name : 'UnknownError';
             const errorMessage = error instanceof Error ? error.message : String(error);
-            ext.outputChannel.warn(vscode.l10n.t('[IndexCopy] Failed to count source indexes: {0}', errorMessage));
+            ext.outputChannel.warn(l10n.t('[IndexCopy] Failed to count source indexes: {0}', errorMessage));
+            throw new Error(l10n.t('Failed to read source indexes: {0}', errorMessage), { cause: error });
         }
 
         throw new IndexCountCompleteError();

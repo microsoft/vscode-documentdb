@@ -14,7 +14,7 @@ interface exposes source counting and the complete copy operation:
 
 ```typescript
 interface CollectionIndexCopier {
-    countSourceIndexes(signal?: AbortSignal): Promise<number>;
+    getSourceIndexSummary(signal?: AbortSignal): Promise<SourceIndexSummary>;
     copyIndexes(options?: CopyIndexesOptions): Promise<IndexCopyResult>;
 }
 ```
