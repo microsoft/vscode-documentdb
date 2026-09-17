@@ -151,11 +151,14 @@ describe('SelectEntraTokenSourceStep.buildItems', () => {
 });
 
 describe('SelectEntraTokenSourceStep.shouldPrompt', () => {
+    afterEach(() => {
+        expect(mockOutputChannel.info).not.toHaveBeenCalled();
+    });
+
     it('does not prompt when another auth method is selected', () => {
         const context = makeContext({ selectedAuthMethod: AuthMethodId.NativeAuth });
 
         expect(makeStep().shouldPrompt(context)).toBe(false);
-        expect(JSON.stringify(mockOutputChannel.info.mock.calls)).toContain('nonEntraAuthMethod');
     });
 
     it('does not prompt when managed identity is not available for the cluster', () => {
@@ -188,7 +191,6 @@ describe('SelectEntraTokenSourceStep.shouldPrompt', () => {
         });
 
         expect(makeStep().shouldPrompt(context)).toBe(false);
-        expect(JSON.stringify(mockOutputChannel.info.mock.calls)).toContain('explicitMachineWorkflow');
     });
 
     it('still prompts when the string did not declare the Azure machine workflow', () => {
@@ -216,6 +218,56 @@ describe('SelectEntraTokenSourceStep.shouldPrompt', () => {
         });
 
         expect(makeStep().shouldPrompt(context)).toBe(true);
+    });
+});
+
+describe('SelectEntraTokenSourceStep.configureBeforePrompt', () => {
+    it.each<[string, Partial<AuthenticateWizardContext>, boolean]>([
+        ['nonEntraAuthMethod', { selectedAuthMethod: AuthMethodId.NativeAuth }, false],
+        ['managedIdentityUnavailable', { availableAuthMethods: [AuthMethodId.MicrosoftEntraID] }, false],
+        ['noExplicitMachineWorkflow', {}, true],
+        ['explicitMachineWorkflow', {
+            connectionStringAuthFacts: {
+                usesOidc: true, declaresAzureMachineWorkflow: true, username: CLIENT_ID, usernameIsGuid: true,
+            },
+        }, false],
+        ['suppliedIdentityNotClientId', {
+            connectionStringAuthFacts: {
+                usesOidc: true, declaresAzureMachineWorkflow: true, username: 'alice', usernameIsGuid: false,
+            },
+        }, true],
+    ])('logs %s only when reached', (reason, overrides, shouldPrompt) => {
+        const step = makeStep();
+        const context = makeContext(overrides);
+        expect(step.shouldPrompt(context)).toBe(shouldPrompt);
+        expect(step.shouldPrompt(context)).toBe(shouldPrompt);
+        expect(mockOutputChannel.info).not.toHaveBeenCalled();
+
+        step.configureBeforePrompt(context);
+        expect(step.shouldPrompt(context)).toBe(shouldPrompt);
+
+        expect(mockOutputChannel.info).toHaveBeenCalledTimes(1);
+        const output = mockOutputChannel.info.mock.calls[0][0];
+        expect(output).toContain(reason);
+        expect(output).toContain(shouldPrompt ? 'identityPicker.required' : 'identityPicker.skipped');
+    });
+
+    it('uses current state when reached or revisited, not an earlier eligibility result', () => {
+        const step = makeStep();
+        const context = makeContext({ selectedAuthMethod: undefined });
+        expect(step.shouldPrompt(context)).toBe(false);
+        expect(mockOutputChannel.info).not.toHaveBeenCalled();
+
+        context.selectedAuthMethod = AuthMethodId.MicrosoftEntraID;
+        step.configureBeforePrompt(context);
+        expect(step.shouldPrompt(context)).toBe(true);
+        expect(mockOutputChannel.info.mock.calls[0][0]).toContain('identityPicker.required');
+
+        context.selectedAuthMethod = AuthMethodId.NativeAuth;
+        step.configureBeforePrompt(context);
+        expect(step.shouldPrompt(context)).toBe(false);
+        expect(mockOutputChannel.info.mock.calls[1][0]).toContain('identityPicker.skipped');
+        expect(mockOutputChannel.info).toHaveBeenCalledTimes(2);
     });
 });
 

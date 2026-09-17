@@ -46,6 +46,7 @@ jest.mock('../../plugins/api-shared/azure/credentialsManagement', () => ({
 }));
 
 import { type IActionContext } from '@microsoft/vscode-azext-utils';
+import { AuthMethodId } from '../../documentdb/auth/AuthMethod';
 import { traceTenantLookup } from '../../plugins/api-shared/azure/traceTenantLookup';
 import { PromptTenantStep as UpdateCredentialsPromptTenantStep } from '../updateCredentials/PromptTenantStep';
 import { PromptTenantStep as NewConnectionPromptTenantStep } from './PromptTenantStep';
@@ -104,6 +105,30 @@ describe.each([
         for (const sensitiveValue of [TENANT_ID, tenant.displayName, tenant.defaultDomain, tenant.account.label]) {
             expect(outputText()).not.toContain(sensitiveValue);
         }
+    });
+
+    it('keeps look-ahead silent and logs the current tenant gate only when reached', () => {
+        const step = makeStep();
+        const context = { selectedAuthenticationMethod: undefined as AuthMethodId | undefined };
+        expect(step.shouldPrompt(context as never)).toBe(false);
+        expect(step.shouldPrompt(context as never)).toBe(false);
+        expect(mockOutputChannel.info).not.toHaveBeenCalled();
+
+        context.selectedAuthenticationMethod = AuthMethodId.MicrosoftEntraID;
+        step.configureBeforePrompt(context as never);
+        expect(step.shouldPrompt(context as never)).toBe(true);
+        expect(mockOutputChannel.info).toHaveBeenCalledTimes(1);
+        expect(mockOutputChannel.info.mock.calls[0][0]).toContain('"skipped":false');
+        expect(mockOutputChannel.info.mock.calls[0][0]).toContain('interactiveEntra');
+
+        context.selectedAuthenticationMethod = AuthMethodId.ManagedIdentity;
+        step.configureBeforePrompt(context as never);
+        expect(step.shouldPrompt(context as never)).toBe(false);
+        expect(mockOutputChannel.info).toHaveBeenCalledTimes(2);
+        expect(mockOutputChannel.info.mock.calls[1][0]).toContain('"skipped":true');
+        expect(mockOutputChannel.info.mock.calls[1][0]).toContain('notInteractiveEntra');
+        expect(mockIsSignedIn).not.toHaveBeenCalled();
+        expect(mockGetTenants).not.toHaveBeenCalled();
     });
 
     it('runs account management before listing tenants when signed out', async () => {

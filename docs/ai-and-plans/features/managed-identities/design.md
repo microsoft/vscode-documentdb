@@ -508,6 +508,9 @@ Other options
   labels or input values. Token diagnostics cover credential reuse, SDK calls, endpoint-setting
   presence, and tenant checks using safe classifications and operation correlation IDs. This adds
   observability without probing the environment or changing authentication behavior.
+- Gate diagnostics run in `configureBeforePrompt()`, when the wizard reaches the step. Keep
+  `shouldPrompt()` side-effect free: AzureWizard also evaluates it for pending steps while computing
+  titles and step counts, before the inputs needed for a final authentication decision are available.
 
 The top-level family rows use VS Code theme icons: `key` for username/password, `azure` for
 Microsoft Entra ID, and `unlock` for no authentication.

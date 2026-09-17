@@ -92,6 +92,16 @@ interface AuthMethodQuickPickItem extends vscode.QuickPickItem {
     readonly returnToIdentityChoices?: boolean;
 }
 
+interface IdentityPromptDecision {
+    readonly shouldPrompt: boolean;
+    readonly reason:
+        | 'nonEntraAuthMethod'
+        | 'managedIdentityUnavailable'
+        | 'noExplicitMachineWorkflow'
+        | 'suppliedIdentityNotClientId'
+        | 'explicitMachineWorkflow';
+}
+
 /**
  * Asks whether to use an account or managed identity within the Microsoft Entra ID family.
  *
@@ -188,35 +198,45 @@ export class SelectEntraTokenSourceStep<T extends ManagedIdentitySelectionContex
         this.applyClientId(context, normalized, normalized === selected.clientId ? 'connectionString' : 'prompt');
     }
 
+    public configureBeforePrompt(context: T): void {
+        const decision = this.getPromptDecision(context);
+        const facts = context.connectionStringAuthFacts;
+        traceAuthFlow(decision.shouldPrompt ? 'identityPicker.required' : 'identityPicker.skipped', {
+            reason: decision.reason,
+            method: this.getSelectedAuthMethod(context) ?? 'none',
+            suppliedIdentity: !facts?.username ? 'absent' : facts.usernameIsGuid ? 'clientId' : 'unrecognized',
+        });
+    }
+
     public shouldPrompt(context: T): boolean {
+        return this.getPromptDecision(context).shouldPrompt;
+    }
+
+    private getPromptDecision(context: T): IdentityPromptDecision {
         const selectedAuthMethod = this.getSelectedAuthMethod(context);
         if (
             selectedAuthMethod !== AuthMethodId.MicrosoftEntraID &&
             selectedAuthMethod !== AuthMethodId.ManagedIdentity
         ) {
-            traceAuthFlow('identityPicker.skipped', { reason: 'nonEntraAuthMethod', method: selectedAuthMethod ?? 'none' });
-            return false;
+            return { shouldPrompt: false, reason: 'nonEntraAuthMethod' };
         }
 
         const availableMethods =
             context.availableAuthenticationMethods ?? authMethodsFromString(context.availableAuthMethods);
         if (!availableMethods.includes(AuthMethodId.ManagedIdentity)) {
-            traceAuthFlow('identityPicker.skipped', { reason: 'managedIdentityUnavailable' });
-            return false;
+            return { shouldPrompt: false, reason: 'managedIdentityUnavailable' };
         }
 
         const facts = context.connectionStringAuthFacts;
         if (!facts || !facts.declaresAzureMachineWorkflow) {
-            traceAuthFlow('identityPicker.required', { reason: 'noExplicitMachineWorkflow' });
-            return true;
+            return { shouldPrompt: true, reason: 'noExplicitMachineWorkflow' };
         }
 
         const needsCorrection = !!facts.username && !facts.usernameIsGuid;
-        traceAuthFlow(needsCorrection ? 'identityPicker.required' : 'identityPicker.skipped', {
+        return {
+            shouldPrompt: needsCorrection,
             reason: needsCorrection ? 'suppliedIdentityNotClientId' : 'explicitMachineWorkflow',
-            suppliedIdentity: needsCorrection ? 'unrecognized' : facts.username ? 'clientId' : 'absent',
-        });
-        return needsCorrection;
+        };
     }
 
     public validateClientId(this: void, value: string | undefined): string | undefined {

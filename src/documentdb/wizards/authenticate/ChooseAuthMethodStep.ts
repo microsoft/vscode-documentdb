@@ -77,11 +77,14 @@ export class ChooseAuthMethodStep extends AzureWizardPromptStep<AuthenticateWiza
         context.authenticationMethodPrompted = true;
     }
 
-    public shouldPrompt(context: AuthenticateWizardContext): boolean {
+    public configureBeforePrompt(context: AuthenticateWizardContext): void {
         traceAuthFlow('authenticate.authMethodGate', {
-            skipped: !!context.selectedAuthMethod,
+            skipped: !this.shouldPrompt(context),
             reason: context.selectedAuthMethod ? 'methodAlreadySelected' : 'noMethodSelected',
         });
+    }
+
+    public shouldPrompt(context: AuthenticateWizardContext): boolean {
         return !context.selectedAuthMethod;
     }
 }

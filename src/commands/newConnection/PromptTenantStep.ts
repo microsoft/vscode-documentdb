@@ -157,11 +157,15 @@ export class PromptTenantStep extends AzureWizardPromptStep<NewConnectionWizardC
         }
     }
 
-    public shouldPrompt(context: NewConnectionWizardContext): boolean {
+    public configureBeforePrompt(context: NewConnectionWizardContext): void {
+        const shouldPrompt = this.shouldPrompt(context);
         traceAuthFlow('newConnection.tenantPicker.gate', {
-            skipped: context.selectedAuthenticationMethod !== AuthMethodId.MicrosoftEntraID,
-            reason: context.selectedAuthenticationMethod === AuthMethodId.MicrosoftEntraID ? 'interactiveEntra' : 'notInteractiveEntra',
+            skipped: !shouldPrompt,
+            reason: shouldPrompt ? 'interactiveEntra' : 'notInteractiveEntra',
         });
+    }
+
+    public shouldPrompt(context: NewConnectionWizardContext): boolean {
         // Only show this step if Microsoft Entra ID authentication is selected
         return context.selectedAuthenticationMethod === AuthMethodId.MicrosoftEntraID;
     }

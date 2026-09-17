@@ -65,7 +65,44 @@ describe('ChooseAuthMethodStep authentication families', () => {
     );
 
     it('traces a family picker skipped because inference already chose the method', () => {
-        expect(new NewConnectionAuthStep().shouldPrompt({ selectedAuthenticationMethod: AuthMethodId.ManagedIdentity } as never)).toBe(false);
+        const step = new NewConnectionAuthStep();
+        const context = { selectedAuthenticationMethod: AuthMethodId.ManagedIdentity };
+        expect(step.shouldPrompt(context as never)).toBe(false);
+        expect(mockOutputChannel.info).not.toHaveBeenCalled();
+
+        step.configureBeforePrompt(context as never);
+
+        expect(mockOutputChannel.info).toHaveBeenCalledTimes(1);
         expect(JSON.stringify(mockOutputChannel.info.mock.calls)).toContain('methodAlreadySelectedOrInferred');
+    });
+
+    it.each([
+        ['new connection', () => new NewConnectionAuthStep()],
+        ['reconnect', () => new ChooseAuthMethodStep()],
+    ])('keeps %s look-ahead silent and logs only when reached', (_name, makeStep) => {
+        const step = makeStep();
+        const context = {
+            selectedAuthenticationMethod: undefined as AuthMethodId | undefined,
+            selectedAuthMethod: undefined as AuthMethodId | undefined,
+        };
+        expect(step.shouldPrompt(context as never)).toBe(true);
+        expect(step.shouldPrompt(context as never)).toBe(true);
+        expect(mockOutputChannel.info).not.toHaveBeenCalled();
+
+        context.selectedAuthenticationMethod = AuthMethodId.ManagedIdentity;
+        context.selectedAuthMethod = AuthMethodId.ManagedIdentity;
+        step.configureBeforePrompt(context as never);
+        expect(step.shouldPrompt(context as never)).toBe(false);
+
+        expect(mockOutputChannel.info).toHaveBeenCalledTimes(1);
+        expect(mockOutputChannel.info.mock.calls[0][0]).toContain('"skipped":true');
+
+        context.selectedAuthenticationMethod = undefined;
+        context.selectedAuthMethod = undefined;
+        step.configureBeforePrompt(context as never);
+        expect(step.shouldPrompt(context as never)).toBe(true);
+
+        expect(mockOutputChannel.info).toHaveBeenCalledTimes(2);
+        expect(mockOutputChannel.info.mock.calls[1][0]).toContain('"skipped":false');
     });
 });

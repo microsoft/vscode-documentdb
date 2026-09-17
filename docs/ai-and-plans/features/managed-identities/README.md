@@ -28,6 +28,10 @@ and tenant-check outcomes. `Azure tenant lookup` entries distinguish empty resul
 timeouts, and late responses. Operation IDs correlate start/completion/failure entries; managed
 identity callbacks and token-provider stages share a correlation ID, including shell/playground requests.
 
+Gate and skip decisions are logged only when the wizard reaches or revisits the step. Repeated
+`shouldPrompt()` calls used to calculate UI metadata are silent, so they cannot appear as premature
+authentication decisions before the connection string or identity has been chosen.
+
 Environment diagnostics report platform/architecture and only the presence of relevant endpoint,
 header/secret, and proxy settings. They do not identify the SDK-selected endpoint or claim an SDK
 token-cache hit. New trace entries omit account labels, tenant/client IDs, connection strings,
