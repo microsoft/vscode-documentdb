@@ -136,10 +136,9 @@ items shipped in Step 15 — see
 [iterations/15-shell-liveness-audit-fixes.md](./iterations/15-shell-liveness-audit-fixes.md) for the
 cross-cutting summary and lessons. `# Deferred` and `# Won't fix` are untouched.
 
-**Using the shipped build surfaced three more things** — one regression, one design question since
+**Using the shipped build surfaced four more things** — two regressions, one design question since
 decided, and one operator request. They are in [Found after Step 15](#found-after-step-15) as
-N1–N3. **All three are now built**, in that order, each with its own `### Shipped — commit <sha>`
-subsection.
+N1–N4. **All four are now built**, each with its own `### Shipped — commit <sha>` subsection.
 
 ## Note: the future standalone shell
 
@@ -199,14 +198,15 @@ is luxury 5 / usefulness 3. Both are worth doing; they are not worth doing _in t
 | N1  | Insertable ghosts steal Tab from the list      | S          | 5   | 1   | Fix       | Shipped `829788c1` |
 | N2  | Hint markers, and what `db.` should say        | S          | 4   | 4   | Fix       | Shipped `5526f566` |
 | N3  | Setting to turn the inline hints off           | S          | 4   | 2   | Fix       | Shipped `3dc5b368` |
+| N4  | Accepting a completion ends the ghost chain    | XS         | 4   | 2   | Fix       | Shipped `77d39bbe` |
 
 Two entries changed shape during triage. **I7** moved to Deferred once it became clear that the
 version worth having (list stays visible, Tab moves a highlight through it) needs I10 as a
 prerequisite — see I7 for the reasoning. **I10** moved the other way: dropping I1b removed its main
 driver, then I7 gave it a new one, so it is deferred rather than closed.
 
-**N1–N3 were raised after Step 15 shipped** and are not part of the original triage — see
-[Found after Step 15](#found-after-step-15). **All three are shipped.** N2's decision supersedes the
+**N1–N4 were raised after Step 15 shipped** and are not part of the original triage — see
+[Found after Step 15](#found-after-step-15). **All four are shipped.** N2's decision supersedes the
 shipped I1c, whose empty-prefix rule was removed when N2 was built.
 
 F7 and F8 from the first draft were not defects; they are folded into I5 and I4 as supporting
@@ -804,13 +804,16 @@ Moved to the **Won't fix** section below.
 # Found after Step 15
 
 Raised by the operator while using the shipped build, plus one design question Step 15 left open.
-**None of these were triaged in the original audit** — they are consequences of the work, not
-findings about the code as it stood.
+**None of these were triaged in the original audit** — they are mostly consequences of the work
+rather than findings about the code as it stood. N4 is the exception: it predates all of it and was
+simply never noticed, because the only way to see it is to accept a completion and then look at what
+does _not_ happen next.
 
-**Status: all three are shipped.** They were built in the stated order, N1 → N2 → N3. Both ⬜ markers
-were resolved by building the recommendation recorded against them, because no operator ruling was
-available at build time and no competing proposal existed; each is flagged in place with the single
-change that would reverse it.
+**Status: all four are shipped.** N1–N3 were built in the stated order, N1 → N2 → N3; **N4 was
+reported against that build and is a long-standing bug rather than a consequence of it**. Both ⬜
+markers were resolved by building the recommendation recorded against them, because no operator
+ruling was available at build time and no competing proposal existed; each is flagged in place with
+the single change that would reverse it.
 
 ## N1. An insertable ghost steals Tab from the completion list
 
@@ -1343,6 +1346,59 @@ other test in the file meaningful as a "both true" control.
 | shell `help` names the prefix and both leaf names                             |
 
 Suites: 17 (shell + shell-runtime), 619 tests, all passing.
+
+## N4. Accepting a completion ends the suggestion chain
+
+**Regression, long-standing rather than new. Shipped in `77d39bbe`.** Reported by the operator:
+
+> "when I type in `$exists` in full, then I see that info text. But when I type in `$ex` and then get
+> autocompletion via Tab or Right Arrow, then the text renders, but it looks like we no longer
+> evaluate and don't show the info text anymore."
+
+**Verified.** The buffer is identical either way — `db['x'].find({ $exists` — so the only difference
+is how it got there. `ShellInputHandler.insertText()` and `replaceText()` carry an explicit comment:
+
+```ts
+// NOTE: This method intentionally does NOT fire `onBufferChange`. It is a
+// PTY-controlled mutation — the PTY is responsible for any follow-up
+// evaluations (e.g., ghost text) after calling this method.
+```
+
+The PTY never held up its end. Neither `applySingleCompletion()` nor `handleAcceptGhostText()` asked
+for a follow-up, so the suggestion chain stopped dead at acceptance and stayed stopped until the next
+keystroke.
+
+**This is wider than the description hint.** Every ghost that would have followed was lost the same
+way: closing brackets after accepting a method name, the schema hint after completing a collection,
+a further history match. The report names the case that is easiest to see.
+
+**Fix.** Acceptance now calls `handleBufferChange()` with the post-mutation buffer — the same
+debounced, guarded path a keystroke takes, so accepting a candidate leaves the shell in exactly the
+state typing it out would have. `ShellInputHandler` gained `buffer` and `cursor` getters so the PTY
+can read the state it just caused; the "does NOT fire `onBufferChange`" contract is unchanged, and is
+now actually honoured by its counterparty.
+
+The multi-candidate Tab path is deliberately untouched: it sets `_completionListVisible`, which
+already suppresses ghost text while the list is up.
+
+Two tests, both failing against the unfixed source, both asserting on emitted ANSI:
+
+| Test                                                            |
+| --------------------------------------------------------------- |
+| `hel` + Tab emits `🛈 Show help`, as typing `help` would         |
+| `hel` + Right Arrow emits `🛈 Show help`, as typing `help` would |
+
+Suite: 13 suites, 513 tests, all passing (was 511).
+
+**One pre-existing hazard noticed and left alone.** The ghost debounce timer is not cancelled when a
+line is submitted, so a timer scheduled within 50 ms of Enter can fire against a stale buffer after
+`resetLine()`. `evaluateGhostText()`'s `_evaluating` guard closes most of the window but not all of
+it. This predates N4 — ordinary typing reaches it too — and fixing it belongs with I10, which is
+already deferred for making `reRenderLine()` ghost-aware.
+
+| Complexity | Usefulness | Luxury |
+| ---------- | ---------- | ------ |
+| XS         | 4          | 2      |
 
 ---
 
