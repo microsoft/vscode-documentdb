@@ -59,19 +59,27 @@ program-level narrative, and the sibling areas
 
 ## Timeline
 
-| Date     | PR   | What changed                                                | Docs                                                                                               |
-| -------- | ---- | ----------------------------------------------------------- | -------------------------------------------------------------------------------------------------- |
-| Step 8   | #561 | The Interactive Shell itself, plus the #508 umbrella review | [iterations/08-interactive-shell/](./iterations/08-interactive-shell/)                             |
-| Step 9   | #576 | Tab completion and ghost text                               | [iterations/09-shell-autocompletion.md](./iterations/09-shell-autocompletion.md)                   |
-| Step 9.1 | #576 | Shell results feed SchemaStore                              | [iterations/09.1-shell-schema-feeding.md](./iterations/09.1-shell-schema-feeding.md)               |
-| Step 10  | #580 | Input-line syntax highlighting                              | [iterations/10-syntax-highlighting.md](./iterations/10-syntax-highlighting.md)                     |
-| Step 11  | #631 | Visible underline for terminal links                        | [iterations/11-visible-underline-shell-links.md](./iterations/11-visible-underline-shell-links.md) |
+| Date     | PR   | What changed                                                 | Docs                                                                                               |
+| -------- | ---- | ------------------------------------------------------------ | -------------------------------------------------------------------------------------------------- |
+| Step 8   | #561 | The Interactive Shell itself, plus the #508 umbrella review  | [iterations/08-interactive-shell/](./iterations/08-interactive-shell/)                             |
+| Step 9   | #576 | Tab completion and ghost text                                | [iterations/09-shell-autocompletion.md](./iterations/09-shell-autocompletion.md)                   |
+| Step 9.1 | #576 | Shell results feed SchemaStore                               | [iterations/09.1-shell-schema-feeding.md](./iterations/09.1-shell-schema-feeding.md)               |
+| Step 10  | #580 | Input-line syntax highlighting                               | [iterations/10-syntax-highlighting.md](./iterations/10-syntax-highlighting.md)                     |
+| Step 11  | #631 | Visible underline for terminal links                         | [iterations/11-visible-underline-shell-links.md](./iterations/11-visible-underline-shell-links.md) |
 | Step 12  | TBD  | Shell session UX and follow-up issues                        | [iterations/12-shell-session-ux.md](./iterations/12-shell-session-ux.md)                           |
 | Step 13  | TBD  | Ghost text clipped to terminal width (input-line corruption) | [iterations/13-ghost-text-wrap-clipping.md](./iterations/13-ghost-text-wrap-clipping.md)           |
 | Step 14  | TBD  | Bracket-notation completion now removes the `db.` dot        | [iterations/14-bracket-notation-dot-removal.md](./iterations/14-bracket-notation-dot-removal.md)   |
 
 Iteration numbers 8, 9 and 9.1 are the original step numbers of the shell-integration program and
 are preserved. Steps 10 and 11 are new numbers for work that had none.
+
+## Open backlog
+
+[shell-liveness-audit.md](./shell-liveness-audit.md) — an audit of the first minutes of shell use,
+written after Steps 13 and 14 both turned out to be reachable within the first three keystrokes. It
+lists verified findings (resize can strand the cursor, ghost text can paint over real text,
+`String.length` used for width in two remaining places) alongside rated quality-of-life proposals,
+grouped into **Fix**, **Deferred** and **Won't fix**. Nothing in it is implemented.
 
 ## Decisions
 
