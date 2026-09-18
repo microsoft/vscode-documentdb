@@ -891,5 +891,25 @@ describe('ShellCompletionProvider', () => {
             expect(escaped).toBeDefined();
             expect(escaped!.insertText).toBe("['a\\\\b\\'c']");
         });
+
+        it('should ask for the preceding dot to be removed on bracket-notation candidates', () => {
+            const result = provider.getCompletions('db.sto', 6, TEST_CONTEXT);
+            expect(result.candidates[0].replaceCharsBefore).toBe(1);
+        });
+
+        it('should not remove any character for dot-notation candidates', () => {
+            const result = provider.getCompletions('db.res', 6, TEST_CONTEXT);
+            expect(result.candidates[0].label).toBe('restaurants');
+            expect(result.candidates[0].replaceCharsBefore).toBeUndefined();
+        });
+
+        it('should produce valid JS when the replacement is applied to the buffer', () => {
+            const buffer = 'db.sto';
+            const result = provider.getCompletions(buffer, buffer.length, TEST_CONTEXT);
+            const candidate = result.candidates[0];
+            const deleteCount = result.prefix.length + (candidate.replaceCharsBefore ?? 0);
+
+            expect(buffer.slice(0, buffer.length - deleteCount) + candidate.insertText).toBe("db['stores (10)']");
+        });
     });
 });

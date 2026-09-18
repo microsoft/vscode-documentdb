@@ -68,6 +68,7 @@ program-level narrative, and the sibling areas
 | Step 11  | #631 | Visible underline for terminal links                        | [iterations/11-visible-underline-shell-links.md](./iterations/11-visible-underline-shell-links.md) |
 | Step 12  | TBD  | Shell session UX and follow-up issues                        | [iterations/12-shell-session-ux.md](./iterations/12-shell-session-ux.md)                           |
 | Step 13  | TBD  | Ghost text clipped to terminal width (input-line corruption) | [iterations/13-ghost-text-wrap-clipping.md](./iterations/13-ghost-text-wrap-clipping.md)           |
+| Step 14  | TBD  | Bracket-notation completion now removes the `db.` dot        | [iterations/14-bracket-notation-dot-removal.md](./iterations/14-bracket-notation-dot-removal.md)   |
 
 Iteration numbers 8, 9 and 9.1 are the original step numbers of the shell-integration program and
 are preserved. Steps 10 and 11 are new numbers for work that had none.

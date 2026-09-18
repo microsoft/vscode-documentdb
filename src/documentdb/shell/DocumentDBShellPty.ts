@@ -1068,13 +1068,14 @@ export class DocumentDBShellPty implements vscode.Pseudoterminal {
      */
     private applySingleCompletion(result: CompletionResult): void {
         const candidate = result.candidates[0];
+        const extraBefore = candidate.replaceCharsBefore ?? 0;
 
         // If insertText doesn't start with the typed prefix, replace
         // the prefix entirely. Covers bracket notation (db[re → 'restaurants']),
         // quoted field paths (address.ci → "address.city"), and
         // special-char collections (sto → ['stores (10)']).
-        if (result.prefix.length > 0 && !candidate.insertText.startsWith(result.prefix)) {
-            this._inputHandler.replaceText(result.prefix.length, candidate.insertText);
+        if (extraBefore > 0 || (result.prefix.length > 0 && !candidate.insertText.startsWith(result.prefix))) {
+            this._inputHandler.replaceText(result.prefix.length + extraBefore, candidate.insertText);
             this.trackCompletionAccepted(candidate.kind, 'tab');
             return;
         }
@@ -1182,9 +1183,10 @@ export class DocumentDBShellPty implements vscode.Pseudoterminal {
             const candidate = result.candidates[0];
 
             // Skip ghost text when insertText doesn't start with the typed prefix
-            // (e.g., bracket notation, quoted field paths, special-char collections).
+            // or when accepting would rewrite text before the prefix (e.g., bracket
+            // notation, quoted field paths, special-char collections).
             // The visual would be misleading since the insertion replaces the prefix.
-            if (!candidate.insertText.startsWith(result.prefix)) {
+            if (!candidate.insertText.startsWith(result.prefix) || (candidate.replaceCharsBefore ?? 0) > 0) {
                 this.clearGhostState();
                 return;
             }
