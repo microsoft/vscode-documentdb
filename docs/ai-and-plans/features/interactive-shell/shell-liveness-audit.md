@@ -173,7 +173,7 @@ is luxury 5 / usefulness 3. Both are worth doing; they are not worth doing _in t
 | F1  | Resize can strand the cursor                   | S          | 5   | 1   | Fix       | —                  |
 | F2  | Ghost text paints over real text mid-buffer    | XS         | 4   | 1   | Fix       | Shipped `88ef37c5` |
 | F3  | Completion list measured with `String.length`  | S          | 3   | 1   | Fix       | —                  |
-| F4  | Prompt width measured with `String.length`     | XS         | 2   | 1   | Fix       | —                  |
+| F4  | Prompt width measured with `String.length`     | XS         | 2   | 1   | Fix       | Shipped `412722bf` |
 | F5  | Shell `help` hard-coded to ~62 columns         | S          | 3   | 2   | Fix       | —                  |
 | F6  | Banner and logo drawn at an assumed 80 columns | S          | 1   | 1   | Won't fix | —                  |
 | I1a | Bracket-notation preview hint                  | S          | 4   | 3   | Fix       | —                  |
@@ -344,6 +344,19 @@ happens to be correct. It is correct by luck, not by construction.
 | Complexity | Usefulness | Luxury |
 | ---------- | ---------- | ------ |
 | XS         | 2          | 1      |
+
+### Shipped — commit `412722bf`
+
+**The finding reproduced exactly as described.** All three sites were still passing `prompt.length`.
+Changed to `terminalDisplayWidth(prompt)`; no other change.
+
+The regression test constructs a PTY on a database named `日本語` — 5 UTF-16 code units, 8 terminal
+columns — and asserts on the **emitted ANSI**: the re-render after one keystroke must contain
+`\r\x1b[8C` and must not contain `\r\x1b[5C`. Verified failing against the unfixed source
+(`Received: …\r\x1b[5Cx`) and passing after.
+
+The continuation prompt is unchanged in value — `┆ > ` is 4 units and 4 columns either way — but it
+is now correct by construction rather than by luck, which was the point of the item.
 
 ## F5. Shell `help` is hard-coded to ~62 columns
 
