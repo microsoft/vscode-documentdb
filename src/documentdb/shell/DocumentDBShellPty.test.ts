@@ -133,6 +133,12 @@ describe('DocumentDBShellPty', () => {
     });
 
     afterEach(() => {
+        // The shell has exactly two hint markers: nothing (appendable) and 🛈
+        // (informational). It names no keys. Asserted for every test so a new
+        // hint cannot quietly reintroduce a third marker or a `(Tab)` suffix.
+        expect(written).not.toContain('→');
+        expect(written).not.toContain('(Tab)');
+
         jest.restoreAllMocks();
     });
 
@@ -656,7 +662,7 @@ describe('DocumentDBShellPty', () => {
             pty.handleInput('db.rest');
             await afterGhostDebounce();
 
-            expect(written).toContain(`${GHOST_STYLE}  → db['restaurants-something']  (Tab)`);
+            expect(written).toContain(`${GHOST_STYLE}  🛈 db['restaurants-something']`);
         });
 
         it('previews exactly what Tab then produces', async () => {
@@ -674,7 +680,7 @@ describe('DocumentDBShellPty', () => {
         });
     });
 
-    describe('ghost text — empty prefix at `db.`', () => {
+    describe('ghost text — collection count at `db.`', () => {
         /** Dim + gray prefix emitted by ShellGhostText. */
         const GHOST_STYLE = '\x1b[2m\x1b[90m';
         const afterGhostDebounce = (): Promise<void> => new Promise((resolve) => setTimeout(resolve, 80));
@@ -705,25 +711,35 @@ describe('DocumentDBShellPty', () => {
             written = '';
         });
 
-        it('points out the sole collection even though nothing has been typed after the dot', async () => {
+        it('says how many collections the database holds', async () => {
+            mockDbDotCandidates(['a', 'b', 'c', 'd', 'e', 'f', 'g']);
+
+            pty.handleInput('db.');
+            await afterGhostDebounce();
+
+            expect(written).toContain(`${GHOST_STYLE}  🛈 7 collections`);
+        });
+
+        it('says it in the singular for one collection', async () => {
             mockDbDotCandidates(['restaurants']);
 
             pty.handleInput('db.');
             await afterGhostDebounce();
 
-            expect(written).toContain(`${GHOST_STYLE}  → db.restaurants`);
+            expect(written).toContain(`${GHOST_STYLE}  🛈 1 collection`);
+            expect(written).not.toContain('1 collections');
         });
 
-        it('does not promise Tab, because Tab lists the database methods too', async () => {
-            mockDbDotCandidates(['restaurants']);
+        it('stays silent on a cold cache, which yields no collection candidates', async () => {
+            mockDbDotCandidates([]);
 
             pty.handleInput('db.');
             await afterGhostDebounce();
 
-            expect(written).not.toContain('(Tab)');
+            expect(written).not.toContain(GHOST_STYLE);
         });
 
-        it('leaves Tab showing the candidate list rather than accepting the suggestion', async () => {
+        it('is informational — Tab still shows the candidate list', async () => {
             mockDbDotCandidates(['restaurants']);
 
             pty.handleInput('db.');
@@ -732,22 +748,28 @@ describe('DocumentDBShellPty', () => {
 
             pty.handleInput('\x09'); // Tab
 
-            // The list, not an insertion: every candidate is rendered.
             expect(written).toContain('restaurants');
             expect(written).toContain('getName');
             expect(written).toContain('runCommand');
         });
 
-        it('stays silent when more than one collection could be meant', async () => {
-            mockDbDotCandidates(['restaurants', 'reviews']);
+        it('outranks a history suggestion, which `db.` almost always has', async () => {
+            mockEvaluate.mockResolvedValue({ type: 'string', printable: '"x"', durationMs: 1 });
+            mockDbDotCandidates(['restaurants']);
+
+            pty.handleInput('db.restaurants.find()');
+            pty.handleInput('\r');
+            await new Promise((resolve) => setTimeout(resolve, 20));
+            written = '';
 
             pty.handleInput('db.');
             await afterGhostDebounce();
 
-            expect(written).not.toContain(GHOST_STYLE);
+            expect(written).toContain(`${GHOST_STYLE}  🛈 1 collection`);
+            expect(written).not.toContain(`${GHOST_STYLE}restaurants.find()`);
         });
 
-        it('previews a bracket-notation collection without promising Tab', async () => {
+        it('previews a bracket-notation collection rather than counting it, once a prefix is typed', async () => {
             jest.spyOn(ShellCompletionProvider.prototype, 'getCompletions').mockReturnValue({
                 candidates: [
                     {
@@ -756,17 +778,15 @@ describe('DocumentDBShellPty', () => {
                         kind: 'collection',
                         replaceCharsBefore: 1,
                     },
-                    { label: 'getName', insertText: 'getName', kind: 'method' },
                 ],
-                prefix: '',
+                prefix: 'rest',
                 replacementStart: 3,
             });
 
-            pty.handleInput('db.');
+            pty.handleInput('db.rest');
             await afterGhostDebounce();
 
-            expect(written).toContain(`${GHOST_STYLE}  → db['restaurants-original']`);
-            expect(written).not.toContain('(Tab)');
+            expect(written).toContain(`${GHOST_STYLE}  🛈 db['restaurants-original']`);
         });
     });
 
