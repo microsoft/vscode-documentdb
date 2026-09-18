@@ -19,8 +19,8 @@ import { randomUUID } from 'crypto';
 import { type MongoClientOptions, type MongoClient as MongoClientType } from 'mongodb';
 import { parentPort } from 'worker_threads';
 import { DOCUMENTDB_ENTRA_SCOPE } from '../auth/entraScopes';
-import { expiresInSecondsFromTimestamp } from '../auth/ManagedIdentityAuthHandler';
 import { getOidcAllowedHosts } from '../auth/oidcAllowedHosts';
+import { expiresInSecondsFromTimestamp } from '../auth/tokenExpiry';
 import { type MainToWorkerMessage, type WorkerToMainMessage } from './workerTypes';
 
 if (!parentPort) {
