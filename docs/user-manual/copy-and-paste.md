@@ -48,7 +48,9 @@ Use the Explorer's Indexes nodes when you need to recreate indexes without copyi
    Indexes…**. Expanded field rows, `_id`, and non-copyable search entries in the selection are
    ignored. To select every copyable secondary index, right-click the **Indexes** parent and select
    **Copy Indexes…**. This parent selection resolves the source's copyable indexes when you paste,
-   so it includes catalog changes made after copying.
+  so it includes catalog changes made after copying. The resolved set is frozen when the
+  confirmation is shown: indexes added afterward are not copied, and removing a confirmed index
+  causes a visible failure.
 3. Expand the target collection, right-click its **Indexes** node, and select **Paste Indexes…**.
 4. Review the source, target, selected indexes, exclusions, and any unique or TTL warnings, then
    confirm.

@@ -706,8 +706,8 @@ because they come from different layers:
 
 - `catalogCount`, `copyableCount`, and `excluded` — computed by the wizard from `ClustersClient`;
 - `uniqueIndexNames` and `ttlIndexNames` — selection-scoped names returned by `getSourceIndexSummary`;
-- `sourceIndexNames` — `undefined` for a parent copy, a one-element array for a single-index copy,
-  or the validated selected-name array for a multi-index copy.
+- `sourceIndexNames` — the classified copyable-name snapshot for a parent copy, a one-element array
+  for a single-index copy, or the validated selected-name array for a multi-index copy.
 
 The catalog fields describe the entire classified catalog in both scopes. They are displayed only
 for a parent copy. A single-index confirmation uses the validated selected name and its warning
@@ -726,6 +726,11 @@ from `CountSourceIndexesStep`:
    best-effort search read and live-reference timing described above.
 2. The **copier summary**, `getSourceIndexSummary({ sourceIndexNames, signal })`, for the unique and
    TTL warning names.
+
+For a parent copy, the classified copyable names become `sourceIndexNames` before the summary. That
+freezes the set shown in confirmation through task execution. An index added afterward is excluded;
+an index removed afterward causes the copier's unresolved-name failure instead of silently changing
+the operation.
 
 The parent-copy display uses only the classified read for its counts and exclusions. A single-index
 copy resolves and validates its selected name against that read, but renders no catalog-wide
@@ -969,7 +974,8 @@ Test:
 - cross-database and cross-connection targets are accepted;
 - stale single-index selections clear only the index buffer;
 - a successful paste leaves the buffer intact;
-- an `index` scope passes a one-element `sourceIndexNames`, and `allIndexes` passes `undefined`;
+- an `index` scope passes a one-element `sourceIndexNames`, and `allIndexes` passes the copyable-name
+  snapshot loaded before confirmation;
 - an `indexes` scope validates and passes every selected name;
 - a single-index confirmation shows only its selected name and applicable warnings, with no
   catalog-wide count, unrelated names, or exclusion line;

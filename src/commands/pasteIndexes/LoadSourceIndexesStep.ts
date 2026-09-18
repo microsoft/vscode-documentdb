@@ -90,7 +90,7 @@ export class LoadSourceIndexesStep extends AzureWizardPromptStep<PasteIndexesWiz
                 }
                 context.sourceIndexNames = selectedIndexNames;
             } else {
-                context.sourceIndexNames = undefined;
+                context.sourceIndexNames = [...context.copyableIndexNames];
             }
 
             const summary = await context.indexCopier.getSourceIndexSummary({

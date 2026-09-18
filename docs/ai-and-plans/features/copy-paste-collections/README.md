@@ -68,7 +68,8 @@ durable intent and rationale. Code and tests remain authoritative for current be
 - Progress, result counts, diagnostics, telemetry, and a cancellation-aware completion pause are
   reported by the task and copier.
 - Dedicated Copy Index uses one stable index name or an immutable selected-name subset; Copy
-  Indexes retains a live parent scope and resolves the current source catalog at paste time.
+  Indexes retains a live parent scope until paste-time loading, then freezes the resolved names
+  through confirmation and task execution.
 - Mixed tree selections may be invoked from any selected index row; `_id` and non-copyable search
   entries are ignored while ordinary selected indexes are retained.
 - Search catalog entries without ordinary keys remain visible but are classified as not copyable.

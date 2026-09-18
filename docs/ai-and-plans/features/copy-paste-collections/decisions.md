@@ -38,6 +38,7 @@ created: 2026-09-16
 | 0024 | Preserve collection-copy behavior while adapting contracts     | Superseded by D0026 | Rejected count and prompt-order redesigns                            | 2026-09-17 | #930 |
 | 0025 | Filter index tree multi-selection into one source subset       | Accepted            | Extended the first version after validating the cluster move pattern | 2026-09-17 | #930 |
 | 0026 | Refuse document-affecting indexes during collection paste      | Accepted            | Reverses the warning-and-copy behavior for TTL and unique indexes    | 2026-09-18 | #930 |
+| 0027 | Freeze parent index selection at confirmation                   | Accepted            | Replaces execution-time catalog expansion with a confirmed snapshot  | 2026-09-18 | #930 |
 
 > Entries below are semantically immutable. Append a new decision rather than rewriting an old one,
 > and record a reversal as a new entry plus a status change in the table.
@@ -662,3 +663,34 @@ Collection paste retains indexes-before-documents only for definitions that cann
 documents. Dedicated Paste Indexes remains the explicit route for TTL and unique indexes. This
 supersedes D0005 only for document-affecting definitions and D0024 only where it required preserving
 the old unique/TTL warning behavior.
+
+## 0027 — Freeze parent index selection at confirmation
+
+**Status:** Accepted · **Date:** 2026-09-18 · **Raised by:** data-loss review
+
+### Decision
+
+Keep the copied `allIndexes` buffer live until the Paste Indexes wizard loads the source catalog.
+Then store the classified copyable names in `sourceIndexNames` and pass that same immutable set to
+the summary, confirmation, and task.
+
+### Reasoning
+
+The dedicated flow warns explicitly for TTL and unique definitions. Re-expanding the catalog during
+execution can copy a document-affecting index added after confirmation without warning. Freezing at
+the loading step makes the confirmed and executed sets identical.
+
+### Alternatives considered
+
+- **Keep execution-time expansion.** It includes the newest catalog but permits unconfirmed indexes
+  and defeats warning telemetry.
+- **Freeze when Copy Indexes is invoked.** It removes the useful live-parent behavior between copy
+  and paste and can present a stale set before the wizard even opens.
+- **Silently drop names removed after confirmation.** It completes more often but makes execution
+  diverge from the confirmed operation.
+
+### Consequence
+
+Indexes added after confirmation wait for a later paste. If a confirmed index is removed before
+execution, the copier reports `Source indexes were not found` and creates nothing for that missing
+set instead of silently shrinking the operation.

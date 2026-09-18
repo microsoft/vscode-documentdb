@@ -86,8 +86,9 @@ describe('LoadSourceIndexesStep', () => {
             { name: '_id_', type: 'traditional', reason: 'builtInId' },
             { name: 'search', type: 'search', reason: 'notCopyable' },
         ]);
+        expect(context.sourceIndexNames).toEqual(['email_1']);
         expect(getSourceIndexSummary).toHaveBeenCalledWith({
-            sourceIndexNames: undefined,
+            sourceIndexNames: ['email_1'],
             signal: expect.any(AbortSignal),
         });
         expect(context.telemetry.measurements).toMatchObject({

@@ -260,6 +260,17 @@ Note the trade-off: the copier throws `Source indexes were not found` if a confi
 dropped in the meantime, which converts a silent divergence into a visible failure. Confirm that
 this is the intended behaviour before implementing.
 
+**Resolution progress (commit `fix(index-copy): freeze confirmed index selection`):** implemented
+with high confidence after evaluating the stated trade-off. `allIndexes` remains live until the
+Paste Indexes loading step, then the classified copyable names are passed to both the summary and
+task. Additions after confirmation are excluded; a removed confirmed index fails visibly through
+the existing unresolved-name guard.
+
+**Alternatives evaluated:** execution-time expansion kept the newest catalog but admitted
+unconfirmed TTL/unique indexes; freezing at Copy Indexes time discarded useful live-parent behavior;
+silently shrinking removed names hid divergence. The paste-time snapshot retains freshness until
+the user begins the operation and makes confirmation authoritative.
+
 ---
 
 ### D5 — Collection-flow TTL warning understates the risk — superseded
