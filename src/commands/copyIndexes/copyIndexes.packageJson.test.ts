@@ -34,20 +34,31 @@ describe('index copy command contributions', () => {
         expect(commands).toEqual(
             expect.arrayContaining([
                 'vscode-documentdb.command.copyIndex',
+                'vscode-documentdb.command.copySelectedIndexes',
                 'vscode-documentdb.command.copyIndexes',
                 'vscode-documentdb.command.pasteIndexes',
             ]),
         );
     });
 
-    it('gates Copy Index on the positive copyable state', () => {
+    it('shows Copy Index only for a single copyable selection', () => {
         const entry = contributes.menus['view/item/context'].find(
             (candidate) => candidate.command === 'vscode-documentdb.command.copyIndex',
         );
 
         expect(entry?.when).toContain('state_copyable');
         expect(entry?.when).toContain('treeitem_index');
-        expect(entry?.when).not.toContain('!listMultiSelection');
+        expect(entry?.when).toContain('!listMultiSelection');
+    });
+
+    it('shows Copy Selected Indexes only for a copyable multi-selection', () => {
+        const entry = contributes.menus['view/item/context'].find(
+            (candidate) => candidate.command === 'vscode-documentdb.command.copySelectedIndexes',
+        );
+
+        expect(entry?.when).toContain('state_copyable');
+        expect(entry?.when).toContain('treeitem_index');
+        expect(entry?.when).toMatch(/&& listMultiSelection$/);
     });
 
     it('gates Paste Indexes on the buffer service context key', () => {
@@ -61,6 +72,7 @@ describe('index copy command contributions', () => {
 
     it.each([
         'vscode-documentdb.command.copyIndex',
+        'vscode-documentdb.command.copySelectedIndexes',
         'vscode-documentdb.command.copyIndexes',
         'vscode-documentdb.command.pasteIndexes',
         'vscode-documentdb.command.copyCollection',
