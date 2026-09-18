@@ -24,6 +24,7 @@ export interface PasteCollectionWizardContext extends IActionContext {
     sourceIndexCount?: number;
     sourceUniqueIndexNames: string[];
     sourceTtlIndexNames: string[];
+    largeCollectionWarningShown: boolean;
 
     // Target details
     targetNode: CollectionItem | DatabaseItem;

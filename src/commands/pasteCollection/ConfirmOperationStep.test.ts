@@ -26,6 +26,7 @@ function createContext(isTargetExistingCollection: boolean): PasteCollectionWiza
         sourceIndexCount: 3,
         sourceUniqueIndexNames: [],
         sourceTtlIndexNames: [],
+        largeCollectionWarningShown: false,
         targetConnectionId: 'target',
         targetConnectionName: 'Target',
         targetDatabaseName: 'targetDb',
@@ -48,10 +49,21 @@ describe('ConfirmOperationStep', () => {
     it('formats copy-and-paste notes as bullets', async () => {
         await new ConfirmOperationStep().prompt(createContext(false));
 
+        const detail = showInformationMessage.mock.calls[0][1].detail;
+        expect(detail).toContain(
+            'Important:\n' + ' • This operation will copy all documents from the source to the target collection.',
+        );
+        expect(detail).not.toContain('Large collections may take several minutes to complete.');
+    });
+
+    it('includes the timing note when the large-collection warning was shown', async () => {
+        const context = createContext(false);
+        context.largeCollectionWarningShown = true;
+
+        await new ConfirmOperationStep().prompt(context);
+
         expect(showInformationMessage.mock.calls[0][1].detail).toContain(
-            'Important:\n' +
-                ' • This operation will copy all documents from the source to the target collection.\n' +
-                ' • Large collections may take several minutes to complete.',
+            ' • Large collections may take several minutes to complete.',
         );
     });
 

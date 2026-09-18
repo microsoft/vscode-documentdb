@@ -38,7 +38,9 @@ export class ConfirmOperationStep extends AzureWizardPromptStep<PasteCollectionW
               ]
             : [
                   l10n.t('This operation will copy all documents from the source to the target collection.'),
-                  l10n.t('Large collections may take several minutes to complete.'),
+                  ...(context.largeCollectionWarningShown
+                      ? [l10n.t('Large collections may take several minutes to complete.')]
+                      : []),
               ];
         // Combine all parts
         const confirmationMessage = [

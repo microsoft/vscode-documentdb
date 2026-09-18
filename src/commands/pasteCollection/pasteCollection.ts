@@ -9,8 +9,8 @@ import {
     type AzureWizardPromptStep,
     type IActionContext,
 } from '@microsoft/vscode-azext-utils';
-import { randomUUID } from 'crypto';
 import * as l10n from '@vscode/l10n';
+import { randomUUID } from 'crypto';
 import * as vscode from 'vscode';
 import { ClustersClient } from '../../documentdb/ClustersClient';
 import { ext } from '../../extensionVariables';
@@ -130,6 +130,7 @@ export async function pasteCollection(
         copyIndexes: false,
         sourceUniqueIndexNames: [],
         sourceTtlIndexNames: [],
+        largeCollectionWarningShown: false,
     };
 
     // Check for circular dependency when pasting into the same collection
@@ -167,6 +168,7 @@ export async function pasteCollection(
         if (sourceCollectionSize !== undefined && sourceCollectionSize > largeCollectionThreshold) {
             promptSteps.push(new LargeCollectionWarningStep());
 
+            wizardContext.largeCollectionWarningShown = true;
             context.telemetry.properties.largeCollectionWarningShown = 'true';
             context.telemetry.measurements.sourceCollectionSizeForWarning = sourceCollectionSize;
             context.telemetry.measurements.largeCollectionThresholdUsed = largeCollectionThreshold;
