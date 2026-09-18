@@ -28,17 +28,17 @@ This document is the summary and the cross-cutting lessons.
 
 Nine items, nine commits, in the order the audit recommended.
 
-| Item | Commit     | What changed                                                             |
-| ---- | ---------- | ------------------------------------------------------------------------ |
-| F2   | `88ef37c5` | Ghost text guarded against a mid-buffer cursor                            |
-| F4   | `412722bf` | Prompt measured in display columns at all three call sites                |
+| Item | Commit     | What changed                                                                |
+| ---- | ---------- | --------------------------------------------------------------------------- |
+| F2   | `88ef37c5` | Ghost text guarded against a mid-buffer cursor                              |
+| F4   | `412722bf` | Prompt measured in display columns at all three call sites                  |
 | F1   | `4c40d050` | Tracked cursor row recomputed on resize; the line repaints at the new width |
-| I5   | `3b93b204` | A fully-typed candidate's own `detail` rendered as an inline hint         |
-| F3   | `eb988c4b` | Completion list measured, clipped and padded in display columns           |
-| F5   | `d4a2c765` | Shell `help` laid out to the terminal width                               |
-| I1a  | `a0774f47` | Bracket-notation completions advertised instead of silently skipped       |
-| I1c  | `a22358b0` | `db.` suggests when exactly one collection could be meant                 |
-| I2   | `50e6ba53` | Fish-style history autosuggestion, with both caps                         |
+| I5   | `3b93b204` | A fully-typed candidate's own `detail` rendered as an inline hint           |
+| F3   | `eb988c4b` | Completion list measured, clipped and padded in display columns             |
+| F5   | `d4a2c765` | Shell `help` laid out to the terminal width                                 |
+| I1a  | `a0774f47` | Bracket-notation completions advertised instead of silently skipped         |
+| I1c  | `a22358b0` | `db.` suggests when exactly one collection could be meant                   |
+| I2   | `50e6ba53` | Fish-style history autosuggestion, with both caps                           |
 
 Each is followed by a small `Record <item> in the shell liveness audit` commit carrying the
 write-up, because a commit cannot reference its own hash.
@@ -86,7 +86,7 @@ would have needed a resize protocol and should have been re-rated.
 ghost state looked likely — ghost erased from the screen by `reRenderLine()`'s `\x1b[J` while
 `isVisible` stayed `true`, letting Tab accept an invisible suggestion. It cannot happen:
 `handleInput()` clears ghost state on every input except Right Arrow and Tab. Recorded so nobody
-spends that half hour twice. (`setDimensions()` does *not* go through `handleInput()`, which is why
+spends that half hour twice. (`setDimensions()` does _not_ go through `handleInput()`, which is why
 F1 clears ghost state explicitly.)
 
 ## The decision the audit left open
@@ -117,13 +117,13 @@ Step 14.
 
 Representative examples:
 
-| Assertion                                              | Why it is the right level                                         |
-| -------------------------------------------------------- | ------------------------------------------------------------------- |
-| `\r\x1b[8C` for a database named `日本語`                | the cursor column is the thing that breaks, not the width helper     |
-| CUU count after a narrowing resize                      | would still pass if the row math were wrong, were it not asserted    |
-| `寿司` followed by exactly four pad spaces               | column alignment is only observable in the emitted row               |
-| Tab after the I1a preview produces the previewed text   | an advertisement that lies is the Step 14 failure again              |
-| Right Arrow inserts exactly the remembered command      | a completion is `(deleteCount, insertText)` applied to a buffer      |
+| Assertion                                             | Why it is the right level                                         |
+| ----------------------------------------------------- | ----------------------------------------------------------------- |
+| `\r\x1b[8C` for a database named `日本語`             | the cursor column is the thing that breaks, not the width helper  |
+| CUU count after a narrowing resize                    | would still pass if the row math were wrong, were it not asserted |
+| `寿司` followed by exactly four pad spaces            | column alignment is only observable in the emitted row            |
+| Tab after the I1a preview produces the previewed text | an advertisement that lies is the Step 14 failure again           |
+| Right Arrow inserts exactly the remembered command    | a completion is `(deleteCount, insertText)` applied to a buffer   |
 
 Shell suites went from **13 / 471** to **13 / 496**. Full suite: 255 suites, 3,948 tests, green.
 `npm run build` clean after every commit.
@@ -148,7 +148,7 @@ No `TDD:` suite was modified. Seven existing `toHaveBeenCalledWith(code)` assert
   else.** F2's bug was closed in the caller. Putting the guard at the write site costs four lines and
   removes the possibility of a future second caller reopening it. Deleting the item instead would
   have thrown away the regression test, which was the part with lasting value.
-- **Cost estimates in an audit should record *where the code runs*, not just which module owns the
+- **Cost estimates in an audit should record _where the code runs_, not just which module owns the
   concern.** F5 was rated S on the assumption that two candidate modules were equally reachable. One
   was across a thread boundary. The conclusion survived; the estimate would not have.
 - **When several items add writers to the same scarce resource, decide the precedence explicitly

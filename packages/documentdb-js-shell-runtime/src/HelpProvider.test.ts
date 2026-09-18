@@ -168,7 +168,9 @@ describe('HelpProvider', () => {
 
             it('wraps the tip line rather than letting the terminal soft-wrap it', () => {
                 const text = helpProvider.getHelpText(40);
-                const tipLines = text.split('\n').filter((l) => l.includes('Variables persist') || l.includes('inline'));
+                const tipLines = text
+                    .split('\n')
+                    .filter((l) => l.includes('Variables persist') || l.includes('inline'));
 
                 expect(tipLines.length).toBeGreaterThan(1);
                 for (const line of tipLines) {
