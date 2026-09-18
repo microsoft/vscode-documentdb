@@ -28,6 +28,8 @@ interface MockIndex {
     key: Record<string, number | string>;
     name?: string;
     v?: number;
+    textIndexVersion?: number;
+    weights?: Record<string, number>;
     unique?: boolean;
     expireAfterSeconds?: number;
     background?: boolean;
@@ -161,6 +163,7 @@ describe('DocumentDbCollectionIndexCopier', () => {
             createdCount: 0,
             skippedCount: 1,
             renamedCount: 0,
+            conflictingCount: 0,
             cancelled: false,
         });
         expect(createIndex).not.toHaveBeenCalled();
@@ -189,6 +192,7 @@ describe('DocumentDbCollectionIndexCopier', () => {
             createdCount: 1,
             skippedCount: 0,
             renamedCount: 0,
+            conflictingCount: 0,
             cancelled: false,
         });
     });
@@ -394,6 +398,45 @@ describe('DocumentDbCollectionIndexCopier', () => {
             name: 'shared_copy_2',
         });
         expect(result.renamedCount).toBe(1);
+        expect(result.conflictingCount).toBe(0);
+    });
+
+    it('skips a same-key options conflict instead of creating a renamed duplicate', async () => {
+        const createIndex = jest.fn();
+        const onProgress = jest.fn();
+        const copier = createCopier(
+            createClient([{ key: { createdAt: 1 }, name: 'createdAt_1', expireAfterSeconds: 3600 }]),
+            createClient([{ key: { createdAt: 1 }, name: 'createdAt_1', expireAfterSeconds: 2592000 }], createIndex),
+        );
+
+        await expect(copier.copyIndexes({ onProgress })).resolves.toEqual({
+            selectedIndexCount: 1,
+            createdCount: 0,
+            skippedCount: 1,
+            renamedCount: 0,
+            conflictingCount: 1,
+            cancelled: false,
+        });
+        expect(createIndex).not.toHaveBeenCalled();
+        expect(onProgress).toHaveBeenCalledWith({ completed: 1, total: 1, indexName: 'createdAt_1' });
+    });
+
+    it('ignores server-generated options when comparing definitions', async () => {
+        const createIndex = jest.fn();
+        const copier = createCopier(
+            createClient([{ key: { title: 'text' }, name: 'title_text', textIndexVersion: 3, weights: { title: 1 } }]),
+            createClient(
+                [{ key: { title: 'text' }, name: 'existing_title_text', textIndexVersion: 2, weights: { title: 1 } }],
+                createIndex,
+            ),
+        );
+
+        await expect(copier.copyIndexes()).resolves.toMatchObject({
+            createdCount: 0,
+            skippedCount: 1,
+            conflictingCount: 0,
+        });
+        expect(createIndex).not.toHaveBeenCalled();
     });
 
     it('propagates index creation failures', async () => {

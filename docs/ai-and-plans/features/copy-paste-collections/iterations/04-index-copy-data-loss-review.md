@@ -94,6 +94,17 @@ source index's key pattern. If one does, skip the index and report it as a confl
 renaming. Renaming should remain valid only for a name collision on a _different_ key. Whatever is
 chosen must be reflected in the confirmation text and in a regression test.
 
+**Resolution progress (commit `fix(indexes): prevent same-key option conflicts`):** implemented as
+proposed. The copier now skips and counts a same-key options conflict before name generation, while
+different-key name collisions still receive deterministic suffixes. The dedicated task summary and
+both task telemetry paths expose the conflict count. Regression coverage uses the concrete shorter-
+TTL case above.
+
+**Alternatives evaluated:** aborting the entire dedicated paste was stronger but would prevent
+independent safe indexes in the selection from being copied; retaining rename and relying on server
+rejection preserved throughput but left the documented cross-endpoint data-loss risk. Skipping only
+the conflicting index preserves safe work and fails closed for the dangerous definition.
+
 ---
 
 ### D2 — Equivalence check feeds the rename path more often than it appears
@@ -113,6 +124,16 @@ straight into D1.
 **Proposed resolution:** compare a normalized subset — key pattern plus semantic options such as
 `unique`, `sparse`, `expireAfterSeconds`, `partialFilterExpression`, `collation`, `weights` — rather
 than the raw catalog document. Server-version artefacts must not participate in equivalence.
+
+**Resolution progress (commit `fix(indexes): prevent same-key option conflicts`):** implemented with
+an explicit semantic-option allowlist. Server-generated fields such as `textIndexVersion` and
+`2dsphereIndexVersion` no longer change equivalence; key order and options that alter index behavior
+still do. A cross-version text-index regression test proves the intended comparison.
+
+**Alternatives evaluated:** a denylist of known generated fields was smaller initially but would
+silently regress when a server adds another catalog-only field; retaining raw options required every
+endpoint to normalize identically. The allowlist costs maintenance when a new semantic option is
+supported, but errs toward conflict-skipping rather than duplicate creation.
 
 ---
 
@@ -288,6 +309,17 @@ under D3. Implement both at the same time so the two flows stay comparable in th
 **Proposed resolution:** add a separate measurement for renames where the target already held an
 index with the same key pattern, distinct from renames caused by a name collision on a different
 key. This should be added alongside whatever fix D1 receives.
+
+**Resolution progress (commit `fix(indexes): prevent same-key option conflicts`):** deviated from the
+proposed field with high confidence. D1 removes same-key renames entirely, so a risky-rename count
+would be permanently zero. Both tasks instead emit `conflictingIndexCount`, measuring prevented
+same-key option conflicts; `renamedIndexCount` now exclusively measures benign different-key name
+collisions.
+
+**Alternatives evaluated:** retaining a zero-valued same-key rename measurement matched the proposal
+literally but supplied no field evidence; counting conflicts only in logs was not aggregatable. The
+chosen measurement directly answers how often the former D1 path would have fired, at the cost of a
+new name that dashboards must adopt.
 
 ### T3 — Paste wizard event cannot be joined to the task events
 

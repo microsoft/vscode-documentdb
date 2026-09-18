@@ -146,9 +146,10 @@ export class CopyIndexesTask extends Task implements ResourceTrackingTask {
         }
 
         const message = vscode.l10n.t(
-            '{0} indexes created, {1} already existed, {2} renamed.',
+            '{0} indexes created, {1} equivalent indexes skipped, {2} option conflicts skipped, {3} renamed.',
             result.createdCount.toString(),
             result.skippedCount.toString(),
+            result.conflictingCount.toString(),
             result.renamedCount.toString(),
         );
         this.updateProgress(100, message);
@@ -164,6 +165,7 @@ export class CopyIndexesTask extends Task implements ResourceTrackingTask {
         context.telemetry.measurements.createdIndexCount = result.createdCount;
         context.telemetry.measurements.skippedIndexCount = result.skippedCount;
         context.telemetry.measurements.renamedIndexCount = result.renamedCount;
+        context.telemetry.measurements.conflictingIndexCount = result.conflictingCount;
         context.telemetry.properties.indexCopyCancelled = result.cancelled ? 'true' : 'false';
         context.telemetry.properties.indexCopyFailed = 'false';
     }

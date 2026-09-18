@@ -28,6 +28,24 @@ interface IndexDefinition {
     hidden: boolean;
 }
 
+const semanticIndexOptionNames = new Set([
+    'bits',
+    'bucketSize',
+    'collation',
+    'cosmosSearchOptions',
+    'default_language',
+    'expireAfterSeconds',
+    'language_override',
+    'max',
+    'min',
+    'partialFilterExpression',
+    'sparse',
+    'storageEngine',
+    'unique',
+    'weights',
+    'wildcardProjection',
+]);
+
 /**
  * Copies indexes between two DocumentDB API collections.
  *
@@ -76,12 +94,14 @@ export class DocumentDbCollectionIndexCopier implements CollectionIndexCopier {
         const targetIndexes = await this.readCopyableIndexes(targetClient, this.target, options.signal);
         const targetIndexNames = new Set(targetIndexes.map((index) => index.name));
         const targetSignatures = new Set(targetIndexes.map((index) => this.getDefinitionSignature(index)));
+        const targetKeySignatures = new Set(targetIndexes.map((index) => this.getKeySignature(index)));
 
         const result: IndexCopyResult = {
             selectedIndexCount: sourceIndexes.length,
             createdCount: 0,
             skippedCount: 0,
             renamedCount: 0,
+            conflictingCount: 0,
             cancelled: false,
         };
 
@@ -100,6 +120,23 @@ export class DocumentDbCollectionIndexCopier implements CollectionIndexCopier {
                 result.skippedCount++;
                 ext.outputChannel.debug(
                     vscode.l10n.t('[IndexCopy] Skipping equivalent index "{0}".', sourceIndex.name),
+                );
+                options.onProgress?.({
+                    completed: result.createdCount + result.skippedCount,
+                    total: sourceIndexes.length,
+                    indexName: sourceIndex.name,
+                });
+                continue;
+            }
+
+            if (targetKeySignatures.has(this.getKeySignature(sourceIndex))) {
+                result.skippedCount++;
+                result.conflictingCount++;
+                ext.outputChannel.warn(
+                    vscode.l10n.t(
+                        '[IndexCopy] Skipping index "{0}" because the target has the same key pattern with different options.',
+                        sourceIndex.name,
+                    ),
                 );
                 options.onProgress?.({
                     completed: result.createdCount + result.skippedCount,
@@ -136,6 +173,7 @@ export class DocumentDbCollectionIndexCopier implements CollectionIndexCopier {
             result.createdCount++;
             targetIndexNames.add(targetName);
             targetSignatures.add(this.getDefinitionSignature(sourceIndex));
+            targetKeySignatures.add(this.getKeySignature(sourceIndex));
             ext.outputChannel.trace(vscode.l10n.t('[IndexCopy] Created index "{0}".', targetName));
             options.onProgress?.({
                 completed: result.createdCount + result.skippedCount,
@@ -298,8 +336,14 @@ export class DocumentDbCollectionIndexCopier implements CollectionIndexCopier {
     private getDefinitionSignature(index: IndexDefinition): string {
         return JSON.stringify({
             key: this.getKeyEntries(index.key),
-            options: this.sortObject(index.options),
+            options: this.sortObject(
+                Object.fromEntries(Object.entries(index.options).filter(([name]) => semanticIndexOptionNames.has(name))),
+            ),
         });
+    }
+
+    private getKeySignature(index: IndexDefinition): string {
+        return JSON.stringify(this.getKeyEntries(index.key));
     }
 
     private sortObject(value: unknown): unknown {

@@ -89,6 +89,7 @@ describe('CopyPasteCollectionTask index phase', () => {
                     createdCount: 0,
                     skippedCount: 1,
                     renamedCount: 0,
+                    conflictingCount: 0,
                     cancelled: false,
                 };
             }),
@@ -114,7 +115,14 @@ describe('CopyPasteCollectionTask index phase', () => {
         const indexCopier = {
             copyIndexes: jest.fn().mockImplementation(async () => {
                 calls.push('indexes');
-                return { selectedIndexCount: 1, createdCount: 1, skippedCount: 0, renamedCount: 0, cancelled: false };
+                return {
+                    selectedIndexCount: 1,
+                    createdCount: 1,
+                    skippedCount: 0,
+                    renamedCount: 0,
+                    conflictingCount: 0,
+                    cancelled: false,
+                };
             }),
         } as unknown as CollectionIndexCopier;
         const reader = {
@@ -188,6 +196,7 @@ describe('CopyPasteCollectionTask index phase', () => {
                 createdCount: 1,
                 skippedCount: 0,
                 renamedCount: 0,
+                conflictingCount: 0,
                 cancelled: false,
             }),
         } as unknown as CollectionIndexCopier;

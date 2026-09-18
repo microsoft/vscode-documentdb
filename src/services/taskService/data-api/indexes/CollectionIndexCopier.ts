@@ -14,6 +14,7 @@ export interface IndexCopyResult {
     createdCount: number;
     skippedCount: number;
     renamedCount: number;
+    conflictingCount: number;
     cancelled: boolean;
 }
 

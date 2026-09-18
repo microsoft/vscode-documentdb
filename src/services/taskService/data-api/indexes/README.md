@@ -32,14 +32,16 @@ index definitions private. The task receives neither clients nor index definitio
 - excluding the built-in `_id` index from copying and copy progress;
 - preserving key order and supported index options, including DocumentDB vector options;
 - comparing definitions independently of names and mutable visibility;
+- ignoring server-generated catalog versions when comparing semantic definitions;
 - skipping equivalent target definitions;
-- resolving name collisions with deterministic `_copy`, `_copy_2`, and later suffixes;
+- skipping same-key definitions whose semantic options conflict;
+- resolving different-key name collisions with deterministic `_copy`, `_copy_2`, and later suffixes;
 - creating indexes sequentially with background creation requested;
 - applying hidden visibility after creation;
 - stopping before the next index after cancellation;
 - selecting optional source names after the source read while preserving catalog order;
 - rejecting duplicate or unresolved requested names before target work;
-- reporting created, skipped, renamed, and cancellation counts.
+- reporting created, skipped, conflicting, renamed, and cancellation counts.
 
 Index lists are intentionally bounded arrays rather than streams. Creation is sequential so
 progress, cancellation, and failures have deterministic ordering.
@@ -60,6 +62,8 @@ sequenceDiagram
         Copier->>Copier: compare definition and resolve name
         alt Equivalent definition exists
             Copier-->>Task: progress: skipped
+        else Same key has different options
+            Copier-->>Task: progress: conflict skipped
         else Definition must be created
             Copier->>Client: createIndex(background: true)
             opt Source index is hidden

@@ -423,6 +423,7 @@ export class CopyPasteCollectionTask extends Task implements ResourceTrackingTas
             context.telemetry.measurements.createdIndexCount = result.createdCount;
             context.telemetry.measurements.skippedIndexCount = result.skippedCount;
             context.telemetry.measurements.renamedIndexCount = result.renamedCount;
+            context.telemetry.measurements.conflictingIndexCount = result.conflictingCount;
             context.telemetry.properties.indexCopyCancelled = result.cancelled ? 'true' : 'false';
         }
 
@@ -436,9 +437,10 @@ export class CopyPasteCollectionTask extends Task implements ResourceTrackingTas
         } else {
             ext.outputChannel.trace(
                 vscode.l10n.t(
-                    '[CopyPasteTask] Index copy completed: {0} created, {1} skipped, {2} renamed.',
+                    '[CopyPasteTask] Index copy completed: {0} created, {1} skipped, {2} conflicts, {3} renamed.',
                     result.createdCount.toString(),
                     result.skippedCount.toString(),
+                    result.conflictingCount.toString(),
                     result.renamedCount.toString(),
                 ),
             );

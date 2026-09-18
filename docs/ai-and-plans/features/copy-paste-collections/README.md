@@ -54,8 +54,9 @@ durable intent and rationale. Code and tests remain authoritative for current be
 - The source catalog count includes the built-in `_id` index, but `_id` is excluded from the copy
   operation and its progress totals.
 - Indexes are copied sequentially after target creation and before document streaming.
-- Equivalent definitions are skipped regardless of name. A conflicting name receives deterministic
-  `_copy`, `_copy_2`, and later suffixes.
+- Equivalent definitions are skipped regardless of name and server-generated catalog versions.
+  Same-key option conflicts are skipped rather than duplicated. A conflicting name on a different
+  key receives deterministic `_copy`, `_copy_2`, and later suffixes.
 - Supported DocumentDB API options, including vector index options, are preserved. Builds always
   request background creation, and `hidden` is applied separately after creation rather than copied
   as a creation option. Other server-normalized index shapes are not yet proven to round-trip.

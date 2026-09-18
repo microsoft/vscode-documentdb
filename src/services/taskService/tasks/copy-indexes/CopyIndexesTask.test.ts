@@ -106,6 +106,7 @@ describe('CopyIndexesTask', () => {
                     createdCount: 2,
                     skippedCount: 1,
                     renamedCount: 1,
+                    conflictingCount: 1,
                     cancelled: false,
                 };
             }),
@@ -117,12 +118,15 @@ describe('CopyIndexesTask', () => {
 
         expect(copier.copyIndexes).toHaveBeenCalledWith(expect.objectContaining({ sourceIndexNames: ['email_1'] }));
         expect(task.progressUpdates.map((update) => update.progress)).toEqual([0, 33, 66, 100, 100]);
-        expect(task.progressUpdates.at(-1)?.message).toBe('2 indexes created, 1 already existed, 1 renamed.');
+        expect(task.progressUpdates.at(-1)?.message).toBe(
+            '2 indexes created, 1 equivalent indexes skipped, 1 option conflicts skipped, 1 renamed.',
+        );
         expect(context.telemetry.measurements).toMatchObject({
             selectedIndexCount: 3,
             createdIndexCount: 2,
             skippedIndexCount: 1,
             renamedIndexCount: 1,
+            conflictingIndexCount: 1,
         });
         expect(context.telemetry.properties).toMatchObject({
             isCrossConnection: 'true',
@@ -141,6 +145,7 @@ describe('CopyIndexesTask', () => {
                     createdCount: 0,
                     skippedCount: 0,
                     renamedCount: 0,
+                    conflictingCount: 0,
                     cancelled: false,
                 };
             }),
@@ -162,6 +167,7 @@ describe('CopyIndexesTask', () => {
                 createdCount: 0,
                 skippedCount: 0,
                 renamedCount: 0,
+                conflictingCount: 0,
                 cancelled: false,
             }),
         } as unknown as CollectionIndexCopier;
@@ -189,6 +195,7 @@ describe('CopyIndexesTask', () => {
                 createdCount: 2,
                 skippedCount: 0,
                 renamedCount: 0,
+                conflictingCount: 0,
                 cancelled: false,
             }),
         } as unknown as CollectionIndexCopier;
@@ -211,6 +218,7 @@ describe('CopyIndexesTask', () => {
                     createdCount: 2,
                     skippedCount: 0,
                     renamedCount: 0,
+                    conflictingCount: 0,
                     cancelled: true,
                 };
             }),
