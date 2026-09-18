@@ -1207,12 +1207,21 @@ export class DocumentDBShellPty implements vscode.Pseudoterminal {
         // the candidate's description, the schema hint, then closing brackets.
         const candidate = this.ghostCandidate(buffer, cursor, result);
         if (candidate) {
+            // At an empty prefix Tab shows the candidate list rather than
+            // completing — `db.` always offers the database methods alongside
+            // the collection. So the suggestion may not claim Tab, and must not
+            // be insertable, or it would steal the list it is competing with.
+            if (result.prefix.length === 0) {
+                this.showCompletionPreviewHint(buffer, result.prefix, candidate, false);
+                return;
+            }
+
             // Accepting this candidate would rewrite text the user already typed
             // (bracket notation, quoted field paths, special-char collections),
             // which ghost text cannot represent because it only ever appends.
             // Advertise the result as a non-insertable preview instead.
             if (!candidate.insertText.startsWith(result.prefix) || (candidate.replaceCharsBefore ?? 0) > 0) {
-                this.showCompletionPreviewHint(buffer, result.prefix, candidate);
+                this.showCompletionPreviewHint(buffer, result.prefix, candidate, true);
                 return;
             }
 
@@ -1316,7 +1325,11 @@ export class DocumentDBShellPty implements vscode.Pseudoterminal {
      * `db.` qualifies: it always returns every database method alongside the
      * collections, so it is never a single candidate — but if exactly one of
      * those candidates is a collection, that is unambiguously what the user
-     * means by `db.` and is worth suggesting.
+     * means by `db.` and is worth pointing out.
+     *
+     * Tab does not agree at an empty prefix: it sees all the candidates and
+     * shows the list. Callers must therefore treat an empty-prefix match as
+     * informational only — see {@link evaluateGhostText}.
      */
     private ghostCandidate(buffer: string, cursor: number, result: CompletionResult): CompletionCandidate | undefined {
         if (result.prefix.length > 0) {
@@ -1354,18 +1367,29 @@ export class DocumentDBShellPty implements vscode.Pseudoterminal {
     }
 
     /**
-     * Preview what Tab would produce for a candidate that rewrites already-typed
-     * text, e.g. `db.rest` → `db['restaurants-something']`.
+     * Preview the completion a candidate stands for, e.g. `db.rest` →
+     * `db['restaurants-something']`. Never insertable.
      *
-     * Ghost text can only append, so such candidates cannot be shown inline.
-     * Without this they are silently skipped — which is how a user whose
-     * collections all need bracket notation never sees completion at all.
+     * Two cases reach this. A candidate that rewrites already-typed text cannot
+     * be shown inline, because ghost text only appends — without this it would
+     * be silently skipped, which is how a user whose collections all need
+     * bracket notation never sees completion at all. And at an empty prefix any
+     * candidate is shown this way, because Tab lists there rather than
+     * completing.
+     *
+     * @param advertiseTab - whether Tab would actually produce this preview.
+     * Promising a key that does something else is worse than promising nothing.
      */
-    private showCompletionPreviewHint(buffer: string, prefix: string, candidate: CompletionCandidate): void {
+    private showCompletionPreviewHint(
+        buffer: string,
+        prefix: string,
+        candidate: CompletionCandidate,
+        advertiseTab: boolean,
+    ): void {
         const deleteCount = prefix.length + (candidate.replaceCharsBefore ?? 0);
         const preview = buffer.slice(0, Math.max(0, buffer.length - deleteCount)) + candidate.insertText;
 
-        const hint = `  → ${preview}  (Tab)`;
+        const hint = advertiseTab ? `  → ${preview}  (Tab)` : `  → ${preview}`;
         this._ghostTextIsHint = true;
         this._ghostTextIsClosingBrackets = false;
         this._ghostCandidateKind = undefined;

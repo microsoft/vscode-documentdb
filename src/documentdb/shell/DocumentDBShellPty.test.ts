@@ -705,13 +705,37 @@ describe('DocumentDBShellPty', () => {
             written = '';
         });
 
-        it('suggests the sole collection even though nothing has been typed after the dot', async () => {
+        it('points out the sole collection even though nothing has been typed after the dot', async () => {
             mockDbDotCandidates(['restaurants']);
 
             pty.handleInput('db.');
             await afterGhostDebounce();
 
-            expect(written).toContain(`${GHOST_STYLE}restaurants`);
+            expect(written).toContain(`${GHOST_STYLE}  → db.restaurants`);
+        });
+
+        it('does not promise Tab, because Tab lists the database methods too', async () => {
+            mockDbDotCandidates(['restaurants']);
+
+            pty.handleInput('db.');
+            await afterGhostDebounce();
+
+            expect(written).not.toContain('(Tab)');
+        });
+
+        it('leaves Tab showing the candidate list rather than accepting the suggestion', async () => {
+            mockDbDotCandidates(['restaurants']);
+
+            pty.handleInput('db.');
+            await afterGhostDebounce();
+            written = '';
+
+            pty.handleInput('\x09'); // Tab
+
+            // The list, not an insertion: every candidate is rendered.
+            expect(written).toContain('restaurants');
+            expect(written).toContain('getName');
+            expect(written).toContain('runCommand');
         });
 
         it('stays silent when more than one collection could be meant', async () => {
@@ -721,6 +745,28 @@ describe('DocumentDBShellPty', () => {
             await afterGhostDebounce();
 
             expect(written).not.toContain(GHOST_STYLE);
+        });
+
+        it('previews a bracket-notation collection without promising Tab', async () => {
+            jest.spyOn(ShellCompletionProvider.prototype, 'getCompletions').mockReturnValue({
+                candidates: [
+                    {
+                        label: 'restaurants-original',
+                        insertText: "['restaurants-original']",
+                        kind: 'collection',
+                        replaceCharsBefore: 1,
+                    },
+                    { label: 'getName', insertText: 'getName', kind: 'method' },
+                ],
+                prefix: '',
+                replacementStart: 3,
+            });
+
+            pty.handleInput('db.');
+            await afterGhostDebounce();
+
+            expect(written).toContain(`${GHOST_STYLE}  → db['restaurants-original']`);
+            expect(written).not.toContain('(Tab)');
         });
     });
 
