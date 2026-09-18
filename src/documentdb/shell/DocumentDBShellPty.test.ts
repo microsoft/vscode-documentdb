@@ -311,7 +311,7 @@ describe('DocumentDBShellPty', () => {
             pty.handleInput('\r');
             await new Promise((resolve) => setTimeout(resolve, 10));
 
-            expect(mockEvaluate).toHaveBeenCalledWith('db.test.find()');
+            expect(mockEvaluate).toHaveBeenCalledWith('db.test.find()', 80);
         });
 
         it('should display evaluation result', async () => {
@@ -615,7 +615,7 @@ describe('DocumentDBShellPty', () => {
             pty.handleInput('\r');
             await new Promise((resolve) => setTimeout(resolve, 10));
 
-            expect(mockEvaluate).toHaveBeenCalledWith('help');
+            expect(mockEvaluate).toHaveBeenCalledWith('help', 80);
         });
     });
 
@@ -687,6 +687,17 @@ describe('DocumentDBShellPty', () => {
 
             resolveEval({ type: 'string', printable: '"x"', durationMs: 1 });
             await new Promise((resolve) => setTimeout(resolve, 10));
+        });
+
+        it('forwards the current width to evaluation, so width-aware output fits', async () => {
+            mockEvaluate.mockResolvedValue({ type: 'Help', printable: 'help text', durationMs: 0 });
+
+            pty.setDimensions({ columns: 42, rows: 24 });
+            pty.handleInput('help');
+            pty.handleInput('\r');
+            await new Promise((resolve) => setTimeout(resolve, 10));
+
+            expect(mockEvaluate).toHaveBeenCalledWith('help', 42);
         });
     });
 
@@ -820,7 +831,7 @@ describe('DocumentDBShellPty', () => {
 
             await new Promise((resolve) => setTimeout(resolve, 10));
 
-            expect(mockEvaluate).toHaveBeenCalledWith('db.test.find({\n  age: 25\n})');
+            expect(mockEvaluate).toHaveBeenCalledWith('db.test.find({\n  age: 25\n})', 80);
         });
 
         it('should show database prompt after multi-line evaluation completes', async () => {
@@ -868,7 +879,7 @@ describe('DocumentDBShellPty', () => {
 
             await new Promise((resolve) => setTimeout(resolve, 10));
 
-            expect(mockEvaluate).toHaveBeenCalledWith('db.test.find({\n  age: 25\n})');
+            expect(mockEvaluate).toHaveBeenCalledWith('db.test.find({\n  age: 25\n})', 80);
         });
 
         it('should process sequential pasted commands via paste queue', async () => {
@@ -891,8 +902,8 @@ describe('DocumentDBShellPty', () => {
             await new Promise((resolve) => setTimeout(resolve, 50));
 
             expect(mockEvaluate).toHaveBeenCalledTimes(2);
-            expect(mockEvaluate).toHaveBeenNthCalledWith(1, 'show dbs');
-            expect(mockEvaluate).toHaveBeenNthCalledWith(2, 'use newdb');
+            expect(mockEvaluate).toHaveBeenNthCalledWith(1, 'show dbs', 80);
+            expect(mockEvaluate).toHaveBeenNthCalledWith(2, 'use newdb', 80);
         });
     });
 
@@ -962,7 +973,7 @@ describe('DocumentDBShellPty', () => {
             await new Promise((resolve) => setTimeout(resolve, 100));
 
             // Lines starting with . should be joined directly (no space)
-            expect(mockEvaluate).toHaveBeenCalledWith('db.restaurants.find({}).limit(5);');
+            expect(mockEvaluate).toHaveBeenCalledWith('db.restaurants.find({}).limit(5);', 80);
 
             showQuickPickSpy.mockRestore();
         });
@@ -980,7 +991,7 @@ describe('DocumentDBShellPty', () => {
 
             await new Promise((resolve) => setTimeout(resolve, 50));
 
-            expect(mockEvaluate).toHaveBeenCalledWith('var x = 42;');
+            expect(mockEvaluate).toHaveBeenCalledWith('var x = 42;', 80);
         });
 
         it('should run line by line when behavior is "runLineByLine"', async () => {
@@ -1023,7 +1034,7 @@ describe('DocumentDBShellPty', () => {
             await new Promise((resolve) => setTimeout(resolve, 50));
 
             expect(showQuickPickSpy).not.toHaveBeenCalled();
-            expect(mockEvaluate).toHaveBeenCalledWith('show dbs');
+            expect(mockEvaluate).toHaveBeenCalledWith('show dbs', 80);
 
             showQuickPickSpy.mockRestore();
         });

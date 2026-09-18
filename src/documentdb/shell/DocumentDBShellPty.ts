@@ -689,7 +689,7 @@ export class DocumentDBShellPty implements vscode.Pseudoterminal {
 
             let result: SerializableExecutionResult;
             try {
-                result = await this._sessionManager.evaluate(input);
+                result = await this._sessionManager.evaluate(input, this._columns);
             } catch (evalError) {
                 // Ctrl+C kills the worker, producing a "Worker terminated" error.
                 // Re-classify as user cancellation for accurate telemetry.

@@ -208,6 +208,7 @@ async function handleEval(msg: Extract<MainToWorkerMessage, { type: 'eval' }>): 
     // Evaluate via shell-runtime (handles @mongosh setup, command interception, result transformation)
     const result = await shellRuntime.evaluate(msg.code, msg.databaseName, {
         displayBatchSize: msg.displayBatchSize,
+        terminalColumns: msg.terminalColumns,
     });
 
     // Proactively extract cursorHasMore before serialization.

@@ -106,7 +106,7 @@ export class DocumentDBShellRuntime {
         }
 
         // Check for intercepted commands (help, etc.)
-        const intercepted = this._commandInterceptor.tryIntercept(code);
+        const intercepted = this._commandInterceptor.tryIntercept(code, evalOptions?.terminalColumns);
         if (intercepted) {
             return intercepted;
         }
