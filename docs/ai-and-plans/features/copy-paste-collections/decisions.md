@@ -38,8 +38,8 @@ created: 2026-09-16
 | 0024 | Preserve collection-copy behavior while adapting contracts     | Superseded by D0026 | Rejected count and prompt-order redesigns                            | 2026-09-17 | #930 |
 | 0025 | Filter index tree multi-selection into one source subset       | Accepted            | Extended the first version after validating the cluster move pattern | 2026-09-17 | #930 |
 | 0026 | Refuse document-affecting indexes during collection paste      | Accepted            | Reverses the warning-and-copy behavior for TTL and unique indexes    | 2026-09-18 | #930 |
-| 0027 | Freeze parent index selection at confirmation                   | Accepted            | Replaces execution-time catalog expansion with a confirmed snapshot  | 2026-09-18 | #930 |
-| 0028 | Correlate paste wizards with their tasks                        | Accepted            | Adds an operation-specific ID instead of reusing discovery lineage   | 2026-09-18 | #930 |
+| 0027 | Freeze parent index selection at confirmation                  | Accepted            | Replaces execution-time catalog expansion with a confirmed snapshot  | 2026-09-18 | #930 |
+| 0028 | Correlate paste wizards with their tasks                       | Accepted            | Adds an operation-specific ID instead of reusing discovery lineage   | 2026-09-18 | #930 |
 
 > Entries below are semantically immutable. Append a new decision rather than rewriting an old one,
 > and record a reversal as a new entry plus a status change in the table.

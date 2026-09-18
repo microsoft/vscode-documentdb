@@ -189,9 +189,12 @@ export class DocumentDbCollectionIndexCopier implements CollectionIndexCopier {
                 ext.outputChannel.error(
                     vscode.l10n.t('[IndexCopy] Failed to create index "{0}": {1}', targetName, errorMessage),
                 );
-                const copyError = new Error(vscode.l10n.t('Failed to copy index "{0}": {1}', targetName, errorMessage), {
-                    cause: error,
-                });
+                const copyError = new Error(
+                    vscode.l10n.t('Failed to copy index "{0}": {1}', targetName, errorMessage),
+                    {
+                        cause: error,
+                    },
+                );
                 if (error instanceof IndexVisibilityError) {
                     copyError.name = error.name;
                 }
@@ -365,7 +368,9 @@ export class DocumentDbCollectionIndexCopier implements CollectionIndexCopier {
         return JSON.stringify({
             key: this.getKeyEntries(index.key),
             options: this.sortObject(
-                Object.fromEntries(Object.entries(index.options).filter(([name]) => semanticIndexOptionNames.has(name))),
+                Object.fromEntries(
+                    Object.entries(index.options).filter(([name]) => semanticIndexOptionNames.has(name)),
+                ),
             ),
         });
     }

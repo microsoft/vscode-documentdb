@@ -120,9 +120,7 @@ describe('pasteIndexes', () => {
         jest.mocked(CredentialCache.hasCredentials).mockReturnValue(false);
 
         const context = createContext();
-        await expect(pasteIndexes(context, targetNode)).rejects.toThrow(
-            'source connection is no longer available',
-        );
+        await expect(pasteIndexes(context, targetNode)).rejects.toThrow('source connection is no longer available');
         expect(CopyPasteBufferService.clearIndexes).toHaveBeenCalledTimes(1);
         expect(context.telemetry.properties.wizardFailureReason).toBe('sourceConnectionUnavailable');
     });

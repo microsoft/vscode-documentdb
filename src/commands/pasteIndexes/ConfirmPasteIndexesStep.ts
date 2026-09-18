@@ -12,8 +12,7 @@ export class ConfirmPasteIndexesStep extends AzureWizardPromptStep<PasteIndexesW
         const action = vscode.l10n.t('Paste Indexes');
         const detail = this.buildConfirmationDetail(context);
         const hasDocumentAffectingIndexes = context.uniqueIndexNames.length > 0 || context.ttlIndexNames.length > 0;
-        context.telemetry.properties.uniqueIndexWarningShown =
-            context.uniqueIndexNames.length > 0 ? 'true' : 'false';
+        context.telemetry.properties.uniqueIndexWarningShown = context.uniqueIndexNames.length > 0 ? 'true' : 'false';
         context.telemetry.properties.ttlIndexWarningShown = context.ttlIndexNames.length > 0 ? 'true' : 'false';
         context.telemetry.measurements.sourceUniqueIndexCount = context.uniqueIndexNames.length;
         context.telemetry.measurements.sourceTtlIndexCount = context.ttlIndexNames.length;

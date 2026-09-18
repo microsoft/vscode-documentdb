@@ -85,9 +85,7 @@ export class CountSourceIndexesStep extends AzureWizardPromptStep<PasteCollectio
             '',
             l10n.t('Affected indexes: {0}', indexNames.join(', ')),
             '',
-            l10n.t(
-                'Choose "No, only copy documents", then use Copy Indexes and Paste Indexes separately.',
-            ),
+            l10n.t('Choose "No, only copy documents", then use Copy Indexes and Paste Indexes separately.'),
         ].join('\n');
         const learnMore = l10n.t('Learn More');
         const selectedAction = await vscode.window.showErrorMessage(
