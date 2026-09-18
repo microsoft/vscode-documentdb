@@ -14,6 +14,14 @@ export enum AuthMethodId {
     NativeAuth = 'NativeAuth',
     /** Microsoft Entra ID (Azure AD) authentication. */
     MicrosoftEntraID = 'MicrosoftEntraID',
+    /**
+     * Microsoft Entra ID using the managed identity of the Azure resource hosting VS Code.
+     *
+     * Note: unlike the other values, this one has no counterpart in the ARM `authConfig.allowedModes`
+     * vocabulary, so it is never produced by pass-through of service metadata. It is synthesized by
+     * an explicit rule in `clusterHelpers.ts`.
+     */
+    ManagedIdentity = 'ManagedIdentity',
     /** Anonymous connection without a username, password, or Entra ID. */
     NoAuth = 'NoAuth',
 }
@@ -30,6 +38,8 @@ export interface AuthMethodInfo {
     readonly detail: string;
     /** Optional icon identifier for the authentication method */
     readonly iconName?: string;
+    /** Optional VS Code theme icon identifier for the authentication method */
+    readonly themeIconName?: string;
 }
 
 // Individual auth method definitions
@@ -37,23 +47,38 @@ export const NativeAuthMethod: AuthMethodInfo = {
     id: AuthMethodId.NativeAuth,
     label: vscode.l10n.t('Username and Password'),
     detail: vscode.l10n.t('Authenticate using a username and password'),
+    themeIconName: 'key',
 } as const;
 
 export const MicrosoftEntraIDAuthMethod: AuthMethodInfo = {
     id: AuthMethodId.MicrosoftEntraID,
-    label: vscode.l10n.t('Entra ID for Azure DocumentDB'),
-    detail: vscode.l10n.t('Authenticate using Microsoft Entra ID (Azure AD)'),
-    // iconName: 'Microsoft-Entra-ID-BW-icon.svg',
+    label: vscode.l10n.t('Microsoft Entra ID'),
+    detail: vscode.l10n.t('Sign in with your account, or use an identity assigned to this machine'),
+    themeIconName: 'azure',
+} as const;
+
+export const ManagedIdentityAuthMethod: AuthMethodInfo = {
+    id: AuthMethodId.ManagedIdentity,
+    label: vscode.l10n.t('Managed Identity (Azure hosted)'),
+    detail: vscode.l10n.t('Authenticate using the managed identity assigned to this machine'),
 } as const;
 
 export const NoAuthMethod: AuthMethodInfo = {
     id: AuthMethodId.NoAuth,
     label: vscode.l10n.t('No Authentication'),
     detail: vscode.l10n.t('Connect without a username or password'),
+    themeIconName: 'unlock',
 } as const;
 
 // Arrays for different contexts
-const authMethodsArray: AuthMethodInfo[] = [NativeAuthMethod, MicrosoftEntraIDAuthMethod, NoAuthMethod];
+const authMethodsArray: AuthMethodInfo[] = [
+    NativeAuthMethod,
+    MicrosoftEntraIDAuthMethod,
+    ManagedIdentityAuthMethod,
+    NoAuthMethod,
+];
+
+const authFamilyMethodsArray: AuthMethodInfo[] = [NativeAuthMethod, MicrosoftEntraIDAuthMethod, NoAuthMethod];
 
 // Map for efficient lookup
 const authMethodsMap = new Map<AuthMethodId, AuthMethodInfo>(
@@ -71,6 +96,10 @@ export function getAuthMethod(id: AuthMethodId): AuthMethodInfo {
         throw new Error(`Unknown authentication method: ${id}`);
     }
     return method;
+}
+
+export function getAuthMethodFamily(id: AuthMethodId): AuthMethodId {
+    return id === AuthMethodId.ManagedIdentity ? AuthMethodId.MicrosoftEntraID : id;
 }
 
 /**
@@ -107,6 +136,18 @@ export function authMethodsFromString(methods?: string[]): AuthMethodId[] {
     return availableAuthMethods;
 }
 
+function getAuthMethodIconPath(method: AuthMethodInfo): vscode.IconPath | undefined {
+    if (method.themeIconName) {
+        return new vscode.ThemeIcon(method.themeIconName);
+    }
+
+    if (method.iconName) {
+        return getIconPath(method.iconName);
+    }
+
+    return undefined;
+}
+
 /**
  * Create quick pick items from available authentication methods
  */
@@ -114,28 +155,24 @@ export function createAuthMethodQuickPickItems(
     availableMethods?: AuthMethodId[],
     options: { showSupportInfo?: boolean; filterUnsupported?: boolean } = {},
 ): Array<vscode.QuickPickItem & { authMethod?: AuthMethodId }> {
-    const { showSupportInfo = false, filterUnsupported = false } = options;
+    const { filterUnsupported = false } = options;
 
     let methodsToShow: AuthMethodInfo[];
 
     if (filterUnsupported && availableMethods) {
         // Discovery scenario: Only show methods that are known to be supported
-        methodsToShow = authMethodsArray.filter((method) => availableMethods.includes(method.id));
+        methodsToShow = authFamilyMethodsArray.filter((method) => availableMethods.includes(method.id));
     } else {
         // Manual/editing scenario: Show all methods, use support info to indicate availability
-        methodsToShow = authMethodsArray;
+        methodsToShow = authFamilyMethodsArray;
     }
 
     return methodsToShow.map((method) => ({
         label: method.label,
         detail: method.detail,
         authMethod: method.id,
-        iconPath: method.iconName ? getIconPath(method.iconName) : undefined,
+        iconPath: getAuthMethodIconPath(method),
         alwaysShow: true,
-        description:
-            showSupportInfo && availableMethods && !availableMethods.includes(method.id)
-                ? vscode.l10n.t('Cluster support unknown $(info)')
-                : undefined,
     }));
 }
 

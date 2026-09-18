@@ -41,7 +41,10 @@ When you use the Azure DocumentDB plugin, the following steps are performed:
 5. **Connection Options:**
    - You can connect to a cluster by expanding its entry in the tree view.
    - You can save a cluster to your `DocumentDB Connections` list using the context menu or by clicking the save icon next to its name.
-   - When connecting or saving, the extension detects the authentication methods supported by the cluster (e.g., **Username/Password** or **Entra ID**). If multiple are available, you will be prompted to choose your preferred method.
+   - When connecting or saving, the extension detects the authentication methods supported by the
+     cluster, such as **Username and Password** or **Microsoft Entra ID**. If you select Microsoft
+     Entra ID, a second list lets you sign in with your account or use a managed identity. See
+     [Connect with a Managed Identity](./connect-with-managed-identity).
 
 For an overview of how service discovery works, see the [Service Discovery](./service-discovery) documentation. For details on managing your Azure accounts and subscriptions, refer to the [Managing Azure Subscriptions](./managing-azure-discovery) guide.
 

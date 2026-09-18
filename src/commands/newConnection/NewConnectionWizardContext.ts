@@ -4,8 +4,13 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { type IActionContext } from '@microsoft/vscode-azext-utils';
-import { type EntraIdAuthConfig, type NativeAuthConfig } from '../../documentdb/auth/AuthConfig';
+import {
+    type EntraIdAuthConfig,
+    type ManagedIdentityAuthConfig,
+    type NativeAuthConfig,
+} from '../../documentdb/auth/AuthConfig';
 import { type AuthMethodId } from '../../documentdb/auth/AuthMethod';
+import { type ConnectionStringAuthFacts } from '../../documentdb/auth/managedIdentityConnectionString';
 import { type DocumentDBConnectionString } from '../../documentdb/utils/DocumentDBConnectionString';
 import { type Experience } from '../../DocumentDBExperiences';
 
@@ -24,10 +29,16 @@ export interface NewConnectionWizardContext extends IActionContext {
 
     availableAuthenticationMethods?: AuthMethodId[];
     selectedAuthenticationMethod?: AuthMethodId;
+    /** True when the authentication family quick pick was shown in this wizard pass. */
+    authenticationMethodPrompted?: boolean;
 
     // Authentication configurations - provided by user input or service discovery
     nativeAuthConfig?: NativeAuthConfig;
     entraIdAuthConfig?: EntraIdAuthConfig;
+    /** An empty object selects the system-assigned identity, so absence and `{}` are different. */
+    managedIdentityAuthConfig?: ManagedIdentityAuthConfig;
+    /** Facts read from a pasted connection string before its credentials are stripped. */
+    connectionStringAuthFacts?: ConnectionStringAuthFacts;
 
     // Additional non-secret connection properties supplied by service discovery providers.
     connectionProperties?: Record<string, unknown>;

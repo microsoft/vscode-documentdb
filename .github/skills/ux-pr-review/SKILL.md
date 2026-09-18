@@ -54,14 +54,10 @@ For each, note the **entry point** (how the user gets there) and the **terminal 
 
 ### Step 3 — Draw where flows start and terminate
 
-Produce **both** an ASCII diagram and a Mermaid diagram in the document's "User
-interaction map" section:
-
-- **ASCII flow** — a compact state/branch map (see the `Appendix A` flow in the Local
-  Quick Start example). Good for phase machines and webview panels.
-- **Mermaid `flowchart`** — nodes for each user action/state, edges for transitions, and
-  **explicit terminal nodes** for every outcome (success toast, modal error, silent
-  no-op, tree badge). Mark inconsistent terminations so they stand out.
+Produce a **Mermaid `flowchart`** in the document's "User interaction map" section: nodes
+for each user action/state, edges for transitions, and **explicit terminal nodes** for
+every outcome (success toast, modal error, silent no-op, tree badge). Mark inconsistent
+terminations so they stand out.
 
 ```mermaid
 flowchart TD
@@ -100,7 +96,7 @@ Pick the feature from the index in
 with a README if none fits. Use the full skeleton in
 [references/review-document-template.md](./references/review-document-template.md):
 header block, "How this review was run", the **Legend** (Priority + Status + Markers), the
-**User interaction map** (the two diagrams from Step 3), "The story in one paragraph", the
+**User interaction map** (the diagram from Step 3), "The story in one paragraph", the
 **Priority index** table, the P0→P3 + Implemented section stubs (pre-filled with the Step-4
 Flags as `🟠 Open`), an **Open ideas** section, and an **Appendix** for the flow reference.
 

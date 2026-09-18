@@ -7,10 +7,12 @@
 import { getSessionFromVSCode } from '@microsoft/vscode-azext-azureauth/out/src/getSessionFromVSCode';
 import * as l10n from '@vscode/l10n';
 import { type MongoClientOptions, type OIDCCallbackParams, type OIDCResponse } from 'mongodb';
+import { traceAuthFlow, traceAuthOperation } from '../../utils/authTrace';
 import { type CachedClusterCredentials } from '../CredentialCache';
 import { DocumentDBConnectionString } from '../utils/DocumentDBConnectionString';
 import { resolveAllowInvalidCertificates } from '../utils/tlsException';
 import { type AuthHandler, type AuthHandlerResponse } from './AuthHandler';
+import { DOCUMENTDB_ENTRA_SCOPE } from './entraScopes';
 import { getOidcAllowedHosts } from './oidcAllowedHosts';
 
 /**
@@ -21,15 +23,17 @@ export class MicrosoftEntraIDAuthHandler implements AuthHandler {
 
     public async configureAuth(): Promise<AuthHandlerResponse> {
         // Get Microsoft Entra ID token
-        const session = await getSessionFromVSCode(
-            ['https://ossrdbms-aad.database.windows.net/.default'],
-            this.clusterCredentials.entraIdConfig?.tenantId,
-            {
-                createIfNone: true,
-            },
+        const session = await traceAuthOperation(
+            'interactiveEntra.getSession',
+            () =>
+                getSessionFromVSCode([DOCUMENTDB_ENTRA_SCOPE], this.clusterCredentials.entraIdConfig?.tenantId, {
+                    createIfNone: true,
+                }),
+            { tenantSpecified: !!this.clusterCredentials.entraIdConfig?.tenantId, createIfNone: true },
         );
 
         if (!session) {
+            traceAuthFlow('interactiveEntra.sessionUnavailable', { reason: 'noSessionReturned' });
             throw new Error(l10n.t('Failed to obtain Entra ID token.'));
         }
 
@@ -38,6 +42,7 @@ export class MicrosoftEntraIDAuthHandler implements AuthHandler {
         dbConnectionString.username = ''; // required to move forward with Entra ID
         dbConnectionString.password = ''; // required to move forward with Entra ID
         dbConnectionString.searchParams.delete('authMechanism');
+        dbConnectionString.searchParams.delete('authMechanismProperties');
         dbConnectionString.searchParams.delete('tls');
 
         // Configure MongoDB client options for OIDC
@@ -67,6 +72,7 @@ export class MicrosoftEntraIDAuthHandler implements AuthHandler {
             options.tlsAllowInvalidCertificates = true;
         }
 
+        traceAuthFlow('interactiveEntra.oidcConfigured', { sessionAvailable: true, tls: true });
         return {
             connectionString: dbConnectionString.toString(),
             options,

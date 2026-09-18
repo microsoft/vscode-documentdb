@@ -24,6 +24,7 @@ import { ChooseAuthMethodStep } from '../../documentdb/wizards/authenticate/Choo
 import { ProvidePasswordStep } from '../../documentdb/wizards/authenticate/ProvidePasswordStep';
 import { ProvideUserNameStep } from '../../documentdb/wizards/authenticate/ProvideUsernameStep';
 import { SaveCredentialsStep } from '../../documentdb/wizards/authenticate/SaveCredentialsStep';
+import { SelectEntraTokenSourceStep } from '../../documentdb/wizards/authenticate/SelectEntraTokenSourceStep';
 import { ext } from '../../extensionVariables';
 import { ConnectionReachabilityService } from '../../services/connectionReachabilityService';
 import { ConnectionStorageService, ConnectionType, isConnection } from '../../services/connectionStorageService';
@@ -32,6 +33,7 @@ import { type TreeCluster } from '../models/BaseClusterModel';
 import { type TreeElementWithStorageId } from '../TreeElementWithStorageId';
 import { buildClusterTreeItem } from './clusterItemPresentation';
 import { resolveStorageZone, type ConnectionClusterModel } from './models/ConnectionClusterModel';
+import { buildSavedConnectionSecrets } from './savedConnectionSecrets';
 
 export class DocumentDBClusterItem extends ClusterItemBase<ConnectionClusterModel> implements TreeElementWithStorageId {
     public override readonly cluster: TreeCluster<ConnectionClusterModel>;
@@ -68,6 +70,7 @@ export class DocumentDBClusterItem extends ClusterItemBase<ConnectionClusterMode
                       tenantId: connectionCredentials.secrets.entraIdAuthConfig.tenantId,
                   }
                 : undefined,
+            managedIdentityAuthConfig: connectionCredentials.secrets.managedIdentityAuthConfig,
         };
     }
 
@@ -107,6 +110,7 @@ export class DocumentDBClusterItem extends ClusterItemBase<ConnectionClusterMode
             let authMethod: AuthMethodId | undefined = authMethodFromString(
                 connectionCredentials.properties.selectedAuthMethod,
             );
+            let managedIdentityAuthConfig = connectionCredentials.secrets.managedIdentityAuthConfig;
 
             /**
              * Prompt for credentials if no auth method selected or
@@ -129,6 +133,8 @@ export class DocumentDBClusterItem extends ClusterItemBase<ConnectionClusterMode
                     adminUserName: username,
                     password: password,
                     resourceName: this.cluster.name,
+
+                    managedIdentityAuthConfig: managedIdentityAuthConfig,
 
                     // enforce the user to confirm theusername
                     selectedUserName: undefined,
@@ -154,6 +160,11 @@ export class DocumentDBClusterItem extends ClusterItemBase<ConnectionClusterMode
                     'wizardContext.selectedAuthMethod',
                     'DocumentDBClusterItem.ts',
                 );
+                // An empty config is meaningful: it selects the system-assigned identity.
+                managedIdentityAuthConfig =
+                    authMethod === AuthMethodId.ManagedIdentity
+                        ? (wizardContext.managedIdentityAuthConfig ?? {})
+                        : undefined;
 
                 if (wizardContext.saveCredentials) {
                     ext.outputChannel.append(
@@ -167,17 +178,14 @@ export class DocumentDBClusterItem extends ClusterItemBase<ConnectionClusterMode
                     const connection = await ConnectionStorageService.get(this.storageId, connectionType);
                     if (connection && isConnection(connection)) {
                         connection.properties.selectedAuthMethod = authMethod;
-                        connection.secrets = {
+                        connection.secrets = buildSavedConnectionSecrets({
                             connectionString: connectionString.toString(),
-                            // Populate nativeAuthConfig configuration
-                            nativeAuthConfig:
-                                authMethod === AuthMethodId.NativeAuth && (username || password)
-                                    ? {
-                                          connectionUser: username ?? '',
-                                          connectionPassword: password ?? '',
-                                      }
-                                    : undefined,
-                        };
+                            authMethod,
+                            username,
+                            password,
+                            entraIdAuthConfig: connectionCredentials.secrets.entraIdAuthConfig,
+                            managedIdentityAuthConfig,
+                        });
                         try {
                             await ConnectionStorageService.save(connectionType, connection, true);
                         } catch (pushError) {
@@ -201,7 +209,10 @@ export class DocumentDBClusterItem extends ClusterItemBase<ConnectionClusterMode
 
             switch (authMethod) {
                 case AuthMethodId.MicrosoftEntraID:
-                    ext.outputChannel.append(l10n.t('Connecting to the cluster using Entra ID…'));
+                    ext.outputChannel.append(l10n.t('Connecting to the cluster using a Microsoft Entra account…'));
+                    break;
+                case AuthMethodId.ManagedIdentity:
+                    ext.outputChannel.append(l10n.t('Connecting to the cluster using a managed identity…'));
                     break;
                 default:
                     ext.outputChannel.append(
@@ -224,6 +235,7 @@ export class DocumentDBClusterItem extends ClusterItemBase<ConnectionClusterMode
                     : undefined,
                 this.cluster.emulatorConfiguration, // workspace items can potentially be connecting to an emulator, so we always pass it
                 connectionCredentials.secrets.entraIdAuthConfig,
+                managedIdentityAuthConfig,
             );
 
             let clustersClient: ClustersClient;
@@ -385,9 +397,17 @@ export class DocumentDBClusterItem extends ClusterItemBase<ConnectionClusterMode
      * @returns True if the wizard completed successfully; false if the user canceled or an error occurred.
      */
     private async promptForCredentials(wizardContext: AuthenticateWizardContext): Promise<boolean> {
+        wizardContext.telemetry.properties.authFlowOrigin = 'savedConnection';
         const wizard = new AzureWizard(wizardContext, {
             promptSteps: [
                 new ChooseAuthMethodStep(),
+                new SelectEntraTokenSourceStep<AuthenticateWizardContext>(
+                    (context) => context.selectedAuthMethod,
+                    (context, method) => {
+                        context.selectedAuthMethod = method;
+                        context.isAuthMethodUpdated = true;
+                    },
+                ),
                 new ProvideUserNameStep(),
                 new ProvidePasswordStep(),
                 new SaveCredentialsStep(),
