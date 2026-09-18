@@ -124,6 +124,14 @@ describe('HelpProvider', () => {
             expect(text).toContain('console.log()');
         });
 
+        it('names both display settings, so they are discoverable from inside the shell', () => {
+            // The text wraps, so this is asserted against an unwrapped document.
+            const text = helpProvider.getHelpText(200);
+            expect(text).toContain('documentDB.shell.display');
+            expect(text).toContain('autocompletion');
+            expect(text).toContain('inlineHints');
+        });
+
         it('does NOT include keyboard shortcuts', () => {
             const text = helpProvider.getHelpText();
             expect(text).not.toContain('Run current block');

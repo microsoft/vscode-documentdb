@@ -272,6 +272,12 @@ export class HelpProvider {
 
             header('Tips'),
             tip('Variables persist across commands. console.log() output appears inline.'),
+            // The settings prefix is named once rather than twice in full: a
+            // 39-character id does not fit a 40-column line, and wrapText
+            // deliberately never splits a token.
+            tip(
+                'Settings (search "documentDB.shell.display"): autocompletion turns suggestions off, inlineHints hides the 🛈 notes.',
+            ),
         ];
 
         return this.layoutShellHelp(document, columns).join('\n');

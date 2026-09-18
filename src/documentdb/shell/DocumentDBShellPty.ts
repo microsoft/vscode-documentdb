@@ -1041,6 +1041,10 @@ export class DocumentDBShellPty implements vscode.Pseudoterminal {
      * knows nothing about.
      */
     private handleTab(buffer: string, cursor: number): void {
+        if (!this.isAutocompletionEnabled()) {
+            return;
+        }
+
         const ghostIsInsertable = this._ghostText.isVisible && !this._ghostTextIsHint;
 
         const result = this.getCompletionResult(buffer, cursor);
@@ -1231,15 +1235,9 @@ export class DocumentDBShellPty implements vscode.Pseudoterminal {
             // Single match with a typed prefix — show ghost text
             const remaining = candidate.insertText.slice(result.prefix.length);
             if (remaining.length > 0) {
-                this._ghostTextIsHint = false;
                 this._ghostTextIsClosingBrackets = false;
                 this._ghostCandidateKind = candidate.kind;
-                const rendered = this._ghostText.show(
-                    remaining,
-                    (d) => this._writeEmitter.fire(d),
-                    this.availableGhostColumns(),
-                );
-                if (rendered) {
+                if (this.showInsertableGhost(remaining)) {
                     this.trackCompletionGhostShown(candidate.kind);
                 }
                 return;
@@ -1261,11 +1259,15 @@ export class DocumentDBShellPty implements vscode.Pseudoterminal {
         // The candidates already carry the answer, so a cold cache yields zero
         // collections and nothing is shown — no network call reaches the typing
         // path.
+        //
+        // It is also the only hint that falls through when it is switched off:
+        // the ranking it displaces should come back, not leave the row blank.
         if (result.prefix.length === 0) {
             const collectionCount = result.candidates.filter((c) => c.kind === 'collection').length;
             if (collectionCount > 0 && this._completionProvider.detectContext(buffer, cursor).kind === 'db-dot') {
-                this.showCollectionCountHint(collectionCount);
-                return;
+                if (this.showCollectionCountHint(collectionCount)) {
+                    return;
+                }
             }
         }
 
@@ -1273,16 +1275,10 @@ export class DocumentDBShellPty implements vscode.Pseudoterminal {
         // from the ghost text contract beyond what completions already use.
         const historyMatch = this._inputHandler.findHistorySuggestion(buffer);
         if (historyMatch) {
-            this._ghostTextIsHint = false;
             this._ghostTextIsClosingBrackets = false;
             this._ghostTextIsHistory = true;
             this._ghostCandidateKind = undefined;
-            const historyRendered = this._ghostText.show(
-                historyMatch.slice(buffer.length),
-                (d) => this._writeEmitter.fire(d),
-                this.availableGhostColumns(),
-            );
-            if (historyRendered) {
+            if (this.showInsertableGhost(historyMatch.slice(buffer.length))) {
                 this.trackHistorySuggestionShown();
             }
             return;
@@ -1318,15 +1314,9 @@ export class DocumentDBShellPty implements vscode.Pseudoterminal {
             if (lastCh && !expectsMoreInput.includes(lastCh)) {
                 const closing = getClosingBrackets(buffer);
                 if (closing.length > 0) {
-                    this._ghostTextIsHint = false;
                     this._ghostTextIsClosingBrackets = true;
                     this._ghostCandidateKind = undefined;
-                    const closingRendered = this._ghostText.show(
-                        closing,
-                        (d) => this._writeEmitter.fire(d),
-                        this.availableGhostColumns(),
-                    );
-                    if (closingRendered) {
+                    if (this.showInsertableGhost(closing)) {
                         this.trackClosingBracketsShown();
                     }
                     return;
@@ -1354,38 +1344,64 @@ export class DocumentDBShellPty implements vscode.Pseudoterminal {
     }
 
     /**
+     * Render an appendable suggestion, subject to `display.autocompletion`.
+     *
+     * Every unmarked ghost goes through here, so a future one inherits the
+     * setting by where it is written rather than by someone remembering to
+     * check it.
+     *
+     * @returns whether anything reached the terminal
+     */
+    private showInsertableGhost(text: string): boolean {
+        this._ghostTextIsHint = false;
+        if (!this.isAutocompletionEnabled()) {
+            return false;
+        }
+        return this._ghostText.show(text, (d) => this._writeEmitter.fire(d), this.availableGhostColumns());
+    }
+
+    /**
+     * Render an informational `🛈` line, subject to `display.inlineHints`.
+     *
+     * The counterpart to {@link showInsertableGhost}: the marker on screen and
+     * the setting that governs it are decided in the same place.
+     *
+     * @returns whether anything reached the terminal
+     */
+    private showInlineHint(text: string): boolean {
+        this._ghostTextIsHint = true;
+        this._ghostTextIsClosingBrackets = false;
+        this._ghostCandidateKind = undefined;
+        if (!this.areInlineHintsEnabled()) {
+            return false;
+        }
+        return this._ghostText.show(`  🛈 ${text}`, (d) => this._writeEmitter.fire(d), this.availableGhostColumns());
+    }
+
+    /**
      * Show a hint as ghost text when no schema data is available for a collection.
      * The hint is non-insertable — pressing Tab or Right Arrow won't accept it.
      */
-    private showSchemaHint(collectionName: string): void {
-        const hint = `  🛈 Run db.${collectionName}.find() first for field suggestions`;
-        this._ghostTextIsHint = true;
-        this._ghostText.show(hint, (d) => this._writeEmitter.fire(d), this.availableGhostColumns());
+    private showSchemaHint(collectionName: string): boolean {
+        return this.showInlineHint(`Run db.${collectionName}.find() first for field suggestions`);
     }
 
     /**
      * Show a fully-typed candidate's own description as ghost text.
      * Non-insertable, like every other hint.
      */
-    private showDetailHint(detail: string): void {
-        const hint = `  🛈 ${detail}`;
-        this._ghostTextIsHint = true;
-        this._ghostTextIsClosingBrackets = false;
-        this._ghostCandidateKind = undefined;
-        this._ghostText.show(hint, (d) => this._writeEmitter.fire(d), this.availableGhostColumns());
+    private showDetailHint(detail: string): boolean {
+        return this.showInlineHint(detail);
     }
 
     /**
      * Show how many collections `db.` could stand for. Non-insertable — Tab
      * still lists the candidates.
      */
-    private showCollectionCountHint(count: number): void {
-        const text = count === 1 ? vscode.l10n.t('1 collection') : vscode.l10n.t('{0} collections', count);
-        const hint = `  🛈 ${text}`;
-        this._ghostTextIsHint = true;
-        this._ghostTextIsClosingBrackets = false;
-        this._ghostCandidateKind = undefined;
-        this._ghostText.show(hint, (d) => this._writeEmitter.fire(d), this.availableGhostColumns());
+    private showCollectionCountHint(count: number): boolean {
+        return this.showInlineHint(
+            count === 1 ? vscode.l10n.t('1 collection') : vscode.l10n.t('{0} collections', count),
+        );
     }
 
     /**
@@ -1397,15 +1413,11 @@ export class DocumentDBShellPty implements vscode.Pseudoterminal {
      * skipped, which is how a user whose collections all need bracket notation
      * never sees completion at all.
      */
-    private showCompletionPreviewHint(buffer: string, prefix: string, candidate: CompletionCandidate): void {
+    private showCompletionPreviewHint(buffer: string, prefix: string, candidate: CompletionCandidate): boolean {
         const deleteCount = prefix.length + (candidate.replaceCharsBefore ?? 0);
         const preview = buffer.slice(0, Math.max(0, buffer.length - deleteCount)) + candidate.insertText;
 
-        const hint = `  🛈 ${preview}`;
-        this._ghostTextIsHint = true;
-        this._ghostTextIsClosingBrackets = false;
-        this._ghostCandidateKind = undefined;
-        this._ghostText.show(hint, (d) => this._writeEmitter.fire(d), this.availableGhostColumns());
+        return this.showInlineHint(preview);
     }
 
     /**
@@ -1457,6 +1469,18 @@ export class DocumentDBShellPty implements vscode.Pseudoterminal {
     private isColorEnabled(): boolean {
         const config = vscode.workspace.getConfiguration();
         return config.get<boolean>('documentDB.shell.display.colorSupport', true);
+    }
+
+    /** Governs Tab completion, the candidate list, and every unmarked ghost. */
+    private isAutocompletionEnabled(): boolean {
+        const config = vscode.workspace.getConfiguration();
+        return config.get<boolean>('documentDB.shell.display.autocompletion', true);
+    }
+
+    /** Governs everything rendered with the `🛈` marker. */
+    private areInlineHintsEnabled(): boolean {
+        const config = vscode.workspace.getConfiguration();
+        return config.get<boolean>('documentDB.shell.display.inlineHints', true);
     }
 
     // ─── Private: Telemetry helpers ──────────────────────────────────────────

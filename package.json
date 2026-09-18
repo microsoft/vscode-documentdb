@@ -1642,7 +1642,12 @@
           },
           "documentDB.shell.display.autocompletion": {
             "type": "boolean",
-            "description": "Enable autocompletion in the Interactive Shell (when available). Reserved for future use.",
+            "description": "Enable autocompletion in the Interactive Shell: Tab completion, the candidate list, and the inline suggestions that appear in dim text at the cursor (completions, command history, closing brackets).",
+            "default": true
+          },
+          "documentDB.shell.display.inlineHints": {
+            "type": "boolean",
+            "description": "Show informational hints in the Interactive Shell, marked with 🛈 — command descriptions, collection counts, and previews of what a completion would produce. These are never inserted into your input.",
             "default": true
           },
           "documentDB.shell.multiLinePasteBehavior": {

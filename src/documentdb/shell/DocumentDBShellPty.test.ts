@@ -86,6 +86,8 @@ describe('DocumentDBShellPty', () => {
     let written: string;
     let closeCode: number | void | undefined;
     let terminalName: string | undefined;
+    /** Per-test overrides for top-level (unsectioned) settings. */
+    let settingOverrides: Record<string, unknown>;
 
     const defaultOptions: DocumentDBShellPtyOptions = {
         connectionInfo: {
@@ -100,12 +102,16 @@ describe('DocumentDBShellPty', () => {
         written = '';
         closeCode = undefined;
         terminalName = undefined;
+        settingOverrides = {};
 
         // Mock settings
         jest.spyOn(vscode.workspace, 'getConfiguration').mockImplementation((section?: string) => {
             return {
                 get: jest.fn((_key: string, defaultValue?: unknown) => {
                     if (section === undefined || section === '') {
+                        if (_key in settingOverrides) {
+                            return settingOverrides[_key];
+                        }
                         if (_key === 'documentDB.shell.display.colorSupport') {
                             return false; // Disable colors for easier test assertions
                         }
@@ -958,6 +964,103 @@ describe('DocumentDBShellPty', () => {
             await new Promise((resolve) => setTimeout(resolve, 20));
 
             expect(mockEvaluate).toHaveBeenLastCalledWith("db['restaurants-original']", 80);
+        });
+    });
+
+    describe('display settings — two switches, one per marker', () => {
+        /** Dim + gray prefix emitted by ShellGhostText. */
+        const GHOST_STYLE = '\x1b[2m\x1b[90m';
+        const afterGhostDebounce = (): Promise<void> => new Promise((resolve) => setTimeout(resolve, 80));
+
+        const AUTOCOMPLETION = 'documentDB.shell.display.autocompletion';
+        const INLINE_HINTS = 'documentDB.shell.display.inlineHints';
+
+        beforeEach(async () => {
+            pty.open(undefined);
+            await new Promise((resolve) => setTimeout(resolve, 10));
+            mockEvaluate.mockResolvedValue({ type: 'string', printable: '"x"', durationMs: 1 });
+            written = '';
+        });
+
+        it('autocompletion off: no ghost at `hel`, and Tab does not complete', async () => {
+            settingOverrides[AUTOCOMPLETION] = false;
+
+            pty.handleInput('hel');
+            await afterGhostDebounce();
+
+            expect(written).not.toContain(GHOST_STYLE);
+
+            pty.handleInput('\x09'); // Tab
+            pty.handleInput('\r');
+            await new Promise((resolve) => setTimeout(resolve, 20));
+
+            expect(mockEvaluate).toHaveBeenLastCalledWith('hel', 80);
+        });
+
+        it('autocompletion off: the 🛈 description still appears', async () => {
+            settingOverrides[AUTOCOMPLETION] = false;
+
+            pty.handleInput('help');
+            await afterGhostDebounce();
+
+            expect(written).toContain(`${GHOST_STYLE}  🛈 Show help`);
+        });
+
+        it('inline hints off: no 🛈 description', async () => {
+            settingOverrides[INLINE_HINTS] = false;
+
+            pty.handleInput('help');
+            await afterGhostDebounce();
+
+            expect(written).not.toContain('🛈');
+        });
+
+        it('inline hints off: no collection count at `db.`', async () => {
+            settingOverrides[INLINE_HINTS] = false;
+            jest.spyOn(ShellCompletionProvider.prototype, 'getCompletions').mockReturnValue({
+                candidates: [{ label: 'restaurants', insertText: 'restaurants', kind: 'collection' }],
+                prefix: '',
+                replacementStart: 3,
+            });
+
+            pty.handleInput('db.');
+            await afterGhostDebounce();
+
+            expect(written).not.toContain('🛈');
+        });
+
+        it('inline hints off: `db.` gives the row back to the history suggestion it displaced', async () => {
+            settingOverrides[INLINE_HINTS] = false;
+            jest.spyOn(ShellCompletionProvider.prototype, 'getCompletions').mockReturnValue({
+                candidates: [{ label: 'restaurants', insertText: 'restaurants', kind: 'collection' }],
+                prefix: '',
+                replacementStart: 3,
+            });
+
+            pty.handleInput('db.restaurants.find()');
+            pty.handleInput('\r');
+            await new Promise((resolve) => setTimeout(resolve, 20));
+            written = '';
+
+            pty.handleInput('db.');
+            await afterGhostDebounce();
+
+            expect(written).toContain(`${GHOST_STYLE}restaurants.find()`);
+        });
+
+        it('inline hints off: `hel` still ghosts and Tab still completes', async () => {
+            settingOverrides[INLINE_HINTS] = false;
+
+            pty.handleInput('hel');
+            await afterGhostDebounce();
+
+            expect(written).toContain(`${GHOST_STYLE}p`);
+
+            pty.handleInput('\x09'); // Tab
+            pty.handleInput('\r');
+            await new Promise((resolve) => setTimeout(resolve, 20));
+
+            expect(mockEvaluate).toHaveBeenLastCalledWith('help', 80);
         });
     });
 

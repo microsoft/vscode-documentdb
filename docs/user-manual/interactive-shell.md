@@ -212,7 +212,8 @@ The following settings control shell behavior:
 | ----------------------------------------- | ------- | ------------------------------------------------------------------------------------------------------------------ |
 | `documentDB.shell.initTimeout`            | `60`    | Maximum time (in seconds) to wait for the shell to connect during initialization                                   |
 | `documentDB.shell.display.colorSupport`   | `true`  | Enable ANSI color support for syntax highlighting and formatted output. Disable for screen readers or piped output |
-| `documentDB.shell.display.autocompletion` | `true`  | Enable autocompletion in the Interactive Shell                                                                     |
+| `documentDB.shell.display.autocompletion` | `true`  | Tab completion, the candidate list, and the dim inline suggestions at the cursor                                   |
+| `documentDB.shell.display.inlineHints`    | `true`  | The informational hints marked with 🛈, which are never inserted into your input                                    |
 | `documentDB.shell.multiLinePasteBehavior` | `ask`   | Controls how multi-line text is handled when pasted into the shell                                                 |
 | `documentDB.batchSize`                    | `50`    | Number of documents to display per cursor iteration (shared with Query Playground)                                 |
 
