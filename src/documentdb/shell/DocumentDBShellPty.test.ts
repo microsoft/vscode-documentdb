@@ -577,6 +577,48 @@ describe('DocumentDBShellPty', () => {
         });
     });
 
+    describe('ghost text — candidate description hint', () => {
+        /** Dim + gray prefix emitted by ShellGhostText. */
+        const GHOST_STYLE = '\x1b[2m\x1b[90m';
+        const afterGhostDebounce = (): Promise<void> => new Promise((resolve) => setTimeout(resolve, 80));
+
+        beforeEach(async () => {
+            pty.open(undefined);
+            await new Promise((resolve) => setTimeout(resolve, 10));
+            written = '';
+        });
+
+        it("shows the candidate's description once it is fully typed", async () => {
+            pty.handleInput('help'); // exact, single candidate — nothing left to insert
+
+            await afterGhostDebounce();
+
+            expect(written).toContain(`${GHOST_STYLE}  🛈 Show help`);
+        });
+
+        it('yields the row to an insertable completion', async () => {
+            pty.handleInput('hel'); // 'help' is still incomplete
+
+            await afterGhostDebounce();
+
+            expect(written).toContain(`${GHOST_STYLE}p`);
+            expect(written).not.toContain('🛈');
+        });
+
+        it('is not insertable', async () => {
+            mockEvaluate.mockResolvedValue({ type: 'string', printable: '"x"', durationMs: 1 });
+
+            pty.handleInput('help');
+            await afterGhostDebounce();
+
+            pty.handleInput('\x09'); // Tab
+            pty.handleInput('\r');
+            await new Promise((resolve) => setTimeout(resolve, 10));
+
+            expect(mockEvaluate).toHaveBeenCalledWith('help');
+        });
+    });
+
     describe('prompt width — display columns, not UTF-16 units', () => {
         it('positions the cursor past a wide-character database name', async () => {
             // '日本語> ' is 5 UTF-16 code units but 8 terminal columns: each CJK

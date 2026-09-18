@@ -1198,6 +1198,9 @@ export class DocumentDBShellPty implements vscode.Pseudoterminal {
 
         const result = this.getCompletionResult(buffer, cursor);
 
+        // Only one writer may own the row after the cursor. The precedence is,
+        // in order: an insertable completion, then the candidate's description,
+        // then the schema hint, then closing brackets.
         if (result.candidates.length === 1 && result.prefix.length > 0) {
             const candidate = result.candidates[0];
 
@@ -1224,6 +1227,13 @@ export class DocumentDBShellPty implements vscode.Pseudoterminal {
                 if (rendered) {
                     this.trackCompletionGhostShown(candidate.kind);
                 }
+                return;
+            }
+
+            // The candidate is fully typed, so there is nothing to insert and
+            // the row is free for its description.
+            if (candidate.detail) {
+                this.showDetailHint(candidate.detail);
                 return;
             }
         }
@@ -1284,6 +1294,18 @@ export class DocumentDBShellPty implements vscode.Pseudoterminal {
     private showSchemaHint(collectionName: string): void {
         const hint = `  🛈 Run db.${collectionName}.find() first for field suggestions`;
         this._ghostTextIsHint = true;
+        this._ghostText.show(hint, (d) => this._writeEmitter.fire(d), this.availableGhostColumns());
+    }
+
+    /**
+     * Show a fully-typed candidate's own description as ghost text.
+     * Non-insertable, like every other hint.
+     */
+    private showDetailHint(detail: string): void {
+        const hint = `  🛈 ${detail}`;
+        this._ghostTextIsHint = true;
+        this._ghostTextIsClosingBrackets = false;
+        this._ghostCandidateKind = undefined;
         this._ghostText.show(hint, (d) => this._writeEmitter.fire(d), this.availableGhostColumns());
     }
 
