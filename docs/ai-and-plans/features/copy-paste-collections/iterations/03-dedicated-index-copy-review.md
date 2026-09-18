@@ -117,3 +117,8 @@ Focused verification after the correction:
 - Seven focused suites passed: 54 tests covering buffer immutability, mixed tree selections,
   manifest gating, subset validation and confirmation, wizard initialization, and task telemetry.
 - `npm run build` - passed with no diagnostics.
+
+Follow-up commit `2ed2f756` splits the visible command title by selection mode: a single selection
+shows **Copy Index...**, while `listMultiSelection` shows **Copy Selected Indexes...**. Both command
+IDs route to the same multi-selection handler. Two focused suites passed 17 tests, and formatting,
+lint, and build passed after the change.
