@@ -178,7 +178,7 @@ is luxury 5 / usefulness 3. Both are worth doing; they are not worth doing _in t
 | F6  | Banner and logo drawn at an assumed 80 columns | S          | 1   | 1   | Won't fix | —                  |
 | I1a | Bracket-notation preview hint                  | S          | 4   | 3   | Fix       | Shipped `a0774f47` |
 | I1b | Replacement-aware ghost text                   | M          | 4   | 5   | Won't fix | —                  |
-| I1c | Ghost text at an empty prefix                  | S          | 3   | 3   | Fix       | —                  |
+| I1c | Ghost text at an empty prefix                  | S          | 3   | 3   | Fix       | Shipped `a22358b0` |
 | I2  | History-based autosuggestion (capped)          | M          | 4   | 5   | Fix       | —                  |
 | I3  | Ctrl+R reverse history search                  | M          | 3   | 4   | Deferred  | —                  |
 | I4  | Persist history across sessions                | M          | 4   | 2   | Deferred  | —                  |
@@ -577,6 +577,32 @@ collection name is the most likely thing to need clipping. It will — that path
 | Complexity | Usefulness | Luxury |
 | ---------- | ---------- | ------ |
 | S          | 3          | 3      |
+
+### Shipped — commit `a22358b0`
+
+**Built as specified**, including the "ignore database methods" rule, which is the part that makes it
+work at all.
+
+Rather than relaxing the `prefix.length > 0` condition in place, candidate selection moved into a
+`ghostCandidate()` helper, because the two cases genuinely answer different questions:
+
+| Prefix      | Rule                                                                        |
+| ----------- | --------------------------------------------------------------------------- |
+| non-empty   | the sole match, as before                                                   |
+| empty       | `db-dot` context only, and only when exactly one candidate is a `collection` |
+
+Putting that behind one named function keeps `evaluateGhostText()`'s precedence chain readable and
+means the rest of the branch — preview hint, ghost, description — is shared between the two cases
+rather than duplicated.
+
+**I1a and I1c compose, which is the nicest outcome here.** A sole collection that needs bracket
+notation, at `db.` with nothing typed, now produces `db.` → `  → db['restaurants-something']  (Tab)`.
+That is precisely the user complaint that opened this audit — one collection named
+`restaurants-something`, typing `db.`, nothing shown — and it is answered by the two items together,
+neither of which would have answered it alone.
+
+Two tests: sole collection among database methods at `db.` emits the ghost; two collections emit
+nothing.
 
 ## I2. History-based autosuggestion (fish-style)
 
