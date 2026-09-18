@@ -618,6 +618,28 @@ describe('DocumentDBShellPty', () => {
             expect(written).not.toContain('🛈');
         });
 
+        it('appears after Tab completes the candidate, as if it had been typed in full', async () => {
+            pty.handleInput('hel');
+            await afterGhostDebounce();
+            written = '';
+
+            pty.handleInput('\x09'); // Tab — buffer becomes 'help'
+            await afterGhostDebounce();
+
+            expect(written).toContain(`${GHOST_STYLE}  🛈 Show help`);
+        });
+
+        it('appears after Right Arrow accepts the ghost, as if it had been typed in full', async () => {
+            pty.handleInput('hel');
+            await afterGhostDebounce();
+            written = '';
+
+            pty.handleInput('\x1b[C'); // Right Arrow — accepts the ghost
+            await afterGhostDebounce();
+
+            expect(written).toContain(`${GHOST_STYLE}  🛈 Show help`);
+        });
+
         it('is not insertable', async () => {
             mockEvaluate.mockResolvedValue({ type: 'string', printable: '"x"', durationMs: 1 });
 

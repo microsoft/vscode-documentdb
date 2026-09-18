@@ -1005,7 +1005,7 @@ export class DocumentDBShellPty implements vscode.Pseudoterminal {
      *
      * Deserializes the EJSON printable string back to raw objects (preserving BSON
      * types) and delegates to the shared {@link feedResultToSchemaStore} utility.
-     * Runs asynchronously and never blocks the prompt — failures are silently ignored.
+     * Failures are silently ignored — schema feeding is best-effort.
      */
     private maybeFeedSchemaStore(result: SerializableExecutionResult): void {
         // Only Cursor and Document results with a namespace are worth parsing
@@ -1016,13 +1016,11 @@ export class DocumentDBShellPty implements vscode.Pseudoterminal {
             return;
         }
 
-        void deserializeResultForSchema(result)
-            .then((deserialized) => {
-                feedResultToSchemaStore(deserialized, this._connectionInfo.clusterId);
-            })
-            .catch(() => {
-                // Non-critical — schema feeding is best-effort
-            });
+        try {
+            feedResultToSchemaStore(deserializeResultForSchema(result), this._connectionInfo.clusterId);
+        } catch {
+            // Non-critical — schema feeding is best-effort
+        }
     }
 
     // ─── Private: Tab completion ────────────────────────────────────────────
@@ -1105,6 +1103,7 @@ export class DocumentDBShellPty implements vscode.Pseudoterminal {
         if (extraBefore > 0 || (result.prefix.length > 0 && !candidate.insertText.startsWith(result.prefix))) {
             this._inputHandler.replaceText(result.prefix.length + extraBefore, candidate.insertText);
             this.trackCompletionAccepted(candidate.kind, 'tab');
+            this.reevaluateGhostText();
             return;
         }
 
@@ -1112,7 +1111,20 @@ export class DocumentDBShellPty implements vscode.Pseudoterminal {
         if (remaining.length > 0) {
             this._inputHandler.insertText(remaining);
             this.trackCompletionAccepted(candidate.kind, 'tab');
+            this.reevaluateGhostText();
         }
+    }
+
+    /**
+     * Ask for the next suggestion after the PTY itself changed the buffer.
+     *
+     * `insertText()` and `replaceText()` deliberately do not fire
+     * `onBufferChange`, so an accepted completion has to say so on its own —
+     * otherwise `$ex` + Tab lands on `$exists` without the description that
+     * typing `$exists` in full would have shown.
+     */
+    private reevaluateGhostText(): void {
+        this.handleBufferChange(this._inputHandler.buffer, this._inputHandler.cursor);
     }
 
     /**
@@ -1459,6 +1471,7 @@ export class DocumentDBShellPty implements vscode.Pseudoterminal {
             // Insert the ghost text into the buffer through the input handler.
             // insertText handles buffer update + terminal echo in normal color.
             this._inputHandler.insertText(ghostText);
+            this.reevaluateGhostText();
         }
 
         return ghostText;

@@ -158,6 +158,16 @@ export class ShellInputHandler {
         return this._promptWidth + terminalDisplayWidth(this._buffer.slice(0, this._cursor));
     }
 
+    /** Current line contents. */
+    get buffer(): string {
+        return this._buffer;
+    }
+
+    /** Cursor position within {@link buffer}. */
+    get cursor(): number {
+        return this._cursor;
+    }
+
     /**
      * Whether the handler is currently accumulating a multi-line expression.
      */
