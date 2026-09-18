@@ -295,7 +295,7 @@ export class ShellOutputFormatter {
      * Format help text for terminal display.
      *
      * Shell help uses a structured format:
-     * - Lines starting with `# ` are section headers → rendered bold (+ cyan when color enabled)
+    * - Lines starting with `# ` are section headers → rendered bold
      * - Lines starting with `  ` contain a padded command/description pair → command in yellow
      * - Other lines (tips, blanks) are rendered as-is in gray
      *
@@ -330,7 +330,7 @@ export class ShellOutputFormatter {
             .map((line) => {
                 // Section headers: "# Title"
                 if (line.startsWith('# ')) {
-                    return `${ANSI.bold}${ANSI.cyan}${line.slice(2)}${ANSI.reset}`;
+                    return `${ANSI.bold}${line.slice(2)}${ANSI.reset}`;
                 }
 
                 // Command entries: "  command(padded)     description"
