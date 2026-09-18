@@ -243,6 +243,10 @@ downgrade were rejected for the reasons recorded in D0026. The shared helper rem
 copier rather than in presentation code because it operates on driver options and protects every
 future caller by default.
 
+**Follow-up (commit `fix(collection-copy): format refusal modal details`):** formatted the modal
+detail as separate explanation, affected-index, and recovery blocks, following the tree-view index
+action dialog's newline pattern. The behavior and decision are unchanged.
+
 ---
 
 ### D4 — Warnings are computed at confirm time, the copy re-reads at execution time

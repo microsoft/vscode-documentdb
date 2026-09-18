@@ -78,15 +78,23 @@ export class CountSourceIndexesStep extends AzureWizardPromptStep<PasteCollectio
         context.telemetry.measurements.sourceTtlIndexCount = ttlIndexCount;
 
         const indexNames = [...new Set([...context.sourceUniqueIndexNames, ...context.sourceTtlIndexNames])];
+        const detail = [
+            l10n.t(
+                'Collection paste cannot automatically copy TTL or unique indexes because they can delete or reject documents.',
+            ),
+            '',
+            l10n.t('Affected indexes: {0}', indexNames.join(', ')),
+            '',
+            l10n.t(
+                'Choose "No, only copy documents", then use Copy Indexes and Paste Indexes separately.',
+            ),
+        ].join('\n');
         const learnMore = l10n.t('Learn More');
         const selectedAction = await vscode.window.showErrorMessage(
             l10n.t('Cannot copy TTL or unique indexes with documents'),
             {
                 modal: true,
-                detail: l10n.t(
-                    'Collection paste cannot automatically copy TTL or unique indexes because they can delete or reject documents. Affected indexes: {0}. Choose "No, only copy documents", then use Copy Indexes and Paste Indexes separately.',
-                    indexNames.join(', '),
-                ),
+                detail,
             },
             learnMore,
         );

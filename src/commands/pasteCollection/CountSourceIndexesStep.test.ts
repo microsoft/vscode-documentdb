@@ -83,7 +83,12 @@ describe('CountSourceIndexesStep', () => {
 
         expect(vscode.window.showErrorMessage).toHaveBeenCalledWith(
             'Cannot copy TTL or unique indexes with documents',
-            expect.objectContaining({ modal: true, detail: expect.stringContaining('Affected indexes:') }),
+            expect.objectContaining({
+                modal: true,
+                detail: expect.stringMatching(
+                    /reject documents\.\n\nAffected indexes: .+\n\nChoose "No, only copy documents"/,
+                ),
+            }),
             'Learn More',
         );
         expect(context.telemetry.properties.wizardFailureReason).toBe('documentAffectingIndexes');
