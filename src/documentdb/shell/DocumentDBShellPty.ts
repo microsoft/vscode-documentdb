@@ -490,19 +490,23 @@ export class DocumentDBShellPty implements vscode.Pseudoterminal {
             let authLabel: string;
             switch (metadata.authMechanism) {
                 case 'MicrosoftEntraID':
-                    authLabel = l10n.t('Microsoft Entra account');
+                    authLabel = l10n.t('Microsoft Entra ID (Account)');
                     break;
                 case 'ManagedIdentity':
-                    authLabel = l10n.t('Managed Identity');
+                    authLabel = l10n.t('Microsoft Entra ID (Managed Identity)');
                     break;
                 case 'NoAuth':
                     authLabel = l10n.t('No Authentication');
                     break;
                 default:
-                    authLabel = l10n.t('SCRAM');
+                    authLabel = l10n.t('Username and Password (SCRAM)');
                     break;
             }
-            const hostLabel = metadata.isEmulator ? l10n.t('{0} (Emulator)', metadata.host) : metadata.host;
+            const connectionLabel =
+                this._connectionInfo.clusterDisplayName === metadata.host
+                    ? this._connectionInfo.clusterDisplayName
+                    : l10n.t('{0} ({1})', this._connectionInfo.clusterDisplayName, metadata.host);
+            const hostLabel = metadata.isEmulator ? l10n.t('{0} (Emulator)', connectionLabel) : connectionLabel;
 
             this.writeLine(this._outputFormatter.formatSystemMessage(l10n.t('Connected to: {0}', hostLabel)));
 

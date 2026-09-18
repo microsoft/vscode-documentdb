@@ -178,14 +178,28 @@ describe('DocumentDBShellPty', () => {
             // Wait for async init to complete
             await new Promise((resolve) => setTimeout(resolve, 10));
             expect(written).toContain('testdb> ');
-            expect(written).toContain('Connected to');
+            expect(written).toContain('Connected to: TestCluster (test-host.documents.azure.com:10255)');
             expect(written).toContain('SCRAM');
         });
 
+        it('should not repeat the host when it matches the connection name', async () => {
+            mockInitialize.mockResolvedValueOnce({
+                host: 'TestCluster',
+                authMechanism: 'NativeAuth',
+                isEmulator: false,
+            });
+
+            pty.open(undefined);
+            await new Promise((resolve) => setTimeout(resolve, 10));
+
+            expect(written).toContain('Connected to: TestCluster');
+            expect(written).not.toContain('Connected to: TestCluster (TestCluster)');
+        });
+
         it.each([
-            ['NativeAuth', 'SCRAM'],
-            ['MicrosoftEntraID', 'Microsoft Entra account'],
-            ['ManagedIdentity', 'Managed Identity'],
+            ['NativeAuth', 'Username and Password (SCRAM)'],
+            ['MicrosoftEntraID', 'Microsoft Entra ID (Account)'],
+            ['ManagedIdentity', 'Microsoft Entra ID (Managed Identity)'],
             ['NoAuth', 'No Authentication'],
         ] as const)('should display the %s authentication label', async (authMechanism, expectedLabel) => {
             mockInitialize.mockResolvedValueOnce({
