@@ -11,6 +11,10 @@ import { CountSourceIndexesStep } from './CountSourceIndexesStep';
 import { type PasteCollectionWizardContext } from './PasteCollectionWizardContext';
 import { createIndexCopier } from './createIndexCopier';
 
+const showErrorMessage = vscode.window.showErrorMessage as unknown as jest.MockedFunction<
+    (message: string, options: vscode.MessageOptions, ...items: string[]) => Thenable<string | undefined>
+>;
+
 jest.mock('../../extensionVariables', () => ({
     ext: { outputChannel: { warn: jest.fn() } },
 }));
@@ -88,7 +92,7 @@ describe('CountSourceIndexesStep', () => {
     });
 
     it('opens the collection-paste guidance from Learn More before cancelling', async () => {
-        jest.mocked(vscode.window.showErrorMessage).mockResolvedValue('Learn More');
+        showErrorMessage.mockResolvedValue('Learn More');
         jest.mocked(createIndexCopier).mockReturnValue({
             getSourceIndexSummary: jest.fn().mockResolvedValue({
                 count: 2,
