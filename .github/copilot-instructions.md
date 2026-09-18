@@ -57,6 +57,12 @@ Never hand-merge a conflict in `l10n/bundle.l10n.json`. It is generated. Take ei
 side, or delete the file, then run `npm run l10n` and commit the result. Resolving it
 by hand is slower and produces a bundle that does not match the source.
 
+## Webview visual checks
+
+`npm run webpack-dev-wv && npm run test:visual`. To inspect a state by hand or with browser tools, run
+`node test/webview-harness/serve.js` and open the printed URL with `?scenario=…&theme=…`. See
+`test/webview-harness/README.md`. Host-side behaviour is **not** exercised.
+
 ## Git Safety
 
 - **Never use `git add -f`** to force-add files. If `git add` refuses a file, it is likely in `.gitignore` for a reason (e.g., `docs/plan/`, `docs/analysis/`, build outputs). Do NOT override this with `-f`.
