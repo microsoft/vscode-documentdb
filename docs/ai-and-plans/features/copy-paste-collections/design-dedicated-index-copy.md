@@ -905,6 +905,8 @@ contract exists in the repository.
 ## Error behavior
 
 - Catalog or creation failures fail the dedicated task and preserve the original error as `cause`.
+- A post-create hidden-state failure preserves the stable `IndexVisibilityError` name through the
+  copier wrapper, so task `indexCopyError` telemetry distinguishes the visible-index residue.
 - User-facing failures include the failed target index where known and offer **Show Output** through
   the existing task progress reporting path.
 - Cancellation stops before the next index; the abort signal is not plumbed into an in-flight

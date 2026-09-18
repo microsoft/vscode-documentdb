@@ -38,6 +38,7 @@ index definitions private. The task receives neither clients nor index definitio
 - resolving different-key name collisions with deterministic `_copy`, `_copy_2`, and later suffixes;
 - creating indexes sequentially with background creation requested;
 - applying hidden visibility after creation;
+- preserving `IndexVisibilityError` when a created index cannot be restored to hidden state;
 - stopping before the next index after cancellation;
 - selecting optional source names after the source read while preserving catalog order;
 - rejecting duplicate or unresolved requested names before target work;

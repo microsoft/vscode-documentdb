@@ -461,6 +461,16 @@ in telemetry.
 
 **Proposed resolution:** record a distinct error code for this branch.
 
+**Resolution progress (commit `fix(telemetry): classify index visibility failures`):** implemented
+as `IndexVisibilityError`. The copier preserves that name through its user-facing wrapper, and both
+tasks' existing `indexCopyError = error.name` path emits the dedicated signal. The original failure
+remains available as `cause`.
+
+**Alternatives evaluated:** a new boolean duplicated the existing error classifier and required
+expanding result contracts for an exceptional path; log-only classification was not aggregatable;
+raw hide messages were unstable and may contain server text. A stable error name reuses the current
+schema and identifies the specific partial-state risk.
+
 ---
 
 ## Handoff notes

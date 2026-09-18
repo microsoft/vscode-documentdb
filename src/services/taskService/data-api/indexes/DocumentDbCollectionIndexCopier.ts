@@ -28,6 +28,13 @@ interface IndexDefinition {
     hidden: boolean;
 }
 
+class IndexVisibilityError extends Error {
+    public constructor(message: string) {
+        super(message);
+        this.name = 'IndexVisibilityError';
+    }
+}
+
 const semanticIndexOptionNames = new Set([
     'bits',
     'bucketSize',
@@ -182,9 +189,13 @@ export class DocumentDbCollectionIndexCopier implements CollectionIndexCopier {
                 ext.outputChannel.error(
                     vscode.l10n.t('[IndexCopy] Failed to create index "{0}": {1}', targetName, errorMessage),
                 );
-                throw new Error(vscode.l10n.t('Failed to copy index "{0}": {1}', targetName, errorMessage), {
+                const copyError = new Error(vscode.l10n.t('Failed to copy index "{0}": {1}', targetName, errorMessage), {
                     cause: error,
                 });
+                if (error instanceof IndexVisibilityError) {
+                    copyError.name = error.name;
+                }
+                throw copyError;
             }
 
             result.createdCount++;
@@ -324,7 +335,7 @@ export class DocumentDbCollectionIndexCopier implements CollectionIndexCopier {
                     typeof visibilityResult.errmsg === 'string'
                         ? visibilityResult.errmsg
                         : vscode.l10n.t('Failed to hide index.');
-                throw new Error(
+                throw new IndexVisibilityError(
                     vscode.l10n.t('Index "{0}" was created but could not be hidden: {1}', index.name, errorMessage),
                 );
             }

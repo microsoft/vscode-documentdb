@@ -379,9 +379,10 @@ describe('DocumentDbCollectionIndexCopier', () => {
             ),
         );
 
-        await expect(copier.copyIndexes({ sourceIndexNames: ['addedAt_-1'] })).rejects.toThrow(
-            'Index "addedAt_-1" was created but could not be hidden: hide failed',
-        );
+        await expect(copier.copyIndexes({ sourceIndexNames: ['addedAt_-1'] })).rejects.toMatchObject({
+            name: 'IndexVisibilityError',
+            message: expect.stringContaining('Index "addedAt_-1" was created but could not be hidden: hide failed'),
+        });
     });
 
     it('adds a suffix when an index name collides with a different definition', async () => {
