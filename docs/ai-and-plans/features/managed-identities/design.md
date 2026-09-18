@@ -8,7 +8,8 @@ prs: [886]
 # Managed Identity Support for Azure DocumentDB (vCore)
 
 **Status:** Implemented on `dev/tnaum/managed-identities`, with the Entra identity presentation
-revised in [iteration 04](iterations/04-entra-identity-flow.md). Azure VM validation remains pending.
+revised in [iteration 04](iterations/04-entra-identity-flow.md). Azure VM validation passed on
+2026-09-18.
 **Progress:** see the [original implementation log](iterations/01-implementation-log.md), the
 [Entra flow iteration](iterations/04-entra-identity-flow.md), and the
 [manual validation checklist](manual-validation-checklist.md)
@@ -171,16 +172,17 @@ export const ManagedIdentityAuthMethod: AuthMethodInfo = {
 } as const;
 ```
 
-Add to `authMethodsArray` between `MicrosoftEntraIDAuthMethod` and `NoAuthMethod`, so it renders
-adjacent to the other Entra ID option.
+Add to `authMethodsArray` for persisted-method lookup and internal display. Deliberately omit it from
+`authFamilyMethodsArray`: the top-level picker presents **Microsoft Entra ID** once, then the shared
+identity picker offers account sign-in and managed identity choices. See [D10](decisions.md#d10-managed-identity-is-presented-inside-the-microsoft-entra-id-family).
 
 > **Naming caveat.** `AuthMethodId` values double as the ARM `authConfig.allowedModes` vocabulary in
 > `clusterHelpers.ts` (`allowedModes.filter(isSupportedAuthMethod)`). `ManagedIdentity` has no ARM
 > counterpart, so it must be added by explicit rule (see §6), never by pass-through. If ARM ever
 > introduces a mode with this exact name, revisit.
 >
-> Label wording is **confirmed**: keep "Managed Identity (Azure hosted)". The `detail` line carries
-> the discovery hint that D3's probe was originally meant to provide, as static copy.
+> The internal method label remains "Managed Identity (Azure hosted)" for places that display the
+> resolved persisted method. It is not a separate row in the top-level authentication-family picker.
 >
 > **Revised in review, 2026-08-10.** The `detail` originally read "Use when VS Code is running on an
 > Azure VM that has a managed identity assigned". It asserted a host type we never verify, and it
@@ -787,7 +789,7 @@ Deliberately ahead of the remaining feature work: WI6 and WI11 cannot be reviewe
 ### After the work lands
 
 Deliberately **not** done up front: both issues should be written with what the implementation and
-the VM validation actually taught us, otherwise they will need rewriting.
+completed VM validation taught us, otherwise they would need rewriting.
 
 | ID   | Description                                                                                                                                                                   | Status |
 | ---- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------ |
@@ -843,31 +845,8 @@ Cases to cover:
 
 ### Manual validation checklist (WI25)
 
-For whoever holds the Azure VM repro. **Azure VMs only**, per D0. Each case from both the Connections
-view and the Azure Resources view, and in Collection View plus Playground plus Shell:
-
-- [ ] VM with **only** a system-assigned identity, no client ID entered.
-- [ ] VM with **one** user-assigned identity, no client ID entered.
-- [ ] VM with **two or more** identities, no client ID entered. Expect the readable
-      multiple-identity message, not an opaque failure. **This is the reported incident.**
-- [ ] Same VM, correct client ID entered. Expect success.
-- [ ] Client ID of an identity not registered on the cluster. Expect a message that mentions
-      cluster-side registration.
-- [ ] The documented Learn connection string pasted verbatim, including
-      `authMechanismProperties=ENVIRONMENT:azure,TOKEN_RESOURCE:...`. Expect the method to be
-      preselected and the identity step to be skipped.
-- [ ] `Copy Connection String` on a managed-identity connection: no password prompt appears, and the
-      copied string works in `mongosh` on that same VM.
-- [ ] Same copied string used from a small Node driver script on that VM.
-- [ ] Same copied string pasted into New Connection in a second VS Code window. Expect an identical
-      managed-identity connection, not a native-auth one.
-- [ ] Non-Azure machine, Managed Identity selected. Expect the "no managed identity is available on
-      this machine" message.
-- [ ] The identity quick pick offers the system-assigned identity first, an optional connection-string
-      client ID when present, and manual client-ID entry last.
-- [ ] Reload the window and reconnect a saved managed-identity connection.
-- [ ] Move a saved managed-identity connection into a folder, then reconnect (dual-ID regression).
-- [ ] Confirm existing interactive Entra ID connections, including multi-tenant, still work.
+Completed successfully on a real Azure VM on 2026-09-18. The verified scenarios and results are
+recorded in the [manual validation checklist](manual-validation-checklist.md).
 
 ### PR completion checklist
 

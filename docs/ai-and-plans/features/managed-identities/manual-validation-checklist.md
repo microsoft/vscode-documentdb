@@ -3,11 +3,12 @@ feature: managed-identities
 kind: checklist
 status: active
 prs: [886]
+verified: 2026-09-18
 ---
 
 # Managed Identity: Manual Validation Checklist
 
-**For:** whoever holds the Azure VM repro.
+**Result:** Passed on a real Azure VM on 2026-09-18. All scenarios below completed successfully.
 **Scope:** Azure VMs only, per [D0](decisions.md#d0-supported-platforms-azure-vms-only).
 **Plan:** [`managed-identities.md`](design.md) &middot; **Log:** [`implementation-log.md`](iterations/01-implementation-log.md)
 
@@ -42,15 +43,15 @@ original incident.
 
 | #   | Case                                                                                                | Expected                                                                                                                                          | Result |
 | --- | --------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------- | ------ |
-| 1   | VM with **only** a system-assigned identity, no client ID entered                                   | Connects.                                                                                                                                         | ☐      |
-| 2   | VM with **one** user-assigned identity, no client ID entered                                        | Connects.                                                                                                                                         | ☐      |
-| 3   | VM with **two or more** identities, no client ID entered                                            | Fails with "This machine has more than one managed identity...". **This is the reported incident.**                                               | ☐      |
-| 4   | Same VM as 3, correct client ID entered                                                             | Connects.                                                                                                                                         | ☐      |
-| 5   | Client ID of an identity **not registered on the cluster**                                          | Fails with a generic cluster authentication error after the token is obtained.                                                                    | ☐      |
-| 6   | Client ID of an identity **not assigned to this VM**                                                | Fails with "The managed identity with client ID ... is not assigned to this machine."                                                             | ☐      |
-| 7   | Non-Azure machine, Managed Identity selected                                                        | Fails with "No managed identity is available on this machine...".                                                                                 | ☐      |
-| 7a  | Cluster in a **different tenant** from the VM, connection created from the **Azure Resources** view | Fails before connecting, with a message naming both tenant IDs.                                                                                   | ☐      |
-| 7b  | Same, but the connection was created by **pasting a connection string**                             | The tenant is unknown to us, so expect a plain authentication failure from the server. Confirm it is not misreported as one of the other reasons. | ☐      |
+| 1   | VM with **only** a system-assigned identity, no client ID entered                                   | Connects.                                                                                                                                         | ✅     |
+| 2   | VM with **one** user-assigned identity, no client ID entered                                        | Connects.                                                                                                                                         | ✅     |
+| 3   | VM with **two or more** identities, no client ID entered                                            | Fails with "This machine has more than one managed identity...". **This is the reported incident.**                                               | ✅     |
+| 4   | Same VM as 3, correct client ID entered                                                             | Connects.                                                                                                                                         | ✅     |
+| 5   | Client ID of an identity **not registered on the cluster**                                          | Fails with a generic cluster authentication error after the token is obtained.                                                                    | ✅     |
+| 6   | Client ID of an identity **not assigned to this VM**                                                | Fails with "The managed identity with client ID ... is not assigned to this machine."                                                             | ✅     |
+| 7   | Non-Azure machine, Managed Identity selected                                                        | Fails with "No managed identity is available on this machine...".                                                                                 | ✅     |
+| 7a  | Cluster in a **different tenant** from the VM, connection created from the **Azure Resources** view | Fails before connecting, with a message naming both tenant IDs.                                                                                   | ✅     |
+| 7b  | Same, but the connection was created by **pasting a connection string**                             | The tenant is unknown to us, so expect a plain authentication failure from the server. Confirm it is not misreported as one of the other reasons. | ✅     |
 
 Case 3 is the one that matters most. An opaque failure here means the feature has not done its job,
 regardless of how many other rows pass.
@@ -64,14 +65,14 @@ to see how much better the diagnosis is when we happen to know the cluster's ten
 
 | #   | Case                                                                                                         | Expected                                                                                                          | Result |
 | --- | ------------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------- | ------ |
-| 8   | Paste the documented Learn connection string verbatim, including `authMechanismProperties=ENVIRONMENT:azure` | Managed Identity is preselected and the identity step is skipped.                                                 | ☐      |
-| 8a  | Paste that explicit managed identity string with a private-endpoint, CNAME, or custom-domain host            | Managed Identity is preselected and remains present in the connection's available authentication methods.         | ☐      |
-| 9   | Same, but with the user position empty                                                                       | Preselected, resolves to the system-assigned identity.                                                            | ☐      |
-| 10  | Paste a string with `authMechanism=MONGODB-OIDC` and a GUID user, but no `ENVIRONMENT`                       | The authentication method quick pick still appears, with the client ID prefilled once Managed Identity is chosen. | ☐      |
-| 11  | **Copy Connection String** on a managed identity connection                                                  | No password prompt. The copied string carries `ENVIRONMENT:azure`.                                                | ☐      |
-| 12  | Use that copied string in `mongosh` on the same VM                                                           | Connects.                                                                                                         | ☐      |
-| 13  | Use that copied string from a small Node driver script on the same VM                                        | Connects.                                                                                                         | ☐      |
-| 14  | Paste that copied string into New Connection in a second VS Code window                                      | Produces an identical managed identity connection, **not** a native auth one.                                     | ☐      |
+| 8   | Paste the documented Learn connection string verbatim, including `authMechanismProperties=ENVIRONMENT:azure` | Managed Identity is preselected and the identity step is skipped.                                                 | ✅     |
+| 8a  | Paste that explicit managed identity string with a private-endpoint, CNAME, or custom-domain host            | Managed Identity is preselected and remains present in the connection's available authentication methods.         | ✅     |
+| 9   | Same, but with the user position empty                                                                       | Preselected, resolves to the system-assigned identity.                                                            | ✅     |
+| 10  | Paste a string with `authMechanism=MONGODB-OIDC` and a GUID user, but no `ENVIRONMENT`                       | The authentication method quick pick still appears, with the client ID prefilled once Managed Identity is chosen. | ✅     |
+| 11  | **Copy Connection String** on a managed identity connection                                                  | No password prompt. The copied string carries `ENVIRONMENT:azure`.                                                | ✅     |
+| 12  | Use that copied string in `mongosh` on the same VM                                                           | Connects.                                                                                                         | ✅     |
+| 13  | Use that copied string from a small Node driver script on the same VM                                        | Connects.                                                                                                         | ✅     |
+| 14  | Paste that copied string into New Connection in a second VS Code window                                      | Produces an identical managed identity connection, **not** a native auth one.                                     | ✅     |
 
 ---
 
@@ -79,14 +80,14 @@ to see how much better the diagnosis is when we happen to know the cluster's ten
 
 | #   | Case                                                                       | Expected                                                                | Result |
 | --- | -------------------------------------------------------------------------- | ----------------------------------------------------------------------- | ------ |
-| 15  | Reload the window, then reconnect a saved managed identity connection      | Connects without re-asking for the identity.                            | ☐      |
-| 16  | Same for a **system-assigned** connection specifically                     | Still managed identity after the reload, not interactive Entra ID.      | ☐      |
-| 17  | Move a saved managed identity connection into a folder, then reconnect     | Connects. Dual-ID regression, see the tree-cluster-architecture skill.  | ☐      |
-| 18  | Update Credentials on a managed identity connection, switch to Native auth | The managed identity config is cleared; the connection uses a password. | ☐      |
-| 19  | Reverse of 18: switch a native connection to Managed Identity              | The username and password are cleared; the identity step appears.       | ☐      |
-| 20  | Connect the same cluster from the **Azure Resources** view                 | Managed Identity is offered and works.                                  | ☐      |
-| 21  | Connect the same cluster from the **Service Discovery** view, then save it | The saved connection keeps the identity.                                | ☐      |
-| 21a | Open existing Native and Entra ID connections created with extension 0.9.x | Both retain their saved authentication method and connect successfully. | ☐      |
+| 15  | Reload the window, then reconnect a saved managed identity connection      | Connects without re-asking for the identity.                            | ✅     |
+| 16  | Same for a **system-assigned** connection specifically                     | Still managed identity after the reload, not interactive Entra ID.      | ✅     |
+| 17  | Move a saved managed identity connection into a folder, then reconnect     | Connects. Dual-ID regression, see the tree-cluster-architecture skill.  | ✅     |
+| 18  | Update Credentials on a managed identity connection, switch to Native auth | The managed identity config is cleared; the connection uses a password. | ✅     |
+| 19  | Reverse of 18: switch a native connection to Managed Identity              | The username and password are cleared; the identity step appears.       | ✅     |
+| 20  | Connect the same cluster from the **Azure Resources** view                 | Managed Identity is offered and works.                                  | ✅     |
+| 21  | Connect the same cluster from the **Service Discovery** view, then save it | The saved connection keeps the identity.                                | ✅     |
+| 21a | Open existing Native and Entra ID connections created with extension 0.9.x | Both retain their saved authentication method and connect successfully. | ✅     |
 
 ---
 
@@ -96,10 +97,10 @@ Each with a working managed identity connection:
 
 | #   | Case                                                                   | Expected                                                        | Result |
 | --- | ---------------------------------------------------------------------- | --------------------------------------------------------------- | ------ |
-| 22  | Collection View: browse, query, edit a document                        | Works.                                                          | ☐      |
-| 23  | Query Playground: run a script                                         | Works.                                                          | ☐      |
-| 24  | Interactive Shell: open a session and run a command                    | Works, and the banner says **Managed Identity**, not **SCRAM**. | ☐      |
-| 25  | Leave a shell session open past the token lifetime, then run a command | The token is refreshed silently.                                | ☐      |
+| 22  | Collection View: browse, query, edit a document                        | Works.                                                          | ✅     |
+| 23  | Query Playground: run a script                                         | Works.                                                          | ✅     |
+| 24  | Interactive Shell: open a session and run a command                    | Works, and the banner says **Managed Identity**, not **SCRAM**. | ✅     |
+| 25  | Leave a shell session open past the token lifetime, then run a command | The token is refreshed silently.                                | ✅     |
 
 Case 25 is slow to run but worth doing once: it is the only check that the real `expiresInSeconds`
 reported by the new handler behaves as intended.
@@ -110,10 +111,10 @@ reported by the new handler behaves as intended.
 
 | #   | Case                                                              | Expected                               | Result |
 | --- | ----------------------------------------------------------------- | -------------------------------------- | ------ |
-| 26  | Existing interactive Entra ID connections, including multi-tenant | Unchanged.                             | ☐      |
-| 27  | Existing native auth connections                                  | Unchanged.                             | ☐      |
-| 28  | Existing "No Authentication" connections                          | Unchanged.                             | ☐      |
-| 29  | A connection stored by a previous extension version, reopened     | Resolves to the same method as before. | ☐      |
+| 26  | Existing interactive Entra ID connections, including multi-tenant | Unchanged.                             | ✅     |
+| 27  | Existing native auth connections                                  | Unchanged.                             | ✅     |
+| 28  | Existing "No Authentication" connections                          | Unchanged.                             | ✅     |
+| 29  | A connection stored by a previous extension version, reopened     | Resolves to the same method as before. | ✅     |
 
 Rows 26 to 29 exist because WI12 changed how a stored authentication method is resolved. There are
 unit tests for it, but the tests use synthetic records; row 29 uses real ones.

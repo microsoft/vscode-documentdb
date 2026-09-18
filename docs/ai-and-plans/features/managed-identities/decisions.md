@@ -345,9 +345,9 @@ summarised below. Nothing in the plan depends on the outcome except WI20 and one
 **Decision:** ship `ManagedIdentity` only. Everything else goes into a **dedicated GitHub issue,
 filed after this work lands**.
 
-The timing is deliberate. What we learn while building this, particularly the real error shapes from
-the harness and whatever the Azure VM validation turns up, will change what that issue should say.
-Writing it first would mean rewriting it later, and a stale issue is worse than a late one.
+The timing is deliberate. The implementation, fake-endpoint harness, and completed Azure VM
+validation provide the evidence that should shape that issue. Filing it after this work lands keeps
+the follow-up grounded in the behavior that was actually observed.
 
 ### Reasoning
 
@@ -448,7 +448,7 @@ note, but the committed work is updating **our own** documentation under `docs/`
   there is no password prompt (D1a).
 - `docs/user-manual/how-to-construct-url.md` and
   `src/documentdb/utils/connection-string-parameters.md`: the `ENVIRONMENT` and `TOKEN_RESOURCE`
-  properties, and the fact that we produce but do not consume them (pending the D1a open item).
+  properties and their round-trip behavior.
 
 ---
 

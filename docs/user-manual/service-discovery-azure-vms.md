@@ -58,6 +58,8 @@ This provider supports the following management features:
 - **Filter Resources**: Control which tenants and subscriptions are displayed, and customize the VM tag filter. Click the funnel icon next to the provider name.
 - **Refresh**: Reload the resource list after making changes. Click the refresh icon.
 
+![Filter Azure VM resources](./images/service-discovery-filter-vm.png)
+
 For detailed instructions on account and subscription management, see [Managing Azure Discovery (Accounts, Tenants, and Subscriptions)](./managing-azure-discovery).
 
 ### VM-Specific Filtering

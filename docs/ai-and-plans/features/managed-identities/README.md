@@ -69,7 +69,8 @@ continues to use Output tracing, which is unchanged.
 ## Status
 
 Implemented in [PR #886](https://github.com/microsoft/vscode-documentdb/pull/886), targeting `main`.
-Real Azure VM validation remains pending; see the [manual checklist](manual-validation-checklist.md).
+Real Azure VM validation passed on 2026-09-18; see the completed
+[manual checklist](manual-validation-checklist.md).
 Side-loaded validation used the preview marker `0.10.2-managed-identity`; the package version was
 restored to the branch's `0.10.2` baseline before review handoff. This is not a claim that the feature
 shipped in `0.10.2`.

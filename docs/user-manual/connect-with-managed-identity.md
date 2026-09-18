@@ -12,7 +12,7 @@ This is the right choice for a shared jump box, a build agent, or any Azure VM w
 
 - [Before you start](#before-you-start)
 - [Supported environments](#supported-environments)
-- [The identity and the cluster must be in the same tenant](#the-identity-and-the-cluster-must-be-in-the-same-tenant)
+- [Important: the identity and the cluster must be in the same tenant](#important-the-identity-and-the-cluster-must-be-in-the-same-tenant)
 - [Create a connection](#create-a-connection)
 - [Choosing the identity](#choosing-the-identity)
 - [Paste a connection string instead](#paste-a-connection-string-instead)
@@ -27,7 +27,7 @@ Four things have to be in place, and all four are outside VS Code:
 1. The Azure VM has a **system-assigned** or **user-assigned** managed identity.
 2. The identity is **registered on the DocumentDB cluster** as a user. Assigning an identity to a VM does not grant it any database access on its own. See [Azure DocumentDB role-based access control](https://learn.microsoft.com/azure/documentdb/how-to-connect-role-based-access-control).
 3. The cluster allows Microsoft Entra ID authentication.
-4. The VM and the cluster are **in the same Microsoft Entra tenant**. See [the next section but one](#the-identity-and-the-cluster-must-be-in-the-same-tenant).
+4. The VM and the cluster are **in the same Microsoft Entra tenant**. See [the next section but one](#important-the-identity-and-the-cluster-must-be-in-the-same-tenant).
 
 If any of these is missing, the connection fails. The extension identifies failures reported by the
 managed identity endpoint and known tenant mismatches. If the cluster does not recognize the
@@ -35,18 +35,25 @@ identity, the server returns a generic authentication error instead.
 
 ## Supported environments
 
-**Azure VMs only.** This feature is designed and documented for Azure VMs. Validation against a real
-Azure VM is still pending.
+**Azure VMs only.** This feature is designed, documented, and validated for Azure VMs.
 
 The underlying credential library also works on App Service, Container Apps, Azure Arc enabled servers and AKS, and nothing here deliberately blocks those. They are simply not scenarios the extension claims or verifies, so treat success there as a bonus rather than a guarantee.
 
 On a machine that is not Azure hosted, the method is still listed, and selecting it produces a clear message rather than a silent failure.
 
-## The identity and the cluster must be in the same tenant
+## Important: the identity and the cluster must be in the same tenant
 
-This is the one hard limitation of managed identity, and it has no workaround.
+Direct managed identity authentication is tenant-bound. The managed identity and the DocumentDB
+cluster must belong to the same Microsoft Entra tenant. Microsoft documents that
+[managed identities do not support cross-directory or cross-tenant scenarios](https://learn.microsoft.com/entra/identity/managed-identities-azure-resources/managed-identities-faq#can-i-use-a-managed-identity-to-access-a-resource-in-a-different-directorytenant).
 
-A managed identity is a service principal that exists in exactly **one** Microsoft Entra tenant: the tenant of the subscription that owns the VM. Unlike a user account, it cannot be invited as a guest into another tenant, and the token request has no tenant parameter to point somewhere else. So if the VM is in one tenant and the DocumentDB cluster is in another, managed identity cannot authenticate, no matter how the cluster is configured.
+A managed identity is represented by a service principal in one Microsoft Entra tenant. The
+[Azure VM managed identity token endpoint](https://learn.microsoft.com/entra/identity/managed-identities-azure-resources/how-to-use-vm-token#get-a-token-using-http)
+lets a caller select the target resource and managed identity, but it does not accept a target
+tenant. The extension uses that endpoint through Azure's managed identity credential library, so
+this is an Azure managed identity constraint rather than a limitation introduced by the extension.
+If the managed identity is in one tenant and the DocumentDB cluster is in another, direct managed
+identity authentication fails.
 
 That is why the connection flow never asks which tenant to use, while [Entra ID sign-in](#how-it-differs-from-entra-id) does: a person can belong to several tenants, a machine identity belongs to one.
 
@@ -82,8 +89,12 @@ Microsoft Entra ID connections use one identity list for account sign-in and man
   It looks like `11111111-2222-3333-4444-555555555555`.
 
 When the connection string declared OIDC and the extension inferred the Microsoft Entra ID family,
-the list also offers **Use a different authentication method...**. This is the route to
+the list also offers **Choose a different authentication method...**. This is the route to
 username/password or no authentication when the inferred family was not what you intended.
+
+When you selected Microsoft Entra ID from the authentication method list, the identity list instead
+offers **Back to authentication method selection**. Use it to return to the preceding list without
+restarting the connection flow.
 
 **If the VM has more than one identity, the client ID is not optional.** The Azure instance metadata service cannot choose between several identities on its own, so a request without a client ID fails. This is the single most common cause of a failed managed identity connection.
 
@@ -122,7 +133,7 @@ No password prompt appears, because there is no password to include. See [Copy C
 | This machine has more than one managed identity                                               | Reconnect and enter the client ID of the identity you want. The metadata service cannot pick one for you.                                                                                                                                                                     |
 | No managed identity is available on this machine                                              | VS Code is not running on an Azure resource with a managed identity assigned, or the instance metadata service is not reachable.                                                                                                                                              |
 | The managed identity with client ID ... is not assigned to this machine                       | The client ID is valid but that identity is not attached to this VM. Check the VM's Identity blade in the Azure portal.                                                                                                                                                       |
-| This managed identity belongs to Microsoft Entra tenant ..., but the cluster is in tenant ... | The VM and the cluster are in different tenants. There is no way to bridge that with a managed identity; use Entra ID sign-in instead. See [the tenant section](#the-identity-and-the-cluster-must-be-in-the-same-tenant).                                                    |
+| This managed identity belongs to Microsoft Entra tenant ..., but the cluster is in tenant ... | The VM and the cluster are in different tenants. Use Entra ID sign-in instead. See [the tenant section](#important-the-identity-and-the-cluster-must-be-in-the-same-tenant).                                                                                                  |
 | The connection is refused after a token was obtained                                          | Authentication worked but the cluster does not recognize the identity. Register it on the cluster as described in [Before you start](#before-you-start). If the connection came from a pasted connection string, also check that the cluster is in the same tenant as the VM. |
 
 ## How it differs from Entra ID
