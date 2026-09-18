@@ -271,12 +271,12 @@ now calls `renderCurrentLine()`.
 
 Four tests, two of which fail against the unfixed source:
 
-| Test                                                            | File                     | Fails before? |
-| --------------------------------------------------------------- | ------------------------ | ------------- |
-| tracks the cursor row across a **narrowing** resize (asserts CUU count) | `ShellInputHandler.test.ts` | yes           |
-| tracks the cursor row across a **widening** resize                | `ShellInputHandler.test.ts` | no (control)  |
-| `setDimensions` repaints the input line at the new width          | `DocumentDBShellPty.test.ts` | yes           |
-| `setDimensions` does not touch the terminal while evaluating      | `DocumentDBShellPty.test.ts` | no (guard)    |
+| Test                                                                    | File                         | Fails before? |
+| ----------------------------------------------------------------------- | ---------------------------- | ------------- |
+| tracks the cursor row across a **narrowing** resize (asserts CUU count) | `ShellInputHandler.test.ts`  | yes           |
+| tracks the cursor row across a **widening** resize                      | `ShellInputHandler.test.ts`  | no (control)  |
+| `setDimensions` repaints the input line at the new width                | `DocumentDBShellPty.test.ts` | yes           |
+| `setDimensions` does not touch the terminal while evaluating            | `DocumentDBShellPty.test.ts` | no (guard)    |
 
 All four assert on emitted ANSI.
 
@@ -387,9 +387,9 @@ That is what restores `MAX_DISPLAY_ROWS` as a bound on _physical_ rows.
 
 Two tests, both failing against the unfixed module:
 
-| Test                                                                 | Asserts on            |
-| ---------------------------------------------------------------------- | --------------------- |
-| `寿司` (2 code units, 4 columns) is followed by exactly 4 pad spaces   | the emitted row string |
+| Test                                                                                 | Asserts on                          |
+| ------------------------------------------------------------------------------------ | ----------------------------------- |
+| `寿司` (2 code units, 4 columns) is followed by exactly 4 pad spaces                 | the emitted row string              |
 | a 60-char label in a 20-column terminal clips, and no row exceeds 20 visible columns | every emitted row, escapes stripped |
 
 **Unblocks I6 and I7** — both were gated on width-correct measurement here. They remain deferred.
@@ -567,10 +567,10 @@ Consistent with the sibling `showSchemaHint()`.
 Two tests, driving a mocked bracket-notation candidate through
 `ShellCompletionProvider.prototype.getCompletions`:
 
-| Test                                                      | Fails before? |
-| ----------------------------------------------------------- | ------------- |
-| `db.rest` emits `  → db['restaurants-something']  (Tab)`    | yes           |
-| Tab then actually produces `db['restaurants-something']`     | no — it pins the preview to reality |
+| Test                                                     | Fails before?                       |
+| -------------------------------------------------------- | ----------------------------------- |
+| `db.rest` emits `  → db['restaurants-something']  (Tab)` | yes                                 |
+| Tab then actually produces `db['restaurants-something']` | no — it pins the preview to reality |
 
 The second test is the one that matters long-term: an advertisement that lies about what Tab does
 is worse than no advertisement, and that is exactly the class of bug Step 14 was.
@@ -601,10 +601,10 @@ work at all.
 Rather than relaxing the `prefix.length > 0` condition in place, candidate selection moved into a
 `ghostCandidate()` helper, because the two cases genuinely answer different questions:
 
-| Prefix      | Rule                                                                        |
-| ----------- | --------------------------------------------------------------------------- |
-| non-empty   | the sole match, as before                                                   |
-| empty       | `db-dot` context only, and only when exactly one candidate is a `collection` |
+| Prefix    | Rule                                                                         |
+| --------- | ---------------------------------------------------------------------------- |
+| non-empty | the sole match, as before                                                    |
+| empty     | `db-dot` context only, and only when exactly one candidate is a `collection` |
 
 Putting that behind one named function keeps `evaluateGhostText()`'s precedence chain readable and
 means the rest of the branch — preview hint, ghost, description — is shared between the two cases
@@ -622,16 +622,16 @@ nothing.
 ### Follow-up — commit `fd2a0a8a`
 
 **The operator hit this immediately, and the item as triaged was wrong.** At `db.` the suggestion
-rendered `  → db['restaurants-original']  (Tab)` — but Tab sees *all* the candidates, the sole
+rendered `  → db['restaurants-original']  (Tab)` — but Tab sees _all_ the candidates, the sole
 collection plus nineteen database methods, so it showed the list. The hint promised something that
 did not happen.
 
 Both name shapes were broken, in opposite directions:
 
-| Collection name at `db.` | Ghost                  | Tab actually did                    |
-| -------------------------- | ---------------------- | ----------------------------------- |
-| needs brackets           | hint claiming `(Tab)`  | cleared it, showed the list — **lied** |
-| plain identifier         | insertable dim ghost   | accepted the ghost — **stole the list** |
+| Collection name at `db.` | Ghost                 | Tab actually did                        |
+| ------------------------ | --------------------- | --------------------------------------- |
+| needs brackets           | hint claiming `(Tab)` | cleared it, showed the list — **lied**  |
+| plain identifier         | insertable dim ghost  | accepted the ghost — **stole the list** |
 
 `fd2a0a8a` makes the empty-prefix suggestion informational: no `(Tab)`, not insertable, Tab keeps
 listing. `(Tab)` now appears only where it is true — a single candidate at a typed prefix.
@@ -642,8 +642,8 @@ the `→` shape with different affordances, which is **N2**.
 
 **N2 has since been decided, and it supersedes this item's empty-prefix rule entirely.** `db.` will
 show a collection count rather than the sole collection's name, so neither the insertable ghost nor
-the `→` preview will appear there. What survives of I1c is the question it asked — *should `db.` say
-anything at all?* — answered better than it was triaged.
+the `→` preview will appear there. What survives of I1c is the question it asked — _should `db.` say
+anything at all?_ — answered better than it was triaged.
 
 ## I2. History-based autosuggestion (fish-style)
 
@@ -776,11 +776,11 @@ documents matching the filter`.
 
 Three tests, asserting on emitted ANSI:
 
-| Test                                                    | Fails before? |
-| --------------------------------------------------------- | ------------- |
-| `help` (exact) emits `\x1b[2m\x1b[90m  🛈 Show help`        | yes           |
-| `hel` (incomplete) emits the completion ghost and no `🛈` | no (precedence guard) |
-| Tab on a showing description inserts nothing               | no (non-insertability guard) |
+| Test                                                     | Fails before?                |
+| -------------------------------------------------------- | ---------------------------- |
+| `help` (exact) emits `\x1b[2m\x1b[90m  🛈 Show help`      | yes                          |
+| `hel` (incomplete) emits the completion ghost and no `🛈` | no (precedence guard)        |
+| Tab on a showing description inserts nothing             | no (non-insertability guard) |
 
 ## I8. A first-run nudge that names a real collection — rejected
 
@@ -795,8 +795,9 @@ Raised by the operator while using the shipped build, plus one design question S
 findings about the code as it stood.
 
 **Status: all three have an implementation plan, none is built.** Build order is **N1 → N2 → N3**,
-and each plan says why it sits there. Two plans carry a **⬜ Needs your call** marker — N2's
-precedence question and N3's one-switch-or-two — which are the only things blocking a start.
+and each plan says why it sits there. Two ⬜ markers remain — N2's `→` marker and its precedence
+against history, and one sub-question in N3 — and they are the only things blocking a start. N1 is
+unblocked and can begin now.
 
 ## N1. An insertable ghost steals Tab from the completion list
 
@@ -817,10 +818,10 @@ MyDatabase> use MyDatabase          ← the list never appeared
 **Verified**, by driving the PTY with four database candidates and running `use MyDatabase` in
 between:
 
-| State                          | Ghost shown | Tab lists all four |
-| -------------------------------- | ----------- | ------------------ |
+| State                                 | Ghost shown | Tab lists all four |
+| ------------------------------------- | ----------- | ------------------ |
 | before `use MyDatabase` is in history | no          | **yes**            |
-| after                          | yes         | **no**             |
+| after                                 | yes         | **no**             |
 
 **Root cause.** `handleTab()` opens with:
 
@@ -831,7 +832,7 @@ if (this._ghostText.isVisible && !this._ghostTextIsHint) {
 }
 ```
 
-Tab accepts *any* visible insertable ghost, unconditionally, before it ever asks the completion
+Tab accepts _any_ visible insertable ghost, unconditionally, before it ever asks the completion
 provider what the candidates are. That was harmless until I2, because the only insertable ghost was
 a completion ghost, and that only appears when there is exactly one candidate — so accepting it and
 completing it were the same act. **History autosuggestion has no such coupling.** `use ` matches a
@@ -873,18 +874,18 @@ today and nothing else would take its place.
 that candidate's remaining text, so `applySingleCompletion()` produces the same buffer the ghost
 would have. Tab keeps behaving identically; it just arrives there through the completion path.
 
-| # | Change | File |
-| - | ------ | ---- |
-| 1 | Reorder `handleTab()` as above | `DocumentDBShellPty.ts` |
+| #   | Change                         | File                    |
+| --- | ------------------------------ | ----------------------- |
+| 1   | Reorder `handleTab()` as above | `DocumentDBShellPty.ts` |
 
 **Tests**
 
-| Assertion | Why |
-| --------- | --- |
-| `use ` with `use MyDatabase` in history: Tab emits all four databases | the reported regression |
-| the same, Right Arrow: buffer becomes `use MyDatabase` | the key that should own ghost text |
-| closing-bracket ghost with zero candidates: Tab still accepts it | the fallback, which is the risky half |
-| `hel` (one candidate, ghost showing): Tab still yields `help` | completion ghosts unchanged |
+| Assertion                                                                       | Why                                                 |
+| ------------------------------------------------------------------------------- | --------------------------------------------------- |
+| `use ` with `use MyDatabase` in history: Tab emits all four databases           | the reported regression                             |
+| the same, Right Arrow: buffer becomes `use MyDatabase`                          | the key that should own ghost text                  |
+| closing-bracket ghost with zero candidates: Tab still accepts it                | the fallback, which is the risky half               |
+| `hel` (one candidate, ghost showing): Tab still yields `help`                   | completion ghosts unchanged                         |
 | `db.rest` preview hint showing: Tab still produces `db['restaurants-original']` | hints were already cleared-then-completed; guard it |
 
 | Complexity | Usefulness | Luxury |
@@ -899,15 +900,15 @@ other one does that."**
 The observation is correct, and the inconsistency got worse in `fd2a0a8a`, which made `(Tab)`
 conditional. Current state:
 
-| Ghost                      | Rendering                          | Can you act on it | Names a key |
-| ---------------------------- | ---------------------------------- | ----------------- | ----------- |
-| completion                 | dim text at the cursor             | yes — Tab or →    | no          |
-| history                    | dim text at the cursor             | yes — Tab or →    | no          |
-| closing brackets           | dim text at the cursor             | yes — Tab or →    | no          |
-| schema hint                | `  🛈 Run db.X.find() first…`      | no                | no          |
-| description (I5)           | `  🛈 <description>`               | no                | no          |
-| rewrite preview (I1a)      | `  → <line>  (Tab)`                | not directly, but Tab produces it | **yes** |
-| empty prefix at `db.`      | `  → <line>`                       | no — Tab lists instead | no      |
+| Ghost                 | Rendering                    | Can you act on it                 | Names a key |
+| --------------------- | ---------------------------- | --------------------------------- | ----------- |
+| completion            | dim text at the cursor       | yes — Tab or →                    | no          |
+| history               | dim text at the cursor       | yes — Tab or →                    | no          |
+| closing brackets      | dim text at the cursor       | yes — Tab or →                    | no          |
+| schema hint           | `  🛈 Run db.X.find() first…` | no                                | no          |
+| description (I5)      | `  🛈 <description>`          | no                                | no          |
+| rewrite preview (I1a) | `  → <line>  (Tab)`          | not directly, but Tab produces it | **yes**     |
+| empty prefix at `db.` | `  → <line>`                 | no — Tab lists instead            | no          |
 
 The last two rows share a shape and differ in affordance, distinguished only by a trailing token
 the user has to notice. The affordance belongs on the marker, not on a suffix.
@@ -936,12 +937,12 @@ there are is awesome, I think I'd do it anyway for `db.` — it shows early how 
 Not "the sole collection". A **count**, every time `db.` is typed, whatever the number. That is a
 different and better answer than anything in the original I1c:
 
-| | I1c as triaged | Decided |
-| --- | --- | --- |
-| When it fires | exactly one collection | always |
-| What it says | that one collection's name | how many there are |
-| Affordance | insertable ghost (or `→` preview) | `🛈`, informational |
-| Tab | stole the list, or lied about it | always lists |
+|               | I1c as triaged                    | Decided            |
+| ------------- | --------------------------------- | ------------------ |
+| When it fires | exactly one collection            | always             |
+| What it says  | that one collection's name        | how many there are |
+| Affordance    | insertable ghost (or `→` preview) | `🛈`, informational |
+| Tab           | stole the list, or lied about it  | always lists       |
 
 It is informational, so it has no N1 exposure and cannot lie about Tab. **This supersedes I1c's
 empty-prefix rule**, which is a shipped item — I1c's sole-collection path at `db.` goes away when
@@ -953,18 +954,66 @@ this is built.
 Correct, and this is the point that keeps I1a alive. The count and the preview answer different
 questions at different moments:
 
-| Moment | Shown | Question answered |
-| --- | --- | --- |
-| `db.` | `  🛈 7 collections` | "is there anything here?" |
+| Moment    | Shown                            | Question answered            |
+| --------- | -------------------------------- | ---------------------------- |
+| `db.`     | `  🛈 7 collections`              | "is there anything here?"    |
 | `db.rest` | `  → db['restaurants-original']` | "why won't `db.rest…` work?" |
 
 ### Resulting vocabulary
 
-| Marker | Meaning | Used by |
-| --- | --- | --- |
-| none | this text gets appended right where you are looking | completion, history, closing brackets |
-| `🛈` | information; no key acts on it | schema hint, description, collection count |
-| `→` | Tab rewrites your line to this | rewrite preview |
+| Marker | Meaning                                             | Used by                                    |
+| ------ | --------------------------------------------------- | ------------------------------------------ |
+| none   | this text gets appended right where you are looking | completion, history, closing brackets      |
+| `🛈`    | information; no key acts on it                      | schema hint, description, collection count |
+| `→`    | Tab rewrites your line to this                      | rewrite preview                            |
+
+The third row is **provisional** — see below.
+
+### ⬜ Open: should `→` exist at all?
+
+> "I'm still on the edge with having that new → character at all."
+
+Worth separating two things the operator has already said, because they point different ways:
+
+- > "it was just fine at `db.re`, then the autocompletion made sense" — the **behaviour** is wanted.
+- > "it does not help when one starts typing `db.rest` and then, how to show that it needs to be in
+  > `[]`?" — the **job** is real and nothing else does it.
+
+So this is a question about the marker, not about the feature. Four answers:
+
+**A. Fold it into `🛈`.** `db.rest` → `  🛈 db['restaurants-original']`. The vocabulary collapses to
+two markers: unmarked means "appendable", `🛈` means "information". Nothing is lost that the content
+does not already carry — seeing your own line rewritten, right next to what you typed, is
+self-explanatory. **Recommended, for three reasons:**
+
+1. **The arrow will almost never be seen.** It fires only when a single candidate rewrites what you
+   typed: collection names that are not valid JS identifiers, and quoted field paths. A user with
+   ordinary collection names will never see it once. A distinct character earns its place by
+   appearing often enough to be learned, and this one cannot.
+2. **It makes the affordance rule airtight.** With exactly one informational marker there is no way
+   to render something that looks actionable and is not. That is the entire class of bug behind
+   `fd2a0a8a`, closed structurally rather than by convention.
+3. **It lines the markers up with N3's two settings.** `autocompletion` governs the unmarked ghosts;
+   the new hints setting governs everything marked `🛈`. The glyph on screen tells the user which
+   switch controls it. That alignment is free, and it only exists if there are exactly two markers.
+
+**B. Keep `→`.** It is more precise: `🛈` means "a note", `→` means "this becomes that", and a
+rewrite genuinely is a transformation rather than a remark. The cost is a third symbol to learn for
+a case most users never hit, and the affordance rule stays a convention rather than a guarantee.
+
+**C. Drop the preview entirely.** `db.rest` shows nothing again; Tab still produces the right answer
+because Step 14 fixed that. Cheapest option, and the collection count at `db.` already tells the
+user there is something here. But it reintroduces the second half of the complaint that opened this
+audit — the user types `db.rest`, sees nothing, and has no reason to believe Tab will help. I1a
+existed to close exactly that, and the operator confirmed it worked.
+
+**D. Say the reason instead of showing the result** — `  🛈 name needs quotes`. More honest about
+*why*, but it makes the user do the rewrite in their head, costs a localized string, and is wider
+than the thing it is explaining.
+
+**If A is chosen**, N2's step 1 becomes "`showCompletionPreviewHint()` renders `  🛈 ${preview}`" and
+the `→` character never enters the codebase. If **C**, steps 1 and the I1a preview path are deleted
+outright and I1a is marked superseded rather than shipped.
 
 ### Settled
 
@@ -998,27 +1047,27 @@ questions at different moments:
 
 **Order: after N1.**
 
-| # | Change | File |
-| - | ------ | ---- |
-| 1 | `showCompletionPreviewHint()` drops the `advertiseTab` parameter; the hint is always `  → ${preview}` | `DocumentDBShellPty.ts` |
-| 2 | Delete the `result.prefix.length === 0` special case added by `fd2a0a8a` | `DocumentDBShellPty.ts` |
-| 3 | Delete `ghostCandidate()`'s empty-prefix branch — it returns `undefined` for an empty prefix, and `detectContext` is no longer called there | `DocumentDBShellPty.ts` |
-| 4 | Add `showCollectionCountHint()` next to `showDetailHint()`, rendering `  🛈 {n} collections` via `_ghostTextIsHint = true` | `DocumentDBShellPty.ts` |
-| 5 | Add the count to the precedence chain — see the question below for where | `DocumentDBShellPty.ts` |
+| #   | Change                                                                                                                                      | File                    |
+| --- | ------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------- |
+| 1   | `showCompletionPreviewHint()` drops the `advertiseTab` parameter; the hint is always `  → ${preview}`                                       | `DocumentDBShellPty.ts` |
+| 2   | Delete the `result.prefix.length === 0` special case added by `fd2a0a8a`                                                                    | `DocumentDBShellPty.ts` |
+| 3   | Delete `ghostCandidate()`'s empty-prefix branch — it returns `undefined` for an empty prefix, and `detectContext` is no longer called there | `DocumentDBShellPty.ts` |
+| 4   | Add `showCollectionCountHint()` next to `showDetailHint()`, rendering `  🛈 {n} collections` via `_ghostTextIsHint = true`                   | `DocumentDBShellPty.ts` |
+| 5   | Add the count to the precedence chain — see the question below for where                                                                    | `DocumentDBShellPty.ts` |
 
 Steps 2 and 3 remove the whole I1c empty-prefix mechanism; step 4 replaces it. Net effect on
 `evaluateGhostText()` is roughly neutral in size.
 
 **Tests**
 
-| Assertion | Why |
-| --------- | --- |
-| `db.` with 7 collections emits `\x1b[2m\x1b[90m  🛈 7 collections` | the feature |
-| `db.` with 1 collection emits `1 collection`, singular | the pluralisation ternary |
-| `db.` with a cold cache emits no ghost | the cache-only guarantee, via zero candidates |
-| `db.` still lists on Tab | the hint stays informational |
-| `db.rest` emits `  → db['restaurants-original']` and **no** `(Tab)` anywhere | decision 1 |
-| the existing `db.`-suggests-the-sole-collection tests are **deleted**, not adapted | they encode the superseded I1c rule |
+| Assertion                                                                          | Why                                           |
+| ---------------------------------------------------------------------------------- | --------------------------------------------- |
+| `db.` with 7 collections emits `\x1b[2m\x1b[90m  🛈 7 collections`                  | the feature                                   |
+| `db.` with 1 collection emits `1 collection`, singular                             | the pluralisation ternary                     |
+| `db.` with a cold cache emits no ghost                                             | the cache-only guarantee, via zero candidates |
+| `db.` still lists on Tab                                                           | the hint stays informational                  |
+| `db.rest` emits `  → db['restaurants-original']` and **no** `(Tab)` anywhere       | decision 1                                    |
+| the existing `db.`-suggests-the-sole-collection tests are **deleted**, not adapted | they encode the superseded I1c rule           |
 
 **⬜ Needs your call before I build:** where does the count sit relative to history? "Insertable
 beats informational" gives the row to a history match, and at `db.` there almost always is one —
@@ -1038,10 +1087,11 @@ cursor is. That is one narrow exception to the precedence rule rather than a cha
 Add a setting that disables the inline hints, and say so in shell `help` so it is discoverable from
 inside the shell rather than only from the settings UI.
 
-**The scope needs deciding, and the axis is affordance, not source.** The honest split is the one N2
-describes: informational hints (`🛈` description, `🛈` schema hint, `🛈` collection count, `→`
-preview) appear unbidden and cannot be acted on, so they are what "non-stop help" means. The
-insertable ghosts (completion, history, closing brackets) are suggestions the user is about to use.
+**The scope is the affordance line, not the source.** Informational hints (`🛈` description, `🛈`
+schema hint, `🛈` collection count, and the rewrite preview) appear unbidden and cannot be acted on,
+so they are what "non-stop help" means. The insertable ghosts (completion, history, closing
+brackets) are suggestions the user is about to use. The operator has ruled that these are two
+different things and get two different switches — see below.
 
 **Two findings while sizing this, both of which change the item.**
 
@@ -1064,51 +1114,56 @@ localized string N3 touches is N2's collection count, via `vscode.l10n.t()` in s
   `vscode.workspace.getConfiguration()` in `ShellOutputFormatter` and `DocumentDBShellPty`. Every
   hint path runs in the extension host, so this is a local read — no worker plumbing, unlike F5.
 - **The `help` mention has a wrinkle.** `HelpProvider` runs in the worker and imports no `vscode`,
-  so it cannot read the setting's value. It does not need to: it should *name* the setting, not
+  so it cannot read the setting's value. It does not need to: it should _name_ the setting, not
   report its state. Note also that the entire help text is unlocalized English literals in a
   `vscode`-free package, so a new tip line is consistent with what is there.
 
+### Decided by the operator — two settings
+
+> "autocompletion is autocompletion, but these (i) hints around are something extra."
+
+| Setting                                    | Governs                                                            | State today          |
+| ------------------------------------------ | ------------------------------------------------------------------ | -------------------- |
+| `documentDB.shell.display.autocompletion`  | Tab completion, the candidate list, and the insertable ghosts (completion, history, closing brackets) | contributed, **dead** |
+| `documentDB.shell.display.inlineHints`     | everything marked `🛈` — description, schema hint, collection count, and the rewrite preview | new                  |
+
+Both become real; neither is a subset of the other. The split is the affordance line N2 draws, which
+means **the marker on screen tells the user which switch controls it** — unmarked is autocompletion,
+`🛈` is hints. That only holds cleanly if N2 picks option A, which is a further argument for it.
+
 ### Implementation plan — for review
 
-**Order: after N2**, so the count is in place before it is made switchable.
+**Order: after N2**, so the count exists before it is made switchable.
 
-| # | Change | File |
-| - | ------ | ---- |
-| 1 | Rewrite the `autocompletion` setting's description — drop "Reserved for future use", state what it turns off | `package.json` |
-| 2 | Read it once per evaluation in `evaluateGhostText()` and return early when `false`, before any branch | `DocumentDBShellPty.ts` |
-| 3 | Add a tip to the `# Tips` section naming the setting | `HelpProvider.ts` |
-| 4 | Correct the settings table row | `docs/user-manual/interactive-shell.md` |
+| #   | Change                                                                                                         | File                                    |
+| --- | -------------------------------------------------------------------------------------------------------------- | --------------------------------------- |
+| 1   | Rewrite the `autocompletion` description — drop "Reserved for future use", say what it covers                  | `package.json`                          |
+| 2   | Contribute `documentDB.shell.display.inlineHints`, boolean, default `true`                                     | `package.json`                          |
+| 3   | Wire `autocompletion`: return early from `evaluateGhostText()` before the insertable branches, and from `handleTab()` | `DocumentDBShellPty.ts`                 |
+| 4   | Wire `inlineHints`: one guard in front of the informational branches                                           | `DocumentDBShellPty.ts`                 |
+| 5   | Add a tip to the `# Tips` section naming **both** settings                                                     | `HelpProvider.ts`                       |
+| 6   | Correct the `autocompletion` row and add the new one                                                           | `docs/user-manual/interactive-shell.md` |
 
-Step 2 at the top of `evaluateGhostText()` is deliberate: one check, one place, covering every
-present and future ghost. Scattering the check across six branches is how one of them gets missed.
+Steps 3 and 4 are two guards, not six — placed at the two points where the precedence chain changes
+category, so a future ghost inherits the right switch by where it is added rather than by someone
+remembering to check.
 
 **Tests**
 
-| Assertion | Why |
-| --------- | --- |
-| setting `false`: `hel` emits no ghost | the switch works for insertable ghosts |
-| setting `false`: `help` emits no `🛈` | and for informational ones |
-| setting `false`: Tab still completes and still lists | the switch is about *inline* suggestion, not completion |
-| setting `true`: everything behaves as the N1/N2 tests expect | default unchanged |
-| shell `help` output contains the setting name | discoverability, which is half the request |
+| Assertion                                                        | Why                                     |
+| ---------------------------------------------------------------- | --------------------------------------- |
+| `autocompletion` false: `hel` emits no ghost, Tab does not complete | the setting finally means something     |
+| `autocompletion` false: `help` still emits its `🛈` description    | the two switches are independent        |
+| `inlineHints` false: `help` emits no `🛈`, `db.` emits no count    | the requested behaviour                 |
+| `inlineHints` false: `hel` still ghosts, Tab still completes      | silencing commentary keeps completion   |
+| both true: the N1/N2 suites pass unchanged                       | default unchanged                       |
+| shell `help` names both settings                                 | discoverability, half the request       |
 
-**⬜ Needs your call before I build:** one switch or two?
-
-- **One** — reuse `documentDB.shell.display.autocompletion` for all inline suggestion, hints and
-  ghosts alike. No new contribution point, retires a dead documented setting, one thing to explain.
-  Cost: silencing the commentary also silences history autosuggestion.
-- **Two** — `autocompletion` keeps the insertable ghosts, a new `…display.inlineHints` covers the
-  informational ones. Precise, and both settings become real. Cost: a second name, and users must
-  understand a distinction we invented.
-
-My recommendation is **one**, on your "no special cases, keep it simple" — someone annoyed enough to
-turn this off likely wants all of it gone, and it costs nothing to split later if anyone asks. Tab
-completion and the candidate list stay available either way; this only governs what appears without
-being asked for.
-
-| Complexity | Usefulness | Luxury |
-| ---------- | ---------- | ------ |
-| S          | 4          | 2      |
+**⬜ One sub-question:** does `autocompletion: false` also disable **Tab**, or only the automatic
+suggestions? The name says all of it, and step 3 above assumes that. The alternative reading —
+automatic suggestions off, Tab still works on demand — is friendlier but makes the setting's name a
+lie. Recommendation: honour the name. Anyone who wanted only the commentary silenced now has
+`inlineHints` for exactly that, which is the reason the split was worth making.
 
 | Complexity | Usefulness | Luxury |
 | ---------- | ---------- | ------ |
@@ -1375,10 +1430,12 @@ minutes.
 - **Does the collection count outrank a history suggestion at an empty prefix?** N2's count and I2's
   autosuggestion both want the row at `db.`, and "insertable beats informational" currently hands it
   to history. Answerable only after N1, because today that history ghost also takes Tab.
-- **What counts as "help" for the purpose of turning it off?** N3 needs a line between suggestions
-  the user is about to accept and commentary that merely appears. Drawing it at
-  insertable-vs-informational is the defensible answer; a single on/off would also silence
-  autosuggestion, which is probably not what "annoyed by the non-stop help" means.
+- **What counts as "help" for the purpose of turning it off?** **Answered:** two switches —
+  `autocompletion` for completion and the insertable ghosts, a new `inlineHints` for everything
+  marked `🛈`. One sub-question survives in N3: whether `autocompletion: false` also disables Tab.
+- **Does the shell need a `→` marker at all?** Open, and it is the last thing blocking N2. The
+  behaviour it renders is wanted and nothing else does that job; the question is whether it earns a
+  third symbol or folds into `🛈`. See N2.
 - **Is "append only" the permanent ghost text contract?** Rejecting I1b answers it for now, and F2
   would write it down. But I7-as-menu-select needs the renderer to own rows it does not write today,
   which is the same question approached from the other side. Worth one decision covering both rather
