@@ -29,13 +29,17 @@ export class ConfirmOperationStep extends AzureWizardPromptStep<PasteCollectionW
                   })
                 : l10n.t('Copy Indexes: {yesNoValue}', { yesNoValue: indexesSetting });
 
-        const warningText = context.isTargetExistingCollection
-            ? l10n.t(
-                  '⚠️ Warning: This will modify the existing collection. Documents with matching _id values will be handled based on your conflict resolution setting.',
-              )
-            : l10n.t(
-                  'This operation will copy all documents from the source to the target collection. Large collections may take several minutes to complete.',
-              );
+        const importantNotes = context.isTargetExistingCollection
+            ? [
+                  l10n.t('This will modify the existing collection.'),
+                  l10n.t(
+                      'Documents with matching _id values will be handled based on your conflict resolution setting.',
+                  ),
+              ]
+            : [
+                  l10n.t('This operation will copy all documents from the source to the target collection.'),
+                  l10n.t('Large collections may take several minutes to complete.'),
+              ];
         // Combine all parts
         const confirmationMessage = [
             l10n.t('Source:'),
@@ -63,7 +67,8 @@ export class ConfirmOperationStep extends AzureWizardPromptStep<PasteCollectionW
             ' • ' + l10n.t('Conflict Resolution: {strategyName}', { strategyName: conflictStrategy }),
             ' • ' + indexesSummary,
             '',
-            warningText,
+            l10n.t('Important:'),
+            ...importantNotes.map((note) => ' • ' + note),
         ].join('\n');
 
         const actionButton = context.isTargetExistingCollection
