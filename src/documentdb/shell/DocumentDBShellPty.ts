@@ -189,12 +189,7 @@ export class DocumentDBShellPty implements vscode.Pseudoterminal {
         // Disable input during initialization to prevent race conditions
         this._inputHandler.setEnabled(false);
 
-        // Display welcome banner
-        this.writeLine(
-            this._outputFormatter.formatShellTitle(
-                l10n.t('DocumentDB Shell: {0}', this._connectionInfo.clusterDisplayName),
-            ),
-        );
+        this.showLogo();
 
         // Show a labeled spinner during connection
         this._spinner = new ShellSpinner(
@@ -510,9 +505,7 @@ export class DocumentDBShellPty implements vscode.Pseudoterminal {
 
             const identity = metadata.username ?? metadata.displayName;
             const formattedHostLabel = this._outputFormatter.formatConnectionValue(hostLabel);
-            this.writeLine(
-                this._outputFormatter.formatSystemMessage(l10n.t('Connected to: {0}', formattedHostLabel)),
-            );
+            this.writeLine(this._outputFormatter.formatSystemMessage(l10n.t('Connected to: {0}', formattedHostLabel)));
 
             const formattedAuthLabel = this._outputFormatter.formatConnectionValue(authLabel);
             const formattedDatabase = this._outputFormatter.formatConnectionValue(this._currentDatabase);
@@ -863,6 +856,11 @@ export class DocumentDBShellPty implements vscode.Pseudoterminal {
     }
 
     // ─── Private: Terminal output helpers ────────────────────────────────────
+
+    private showLogo(): void {
+        const logo = '╭──────────────────────╮\n│ DocumentDB Shell  >_ │\n╰──────────────────────╯';
+        this.writeLine(this._outputFormatter.formatShellTitle(logo));
+    }
 
     private showPrompt(): void {
         const prompt = `${this._currentDatabase}> `;

@@ -139,7 +139,15 @@ describe('DocumentDBShellPty', () => {
         it('should display welcome banner', () => {
             pty.open(undefined);
             expect(written).toContain('DocumentDB Shell');
-            expect(written).toContain('TestCluster');
+        });
+
+        it('should display the shell logo without persistent connection details', () => {
+            pty.open(undefined);
+
+            expect(written).toContain(
+                '╭──────────────────────╮\r\n│ DocumentDB Shell  >_ │\r\n╰──────────────────────╯',
+            );
+            expect(written).not.toContain('│ TestCluster');
         });
 
         it('should show spinner during connection and clear it after', async () => {

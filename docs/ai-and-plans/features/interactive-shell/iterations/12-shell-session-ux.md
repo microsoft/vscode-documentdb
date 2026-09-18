@@ -86,6 +86,35 @@ handler and playground worker share that module without crossing the extension-h
 - The rebuilt worker contains no `require("vscode")` or `require('vscode')` calls.
 - The affected auth, worker, and shell suites passed with 71 tests.
 
+## WI3: Minimal Terminal Header
+
+**Status:** Implemented
+
+The startup header now uses a compact three-line `DocumentDB Shell` mark. It deliberately carries no
+connection name or host: `Connected to:` is the single persistent source of destination context, and
+duplicating it in the header made long connection names dominate the first screen.
+
+The connection summary uses a minimal, theme-safe hierarchy when
+`documentDB.shell.display.colorSupport` is enabled:
+
+- the shell mark is bold in the terminal's default foreground;
+- labels such as `Connected to`, `Identity`, `Authentication`, and `Database` are gray;
+- their values are bold in the terminal's default foreground;
+- no chromatic ANSI color is introduced by the header.
+
+[`a3f9728e`](https://github.com/microsoft/vscode-documentdb/commit/a3f9728ef0516581a3302c8056f7a2c8f74f3029)
+implements the minimal connection summary.
+[`66901005`](https://github.com/microsoft/vscode-documentdb/commit/66901005326617c068f4fa3a26054746f795a6f9)
+applies the same bold-default treatment to help section headings instead of cyan.
+
+With color support disabled, the same content is emitted without ANSI styling. The connection spinner
+remains a single transient `Connecting and authenticating...` line and does not repeat the destination.
+
+### Verification
+
+- The focused PTY and spinner suites passed with 67 tests.
+- `npm run build` and `npm run webpack-dev-ext` passed.
+
 ## Next Work Items
 
 Add further items only after an issue has a concrete reproduction, an owning code path, and a scoped
