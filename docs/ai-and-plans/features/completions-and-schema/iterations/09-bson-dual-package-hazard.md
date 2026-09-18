@@ -2,15 +2,16 @@
 feature: completions-and-schema
 kind: iteration
 status: active
-prs: []
+prs: [933]
 created: 2026-09-18
 ---
 
 # BSON wrapper types misclassified as plain objects (bson dual-package hazard)
 
 **Branch:** `dev/tnaum/schema-analyzer-bson-fix`
-**Base:** `main`
+**Base:** `dev/tnaum/integrated-shell-improvements` (stacked; branched off `main`)
 **Date:** 2026-09-18
+**PR URL:** https://github.com/microsoft/vscode-documentdb/pull/933
 
 ---
 
