@@ -30,11 +30,7 @@ describe('remove connection command contributions', () => {
     });
 
     it.each([
-        [
-            'vscode-documentdb.command.connectionsView.removeConnection',
-            'Delete Connection…',
-            '!listMultiSelection',
-        ],
+        ['vscode-documentdb.command.connectionsView.removeConnection', 'Delete Connection…', '!listMultiSelection'],
         [
             'vscode-documentdb.command.connectionsView.removeSelectedConnections',
             'Delete Selected Connections…',
