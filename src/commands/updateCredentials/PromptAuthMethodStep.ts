@@ -6,6 +6,7 @@
 import { AzureWizardPromptStep } from '@microsoft/vscode-azext-utils';
 import { l10n } from 'vscode';
 import { createAuthMethodQuickPickItemsWithSupportInfo } from '../../documentdb/auth/AuthMethod';
+import { traceAuthFlow, traceAuthOperation } from '../../utils/authTrace';
 import { type UpdateCredentialsWizardContext } from './UpdateCredentialsWizardContext';
 
 export class PromptAuthMethodStep extends AzureWizardPromptStep<UpdateCredentialsWizardContext> {
@@ -30,19 +31,35 @@ export class PromptAuthMethodStep extends AzureWizardPromptStep<UpdateCredential
             }
         }
 
-        const selectedItem = await context.ui.showQuickPick(quickPickItems, {
-            placeHolder: l10n.t('Select an authentication method'),
-            stepName: 'selectAuthMethod',
-            suppressPersistence: true,
-            ignoreFocusOut: true,
+        Object.assign(context.telemetry.properties, {
+            authMethod: undefined,
+            authMethodSelectionSource: undefined,
+            entraIdentityChoice: undefined,
+            entraIdentityPrompted: undefined,
+            entraIdentitySkipReason: undefined,
+            managedIdentityKind: undefined,
+            managedIdentityClientIdSource: undefined,
         });
-
+        const selectedItem = await traceAuthOperation(
+            'updateCredentials.authMethodPicker',
+            () =>
+                context.ui.showQuickPick(quickPickItems, {
+                    placeHolder: l10n.t('Select an authentication method'),
+                    stepName: 'selectAuthMethod',
+                    suppressPersistence: true,
+                    ignoreFocusOut: true,
+                }),
+            { options: quickPickItems.map((item) => item.authMethod).join(','), reason: 'credentialsBeingUpdated' },
+        );
         if (!selectedItem) {
-            // Treat cancellation as an error so caller can handle it consistently
             throw new Error(l10n.t('No authentication method selected.'));
         }
 
+        context.telemetry.properties.authMethod = selectedItem.authMethod;
+        context.telemetry.properties.authMethodSelectionSource = 'prompt';
         context.selectedAuthenticationMethod = selectedItem.authMethod;
+        traceAuthFlow('updateCredentials.authMethodSelected', { method: selectedItem.authMethod ?? 'none' });
+        context.authenticationMethodPrompted = true;
     }
 
     public shouldPrompt(): boolean {

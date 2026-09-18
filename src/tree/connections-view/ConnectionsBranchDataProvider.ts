@@ -207,10 +207,6 @@ export class ConnectionsBranchDataProvider extends BaseExtendedTreeDataProvider<
                 connectionUser: connection.secrets.nativeAuthConfig?.connectionUser,
             };
 
-            ext.outputChannel.trace(
-                `[ConnectionsView] Created cluster model: name="${model.name}", clusterId="${model.clusterId}", treeId="${model.treeId}"`,
-            );
-
             return new DocumentDBClusterItem(model);
         });
 
@@ -219,6 +215,10 @@ export class ConnectionsBranchDataProvider extends BaseExtendedTreeDataProvider<
 
         // Sort connections alphabetically by name
         clusterItems.sort((a, b) => a.cluster.name.localeCompare(b.cluster.name, undefined, { numeric: true }));
+
+        ext.outputChannel.trace(
+            `[ConnectionsView] Loaded root cluster items: ${clusterFolderItems.length} folder(s), ${clusterItems.length} connection(s).`,
+        );
 
         // Show "New Connection" only if there are no cluster folders or connections
         // (don't count the LocalEmulatorsItem - it's always shown)

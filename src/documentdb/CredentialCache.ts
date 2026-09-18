@@ -6,8 +6,8 @@
 import { type ConnectionItem } from '../services/connectionStorageService';
 import { CaseInsensitiveMap } from '../utils/CaseInsensitiveMap';
 import { type EmulatorConfiguration } from '../utils/emulatorConfiguration';
-import { type EntraIdAuthConfig, type NativeAuthConfig } from './auth/AuthConfig';
-import { AuthMethodId, type AuthMethodId as AuthMethodIdType } from './auth/AuthMethod';
+import { type EntraIdAuthConfig, type ManagedIdentityAuthConfig, type NativeAuthConfig } from './auth/AuthConfig';
+import { AuthMethodId, isSupportedAuthMethod, type AuthMethodId as AuthMethodIdType } from './auth/AuthMethod';
 import { addAuthenticationDataToConnectionString } from './utils/connectionStringHelpers';
 
 export interface CachedClusterCredentials {
@@ -29,6 +29,8 @@ export interface CachedClusterCredentials {
     // Authentication method specific configurations
     nativeAuthConfig?: NativeAuthConfig;
     entraIdConfig?: EntraIdAuthConfig;
+    /** Present (possibly empty, meaning system-assigned) for managed identity connections. */
+    managedIdentityConfig?: ManagedIdentityAuthConfig;
 }
 
 /**
@@ -96,6 +98,19 @@ export class CredentialCache {
      */
     public static getEntraIdConfig(clusterId: string): EntraIdAuthConfig | undefined {
         return CredentialCache._store.get(clusterId)?.entraIdConfig;
+    }
+
+    /**
+     * Gets the managed identity configuration for the specified cluster.
+     *
+     * An empty object means the system-assigned identity; `undefined` means the connection does not
+     * use managed identity at all.
+     *
+     * @param clusterId - The stable cluster identifier for cache lookup.
+     *   ⚠️ Use cluster.clusterId, NOT treeId.
+     */
+    public static getManagedIdentityConfig(clusterId: string): ManagedIdentityAuthConfig | undefined {
+        return CredentialCache._store.get(clusterId)?.managedIdentityConfig;
     }
 
     /**
@@ -208,6 +223,7 @@ export class CredentialCache {
      * @param nativeAuthConfig - The native authentication configuration (optional, for username/password auth).
      * @param emulatorConfiguration - The emulator configuration object (optional, only relevant for local workspace connections).
      * @param entraIdConfig - The Entra ID configuration object (optional, only relevant for Microsoft Entra ID authentication).
+     * @param managedIdentityConfig - The managed identity configuration (optional; an empty object selects the system-assigned identity).
      */
     public static setAuthCredentials(
         clusterId: string,
@@ -216,6 +232,7 @@ export class CredentialCache {
         nativeAuthConfig?: NativeAuthConfig,
         emulatorConfiguration?: EmulatorConfiguration,
         entraIdConfig?: EntraIdAuthConfig,
+        managedIdentityConfig?: ManagedIdentityAuthConfig,
     ): void {
         const username = nativeAuthConfig?.connectionUser ?? '';
         const password = nativeAuthConfig?.connectionPassword ?? '';
@@ -234,6 +251,7 @@ export class CredentialCache {
             authMechanism: authMethod,
             entraIdConfig: entraIdConfig,
             nativeAuthConfig: nativeAuthConfig,
+            managedIdentityConfig: managedIdentityConfig,
         };
 
         CredentialCache._store.set(clusterId, credentials);
@@ -263,20 +281,21 @@ export class CredentialCache {
         let selectedAuthMethod = authMethod;
         if (!selectedAuthMethod) {
             const explicitMethod = connectionItem.properties.selectedAuthMethod as AuthMethodIdType | undefined;
-            if (explicitMethod === AuthMethodId.NoAuth) {
-                // Respect an explicit "No Authentication" choice even though there is no
-                // native/entra config to infer from; otherwise it would fall back to Native.
-                selectedAuthMethod = AuthMethodId.NoAuth;
+            if (isSupportedAuthMethod(explicitMethod)) {
+                // Honor the persisted choice for EVERY known method, not just NoAuth. Inference is a
+                // fallback for records that predate the explicit field, and it cannot distinguish
+                // managed identity from interactive Entra ID: a managed identity connection
+                // discovered through ARM legitimately carries an entraIdAuthConfig as well.
+                selectedAuthMethod = explicitMethod;
+            } else if (secrets.managedIdentityAuthConfig) {
+                selectedAuthMethod = AuthMethodId.ManagedIdentity;
             } else if (secrets.entraIdAuthConfig) {
                 selectedAuthMethod = AuthMethodId.MicrosoftEntraID;
             } else if (secrets.nativeAuthConfig) {
                 selectedAuthMethod = AuthMethodId.NativeAuth;
             } else {
-                // Use the selected method from properties or first available method
                 selectedAuthMethod =
-                    explicitMethod ??
-                    (connectionItem.properties.availableAuthMethods[0] as AuthMethodIdType) ??
-                    AuthMethodId.NativeAuth;
+                    (connectionItem.properties.availableAuthMethods[0] as AuthMethodIdType) ?? AuthMethodId.NativeAuth;
             }
         }
 
@@ -293,6 +312,9 @@ export class CredentialCache {
             cacheEntraIdConfig = { ...secrets.entraIdAuthConfig };
         }
 
+        const cacheManagedIdentityConfig =
+            !isNoAuth && secrets.managedIdentityAuthConfig ? { ...secrets.managedIdentityAuthConfig } : undefined;
+
         // Use structured configurations
         const username = isNoAuth ? '' : (secrets.nativeAuthConfig?.connectionUser ?? '');
         const password = isNoAuth ? '' : (secrets.nativeAuthConfig?.connectionPassword ?? '');
@@ -305,6 +327,7 @@ export class CredentialCache {
             username || password ? { connectionUser: username, connectionPassword: password } : undefined,
             emulatorConfiguration,
             cacheEntraIdConfig,
+            cacheManagedIdentityConfig,
         );
     }
 }

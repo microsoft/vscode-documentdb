@@ -130,10 +130,6 @@ export class AzureSubscriptionItem implements TreeElement, TreeElementWithContex
                             viewId: Views.DiscoveryView,
                         };
 
-                        ext.outputChannel.trace(
-                            `[DiscoveryView/VM] Created cluster model: name="${vmInfo.name}", clusterId="${vmInfo.clusterId}", treeId="${vmInfo.treeId}"`,
-                        );
-
                         vmItems.push(
                             new AzureVMResourceItem(this.journeyCorrelationId, this.subscription.subscription, vmInfo),
                         );
@@ -143,6 +139,8 @@ export class AzureSubscriptionItem implements TreeElement, TreeElementWithContex
                 // Add enhanced telemetry for discovery
                 context.telemetry.measurements.discoveryResourcesCount = vmItems.length;
                 context.telemetry.measurements.discoveryLoadTimeMs = Date.now() - startTime;
+
+                ext.outputChannel.trace(`[DiscoveryView/VM] Loaded ${vmItems.length} tagged virtual machine(s).`);
 
                 return vmItems.sort((a, b) =>
                     a.cluster.name.localeCompare(b.cluster.name, undefined, { numeric: true }),
