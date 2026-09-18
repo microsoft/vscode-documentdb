@@ -575,6 +575,12 @@ Two tests, driving a mocked bracket-notation candidate through
 The second test is the one that matters long-term: an advertisement that lies about what Tab does
 is worse than no advertisement, and that is exactly the class of bug Step 14 was.
 
+**Superseded in rendering by N2 — not in behaviour.** The marker becomes `🛈` and the `(Tab)` suffix
+goes, so the hint will read `  🛈 db['restaurants-something']`. Everything this item actually
+introduced survives: that these candidates are advertised at all rather than silently dropped, and
+that the preview is computed with the same arithmetic acceptance uses, so it cannot drift from what
+Tab produces. Only the two decorations change.
+
 ### I1b. Replacement-aware ghost text — rejected
 
 Moved to the **Won't fix** section below, with the reasoning.
@@ -795,9 +801,9 @@ Raised by the operator while using the shipped build, plus one design question S
 findings about the code as it stood.
 
 **Status: all three have an implementation plan, none is built.** Build order is **N1 → N2 → N3**,
-and each plan says why it sits there. Two ⬜ markers remain — N2's `→` marker and its precedence
-against history, and one sub-question in N3 — and they are the only things blocking a start. N1 is
-unblocked and can begin now.
+and each plan says why it sits there. Two ⬜ markers remain — N2's precedence of the collection count
+against a history suggestion, and N3's question of whether `autocompletion: false` also disables Tab.
+Neither blocks N1, which is fully unblocked and can begin now.
 
 ## N1. An insertable ghost steals Tab from the completion list
 
@@ -920,16 +926,16 @@ the user has to notice. The affordance belongs on the marker, not on a suffix.
 - **`→`** — Tab rewrites your whole line to this
 
 Under that rule `→` is unavailable for the `db.` case, because Tab lists there rather than
-rewriting.
+rewriting. (The operator has since collapsed this to **two** markers — see below. The three-marker
+rule is kept here because it is the reasoning that produced the two-marker one.)
 
 ### Decided by the operator — not yet built
 
 **1. `(Tab)` goes.** > "(Tab) is 'known', no need to show it."
 
-So `→` alone carries the meaning "Tab rewrites your line to this", and the shell names no keys
-anywhere. This removes the conditional-suffix problem `fd2a0a8a` introduced: once nothing ever
-prints `(Tab)`, the two `→` rows can no longer be told apart by a trailing token — which is fine,
-because decision 2 removes the second row entirely.
+The shell names no keys anywhere. This also removes the conditional-suffix problem `fd2a0a8a`
+introduced: once nothing ever prints `(Tab)`, no two hints can be told apart by a trailing token the
+user has to notice.
 
 **2. `db.` shows a collection count, unconditionally.** > "showing after `db.` how many collections
 there are is awesome, I think I'd do it anyway for `db.` — it shows early how cool we are :)"
@@ -957,21 +963,24 @@ questions at different moments:
 | Moment    | Shown                            | Question answered            |
 | --------- | -------------------------------- | ---------------------------- |
 | `db.`     | `  🛈 7 collections`              | "is there anything here?"    |
-| `db.rest` | `  → db['restaurants-original']` | "why won't `db.rest…` work?" |
+| `db.rest` | `  🛈 db['restaurants-original']` | "why won't `db.rest…` work?" |
 
 ### Resulting vocabulary
 
-| Marker | Meaning                                             | Used by                                    |
-| ------ | --------------------------------------------------- | ------------------------------------------ |
-| none   | this text gets appended right where you are looking | completion, history, closing brackets      |
-| `🛈`    | information; no key acts on it                      | schema hint, description, collection count |
-| `→`    | Tab rewrites your line to this                      | rewrite preview                            |
+| Marker | Meaning                                             | Used by                                                      |
+| ------ | --------------------------------------------------- | ------------------------------------------------------------ |
+| none   | this text gets appended right where you are looking | completion, history, closing brackets                        |
+| `🛈`    | information; no key acts on it                      | schema hint, description, collection count, rewrite preview  |
 
-The third row is **provisional** — see below.
+Two markers, and the list is closed — see below.
 
-### ⬜ Open: should `→` exist at all?
+### Decided: `→` folds into `🛈`
 
-> "I'm still on the edge with having that new → character at all."
+> "I'm still on the edge with having that new → character at all." → **Option A.**
+
+The `→` character never enters the codebase. The rewrite preview renders
+`  🛈 db['restaurants-original']`, and the shell has exactly two markers. The options weighed, and
+why A won:
 
 Worth separating two things the operator has already said, because they point different ways:
 
@@ -984,7 +993,7 @@ So this is a question about the marker, not about the feature. Four answers:
 **A. Fold it into `🛈`.** `db.rest` → `  🛈 db['restaurants-original']`. The vocabulary collapses to
 two markers: unmarked means "appendable", `🛈` means "information". Nothing is lost that the content
 does not already carry — seeing your own line rewritten, right next to what you typed, is
-self-explanatory. **Recommended, for three reasons:**
+self-explanatory. **Chosen, for three reasons:**
 
 1. **The arrow will almost never be seen.** It fires only when a single candidate rewrites what you
    typed: collection names that are not valid JS identifiers, and quoted field paths. A user with
@@ -1011,9 +1020,17 @@ existed to close exactly that, and the operator confirmed it worked.
 *why*, but it makes the user do the rewrite in their head, costs a localized string, and is wider
 than the thing it is explaining.
 
-**If A is chosen**, N2's step 1 becomes "`showCompletionPreviewHint()` renders `  🛈 ${preview}`" and
-the `→` character never enters the codebase. If **C**, steps 1 and the I1a preview path are deleted
-outright and I1a is marked superseded rather than shipped.
+**Consequences of A, now binding:**
+
+- `showCompletionPreviewHint()` renders `  🛈 ${preview}` — step 1 of the plan below.
+- **The marker list is closed at two entries.** Adding a third later means reopening this decision,
+  not extending it. That is the point: a two-value vocabulary cannot drift into an ambiguous one.
+- **N3's alignment stops being a hope and becomes a guarantee.** Unmarked ghosts are governed by
+  `autocompletion`, everything marked `🛈` by `inlineHints`. The glyph on screen names its own switch,
+  so a user can predict which setting affects what they are looking at without reading anything.
+- **I1a is superseded in rendering, not in behaviour.** Both the marker and the `(Tab)` suffix go.
+  What I1a introduced — that these candidates are advertised at all, and that the preview is computed
+  with the same arithmetic acceptance uses — is untouched.
 
 ### Settled
 
@@ -1049,7 +1066,7 @@ outright and I1a is marked superseded rather than shipped.
 
 | #   | Change                                                                                                                                      | File                    |
 | --- | ------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------- |
-| 1   | `showCompletionPreviewHint()` drops the `advertiseTab` parameter; the hint is always `  → ${preview}`                                       | `DocumentDBShellPty.ts` |
+| 1   | `showCompletionPreviewHint()` drops the `advertiseTab` parameter; the hint is always `  🛈 ${preview}`                                      | `DocumentDBShellPty.ts` |
 | 2   | Delete the `result.prefix.length === 0` special case added by `fd2a0a8a`                                                                    | `DocumentDBShellPty.ts` |
 | 3   | Delete `ghostCandidate()`'s empty-prefix branch — it returns `undefined` for an empty prefix, and `detectContext` is no longer called there | `DocumentDBShellPty.ts` |
 | 4   | Add `showCollectionCountHint()` next to `showDetailHint()`, rendering `  🛈 {n} collections` via `_ghostTextIsHint = true`                   | `DocumentDBShellPty.ts` |
@@ -1066,7 +1083,8 @@ Steps 2 and 3 remove the whole I1c empty-prefix mechanism; step 4 replaces it. N
 | `db.` with 1 collection emits `1 collection`, singular                             | the pluralisation ternary                     |
 | `db.` with a cold cache emits no ghost                                             | the cache-only guarantee, via zero candidates |
 | `db.` still lists on Tab                                                           | the hint stays informational                  |
-| `db.rest` emits `  → db['restaurants-original']` and **no** `(Tab)` anywhere       | decision 1                                    |
+| `db.rest` emits `  🛈 db['restaurants-original']`                                  | the fold onto one informational marker        |
+| no `(Tab)` and no `→` is emitted by any path, asserted across the whole suite      | decision 1 and the fold, guarded globally     |
 | the existing `db.`-suggests-the-sole-collection tests are **deleted**, not adapted | they encode the superseded I1c rule           |
 
 **⬜ Needs your call before I build:** where does the count sit relative to history? "Insertable
@@ -1127,9 +1145,10 @@ localized string N3 touches is N2's collection count, via `vscode.l10n.t()` in s
 | `documentDB.shell.display.autocompletion`  | Tab completion, the candidate list, and the insertable ghosts (completion, history, closing brackets) | contributed, **dead** |
 | `documentDB.shell.display.inlineHints`     | everything marked `🛈` — description, schema hint, collection count, and the rewrite preview | new                  |
 
-Both become real; neither is a subset of the other. The split is the affordance line N2 draws, which
-means **the marker on screen tells the user which switch controls it** — unmarked is autocompletion,
-`🛈` is hints. That only holds cleanly if N2 picks option A, which is a further argument for it.
+Both become real; neither is a subset of the other. The split is the affordance line N2 draws, and
+because N2 settled on folding `→` into `🛈` there are exactly two markers — so **the glyph on screen
+names its own switch**: unmarked is `autocompletion`, `🛈` is `inlineHints`. Nothing extra has to be
+learned or documented for a user to predict which setting affects what they are looking at.
 
 ### Implementation plan — for review
 
@@ -1433,9 +1452,8 @@ minutes.
 - **What counts as "help" for the purpose of turning it off?** **Answered:** two switches —
   `autocompletion` for completion and the insertable ghosts, a new `inlineHints` for everything
   marked `🛈`. One sub-question survives in N3: whether `autocompletion: false` also disables Tab.
-- **Does the shell need a `→` marker at all?** Open, and it is the last thing blocking N2. The
-  behaviour it renders is wanted and nothing else does that job; the question is whether it earns a
-  third symbol or folds into `🛈`. See N2.
+- **Does the shell need a `→` marker at all?** **Answered: no.** It folds into `🛈`, leaving exactly
+  two markers — which in turn makes each marker name the N3 setting that governs it. See N2.
 - **Is "append only" the permanent ghost text contract?** Rejecting I1b answers it for now, and F2
   would write it down. But I7-as-menu-select needs the renderer to own rows it does not write today,
   which is the same question approached from the other side. Worth one decision covering both rather
