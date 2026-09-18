@@ -18,6 +18,8 @@ import { DocumentDBShellRuntime } from '@documentdb-js/shell-runtime';
 import { randomUUID } from 'crypto';
 import { type MongoClientOptions, type MongoClient as MongoClientType } from 'mongodb';
 import { parentPort } from 'worker_threads';
+import { DOCUMENTDB_ENTRA_SCOPE } from '../auth/entraScopes';
+import { expiresInSecondsFromTimestamp } from '../auth/ManagedIdentityAuthHandler';
 import { getOidcAllowedHosts } from '../auth/oidcAllowedHosts';
 import { type MainToWorkerMessage, type WorkerToMainMessage } from './workerTypes';
 
@@ -115,8 +117,11 @@ async function handleInit(msg: Extract<MainToWorkerMessage, { type: 'init' }>): 
         ...msg.clientOptions,
     };
 
-    // For Entra ID, configure OIDC callback that requests tokens via IPC
-    if (msg.authMechanism === 'MicrosoftEntraID') {
+    // Entra ID and managed identity are the same OIDC mechanism on the wire; only the token source
+    // differs, and both are resolved on the main thread so there is one credential and one cache
+    // per window, and so the worker never needs @azure/identity.
+    if (msg.authMechanism === 'MicrosoftEntraID' || msg.authMechanism === 'ManagedIdentity') {
+        const usesManagedIdentity = msg.authMechanism === 'ManagedIdentity';
         options.authMechanism = 'MONGODB-OIDC';
         options.tls = true;
         options.authMechanismProperties = {
@@ -129,8 +134,10 @@ async function handleInit(msg: Extract<MainToWorkerMessage, { type: 'init' }>): 
                 const tokenRequest: WorkerToMainMessage = {
                     type: 'tokenRequest',
                     requestId,
-                    scopes: ['https://ossrdbms-aad.database.windows.net/.default'],
+                    scopes: [DOCUMENTDB_ENTRA_SCOPE],
                     tenantId: msg.tenantId,
+                    source: usesManagedIdentity ? 'managedIdentity' : 'vscode',
+                    clientId: usesManagedIdentity ? msg.managedIdentityClientId : undefined,
                 };
                 parentPort!.postMessage(tokenRequest);
                 const accessToken = await tokenPromise;
@@ -142,11 +149,11 @@ async function handleInit(msg: Extract<MainToWorkerMessage, { type: 'init' }>): 
                 try {
                     const payload = accessToken.split('.')[1];
                     if (payload) {
-                        const decoded = JSON.parse(Buffer.from(payload, 'base64').toString()) as {
+                        const decoded = JSON.parse(Buffer.from(payload, 'base64url').toString()) as {
                             exp?: number;
                         };
                         if (typeof decoded.exp === 'number') {
-                            expiresInSeconds = Math.max(0, decoded.exp - Math.floor(Date.now() / 1000));
+                            expiresInSeconds = expiresInSecondsFromTimestamp(decoded.exp * 1000);
                         }
                     }
                 } catch {

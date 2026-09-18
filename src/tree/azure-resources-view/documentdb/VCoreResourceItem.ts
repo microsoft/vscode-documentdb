@@ -21,6 +21,7 @@ import { type AuthenticateWizardContext } from '../../../documentdb/wizards/auth
 import { ChooseAuthMethodStep } from '../../../documentdb/wizards/authenticate/ChooseAuthMethodStep';
 import { ProvidePasswordStep } from '../../../documentdb/wizards/authenticate/ProvidePasswordStep';
 import { ProvideUserNameStep } from '../../../documentdb/wizards/authenticate/ProvideUsernameStep';
+import { SelectEntraTokenSourceStep } from '../../../documentdb/wizards/authenticate/SelectEntraTokenSourceStep';
 import { ext } from '../../../extensionVariables';
 import {
     extractCredentialsFromCluster,
@@ -98,6 +99,7 @@ export class VCoreResourceItem extends ClusterItemBase<AzureClusterModel> {
                 adminUserName: credentials.nativeAuthConfig?.connectionUser,
                 resourceName: this.cluster.name,
                 availableAuthMethods: credentials.availableAuthMethods,
+                managedIdentityAuthConfig: credentials.managedIdentityAuthConfig,
             };
 
             // Prompt for credentials
@@ -133,11 +135,17 @@ export class VCoreResourceItem extends ClusterItemBase<AzureClusterModel> {
                 nativeAuthConfig,
                 undefined,
                 credentials.entraIdAuthConfig,
+                wizardContext.selectedAuthMethod === AuthMethodId.ManagedIdentity
+                    ? (wizardContext.managedIdentityAuthConfig ?? {})
+                    : undefined,
             );
 
             switch (wizardContext.selectedAuthMethod) {
                 case AuthMethodId.MicrosoftEntraID:
-                    ext.outputChannel.append(l10n.t('Connecting to the cluster using Entra ID…'));
+                    ext.outputChannel.append(l10n.t('Connecting to the cluster using a Microsoft Entra account…'));
+                    break;
+                case AuthMethodId.ManagedIdentity:
+                    ext.outputChannel.append(l10n.t('Connecting to the cluster using a managed identity…'));
                     break;
                 default:
                     ext.outputChannel.append(
@@ -198,8 +206,20 @@ export class VCoreResourceItem extends ClusterItemBase<AzureClusterModel> {
      * @returns True if the wizard completed successfully; false if the user canceled or an error occurred.
      */
     private async promptForCredentials(wizardContext: AuthenticateWizardContext): Promise<boolean> {
+        wizardContext.telemetry.properties.authFlowOrigin = 'azureResources';
         const wizard = new AzureWizard(wizardContext, {
-            promptSteps: [new ChooseAuthMethodStep(), new ProvideUserNameStep(), new ProvidePasswordStep()],
+            promptSteps: [
+                new ChooseAuthMethodStep(),
+                new SelectEntraTokenSourceStep<AuthenticateWizardContext>(
+                    (context) => context.selectedAuthMethod,
+                    (context, method) => {
+                        context.selectedAuthMethod = method;
+                        context.isAuthMethodUpdated = true;
+                    },
+                ),
+                new ProvideUserNameStep(),
+                new ProvidePasswordStep(),
+            ],
             title: l10n.t('Authenticate to connect with your DocumentDB cluster'),
             showLoadingPrompt: true,
         });

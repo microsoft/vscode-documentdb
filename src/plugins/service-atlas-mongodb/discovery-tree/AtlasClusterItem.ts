@@ -20,6 +20,7 @@ import { type AuthenticateWizardContext } from '../../../documentdb/wizards/auth
 import { ChooseAuthMethodStep } from '../../../documentdb/wizards/authenticate/ChooseAuthMethodStep';
 import { ProvidePasswordStep } from '../../../documentdb/wizards/authenticate/ProvidePasswordStep';
 import { ProvideUserNameStep } from '../../../documentdb/wizards/authenticate/ProvideUsernameStep';
+import { SelectEntraTokenSourceStep } from '../../../documentdb/wizards/authenticate/SelectEntraTokenSourceStep';
 import { ext } from '../../../extensionVariables';
 import { ClusterItemBase, type EphemeralClusterCredentials } from '../../../tree/documentdb/ClusterItemBase';
 import { type TreeCluster } from '../../../tree/models/BaseClusterModel';
@@ -358,9 +359,17 @@ export class AtlasClusterItem extends ClusterItemBase<AtlasClusterModel> {
      * Prompts the user for credentials using a wizard.
      */
     private async promptForCredentials(wizardContext: AuthenticateWizardContext): Promise<boolean> {
+        wizardContext.telemetry.properties.authFlowOrigin = 'atlasDiscovery';
         const wizard = new AzureWizard(wizardContext, {
             promptSteps: [
                 new ChooseAuthMethodStep(),
+                new SelectEntraTokenSourceStep<AuthenticateWizardContext>(
+                    (context) => context.selectedAuthMethod,
+                    (context, method) => {
+                        context.selectedAuthMethod = method;
+                        context.isAuthMethodUpdated = true;
+                    },
+                ),
                 new SelectAtlasDatabaseUserStep((signal) => this.listDatabaseUserCandidates(signal), this.cluster.name),
                 new ProvideUserNameStep(),
                 new ProvidePasswordStep(),

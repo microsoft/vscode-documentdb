@@ -5,6 +5,7 @@
 
 import { AzureWizardPromptStep, type IWizardOptions } from '@microsoft/vscode-azext-utils';
 import * as l10n from '@vscode/l10n';
+import { SelectEntraTokenSourceStep } from '../../documentdb/wizards/authenticate/SelectEntraTokenSourceStep';
 import { DocumentDBExperience } from '../../DocumentDBExperiences';
 import { ExecuteStep } from './ExecuteStep';
 import { ConnectionMode, type NewConnectionWizardContext } from './NewConnectionWizardContext';
@@ -68,6 +69,12 @@ export class PromptConnectionModeStep extends AzureWizardPromptStep<NewConnectio
                         // TLS-exception step (§7) — gated to local/private hosts; defaults to Enable TLS.
                         new PromptTlsExceptionStep(),
                         new PromptAuthMethodStep(),
+                        new SelectEntraTokenSourceStep<NewConnectionWizardContext>(
+                            (context) => context.selectedAuthenticationMethod,
+                            (context, method) => {
+                                context.selectedAuthenticationMethod = method;
+                            },
+                        ),
                         new PromptTenantStep(),
                         new PromptUsernameStep(),
                         new PromptPasswordStep(),
