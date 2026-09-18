@@ -185,7 +185,7 @@ is luxury 5 / usefulness 3. Both are worth doing; they are not worth doing _in t
 | F6  | Banner and logo drawn at an assumed 80 columns | S          | 1   | 1   | Won't fix | —                  |
 | I1a | Bracket-notation preview hint                  | S          | 4   | 3   | Fix       | Shipped `a0774f47` |
 | I1b | Replacement-aware ghost text                   | M          | 4   | 5   | Won't fix | —                  |
-| I1c | Ghost text at an empty prefix                  | S          | 3   | 3   | Fix       | Shipped `a22358b0` |
+| I1c | Ghost text at an empty prefix                  | S          | 3   | 3   | Fix       | Superseded by N2   |
 | I2  | History-based autosuggestion (capped)          | M          | 4   | 5   | Fix       | Shipped `50e6ba53` |
 | I3  | Ctrl+R reverse history search                  | M          | 3   | 4   | Deferred  | —                  |
 | I4  | Persist history across sessions                | M          | 4   | 2   | Deferred  | —                  |
@@ -196,7 +196,7 @@ is luxury 5 / usefulness 3. Both are worth doing; they are not worth doing _in t
 | I9  | Clickable collection names                     | M          | 3   | 4   | Deferred  | —                  |
 | I10 | Make `reRenderLine()` ghost-aware              | M          | 3   | 1   | Deferred  | —                  |
 | N1  | Insertable ghosts steal Tab from the list      | S          | 5   | 1   | Fix       | Shipped `829788c1` |
-| N2  | Hint markers, and what `db.` should say        | S          | 4   | 4   | **Open**  | Decided, not built |
+| N2  | Hint markers, and what `db.` should say        | S          | 4   | 4   | Fix       | Shipped `5526f566` |
 | N3  | Setting to turn the inline hints off           | S          | 4   | 2   | **Open**  | Operator request   |
 
 Two entries changed shape during triage. **I7** moved to Deferred once it became clear that the
@@ -205,9 +205,8 @@ prerequisite — see I7 for the reasoning. **I10** moved the other way: dropping
 driver, then I7 gave it a new one, so it is deferred rather than closed.
 
 **N1–N3 were raised after Step 15 shipped** and are not part of the original triage — see
-[Found after Step 15](#found-after-step-15). N1 is a live regression and should land before the PR
-goes for review. N2 has since been **decided by the operator but not built**, and its decision
-supersedes part of the shipped I1c. **N1 must be built before N2**, for the reason recorded under N2.
+[Found after Step 15](#found-after-step-15). **N1 and N2 are shipped**; N3 remains open. N2's
+decision supersedes the shipped I1c, whose empty-prefix rule was removed when N2 was built.
 
 F7 and F8 from the first draft were not defects; they are folded into I5 and I4 as supporting
 evidence.
@@ -651,6 +650,13 @@ show a collection count rather than the sole collection's name, so neither the i
 the `→` preview will appear there. What survives of I1c is the question it asked — _should `db.` say
 anything at all?_ — answered better than it was triaged.
 
+### Superseded — commit `5526f566`
+
+N2 shipped and removed the empty-prefix mechanism: `ghostCandidate()` returns `undefined` for an
+empty prefix, the `db.`-suggests-the-sole-collection tests are deleted, and `db.` now renders
+`  🛈 N collections`. `a22358b0` and `fd2a0a8a` survive only as history. The `ghostCandidate()`
+helper itself remains, doing the non-empty-prefix half it was factored out for.
+
 ## I2. History-based autosuggestion (fish-style)
 
 When the buffer is a prefix of a previous command, ghost the rest of it. This is the single most
@@ -800,9 +806,10 @@ Raised by the operator while using the shipped build, plus one design question S
 **None of these were triaged in the original audit** — they are consequences of the work, not
 findings about the code as it stood.
 
-**Status: N1 is shipped; N2 and N3 have plans and are not built.** Build order is **N1 → N2 → N3**,
-and each plan says why it sits there. Two ⬜ markers remain — N2's precedence of the collection count
-against a history suggestion, and N3's question of whether `autocompletion: false` also disables Tab.
+**Status: N1 and N2 are shipped; N3 has a plan and is not built.** Build order is **N1 → N2 → N3**,
+and each plan says why it sits there. One ⬜ marker remains — N3's question of whether
+`autocompletion: false` also disables Tab. N2's ⬜ was resolved by building the recommendation; see
+the note under it.
 
 ## N1. An insertable ghost steals Tab from the completion list
 
@@ -939,8 +946,8 @@ Suite: 13 suites, 504 tests, all passing (was 499).
 
 ## N2. The hint marker vocabulary is inconsistent
 
-**Open design question. Raised by the operator: "it's the one that shows an → arrow and (Tab), no
-other one does that."**
+**Shipped in `5526f566`.** Raised by the operator: "it's the one that shows an → arrow and (Tab), no
+other one does that."
 
 The observation is correct, and the inconsistency got worse in `fd2a0a8a`, which made `(Tab)`
 conditional. Current state:
@@ -1133,9 +1140,54 @@ empty prefix in the `db-dot` context specifically**, because a history match on 
 prefix that generic carries almost no information, whereas the count is about exactly where the
 cursor is. That is one narrow exception to the precedence rule rather than a change to it.
 
+**Resolved by building the recommendation.** No operator ruling was available at build time and the
+recommendation was the only proposal on the table, so the count wins at an empty prefix in `db-dot`.
+It is one branch, guarded by context, and reversing it means deleting that branch. If this was the
+wrong call, say so — the test `outranks a history suggestion, which \`db.\` almost always has` is the
+one to invert.
+
 | Complexity | Usefulness | Luxury |
 | ---------- | ---------- | ------ |
 | S          | 4          | 4      |
+
+### Shipped — commit `5526f566`
+
+**Built as planned, all five steps.** `showCompletionPreviewHint()` lost `advertiseTab` and renders
+`  🛈 ${preview}`; the empty-prefix special case and `ghostCandidate()`'s empty-prefix branch are
+gone; `showCollectionCountHint()` sits next to `showDetailHint()`; the count is in the precedence
+chain between the candidate block and the history suggestion.
+
+**Three things worth recording:**
+
+- **`ghostCandidate()` lost two parameters, not just a branch.** With the empty-prefix path gone it
+  no longer calls `detectContext()`, so `buffer` and `cursor` became unused. The signature is now
+  `ghostCandidate(result)`. `detectContext()` did not disappear from the module — it moved to the
+  count's guard, where it is what keeps the count out of `db[` and other empty-prefix contexts.
+- **The marker guard is an `afterEach` on the whole suite**, asserting `written` contains neither
+  `→` nor `(Tab)`. That is the only way to make "asserted across the whole suite" literally true, and
+  it is cheap: those two tokens appear nowhere else in shell output, verified by grep before adding
+  it. A future hint that reintroduces a third marker fails every test in the file, which is the
+  intended noise level for reopening a closed decision.
+- **`l10n/bundle.l10n.json` carries unrelated drift.** The generator picked up three entries from
+  earlier shell commits that never ran it (`{0} ({1})`, `Identity: {0} | …`, and the removal of
+  `DocumentDB Shell: {0}`). The file is generated and must not be hand-edited, so the drift ships
+  with this commit rather than being separated out.
+
+Seven tests, replacing the five in the deleted `ghost text — empty prefix at \`db.\`` block:
+
+| Test                                                                  | What it pins              |
+| --------------------------------------------------------------------- | ------------------------- |
+| `db.` with 7 collections emits `\x1b[2m\x1b[90m  🛈 7 collections`     | the feature               |
+| `db.` with 1 collection emits `1 collection`, and not `1 collections` | the pluralisation ternary |
+| `db.` with no collection candidates emits no ghost                    | the cache-only guarantee  |
+| `db.` still lists every candidate on Tab                              | the hint is informational |
+| the count beats a history match on `db.`                              | the ⬜ decision above     |
+| `db.rest` emits `  🛈 db['restaurants-original']`                      | the fold onto one marker  |
+| the bracket-notation preview emits `  🛈 …` with no `(Tab)`            | decision 1                |
+
+The five superseded I1c tests were **deleted, not adapted**, as the plan required.
+
+Suite: 13 suites, 505 tests, all passing (was 504).
 
 ## N3. A setting to turn the inline hints off, named in `help`
 
