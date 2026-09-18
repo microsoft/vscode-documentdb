@@ -6,8 +6,6 @@
 
 **DocumentDB for VS Code** is built with an open architecture. While the extension focuses on developer productivity (data exploration, running queries, and importing/exporting data), the core connectivity is centered around connection strings.
 
-![Service Discovery Providers Location](./images/service-discovery-introduction.png)
-
 ## How Service Discovery Works
 
 A **Service Discovery plugin** is designed to understand a specific vendor environment. Its responsibilities include:
