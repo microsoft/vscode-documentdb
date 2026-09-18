@@ -137,6 +137,7 @@ describe('Local Quick Start cluster-command opt-in (UX review item 20)', () => {
         'vscode-documentdb.command.connectionsView.renameConnection',
         'vscode-documentdb.command.connectionsView.moveItems',
         'vscode-documentdb.command.connectionsView.removeConnection',
+        'vscode-documentdb.command.connectionsView.removeSelectedConnections',
         'vscode-documentdb.command.connectionsView.updateCredentials',
         'vscode-documentdb.command.connectionsView.updateConnectionString',
         'vscode-documentdb.command.accessDataMigrationServices',
