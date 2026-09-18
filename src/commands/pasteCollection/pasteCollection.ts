@@ -3,7 +3,12 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { AzureWizard, type AzureWizardPromptStep, type IActionContext } from '@microsoft/vscode-azext-utils';
+import {
+    AzureWizard,
+    UserCancelledError,
+    type AzureWizardPromptStep,
+    type IActionContext,
+} from '@microsoft/vscode-azext-utils';
 import * as l10n from '@vscode/l10n';
 import * as vscode from 'vscode';
 import { ClustersClient } from '../../documentdb/ClustersClient';
@@ -211,9 +216,9 @@ export async function pasteCollection(
         // Record failure telemetry
         context.telemetry.properties.wizardCompletedSuccessfully = 'false';
 
-        if (error instanceof Error && error.message.includes('cancelled')) {
+        if (error instanceof UserCancelledError || (error instanceof Error && error.message.includes('cancelled'))) {
             // User cancelled the wizard, don't show error
-            context.telemetry.properties.wizardFailureReason = 'userCancelled';
+            context.telemetry.properties.wizardFailureReason ??= 'userCancelled';
             context.telemetry.properties.wizardCancelledByUser = 'true';
             return;
         }

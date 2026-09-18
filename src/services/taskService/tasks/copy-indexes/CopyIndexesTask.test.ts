@@ -116,7 +116,9 @@ describe('CopyIndexesTask', () => {
 
         await task.runWorkForTest(new AbortController().signal, context);
 
-        expect(copier.copyIndexes).toHaveBeenCalledWith(expect.objectContaining({ sourceIndexNames: ['email_1'] }));
+        expect(copier.copyIndexes).toHaveBeenCalledWith(
+            expect.objectContaining({ sourceIndexNames: ['email_1'], allowDocumentAffectingIndexes: true }),
+        );
         expect(task.progressUpdates.map((update) => update.progress)).toEqual([0, 33, 66, 100, 100]);
         expect(task.progressUpdates.at(-1)?.message).toBe(
             '2 indexes created, 1 equivalent indexes skipped, 1 option conflicts skipped, 1 renamed.',

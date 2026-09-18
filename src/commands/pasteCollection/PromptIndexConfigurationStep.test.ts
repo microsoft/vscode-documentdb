@@ -51,7 +51,8 @@ describe('PromptIndexConfigurationStep', () => {
             expect.arrayContaining([
                 expect.objectContaining({
                     id: 'copy',
-                    detail: "Copy the source collection's secondary index definitions.",
+                    detail:
+                        "Copy the source collection's secondary index definitions. TTL and unique indexes must be pasted separately.",
                 }),
             ]),
             expect.any(Object),

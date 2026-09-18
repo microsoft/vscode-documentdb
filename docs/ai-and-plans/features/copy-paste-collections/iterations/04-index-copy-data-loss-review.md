@@ -228,6 +228,18 @@ headline behaviour. Append the reversal and its rationale to
 rename-on-collision path that can shorten an existing TTL lives in the copier and still applies to
 the dedicated Paste Indexes flow — which is now the recommended way to move a TTL index.
 
+**Resolution progress (commit `fix(collection-copy): refuse document-affecting indexes`):**
+implemented the ruled design. One exported predicate defines the TTL/unique rule; summary
+classification and the copier consume it. The collection wizard refuses after its existing source
+read, names the affected indexes in a modal, links to the user guide, records stable reason and count
+telemetry, and preserves documents-only behavior. The copier defaults to deny before target work,
+while `CopyIndexesTask` explicitly opts in. The old collection confirmation warnings were deleted.
+
+**Alternatives evaluated:** index-after-documents, warning-and-continue, and silent documents-only
+downgrade were rejected for the reasons recorded in D0026. The shared helper remains beside the
+copier rather than in presentation code because it operates on driver options and protects every
+future caller by default.
+
 ---
 
 ### D4 — Warnings are computed at confirm time, the copy re-reads at execution time
@@ -266,6 +278,10 @@ becomes unreachable and the helper is deleted rather than reworded. The dedicate
 states the consequence correctly —
 [ConfirmPasteIndexesStep.ts](../../../../../src/commands/pasteIndexes/ConfirmPasteIndexesStep.ts)
 lines 95-100, "including after this task finishes" — and keeps that wording unchanged.
+
+**Resolution progress (commit `fix(collection-copy): refuse document-affecting indexes`):** closed
+by D3. The unreachable helper and its tests were deleted, and `ConfirmOperationStep` no longer
+assembles index warnings.
 
 ---
 

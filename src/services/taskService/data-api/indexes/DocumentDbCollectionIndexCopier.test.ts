@@ -31,7 +31,10 @@ interface MockIndex {
     textIndexVersion?: number;
     weights?: Record<string, number>;
     unique?: boolean;
+    sparse?: boolean;
     expireAfterSeconds?: number;
+    partialFilterExpression?: Record<string, unknown>;
+    collation?: Record<string, unknown>;
     background?: boolean;
     hidden?: boolean;
     cosmosSearchOptions?: Record<string, unknown>;
@@ -158,7 +161,9 @@ describe('DocumentDbCollectionIndexCopier', () => {
             createClient([{ key: { email: 1 }, name: 'target_name', v: 1, unique: true }], createIndex),
         );
 
-        await expect(copier.copyIndexes({ sourceIndexNames: ['source_name'], onProgress })).resolves.toEqual({
+        await expect(
+            copier.copyIndexes({ sourceIndexNames: ['source_name'], allowDocumentAffectingIndexes: true, onProgress }),
+        ).resolves.toEqual({
             selectedIndexCount: 1,
             createdCount: 0,
             skippedCount: 1,
@@ -178,7 +183,7 @@ describe('DocumentDbCollectionIndexCopier', () => {
             createClient([], createIndex),
         );
 
-        const result = await copier.copyIndexes({ onStart });
+        const result = await copier.copyIndexes({ allowDocumentAffectingIndexes: true, onStart });
 
         expect(onStart).toHaveBeenCalledWith(1);
         expect(createIndex).toHaveBeenCalledWith('targetDb', 'targetCollection', {
@@ -267,7 +272,9 @@ describe('DocumentDbCollectionIndexCopier', () => {
             ),
         );
 
-        await expect(copier.copyIndexes({ sourceIndexNames: ['status_1'] })).resolves.toMatchObject({
+        await expect(
+            copier.copyIndexes({ sourceIndexNames: ['status_1'], allowDocumentAffectingIndexes: true }),
+        ).resolves.toMatchObject({
             selectedIndexCount: 1,
             createdCount: 0,
             skippedCount: 1,
@@ -409,7 +416,7 @@ describe('DocumentDbCollectionIndexCopier', () => {
             createClient([{ key: { createdAt: 1 }, name: 'createdAt_1', expireAfterSeconds: 2592000 }], createIndex),
         );
 
-        await expect(copier.copyIndexes({ onProgress })).resolves.toEqual({
+        await expect(copier.copyIndexes({ allowDocumentAffectingIndexes: true, onProgress })).resolves.toEqual({
             selectedIndexCount: 1,
             createdCount: 0,
             skippedCount: 1,
@@ -419,6 +426,71 @@ describe('DocumentDbCollectionIndexCopier', () => {
         });
         expect(createIndex).not.toHaveBeenCalled();
         expect(onProgress).toHaveBeenCalledWith({ completed: 1, total: 1, indexName: 'createdAt_1' });
+    });
+
+    it('rejects document-affecting indexes by default before reading the target catalog', async () => {
+        const targetIndexes = jest.fn().mockResolvedValue([]);
+        const targetClient = {
+            getCollection: jest.fn().mockReturnValue({ indexes: targetIndexes }),
+            createIndex: jest.fn(),
+        } as unknown as ClustersClient;
+        const copier = createCopier(
+            createClient([
+                { key: { email: 1 }, name: 'email_1', unique: true },
+                { key: { expiresAt: 1 }, name: 'expiresAt_1', expireAfterSeconds: 0 },
+            ]),
+            targetClient,
+        );
+
+        await expect(copier.copyIndexes()).rejects.toThrow(
+            'Cannot copy TTL or unique indexes as part of a collection paste: "email_1", "expiresAt_1".',
+        );
+        expect(targetIndexes).not.toHaveBeenCalled();
+        expect(targetClient.createIndex).not.toHaveBeenCalled();
+    });
+
+    it('allows the dedicated flow to copy TTL and unique indexes', async () => {
+        const createIndex = jest.fn().mockResolvedValue({ ok: 1 });
+        const copier = createCopier(
+            createClient([
+                { key: { email: 1 }, name: 'email_1', unique: true },
+                { key: { expiresAt: 1 }, name: 'expiresAt_1', expireAfterSeconds: 0 },
+            ]),
+            createClient([], createIndex),
+        );
+
+        await expect(copier.copyIndexes({ allowDocumentAffectingIndexes: true })).resolves.toMatchObject({
+            selectedIndexCount: 2,
+            createdCount: 2,
+        });
+        expect(createIndex).toHaveBeenCalledTimes(2);
+    });
+
+    it('allows non-document-affecting options without an explicit opt-in', async () => {
+        const createIndex = jest.fn().mockResolvedValue({ ok: 1 });
+        const copier = createCopier(
+            createClient([
+                {
+                    key: { region: 1 },
+                    name: 'region_1',
+                    sparse: true,
+                    partialFilterExpression: { active: true },
+                    collation: { locale: 'en' },
+                },
+            ]),
+            createClient([], createIndex),
+        );
+
+        await expect(copier.copyIndexes()).resolves.toMatchObject({ createdCount: 1 });
+        expect(createIndex).toHaveBeenCalledWith(
+            'targetDb',
+            'targetCollection',
+            expect.objectContaining({
+                sparse: true,
+                partialFilterExpression: { active: true },
+                collation: { locale: 'en' },
+            }),
+        );
     });
 
     it('ignores server-generated options when comparing definitions', async () => {

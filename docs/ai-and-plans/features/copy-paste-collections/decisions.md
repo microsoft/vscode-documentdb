@@ -16,7 +16,7 @@ created: 2026-09-16
 | 0002 | Use one optional `CollectionIndexCopier` at the task boundary  | Accepted            | Chosen after rejecting the more elaborate migration pipeline         | 2026-09-16 | —    |
 | 0003 | Defer a portable index model until cross-database migration    | Accepted            | Simplified from the proposed reader/planner/writer architecture      | 2026-09-16 | —    |
 | 0004 | Keep index processing bounded and sequential                   | Accepted            | Migrated from the original implementation plan                       | 2026-09-16 | —    |
-| 0005 | Copy indexes before document streaming                         | Accepted            | Migrated from the original implementation plan                       | 2026-09-16 | —    |
+| 0005 | Copy indexes before document streaming                         | Superseded by D0026 | Migrated from the original implementation plan                       | 2026-09-16 | —    |
 | 0006 | Exclude the built-in `_id` index                               | Superseded by D0012 | Migrated from the original implementation plan                       | 2026-09-16 | —    |
 | 0007 | Compare definitions before names                               | Accepted            | Migrated from the original implementation plan                       | 2026-09-16 | —    |
 | 0008 | Preserve index creation failures                               | Accepted            | Migrated from the original implementation plan                       | 2026-09-16 | —    |
@@ -35,8 +35,9 @@ created: 2026-09-16
 | 0021 | Do not roll back buffer state after a setContext failure       | Accepted            | Rejected handling an unreachable production failure                  | 2026-09-17 | #930 |
 | 0022 | Keep copied index state after a successful paste               | Accepted            | Matches reusable collection-copy behavior                            | 2026-09-17 | #930 |
 | 0023 | Use a dedicated task for index-only copy                       | Accepted            | Rejected reusing document-transfer orchestration                     | 2026-09-17 | #930 |
-| 0024 | Preserve collection-copy behavior while adapting contracts     | Accepted            | Rejected count and prompt-order redesigns                            | 2026-09-17 | #930 |
+| 0024 | Preserve collection-copy behavior while adapting contracts     | Superseded by D0026 | Rejected count and prompt-order redesigns                            | 2026-09-17 | #930 |
 | 0025 | Filter index tree multi-selection into one source subset       | Accepted            | Extended the first version after validating the cluster move pattern | 2026-09-17 | #930 |
+| 0026 | Refuse document-affecting indexes during collection paste      | Accepted            | Reverses the warning-and-copy behavior for TTL and unique indexes    | 2026-09-18 | #930 |
 
 > Entries below are semantically immutable. Append a new decision rather than rewriting an old one,
 > and record a reversal as a new entry plus a status change in the table.
@@ -627,3 +628,37 @@ treated consistently and do not hide an otherwise valid command.
 The buffer gains an immutable `indexes` scope containing selected names. Paste validates every name
 and scopes confirmation, warnings, progress, and telemetry to that subset. The parent Copy Indexes
 command retains live all-index semantics.
+
+## 0026 — Refuse document-affecting indexes during collection paste
+
+**Status:** Accepted · **Date:** 2026-09-18 · **Raised by:** data-loss review
+
+### Decision
+
+When collection paste is configured to copy indexes, refuse the operation if the source summary
+contains `expireAfterSeconds` or `unique: true`. Direct the user to rerun a documents-only paste and
+then use the separately confirmed index-only flow. Keep sparse, partial-filter, and collation indexes
+eligible. The copier denies document-affecting indexes by default; only the dedicated task opts in.
+
+### Reasoning
+
+TTL indexes can delete documents while they stream, and secondary unique indexes can reject writes
+that the document conflict policy describes only as `_id` conflicts. In either case the task can
+report success while the target contains fewer documents than the source. A wizard-only check is not
+sufficient because the source catalog is read again at execution time.
+
+### Alternatives considered
+
+- **Create indexes after documents.** This avoids streaming under active constraints but leaves a
+  partially copied target if index creation then fails and changes the established phase contract.
+- **Continue with warnings.** This preserves the prior flow but asks confirmation to carry a silent
+  document-loss risk that can also change between confirmation and execution.
+- **Silently downgrade to documents only.** This protects document fidelity but violates the user's
+  explicit index choice and makes the completed task misleading.
+
+### Consequence
+
+Collection paste retains indexes-before-documents only for definitions that cannot reject or delete
+documents. Dedicated Paste Indexes remains the explicit route for TTL and unique indexes. This
+supersedes D0005 only for document-affecting definitions and D0024 only where it required preserving
+the old unique/TTL warning behavior.

@@ -46,6 +46,10 @@ const semanticIndexOptionNames = new Set([
     'wildcardProjection',
 ]);
 
+export function isDocumentAffectingIndex(options: Readonly<Document>): boolean {
+    return options.unique === true || Object.hasOwn(options, 'expireAfterSeconds');
+}
+
 /**
  * Copies indexes between two DocumentDB API collections.
  *
@@ -90,6 +94,19 @@ export class DocumentDbCollectionIndexCopier implements CollectionIndexCopier {
         // Read both bounded catalogs once so equivalence and name collisions use stable snapshots.
         const copyableSourceIndexes = await this.readCopyableIndexes(sourceClient, this.source, options.signal);
         const sourceIndexes = this.selectSourceIndexes(copyableSourceIndexes, requestedNames);
+        if (!options.allowDocumentAffectingIndexes) {
+            const documentAffectingIndexNames = sourceIndexes
+                .filter((index) => isDocumentAffectingIndex(index.options))
+                .map((index) => `"${index.name}"`);
+            if (documentAffectingIndexNames.length > 0) {
+                throw new Error(
+                    vscode.l10n.t(
+                        'Cannot copy TTL or unique indexes as part of a collection paste: {0}.',
+                        documentAffectingIndexNames.join(', '),
+                    ),
+                );
+            }
+        }
         options.onStart?.(sourceIndexes.length);
         const targetIndexes = await this.readCopyableIndexes(targetClient, this.target, options.signal);
         const targetIndexNames = new Set(targetIndexes.map((index) => index.name));

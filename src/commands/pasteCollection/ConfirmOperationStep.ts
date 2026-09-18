@@ -8,7 +8,6 @@ import * as l10n from '@vscode/l10n';
 import * as vscode from 'vscode';
 import { ConflictResolutionStrategy } from '../../services/taskService/tasks/copy-and-paste/copyPasteConfig';
 import { type PasteCollectionWizardContext } from './PasteCollectionWizardContext';
-import { formatIndexCopyWarnings } from './formatIndexCopyWarnings';
 
 export class ConfirmOperationStep extends AzureWizardPromptStep<PasteCollectionWizardContext> {
     public async prompt(context: PasteCollectionWizardContext): Promise<void> {
@@ -37,10 +36,6 @@ export class ConfirmOperationStep extends AzureWizardPromptStep<PasteCollectionW
             : l10n.t(
                   'This operation will copy all documents from the source to the target collection. Large collections may take several minutes to complete.',
               );
-        const indexWarnings = context.copyIndexes
-            ? formatIndexCopyWarnings(context.sourceUniqueIndexNames, context.sourceTtlIndexNames)
-            : [];
-
         // Combine all parts
         const confirmationMessage = [
             l10n.t('Source:'),
@@ -69,7 +64,6 @@ export class ConfirmOperationStep extends AzureWizardPromptStep<PasteCollectionW
             ' • ' + indexesSummary,
             '',
             warningText,
-            ...indexWarnings,
         ].join('\n');
 
         const actionButton = context.isTargetExistingCollection

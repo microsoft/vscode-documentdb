@@ -182,9 +182,11 @@ sequenceDiagram
     Reader-->>Writer: AsyncIterable of DocumentDetails
 ```
 
-The target must exist before indexes are created. Index creation must finish before document
-streaming starts. An index failure fails the task; cancellation leaves indexes already created on
-the target and prevents document transfer.
+The target must exist before indexes are created. Collection paste refuses TTL and unique source
+indexes before confirmation; the copier also denies them by default if the source catalog changes
+before execution. Other index creation must finish before document streaming starts. An index
+failure fails the task; cancellation leaves indexes already created on the target and prevents
+document transfer. Dedicated index-only paste explicitly opts into TTL and unique definitions.
 
 ## Cross-database scope
 

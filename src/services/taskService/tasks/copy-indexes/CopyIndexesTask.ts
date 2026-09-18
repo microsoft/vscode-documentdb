@@ -91,6 +91,7 @@ export class CopyIndexesTask extends Task implements ResourceTrackingTask {
         try {
             result = await this.indexCopier.copyIndexes({
                 sourceIndexNames: this.config.sourceIndexNames,
+                allowDocumentAffectingIndexes: true,
                 signal,
                 onStart: (resolvedTotal) => {
                     total = resolvedTotal;

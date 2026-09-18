@@ -33,6 +33,8 @@ export interface GetSourceIndexSummaryOptions {
 export interface CopyIndexesOptions {
     /** Omit for every copyable secondary index. */
     readonly sourceIndexNames?: readonly string[];
+    /** Dedicated index-only flows must explicitly opt in to indexes that can reject or delete documents. */
+    readonly allowDocumentAffectingIndexes?: boolean;
     readonly signal?: AbortSignal;
     /** Called once after source selection resolves and before target processing starts. */
     readonly onStart?: (total: number) => void;

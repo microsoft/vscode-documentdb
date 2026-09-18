@@ -494,11 +494,12 @@ scale for that task, and its existing presentation-only pause remains unchanged.
 In other words, the regular task consumes copier progress for orchestration and diagnostics but does
 not expose determinate index-by-index progress to the user.
 
-Preserve the rest of the collection workflow as well: target creation or merge, document conflict
-handling, source validation, and the existing unique/TTL warnings. Indexes still run after the
-target exists and before document streaming, including for an empty source collection. Index failure
-or cancellation prevents document streaming; already-created indexes remain. A separately copied
-index selection must never restrict this flow. See the Paste Collection regression checklist below.
+Preserve target creation or merge, document conflict handling, source validation, and index ordering.
+The collection wizard refuses TTL and unique indexes before confirmation, and the copier denies them
+by default as an execution-time backstop. Other indexes still run after the target exists and before
+document streaming, including for an empty source collection. Index failure or cancellation prevents
+document streaming; already-created indexes remain. A separately copied index selection must never
+restrict this flow. See the Paste Collection regression checklist below.
 
 ### Dedicated index-copy presentation
 
@@ -775,8 +776,9 @@ For **Copy Indexes** from the parent, show:
   automatically. Omit this line only when there are no known exclusions, not merely because the
   search-index read was empty or failed. Indicate that search-index exclusions are best-effort.
 
-For both scopes, show a warning that equivalent indexes are skipped, name collisions are renamed,
-and cancellation does not roll back indexes already created.
+For both scopes, show a warning that equivalent indexes and same-key option conflicts are skipped,
+different-key name collisions are renamed, and cancellation does not roll back indexes already
+created.
 
 Use dedicated index-only warning wording in this step, based on the selection-scoped names from the
 summary:
@@ -784,9 +786,9 @@ summary:
 - Unique: `Creating unique indexes ({0}) may fail if existing target documents contain duplicate values.`
 - TTL: `TTL indexes ({0}) may delete expired documents already in the target collection, including after this task finishes.`
 
-Keep `formatIndexCopyWarnings` and its collection-copy callers unchanged. Its warnings about copied
-documents and generated IDs belong to that workflow, not this one. The dedicated warning text must
-not imply that documents are being transferred.
+The collection flow no longer uses `formatIndexCopyWarnings`: it refuses TTL and unique definitions
+instead of confirming their document-transfer consequences. The dedicated warning text must not
+imply that documents are being transferred.
 
 Use a modal warning when unique or TTL indexes are selected; otherwise use a modal information
 confirmation.
@@ -1008,6 +1010,9 @@ The regression checklist is:
 - The index summary is read only after opting in; summary failures still stop prompting.
 - `CountSourceIndexesStep` passes `{ signal }` without a name filter, still reads `summary.count`,
   and preserves the displayed catalog-inclusive count and its `sourceIndexCount` measurement.
+- TTL or unique summary entries stop the wizard with a named explanation and refusal telemetry;
+  sparse, partial, and collation options remain eligible. Documents-only paste never reaches the
+  guard.
 - Target creation or existing-target merge behavior and document conflict handling are unchanged;
   the target exists before index creation starts.
 - Indexes are copied before document streaming, including when the source collection has no
@@ -1017,8 +1022,8 @@ The regression checklist is:
 - Collection copy omits `sourceIndexNames` and processes every copyable secondary index, even when
   the independent index buffer contains a single-index selection. Index buffer mutations do not
   erase or change collection copy state.
-- Existing unique/TTL warnings, equivalence and rename behavior, vector options, hidden-state
-  handling, document-focused progress, and the cancellation-aware presentation pause are unchanged.
+- Same-key option conflicts are skipped, while vector options, hidden-state handling,
+  document-focused progress, and the cancellation-aware presentation pause are unchanged.
 - The prompt no longer promises "all" secondary definitions; the notification uses **Cancel Copy**
   and **Learn More**; the two collection commands are hidden from the command palette.
 - Task measurements use the agreed result-field rename without changing the collection wizard's

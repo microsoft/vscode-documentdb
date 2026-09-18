@@ -41,6 +41,7 @@ index definitions private. The task receives neither clients nor index definitio
 - stopping before the next index after cancellation;
 - selecting optional source names after the source read while preserving catalog order;
 - rejecting duplicate or unresolved requested names before target work;
+- denying TTL and unique indexes by default unless a dedicated index-only caller explicitly opts in;
 - reporting created, skipped, conflicting, renamed, and cancellation counts.
 
 Index lists are intentionally bounded arrays rather than streams. Creation is sequential so
@@ -79,9 +80,9 @@ runs after initialization and before document streaming. An index creation failu
 indexes already created are not rolled back.
 
 For dedicated index-only paste, `CopyIndexesTask` passes one selected name, a selected-name subset,
-or omits the restriction for the live parent scope. It maps evaluated indexes to determinate
-progress and uses the same comparison, naming, creation, visibility, and cancellation path shown
-above.
+or omits the restriction for the live parent scope. It explicitly allows TTL and unique definitions,
+maps evaluated indexes to determinate progress, and uses the same comparison, naming, creation,
+visibility, and cancellation path shown above. Collection paste leaves that option denied.
 
 ## Counting behavior
 

@@ -51,9 +51,12 @@ durable intent and rationale. Code and tests remain authoritative for current be
 - The wizard offers index copying separately from document conflict handling.
 - Source indexes are counted only after the user selects **Copy indexes**; document-only paste never
   reads the index catalog.
+- Collection paste refuses the index-copy option when the source contains TTL or unique indexes;
+  those document-affecting definitions require the separately confirmed dedicated index flow.
 - The source catalog count includes the built-in `_id` index, but `_id` is excluded from the copy
   operation and its progress totals.
-- Indexes are copied sequentially after target creation and before document streaming.
+- Non-document-affecting indexes are copied sequentially after target creation and before document
+  streaming. The copier denies TTL and unique indexes by default as an execution-time backstop.
 - Equivalent definitions are skipped regardless of name and server-generated catalog versions.
   Same-key option conflicts are skipped rather than duplicated. A conflicting name on a different
   key receives deterministic `_copy`, `_copy_2`, and later suffixes.
