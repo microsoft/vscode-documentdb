@@ -724,6 +724,61 @@ describe('DocumentDBShellPty', () => {
         });
     });
 
+    describe('ghost text — history autosuggestion', () => {
+        /** Dim + gray prefix emitted by ShellGhostText. */
+        const GHOST_STYLE = '\x1b[2m\x1b[90m';
+        const afterGhostDebounce = (): Promise<void> => new Promise((resolve) => setTimeout(resolve, 80));
+
+        beforeEach(async () => {
+            pty.open(undefined);
+            await new Promise((resolve) => setTimeout(resolve, 10));
+            mockEvaluate.mockResolvedValue({ type: 'string', printable: '"x"', durationMs: 1 });
+            written = '';
+        });
+
+        it('suggests the rest of a previously run command', async () => {
+            // Bracket notation and all — no syntax awareness required.
+            pty.handleInput("db['restaurants-something'].find()");
+            pty.handleInput('\r');
+            await new Promise((resolve) => setTimeout(resolve, 20));
+            written = '';
+
+            pty.handleInput('db[');
+            await afterGhostDebounce();
+
+            expect(written).toContain(`${GHOST_STYLE}'restaurants-something'].find()`);
+        });
+
+        it('yields to a completion candidate, which can also be accepted', async () => {
+            pty.handleInput('help me');
+            pty.handleInput('\r');
+            await new Promise((resolve) => setTimeout(resolve, 20));
+            written = '';
+
+            pty.handleInput('hel');
+            await afterGhostDebounce();
+
+            // 'help' is a real completion candidate, so it owns the row.
+            expect(written).toContain(`${GHOST_STYLE}p`);
+            expect(written).not.toContain(`${GHOST_STYLE}p me`);
+        });
+
+        it('is insertable', async () => {
+            pty.handleInput('db.restaurants.countDocuments({})');
+            pty.handleInput('\r');
+            await new Promise((resolve) => setTimeout(resolve, 20));
+
+            pty.handleInput('db.restaurants.c');
+            await afterGhostDebounce();
+
+            pty.handleInput('\x1b[C'); // Right Arrow accepts ghost text
+            pty.handleInput('\r');
+            await new Promise((resolve) => setTimeout(resolve, 20));
+
+            expect(mockEvaluate).toHaveBeenLastCalledWith('db.restaurants.countDocuments({})', 80);
+        });
+    });
+
     describe('prompt width — display columns, not UTF-16 units', () => {
         it('positions the cursor past a wide-character database name', async () => {
             // '日本語> ' is 5 UTF-16 code units but 8 terminal columns: each CJK

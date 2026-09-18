@@ -57,6 +57,15 @@ export class ShellInputHandler {
     private _savedInput: string = '';
     /** Maximum history entries. */
     private readonly _maxHistory: number = 500;
+    /**
+     * How far back autosuggestion looks, newest first.
+     *
+     * Deliberately not derived from {@link _maxHistory}: how much to remember
+     * and how far back to suggest from are different questions, and this one is
+     * answered on the typing path. A hit on the 400th-oldest command is not
+     * what the user meant.
+     */
+    private readonly _maxHistorySearch: number = 100;
 
     /** Whether input is currently accepted. */
     private _enabled: boolean = true;
@@ -192,6 +201,32 @@ export class ShellInputHandler {
      */
     getCursor(): number {
         return this._cursor;
+    }
+
+    /**
+     * Most recent command that begins with `prefix`, for inline autosuggestion.
+     *
+     * Scans newest-first over at most {@link _maxHistorySearch} entries and
+     * returns the first hit — ghost text shows one suggestion, so there is
+     * nothing to do with the rest.
+     *
+     * Multi-line entries are skipped: their newlines cannot be inserted into a
+     * single-line buffer.
+     */
+    findHistorySuggestion(prefix: string): string | undefined {
+        if (prefix.length === 0) {
+            return undefined;
+        }
+
+        const oldest = Math.max(0, this._history.length - this._maxHistorySearch);
+        for (let i = this._history.length - 1; i >= oldest; i--) {
+            const entry = this._history[i];
+            if (entry.length > prefix.length && entry.startsWith(prefix) && !entry.includes('\n')) {
+                return entry;
+            }
+        }
+
+        return undefined;
     }
 
     /**

@@ -103,6 +103,8 @@ export class DocumentDBShellPty implements vscode.Pseudoterminal {
     private _ghostTextIsHint: boolean = false;
     /** Whether the current ghost text is a closing-brackets suggestion. */
     private _ghostTextIsClosingBrackets: boolean = false;
+    /** Whether the current ghost text came from command history. */
+    private _ghostTextIsHistory: boolean = false;
     /** The kind of the completion candidate shown as ghost text (for telemetry). */
     private _ghostCandidateKind: CompletionCandidate['kind'] | undefined;
     /** Optional initial input to pre-fill after initialization. */
@@ -1128,6 +1130,7 @@ export class DocumentDBShellPty implements vscode.Pseudoterminal {
         this._ghostText.clear((d) => this._writeEmitter.fire(d));
         this._ghostTextIsHint = false;
         this._ghostTextIsClosingBrackets = false;
+        this._ghostTextIsHistory = false;
         this._ghostCandidateKind = undefined;
     }
 
@@ -1198,10 +1201,10 @@ export class DocumentDBShellPty implements vscode.Pseudoterminal {
 
         const result = this.getCompletionResult(buffer, cursor);
 
-        // Only one writer may own the row after the cursor. The precedence is,
-        // in order: an insertable completion, then the bracket-notation preview,
-        // then the candidate's description, then the schema hint, then closing
-        // brackets.
+        // Only one writer may own the row after the cursor, and an insertable
+        // suggestion always beats an informational one. The precedence is:
+        // completion ghost, bracket-notation preview, history autosuggestion,
+        // the candidate's description, the schema hint, then closing brackets.
         const candidate = this.ghostCandidate(buffer, cursor, result);
         if (candidate) {
             // Accepting this candidate would rewrite text the user already typed
@@ -1236,6 +1239,25 @@ export class DocumentDBShellPty implements vscode.Pseudoterminal {
                 this.showDetailHint(candidate.detail);
                 return;
             }
+        }
+
+        // Fish-style history autosuggestion. A pure append, so it needs nothing
+        // from the ghost text contract beyond what completions already use.
+        const historyMatch = this._inputHandler.findHistorySuggestion(buffer);
+        if (historyMatch) {
+            this._ghostTextIsHint = false;
+            this._ghostTextIsClosingBrackets = false;
+            this._ghostTextIsHistory = true;
+            this._ghostCandidateKind = undefined;
+            const historyRendered = this._ghostText.show(
+                historyMatch.slice(buffer.length),
+                (d) => this._writeEmitter.fire(d),
+                this.availableGhostColumns(),
+            );
+            if (historyRendered) {
+                this.trackHistorySuggestionShown();
+            }
+            return;
         }
 
         // No completions inside a method argument — show schema hint only if
@@ -1369,6 +1391,7 @@ export class DocumentDBShellPty implements vscode.Pseudoterminal {
 
         const ghostText = this._ghostText.currentText;
         const wasClosingBrackets = this._ghostTextIsClosingBrackets;
+        const wasHistory = this._ghostTextIsHistory;
         const candidateKind = this._ghostCandidateKind;
 
         // Clear ghost state and erase the dim rendering
@@ -1378,6 +1401,8 @@ export class DocumentDBShellPty implements vscode.Pseudoterminal {
             // ── Telemetry: track ghost text acceptance ───────────────
             if (wasClosingBrackets) {
                 this.trackClosingBracketsAccepted();
+            } else if (wasHistory) {
+                this.trackHistorySuggestionAccepted();
             } else if (candidateKind) {
                 this.trackCompletionAccepted(candidateKind, 'ghostText');
                 this.trackCompletionGhostAccepted(candidateKind);
@@ -1470,6 +1495,24 @@ export class DocumentDBShellPty implements vscode.Pseudoterminal {
      */
     private trackClosingBracketsAccepted(): void {
         accumulateTelemetry('shell.closingBrackets', (sample) => {
+            sample.measurements.accepted = 1;
+        });
+    }
+
+    /**
+     * Track that a history-based autosuggestion was shown.
+     */
+    private trackHistorySuggestionShown(): void {
+        accumulateTelemetry('shell.historySuggestion', (sample) => {
+            sample.measurements.shown = 1;
+        });
+    }
+
+    /**
+     * Track that a history-based autosuggestion was accepted.
+     */
+    private trackHistorySuggestionAccepted(): void {
+        accumulateTelemetry('shell.historySuggestion', (sample) => {
             sample.measurements.accepted = 1;
         });
     }

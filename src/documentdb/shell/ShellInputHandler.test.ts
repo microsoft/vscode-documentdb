@@ -864,4 +864,53 @@ describe('ShellInputHandler', () => {
             expect(handler.cursorColumn).toBe(2);
         });
     });
+
+    describe('findHistorySuggestion', () => {
+        /** Submit a command so it lands in history, then start a fresh line. */
+        function run(command: string): void {
+            handler.handleInput(command);
+            handler.handleInput('\r');
+            handler.resetLine();
+        }
+
+        it('should return the most recent matching command', () => {
+            run('db.users.find({})');
+            run('db.users.countDocuments({})');
+
+            expect(handler.findHistorySuggestion('db.users.')).toBe('db.users.countDocuments({})');
+        });
+
+        it('should return undefined for an empty prefix', () => {
+            run('db.users.find({})');
+
+            expect(handler.findHistorySuggestion('')).toBeUndefined();
+        });
+
+        it('should not suggest an entry equal to the prefix', () => {
+            run('show dbs');
+
+            expect(handler.findHistorySuggestion('show dbs')).toBeUndefined();
+        });
+
+        it('should skip multi-line entries, whose newlines cannot be inserted', () => {
+            handler.handleInput('db.users.find({');
+            handler.handleInput('\r'); // incomplete — starts multi-line accumulation
+            handler.handleInput('})');
+            handler.handleInput('\r');
+            handler.resetLine();
+            run('db.users.drop()');
+
+            expect(handler.findHistorySuggestion('db.users.f')).toBeUndefined();
+        });
+
+        it('should not look further back than the search cap', () => {
+            run('db.ancient.find({})');
+            for (let i = 0; i < 100; i++) {
+                run(`db.filler${String(i)}.find({})`);
+            }
+
+            expect(handler.findHistorySuggestion('db.ancient.')).toBeUndefined();
+            expect(handler.findHistorySuggestion('db.filler99.')).toBe('db.filler99.find({})');
+        });
+    });
 });
