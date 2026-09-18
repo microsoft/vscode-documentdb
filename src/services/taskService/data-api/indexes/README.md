@@ -23,10 +23,16 @@ interface CollectionIndexCopier {
 the source and target endpoint descriptors, acquires their clients, and keeps database-specific
 index definitions private. The task receives neither clients nor index definitions.
 
+`CopyIndexesTask` also uses the shared `CollectionEndpoint` descriptor, without importing the concrete
+copier, client, or credential cache. Its injected copier owns execution-time source validation and
+connection handling. `DocumentDbCollectionEndpoint` remains an alias for existing DocumentDB callers.
+
 ## Responsibilities
 
 `DocumentDbCollectionIndexCopier` owns:
 
+- validating source connection availability and collection existence at copy execution time, before
+    acquiring the target client;
 - reading the collection's index catalog through `ClustersClient`;
 - including the built-in `_id` index in the source catalog summary count;
 - excluding the built-in `_id` index from copying and copy progress;
@@ -57,8 +63,10 @@ sequenceDiagram
     participant Client as ClustersClient
 
     Task->>Copier: copyIndexes()
-    Copier->>Client: acquire source and target clients
+    Copier->>Copier: check source connection availability
+    Copier->>Client: acquire source client and validate source collection
     Copier->>Client: read source indexes
+    Copier->>Client: acquire target client
     Copier->>Client: read target indexes
     loop Each source secondary index
         Copier->>Copier: compare definition and resolve name
@@ -81,9 +89,14 @@ runs after initialization and before document streaming. An index creation failu
 indexes already created are not rolled back.
 
 For dedicated index-only paste, `CopyIndexesTask` passes one selected name, a selected-name subset,
-or omits the restriction for the live parent scope. It explicitly allows TTL and unique definitions,
+or the names resolved from the parent scope before confirmation. It explicitly allows TTL and unique definitions,
 maps evaluated indexes to determinate progress, and uses the same comparison, naming, creation,
 visibility, and cancellation path shown above. Collection paste leaves that option denied.
+
+Unavailable-source and missing-collection failures preserve their localized messages and surface as
+`SourceConnectionUnavailableError` and `SourceCollectionNotFoundError`. The index task reports their
+names through its generic execution-failure telemetry rather than performing provider checks during
+initialization. Cancellation while waiting for source validation stops before target access.
 
 ## Counting behavior
 

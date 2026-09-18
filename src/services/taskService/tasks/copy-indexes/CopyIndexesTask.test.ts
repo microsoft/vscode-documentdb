@@ -4,20 +4,10 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { type IActionContext } from '@microsoft/vscode-azext-utils';
-import { ClustersClient } from '../../../../documentdb/ClustersClient';
-import { CredentialCache } from '../../../../documentdb/CredentialCache';
 import { ext } from '../../../../extensionVariables';
 import { type CollectionIndexCopier, type CopyIndexesOptions } from '../../data-api/indexes/CollectionIndexCopier';
 import { TaskState } from '../../taskService';
 import { CopyIndexesTask, type CopyIndexesConfig } from './CopyIndexesTask';
-
-jest.mock('../../../../documentdb/ClustersClient', () => ({
-    ClustersClient: { getClient: jest.fn() },
-}));
-
-jest.mock('../../../../documentdb/CredentialCache', () => ({
-    CredentialCache: { hasCredentials: jest.fn() },
-}));
 
 jest.mock('../../../../extensionVariables', () => ({
     ext: { outputChannel: { trace: jest.fn(), warn: jest.fn() } },
@@ -56,46 +46,22 @@ function createContext(): IActionContext {
 describe('CopyIndexesTask', () => {
     beforeEach(() => {
         jest.clearAllMocks();
-        jest.mocked(CredentialCache.hasCredentials).mockReturnValue(true);
-        jest.mocked(ClustersClient.getClient).mockResolvedValue({
-            listCollections: jest.fn().mockResolvedValue([{ name: 'sourceCollection' }]),
-        } as unknown as ClustersClient);
     });
 
-    it('validates source credentials and collection existence', async () => {
-        const task = new TestCopyIndexesTask(config, {} as CollectionIndexCopier);
+    it('initializes without database access and leaves validation to copier execution', async () => {
+        const copier: CollectionIndexCopier = {
+            getSourceIndexSummary: jest.fn(),
+            copyIndexes: jest.fn(),
+        };
+        const task = new TestCopyIndexesTask(config, copier);
         const signal = new AbortController().signal;
 
         const context = createContext();
         await task.runInitializeForTest(signal, context);
 
-        expect(CredentialCache.hasCredentials).toHaveBeenCalledWith('source');
-        expect(ClustersClient.getClient).toHaveBeenCalledWith('source', signal);
+        expect(copier.getSourceIndexSummary).not.toHaveBeenCalled();
+        expect(copier.copyIndexes).not.toHaveBeenCalled();
         expect(context.telemetry.properties.copyOperationCorrelationId).toBe('operation-id');
-    });
-
-    it('rejects a disconnected source', async () => {
-        jest.mocked(CredentialCache.hasCredentials).mockReturnValue(false);
-        const context = createContext();
-        const task = new TestCopyIndexesTask(config, {} as CollectionIndexCopier);
-
-        await expect(task.runInitializeForTest(new AbortController().signal, context)).rejects.toThrow(
-            'source connection is no longer available',
-        );
-        expect(context.telemetry.properties.sourceClusterDisconnected).toBe('true');
-    });
-
-    it('rejects a missing source collection', async () => {
-        jest.mocked(ClustersClient.getClient).mockResolvedValue({
-            listCollections: jest.fn().mockResolvedValue([]),
-        } as unknown as ClustersClient);
-        const context = createContext();
-        const task = new TestCopyIndexesTask(config, {} as CollectionIndexCopier);
-
-        await expect(task.runInitializeForTest(new AbortController().signal, context)).rejects.toThrow(
-            'source collection "sourceCollection" no longer exists',
-        );
-        expect(context.telemetry.properties.sourceCollectionNotFound).toBe('true');
     });
 
     it('maps created and skipped indexes to determinate progress and telemetry', async () => {
@@ -270,19 +236,23 @@ describe('CopyIndexesTask', () => {
         expect(context.telemetry.measurements.selectedIndexCount).toBe(3);
     });
 
-    it('preserves the copier failure as the cause and classifies telemetry', async () => {
-        const cause = new Error('create failed');
-        cause.name = 'IndexCreationError';
-        const copier = { copyIndexes: jest.fn().mockRejectedValue(cause) } as unknown as CollectionIndexCopier;
-        const task = new TestCopyIndexesTask(config, copier);
-        const context = createContext();
+    it.each(['IndexCreationError', 'SourceConnectionUnavailableError', 'SourceCollectionNotFoundError'])(
+        'preserves the copier %s failure as the cause and classifies telemetry',
+        async (errorName) => {
+            const cause = new Error('copy failed');
+            cause.name = errorName;
+            const copier = { copyIndexes: jest.fn().mockRejectedValue(cause) } as unknown as CollectionIndexCopier;
+            const task = new TestCopyIndexesTask(config, copier);
+            const context = createContext();
 
-        const operation = task.runWorkForTest(new AbortController().signal, context);
+            const operation = task.runWorkForTest(new AbortController().signal, context);
 
-        await expect(operation).rejects.toMatchObject({ cause });
-        await expect(operation).rejects.toThrow('Failed to copy indexes: create failed');
-        expect(context.telemetry.properties.indexCopyError).toBe('IndexCreationError');
-    });
+            await expect(operation).rejects.toMatchObject({ cause });
+            await expect(operation).rejects.toThrow('Failed to copy indexes: copy failed');
+            expect(context.telemetry.properties.indexCopyError).toBe(errorName);
+            expect(context.telemetry.properties.indexCopyFailed).toBe('true');
+        },
+    );
 
     it('declares source and target collections as stable resources', () => {
         const task = new TestCopyIndexesTask(config, {} as CollectionIndexCopier);

@@ -1,6 +1,6 @@
 <!-- Learn More Section Badge or Breadcrumb -->
 
-> **Learn More** - [Back to Learn More Index](./index.md)
+> **Learn More** - [Back to Learn More Index](../index#user-manual)
 
 ---
 

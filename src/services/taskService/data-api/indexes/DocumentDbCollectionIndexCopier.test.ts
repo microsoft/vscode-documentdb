@@ -4,11 +4,16 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { ClustersClient } from '../../../../documentdb/ClustersClient';
+import { CredentialCache } from '../../../../documentdb/CredentialCache';
 import { ext } from '../../../../extensionVariables';
 import { DocumentDbCollectionIndexCopier } from './DocumentDbCollectionIndexCopier';
 
 jest.mock('../../../../documentdb/ClustersClient', () => ({
     ClustersClient: { getClient: jest.fn() },
+}));
+
+jest.mock('../../../../documentdb/CredentialCache', () => ({
+    CredentialCache: { hasCredentials: jest.fn() },
 }));
 
 jest.mock('../../../../extensionVariables', () => ({
@@ -46,6 +51,7 @@ function createClient(
     hideIndex: jest.Mock = jest.fn(),
 ): ClustersClient {
     return {
+        listCollections: jest.fn().mockResolvedValue([{ name: source.collectionName }]),
         getCollection: jest.fn().mockReturnValue({
             indexes: jest.fn().mockResolvedValue(indexes),
         }),
@@ -70,6 +76,89 @@ function createCopier(
 describe('DocumentDbCollectionIndexCopier', () => {
     beforeEach(() => {
         jest.clearAllMocks();
+        jest.mocked(CredentialCache.hasCredentials).mockReturnValue(true);
+    });
+
+    it('rejects a disconnected source before connecting to either endpoint', async () => {
+        const sourceClient = createClient([]);
+        const targetClient = createClient([]);
+        const copier = createCopier(sourceClient, targetClient);
+        jest.mocked(CredentialCache.hasCredentials).mockReturnValue(false);
+
+        await expect(copier.copyIndexes()).rejects.toMatchObject({
+            name: 'SourceConnectionUnavailableError',
+            message: 'The source connection is no longer available. Reconnect and copy the indexes again.',
+        });
+
+        expect(CredentialCache.hasCredentials).toHaveBeenCalledWith(source.clusterId);
+        expect(ClustersClient.getClient).not.toHaveBeenCalled();
+        expect(targetClient.createIndex).not.toHaveBeenCalled();
+    });
+
+    it('rejects a deleted source after summary loading and before target access', async () => {
+        const sourceClient = createClient([{ key: { email: 1 }, name: 'email_1' }]);
+        const targetClient = createClient([]);
+        const copier = createCopier(sourceClient, targetClient);
+        await copier.getSourceIndexSummary();
+        jest.mocked(sourceClient.listCollections).mockResolvedValue([]);
+        const signal = new AbortController().signal;
+
+        await expect(copier.copyIndexes({ signal })).rejects.toMatchObject({
+            name: 'SourceCollectionNotFoundError',
+            message:
+                'The source collection "sourceCollection" no longer exists. Copy the indexes again from an available collection.',
+        });
+
+        expect(sourceClient.listCollections).toHaveBeenCalledWith(source.databaseName);
+        expect(ClustersClient.getClient).toHaveBeenCalledWith(source.clusterId, signal);
+        expect(ClustersClient.getClient).not.toHaveBeenCalledWith(target.clusterId, expect.anything());
+        expect(targetClient.getCollection).not.toHaveBeenCalled();
+        expect(targetClient.createIndex).not.toHaveBeenCalled();
+    });
+
+    it('propagates source validation failures without accessing the target', async () => {
+        const sourceClient = createClient([]);
+        const targetClient = createClient([]);
+        const copier = createCopier(sourceClient, targetClient);
+        const failure = new Error('Source access denied');
+        jest.mocked(sourceClient.listCollections).mockRejectedValue(failure);
+
+        await expect(copier.copyIndexes()).rejects.toBe(failure);
+
+        expect(ClustersClient.getClient).toHaveBeenCalledTimes(1);
+        expect(sourceClient.getCollection).not.toHaveBeenCalled();
+        expect(targetClient.createIndex).not.toHaveBeenCalled();
+    });
+
+    it('stops waiting for source validation when cancelled without accessing the target', async () => {
+        const controller = new AbortController();
+        const sourceClient = createClient([]);
+        const targetClient = createClient([]);
+        const copier = createCopier(sourceClient, targetClient);
+        const validationStarted = new Promise<void>((resolve) => {
+            jest.mocked(sourceClient.listCollections).mockImplementation(() => {
+                resolve();
+                return new Promise(() => undefined);
+            });
+        });
+        const operation = copier.copyIndexes({ signal: controller.signal });
+        await validationStarted;
+
+        controller.abort();
+
+        await expect(operation).rejects.toMatchObject({ name: 'AbortError' });
+        expect(ClustersClient.getClient).toHaveBeenCalledTimes(1);
+        expect(sourceClient.getCollection).not.toHaveBeenCalled();
+        expect(targetClient.createIndex).not.toHaveBeenCalled();
+    });
+
+    it('does not connect when copying is already cancelled', async () => {
+        const controller = new AbortController();
+        const copier = createCopier(createClient([]));
+        controller.abort();
+
+        await expect(copier.copyIndexes({ signal: controller.signal })).rejects.toMatchObject({ name: 'AbortError' });
+        expect(ClustersClient.getClient).not.toHaveBeenCalled();
     });
 
     it('counts all source indexes and summarizes copyable document-affecting options', async () => {
@@ -136,17 +225,27 @@ describe('DocumentDbCollectionIndexCopier', () => {
 
     it.each(['source', 'target'] as const)('stops waiting for %s indexes when copying is cancelled', async (side) => {
         const controller = new AbortController();
-        const pendingIndexes = jest.fn().mockReturnValue(new Promise(() => undefined));
+        const pendingIndexes = jest.fn();
+        const catalogReadStarted = new Promise<void>((resolve) => {
+            pendingIndexes.mockImplementation(() => {
+                resolve();
+                return new Promise(() => undefined);
+            });
+        });
         const pendingClient = {
+            listCollections: jest.fn().mockResolvedValue([{ name: source.collectionName }]),
             getCollection: jest.fn().mockReturnValue({ indexes: pendingIndexes }),
         } as unknown as ClustersClient;
         const sourceClient = side === 'source' ? pendingClient : createClient([]);
         const targetClient = side === 'target' ? pendingClient : createClient([]);
         const copier = createCopier(sourceClient, targetClient);
         const copyPromise = copier.copyIndexes({ signal: controller.signal });
+        await catalogReadStarted;
 
         expect(ClustersClient.getClient).toHaveBeenCalledWith('source', controller.signal);
-        expect(ClustersClient.getClient).toHaveBeenCalledWith('target', controller.signal);
+        if (side === 'target') {
+            expect(ClustersClient.getClient).toHaveBeenCalledWith('target', controller.signal);
+        }
 
         controller.abort();
 

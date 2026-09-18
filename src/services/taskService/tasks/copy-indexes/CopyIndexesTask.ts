@@ -5,17 +5,18 @@
 
 import { type IActionContext } from '@microsoft/vscode-azext-utils';
 import * as vscode from 'vscode';
-import { ClustersClient } from '../../../../documentdb/ClustersClient';
-import { CredentialCache } from '../../../../documentdb/CredentialCache';
 import { ext } from '../../../../extensionVariables';
-import { type CollectionIndexCopier, type IndexCopyResult } from '../../data-api/indexes/CollectionIndexCopier';
-import { type DocumentDbCollectionEndpoint } from '../../data-api/indexes/DocumentDbCollectionIndexCopier';
+import {
+    type CollectionEndpoint,
+    type CollectionIndexCopier,
+    type IndexCopyResult,
+} from '../../data-api/indexes/CollectionIndexCopier';
 import { Task } from '../../taskService';
 import { type ResourceDefinition, type ResourceTrackingTask } from '../../taskServiceResourceTracking';
 
 export interface CopyIndexesConfig {
-    readonly source: DocumentDbCollectionEndpoint;
-    readonly target: DocumentDbCollectionEndpoint;
+    readonly source: CollectionEndpoint;
+    readonly target: CollectionEndpoint;
     readonly sourceIndexNames?: readonly string[];
     readonly copyScope: 'index' | 'indexes' | 'allIndexes';
     readonly copyOperationCorrelationId: string;
@@ -45,32 +46,9 @@ export class CopyIndexesTask extends Task implements ResourceTrackingTask {
         return [this.config.source, this.config.target];
     }
 
-    protected async onInitialize(signal: AbortSignal, context?: IActionContext): Promise<void> {
+    protected async onInitialize(_signal: AbortSignal, context?: IActionContext): Promise<void> {
         if (context) {
             context.telemetry.properties.copyOperationCorrelationId = this.config.copyOperationCorrelationId;
-        }
-        if (!CredentialCache.hasCredentials(this.config.source.clusterId)) {
-            if (context) {
-                context.telemetry.properties.sourceClusterDisconnected = 'true';
-            }
-            throw new Error(
-                vscode.l10n.t('The source connection is no longer available. Reconnect and copy the indexes again.'),
-            );
-        }
-
-        this.updateStatus(this.getStatus().state, vscode.l10n.t('Validating source collection...'));
-        const sourceClient = await ClustersClient.getClient(this.config.source.clusterId, signal);
-        const collections = await sourceClient.listCollections(this.config.source.databaseName);
-        if (!collections.some((collection) => collection.name === this.config.source.collectionName)) {
-            if (context) {
-                context.telemetry.properties.sourceCollectionNotFound = 'true';
-            }
-            throw new Error(
-                vscode.l10n.t(
-                    'The source collection "{0}" no longer exists. Copy the indexes again from an available collection.',
-                    this.config.source.collectionName,
-                ),
-            );
         }
     }
 

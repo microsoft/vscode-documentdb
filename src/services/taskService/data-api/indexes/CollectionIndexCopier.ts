@@ -3,6 +3,12 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+export interface CollectionEndpoint {
+    readonly clusterId: string;
+    readonly databaseName: string;
+    readonly collectionName: string;
+}
+
 export interface IndexCopyProgress {
     completed: number;
     total: number;

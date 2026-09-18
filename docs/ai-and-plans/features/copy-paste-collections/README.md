@@ -114,12 +114,18 @@ is:
 - task lifecycle, progress, cancellation, and telemetry remain in `CopyPasteCollectionTask`;
 - index copying uses one optional `CollectionIndexCopier` supplied to the task;
 - dedicated index copy supplies the same copier with an optional source-name restriction;
+- `CopyIndexesTask` uses the shared `CollectionEndpoint` descriptor and has no DocumentDB client or
+  credential-cache dependency; the concrete copier validates the source again during execution;
 - copyability classification remains above the copier, over the user-visible catalog;
 - the first copier remains DocumentDB API-specific and owns both source and target index behavior.
 
 The single copier is a deliberate scope choice, not a claim that indexes are portable. If
 cross-database index migration becomes a product requirement, this boundary must be revisited before
-adding another implementation. See [decision 0002](./decisions.md#0002--use-one-optional-collectionindexcopier-at-the-task-boundary).
+adding translation between database families. Another database can supply its own same-family copier
+without changing this interface. See [decision 0002](./decisions.md#0002--use-one-optional-collectionindexcopier-at-the-task-boundary).
+
+The task validation refactor and its verification are recorded in
+[05 - Index-copy provider boundary](./iterations/05-index-copy-provider-boundary.md).
 
 ## Decisions
 

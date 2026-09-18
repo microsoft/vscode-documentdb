@@ -6,8 +6,10 @@
 import { type Document, type IndexDescriptionInfo } from 'mongodb';
 import * as vscode from 'vscode';
 import { ClustersClient } from '../../../../documentdb/ClustersClient';
+import { CredentialCache } from '../../../../documentdb/CredentialCache';
 import { ext } from '../../../../extensionVariables';
 import {
+    type CollectionEndpoint,
     type CollectionIndexCopier,
     type CopyIndexesOptions,
     type GetSourceIndexSummaryOptions,
@@ -15,11 +17,7 @@ import {
     type SourceIndexSummary,
 } from './CollectionIndexCopier';
 
-export interface DocumentDbCollectionEndpoint {
-    clusterId: string;
-    databaseName: string;
-    collectionName: string;
-}
+export type DocumentDbCollectionEndpoint = CollectionEndpoint;
 
 interface IndexDefinition {
     key: Record<string, number | string>;
@@ -93,10 +91,7 @@ export class DocumentDbCollectionIndexCopier implements CollectionIndexCopier {
 
     public async copyIndexes(options: CopyIndexesOptions = {}): Promise<IndexCopyResult> {
         const requestedNames = this.getRequestedNames(options.sourceIndexNames);
-        const [sourceClient, targetClient] = await Promise.all([
-            ClustersClient.getClient(this.source.clusterId, options.signal),
-            ClustersClient.getClient(this.target.clusterId, options.signal),
-        ]);
+        const sourceClient = await this.getValidatedSourceClient(options.signal);
 
         // Read both bounded catalogs once so equivalence and name collisions use stable snapshots.
         const copyableSourceIndexes = await this.readCopyableIndexes(sourceClient, this.source, options.signal);
@@ -115,6 +110,7 @@ export class DocumentDbCollectionIndexCopier implements CollectionIndexCopier {
             }
         }
         options.onStart?.(sourceIndexes.length);
+        const targetClient = await ClustersClient.getClient(this.target.clusterId, options.signal);
         const targetIndexes = await this.readCopyableIndexes(targetClient, this.target, options.signal);
         const targetIndexNames = new Set(targetIndexes.map((index) => index.name));
         const targetSignatures = new Set(targetIndexes.map((index) => this.getDefinitionSignature(index)));
@@ -217,6 +213,33 @@ export class DocumentDbCollectionIndexCopier implements CollectionIndexCopier {
         return result;
     }
 
+    private async getValidatedSourceClient(signal?: AbortSignal): Promise<ClustersClient> {
+        signal?.throwIfAborted();
+        if (!CredentialCache.hasCredentials(this.source.clusterId)) {
+            const error = new Error(
+                vscode.l10n.t('The source connection is no longer available. Reconnect and copy the indexes again.'),
+            );
+            error.name = 'SourceConnectionUnavailableError';
+            throw error;
+        }
+
+        const sourceClient = await ClustersClient.getClient(this.source.clusterId, signal);
+        signal?.throwIfAborted();
+        const collections = await this.waitForOperation(sourceClient.listCollections(this.source.databaseName), signal);
+        if (!collections.some((collection) => collection.name === this.source.collectionName)) {
+            const error = new Error(
+                vscode.l10n.t(
+                    'The source collection "{0}" no longer exists. Copy the indexes again from an available collection.',
+                    this.source.collectionName,
+                ),
+            );
+            error.name = 'SourceCollectionNotFoundError';
+            throw error;
+        }
+
+        return sourceClient;
+    }
+
     private getRequestedNames(sourceIndexNames?: readonly string[]): ReadonlySet<string> | undefined {
         if (sourceIndexNames === undefined) {
             return undefined;
@@ -288,6 +311,9 @@ export class DocumentDbCollectionIndexCopier implements CollectionIndexCopier {
         return new Promise<T>((resolve, reject) => {
             const onAbort = (): void => reject(this.getAbortError(signal));
             signal.addEventListener('abort', onAbort, { once: true });
+            if (signal.aborted) {
+                onAbort();
+            }
             void operation.then(
                 (result) => {
                     signal.removeEventListener('abort', onAbort);

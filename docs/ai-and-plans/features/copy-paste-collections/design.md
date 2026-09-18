@@ -159,6 +159,19 @@ The dedicated task does not create collections or transfer documents. It maps ea
 including skips, to determinate progress. Cancellation stops before the next index and does not roll
 back completed creation. Successful paste leaves the buffer intact for reuse.
 
+`CopyIndexesTask` depends only on `CollectionIndexCopier` and the shared `CollectionEndpoint`
+descriptor, not on DocumentDB clients or credentials. The command supplies a
+`DocumentDbCollectionIndexCopier` instance through that interface. Task initialization only records
+the operation correlation ID; connection handling and source validation run inside `copyIndexes()`.
+The copier rejects an unavailable source connection or missing source collection before acquiring
+the target client, and validates selected names before reading the target catalog or creating indexes.
+Wizard validation remains useful for early feedback but cannot replace this execution-time check.
+
+Another database supplies its own copier with its own validation and authentication behavior. No
+separate validator, task authentication hook, or portable index definition is required. The collection
+copy task's existing source validation and metadata access remain outside this refactor. See
+[the provider-boundary implementation note](./iterations/05-index-copy-provider-boundary.md).
+
 ## Execution order
 
 ```mermaid
