@@ -34,6 +34,7 @@ jest.mock('../../documentdb/ClustersClient', () => ({
     ClustersClient: {
         getClient: jest.fn(),
     },
+    getIndexExclusionReason: jest.fn(() => undefined),
 }));
 
 describe('compareIndexNames', () => {
