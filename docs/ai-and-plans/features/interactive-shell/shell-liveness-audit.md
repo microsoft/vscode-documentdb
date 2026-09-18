@@ -170,7 +170,7 @@ is luxury 5 / usefulness 3. Both are worth doing; they are not worth doing _in t
 
 | #   | Item                                           | Complexity | Use | Lux | Decision  | Status             |
 | --- | ---------------------------------------------- | ---------- | --- | --- | --------- | ------------------ |
-| F1  | Resize can strand the cursor                   | S          | 5   | 1   | Fix       | —                  |
+| F1  | Resize can strand the cursor                   | S          | 5   | 1   | Fix       | Shipped `4c40d050` |
 | F2  | Ghost text paints over real text mid-buffer    | XS         | 4   | 1   | Fix       | Shipped `88ef37c5` |
 | F3  | Completion list measured with `String.length`  | S          | 3   | 1   | Fix       | —                  |
 | F4  | Prompt width measured with `String.length`     | XS         | 2   | 1   | Fix       | Shipped `412722bf` |
@@ -232,6 +232,43 @@ against the _new_ column count. Recompute it in `setColumns()` instead of zeroin
 | Complexity | Usefulness | Luxury |
 | ---------- | ---------- | ------ |
 | S          | 5          | 1      |
+
+### Shipped — commit `4c40d050`
+
+**The finding reproduced exactly as described**, and both halves of the prescribed fix were needed.
+
+`ShellInputHandler.setColumns()` now recomputes the row through a small private
+`cursorRowForColumns()` helper using the same deferred-wrap formula as `reRenderLine()`
+(`absCol > 0 ? Math.floor((absCol - 1) / cols) : 0`, over `cursorColumn`). `DocumentDBShellPty.setDimensions()`
+now calls `renderCurrentLine()`.
+
+**Two implementation details worth recording**, neither of which changes the shape of the item:
+
+- **The repaint is gated.** `setDimensions()` can fire at any moment, including mid-evaluation while
+  command output is streaming and during connect while input is disabled. Repainting the input line
+  then would inject the prompt and buffer into somebody else's output. The repaint is skipped unless
+  `!_closed && !_evaluating && _inputHandler.isEnabled`.
+- **Ghost state is cleared before the repaint.** `reRenderLine()` ends with `\x1b[J`, which erases the
+  ghost from the screen while `ShellGhostText._visible` would stay `true` — Tab would then accept a
+  suggestion the user can no longer see. `clearGhostState()` first. (This is the same hazard checked
+  and dismissed under F2 for cursor movement, where `handleInput()` already clears it; `setDimensions()`
+  does not go through `handleInput()`.)
+
+Four tests, two of which fail against the unfixed source:
+
+| Test                                                            | File                     | Fails before? |
+| --------------------------------------------------------------- | ------------------------ | ------------- |
+| tracks the cursor row across a **narrowing** resize (asserts CUU count) | `ShellInputHandler.test.ts` | yes           |
+| tracks the cursor row across a **widening** resize                | `ShellInputHandler.test.ts` | no (control)  |
+| `setDimensions` repaints the input line at the new width          | `DocumentDBShellPty.test.ts` | yes           |
+| `setDimensions` does not touch the terminal while evaluating      | `DocumentDBShellPty.test.ts` | no (guard)    |
+
+All four assert on emitted ANSI.
+
+**F6 note.** The audit predicted that "if F1 gives the initial width a sensible value on the way past,
+[F6] stops being a separate problem." It does not: F1 touches the resize path only, and `open()`'s
+80-column default is untouched. F6 remains exactly as recorded — won't fix, for the reason already
+given.
 
 ## F2. Ghost text paints over real text when the cursor is mid-buffer
 
