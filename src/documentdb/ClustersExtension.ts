@@ -209,6 +209,7 @@ export class ClustersExtension implements vscode.Disposable {
         ext.discoveryBranchDataProvider = new DiscoveryBranchDataProvider();
 
         ext.discoveryTreeView = vscode.window.createTreeView(Views.DiscoveryView, {
+            canSelectMany: true,
             showCollapseAll: true,
             treeDataProvider: ext.discoveryBranchDataProvider,
             dragAndDropController: new DiscoveryViewDragAndDropController(),
