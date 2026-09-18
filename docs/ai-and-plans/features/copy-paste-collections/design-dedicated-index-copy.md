@@ -79,7 +79,8 @@ workflow. The collection flow needs internal adaptations, not a redesign.
 
 1. The user opens an Indexes node and invokes **Copy Index…** on a copyable secondary index.
 2. The command records a stable source collection descriptor and the selected index name.
-3. A notification says that the index is ready to paste and offers **Cancel Copy**.
+3. A notification says that the index is ready to paste and offers **Cancel Copy** and **Learn
+   More**. Learn More opens the published copy-and-paste user guide.
 4. The user invokes **Paste Indexes…** on another collection's Indexes node.
 5. A confirmation shows the source, target, the one selected index name, and its applicable unique
    or TTL warnings. It shows no whole-collection count or unrelated excluded entries.
@@ -91,7 +92,7 @@ The `_id` node and non-copyable entries do not offer **Copy Index…**; they are
 ### Copy selected indexes
 
 1. The user selects two or more index rows from one collection and invokes **Copy Selected
-  Indexes…** on any selected index row.
+   Indexes…** on any selected index row.
 2. The command receives the right-clicked item and VS Code's selected-items array, matching the
    existing Move to Folder command pattern.
 3. It retains copyable `IndexItem` nodes from the same collection and records their names as a
@@ -106,11 +107,15 @@ offer **Copy Selected Indexes…**. Right-clicking `_id`, a keyless search index
 offers the command for a multi-selection; excluded entries and expanded field rows are ignored. A
 single selection instead shows **Copy Index…** only for a copyable index.
 
-#### Notification button label
+#### Notification actions
 
 Use **Cancel Copy**, not **Undo**. Nothing has been written to a database at this point, and
 **Undo** reads as reverting a database operation. **Cancel Copy** names exactly what is discarded
 and cannot be misread as destructive.
+
+Also offer **Learn More**, linking directly to
+`https://microsoft.github.io/vscode-documentdb/user-manual/copy-and-paste#copy-and-paste-indexes-without-documents`.
+Opening documentation does not clear the copied-index buffer.
 
 Apply the same rename to the existing Copy Collection notification in
 `src/commands/copyCollection/copyCollection.ts`, which currently offers **Undo**. Also correct the
@@ -129,8 +134,8 @@ two flows differ.
 2. The command records an `all` source selection. It does not retain the current child nodes or a
    snapshot of provider-specific index definitions.
 3. The confirmation notification says that the collection's copyable secondary indexes are ready to
-   paste and offers **Cancel Copy**. It must not claim "all indexes", because `_id` and any
-   non-copyable entries are excluded.
+   paste and offers **Cancel Copy** and **Learn More**. It must not claim "all indexes", because
+   `_id` and any non-copyable entries are excluded.
 4. Paste resolves the current source catalog, excluding `_id` and non-copyable entries, and starts
    the same dedicated task.
 
@@ -848,7 +853,8 @@ Command wrappers provide duration, result, cancellation, and errors. Add only do
 Copy commands:
 
 - property `copyScope`: `index`, `indexes`, or `allIndexes`;
-- property `copyCancelled`: whether **Cancel Copy** was chosen.
+- property `copyCancelled`: whether **Cancel Copy** was chosen;
+- property `learnMoreClicked`: whether **Learn More** was chosen.
 
 Paste Indexes wizard:
 

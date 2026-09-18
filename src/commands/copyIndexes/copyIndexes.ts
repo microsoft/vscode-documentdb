@@ -3,7 +3,7 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { type IActionContext } from '@microsoft/vscode-azext-utils';
+import { openUrl, type IActionContext } from '@microsoft/vscode-azext-utils';
 import * as vscode from 'vscode';
 import { getIndexExclusionReason } from '../../documentdb/ClustersClient';
 import {
@@ -121,10 +121,16 @@ async function storeAndNotify(
     await CopyPasteBufferService.setIndexes(selection);
 
     const cancelCopy = vscode.l10n.t('Cancel Copy');
-    const selectedAction = await vscode.window.showInformationMessage(message, cancelCopy);
+    const learnMore = vscode.l10n.t('Learn More');
+    const selectedAction = await vscode.window.showInformationMessage(message, cancelCopy, learnMore);
     const copyCancelled = selectedAction === cancelCopy;
     context.telemetry.properties.copyCancelled = copyCancelled ? 'true' : 'false';
     if (copyCancelled) {
         await CopyPasteBufferService.clearIndexes();
+    } else if (selectedAction === learnMore) {
+        await openUrl(
+            'https://microsoft.github.io/vscode-documentdb/user-manual/copy-and-paste#copy-and-paste-indexes-without-documents',
+        );
+        context.telemetry.properties.learnMoreClicked = 'true';
     }
 }

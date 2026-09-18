@@ -43,23 +43,31 @@ Use the Explorer's Indexes nodes when you need to recreate indexes without copyi
 
 1. Expand a source collection's **Indexes** node.
 2. To select one ordinary secondary index, right-click it and select **Copy Index…**. To copy a
-  subset, select multiple index rows, right-click any selected index, and select **Copy Selected
-  Indexes…**. Expanded field rows, `_id`, and non-copyable search entries in the selection are
-  ignored. To select every copyable secondary index, right-click the **Indexes** parent and select
-  **Copy Indexes…**. This parent selection resolves the source's copyable indexes when you paste,
-  so it includes catalog changes made after copying.
+   subset, select multiple index rows, right-click any selected index, and select **Copy Selected
+   Indexes…**. Expanded field rows, `_id`, and non-copyable search entries in the selection are
+   ignored. To select every copyable secondary index, right-click the **Indexes** parent and select
+   **Copy Indexes…**. This parent selection resolves the source's copyable indexes when you paste,
+   so it includes catalog changes made after copying.
 3. Expand the target collection, right-click its **Indexes** node, and select **Paste Indexes…**.
 4. Review the source, target, selected indexes, exclusions, and any unique or TTL warnings, then
    confirm.
 
-The built-in `_id` index is not copied. Search and vector search catalog entries that do not have an
-ordinary index definition are shown as not copyable; recreate those manually on the target. This is
-different from an ordinary DocumentDB vector index, which has a key definition and can be copied.
+For each selected secondary index, the extension sends the target database a `createIndexes`
+command containing one index definition. The definition includes the ordered key specification,
+the source name when it is available, and creation options reported by the source catalog, such as
+`unique`, `sparse`, `expireAfterSeconds`, `partialFilterExpression`, and vector configuration. The
+extension requests background creation. If the source index is hidden, it restores that state after
+creation with a separate `collMod` command.
+
+The built-in `_id` index is always excluded because the target collection creates it automatically.
+Catalog entries without an ordinary key definition cannot be represented by this `createIndexes`
+flow and are not copied.
 
 Equivalent target definitions are skipped. If a name is already used by a different definition,
 the copied index receives a deterministic suffix. Cancellation leaves indexes already created on
 the target. A successful paste keeps the source selection available so you can paste it into another
-target; use **Cancel Copy** or copy another index selection to replace it.
+target; use **Cancel Copy** or copy another index selection to replace it. Select **Learn More** in
+the copy notification to open this guide without clearing the selection.
 
 ## Important Considerations
 

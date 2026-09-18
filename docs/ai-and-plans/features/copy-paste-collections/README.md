@@ -75,6 +75,8 @@ durable intent and rationale. Code and tests remain authoritative for current be
 - A successful dedicated paste leaves the copied-index buffer intact so the same selection can be
   pasted into more than one target. Another copy replaces it; Cancel Copy or stale validation
   clears it.
+- Index-copy notifications link to the published copy-and-paste guide through **Learn More** without
+  clearing the copied selection.
 
 ## Code map
 

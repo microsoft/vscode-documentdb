@@ -3,7 +3,7 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { type IActionContext } from '@microsoft/vscode-azext-utils';
+import { type IActionContext, openUrl } from '@microsoft/vscode-azext-utils';
 import * as vscode from 'vscode';
 import { CopyPasteBufferService } from '../../services/CopyPasteBufferService';
 import { type TreeElement } from '../../tree/TreeElement';
@@ -14,6 +14,10 @@ import { copyIndex, copyIndexes } from './copyIndexes';
 const showInformationMessage = vscode.window.showInformationMessage as unknown as jest.MockedFunction<
     (message: string, ...items: string[]) => Thenable<string | undefined>
 >;
+
+jest.mock('@microsoft/vscode-azext-utils', () => ({
+    openUrl: jest.fn().mockResolvedValue(undefined),
+}));
 
 jest.mock('../../services/CopyPasteBufferService', () => ({
     CopyPasteBufferService: {
@@ -98,6 +102,7 @@ describe('copyIndexes commands', () => {
             expect(showInformationMessage).toHaveBeenCalledWith(
                 '2 indexes from collection "collection" are ready to paste.',
                 'Cancel Copy',
+                'Learn More',
             );
         },
     );
@@ -146,5 +151,19 @@ describe('copyIndexes commands', () => {
 
         expect(CopyPasteBufferService.clearIndexes).toHaveBeenCalledTimes(1);
         expect(context.telemetry.properties.copyCancelled).toBe('true');
+    });
+
+    it('opens index copy documentation from Learn More', async () => {
+        showInformationMessage.mockResolvedValue('Learn More');
+        const context = createContext();
+
+        await copyIndexes(context, createIndexesNode());
+
+        expect(openUrl).toHaveBeenCalledWith(
+            'https://microsoft.github.io/vscode-documentdb/user-manual/copy-and-paste#copy-and-paste-indexes-without-documents',
+        );
+        expect(CopyPasteBufferService.clearIndexes).not.toHaveBeenCalled();
+        expect(context.telemetry.properties.learnMoreClicked).toBe('true');
+        expect(context.telemetry.properties.copyCancelled).toBe('false');
     });
 });
