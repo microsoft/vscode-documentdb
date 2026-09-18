@@ -1,7 +1,7 @@
 ---
 feature: copy-paste-collections
 kind: review
-status: active
+status: historical
 prs: [930]
 created: 2026-09-18
 verified: 2026-09-18
@@ -21,12 +21,15 @@ code:
 **Scope requested by the operator:** data-loss edge cases and telemetry coverage for the new
 copy/paste index operations. Inability to perform an operation was explicitly de-scoped as low
 severity.
-**Status of this document:** findings only. No code has been changed for any item below. Except
-where an **Operator ruling** is recorded, the resolutions listed are proposals, not decisions.
+**Status of this document:** completed resolution record. The original findings and proposals remain
+in place; implementation results, alternatives, and decisions are recorded inline beneath each item.
 
 ## Operator rulings (2026-09-18)
 
-Only D3 has been ruled on. It also settles D5. Everything else is still open.
+The table below records the initial ruling before implementation. It settled D3 and D5.
+Subsequently, the operator requested resolution of every review issue and authorized deviations when
+implementation confidence exceeded 80%, provided alternatives, trade-offs, and decisions were
+documented inline. That instruction authorized the remaining resolutions recorded below.
 
 | #   | Question                                | Ruling                                                                                                               |
 | --- | --------------------------------------- | -------------------------------------------------------------------------------------------------------------------- |
@@ -473,7 +476,10 @@ schema and identifies the specific partial-state risk.
 
 ---
 
-## Handoff notes
+## Handoff notes (pre-implementation)
+
+The notes below describe the state at the original review handoff. They are retained as historical
+context and are superseded by the inline resolution notes and Outcome.
 
 - **D3 is decided and ready to implement.** Everything else is still a proposal and needs an
   operator ruling before behaviour changes.
@@ -491,3 +497,31 @@ schema and identifies the specific partial-state risk.
 - Any string change requires `npm run l10n` at Case 2, not during implementation.
 - While the PR stays draft, verify with Case 1 only: `npm run build` plus the targeted Jest files
   for the touched code. Run the full Case 2 suite only when moving to ready for review.
+
+## Outcome
+
+All findings are resolved. D5 was closed through D3 as ruled; the other items landed with their
+alternatives and decisions recorded at the finding that motivated them.
+
+Implementation commits:
+
+- `59dfd23a` — prevent same-key option conflicts (D1, D2, T2)
+- `ae7ac596` — refuse document-affecting indexes during collection paste (D3, D5)
+- `a37d6f19` — freeze the confirmed index selection (D4)
+- `3ddce15f` — record dedicated warning exposure (T1)
+- `567e3ae7` — correlate paste wizards and tasks (T3)
+- `1f50dfad` — align collection-task outcomes (T4, T5); this commit also contains the two
+  collection-task correlation assignments because an earlier commit invocation reported success
+  without committing the remaining T3 files
+- `9c473a07` — classify command early exits (T6)
+- `ba66d445` — classify visibility restoration failures (T7)
+- `d47cbad4` — correct the Learn More test mock overload found by the build
+
+Verified on 2026-09-18 under draft-PR Case 1:
+
+- `npm run build` — passed
+- 10 targeted Jest suites, 86 tests — passed with `--no-coverage`
+
+Per repository rules, localization generation, formatting, lint, the full Jest suite, and packaging
+were not run while the PR remains draft. They remain required only when moving the PR to ready for
+review.
