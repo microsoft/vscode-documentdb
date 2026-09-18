@@ -131,7 +131,10 @@ fix", so deferred items get their own section rather than being buried next to t
 were actually rejected.
 
 **Implementation progress is tracked in the Status column of the table below**, and each shipped item
-carries a `### Shipped — commit <sha>` subsection recording what was done and why.
+carries a `### Shipped — commit <sha>` subsection recording what was done and why. All nine `# Fix`
+items shipped in Step 15 — see
+[iterations/15-shell-liveness-audit-fixes.md](./iterations/15-shell-liveness-audit-fixes.md) for the
+cross-cutting summary and lessons. `# Deferred` and `# Won't fix` are untouched.
 
 ## Note: the future standalone shell
 

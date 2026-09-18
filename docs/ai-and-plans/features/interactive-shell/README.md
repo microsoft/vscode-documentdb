@@ -69,6 +69,7 @@ program-level narrative, and the sibling areas
 | Step 12  | TBD  | Shell session UX and follow-up issues                        | [iterations/12-shell-session-ux.md](./iterations/12-shell-session-ux.md)                           |
 | Step 13  | TBD  | Ghost text clipped to terminal width (input-line corruption) | [iterations/13-ghost-text-wrap-clipping.md](./iterations/13-ghost-text-wrap-clipping.md)           |
 | Step 14  | TBD  | Bracket-notation completion now removes the `db.` dot        | [iterations/14-bracket-notation-dot-removal.md](./iterations/14-bracket-notation-dot-removal.md)   |
+| Step 15  | TBD  | Liveness audit: width, resize and ghost text — nine items    | [iterations/15-shell-liveness-audit-fixes.md](./iterations/15-shell-liveness-audit-fixes.md)       |
 
 Iteration numbers 8, 9 and 9.1 are the original step numbers of the shell-integration program and
 are preserved. Steps 10 and 11 are new numbers for work that had none.
@@ -79,7 +80,12 @@ are preserved. Steps 10 and 11 are new numbers for work that had none.
 written after Steps 13 and 14 both turned out to be reachable within the first three keystrokes. It
 lists verified findings (resize can strand the cursor, ghost text can paint over real text,
 `String.length` used for width in two remaining places) alongside rated quality-of-life proposals,
-grouped into **Fix**, **Deferred** and **Won't fix**. Nothing in it is implemented.
+grouped into **Fix**, **Deferred** and **Won't fix**.
+
+All nine **Fix** items shipped in Step 15; each carries its commit and a write-up inline in the
+audit. **Deferred** and **Won't fix** are untouched and remain the live backlog — I7 (Tab-cycling as
+menu-select) and its prerequisite I10 are the largest, and I4 (persisting history) is blocked on a
+redaction decision rather than on storage.
 
 ## Decisions
 
