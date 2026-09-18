@@ -592,8 +592,9 @@ rows?
 ### Decision
 
 Yes. Register Copy Index as a plain correlated command so VS Code supplies the right-clicked item and
-the selected-items array. Retain only copyable `IndexItem` instances from the right-clicked index's
-collection. Ignore expanded field rows, `_id`, and keyless non-copyable entries. Reject copyable
+the selected-items array. Offer **Copy Selected Indexes…** when any selected index row is
+right-clicked, then retain only copyable `IndexItem` instances and use the first retained index as
+the source. Ignore expanded field rows, `_id`, and keyless non-copyable entries. Reject copyable
 indexes from another collection.
 
 ### Reasoning
@@ -604,12 +605,18 @@ elements but are not indexes, and the buffer has one stable source collection de
 discarding valid indexes from another collection would make the resulting paste surprising, while
 rejecting the selection tells the user how to correct it.
 
+Requiring the right-clicked row itself to be copyable makes mixed selections depend on where the
+user opens the context menu. Filtering the whole selection is simpler: `_id` and search entries are
+treated consistently and do not hide an otherwise valid command.
+
 ### Alternatives considered
 
 - **Keep one-or-all only.** Simpler, but leaves the context menu empty during a natural VS Code
   workflow and forces repeated copy/paste operations.
 - **Remove only `!listMultiSelection`.** Rejected because the existing tree-node unwrapping handler
   would receive only the clicked index and silently ignore the rest.
+- **Require a copyable right-clicked index.** Rejected because `_id` or a search entry can suppress
+  the command even when the selection contains ordinary secondary indexes that can be copied.
 - **Accept indexes across collections.** Rejected because one copied selection cannot truthfully
   carry one source descriptor or resolve one catalog for several collections.
 - **Treat non-index rows as an error.** Rejected because selecting expanded field rows is easy and

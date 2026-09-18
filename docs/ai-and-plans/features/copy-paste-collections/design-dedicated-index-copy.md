@@ -91,7 +91,7 @@ The `_id` node and non-copyable entries do not offer **Copy Index…**; they are
 ### Copy selected indexes
 
 1. The user selects two or more index rows from one collection and invokes **Copy Selected
-   Indexes…** on a copyable selected index.
+  Indexes…** on any selected index row.
 2. The command receives the right-clicked item and VS Code's selected-items array, matching the
    existing Move to Folder command pattern.
 3. It retains copyable `IndexItem` nodes from the same collection and records their names as a
@@ -102,8 +102,9 @@ The `_id` node and non-copyable entries do not offer **Copy Index…**; they are
    unique or TTL warnings.
 
 The right-clicked node controls menu eligibility. Right-clicking an expanded field row does not
-offer **Copy Selected Indexes…**; right-clicking a copyable index while field rows are also selected
-offers the command and ignores those rows. A single selection instead shows **Copy Index…**.
+offer **Copy Selected Indexes…**. Right-clicking `_id`, a keyless search index, or a copyable index
+offers the command for a multi-selection; excluded entries and expanded field rows are ignored. A
+single selection instead shows **Copy Index…** only for a copyable index.
 
 #### Notification button label
 
@@ -663,14 +664,14 @@ hidden indexes, which carry `state_hidden` and are copyable.
 ### Menu entries
 
 - **Copy Index…** on `treeItem_index`, gated by `state_copyable` and `!listMultiSelection`;
-- **Copy Selected Indexes…** on `treeItem_index`, gated by `state_copyable` and
-  `listMultiSelection`;
+- **Copy Selected Indexes…** on `treeItem_index`, gated by `listMultiSelection` regardless of the
+  right-clicked index's copyability;
 - **Copy Indexes…** on `treeItem_indexes`;
 - **Paste Indexes…** on `treeItem_indexes`, gated by `documentdb.hasCopiedIndexes`.
 
-Retain the existing view and experience gates. Retain `!listMultiSelection` for parent copy and
-paste, but omit it from **Copy Index…**. Put copy and paste near the other constructive Indexes
-actions, before hide/unhide/delete operations.
+Retain the existing view and experience gates. Retain `!listMultiSelection` for single-index copy,
+parent copy, and paste. Put copy and paste near the other constructive Indexes actions, before
+hide/unhide/delete operations.
 
 ### Command palette
 

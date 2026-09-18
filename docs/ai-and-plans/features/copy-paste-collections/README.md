@@ -65,6 +65,8 @@ durable intent and rationale. Code and tests remain authoritative for current be
   reported by the task and copier.
 - Dedicated Copy Index uses one stable index name or an immutable selected-name subset; Copy
   Indexes retains a live parent scope and resolves the current source catalog at paste time.
+- Mixed tree selections may be invoked from any selected index row; `_id` and non-copyable search
+  entries are ignored while ordinary selected indexes are retained.
 - Search catalog entries without ordinary keys remain visible but are classified as not copyable.
   The parent confirmation itemizes known exclusions, including `_id`; search exclusions are
   best-effort when the platform does not support their catalog API.

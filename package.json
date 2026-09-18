@@ -1232,7 +1232,7 @@
         {
           "//": "[Index] Copy Selected Indexes",
           "command": "vscode-documentdb.command.copySelectedIndexes",
-          "when": "view =~ /connectionsView|discoveryView|azure(ResourceGroups|FocusView)/ && viewItem =~ /\\btreeitem_index\\b/i && viewItem =~ /\\bstate_copyable\\b/i && viewItem =~ /\\bexperience_(documentDB|mongoRU|mongoDBAtlas)\\b/i && listMultiSelection",
+          "when": "view =~ /connectionsView|discoveryView|azure(ResourceGroups|FocusView)/ && viewItem =~ /\\btreeitem_index\\b/i && viewItem =~ /\\bexperience_(documentDB|mongoRU|mongoDBAtlas)\\b/i && listMultiSelection",
           "group": "2@1"
         },
         {

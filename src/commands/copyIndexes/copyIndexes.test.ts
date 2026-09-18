@@ -76,27 +76,31 @@ describe('copyIndexes commands', () => {
         expect(context.telemetry.properties.copyCancelled).toBe('false');
     });
 
-    it('stores multiple selected indexes and ignores expanded fields and non-copyable entries', async () => {
-        const context = createContext();
-        const emailIndex = createIndexNode({ name: 'email_1', type: 'traditional', key: { email: 1 } });
-        const regionIndex = createIndexNode({ name: 'region_1', type: 'traditional', key: { region: 1 } });
-        const idIndex = createIndexNode({ name: '_id_', type: 'traditional', key: { _id: 1 } });
-        const searchIndex = createIndexNode({ name: 'search', type: 'search' });
-        const expandedField = { id: `${emailIndex.id}/email`, getTreeItem: jest.fn() } as unknown as TreeElement;
+    it.each(['built-in _id', 'search'] as const)(
+        'stores copyable selected indexes when invoked from a %s index',
+        async (clickedIndexType) => {
+            const context = createContext();
+            const emailIndex = createIndexNode({ name: 'email_1', type: 'traditional', key: { email: 1 } });
+            const regionIndex = createIndexNode({ name: 'region_1', type: 'traditional', key: { region: 1 } });
+            const idIndex = createIndexNode({ name: '_id_', type: 'traditional', key: { _id: 1 } });
+            const searchIndex = createIndexNode({ name: 'search', type: 'search' });
+            const expandedField = { id: `${emailIndex.id}/email`, getTreeItem: jest.fn() } as unknown as TreeElement;
+            const clickedNode = clickedIndexType === 'built-in _id' ? idIndex : searchIndex;
 
-        await copyIndex(context, emailIndex, [emailIndex, expandedField, idIndex, regionIndex, searchIndex]);
+            await copyIndex(context, clickedNode, [emailIndex, expandedField, idIndex, regionIndex, searchIndex]);
 
-        expect(CopyPasteBufferService.setIndexes).toHaveBeenCalledWith(
-            expect.objectContaining({
-                scope: { kind: 'indexes', indexNames: ['email_1', 'region_1'] },
-            }),
-        );
-        expect(context.telemetry.properties.copyScope).toBe('indexes');
-        expect(showInformationMessage).toHaveBeenCalledWith(
-            '2 indexes from collection "collection" are ready to paste.',
-            'Cancel Copy',
-        );
-    });
+            expect(CopyPasteBufferService.setIndexes).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    scope: { kind: 'indexes', indexNames: ['email_1', 'region_1'] },
+                }),
+            );
+            expect(context.telemetry.properties.copyScope).toBe('indexes');
+            expect(showInformationMessage).toHaveBeenCalledWith(
+                '2 indexes from collection "collection" are ready to paste.',
+                'Cancel Copy',
+            );
+        },
+    );
 
     it('rejects selected indexes from different collections', async () => {
         const emailIndex = createIndexNode({ name: 'email_1', type: 'traditional', key: { email: 1 } });

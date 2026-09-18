@@ -51,12 +51,12 @@ describe('index copy command contributions', () => {
         expect(entry?.when).toContain('!listMultiSelection');
     });
 
-    it('shows Copy Selected Indexes only for a copyable multi-selection', () => {
+    it('shows Copy Selected Indexes for a multi-selection even when the context item is not copyable', () => {
         const entry = contributes.menus['view/item/context'].find(
             (candidate) => candidate.command === 'vscode-documentdb.command.copySelectedIndexes',
         );
 
-        expect(entry?.when).toContain('state_copyable');
+        expect(entry?.when).not.toContain('state_copyable');
         expect(entry?.when).toContain('treeitem_index');
         expect(entry?.when).toMatch(/&& listMultiSelection$/);
     });
