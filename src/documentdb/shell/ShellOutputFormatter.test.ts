@@ -238,6 +238,24 @@ describe('ShellOutputFormatter', () => {
         });
     });
 
+    describe('connection banner formatting', () => {
+        it('should use neutral emphasis for the title and values', () => {
+            expect(formatter.formatShellTitle('DocumentDB Shell: Demo')).toBe(
+                '\x1b[1mDocumentDB Shell: Demo\x1b[0m',
+            );
+            expect(formatter.formatConnectionValue('value')).toBe('\x1b[1m\x1b[39mvalue\x1b[0m\x1b[90m');
+        });
+
+        it('should preserve plain text when color support is disabled', () => {
+            jest.spyOn(vscode.workspace, 'getConfiguration').mockReturnValue({
+                get: jest.fn(() => false),
+            } as unknown as vscode.WorkspaceConfiguration);
+
+            expect(formatter.formatShellTitle('DocumentDB Shell: Demo')).toBe('DocumentDB Shell: Demo');
+            expect(formatter.formatConnectionValue('alex@contoso.com')).toBe('alex@contoso.com');
+        });
+    });
+
     describe('Help result formatting', () => {
         it('should format help text directly from string', () => {
             const result = makeResult({

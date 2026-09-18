@@ -191,7 +191,7 @@ export class DocumentDBShellPty implements vscode.Pseudoterminal {
 
         // Display welcome banner
         this.writeLine(
-            this._outputFormatter.formatSystemMessage(
+            this._outputFormatter.formatShellTitle(
                 l10n.t('DocumentDB Shell: {0}', this._connectionInfo.clusterDisplayName),
             ),
         );
@@ -508,24 +508,29 @@ export class DocumentDBShellPty implements vscode.Pseudoterminal {
                     : l10n.t('{0} ({1})', this._connectionInfo.clusterDisplayName, metadata.host);
             const hostLabel = metadata.isEmulator ? l10n.t('{0} (Emulator)', connectionLabel) : connectionLabel;
 
-            this.writeLine(this._outputFormatter.formatSystemMessage(l10n.t('Connected to: {0}', hostLabel)));
-
             const identity = metadata.username ?? metadata.displayName;
+            const formattedHostLabel = this._outputFormatter.formatConnectionValue(hostLabel);
+            this.writeLine(
+                this._outputFormatter.formatSystemMessage(l10n.t('Connected to: {0}', formattedHostLabel)),
+            );
+
+            const formattedAuthLabel = this._outputFormatter.formatConnectionValue(authLabel);
+            const formattedDatabase = this._outputFormatter.formatConnectionValue(this._currentDatabase);
             if (identity) {
                 this.writeLine(
                     this._outputFormatter.formatSystemMessage(
                         l10n.t(
                             'Identity: {0} | Authentication: {1} | Database: {2}',
-                            identity,
-                            authLabel,
-                            this._currentDatabase,
+                            this._outputFormatter.formatConnectionValue(identity),
+                            formattedAuthLabel,
+                            formattedDatabase,
                         ),
                     ),
                 );
             } else {
                 this.writeLine(
                     this._outputFormatter.formatSystemMessage(
-                        l10n.t('Authentication: {0} | Database: {1}', authLabel, this._currentDatabase),
+                        l10n.t('Authentication: {0} | Database: {1}', formattedAuthLabel, formattedDatabase),
                     ),
                 );
             }
