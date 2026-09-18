@@ -74,8 +74,27 @@ the swc loader options in `webpack.config.ext.js` so that webpack could split la
 dependencies. That made webpack see real dynamic imports — and pull in the second copy of
 `bson`.
 
-First shipped in **v0.9.0** (2026-06-18). Affected releases: v0.9.0, v0.9.1, v0.9.2,
-v0.10.0, v0.10.1, v0.10.2 — roughly three and a half months.
+| Date       | Event                                                                                        |
+| ---------- | -------------------------------------------------------------------------------------------- |
+| 2026-03-25 | `await import('bson')` call sites added — harmless, swc downlevels `import()` to `require()` |
+| 2026-04-29 | `e6dd3923` authored (`ignoreDynamic: true`)                                                  |
+| 2026-06-01 | `e6dd3923` merged to `main` — bug becomes live on `main`                                     |
+| 2026-06-03 | `v0.8.1` — tagged from an earlier commit, **not** affected                                   |
+| 2026-06-18 | `v0.9.0` — **first affected release**                                                        |
+| 2026-06-26 | `v0.9.1` — affected                                                                          |
+| 2026-08-04 | `v0.9.2` — affected                                                                          |
+| 2026-08-16 | `v0.10.0` — affected                                                                         |
+| 2026-09-02 | `v0.10.1` — affected                                                                         |
+| 2026-09-11 | `v0.10.2` — affected                                                                         |
+| 2026-09-18 | Reported and fixed                                                                           |
+
+Exposure: **92 days in released builds** (v0.9.0 → 2026-09-18), 109 days on `main`, across
+six consecutive releases.
+
+It survived that long because the failure is silent — no error, no crash, just quietly
+wrong schema output. `EJSON.stringify` duck-types on `_bsontype`, so serialization and
+rendering kept working perfectly; only type _inference_ was broken. That asymmetry is the
+reason the hardening below is worth its cost.
 
 ## What changed
 
@@ -142,5 +161,12 @@ grep -c vendors-node_modules_bson_lib_bson_node_mjs dist/main.js   # must be 0
 - Schema data cached before the fix is stale; `SchemaStore` clears on window reload, so no
   migration is needed in-product. Downstream consumers that persist `getKnownFields()`
   output should invalidate it on upgrade.
-- `@documentdb-js/schema-analyzer` needs a version bump and a changelog entry for the
-  `inferType()` hardening. The package has no `CHANGELOG.md` yet.
+- `@documentdb-js/schema-analyzer` released as **1.0.0** with a new `CHANGELOG.md`. A major
+  bump rather than a patch because `getKnownFields()` output changes for consumers, and
+  because 1.0.0 is where the API gains a stability commitment that 0.x by definition did
+  not carry. The changelog describes 0.8.0/0.8.1 as public preview releases — they are live
+  on npm — rather than internal ones.
+- The three sibling `@documentdb-js/*` packages stay at 0.8.1, so the version lockstep set
+  by `49d2cbd5` is now broken. The publish workflow takes a per-package input, so drift is
+  mechanically fine; a coordinated 1.0.0 is still open if the packages are announced
+  together.
