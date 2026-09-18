@@ -81,6 +81,74 @@ describe('ShellGhostText', () => {
         });
     });
 
+    describe('width clipping', () => {
+        /** Display width of the text between the dim-style prefix and the reset. */
+        const renderedWidth = (data: string): number => {
+            const match = /\x1b\[2m\x1b\[90m(.*?)\x1b\[0m/s.exec(data);
+            return match ? [...match[1]].length : 0;
+        };
+
+        it('should render in full when the text fits', () => {
+            ghostText.show('abcde', write, 10);
+            expect(written).toContain('\x1b[2m\x1b[90mabcde\x1b[0m');
+            expect(written).toContain('\x1b[5D');
+        });
+
+        it('should clip to the available columns and mark the truncation', () => {
+            ghostText.show('abcdefghij', write, 5);
+            expect(written).toContain('\x1b[2m\x1b[90mabcd…\x1b[0m');
+            expect(written).toContain('\x1b[5D');
+        });
+
+        it('should never render wider than the available columns', () => {
+            for (const available of [1, 2, 3, 7, 12, 40]) {
+                written = '';
+                ghostText.reset();
+                ghostText.show('  🛈 Run db.vector_index_debug_cases.find() first', write, available);
+                expect(renderedWidth(written)).toBeLessThanOrEqual(available);
+            }
+        });
+
+        it('should move the cursor back exactly as far as it wrote', () => {
+            ghostText.show('  🛈 Run db.vector_index_debug_cases.find() first', write, 12);
+            const back = /\x1b\[(\d+)D/.exec(written);
+            expect(back).not.toBeNull();
+            expect(Number(back?.[1])).toBe(renderedWidth(written));
+        });
+
+        it('should not render at all when no columns are available', () => {
+            ghostText.show('suggestion', write, 0);
+            expect(ghostText.isVisible).toBe(false);
+            expect(written).toBe('');
+        });
+
+        it('should not render at all when the row is already overflowing', () => {
+            ghostText.show('suggestion', write, -3);
+            expect(ghostText.isVisible).toBe(false);
+            expect(written).toBe('');
+        });
+
+        it('should keep the full text available for acceptance when clipped', () => {
+            ghostText.show('completion', write, 4);
+            expect(ghostText.currentText).toBe('completion');
+        });
+
+        it('should re-render when the available width changes', () => {
+            ghostText.show('completion', write, 4);
+            written = '';
+            ghostText.show('completion', write, 20);
+            expect(written).toContain('\x1b[2m\x1b[90mcompletion\x1b[0m');
+        });
+
+        it('should not split a surrogate pair when clipping', () => {
+            // Clipping at 2 columns leaves room for 1 column + the ellipsis.
+            ghostText.show('a🛈bcdef', write, 3);
+            const match = /\x1b\[2m\x1b\[90m(.*?)\x1b\[0m/s.exec(written);
+            expect(match?.[1]).toBe('a🛈…');
+            expect(written).toContain('\x1b[3D');
+        });
+    });
+
     describe('clear', () => {
         it('should erase ghost text and become not visible', () => {
             ghostText.show('text', write);

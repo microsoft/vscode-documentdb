@@ -125,6 +125,15 @@ export class ShellInputHandler {
     }
 
     /**
+     * Absolute terminal column of the cursor (prompt width + display width of
+     * the buffer up to the cursor). Callers rendering after the cursor need
+     * this to stay inside the terminal width.
+     */
+    get cursorColumn(): number {
+        return this._promptWidth + terminalDisplayWidth(this._buffer.slice(0, this._cursor));
+    }
+
+    /**
      * Whether the handler is currently accumulating a multi-line expression.
      */
     get isInMultiLineMode(): boolean {

@@ -1120,6 +1120,21 @@ export class DocumentDBShellPty implements vscode.Pseudoterminal {
     }
 
     /**
+     * Columns still free on the cursor's terminal row.
+     *
+     * The last column is deliberately excluded: writing into it sets the
+     * terminal's deferred-wrap flag, and the cursor-back sequence that restores
+     * the editing position cannot move between rows.
+     */
+    private availableGhostColumns(): number {
+        const cols = this._columns;
+        if (cols <= 0) {
+            return 0;
+        }
+        return cols - 1 - (this._inputHandler.cursorColumn % cols);
+    }
+
+    /**
      * Handle buffer changes for ghost text evaluation.
      * Called after every character insertion or deletion.
      */
@@ -1180,7 +1195,11 @@ export class DocumentDBShellPty implements vscode.Pseudoterminal {
                 this._ghostTextIsHint = false;
                 this._ghostTextIsClosingBrackets = false;
                 this._ghostCandidateKind = candidate.kind;
-                const rendered = this._ghostText.show(remaining, (d) => this._writeEmitter.fire(d));
+                const rendered = this._ghostText.show(
+                    remaining,
+                    (d) => this._writeEmitter.fire(d),
+                    this.availableGhostColumns(),
+                );
                 if (rendered) {
                     this.trackCompletionGhostShown(candidate.kind);
                 }
@@ -1221,7 +1240,11 @@ export class DocumentDBShellPty implements vscode.Pseudoterminal {
                     this._ghostTextIsHint = false;
                     this._ghostTextIsClosingBrackets = true;
                     this._ghostCandidateKind = undefined;
-                    const closingRendered = this._ghostText.show(closing, (d) => this._writeEmitter.fire(d));
+                    const closingRendered = this._ghostText.show(
+                        closing,
+                        (d) => this._writeEmitter.fire(d),
+                        this.availableGhostColumns(),
+                    );
                     if (closingRendered) {
                         this.trackClosingBracketsShown();
                     }
@@ -1240,7 +1263,7 @@ export class DocumentDBShellPty implements vscode.Pseudoterminal {
     private showSchemaHint(collectionName: string): void {
         const hint = `  🛈 Run db.${collectionName}.find() first for field suggestions`;
         this._ghostTextIsHint = true;
-        this._ghostText.show(hint, (d) => this._writeEmitter.fire(d));
+        this._ghostText.show(hint, (d) => this._writeEmitter.fire(d), this.availableGhostColumns());
     }
 
     /**

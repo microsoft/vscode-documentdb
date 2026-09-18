@@ -293,7 +293,7 @@ const regexpesc = /\\(?:[bBdDfnrstvwWn0\\\/]|[(){}\[\]\$\^|\-*+?\.]|c[A-Z]|x[0-9
 | I-07        | INFO     | `colorizeShellInput.ts`                          | Extra convenience wrapper not in plan                                           | Accept (positive deviation) |
 | I-08        | LOW      | `monarchRunner.ts:186-206`                       | `resolveCases` relies on implicit key insertion order                           | ✅ Fixed (`50c0173`)        |
 | I-09        | INFO     | —                                                | No l10n strings needed                                                          | Verified                    |
-| I-10        | **HIGH** | `ShellInputHandler.ts` / `DocumentDBShellPty.ts` | Full-line re-render assumes a single terminal row; wrapped input is not handled | ✅ Fixed (`6c2e7e4`)        |
+| I-10        | **HIGH** | `ShellInputHandler.ts` / `DocumentDBShellPty.ts` | Full-line re-render assumes a single terminal row; wrapped input is not handled | ✅ Fixed (`6c2e7e4`) — buffer path only; the ghost text path was closed later in [13-ghost-text-wrap-clipping.md](./13-ghost-text-wrap-clipping.md) |
 | I-11        | **HIGH** | `ShellInputHandler.ts` / `DocumentDBShellPty.ts` | Cursor math uses `String.length` instead of terminal display width              | ✅ Fixed (`6c2e7e4`)        |
 | I-12        | MEDIUM   | `ShellInputHandler.ts` / `DocumentDBShellPty.ts` | Completion and ghost-text insertions bypass the colorized re-render path        | ✅ Fixed (`63c8f4f`)        |
 | I-13        | MEDIUM   | shell highlighting tests                         | Missing coverage for wrapped lines, Unicode width, and completion redraw        | Deferred (separate PR)      |

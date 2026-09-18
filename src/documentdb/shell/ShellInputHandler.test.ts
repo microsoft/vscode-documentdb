@@ -806,4 +806,31 @@ describe('ShellInputHandler', () => {
             expect(handler.getBuffer()).toBe('a'.repeat(50) + 'X' + 'a'.repeat(50));
         });
     });
+
+    describe('cursorColumn', () => {
+        it('should report the prompt width for an empty buffer', () => {
+            handler.setPromptWidth(8);
+            expect(handler.cursorColumn).toBe(8);
+        });
+
+        it('should include the prompt and the text before the cursor', () => {
+            handler.setPromptWidth(8);
+            handler.handleInput('db.coll.find(');
+            expect(handler.cursorColumn).toBe(8 + 13);
+        });
+
+        it('should follow the cursor rather than the buffer end', () => {
+            handler.setPromptWidth(8);
+            handler.handleInput('abcdef');
+            handler.handleInput('\x1b[D');
+            handler.handleInput('\x1b[D');
+            expect(handler.cursorColumn).toBe(8 + 4);
+        });
+
+        it('should count display width, not code units, for surrogate pairs', () => {
+            handler.setPromptWidth(0);
+            handler.handleInput('🛈x'); // 3 code units, 2 display columns
+            expect(handler.cursorColumn).toBe(2);
+        });
+    });
 });

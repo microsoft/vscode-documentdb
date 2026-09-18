@@ -67,6 +67,7 @@ program-level narrative, and the sibling areas
 | Step 10  | #580 | Input-line syntax highlighting                              | [iterations/10-syntax-highlighting.md](./iterations/10-syntax-highlighting.md)                     |
 | Step 11  | #631 | Visible underline for terminal links                        | [iterations/11-visible-underline-shell-links.md](./iterations/11-visible-underline-shell-links.md) |
 | Step 12  | TBD  | Shell session UX and follow-up issues                        | [iterations/12-shell-session-ux.md](./iterations/12-shell-session-ux.md)                           |
+| Step 13  | TBD  | Ghost text clipped to terminal width (input-line corruption) | [iterations/13-ghost-text-wrap-clipping.md](./iterations/13-ghost-text-wrap-clipping.md)           |
 
 Iteration numbers 8, 9 and 9.1 are the original step numbers of the shell-integration program and
 are preserved. Steps 10 and 11 are new numbers for work that had none.
