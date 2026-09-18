@@ -182,7 +182,7 @@ is luxury 5 / usefulness 3. Both are worth doing; they are not worth doing _in t
 | I2  | History-based autosuggestion (capped)          | M          | 4   | 5   | Fix       | —                  |
 | I3  | Ctrl+R reverse history search                  | M          | 3   | 4   | Deferred  | —                  |
 | I4  | Persist history across sessions                | M          | 4   | 2   | Deferred  | —                  |
-| I5  | Inline `detail` hint for the single match      | S          | 4   | 4   | Fix       | —                  |
+| I5  | Inline `detail` hint for the single match      | S          | 4   | 4   | Fix       | Shipped `3b93b204` |
 | I6  | `detail` in the multi-column list              | M          | 3   | 3   | Deferred  | —                  |
 | I7  | Tab-cycling — as menu-select, with the list    | L (+ I10)  | 3   | 5   | Deferred  | —                  |
 | I8  | First-run nudge naming a real collection       | S          | 5   | 3   | Won't fix | —                  |
@@ -526,6 +526,44 @@ order rather than whichever branch happens to return first.
 | Complexity | Usefulness | Luxury |
 | ---------- | ---------- | ------ |
 | S          | 4          | 4      |
+
+### Shipped — commit `3b93b204`
+
+**The finding held.** `.detail` still had zero readers in `src/documentdb/shell/`.
+
+**The one decision this item required: _when_ does the description get the row?** The audit specifies
+the visual but not the trigger. The answer that falls out of the caution above is **when the single
+candidate is fully typed** — `remaining.length === 0`, so there is nothing to insert and the row is
+genuinely free. Any earlier and it would be fighting the completion ghost for the same columns; the
+completion ghost is worth more, because it can be accepted.
+
+So the precedence is now written out in `evaluateGhostText()` as a comment and enforced by the
+branch order:
+
+1. insertable completion (`remaining.length > 0`)
+2. the candidate's `detail`
+3. schema hint
+4. closing brackets
+
+This also lands the audit's own example verbatim: `db.coll.countDocuments` → `  🛈 Count of
+documents matching the filter`.
+
+**Implementation notes.**
+
+- `showDetailHint()` sits next to `showSchemaHint()` and reuses `_ghostTextIsHint = true`, so it is
+  non-insertable by construction and clipped by `availableGhostColumns()` with no new code.
+- **No `l10n` run needed.** The hint contributes no English of its own — the glyph and two spaces
+  only. The description text comes from the registry. (Noted because it is the kind of thing that
+  looks like it needs `npm run l10n` and does not. `showSchemaHint()`'s literal is likewise not
+  localized today; left alone, it is not this item.)
+
+Three tests, asserting on emitted ANSI:
+
+| Test                                                    | Fails before? |
+| --------------------------------------------------------- | ------------- |
+| `help` (exact) emits `\x1b[2m\x1b[90m  🛈 Show help`        | yes           |
+| `hel` (incomplete) emits the completion ghost and no `🛈` | no (precedence guard) |
+| Tab on a showing description inserts nothing               | no (non-insertability guard) |
 
 ## I8. A first-run nudge that names a real collection — rejected
 
