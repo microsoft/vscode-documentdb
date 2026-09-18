@@ -58,7 +58,7 @@ export class AzureMongoRUSubscriptionItem implements TreeElement, TreeElementWit
                 context.telemetry.measurements.discoveryResourcesCount = accounts.length;
                 context.telemetry.measurements.discoveryLoadTimeMs = Date.now() - startTime;
 
-                return accounts
+                const resourceItems = accounts
                     .sort((a, b) => (a.name || '').localeCompare(b.name || '', undefined, { numeric: true }))
                     .map((account) => {
                         const resourceId = nonNullProp(account, 'id', 'account.id', 'AzureMongoRUSubscriptionItem.ts');
@@ -84,16 +84,17 @@ export class AzureMongoRUSubscriptionItem implements TreeElement, TreeElementWit
                             viewId: Views.DiscoveryView,
                         };
 
-                        ext.outputChannel.trace(
-                            `[DiscoveryView/MongoRU] Created cluster model: name="${clusterInfo.name}", clusterId="${clusterInfo.clusterId}", treeId="${clusterInfo.treeId}"`,
-                        );
-
                         return new MongoRUResourceItem(
                             this.journeyCorrelationId,
                             this.subscription.subscription,
                             clusterInfo,
                         );
                     });
+
+                ext.outputChannel.trace(
+                    `[DiscoveryView/MongoRU] Loaded ${resourceItems.length} DocumentDB API account(s).`,
+                );
+                return resourceItems;
             },
         );
     }

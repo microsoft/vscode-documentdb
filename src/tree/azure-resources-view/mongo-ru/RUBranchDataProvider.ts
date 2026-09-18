@@ -89,12 +89,9 @@ export class RUBranchDataProvider
                     viewId: Views.AzureResourcesView,
                 };
 
-                ext.outputChannel.trace(
-                    `[AzureResourcesView/RU/cache] Created cluster model: name="${cluster.name}", clusterId="${cluster.clusterId}", treeId="${cluster.treeId}"`,
-                );
-
                 cache.set(resourceId, cluster);
             });
+            ext.outputChannel.trace(`[AzureResourcesView/RU] Cached metadata for ${ruAccounts.length} account(s).`);
             return cache;
         },
         updateItem: (item, metadata) => {
@@ -166,10 +163,6 @@ export class RUBranchDataProvider
             if (cachedMetadata) {
                 clusterInfo = { ...clusterInfo, ...cachedMetadata };
             }
-
-            ext.outputChannel.trace(
-                `[AzureResourcesView/RU] Created cluster model: name="${clusterInfo.name}", clusterId="${clusterInfo.clusterId}", treeId="${clusterInfo.treeId}", hasCachedMetadata=${!!cachedMetadata}`,
-            );
 
             const clusterItem = new RUResourceItem(resource.subscription, clusterInfo);
             ext.state.wrapItemInStateHandling(clusterItem, () => this.refresh(clusterItem));

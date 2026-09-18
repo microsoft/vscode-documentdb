@@ -487,12 +487,21 @@ export class DocumentDBShellPty implements vscode.Pseudoterminal {
             });
 
             // Display connection summary
-            const authLabel =
-                metadata.authMechanism === 'MicrosoftEntraID'
-                    ? l10n.t('Entra ID')
-                    : metadata.authMechanism === 'NoAuth'
-                      ? l10n.t('No Authentication')
-                      : l10n.t('SCRAM');
+            let authLabel: string;
+            switch (metadata.authMechanism) {
+                case 'MicrosoftEntraID':
+                    authLabel = l10n.t('Microsoft Entra account');
+                    break;
+                case 'ManagedIdentity':
+                    authLabel = l10n.t('Managed Identity');
+                    break;
+                case 'NoAuth':
+                    authLabel = l10n.t('No Authentication');
+                    break;
+                default:
+                    authLabel = l10n.t('SCRAM');
+                    break;
+            }
             const hostLabel = metadata.isEmulator ? l10n.t('{0} (Emulator)', metadata.host) : metadata.host;
 
             this.writeLine(this._outputFormatter.formatSystemMessage(l10n.t('Connected to: {0}', hostLabel)));

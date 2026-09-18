@@ -60,7 +60,7 @@ export class AzureSubscriptionItem implements TreeElement, TreeElementWithContex
                 context.telemetry.measurements.discoveryResourcesCount = accounts.length;
                 context.telemetry.measurements.discoveryLoadTimeMs = Date.now() - startTime;
 
-                return accounts
+                const resourceItems = accounts
                     .sort((a, b) => (a.name || '').localeCompare(b.name || '', undefined, { numeric: true }))
                     .map((account) => {
                         const resourceId = nonNullProp(account, 'id', 'account.id', 'AzureSubscriptionItem.ts');
@@ -86,16 +86,15 @@ export class AzureSubscriptionItem implements TreeElement, TreeElementWithContex
                             viewId: Views.DiscoveryView,
                         };
 
-                        ext.outputChannel.trace(
-                            `[DiscoveryView/vCore] Created cluster model: name="${clusterInfo.name}", clusterId="${clusterInfo.clusterId}", treeId="${clusterInfo.treeId}"`,
-                        );
-
                         return new DocumentDBResourceItem(
                             this.journeyCorrelationId,
                             this.subscription.subscription,
                             clusterInfo,
                         );
                     });
+
+                ext.outputChannel.trace(`[DiscoveryView/vCore] Loaded ${resourceItems.length} cluster(s).`);
+                return resourceItems;
             },
         );
     }
