@@ -5,6 +5,7 @@
 
 import { callWithTelemetryAndErrorHandling } from '@microsoft/vscode-azext-utils';
 import * as l10n from '@vscode/l10n';
+import { EJSON } from 'bson';
 import { randomUUID } from 'crypto';
 import type * as vscode from 'vscode';
 import { ext } from '../../extensionVariables';
@@ -300,17 +301,20 @@ export class PlaygroundEvaluator implements vscode.Disposable {
      * Deserialize the worker result — printable is a canonical EJSON string from the worker.
      * Canonical EJSON preserves all BSON types (ObjectId, Date, Decimal128, Int32,
      * Long, Double, etc.) so that SchemaAnalyzer correctly identifies field types.
+     *
+     * `EJSON` must be imported statically: a dynamic `import('bson')` resolves the
+     * package's ESM entry, giving BSON classes distinct from the CommonJS ones the
+     * driver uses, which breaks every `instanceof` check downstream.
      */
-    private async deserializeResult(serResult: {
+    private deserializeResult(serResult: {
         type: string | null;
         printable: string;
         durationMs: number;
         cursorHasMore?: boolean;
         source?: { namespace?: { db: string; collection: string } };
-    }): Promise<ExecutionResult> {
+    }): ExecutionResult {
         let printable: unknown;
         try {
-            const { EJSON } = await import('bson');
             printable = EJSON.parse(serResult.printable, { relaxed: false });
         } catch {
             meterSilentCatch('PlaygroundEvaluator_ejson');

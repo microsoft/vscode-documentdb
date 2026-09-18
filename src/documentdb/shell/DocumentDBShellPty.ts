@@ -984,7 +984,7 @@ export class DocumentDBShellPty implements vscode.Pseudoterminal {
      *
      * Deserializes the EJSON printable string back to raw objects (preserving BSON
      * types) and delegates to the shared {@link feedResultToSchemaStore} utility.
-     * Runs asynchronously and never blocks the prompt — failures are silently ignored.
+     * Failures are silently ignored — schema feeding is best-effort.
      */
     private maybeFeedSchemaStore(result: SerializableExecutionResult): void {
         // Only Cursor and Document results with a namespace are worth parsing
@@ -995,13 +995,11 @@ export class DocumentDBShellPty implements vscode.Pseudoterminal {
             return;
         }
 
-        void deserializeResultForSchema(result)
-            .then((deserialized) => {
-                feedResultToSchemaStore(deserialized, this._connectionInfo.clusterId);
-            })
-            .catch(() => {
-                // Non-critical — schema feeding is best-effort
-            });
+        try {
+            feedResultToSchemaStore(deserializeResultForSchema(result), this._connectionInfo.clusterId);
+        } catch {
+            // Non-critical — schema feeding is best-effort
+        }
     }
 
     // ─── Private: Tab completion ────────────────────────────────────────────

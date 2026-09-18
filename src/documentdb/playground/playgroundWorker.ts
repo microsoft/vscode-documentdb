@@ -15,6 +15,7 @@
  */
 
 import { DocumentDBShellRuntime } from '@documentdb-js/shell-runtime';
+import { EJSON } from 'bson';
 import { randomUUID } from 'crypto';
 import { type MongoClientOptions, type MongoClient as MongoClientType } from 'mongodb';
 import { parentPort } from 'worker_threads';
@@ -234,7 +235,6 @@ async function handleEval(msg: Extract<MainToWorkerMessage, { type: 'eval' }>): 
     // serialization to EJSON is the worker's IPC concern)
     let printableStr: string;
     try {
-        const { EJSON } = await import('bson');
         printableStr = EJSON.stringify(result.printable, { relaxed: false });
     } catch {
         try {
