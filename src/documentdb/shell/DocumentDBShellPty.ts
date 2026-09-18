@@ -1199,17 +1199,18 @@ export class DocumentDBShellPty implements vscode.Pseudoterminal {
         const result = this.getCompletionResult(buffer, cursor);
 
         // Only one writer may own the row after the cursor. The precedence is,
-        // in order: an insertable completion, then the candidate's description,
-        // then the schema hint, then closing brackets.
+        // in order: an insertable completion, then the bracket-notation preview,
+        // then the candidate's description, then the schema hint, then closing
+        // brackets.
         if (result.candidates.length === 1 && result.prefix.length > 0) {
             const candidate = result.candidates[0];
 
-            // Skip ghost text when insertText doesn't start with the typed prefix
-            // or when accepting would rewrite text before the prefix (e.g., bracket
-            // notation, quoted field paths, special-char collections).
-            // The visual would be misleading since the insertion replaces the prefix.
+            // Accepting this candidate would rewrite text the user already typed
+            // (bracket notation, quoted field paths, special-char collections),
+            // which ghost text cannot represent because it only ever appends.
+            // Advertise the result as a non-insertable preview instead.
             if (!candidate.insertText.startsWith(result.prefix) || (candidate.replaceCharsBefore ?? 0) > 0) {
-                this.clearGhostState();
+                this.showCompletionPreviewHint(buffer, result.prefix, candidate);
                 return;
             }
 
@@ -1303,6 +1304,25 @@ export class DocumentDBShellPty implements vscode.Pseudoterminal {
      */
     private showDetailHint(detail: string): void {
         const hint = `  🛈 ${detail}`;
+        this._ghostTextIsHint = true;
+        this._ghostTextIsClosingBrackets = false;
+        this._ghostCandidateKind = undefined;
+        this._ghostText.show(hint, (d) => this._writeEmitter.fire(d), this.availableGhostColumns());
+    }
+
+    /**
+     * Preview what Tab would produce for a candidate that rewrites already-typed
+     * text, e.g. `db.rest` → `db['restaurants-something']`.
+     *
+     * Ghost text can only append, so such candidates cannot be shown inline.
+     * Without this they are silently skipped — which is how a user whose
+     * collections all need bracket notation never sees completion at all.
+     */
+    private showCompletionPreviewHint(buffer: string, prefix: string, candidate: CompletionCandidate): void {
+        const deleteCount = prefix.length + (candidate.replaceCharsBefore ?? 0);
+        const preview = buffer.slice(0, Math.max(0, buffer.length - deleteCount)) + candidate.insertText;
+
+        const hint = `  → ${preview}  (Tab)`;
         this._ghostTextIsHint = true;
         this._ghostTextIsClosingBrackets = false;
         this._ghostCandidateKind = undefined;

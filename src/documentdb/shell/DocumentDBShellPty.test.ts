@@ -8,6 +8,7 @@ import { ext } from '../../extensionVariables';
 import { AuthMethodId } from '../auth/AuthMethod';
 import { CredentialCache } from '../CredentialCache';
 import { DocumentDBShellPty, type DocumentDBShellPtyOptions } from './DocumentDBShellPty';
+import { ShellCompletionProvider } from './ShellCompletionProvider';
 import { ShellSpinner } from './ShellSpinner';
 
 // callWithTelemetryAndErrorHandling from @microsoft/vscode-azext-utils silently swallows
@@ -616,6 +617,60 @@ describe('DocumentDBShellPty', () => {
             await new Promise((resolve) => setTimeout(resolve, 10));
 
             expect(mockEvaluate).toHaveBeenCalledWith('help', 80);
+        });
+    });
+
+    describe('ghost text — bracket-notation preview', () => {
+        /** Dim + gray prefix emitted by ShellGhostText. */
+        const GHOST_STYLE = '\x1b[2m\x1b[90m';
+        const afterGhostDebounce = (): Promise<void> => new Promise((resolve) => setTimeout(resolve, 80));
+
+        /**
+         * A collection whose name is not a valid JS identifier: Tab has to
+         * rewrite the `db.` dot, which inline ghost text cannot represent.
+         */
+        function mockBracketNotationCandidate(): void {
+            jest.spyOn(ShellCompletionProvider.prototype, 'getCompletions').mockReturnValue({
+                candidates: [
+                    {
+                        label: 'restaurants-something',
+                        insertText: "['restaurants-something']",
+                        kind: 'collection',
+                        replaceCharsBefore: 1,
+                    },
+                ],
+                prefix: 'rest',
+                replacementStart: 3,
+            });
+        }
+
+        beforeEach(async () => {
+            pty.open(undefined);
+            await new Promise((resolve) => setTimeout(resolve, 10));
+            written = '';
+        });
+
+        it('advertises what Tab would produce instead of showing nothing', async () => {
+            mockBracketNotationCandidate();
+
+            pty.handleInput('db.rest');
+            await afterGhostDebounce();
+
+            expect(written).toContain(`${GHOST_STYLE}  → db['restaurants-something']  (Tab)`);
+        });
+
+        it('previews exactly what Tab then produces', async () => {
+            mockBracketNotationCandidate();
+            mockEvaluate.mockResolvedValue({ type: 'string', printable: '"x"', durationMs: 1 });
+
+            pty.handleInput('db.rest');
+            await afterGhostDebounce();
+
+            pty.handleInput('\x09'); // Tab
+            pty.handleInput('\r');
+            await new Promise((resolve) => setTimeout(resolve, 10));
+
+            expect(mockEvaluate).toHaveBeenCalledWith("db['restaurants-something']", 80);
         });
     });
 
