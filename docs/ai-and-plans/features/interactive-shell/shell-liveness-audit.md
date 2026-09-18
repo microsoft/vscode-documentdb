@@ -136,9 +136,9 @@ items shipped in Step 15 — see
 [iterations/15-shell-liveness-audit-fixes.md](./iterations/15-shell-liveness-audit-fixes.md) for the
 cross-cutting summary and lessons. `# Deferred` and `# Won't fix` are untouched.
 
-**Using the shipped build surfaced three more things** — one regression, one open design question and
-one operator request. They are in [Found after Step 15](#found-after-step-15) as N1–N3. N1 should
-land before the PR goes for review.
+**Using the shipped build surfaced three more things** — one regression, one design question since
+decided, and one operator request. They are in [Found after Step 15](#found-after-step-15) as
+N1–N3. None is built. Build order is **N1, then N2, then N3**.
 
 ## Note: the future standalone shell
 
@@ -196,7 +196,7 @@ is luxury 5 / usefulness 3. Both are worth doing; they are not worth doing _in t
 | I9  | Clickable collection names                     | M          | 3   | 4   | Deferred  | —                  |
 | I10 | Make `reRenderLine()` ghost-aware              | M          | 3   | 1   | Deferred  | —                  |
 | N1  | Insertable ghosts steal Tab from the list      | S          | 5   | 1   | **Open**  | Regression         |
-| N2  | Hint marker vocabulary is inconsistent         | XS         | 3   | 3   | **Open**  | Needs a decision   |
+| N2  | Hint markers, and what `db.` should say        | S          | 4   | 4   | **Open**  | Decided, not built |
 | N3  | Setting to turn the inline hints off           | S          | 4   | 2   | **Open**  | Operator request   |
 
 Two entries changed shape during triage. **I7** moved to Deferred once it became clear that the
@@ -206,7 +206,8 @@ driver, then I7 gave it a new one, so it is deferred rather than closed.
 
 **N1–N3 were raised after Step 15 shipped** and are not part of the original triage — see
 [Found after Step 15](#found-after-step-15). N1 is a live regression and should land before the PR
-goes for review; N2 and N3 are the operator's, to be returned to.
+goes for review. N2 has since been **decided by the operator but not built**, and its decision
+supersedes part of the shipped I1c. **N1 must be built before N2**, for the reason recorded under N2.
 
 F7 and F8 from the first draft were not defects; they are folded into I5 and I4 as supporting
 evidence.
@@ -637,8 +638,12 @@ listing. `(Tab)` now appears only where it is true — a single candidate at a t
 
 **It is a partial fix and should be treated as such.** The second row is an instance of **N1**, which
 is wider than `db.` and is a live regression. And making `(Tab)` conditional left two hints sharing
-the `→` shape with different affordances, which is **N2**. If N1 is fixed by taking Tab away from
-ghost text, this special case can be reverted and the empty-prefix suggestion made insertable again.
+the `→` shape with different affordances, which is **N2**.
+
+**N2 has since been decided, and it supersedes this item's empty-prefix rule entirely.** `db.` will
+show a collection count rather than the sole collection's name, so neither the insertable ghost nor
+the `→` preview will appear there. What survives of I1c is the question it asked — *should `db.` say
+anything at all?* — answered better than it was triaged.
 
 ## I2. History-based autosuggestion (fish-style)
 
@@ -871,23 +876,80 @@ the user has to notice. The affordance belongs on the marker, not on a suffix.
 - **`→`** — Tab rewrites your whole line to this
 
 Under that rule `→` is unavailable for the `db.` case, because Tab lists there rather than
-rewriting. Two decisions follow, and they are the operator's:
+rewriting.
 
-1. **Does `(Tab)` survive?** It is the only place the shell names a key. Defensible — `→` is the one
-   hint whose payoff is not visible from position — but the inverse is awkward: the three ghosts you
-   genuinely can accept never say how. Recommendation: keep it, exactly there, nowhere else, because
-   I1a's whole justification is that users do not know Tab completion exists.
-2. **What does `db.` render as?** Candidates: `  🛈 db['restaurants-original']` (consistent marker,
-   reads a little blankly); `  🛈 1 collection — Tab to list` (teaches the feature at the earliest
-   keystroke, costs a localized string, does not name the collection); or nothing at all, since Tab
-   already lists it in cyan.
+### Decided by the operator — not yet built
 
-**N1 may dissolve part of this.** If Tab stops taking ghost text, the empty-prefix suggestion can be
-insertable again and the whole `→`-without-`(Tab)` row disappears. **Decide N1 first.**
+**1. `(Tab)` goes.** > "(Tab) is 'known', no need to show it."
+
+So `→` alone carries the meaning "Tab rewrites your line to this", and the shell names no keys
+anywhere. This removes the conditional-suffix problem `fd2a0a8a` introduced: once nothing ever
+prints `(Tab)`, the two `→` rows can no longer be told apart by a trailing token — which is fine,
+because decision 2 removes the second row entirely.
+
+**2. `db.` shows a collection count, unconditionally.** > "showing after `db.` how many collections
+there are is awesome, I think I'd do it anyway for `db.` — it shows early how cool we are :)"
+
+Not "the sole collection". A **count**, every time `db.` is typed, whatever the number. That is a
+different and better answer than anything in the original I1c:
+
+| | I1c as triaged | Decided |
+| --- | --- | --- |
+| When it fires | exactly one collection | always |
+| What it says | that one collection's name | how many there are |
+| Affordance | insertable ghost (or `→` preview) | `🛈`, informational |
+| Tab | stole the list, or lied about it | always lists |
+
+It is informational, so it has no N1 exposure and cannot lie about Tab. **This supersedes I1c's
+empty-prefix rule**, which is a shipped item — I1c's sole-collection path at `db.` goes away when
+this is built.
+
+**3. The rewrite preview stays, for typed prefixes.** > "it does not help when one starts typing
+`db.rest` and then, how to show that it needs to be in `[]`?"
+
+Correct, and this is the point that keeps I1a alive. The count and the preview answer different
+questions at different moments:
+
+| Moment | Shown | Question answered |
+| --- | --- | --- |
+| `db.` | `  🛈 7 collections` | "is there anything here?" |
+| `db.rest` | `  → db['restaurants-original']` | "why won't `db.rest…` work?" |
+
+### Resulting vocabulary
+
+| Marker | Meaning | Used by |
+| --- | --- | --- |
+| none | this text gets appended right where you are looking | completion, history, closing brackets |
+| `🛈` | information; no key acts on it | schema hint, description, collection count |
+| `→` | Tab rewrites your line to this | rewrite preview |
+
+### Left open
+
+- **Does the count name the collection when there is exactly one?** `  🛈 1 collection` is weaker
+  than `  🛈 1 collection: restaurants`, and naming it costs nothing at that width. But it reopens
+  the bracket-notation question for names that need it, which decision 3 already handles a keystroke
+  later. Recommendation: name it, plainly, without brackets — the preview corrects the syntax as
+  soon as the user types.
+- **Pluralisation and zero.** `1 collection` / `7 collections` / and something honest for an empty
+  database. This is the first hint with a localized string in it, so it lands in N3's `l10n` work
+  rather than being free like the others.
+
+### Implementation notes
+
+- **The count must come from the synchronous cache only.** `ShellCompletionProvider` already reads
+  `ClustersClient` cached collections without blocking; the hint runs on the typing path inside the
+  50 ms debounce and must not trigger `listCollections()`. If the cache is cold, show nothing.
+  Putting a network call here would be I8's rejection reason arriving through a different door.
+- **N1 gates whether the count is reliably visible.** Precedence is "insertable beats
+  informational", so a history match at `db.` — likely, since `db.` is a prefix of almost every
+  command — outranks the count hint and shows the history suggestion instead. Worse, that history
+  ghost is insertable, so Tab takes it and the list disappears: N1 again, at the very keystroke this
+  decision is meant to make delightful. **Build N1 first**, then decide whether the count outranks
+  history at an empty prefix specifically.
 
 | Complexity | Usefulness | Luxury |
 | ---------- | ---------- | ------ |
-| XS         | 3          | 3      |
+| S          | 4          | 4      |
 
 ## N3. A setting to turn the inline hints off, named in `help`
 
@@ -914,7 +976,8 @@ guessing.
   `vscode`, so it cannot read settings. It does not need to: naming the setting is static text. It
   should *name* the setting, not report its current value.
 - Needs a `package.json` contribution point and a `package.nls.json` description, so this is the
-  first item in this document that genuinely requires `npm run l10n`.
+  first item in this document that genuinely requires `npm run l10n`. N2's collection count adds a
+  pluralized string of its own, so if both are built together the `l10n` run covers them at once.
 
 | Complexity | Usefulness | Luxury |
 | ---------- | ---------- | ------ |
@@ -1176,8 +1239,11 @@ minutes.
 
 - **Which key owns ghost text?** N1 is the forcing question: Tab currently accepts any insertable
   ghost before consulting the completion provider, which was harmless only while the sole insertable
-  ghost implied a sole candidate. Deciding this also settles N2's second half and I7's key bindings,
-  so it is one decision, not three.
+  ghost implied a sole candidate. Deciding this also settles I7's key bindings and gates N2, so it is
+  one decision, not three.
+- **Does the collection count outrank a history suggestion at an empty prefix?** N2's count and I2's
+  autosuggestion both want the row at `db.`, and "insertable beats informational" currently hands it
+  to history. Answerable only after N1, because today that history ghost also takes Tab.
 - **What counts as "help" for the purpose of turning it off?** N3 needs a line between suggestions
   the user is about to accept and commentary that merely appears. Drawing it at
   insertable-vs-informational is the defensible answer; a single on/off would also silence
