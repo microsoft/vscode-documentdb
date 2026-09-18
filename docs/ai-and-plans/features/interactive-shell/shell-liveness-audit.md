@@ -130,7 +130,8 @@ Every item has now been ruled on by the operator. "Record for the future" is not
 fix", so deferred items get their own section rather than being buried next to the two things that
 were actually rejected.
 
-**Nothing here is implemented.**
+**Implementation progress is tracked in the Status column of the table below**, and each shipped item
+carries a `### Shipped — commit <sha>` subsection recording what was done and why.
 
 ## Note: the future standalone shell
 
@@ -167,26 +168,26 @@ is luxury 5 / usefulness 3. Both are worth doing; they are not worth doing _in t
 
 ## Decisions at a glance
 
-| #   | Item                                           | Complexity | Use | Lux | Decision  |
-| --- | ---------------------------------------------- | ---------- | --- | --- | --------- |
-| F1  | Resize can strand the cursor                   | S          | 5   | 1   | Fix       |
-| F2  | Ghost text paints over real text mid-buffer    | XS         | 4   | 1   | Fix       |
-| F3  | Completion list measured with `String.length`  | S          | 3   | 1   | Fix       |
-| F4  | Prompt width measured with `String.length`     | XS         | 2   | 1   | Fix       |
-| F5  | Shell `help` hard-coded to ~62 columns         | S          | 3   | 2   | Fix       |
-| F6  | Banner and logo drawn at an assumed 80 columns | S          | 1   | 1   | Won't fix |
-| I1a | Bracket-notation preview hint                  | S          | 4   | 3   | Fix       |
-| I1b | Replacement-aware ghost text                   | M          | 4   | 5   | Won't fix |
-| I1c | Ghost text at an empty prefix                  | S          | 3   | 3   | Fix       |
-| I2  | History-based autosuggestion (capped)          | M          | 4   | 5   | Fix       |
-| I3  | Ctrl+R reverse history search                  | M          | 3   | 4   | Deferred  |
-| I4  | Persist history across sessions                | M          | 4   | 2   | Deferred  |
-| I5  | Inline `detail` hint for the single match      | S          | 4   | 4   | Fix       |
-| I6  | `detail` in the multi-column list              | M          | 3   | 3   | Deferred  |
-| I7  | Tab-cycling — as menu-select, with the list    | L (+ I10)  | 3   | 5   | Deferred  |
-| I8  | First-run nudge naming a real collection       | S          | 5   | 3   | Won't fix |
-| I9  | Clickable collection names                     | M          | 3   | 4   | Deferred  |
-| I10 | Make `reRenderLine()` ghost-aware              | M          | 3   | 1   | Deferred  |
+| #   | Item                                           | Complexity | Use | Lux | Decision  | Status             |
+| --- | ---------------------------------------------- | ---------- | --- | --- | --------- | ------------------ |
+| F1  | Resize can strand the cursor                   | S          | 5   | 1   | Fix       | —                  |
+| F2  | Ghost text paints over real text mid-buffer    | XS         | 4   | 1   | Fix       | Shipped `88ef37c5` |
+| F3  | Completion list measured with `String.length`  | S          | 3   | 1   | Fix       | —                  |
+| F4  | Prompt width measured with `String.length`     | XS         | 2   | 1   | Fix       | —                  |
+| F5  | Shell `help` hard-coded to ~62 columns         | S          | 3   | 2   | Fix       | —                  |
+| F6  | Banner and logo drawn at an assumed 80 columns | S          | 1   | 1   | Won't fix | —                  |
+| I1a | Bracket-notation preview hint                  | S          | 4   | 3   | Fix       | —                  |
+| I1b | Replacement-aware ghost text                   | M          | 4   | 5   | Won't fix | —                  |
+| I1c | Ghost text at an empty prefix                  | S          | 3   | 3   | Fix       | —                  |
+| I2  | History-based autosuggestion (capped)          | M          | 4   | 5   | Fix       | —                  |
+| I3  | Ctrl+R reverse history search                  | M          | 3   | 4   | Deferred  | —                  |
+| I4  | Persist history across sessions                | M          | 4   | 2   | Deferred  | —                  |
+| I5  | Inline `detail` hint for the single match      | S          | 4   | 4   | Fix       | —                  |
+| I6  | `detail` in the multi-column list              | M          | 3   | 3   | Deferred  | —                  |
+| I7  | Tab-cycling — as menu-select, with the list    | L (+ I10)  | 3   | 5   | Deferred  | —                  |
+| I8  | First-run nudge naming a real collection       | S          | 5   | 3   | Won't fix | —                  |
+| I9  | Clickable collection names                     | M          | 3   | 4   | Deferred  | —                  |
+| I10 | Make `reRenderLine()` ghost-aware              | M          | 3   | 1   | Deferred  | —                  |
 
 Two entries changed shape during triage. **I7** moved to Deferred once it became clear that the
 version worth having (list stays visible, Tab moves a highlight through it) needs I10 as a
@@ -257,6 +258,43 @@ every other shell with autosuggestions does (fish, zsh-autosuggestions) and it m
 | Complexity | Usefulness | Luxury |
 | ---------- | ---------- | ------ |
 | XS         | 4          | 1      |
+
+### Shipped — commit `88ef37c5`
+
+**The finding did not reproduce.** The guard already exists — one level up, in the _caller_:
+
+```ts
+// DocumentDBShellPty.handleBufferChange()
+if (cursor < buffer.length) {
+    this.clearGhostState();
+    return;
+}
+```
+
+`git log -S` puts it in `ec1f36d4` ("wire tab completion and ghost text into terminal"), i.e. it has
+been there since the feature landed. `evaluateGhostText()` has exactly one caller — the debounced
+timer inside `handleBufferChange()` — so neither the Delete nor the Ctrl+U path can reach it with a
+non-empty tail. Verified by reverting the source change and re-running the new regression test: it
+passes either way.
+
+**Done anyway, deliberately.** The guard was added in `evaluateGhostText()` as specified. It costs
+four lines, it puts the invariant at the point where it actually matters (the write site, next to
+`availableGhostColumns()`), and it means a future second caller cannot reintroduce the bug. The
+regression test is the real deliverable: it asserts on the **emitted ANSI** (absence of
+`\x1b[2m\x1b[90m`) rather than on an intermediate value, which is exactly the gap this audit calls
+out.
+
+**One adjacent hypothesis, checked and rejected.** Cursor movement does not fire `onBufferChange`, so
+I expected `_ghostText._visible` to survive a Left Arrow while `reRenderLine()`'s `\x1b[J` erased the
+ghost from the screen — leaving Tab able to accept an invisible suggestion. It cannot:
+`DocumentDBShellPty.handleInput()` calls `clearGhostState()` on every input except `\x1b[C` and
+`\x09`. Confirmed empirically (the buffer after `hel` → Left → Tab is `helpl`, which is plain
+mid-buffer Tab completion, not a stale ghost). No defect; recorded so the next reader does not spend
+the same half hour.
+
+Tests added to [DocumentDBShellPty.test.ts](../../../../src/documentdb/shell/DocumentDBShellPty.test.ts)
+under `ghost text — append-only invariant`: one positive control (ghost renders at end of buffer),
+one guard assertion (no ghost styling emitted when the cursor is mid-buffer).
 
 ## F3. `renderCompletionList()` measures labels with `String.length`
 
