@@ -143,6 +143,9 @@ export class CopyPasteCollectionTask extends Task implements ResourceTrackingTas
      * @param context Optional telemetry context for tracking task operations
      */
     protected async onInitialize(signal: AbortSignal, context?: IActionContext): Promise<void> {
+        if (context) {
+            context.telemetry.properties.copyOperationCorrelationId = this.config.copyOperationCorrelationId;
+        }
         // Validate source cluster credentials (stale reference protection)
         if (!CredentialCache.hasCredentials(this.config.source.clusterId)) {
             // Clear the stale clipboard reference
@@ -257,6 +260,9 @@ export class CopyPasteCollectionTask extends Task implements ResourceTrackingTas
      * @param context Optional telemetry context for tracking task operations
      */
     protected async doWork(signal: AbortSignal, context?: IActionContext): Promise<void> {
+        if (context) {
+            context.telemetry.properties.copyOperationCorrelationId = this.config.copyOperationCorrelationId;
+        }
         if (this.config.copyIndexes) {
             await this.copyIndexes(signal, context);
         }
@@ -411,7 +417,7 @@ export class CopyPasteCollectionTask extends Task implements ResourceTrackingTas
             const errorMessage = error instanceof Error ? error.message : String(error);
             if (context) {
                 context.telemetry.properties.indexCopyFailed = 'true';
-                context.telemetry.properties.indexCopyError = 'copyIndexesFailed';
+                context.telemetry.properties.indexCopyError = error instanceof Error ? error.name : 'UnknownError';
             }
             throw new Error(vscode.l10n.t('Failed to copy indexes before copying documents: {0}', errorMessage), {
                 cause: error,
@@ -425,6 +431,7 @@ export class CopyPasteCollectionTask extends Task implements ResourceTrackingTas
             context.telemetry.measurements.renamedIndexCount = result.renamedCount;
             context.telemetry.measurements.conflictingIndexCount = result.conflictingCount;
             context.telemetry.properties.indexCopyCancelled = result.cancelled ? 'true' : 'false';
+            context.telemetry.properties.indexCopyFailed = 'false';
         }
 
         if (result.cancelled) {

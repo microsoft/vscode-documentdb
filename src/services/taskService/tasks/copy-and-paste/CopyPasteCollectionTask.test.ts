@@ -66,6 +66,7 @@ class TestCopyPasteCollectionTask extends CopyPasteCollectionTask {
 }
 
 const config: CopyPasteConfig = {
+    copyOperationCorrelationId: 'operation-id',
     source: { clusterId: 'source', databaseName: 'sourceDb', collectionName: 'sourceCollection' },
     target: { clusterId: 'target', databaseName: 'targetDb', collectionName: 'targetCollection' },
     onConflict: ConflictResolutionStrategy.Abort,
@@ -108,6 +109,8 @@ describe('CopyPasteCollectionTask index phase', () => {
         );
         expect(context.telemetry.measurements.selectedIndexCount).toBe(20);
         expect(context.telemetry.measurements.sourceIndexCount).toBeUndefined();
+        expect(context.telemetry.properties.copyOperationCorrelationId).toBe('operation-id');
+        expect(context.telemetry.properties.indexCopyFailed).toBe('false');
     });
 
     it('copies indexes before streaming documents', async () => {
@@ -163,7 +166,7 @@ describe('CopyPasteCollectionTask index phase', () => {
         );
         expect(reader.streamDocuments).not.toHaveBeenCalled();
         expect(context.telemetry.properties.indexCopyFailed).toBe('true');
-        expect(context.telemetry.properties.indexCopyError).toBe('copyIndexesFailed');
+        expect(context.telemetry.properties.indexCopyError).toBe('Error');
     });
 
     it('preserves cancellation without recording an index-copy failure', async () => {

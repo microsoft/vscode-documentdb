@@ -374,6 +374,18 @@ propagate a correlation id from the wizard into the task's telemetry context so 
 events can be joined. Check whether `pasteCollection` has the same gap before choosing a mechanism,
 so one approach covers both flows.
 
+**Resolution progress (commit `feat(telemetry): correlate copy wizard and tasks`):** implemented for
+both Paste Indexes and Paste Collection. Each wizard generates `copyOperationCorrelationId` and
+passes it through task config to initialization and execution telemetry. Paste Indexes records the
+original `copyScope` and confirmed `selectedIndexCount`; scope is explicit in task config so D4's
+frozen parent name array is not mislabeled as a selected subset.
+
+**Alternatives evaluated:** `journeyCorrelationId` is already discovery lineage and can span
+unrelated commands; task IDs do not exist during prompting; plain `correlationId` has no repository
+telemetry contract and would obscure which lifecycle it joins. The purpose-qualified field matches
+the existing `journeyCorrelationId` / `connectionCorrelationId` convention at the cost of a longer
+name.
+
 ### T4 — Inconsistent `indexCopyError` naming between the two tasks
 
 **Severity:** Low.
@@ -386,6 +398,14 @@ line 125 correctly uses `error.name`. The repository convention is a codename or
 
 **Proposed resolution:** align the collection task on `error.name`.
 
+**Resolution progress (commit `fix(telemetry): align index copy outcomes`):** implemented. The
+collection task now records `error.name`, or `UnknownError` for non-Error throws, matching the
+dedicated task and avoiding message data.
+
+**Alternatives evaluated:** retaining the constant preserved the old category but discarded the
+diagnostic class; recording `error.message` was rejected by repository convention and could include
+user-derived server text. `error.name` provides stable grouping without message content.
+
 ### T5 — Success path leaves `indexCopyFailed` unset
 
 **Severity:** Low.
@@ -395,6 +415,14 @@ attempted" have to be inferred from the presence of the property plus `copyIndex
 
 **Proposed resolution:** set `indexCopyFailed = 'false'` on the success path, matching
 `CopyIndexesTask.recordResultTelemetry`.
+
+**Resolution progress (commit `fix(telemetry): align index copy outcomes`):** implemented as
+proposed. Successful, failed, and not-attempted collection index phases are now distinguishable
+without inferring property absence.
+
+**Alternatives evaluated:** deriving success from `copyIndexes` plus absent failure remained
+ambiguous for cancellation and future early returns. An explicit false value matches the dedicated
+task and the repository's boolean-property convention.
 
 ### T6 — Early exits carry no failure-reason property
 
