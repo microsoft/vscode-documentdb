@@ -38,6 +38,7 @@ import {
     type ShellTerminalInfo,
     unregisterShellTerminal,
 } from './ShellTerminalLinkProvider';
+import { terminalDisplayWidth } from './terminalDisplayWidth';
 
 /**
  * Configuration for the interactive shell Pseudoterminal.
@@ -864,7 +865,7 @@ export class DocumentDBShellPty implements vscode.Pseudoterminal {
 
     private showPrompt(): void {
         const prompt = `${this._currentDatabase}> `;
-        this._inputHandler.setPromptWidth(prompt.length);
+        this._inputHandler.setPromptWidth(terminalDisplayWidth(prompt));
         this._inputHandler.resetLine();
         this._ghostText.reset();
         this._completionListVisible = false;
@@ -887,7 +888,7 @@ export class DocumentDBShellPty implements vscode.Pseudoterminal {
      */
     private showContinuationPrompt(): void {
         const prompt = '┆ > ';
-        this._inputHandler.setPromptWidth(prompt.length);
+        this._inputHandler.setPromptWidth(terminalDisplayWidth(prompt));
         this._writeEmitter.fire(prompt);
     }
 
@@ -1103,7 +1104,7 @@ export class DocumentDBShellPty implements vscode.Pseudoterminal {
      */
     private rewriteCurrentLine(): void {
         const prompt = `${this._currentDatabase}> `;
-        this._inputHandler.setPromptWidth(prompt.length);
+        this._inputHandler.setPromptWidth(terminalDisplayWidth(prompt));
         this._writeEmitter.fire(prompt);
         this._inputHandler.renderCurrentLine();
     }

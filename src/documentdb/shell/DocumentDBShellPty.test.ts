@@ -577,6 +577,37 @@ describe('DocumentDBShellPty', () => {
         });
     });
 
+    describe('prompt width — display columns, not UTF-16 units', () => {
+        it('positions the cursor past a wide-character database name', async () => {
+            // '日本語> ' is 5 UTF-16 code units but 8 terminal columns: each CJK
+            // ideograph occupies two. Measuring it with String.length makes
+            // _promptWidth too small, and every re-render lands two columns short.
+            const widePty = new DocumentDBShellPty({
+                connectionInfo: {
+                    clusterId: 'test-cluster-id',
+                    clusterDisplayName: 'TestCluster',
+                    databaseName: '日本語',
+                },
+            });
+
+            let wideWritten = '';
+            widePty.onDidWrite((data) => {
+                wideWritten += data;
+            });
+
+            widePty.open(undefined);
+            await new Promise((resolve) => setTimeout(resolve, 10));
+            wideWritten = '';
+
+            widePty.handleInput('x'); // any keystroke triggers a full re-render
+
+            expect(wideWritten).toContain('\r\x1b[8C');
+            expect(wideWritten).not.toContain('\r\x1b[5C');
+
+            widePty.close();
+        });
+    });
+
     describe('action line — Open in Collection View', () => {
         beforeEach(async () => {
             pty.open(undefined);
