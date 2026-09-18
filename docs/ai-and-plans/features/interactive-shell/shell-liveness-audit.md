@@ -794,6 +794,10 @@ Raised by the operator while using the shipped build, plus one design question S
 **None of these were triaged in the original audit** — they are consequences of the work, not
 findings about the code as it stood.
 
+**Status: all three have an implementation plan, none is built.** Build order is **N1 → N2 → N3**,
+and each plan says why it sits there. Two plans carry a **⬜ Needs your call** marker — N2's
+precedence question and N3's one-switch-or-two — which are the only things blocking a start.
+
 ## N1. An insertable ghost steals Tab from the completion list
 
 **Regression. Introduced by I2 (`50e6ba53`). Should land before the PR goes for review.**
@@ -838,11 +842,50 @@ history entry and offers four completion candidates at the same time, and the gh
 
 **Proposed fix: give the two keys separate jobs.** Right Arrow accepts ghost text; Tab belongs to
 completion and only falls back to accepting a ghost when there is nothing to complete. That is the
-fish/zsh split, and it makes the `db.` special case in `fd2a0a8a` unnecessary — the empty-prefix
-suggestion could go back to being insertable, because Tab would no longer be the key that takes it.
+fish/zsh split.
 
 Worth checking against I7 before building: menu-select would give Tab a third job, and this decides
 which one it displaces.
+
+### Implementation plan — for review
+
+**Build this first.** N2 depends on it.
+
+The whole change is the order of `handleTab()`. Today it accepts the ghost, then asks. It should ask
+first, and keep the ghost only as a fallback:
+
+```
+capture the visible ghost (text + insertable?) and clear it
+ask the provider
+  ≥1 candidate  → existing completion behaviour, unchanged
+                   (1 → applySingleCompletion, many → common prefix + list)
+  0 candidates  → if the captured ghost was insertable, accept it
+```
+
+Capturing before clearing matters: the fallback needs the ghost after `clearGhostState()` has run.
+
+**Why the fallback is not a fudge.** It preserves Tab for the two ghosts that have no completion
+behind them — closing brackets (`db.c.find({ _id: 1 ⇥` has no candidates) and history at a prefix
+the provider knows nothing about. Without it, Tab would simply stop working in cases where it works
+today and nothing else would take its place.
+
+**Nothing regresses for completion ghosts.** When there is exactly one candidate, the ghost shows
+that candidate's remaining text, so `applySingleCompletion()` produces the same buffer the ghost
+would have. Tab keeps behaving identically; it just arrives there through the completion path.
+
+| # | Change | File |
+| - | ------ | ---- |
+| 1 | Reorder `handleTab()` as above | `DocumentDBShellPty.ts` |
+
+**Tests**
+
+| Assertion | Why |
+| --------- | --- |
+| `use ` with `use MyDatabase` in history: Tab emits all four databases | the reported regression |
+| the same, Right Arrow: buffer becomes `use MyDatabase` | the key that should own ghost text |
+| closing-bracket ghost with zero candidates: Tab still accepts it | the fallback, which is the risky half |
+| `hel` (one candidate, ghost showing): Tab still yields `help` | completion ghosts unchanged |
+| `db.rest` preview hint showing: Tab still produces `db['restaurants-original']` | hints were already cleared-then-completed; guard it |
 
 | Complexity | Usefulness | Luxury |
 | ---------- | ---------- | ------ |
@@ -923,29 +966,66 @@ questions at different moments:
 | `🛈` | information; no key acts on it | schema hint, description, collection count |
 | `→` | Tab rewrites your line to this | rewrite preview |
 
-### Left open
+### Settled
 
-- **Does the count name the collection when there is exactly one?** `  🛈 1 collection` is weaker
-  than `  🛈 1 collection: restaurants`, and naming it costs nothing at that width. But it reopens
-  the bracket-notation question for names that need it, which decision 3 already handles a keystroke
-  later. Recommendation: name it, plainly, without brackets — the preview corrects the syntax as
-  soon as the user types.
-- **Pluralisation and zero.** `1 collection` / `7 collections` / and something honest for an empty
-  database. This is the first hint with a localized string in it, so it lands in N3's `l10n` work
-  rather than being free like the others.
+- **The count never names the collection.** > "no, no special cases. lets keep it simple."
+  Always `  🛈 N collections`, whatever N is.
+- **Zero shows nothing**, and this is not a special case — it falls out of the source (below). A
+  cold cache and a genuinely empty database both produce zero, and neither is worth a line.
+- **Pluralisation** is `1 collection` / `N collections`. VS Code's `l10n` has no plural forms, so
+  this is a ternary over two `vscode.l10n.t()` calls, not an ICU string.
 
 ### Implementation notes
 
-- **The count must come from the synchronous cache only.** `ShellCompletionProvider` already reads
-  `ClustersClient` cached collections without blocking; the hint runs on the typing path inside the
-  50 ms debounce and must not trigger `listCollections()`. If the cache is cold, show nothing.
-  Putting a network call here would be I8's rejection reason arriving through a different door.
+- **The count needs no new cache read.** `evaluateGhostText()` already holds `result.candidates`
+  from `getCompletionResult()`, and at `db.` those include the collections —
+  `getDbDotCandidates()` merges the `ClustersClient` cache with `SchemaStore` and dedupes. So the
+  count is `result.candidates.filter((c) => c.kind === 'collection').length`, which
+  `ghostCandidate()` already computes today.
+
+  This is worth more than the saved lines: it inherits the cache-only guarantee for free. A cold
+  cache yields no collection candidates, so the count is zero and nothing renders, while the
+  existing background fetch warms the cache for the next keystroke. No network call reaches the
+  typing path, which was I8's rejection reason arriving through a different door.
+
 - **N1 gates whether the count is reliably visible.** Precedence is "insertable beats
   informational", so a history match at `db.` — likely, since `db.` is a prefix of almost every
-  command — outranks the count hint and shows the history suggestion instead. Worse, that history
-  ghost is insertable, so Tab takes it and the list disappears: N1 again, at the very keystroke this
-  decision is meant to make delightful. **Build N1 first**, then decide whether the count outranks
-  history at an empty prefix specifically.
+  command — outranks the count and shows the history suggestion instead. Worse, that history ghost
+  is insertable, so Tab takes it and the list disappears: N1 again, at the very keystroke this
+  decision is meant to make delightful. **Build N1 first.**
+
+### Implementation plan — for review
+
+**Order: after N1.**
+
+| # | Change | File |
+| - | ------ | ---- |
+| 1 | `showCompletionPreviewHint()` drops the `advertiseTab` parameter; the hint is always `  → ${preview}` | `DocumentDBShellPty.ts` |
+| 2 | Delete the `result.prefix.length === 0` special case added by `fd2a0a8a` | `DocumentDBShellPty.ts` |
+| 3 | Delete `ghostCandidate()`'s empty-prefix branch — it returns `undefined` for an empty prefix, and `detectContext` is no longer called there | `DocumentDBShellPty.ts` |
+| 4 | Add `showCollectionCountHint()` next to `showDetailHint()`, rendering `  🛈 {n} collections` via `_ghostTextIsHint = true` | `DocumentDBShellPty.ts` |
+| 5 | Add the count to the precedence chain — see the question below for where | `DocumentDBShellPty.ts` |
+
+Steps 2 and 3 remove the whole I1c empty-prefix mechanism; step 4 replaces it. Net effect on
+`evaluateGhostText()` is roughly neutral in size.
+
+**Tests**
+
+| Assertion | Why |
+| --------- | --- |
+| `db.` with 7 collections emits `\x1b[2m\x1b[90m  🛈 7 collections` | the feature |
+| `db.` with 1 collection emits `1 collection`, singular | the pluralisation ternary |
+| `db.` with a cold cache emits no ghost | the cache-only guarantee, via zero candidates |
+| `db.` still lists on Tab | the hint stays informational |
+| `db.rest` emits `  → db['restaurants-original']` and **no** `(Tab)` anywhere | decision 1 |
+| the existing `db.`-suggests-the-sole-collection tests are **deleted**, not adapted | they encode the superseded I1c rule |
+
+**⬜ Needs your call before I build:** where does the count sit relative to history? "Insertable
+beats informational" gives the row to a history match, and at `db.` there almost always is one —
+`db.` is a prefix of nearly every command ever run. My recommendation is that the **count wins at an
+empty prefix in the `db-dot` context specifically**, because a history match on a three-character
+prefix that generic carries almost no information, whereas the count is about exactly where the
+cursor is. That is one narrow exception to the precedence rule rather than a change to it.
 
 | Complexity | Usefulness | Luxury |
 | ---------- | ---------- | ------ |
@@ -959,25 +1039,76 @@ Add a setting that disables the inline hints, and say so in shell `help` so it i
 inside the shell rather than only from the settings UI.
 
 **The scope needs deciding, and the axis is affordance, not source.** The honest split is the one N2
-describes: informational hints (`🛈` description, `🛈` schema hint, `→` preview) are the ones that
-appear unbidden and cannot be acted on, so they are what "non-stop help" means. The insertable
-ghosts (completion, history, closing brackets) are suggestions the user is about to use. A single
-on/off covering all six would also silence autosuggestion, which is probably not the intent — but a
-two-level setting costs a second name and a second thing to explain. Worth one decision rather than
-guessing.
+describes: informational hints (`🛈` description, `🛈` schema hint, `🛈` collection count, `→`
+preview) appear unbidden and cannot be acted on, so they are what "non-stop help" means. The
+insertable ghosts (completion, history, closing brackets) are suggestions the user is about to use.
 
-**Implementation notes, so the estimate is honest:**
+**Two findings while sizing this, both of which change the item.**
 
-- Precedent exists: `documentDB.shell.display.colorSupport`, read per-use via
-  `vscode.workspace.getConfiguration()` in `ShellOutputFormatter` and `DocumentDBShellPty`. The hint
-  paths all run in the extension host, so reading the setting there is free — no worker plumbing,
-  unlike F5.
-- **The `help` mention is the part with a wrinkle.** `HelpProvider` runs in the worker and imports no
-  `vscode`, so it cannot read settings. It does not need to: naming the setting is static text. It
-  should *name* the setting, not report its current value.
-- Needs a `package.json` contribution point and a `package.nls.json` description, so this is the
-  first item in this document that genuinely requires `npm run l10n`. N2's collection count adds a
-  pluralized string of its own, so if both are built together the `l10n` run covers them at once.
+**1. The setting already exists, and it does nothing.** `package.json` contributes
+`documentDB.shell.display.autocompletion` (boolean, default `true`) with the description "Enable
+autocompletion in the Interactive Shell (when available). **Reserved for future use.**" It is read
+**nowhere** in the source — and it is documented in
+[docs/user-manual/interactive-shell.md](../../../user-manual/interactive-shell.md) as though it
+works. We are shipping a documented switch that is wired to nothing. Whatever else N3 does, that
+should stop.
+
+**2. This needs no `l10n` run** — an earlier note in this document was wrong. Settings descriptions
+in `package.json` are inline English, not `%key%` references; `package.nls.json` contains a single
+placeholder entry and nothing else. Nothing about the contribution point is localized. The only
+localized string N3 touches is N2's collection count, via `vscode.l10n.t()` in source.
+
+**Implementation notes:**
+
+- Precedent for reading it: `documentDB.shell.display.colorSupport`, read per-use via
+  `vscode.workspace.getConfiguration()` in `ShellOutputFormatter` and `DocumentDBShellPty`. Every
+  hint path runs in the extension host, so this is a local read — no worker plumbing, unlike F5.
+- **The `help` mention has a wrinkle.** `HelpProvider` runs in the worker and imports no `vscode`,
+  so it cannot read the setting's value. It does not need to: it should *name* the setting, not
+  report its state. Note also that the entire help text is unlocalized English literals in a
+  `vscode`-free package, so a new tip line is consistent with what is there.
+
+### Implementation plan — for review
+
+**Order: after N2**, so the count is in place before it is made switchable.
+
+| # | Change | File |
+| - | ------ | ---- |
+| 1 | Rewrite the `autocompletion` setting's description — drop "Reserved for future use", state what it turns off | `package.json` |
+| 2 | Read it once per evaluation in `evaluateGhostText()` and return early when `false`, before any branch | `DocumentDBShellPty.ts` |
+| 3 | Add a tip to the `# Tips` section naming the setting | `HelpProvider.ts` |
+| 4 | Correct the settings table row | `docs/user-manual/interactive-shell.md` |
+
+Step 2 at the top of `evaluateGhostText()` is deliberate: one check, one place, covering every
+present and future ghost. Scattering the check across six branches is how one of them gets missed.
+
+**Tests**
+
+| Assertion | Why |
+| --------- | --- |
+| setting `false`: `hel` emits no ghost | the switch works for insertable ghosts |
+| setting `false`: `help` emits no `🛈` | and for informational ones |
+| setting `false`: Tab still completes and still lists | the switch is about *inline* suggestion, not completion |
+| setting `true`: everything behaves as the N1/N2 tests expect | default unchanged |
+| shell `help` output contains the setting name | discoverability, which is half the request |
+
+**⬜ Needs your call before I build:** one switch or two?
+
+- **One** — reuse `documentDB.shell.display.autocompletion` for all inline suggestion, hints and
+  ghosts alike. No new contribution point, retires a dead documented setting, one thing to explain.
+  Cost: silencing the commentary also silences history autosuggestion.
+- **Two** — `autocompletion` keeps the insertable ghosts, a new `…display.inlineHints` covers the
+  informational ones. Precise, and both settings become real. Cost: a second name, and users must
+  understand a distinction we invented.
+
+My recommendation is **one**, on your "no special cases, keep it simple" — someone annoyed enough to
+turn this off likely wants all of it gone, and it costs nothing to split later if anyone asks. Tab
+completion and the candidate list stay available either way; this only governs what appears without
+being asked for.
+
+| Complexity | Usefulness | Luxury |
+| ---------- | ---------- | ------ |
+| S          | 4          | 2      |
 
 | Complexity | Usefulness | Luxury |
 | ---------- | ---------- | ------ |
