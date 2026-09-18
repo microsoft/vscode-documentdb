@@ -882,6 +882,10 @@ export class ClustersExtension implements vscode.Disposable {
                     'vscode-documentdb.command.connectionsView.removeConnection',
                     withTreeNodeCommandCorrelation(removeConnection),
                 );
+                registerCommandWithTreeNodeUnwrapping(
+                    'vscode-documentdb.command.connectionsView.removeSelectedConnections',
+                    withTreeNodeCommandCorrelation(removeConnection),
+                );
 
                 registerCommandWithTreeNodeUnwrapping(
                     'vscode-documentdb.command.connectionsView.renameConnection',
