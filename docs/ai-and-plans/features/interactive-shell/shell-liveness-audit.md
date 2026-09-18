@@ -195,7 +195,7 @@ is luxury 5 / usefulness 3. Both are worth doing; they are not worth doing _in t
 | I8  | First-run nudge naming a real collection       | S          | 5   | 3   | Won't fix | —                  |
 | I9  | Clickable collection names                     | M          | 3   | 4   | Deferred  | —                  |
 | I10 | Make `reRenderLine()` ghost-aware              | M          | 3   | 1   | Deferred  | —                  |
-| N1  | Insertable ghosts steal Tab from the list      | S          | 5   | 1   | **Open**  | Regression         |
+| N1  | Insertable ghosts steal Tab from the list      | S          | 5   | 1   | Fix       | Shipped `829788c1` |
 | N2  | Hint markers, and what `db.` should say        | S          | 4   | 4   | **Open**  | Decided, not built |
 | N3  | Setting to turn the inline hints off           | S          | 4   | 2   | **Open**  | Operator request   |
 
@@ -800,14 +800,13 @@ Raised by the operator while using the shipped build, plus one design question S
 **None of these were triaged in the original audit** — they are consequences of the work, not
 findings about the code as it stood.
 
-**Status: all three have an implementation plan, none is built.** Build order is **N1 → N2 → N3**,
+**Status: N1 is shipped; N2 and N3 have plans and are not built.** Build order is **N1 → N2 → N3**,
 and each plan says why it sits there. Two ⬜ markers remain — N2's precedence of the collection count
 against a history suggestion, and N3's question of whether `autocompletion: false` also disables Tab.
-Neither blocks N1, which is fully unblocked and can begin now.
 
 ## N1. An insertable ghost steals Tab from the completion list
 
-**Regression. Introduced by I2 (`50e6ba53`). Should land before the PR goes for review.**
+**Regression. Introduced by I2 (`50e6ba53`). Shipped in `829788c1`.**
 
 **Reported.** After switching database once, Tab at `use ` stopped listing the databases:
 
@@ -898,6 +897,46 @@ would have. Tab keeps behaving identically; it just arrives there through the co
 | ---------- | ---------- | ------ |
 | S          | 5          | 1      |
 
+### Shipped — commit `829788c1`
+
+**The regression reproduced exactly as reported**, and the fix is the one-function reorder the plan
+called for. `handleTab()` now asks `getCompletionResult()` first; the ghost is accepted only on the
+zero-candidate path.
+
+**One implementation detail differs from the plan, and it is a simplification.** The plan said to
+capture the ghost before clearing it, because the fallback would need it afterwards. That capture
+turned out to be unnecessary: `getCompletionResult()` is pure — it emits nothing and touches no
+ghost state — so the ghost can simply be left standing while the provider is asked. Only
+`ghostIsInsertable` is read up front (the flag is reset by `clearGhostState()`), and
+`handleAcceptGhostText()` is still called with the ghost intact, exactly as Right Arrow calls it.
+The clear moved to just before the completion paths that write over that row.
+
+**One behavioural consequence the plan did not name, recorded because it shows in telemetry.** When
+there is exactly one candidate and its ghost is showing, Tab now reaches the same buffer through
+`applySingleCompletion()` instead of `handleAcceptGhostText()`. The emitted text is identical, but
+the event changes from `completionAccepted{source: ghostText}` + `completionGhostAccepted` to
+`completionAccepted{source: tab}`. That is arguably more honest — the user pressed Tab — but any
+dashboard reading ghost-acceptance rates will see the completion-ghost share drop. History and
+closing-bracket acceptances are unaffected.
+
+Five tests in a new `Tab versus ghost text — which key owns which job` block, all driving the PTY
+and asserting on emitted output or on the string handed to `evaluate()`:
+
+| Test                                                                  | Fails before? |
+| --------------------------------------------------------------------- | ------------- |
+| `use ` with `use MyDatabase` in history: Tab emits all four databases | **yes**       |
+| the same, Right Arrow: evaluates `use MyDatabase`                     | no (control)  |
+| closing-bracket ghost, zero candidates: Tab still accepts it          | no (guard)    |
+| `hel` with its ghost showing: Tab still yields `help`                 | no (guard)    |
+| `db.rest` preview hint showing: Tab still yields the bracket form     | no (guard)    |
+
+The closing-bracket test also stubs `detectContext()` to `unknown`. Without it the real provider
+classifies `db.c.find({ _id: 1 ` as `method-argument`, `SchemaStore` has no fields for `c`, and the
+**schema hint** claims the row before the closing-bracket fallback is ever reached. Worth knowing:
+in real use the closing-bracket ghost only appears once the collection's schema is known.
+
+Suite: 13 suites, 504 tests, all passing (was 499).
+
 ## N2. The hint marker vocabulary is inconsistent
 
 **Open design question. Raised by the operator: "it's the one that shows an → arrow and (Tab), no
@@ -967,10 +1006,10 @@ questions at different moments:
 
 ### Resulting vocabulary
 
-| Marker | Meaning                                             | Used by                                                      |
-| ------ | --------------------------------------------------- | ------------------------------------------------------------ |
-| none   | this text gets appended right where you are looking | completion, history, closing brackets                        |
-| `🛈`    | information; no key acts on it                      | schema hint, description, collection count, rewrite preview  |
+| Marker | Meaning                                             | Used by                                                     |
+| ------ | --------------------------------------------------- | ----------------------------------------------------------- |
+| none   | this text gets appended right where you are looking | completion, history, closing brackets                       |
+| `🛈`    | information; no key acts on it                      | schema hint, description, collection count, rewrite preview |
 
 Two markers, and the list is closed — see below.
 
@@ -1017,7 +1056,7 @@ audit — the user types `db.rest`, sees nothing, and has no reason to believe T
 existed to close exactly that, and the operator confirmed it worked.
 
 **D. Say the reason instead of showing the result** — `  🛈 name needs quotes`. More honest about
-*why*, but it makes the user do the rewrite in their head, costs a localized string, and is wider
+_why_, but it makes the user do the rewrite in their head, costs a localized string, and is wider
 than the thing it is explaining.
 
 **Consequences of A, now binding:**
@@ -1066,7 +1105,7 @@ than the thing it is explaining.
 
 | #   | Change                                                                                                                                      | File                    |
 | --- | ------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------- |
-| 1   | `showCompletionPreviewHint()` drops the `advertiseTab` parameter; the hint is always `  🛈 ${preview}`                                      | `DocumentDBShellPty.ts` |
+| 1   | `showCompletionPreviewHint()` drops the `advertiseTab` parameter; the hint is always `  🛈 ${preview}`                                       | `DocumentDBShellPty.ts` |
 | 2   | Delete the `result.prefix.length === 0` special case added by `fd2a0a8a`                                                                    | `DocumentDBShellPty.ts` |
 | 3   | Delete `ghostCandidate()`'s empty-prefix branch — it returns `undefined` for an empty prefix, and `detectContext` is no longer called there | `DocumentDBShellPty.ts` |
 | 4   | Add `showCollectionCountHint()` next to `showDetailHint()`, rendering `  🛈 {n} collections` via `_ghostTextIsHint = true`                   | `DocumentDBShellPty.ts` |
@@ -1083,7 +1122,7 @@ Steps 2 and 3 remove the whole I1c empty-prefix mechanism; step 4 replaces it. N
 | `db.` with 1 collection emits `1 collection`, singular                             | the pluralisation ternary                     |
 | `db.` with a cold cache emits no ghost                                             | the cache-only guarantee, via zero candidates |
 | `db.` still lists on Tab                                                           | the hint stays informational                  |
-| `db.rest` emits `  🛈 db['restaurants-original']`                                  | the fold onto one informational marker        |
+| `db.rest` emits `  🛈 db['restaurants-original']`                                   | the fold onto one informational marker        |
 | no `(Tab)` and no `→` is emitted by any path, asserted across the whole suite      | decision 1 and the fold, guarded globally     |
 | the existing `db.`-suggests-the-sole-collection tests are **deleted**, not adapted | they encode the superseded I1c rule           |
 
@@ -1140,10 +1179,10 @@ localized string N3 touches is N2's collection count, via `vscode.l10n.t()` in s
 
 > "autocompletion is autocompletion, but these (i) hints around are something extra."
 
-| Setting                                    | Governs                                                            | State today          |
-| ------------------------------------------ | ------------------------------------------------------------------ | -------------------- |
-| `documentDB.shell.display.autocompletion`  | Tab completion, the candidate list, and the insertable ghosts (completion, history, closing brackets) | contributed, **dead** |
-| `documentDB.shell.display.inlineHints`     | everything marked `🛈` — description, schema hint, collection count, and the rewrite preview | new                  |
+| Setting                                   | Governs                                                                                               | State today           |
+| ----------------------------------------- | ----------------------------------------------------------------------------------------------------- | --------------------- |
+| `documentDB.shell.display.autocompletion` | Tab completion, the candidate list, and the insertable ghosts (completion, history, closing brackets) | contributed, **dead** |
+| `documentDB.shell.display.inlineHints`    | everything marked `🛈` — description, schema hint, collection count, and the rewrite preview           | new                   |
 
 Both become real; neither is a subset of the other. The split is the affordance line N2 draws, and
 because N2 settled on folding `→` into `🛈` there are exactly two markers — so **the glyph on screen
@@ -1154,14 +1193,14 @@ learned or documented for a user to predict which setting affects what they are 
 
 **Order: after N2**, so the count exists before it is made switchable.
 
-| #   | Change                                                                                                         | File                                    |
-| --- | -------------------------------------------------------------------------------------------------------------- | --------------------------------------- |
-| 1   | Rewrite the `autocompletion` description — drop "Reserved for future use", say what it covers                  | `package.json`                          |
-| 2   | Contribute `documentDB.shell.display.inlineHints`, boolean, default `true`                                     | `package.json`                          |
+| #   | Change                                                                                                                | File                                    |
+| --- | --------------------------------------------------------------------------------------------------------------------- | --------------------------------------- |
+| 1   | Rewrite the `autocompletion` description — drop "Reserved for future use", say what it covers                         | `package.json`                          |
+| 2   | Contribute `documentDB.shell.display.inlineHints`, boolean, default `true`                                            | `package.json`                          |
 | 3   | Wire `autocompletion`: return early from `evaluateGhostText()` before the insertable branches, and from `handleTab()` | `DocumentDBShellPty.ts`                 |
-| 4   | Wire `inlineHints`: one guard in front of the informational branches                                           | `DocumentDBShellPty.ts`                 |
-| 5   | Add a tip to the `# Tips` section naming **both** settings                                                     | `HelpProvider.ts`                       |
-| 6   | Correct the `autocompletion` row and add the new one                                                           | `docs/user-manual/interactive-shell.md` |
+| 4   | Wire `inlineHints`: one guard in front of the informational branches                                                  | `DocumentDBShellPty.ts`                 |
+| 5   | Add a tip to the `# Tips` section naming **both** settings                                                            | `HelpProvider.ts`                       |
+| 6   | Correct the `autocompletion` row and add the new one                                                                  | `docs/user-manual/interactive-shell.md` |
 
 Steps 3 and 4 are two guards, not six — placed at the two points where the precedence chain changes
 category, so a future ghost inherits the right switch by where it is added rather than by someone
@@ -1169,14 +1208,14 @@ remembering to check.
 
 **Tests**
 
-| Assertion                                                        | Why                                     |
-| ---------------------------------------------------------------- | --------------------------------------- |
-| `autocompletion` false: `hel` emits no ghost, Tab does not complete | the setting finally means something     |
-| `autocompletion` false: `help` still emits its `🛈` description    | the two switches are independent        |
-| `inlineHints` false: `help` emits no `🛈`, `db.` emits no count    | the requested behaviour                 |
-| `inlineHints` false: `hel` still ghosts, Tab still completes      | silencing commentary keeps completion   |
-| both true: the N1/N2 suites pass unchanged                       | default unchanged                       |
-| shell `help` names both settings                                 | discoverability, half the request       |
+| Assertion                                                           | Why                                   |
+| ------------------------------------------------------------------- | ------------------------------------- |
+| `autocompletion` false: `hel` emits no ghost, Tab does not complete | the setting finally means something   |
+| `autocompletion` false: `help` still emits its `🛈` description      | the two switches are independent      |
+| `inlineHints` false: `help` emits no `🛈`, `db.` emits no count      | the requested behaviour               |
+| `inlineHints` false: `hel` still ghosts, Tab still completes        | silencing commentary keeps completion |
+| both true: the N1/N2 suites pass unchanged                          | default unchanged                     |
+| shell `help` names both settings                                    | discoverability, half the request     |
 
 **⬜ One sub-question:** does `autocompletion: false` also disable **Tab**, or only the automatic
 suggestions? The name says all of it, and step 3 above assumes that. The alternative reading —
