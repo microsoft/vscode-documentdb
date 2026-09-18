@@ -54,7 +54,13 @@ Sibling areas: [query-playground](../query-playground/README.md),
 - **The Playground uses two layers:** TypeScript-based completions through a TS Server plugin, and a
   custom provider for DocumentDB-specific items.
 - **Schema is shared, not per-tab.** `SchemaStore` accumulates documents from the Collection View,
-  the Playground, and the Shell against the same key.
+  the Playground, and the Shell against the same key. One surface feeding bad data degrades all of
+  them.
+- **`bson` is imported statically, never via `await import('bson')`.** `bson` ships split
+  `import`/`require` export conditions, so a dynamic import loads a second copy of the package and
+  every `instanceof` check in `SchemaAnalyzer` silently fails. `BSONTypes.inferType()` also falls
+  back to the `_bsontype` tag so a duplicated copy degrades loudly rather than silently. See
+  [iterations/09-bson-dual-package-hazard.md](./iterations/09-bson-dual-package-hazard.md).
 
 ## Timeline
 
@@ -70,6 +76,7 @@ Sibling areas: [query-playground](../query-playground/README.md),
 | 7    | #543 | Playground `CompletionItemProvider`                   | [iterations/07-playground-completion-provider.md](./iterations/07-playground-completion-provider.md)       |
 | 7.1  | #551 | Shared completion code moved out of `webviews/`       | [iterations/07.1-shared-completion-migration.md](./iterations/07.1-shared-completion-migration.md)         |
 | 8    | #717 | Correct aggregation references for unsafe field names | [iterations/08-referenceText-unsafe-field-names.md](./iterations/08-referenceText-unsafe-field-names.md)   |
+| 9    | —    | BSON wrapper types misclassified (bson dual-package)  | [iterations/09-bson-dual-package-hazard.md](./iterations/09-bson-dual-package-hazard.md)                   |
 
 Iteration numbers are the original step numbers of the shell-integration program where one existed.
 
