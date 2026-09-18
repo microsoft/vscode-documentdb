@@ -422,12 +422,6 @@
         "title": "Delete Connection…"
       },
       {
-        "//": "[ConnectionsView] Delete Selected Connections",
-        "category": "DocumentDB",
-        "command": "vscode-documentdb.command.connectionsView.removeSelectedConnections",
-        "title": "Delete Selected Connections…"
-      },
-      {
         "//": "[ConnectionsView] Create Folder",
         "category": "DocumentDB",
         "command": "vscode-documentdb.command.connectionsView.createFolder",
@@ -956,13 +950,7 @@
         {
           "//": "Delete Connection...",
           "command": "vscode-documentdb.command.connectionsView.removeConnection",
-          "when": "view == connectionsView && viewItem =~ /\\btreeitem_documentdbcluster\\b/i && !listMultiSelection",
-          "group": "4@1"
-        },
-        {
-          "//": "Delete Selected Connections...",
-          "command": "vscode-documentdb.command.connectionsView.removeSelectedConnections",
-          "when": "view == connectionsView && viewItem =~ /\\btreeitem_documentdbcluster\\b/i && listMultiSelection",
+          "when": "view == connectionsView && viewItem =~ /\\btreeitem_documentdbcluster\\b/i",
           "group": "4@1"
         },
         {
@@ -1393,10 +1381,6 @@
         },
         {
           "command": "vscode-documentdb.command.connectionsView.removeConnection",
-          "when": "never"
-        },
-        {
-          "command": "vscode-documentdb.command.connectionsView.removeSelectedConnections",
           "when": "never"
         },
         {
