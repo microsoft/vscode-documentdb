@@ -3,11 +3,11 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { DocumentDbCollectionIndexCopier } from '../../services/taskService/data-api/indexes/DocumentDbCollectionIndexCopier';
+import { createIndexCopier as createEndpointIndexCopier } from '../../services/taskService/data-api/indexes/createIndexCopier';
 import { type PasteCollectionWizardContext } from './PasteCollectionWizardContext';
 import { createIndexCopier } from './createIndexCopier';
 
-jest.mock('../../services/taskService/data-api/indexes/DocumentDbCollectionIndexCopier');
+jest.mock('../../services/taskService/data-api/indexes/createIndexCopier');
 
 function createContext(isTargetExistingCollection: boolean): PasteCollectionWizardContext {
     return {
@@ -39,7 +39,7 @@ describe('createIndexCopier', () => {
 
         createIndexCopier(context);
 
-        expect(DocumentDbCollectionIndexCopier).toHaveBeenCalledWith(
+        expect(createEndpointIndexCopier).toHaveBeenCalledWith(
             { clusterId: 'source', databaseName: 'sourceDatabase', collectionName: 'sourceCollection' },
             { clusterId: 'target', databaseName: 'targetDatabase', collectionName },
         );

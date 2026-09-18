@@ -10,6 +10,7 @@ import { ext } from '../../../../extensionVariables';
 import {
     type CollectionIndexCopier,
     type CopyIndexesOptions,
+    type GetSourceIndexSummaryOptions,
     type IndexCopyResult,
     type SourceIndexSummary,
 } from './CollectionIndexCopier';
@@ -27,6 +28,35 @@ interface IndexDefinition {
     hidden: boolean;
 }
 
+class IndexVisibilityError extends Error {
+    public constructor(message: string) {
+        super(message);
+        this.name = 'IndexVisibilityError';
+    }
+}
+
+const semanticIndexOptionNames = new Set([
+    'bits',
+    'bucketSize',
+    'collation',
+    'cosmosSearchOptions',
+    'default_language',
+    'expireAfterSeconds',
+    'language_override',
+    'max',
+    'min',
+    'partialFilterExpression',
+    'sparse',
+    'storageEngine',
+    'unique',
+    'weights',
+    'wildcardProjection',
+]);
+
+export function isDocumentAffectingIndex(options: Readonly<Document>): boolean {
+    return options.unique === true || Object.hasOwn(options, 'expireAfterSeconds');
+}
+
 /**
  * Copies indexes between two DocumentDB API collections.
  *
@@ -42,41 +72,60 @@ export class DocumentDbCollectionIndexCopier implements CollectionIndexCopier {
         private readonly target: DocumentDbCollectionEndpoint,
     ) {}
 
-    public async getSourceIndexSummary(signal?: AbortSignal): Promise<SourceIndexSummary> {
-        const sourceClient = await ClustersClient.getClient(this.source.clusterId, signal);
-        const indexes = await this.readIndexes(sourceClient, this.source, signal);
+    public async getSourceIndexSummary(options: GetSourceIndexSummaryOptions = {}): Promise<SourceIndexSummary> {
+        const requestedNames = this.getRequestedNames(options.sourceIndexNames);
+        const sourceClient = await ClustersClient.getClient(this.source.clusterId, options.signal);
+        const indexes = await this.readIndexes(sourceClient, this.source, options.signal);
         const copyableIndexes = indexes
             .filter((index) => !this.isIdIndex(index))
             .map((index) => this.toIndexDefinition(index));
+        const selectedIndexes = this.selectSourceIndexes(copyableIndexes, requestedNames);
         return {
             count: indexes.length,
-            uniqueIndexNames: copyableIndexes
+            uniqueIndexNames: selectedIndexes
                 .filter((index) => index.options.unique === true)
                 .map((index) => index.name),
-            ttlIndexNames: copyableIndexes
+            ttlIndexNames: selectedIndexes
                 .filter((index) => Object.hasOwn(index.options, 'expireAfterSeconds'))
                 .map((index) => index.name),
         };
     }
 
     public async copyIndexes(options: CopyIndexesOptions = {}): Promise<IndexCopyResult> {
+        const requestedNames = this.getRequestedNames(options.sourceIndexNames);
         const [sourceClient, targetClient] = await Promise.all([
             ClustersClient.getClient(this.source.clusterId, options.signal),
             ClustersClient.getClient(this.target.clusterId, options.signal),
         ]);
 
         // Read both bounded catalogs once so equivalence and name collisions use stable snapshots.
-        const sourceIndexes = await this.readCopyableIndexes(sourceClient, this.source, options.signal);
+        const copyableSourceIndexes = await this.readCopyableIndexes(sourceClient, this.source, options.signal);
+        const sourceIndexes = this.selectSourceIndexes(copyableSourceIndexes, requestedNames);
+        if (!options.allowDocumentAffectingIndexes) {
+            const documentAffectingIndexNames = sourceIndexes
+                .filter((index) => isDocumentAffectingIndex(index.options))
+                .map((index) => `"${index.name}"`);
+            if (documentAffectingIndexNames.length > 0) {
+                throw new Error(
+                    vscode.l10n.t(
+                        'Cannot copy TTL or unique indexes as part of a collection paste: {0}.',
+                        documentAffectingIndexNames.join(', '),
+                    ),
+                );
+            }
+        }
         options.onStart?.(sourceIndexes.length);
         const targetIndexes = await this.readCopyableIndexes(targetClient, this.target, options.signal);
         const targetIndexNames = new Set(targetIndexes.map((index) => index.name));
         const targetSignatures = new Set(targetIndexes.map((index) => this.getDefinitionSignature(index)));
+        const targetKeySignatures = new Set(targetIndexes.map((index) => this.getKeySignature(index)));
 
         const result: IndexCopyResult = {
-            sourceIndexCount: sourceIndexes.length,
+            selectedIndexCount: sourceIndexes.length,
             createdCount: 0,
             skippedCount: 0,
             renamedCount: 0,
+            conflictingCount: 0,
             cancelled: false,
         };
 
@@ -95,6 +144,23 @@ export class DocumentDbCollectionIndexCopier implements CollectionIndexCopier {
                 result.skippedCount++;
                 ext.outputChannel.debug(
                     vscode.l10n.t('[IndexCopy] Skipping equivalent index "{0}".', sourceIndex.name),
+                );
+                options.onProgress?.({
+                    completed: result.createdCount + result.skippedCount,
+                    total: sourceIndexes.length,
+                    indexName: sourceIndex.name,
+                });
+                continue;
+            }
+
+            if (targetKeySignatures.has(this.getKeySignature(sourceIndex))) {
+                result.skippedCount++;
+                result.conflictingCount++;
+                ext.outputChannel.warn(
+                    vscode.l10n.t(
+                        '[IndexCopy] Skipping index "{0}" because the target has the same key pattern with different options.',
+                        sourceIndex.name,
+                    ),
                 );
                 options.onProgress?.({
                     completed: result.createdCount + result.skippedCount,
@@ -123,14 +189,22 @@ export class DocumentDbCollectionIndexCopier implements CollectionIndexCopier {
                 ext.outputChannel.error(
                     vscode.l10n.t('[IndexCopy] Failed to create index "{0}": {1}', targetName, errorMessage),
                 );
-                throw new Error(vscode.l10n.t('Failed to copy index "{0}": {1}', targetName, errorMessage), {
-                    cause: error,
-                });
+                const copyError = new Error(
+                    vscode.l10n.t('Failed to copy index "{0}": {1}', targetName, errorMessage),
+                    {
+                        cause: error,
+                    },
+                );
+                if (error instanceof IndexVisibilityError) {
+                    copyError.name = error.name;
+                }
+                throw copyError;
             }
 
             result.createdCount++;
             targetIndexNames.add(targetName);
             targetSignatures.add(this.getDefinitionSignature(sourceIndex));
+            targetKeySignatures.add(this.getKeySignature(sourceIndex));
             ext.outputChannel.trace(vscode.l10n.t('[IndexCopy] Created index "{0}".', targetName));
             options.onProgress?.({
                 completed: result.createdCount + result.skippedCount,
@@ -141,6 +215,45 @@ export class DocumentDbCollectionIndexCopier implements CollectionIndexCopier {
 
         result.cancelled = result.cancelled || options.signal?.aborted === true;
         return result;
+    }
+
+    private getRequestedNames(sourceIndexNames?: readonly string[]): ReadonlySet<string> | undefined {
+        if (sourceIndexNames === undefined) {
+            return undefined;
+        }
+
+        const requestedNames = new Set(sourceIndexNames);
+        if (requestedNames.size !== sourceIndexNames.length) {
+            throw new Error(vscode.l10n.t('Source index names must be unique.'));
+        }
+
+        return requestedNames;
+    }
+
+    private selectSourceIndexes(
+        sourceIndexes: readonly IndexDefinition[],
+        requestedNames?: ReadonlySet<string>,
+    ): IndexDefinition[] {
+        if (requestedNames === undefined) {
+            return [...sourceIndexes];
+        }
+
+        const unresolvedNames = new Set(requestedNames);
+        const selectedIndexes = sourceIndexes.filter((index) => {
+            if (!requestedNames.has(index.name)) {
+                return false;
+            }
+
+            unresolvedNames.delete(index.name);
+            return true;
+        });
+
+        if (unresolvedNames.size > 0) {
+            const names = [...unresolvedNames].map((name) => `"${name}"`).join(', ');
+            throw new Error(vscode.l10n.t('Source indexes were not found: {0}.', names));
+        }
+
+        return selectedIndexes;
     }
 
     private async readCopyableIndexes(
@@ -225,7 +338,7 @@ export class DocumentDbCollectionIndexCopier implements CollectionIndexCopier {
                     typeof visibilityResult.errmsg === 'string'
                         ? visibilityResult.errmsg
                         : vscode.l10n.t('Failed to hide index.');
-                throw new Error(
+                throw new IndexVisibilityError(
                     vscode.l10n.t('Index "{0}" was created but could not be hidden: {1}', index.name, errorMessage),
                 );
             }
@@ -254,8 +367,16 @@ export class DocumentDbCollectionIndexCopier implements CollectionIndexCopier {
     private getDefinitionSignature(index: IndexDefinition): string {
         return JSON.stringify({
             key: this.getKeyEntries(index.key),
-            options: this.sortObject(index.options),
+            options: this.sortObject(
+                Object.fromEntries(
+                    Object.entries(index.options).filter(([name]) => semanticIndexOptionNames.has(name)),
+                ),
+            ),
         });
+    }
+
+    private getKeySignature(index: IndexDefinition): string {
+        return JSON.stringify(this.getKeyEntries(index.key));
     }
 
     private sortObject(value: unknown): unknown {

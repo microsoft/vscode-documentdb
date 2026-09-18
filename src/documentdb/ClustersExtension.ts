@@ -31,6 +31,7 @@ import { renameConnection } from '../commands/connections-view/renameConnection/
 import { renameFolder } from '../commands/connections-view/renameFolder/renameFolder';
 import { copyCollection } from '../commands/copyCollection/copyCollection';
 import { copyAzureConnectionString } from '../commands/copyConnectionString/copyConnectionString';
+import { copyIndex, copyIndexes } from '../commands/copyIndexes/copyIndexes';
 import { copyReference } from '../commands/copyReference/copyReference';
 import { createCollection } from '../commands/createCollection/createCollection';
 import { createAzureDatabase } from '../commands/createDatabase/createDatabase';
@@ -68,6 +69,7 @@ import {
     openInteractiveShellWithInput,
 } from '../commands/openInteractiveShell/openInteractiveShell';
 import { pasteCollection } from '../commands/pasteCollection/pasteCollection';
+import { pasteIndexes } from '../commands/pasteIndexes/pasteIndexes';
 import { connectPlayground, showConnectionInfo } from '../commands/playground/connectDatabase';
 import { disposeEvaluators, shutdownOrphanedEvaluators } from '../commands/playground/executePlaygroundCode';
 import { newPlayground, newPlaygroundWithContent } from '../commands/playground/newPlayground';
@@ -207,6 +209,7 @@ export class ClustersExtension implements vscode.Disposable {
         ext.discoveryBranchDataProvider = new DiscoveryBranchDataProvider();
 
         ext.discoveryTreeView = vscode.window.createTreeView(Views.DiscoveryView, {
+            canSelectMany: true,
             showCollapseAll: true,
             treeDataProvider: ext.discoveryBranchDataProvider,
             dragAndDropController: new DiscoveryViewDragAndDropController(),
@@ -924,6 +927,16 @@ export class ClustersExtension implements vscode.Disposable {
 
                 registerCommandWithTreeNodeUnwrapping('vscode-documentdb.command.copyCollection', copyCollection);
                 registerCommandWithTreeNodeUnwrapping('vscode-documentdb.command.pasteCollection', pasteCollection);
+                registerCommand('vscode-documentdb.command.copyIndex', withCommandCorrelation(copyIndex));
+                registerCommand('vscode-documentdb.command.copySelectedIndexes', withCommandCorrelation(copyIndex));
+                registerCommandWithTreeNodeUnwrapping(
+                    'vscode-documentdb.command.copyIndexes',
+                    withTreeNodeCommandCorrelation(copyIndexes),
+                );
+                registerCommandWithTreeNodeUnwrapping(
+                    'vscode-documentdb.command.pasteIndexes',
+                    withTreeNodeCommandCorrelation(pasteIndexes),
+                );
 
                 // using registerCommand instead of vscode.commands.registerCommand for better telemetry:
                 // https://github.com/microsoft/vscode-azuretools/tree/main/utils#telemetry-and-error-handling

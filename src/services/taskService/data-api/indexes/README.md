@@ -1,7 +1,7 @@
 # Index Copy Implementation
 
-This folder contains the current DocumentDB API implementation used to copy secondary indexes as
-part of a Copy and Paste Collection task.
+This folder contains the DocumentDB API implementation used by collection copy and dedicated
+index-only copy/paste.
 
 This README describes the code as it exists. Durable architecture decisions and future boundaries
 are recorded in the
@@ -14,7 +14,7 @@ interface exposes source counting and the complete copy operation:
 
 ```typescript
 interface CollectionIndexCopier {
-    getSourceIndexSummary(signal?: AbortSignal): Promise<SourceIndexSummary>;
+    getSourceIndexSummary(options?: GetSourceIndexSummaryOptions): Promise<SourceIndexSummary>;
     copyIndexes(options?: CopyIndexesOptions): Promise<IndexCopyResult>;
 }
 ```
@@ -32,12 +32,18 @@ index definitions private. The task receives neither clients nor index definitio
 - excluding the built-in `_id` index from copying and copy progress;
 - preserving key order and supported index options, including DocumentDB vector options;
 - comparing definitions independently of names and mutable visibility;
+- ignoring server-generated catalog versions when comparing semantic definitions;
 - skipping equivalent target definitions;
-- resolving name collisions with deterministic `_copy`, `_copy_2`, and later suffixes;
+- skipping same-key definitions whose semantic options conflict;
+- resolving different-key name collisions with deterministic `_copy`, `_copy_2`, and later suffixes;
 - creating indexes sequentially with background creation requested;
 - applying hidden visibility after creation;
+- preserving `IndexVisibilityError` when a created index cannot be restored to hidden state;
 - stopping before the next index after cancellation;
-- reporting created, skipped, renamed, and cancellation counts.
+- selecting optional source names after the source read while preserving catalog order;
+- rejecting duplicate or unresolved requested names before target work;
+- denying TTL and unique indexes by default unless a dedicated index-only caller explicitly opts in;
+- reporting created, skipped, conflicting, renamed, and cancellation counts.
 
 Index lists are intentionally bounded arrays rather than streams. Creation is sequential so
 progress, cancellation, and failures have deterministic ordering.
@@ -58,6 +64,8 @@ sequenceDiagram
         Copier->>Copier: compare definition and resolve name
         alt Equivalent definition exists
             Copier-->>Task: progress: skipped
+        else Same key has different options
+            Copier-->>Task: progress: conflict skipped
         else Definition must be created
             Copier->>Client: createIndex(background: true)
             opt Source index is hidden
@@ -71,6 +79,11 @@ sequenceDiagram
 The target collection is created by the document writer during task initialization. Index copying
 runs after initialization and before document streaming. An index creation failure fails the task;
 indexes already created are not rolled back.
+
+For dedicated index-only paste, `CopyIndexesTask` passes one selected name, a selected-name subset,
+or omits the restriction for the live parent scope. It explicitly allows TTL and unique definitions,
+maps evaluated indexes to determinate progress, and uses the same comparison, naming, creation,
+visibility, and cancellation path shown above. Collection paste leaves that option denied.
 
 ## Counting behavior
 
@@ -95,8 +108,10 @@ for the explicit cross-database revisit condition.
 - `CollectionIndexCopier.ts` — provider-neutral task contract and shared progress/result types
 - `DocumentDbCollectionIndexCopier.ts` — DocumentDB API endpoint ownership, index comparison, and
   creation
+- `createIndexCopier.ts` — endpoint-based construction shared by both wizards
 - `DocumentDbCollectionIndexCopier.test.ts` — source-only counting, equivalence, options, vector
-  indexes, background creation, hidden indexes, collisions, failures, and cancellation
+  indexes, source-name filtering, background creation, hidden indexes, collisions, failures, and
+  cancellation
 
 ## Related documentation
 

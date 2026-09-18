@@ -3,16 +3,17 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { DocumentDbCollectionIndexCopier } from '../../services/taskService/data-api/indexes/DocumentDbCollectionIndexCopier';
+import { type CollectionIndexCopier } from '../../services/taskService/data-api/indexes/CollectionIndexCopier';
+import { createIndexCopier as createEndpointIndexCopier } from '../../services/taskService/data-api/indexes/createIndexCopier';
 import { nonNullValue } from '../../utils/nonNull';
 import { type PasteCollectionWizardContext } from './PasteCollectionWizardContext';
 
-export function createIndexCopier(context: PasteCollectionWizardContext): DocumentDbCollectionIndexCopier {
+export function createIndexCopier(context: PasteCollectionWizardContext): CollectionIndexCopier {
     const targetCollectionName = context.isTargetExistingCollection
         ? nonNullValue(context.targetCollectionName, 'targetCollectionName', 'context.targetCollectionName')
         : nonNullValue(context.newCollectionName, 'newCollectionName', 'context.newCollectionName');
 
-    return new DocumentDbCollectionIndexCopier(
+    return createEndpointIndexCopier(
         {
             clusterId: context.sourceConnectionId,
             databaseName: context.sourceDatabaseName,

@@ -9,6 +9,7 @@ import { type CollectionItem } from '../../tree/documentdb/CollectionItem';
 import { type DatabaseItem } from '../../tree/documentdb/DatabaseItem';
 
 export interface PasteCollectionWizardContext extends IActionContext {
+    readonly copyOperationCorrelationId: string;
     // Source collection details (from copy operation)
     sourceCollectionName: string;
     sourceDatabaseName: string;
@@ -23,6 +24,7 @@ export interface PasteCollectionWizardContext extends IActionContext {
     sourceIndexCount?: number;
     sourceUniqueIndexNames: string[];
     sourceTtlIndexNames: string[];
+    largeCollectionWarningShown: boolean;
 
     // Target details
     targetNode: CollectionItem | DatabaseItem;

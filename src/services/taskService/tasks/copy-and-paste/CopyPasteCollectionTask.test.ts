@@ -66,6 +66,7 @@ class TestCopyPasteCollectionTask extends CopyPasteCollectionTask {
 }
 
 const config: CopyPasteConfig = {
+    copyOperationCorrelationId: 'operation-id',
     source: { clusterId: 'source', databaseName: 'sourceDb', collectionName: 'sourceCollection' },
     target: { clusterId: 'target', databaseName: 'targetDb', collectionName: 'targetCollection' },
     onConflict: ConflictResolutionStrategy.Abort,
@@ -85,10 +86,11 @@ describe('CopyPasteCollectionTask index phase', () => {
                 options.onStart?.(20);
                 options.onProgress?.({ completed: 1, total: 20, indexName: 'email_1' });
                 return {
-                    sourceIndexCount: 20,
+                    selectedIndexCount: 20,
                     createdCount: 0,
                     skippedCount: 1,
                     renamedCount: 0,
+                    conflictingCount: 0,
                     cancelled: false,
                 };
             }),
@@ -96,11 +98,19 @@ describe('CopyPasteCollectionTask index phase', () => {
         const reader = { streamDocuments: jest.fn() } as unknown as DocumentReader;
         const writer = { streamDocuments: jest.fn() } as unknown as StreamingDocumentWriter;
         const task = new TestCopyPasteCollectionTask(config, reader, writer, indexCopier, 0);
+        const context = createContext();
 
-        await task.runWorkForTest(new AbortController().signal, createContext());
+        await task.runWorkForTest(new AbortController().signal, context);
 
         expect(task.progressUpdates).toContainEqual({ progress: 0, message: 'Copying 20 indexes...' });
         expect(ext.outputChannel.trace).toHaveBeenCalledWith('[CopyPasteTask] Index copy progress: 1/20 (email_1).');
+        expect(indexCopier.copyIndexes).toHaveBeenCalledWith(
+            expect.not.objectContaining({ sourceIndexNames: expect.anything() }),
+        );
+        expect(context.telemetry.measurements.selectedIndexCount).toBe(20);
+        expect(context.telemetry.measurements.sourceIndexCount).toBeUndefined();
+        expect(context.telemetry.properties.copyOperationCorrelationId).toBe('operation-id');
+        expect(context.telemetry.properties.indexCopyFailed).toBe('false');
     });
 
     it('copies indexes before streaming documents', async () => {
@@ -108,7 +118,14 @@ describe('CopyPasteCollectionTask index phase', () => {
         const indexCopier = {
             copyIndexes: jest.fn().mockImplementation(async () => {
                 calls.push('indexes');
-                return { sourceIndexCount: 1, createdCount: 1, skippedCount: 0, renamedCount: 0, cancelled: false };
+                return {
+                    selectedIndexCount: 1,
+                    createdCount: 1,
+                    skippedCount: 0,
+                    renamedCount: 0,
+                    conflictingCount: 0,
+                    cancelled: false,
+                };
             }),
         } as unknown as CollectionIndexCopier;
         const reader = {
@@ -149,7 +166,7 @@ describe('CopyPasteCollectionTask index phase', () => {
         );
         expect(reader.streamDocuments).not.toHaveBeenCalled();
         expect(context.telemetry.properties.indexCopyFailed).toBe('true');
-        expect(context.telemetry.properties.indexCopyError).toBe('copyIndexesFailed');
+        expect(context.telemetry.properties.indexCopyError).toBe('Error');
     });
 
     it('preserves cancellation without recording an index-copy failure', async () => {
@@ -178,10 +195,11 @@ describe('CopyPasteCollectionTask index phase', () => {
     it('copies indexes when the source collection is empty', async () => {
         const indexCopier = {
             copyIndexes: jest.fn().mockResolvedValue({
-                sourceIndexCount: 1,
+                selectedIndexCount: 1,
                 createdCount: 1,
                 skippedCount: 0,
                 renamedCount: 0,
+                conflictingCount: 0,
                 cancelled: false,
             }),
         } as unknown as CollectionIndexCopier;
@@ -192,6 +210,18 @@ describe('CopyPasteCollectionTask index phase', () => {
         await task.runWorkForTest(new AbortController().signal, createContext());
 
         expect(indexCopier.copyIndexes).toHaveBeenCalled();
+        expect(reader.streamDocuments).not.toHaveBeenCalled();
+    });
+
+    it('does not access indexes when index copying is disabled', async () => {
+        const indexCopier = { copyIndexes: jest.fn() } as unknown as CollectionIndexCopier;
+        const reader = { streamDocuments: jest.fn() } as unknown as DocumentReader;
+        const writer = { streamDocuments: jest.fn() } as unknown as StreamingDocumentWriter;
+        const task = new TestCopyPasteCollectionTask({ ...config, copyIndexes: false }, reader, writer, indexCopier, 0);
+
+        await task.runWorkForTest(new AbortController().signal, createContext());
+
+        expect(indexCopier.copyIndexes).not.toHaveBeenCalled();
         expect(reader.streamDocuments).not.toHaveBeenCalled();
     });
 });

@@ -4,9 +4,13 @@ kind: notes
 status: active
 created: 2026-09-16
 code:
+    - src/commands/copyIndexes/**
     - src/commands/pasteCollection/**
+    - src/commands/pasteIndexes/**
+    - src/services/CopyPasteBufferService.ts
     - src/services/taskService/data-api/**
     - src/services/taskService/tasks/copy-and-paste/**
+    - src/services/taskService/tasks/copy-indexes/**
 ---
 
 # Copy and Paste Collections
@@ -21,6 +25,10 @@ Copy and Paste Collections transfers documents between collections as a backgrou
 also recreate secondary indexes before document transfer begins. The document data plane is split
 into source and target abstractions; index copying uses one task-level `CollectionIndexCopier`
 implemented for the DocumentDB API.
+
+The same copier also supports dedicated index-only copy and paste. Users can mark one ordinary
+secondary index or all copyable secondary indexes from an Indexes node, then paste them into an
+existing collection without transferring documents.
 
 ## Existing documentation
 
@@ -43,11 +51,15 @@ durable intent and rationale. Code and tests remain authoritative for current be
 - The wizard offers index copying separately from document conflict handling.
 - Source indexes are counted only after the user selects **Copy indexes**; document-only paste never
   reads the index catalog.
+- Collection paste refuses the index-copy option when the source contains TTL or unique indexes;
+  those document-affecting definitions require the separately confirmed dedicated index flow.
 - The source catalog count includes the built-in `_id` index, but `_id` is excluded from the copy
   operation and its progress totals.
-- Indexes are copied sequentially after target creation and before document streaming.
-- Equivalent definitions are skipped regardless of name. A conflicting name receives deterministic
-  `_copy`, `_copy_2`, and later suffixes.
+- Non-document-affecting indexes are copied sequentially after target creation and before document
+  streaming. The copier denies TTL and unique indexes by default as an execution-time backstop.
+- Equivalent definitions are skipped regardless of name and server-generated catalog versions.
+  Same-key option conflicts are skipped rather than duplicated. A conflicting name on a different
+  key receives deterministic `_copy`, `_copy_2`, and later suffixes.
 - Supported DocumentDB API options, including vector index options, are preserved. Builds always
   request background creation, and `hidden` is applied separately after creation rather than copied
   as a creation option. Other server-normalized index shapes are not yet proven to round-trip.
@@ -55,13 +67,37 @@ durable intent and rationale. Code and tests remain authoritative for current be
   created and prevents document transfer.
 - Progress, result counts, diagnostics, telemetry, and a cancellation-aware completion pause are
   reported by the task and copier.
+- Each paste wizard shares a purpose-specific `copyOperationCorrelationId` with its task
+  initialization and execution events; Paste Indexes also records confirmed scope and selection
+  size on the wizard event.
+- Dedicated Copy Index uses one stable index name or an immutable selected-name subset; Copy
+  Indexes retains a live parent scope until paste-time loading, then freezes the resolved names
+  through confirmation and task execution.
+- Mixed tree selections may be invoked from any selected index row; `_id` and non-copyable search
+  entries are ignored while ordinary selected indexes are retained.
+- Search catalog entries without ordinary keys remain visible but are classified as not copyable.
+  The parent confirmation itemizes known exclusions, including `_id`; search exclusions are
+  best-effort when the platform does not support their catalog API.
+- Dedicated Paste Indexes targets an existing collection, scopes unique and TTL warnings to the
+  selected indexes, and reports determinate index-by-index task progress.
+- A successful dedicated paste leaves the copied-index buffer intact so the same selection can be
+  pasted into more than one target. Another copy replaces it; Cancel Copy or stale validation
+  clears it.
+- Index-copy notifications link to the published copy-and-paste guide through **Learn More** without
+  clearing the copied selection.
 
 ## Code map
 
 - `src/commands/pasteCollection/**` — wizard choices, source index counting, component construction,
   task registration, and tree annotations
+- `src/commands/copyIndexes/**` — stable source selection and copy notification
+- `src/commands/pasteIndexes/**` — source classification, validation, confirmation, task registration,
+  target annotation, and refresh
+- `src/services/CopyPasteBufferService.ts` — transient copied-index state and command context
 - `src/services/taskService/tasks/copy-and-paste/**` — orchestration, ordering, progress, telemetry,
   and resource declarations
+- `src/services/taskService/tasks/copy-indexes/**` — dedicated index-only progress, telemetry, and
+  resource declarations
 - `src/services/taskService/data-api/readers/**` — source document abstraction and DocumentDB API
   implementation
 - `src/services/taskService/data-api/writers/**` — target streaming abstraction, batching, retry,
@@ -77,6 +113,8 @@ is:
 - document transfer uses a `DocumentReader` source and `StreamingDocumentWriter` target;
 - task lifecycle, progress, cancellation, and telemetry remain in `CopyPasteCollectionTask`;
 - index copying uses one optional `CollectionIndexCopier` supplied to the task;
+- dedicated index copy supplies the same copier with an optional source-name restriction;
+- copyability classification remains above the copier, over the user-visible catalog;
 - the first copier remains DocumentDB API-specific and owns both source and target index behavior.
 
 The single copier is a deliberate scope choice, not a claim that indexes are portable. If

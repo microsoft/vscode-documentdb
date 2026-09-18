@@ -8,7 +8,6 @@ import * as l10n from '@vscode/l10n';
 import * as vscode from 'vscode';
 import { ConflictResolutionStrategy } from '../../services/taskService/tasks/copy-and-paste/copyPasteConfig';
 import { type PasteCollectionWizardContext } from './PasteCollectionWizardContext';
-import { formatIndexCopyWarnings } from './formatIndexCopyWarnings';
 
 export class ConfirmOperationStep extends AzureWizardPromptStep<PasteCollectionWizardContext> {
     public async prompt(context: PasteCollectionWizardContext): Promise<void> {
@@ -30,17 +29,19 @@ export class ConfirmOperationStep extends AzureWizardPromptStep<PasteCollectionW
                   })
                 : l10n.t('Copy Indexes: {yesNoValue}', { yesNoValue: indexesSetting });
 
-        const warningText = context.isTargetExistingCollection
-            ? l10n.t(
-                  '⚠️ Warning: This will modify the existing collection. Documents with matching _id values will be handled based on your conflict resolution setting.',
-              )
-            : l10n.t(
-                  'This operation will copy all documents from the source to the target collection. Large collections may take several minutes to complete.',
-              );
-        const indexWarnings = context.copyIndexes
-            ? formatIndexCopyWarnings(context.sourceUniqueIndexNames, context.sourceTtlIndexNames)
-            : [];
-
+        const importantNotes = context.isTargetExistingCollection
+            ? [
+                  l10n.t('This will modify the existing collection.'),
+                  l10n.t(
+                      'Documents with matching _id values will be handled based on your conflict resolution setting.',
+                  ),
+              ]
+            : [
+                  l10n.t('This operation will copy all documents from the source to the target collection.'),
+                  ...(context.largeCollectionWarningShown
+                      ? [l10n.t('Large collections may take several minutes to complete.')]
+                      : []),
+              ];
         // Combine all parts
         const confirmationMessage = [
             l10n.t('Source:'),
@@ -68,8 +69,8 @@ export class ConfirmOperationStep extends AzureWizardPromptStep<PasteCollectionW
             ' • ' + l10n.t('Conflict Resolution: {strategyName}', { strategyName: conflictStrategy }),
             ' • ' + indexesSummary,
             '',
-            warningText,
-            ...indexWarnings,
+            l10n.t('Important:'),
+            ...importantNotes.map((note) => ' • ' + note),
         ].join('\n');
 
         const actionButton = context.isTargetExistingCollection

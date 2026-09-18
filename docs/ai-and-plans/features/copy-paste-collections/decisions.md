@@ -10,20 +10,36 @@ created: 2026-09-16
 > Durable architecture and behavior decisions for collection copy/paste. Entries 0004–0011 were
 > preserved from the original root-level index-copy plan when this feature folder was established.
 
-| #    | Decision                                                       | Status              | Changed from the proposal?                                           | Date       | PR  |
-| ---- | -------------------------------------------------------------- | ------------------- | -------------------------------------------------------------------- | ---------- | --- |
-| 0001 | Keep implementation documentation beside the Task Service code | Accepted            | Added by the maintainer after recalling the historical documentation | 2026-09-16 | —   |
-| 0002 | Use one optional `CollectionIndexCopier` at the task boundary  | Accepted            | Chosen after rejecting the more elaborate migration pipeline         | 2026-09-16 | —   |
-| 0003 | Defer a portable index model until cross-database migration    | Accepted            | Simplified from the proposed reader/planner/writer architecture      | 2026-09-16 | —   |
-| 0004 | Keep index processing bounded and sequential                   | Accepted            | Migrated from the original implementation plan                       | 2026-09-16 | —   |
-| 0005 | Copy indexes before document streaming                         | Accepted            | Migrated from the original implementation plan                       | 2026-09-16 | —   |
-| 0006 | Exclude the built-in `_id` index                               | Superseded by D0012 | Migrated from the original implementation plan                       | 2026-09-16 | —   |
-| 0007 | Compare definitions before names                               | Accepted            | Migrated from the original implementation plan                       | 2026-09-16 | —   |
-| 0008 | Preserve index creation failures                               | Accepted            | Migrated from the original implementation plan                       | 2026-09-16 | —   |
-| 0009 | Count indexes only after the user chooses to copy them         | Accepted            | Migrated from the original implementation plan                       | 2026-09-16 | —   |
-| 0010 | Do not roll back indexes after cancellation                    | Accepted            | Migrated from the original implementation plan                       | 2026-09-16 | —   |
-| 0011 | Keep the index completion pause presentation-only              | Accepted            | Migrated from the original implementation plan                       | 2026-09-16 | —   |
-| 0012 | Include `_id` in the source catalog count                      | Accepted            | Supersedes the counting portion of decision 0006                     | 2026-09-17 | —   |
+| #    | Decision                                                       | Status              | Changed from the proposal?                                           | Date       | PR   |
+| ---- | -------------------------------------------------------------- | ------------------- | -------------------------------------------------------------------- | ---------- | ---- |
+| 0001 | Keep implementation documentation beside the Task Service code | Accepted            | Added by the maintainer after recalling the historical documentation | 2026-09-16 | —    |
+| 0002 | Use one optional `CollectionIndexCopier` at the task boundary  | Accepted            | Chosen after rejecting the more elaborate migration pipeline         | 2026-09-16 | —    |
+| 0003 | Defer a portable index model until cross-database migration    | Accepted            | Simplified from the proposed reader/planner/writer architecture      | 2026-09-16 | —    |
+| 0004 | Keep index processing bounded and sequential                   | Accepted            | Migrated from the original implementation plan                       | 2026-09-16 | —    |
+| 0005 | Copy indexes before document streaming                         | Superseded by D0026 | Migrated from the original implementation plan                       | 2026-09-16 | —    |
+| 0006 | Exclude the built-in `_id` index                               | Superseded by D0012 | Migrated from the original implementation plan                       | 2026-09-16 | —    |
+| 0007 | Compare definitions before names                               | Accepted            | Migrated from the original implementation plan                       | 2026-09-16 | —    |
+| 0008 | Preserve index creation failures                               | Accepted            | Migrated from the original implementation plan                       | 2026-09-16 | —    |
+| 0009 | Count indexes only after the user chooses to copy them         | Accepted            | Migrated from the original implementation plan                       | 2026-09-16 | —    |
+| 0010 | Do not roll back indexes after cancellation                    | Accepted            | Migrated from the original implementation plan                       | 2026-09-16 | —    |
+| 0011 | Keep the index completion pause presentation-only              | Accepted            | Migrated from the original implementation plan                       | 2026-09-16 | —    |
+| 0012 | Include `_id` in the source catalog count                      | Accepted            | Supersedes the counting portion of decision 0006                     | 2026-09-17 | —    |
+| 0013 | Keep copyability classification in the presentation layer      | Accepted            | Reversed an earlier draft that placed it in the copier               | 2026-09-17 | #930 |
+| 0014 | Express all indexes as an omitted name restriction             | Accepted            | Simplified an earlier discriminated copier selection                 | 2026-09-17 | #930 |
+| 0015 | Classify copyability from the presence of an index key         | Accepted            | Avoids incomplete vendor-specific type checks                        | 2026-09-17 | #930 |
+| 0016 | Keep exclusion reasons generic                                 | Accepted            | Avoids coupling behavior to Atlas-specific terminology               | 2026-09-17 | #930 |
+| 0017 | Scope confirmation detail to the user's selection              | Accepted            | Whole-catalog detail was rejected for single-index copy              | 2026-09-17 | #930 |
+| 0018 | Remove the unsupported search-index placeholder                | Accepted            | Removed a promise for work that is not planned                       | 2026-09-17 | #930 |
+| 0019 | Name notification cancellation Cancel Copy                     | Accepted            | Replaced the misleading Undo label                                   | 2026-09-17 | #930 |
+| 0020 | Store copied indexes in CopyPasteBufferService                 | Accepted            | Rejected adding more global extension state                          | 2026-09-17 | #930 |
+| 0021 | Do not roll back buffer state after a setContext failure       | Accepted            | Rejected handling an unreachable production failure                  | 2026-09-17 | #930 |
+| 0022 | Keep copied index state after a successful paste               | Accepted            | Matches reusable collection-copy behavior                            | 2026-09-17 | #930 |
+| 0023 | Use a dedicated task for index-only copy                       | Accepted            | Rejected reusing document-transfer orchestration                     | 2026-09-17 | #930 |
+| 0024 | Preserve collection-copy behavior while adapting contracts     | Superseded by D0026 | Rejected count and prompt-order redesigns                            | 2026-09-17 | #930 |
+| 0025 | Filter index tree multi-selection into one source subset       | Accepted            | Extended the first version after validating the cluster move pattern | 2026-09-17 | #930 |
+| 0026 | Refuse document-affecting indexes during collection paste      | Accepted            | Reverses the warning-and-copy behavior for TTL and unique indexes    | 2026-09-18 | #930 |
+| 0027 | Freeze parent index selection at confirmation                  | Accepted            | Replaces execution-time catalog expansion with a confirmed snapshot  | 2026-09-18 | #930 |
+| 0028 | Correlate paste wizards with their tasks                       | Accepted            | Adds an operation-specific ID instead of reusing discovery lineage   | 2026-09-18 | #930 |
 
 > Entries below are semantically immutable. Append a new decision rather than rewriting an old one,
 > and record a reversal as a new entry plus a status change in the table.
@@ -284,3 +300,431 @@ exclude it from the set of indexes recreated on the target and from copy progres
 
 Users expect the displayed count to match the collection's complete index catalog. Omitting the
 built-in index makes the count consistently appear one lower than the count they can inspect.
+
+## 0013 — Keep index copyability classification in the presentation layer
+
+**Status:** Accepted · **Date:** 2026-09-17 · **Raised by:** architecture review
+
+### Question
+
+Should `CollectionIndexCopier` classify every catalog entry shown in the tree?
+
+### Decision
+
+No. Classify `IndexItemModel` values in the tree, commands, and Paste Indexes wizard. Keep the
+copier limited to ordinary driver index definitions it can compare and create.
+
+### Reasoning
+
+An earlier draft put classification in the copier because one shared decision point looked tidy.
+It produced two concrete defects: the copier needed a second search-catalog read unrelated to its
+creation algorithm, and one predicate could not be typed across the tree's `IndexItemModel` and the
+driver's `IndexDescriptionInfo`. The tree owns a growing presentation superset; the provider-neutral
+copier should not change whenever that superset gains another display-only entry.
+
+### Consequence
+
+The copier never reads search indexes. The wizard's exclusion report is advisory, while the
+ordinary source catalog used by the copier remains authoritative for work.
+
+## 0014 — Express all indexes as an omitted name restriction
+
+**Status:** Accepted · **Date:** 2026-09-17 · **Raised by:** contract review
+
+### Question
+
+Should the copier accept an explicit `{ kind: 'all' }` selection?
+
+### Decision
+
+No. `sourceIndexNames: undefined` means every copyable secondary index; a readonly name array means
+only those indexes.
+
+### Reasoning
+
+An explicit all variant and an omitted restriction described the same request and doubled the
+contract test matrix. The presentation buffer still uses a discriminated scope because it must
+remember whether the user selected one live child or the live parent.
+
+### Consequence
+
+Collection copy and parent index copy omit the list. Single-index copy supplies one name.
+
+## 0015 — Classify copyability from the presence of an index key
+
+**Status:** Accepted · **Date:** 2026-09-17 · **Raised by:** catalog-shape review
+
+### Question
+
+How should presentation code identify entries the ordinary index copier cannot create?
+
+### Decision
+
+Treat an exact `_id` key as built in and any entry without `key` as not copyable. Do not classify on
+`type === 'search'`.
+
+### Reasoning
+
+Atlas also reports `vectorSearch`, so a search-only type check silently accepts unsupported entries.
+Absence of `key` matches the creation boundary and keeps ordinary DocumentDB vector indexes, which
+have a key and `cosmosSearchOptions`, copyable.
+
+### Consequence
+
+`IndexItemModel.type` includes `vectorSearch`, but type is used for explanation rather than the copy
+decision.
+
+## 0016 — Keep exclusion reasons generic
+
+**Status:** Accepted · **Date:** 2026-09-17 · **Raised by:** extensibility review
+
+### Question
+
+Should the exclusion enum name Atlas Search directly?
+
+### Decision
+
+Use `builtInId` and `notCopyable`. Render the concrete catalog type separately.
+
+### Reasoning
+
+The same structural exclusion can apply to future non-Atlas catalog entries. Encoding a vendor in
+the reason would make otherwise generic command behavior depend on where the entry originated.
+
+### Consequence
+
+Messages can say search or vector search while control flow remains provider-neutral.
+
+## 0017 — Scope confirmation detail to the user's selection
+
+**Status:** Accepted · **Date:** 2026-09-17 · **Raised by:** product review
+
+### Question
+
+Should a single-index confirmation show whole-catalog counts and unrelated exclusions?
+
+### Decision
+
+No. Show only the selected index and warnings that apply to it. Parent copy shows copyable and total
+catalog counts, readable copyable names, and every known exclusion.
+
+### Reasoning
+
+The user selected one index, not its siblings. Whole-catalog detail makes the operation appear wider
+than it is. Parent copy needs the denominator and exclusions because it represents a catalog-wide
+request.
+
+### Consequence
+
+Single-index stale validation fails instead of silently shrinking the selection. Parent exclusion
+reporting remains best-effort when search discovery is unavailable.
+
+## 0018 — Remove the unsupported search-index placeholder
+
+**Status:** Accepted · **Date:** 2026-09-17 · **Raised by:** UX review
+
+### Question
+
+What should replace the `Support coming soon` child under keyless entries?
+
+### Decision
+
+Remove it, make keyless entries non-expandable, and explain non-copyability in the row and tooltip.
+
+### Reasoning
+
+The placeholder promised unplanned work and created an expand affordance with no useful content.
+The tooltip can explain the current limitation without implying a roadmap commitment.
+
+### Consequence
+
+Keyless catalog entries remain visible and informative but have no empty child node.
+
+## 0019 — Name notification cancellation Cancel Copy
+
+**Status:** Accepted · **Date:** 2026-09-17 · **Raised by:** product wording review
+
+### Question
+
+Should the notification action be called Undo?
+
+### Decision
+
+No. Use **Cancel Copy** for both index and collection copy notifications.
+
+### Reasoning
+
+No database write has occurred, so Undo suggests destructive rollback. Cancel Copy accurately names
+the transient state being discarded.
+
+### Consequence
+
+The existing collection telemetry property retains its historical meaning even though the visible
+label changes.
+
+## 0020 — Store copied indexes in CopyPasteBufferService
+
+**Status:** Accepted · **Date:** 2026-09-17 · **Raised by:** state-ownership review
+
+### Question
+
+Where should transient copied-index state live?
+
+### Decision
+
+Use a typed singleton service that stores stable source descriptors and a copied scope, clones on
+write and read, and exclusively synchronizes `documentdb.hasCopiedIndexes`.
+
+### Reasoning
+
+Adding `ext.copiedIndexes` repeats the collection flow's unstable tree-node storage. A clipboard
+name implies operating-system clipboard data, while a selection name conflicts with current tree
+selection. CopyPasteBufferService describes the actual transient typed state.
+
+### Consequence
+
+The index buffer contains `clusterId`, never `treeId` or tree nodes. Collection state remains
+independent until a separate migration is approved.
+
+## 0021 — Do not roll back buffer state after a setContext failure
+
+**Status:** Accepted · **Date:** 2026-09-17 · **Raised by:** reliability review
+
+### Question
+
+Should `setIndexes` roll back state if VS Code's built-in `setContext` command rejects?
+
+### Decision
+
+No. Set state, await `setContext`, and test correct key wiring rather than artificial rollback.
+
+### Reasoning
+
+`setContext` is an in-process built-in with no I/O or key validation. Rejection means the built-in
+command registry itself is unavailable, a state where extension operation is already broken. A
+rollback test could only encode a mock-only branch; exact menu-key tests catch the reachable wiring
+failure.
+
+### Consequence
+
+All buffer mutations are awaited, and package tests bind Paste Indexes to the same key.
+
+## 0022 — Keep copied index state after a successful paste
+
+**Status:** Accepted · **Date:** 2026-09-17 · **Raised by:** workflow review
+
+### Question
+
+Should a successful paste consume the copied-index selection?
+
+### Decision
+
+No. Keep it until another index copy replaces it, Cancel Copy clears it, or stale-source validation
+clears it.
+
+### Reasoning
+
+Users may paste the same selection into several targets, and collection copy already behaves as a
+reusable marker. Consuming it would require repeating source selection for each target.
+
+### Consequence
+
+Successful task execution never calls `clearIndexes`.
+
+## 0023 — Use a dedicated task for index-only copy
+
+**Status:** Accepted · **Date:** 2026-09-17 · **Raised by:** task architecture review
+
+### Question
+
+Should index-only paste reuse `CopyPasteCollectionTask`?
+
+### Decision
+
+No. Add `CopyIndexesTask` and reuse `Task`, resource tracking, progress reporting, and
+`CollectionIndexCopier`.
+
+### Reasoning
+
+The collection task also owns target creation, document counting, conflict policy, streaming, and a
+document-transition delay. Reusing it would add irrelevant lifecycle and obscure determinate index
+progress.
+
+### Consequence
+
+The dedicated task targets existing collections, reports index-by-index percentages, and declares
+both collections as stable resources. The execute step owns live tree annotation and refresh.
+
+## 0024 — Preserve collection-copy behavior while adapting contracts
+
+**Status:** Accepted · **Date:** 2026-09-17 · **Raised by:** regression review
+
+### Question
+
+How much of the existing collection workflow should change while adding dedicated index copy?
+
+### Decision
+
+Limit changes to the shared options contract, result naming, neutral prompt text, notification
+labels, command-palette hiding, and required caller adaptations. Preserve document and index
+ordering, counts, warnings, progress, target creation, conflicts, failures, and cancellation.
+
+### Reasoning
+
+Changing `SourceIndexSummary.count` to an `_id`-free count was rejected because Paste Collection
+displays that value directly; decision 0012 remains in force. Moving index counting before the
+choice was rejected because documents-only copy must not read indexes; decision 0009 is reaffirmed.
+Adding presentation classification to collection copy would require a new round trip solely for
+display. The factual word “all” could be removed without any of those behavioral changes.
+
+### Consequence
+
+Collection copy omits `sourceIndexNames` and remains independent from the index buffer. Its known
+catalog-count mismatch with search indexes is documented but deferred.
+
+## 0025 — Filter index tree multi-selection into one source subset
+
+**Status:** Accepted · **Date:** 2026-09-17 · **Raised by:** implementation UX validation
+
+### Question
+
+Should Copy Index support VS Code tree multi-selection in the same way that Move to Folder supports
+multiple selected clusters and folders, including selections that contain expanded index-field
+rows?
+
+### Decision
+
+Yes. Register Copy Index as a plain correlated command so VS Code supplies the right-clicked item and
+the selected-items array. Offer **Copy Selected Indexes…** when any selected index row is
+right-clicked, then retain only copyable `IndexItem` instances and use the first retained index as
+the source. Ignore expanded field rows, `_id`, and keyless non-copyable entries. Reject copyable
+indexes from another collection.
+
+### Reasoning
+
+The existing Move to Folder command proves the invocation contract and avoids inventing a picker.
+Index selections need stricter domain filtering because expanded field rows are selectable tree
+elements but are not indexes, and the buffer has one stable source collection descriptor. Silently
+discarding valid indexes from another collection would make the resulting paste surprising, while
+rejecting the selection tells the user how to correct it.
+
+Requiring the right-clicked row itself to be copyable makes mixed selections depend on where the
+user opens the context menu. Filtering the whole selection is simpler: `_id` and search entries are
+treated consistently and do not hide an otherwise valid command.
+
+### Alternatives considered
+
+- **Keep one-or-all only.** Simpler, but leaves the context menu empty during a natural VS Code
+  workflow and forces repeated copy/paste operations.
+- **Remove only `!listMultiSelection`.** Rejected because the existing tree-node unwrapping handler
+  would receive only the clicked index and silently ignore the rest.
+- **Require a copyable right-clicked index.** Rejected because `_id` or a search entry can suppress
+  the command even when the selection contains ordinary secondary indexes that can be copied.
+- **Accept indexes across collections.** Rejected because one copied selection cannot truthfully
+  carry one source descriptor or resolve one catalog for several collections.
+- **Treat non-index rows as an error.** Rejected because selecting expanded field rows is easy and
+  they can be safely ignored without changing the requested index subset.
+
+### Consequence
+
+The buffer gains an immutable `indexes` scope containing selected names. Paste validates every name
+and scopes confirmation, warnings, progress, and telemetry to that subset. The parent Copy Indexes
+command retains live all-index semantics.
+
+## 0026 — Refuse document-affecting indexes during collection paste
+
+**Status:** Accepted · **Date:** 2026-09-18 · **Raised by:** data-loss review
+
+### Decision
+
+When collection paste is configured to copy indexes, refuse the operation if the source summary
+contains `expireAfterSeconds` or `unique: true`. Direct the user to rerun a documents-only paste and
+then use the separately confirmed index-only flow. Keep sparse, partial-filter, and collation indexes
+eligible. The copier denies document-affecting indexes by default; only the dedicated task opts in.
+
+### Reasoning
+
+TTL indexes can delete documents while they stream, and secondary unique indexes can reject writes
+that the document conflict policy describes only as `_id` conflicts. In either case the task can
+report success while the target contains fewer documents than the source. A wizard-only check is not
+sufficient because the source catalog is read again at execution time.
+
+### Alternatives considered
+
+- **Create indexes after documents.** This avoids streaming under active constraints but leaves a
+  partially copied target if index creation then fails and changes the established phase contract.
+- **Continue with warnings.** This preserves the prior flow but asks confirmation to carry a silent
+  document-loss risk that can also change between confirmation and execution.
+- **Silently downgrade to documents only.** This protects document fidelity but violates the user's
+  explicit index choice and makes the completed task misleading.
+
+### Consequence
+
+Collection paste retains indexes-before-documents only for definitions that cannot reject or delete
+documents. Dedicated Paste Indexes remains the explicit route for TTL and unique indexes. This
+supersedes D0005 only for document-affecting definitions and D0024 only where it required preserving
+the old unique/TTL warning behavior.
+
+## 0027 — Freeze parent index selection at confirmation
+
+**Status:** Accepted · **Date:** 2026-09-18 · **Raised by:** data-loss review
+
+### Decision
+
+Keep the copied `allIndexes` buffer live until the Paste Indexes wizard loads the source catalog.
+Then store the classified copyable names in `sourceIndexNames` and pass that same immutable set to
+the summary, confirmation, and task.
+
+### Reasoning
+
+The dedicated flow warns explicitly for TTL and unique definitions. Re-expanding the catalog during
+execution can copy a document-affecting index added after confirmation without warning. Freezing at
+the loading step makes the confirmed and executed sets identical.
+
+### Alternatives considered
+
+- **Keep execution-time expansion.** It includes the newest catalog but permits unconfirmed indexes
+  and defeats warning telemetry.
+- **Freeze when Copy Indexes is invoked.** It removes the useful live-parent behavior between copy
+  and paste and can present a stale set before the wizard even opens.
+- **Silently drop names removed after confirmation.** It completes more often but makes execution
+  diverge from the confirmed operation.
+
+### Consequence
+
+Indexes added after confirmation wait for a later paste. If a confirmed index is removed before
+execution, the copier reports `Source indexes were not found` and creates nothing for that missing
+set instead of silently shrinking the operation.
+
+## 0028 — Correlate paste wizards with their tasks
+
+**Status:** Accepted · **Date:** 2026-09-18 · **Raised by:** telemetry review
+
+### Decision
+
+Generate one `copyOperationCorrelationId` for each Paste Indexes or Paste Collection wizard and
+carry it through task configuration to task initialization and execution telemetry. Paste Indexes
+also records the copied scope and confirmed selected count on the wizard event. Carry `copyScope`
+explicitly into `CopyIndexesTask` rather than deriving it from the frozen name list.
+
+### Reasoning
+
+Task Service creates telemetry contexts independently from command telemetry. A config value is the
+smallest shared state that can join all three events. After D0027, a parent copy has an explicit name
+array, so deriving scope from array shape would incorrectly label it as a selected subset.
+
+### Alternatives considered
+
+- **Reuse `journeyCorrelationId`.** Rejected because it identifies discovery/tree lineage and can
+  span unrelated commands, not one paste attempt.
+- **Use a plain `correlationId`.** Rejected because the repository has no generic correlation
+  contract and already distinguishes connection and journey IDs by purpose.
+- **Use the task ID.** It does not exist while the wizard event is being populated.
+- **Infer scope from selected-name count.** It cannot distinguish a parent snapshot from an
+  explicitly selected subset of the same size.
+
+### Consequence
+
+Wizard exposure, task initialization, and task outcomes can be joined per operation without
+recording source or target names. Parent-scope analytics remain accurate after the operation freezes
+its confirmed names.

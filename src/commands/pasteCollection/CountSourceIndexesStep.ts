@@ -3,8 +3,9 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { AzureWizardPromptStep } from '@microsoft/vscode-azext-utils';
+import { AzureWizardPromptStep, openUrl, UserCancelledError } from '@microsoft/vscode-azext-utils';
 import * as l10n from '@vscode/l10n';
+import * as vscode from 'vscode';
 import { ext } from '../../extensionVariables';
 import { type PasteCollectionWizardContext } from './PasteCollectionWizardContext';
 import { createIndexCopier } from './createIndexCopier';
@@ -27,6 +28,7 @@ export class CountSourceIndexesStep extends AzureWizardPromptStep<PasteCollectio
             });
         } catch (error) {
             if (error instanceof IndexCountCompleteError) {
+                await this.refuseDocumentAffectingIndexes(context);
                 return;
             }
 
@@ -42,7 +44,7 @@ export class CountSourceIndexesStep extends AzureWizardPromptStep<PasteCollectio
 
     private async loadSourceIndexCount(context: PasteCollectionWizardContext, signal: AbortSignal): Promise<never> {
         try {
-            const summary = await createIndexCopier(context).getSourceIndexSummary(signal);
+            const summary = await createIndexCopier(context).getSourceIndexSummary({ signal });
             context.sourceIndexCount = summary.count;
             context.sourceUniqueIndexNames = summary.uniqueIndexNames;
             context.sourceTtlIndexNames = summary.ttlIndexNames;
@@ -62,5 +64,44 @@ export class CountSourceIndexesStep extends AzureWizardPromptStep<PasteCollectio
         }
 
         throw new IndexCountCompleteError();
+    }
+
+    private async refuseDocumentAffectingIndexes(context: PasteCollectionWizardContext): Promise<void> {
+        const uniqueIndexCount = context.sourceUniqueIndexNames.length;
+        const ttlIndexCount = context.sourceTtlIndexNames.length;
+        if (uniqueIndexCount === 0 && ttlIndexCount === 0) {
+            return;
+        }
+
+        context.telemetry.properties.wizardFailureReason = 'documentAffectingIndexes';
+        context.telemetry.measurements.sourceUniqueIndexCount = uniqueIndexCount;
+        context.telemetry.measurements.sourceTtlIndexCount = ttlIndexCount;
+
+        const indexNames = [...new Set([...context.sourceUniqueIndexNames, ...context.sourceTtlIndexNames])];
+        const detail = [
+            l10n.t(
+                'Collection paste cannot automatically copy TTL or unique indexes because they can delete or reject documents.',
+            ),
+            '',
+            l10n.t('Affected indexes: {0}', indexNames.join(', ')),
+            '',
+            l10n.t('Choose "No, only copy documents", then use Copy Indexes and Paste Indexes separately.'),
+        ].join('\n');
+        const learnMore = l10n.t('Learn More');
+        const selectedAction = await vscode.window.showErrorMessage(
+            l10n.t('Cannot copy TTL or unique indexes with documents'),
+            {
+                modal: true,
+                detail,
+            },
+            learnMore,
+        );
+        if (selectedAction === learnMore) {
+            await openUrl(
+                'https://microsoft.github.io/vscode-documentdb/user-manual/copy-and-paste#why-collection-paste-refuses-ttl-and-unique-indexes',
+            );
+        }
+
+        throw new UserCancelledError();
     }
 }

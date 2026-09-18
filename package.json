@@ -731,6 +731,30 @@
         "title": "Paste Collection…"
       },
       {
+        "//": "Copy Index",
+        "category": "DocumentDB",
+        "command": "vscode-documentdb.command.copyIndex",
+        "title": "Copy Index…"
+      },
+      {
+        "//": "Copy Selected Indexes",
+        "category": "DocumentDB",
+        "command": "vscode-documentdb.command.copySelectedIndexes",
+        "title": "Copy Selected Indexes…"
+      },
+      {
+        "//": "Copy Indexes",
+        "category": "DocumentDB",
+        "command": "vscode-documentdb.command.copyIndexes",
+        "title": "Copy Indexes…"
+      },
+      {
+        "//": "Paste Indexes",
+        "category": "DocumentDB",
+        "command": "vscode-documentdb.command.pasteIndexes",
+        "title": "Paste Indexes…"
+      },
+      {
         "//": "[Query Playground] New Query Playground",
         "category": "DocumentDB",
         "command": "vscode-documentdb.command.playground.new",
@@ -1188,6 +1212,30 @@
           "group": "1@1"
         },
         {
+          "//": "[Indexes] Copy Indexes",
+          "command": "vscode-documentdb.command.copyIndexes",
+          "when": "view =~ /connectionsView|discoveryView|azure(ResourceGroups|FocusView)/ && viewItem =~ /\\btreeitem_indexes\\b/i && viewItem =~ /\\bexperience_(documentDB|mongoRU|mongoDBAtlas)\\b/i && !listMultiSelection",
+          "group": "2@1"
+        },
+        {
+          "//": "[Indexes] Paste Indexes",
+          "command": "vscode-documentdb.command.pasteIndexes",
+          "when": "view =~ /connectionsView|discoveryView|azure(ResourceGroups|FocusView)/ && viewItem =~ /\\btreeitem_indexes\\b/i && viewItem =~ /\\bexperience_(documentDB|mongoRU|mongoDBAtlas)\\b/i && documentdb.hasCopiedIndexes && !listMultiSelection",
+          "group": "2@2"
+        },
+        {
+          "//": "[Index] Copy Index",
+          "command": "vscode-documentdb.command.copyIndex",
+          "when": "view =~ /connectionsView|discoveryView|azure(ResourceGroups|FocusView)/ && viewItem =~ /\\btreeitem_index\\b/i && viewItem =~ /\\bstate_copyable\\b/i && viewItem =~ /\\bexperience_(documentDB|mongoRU|mongoDBAtlas)\\b/i && !listMultiSelection",
+          "group": "2@1"
+        },
+        {
+          "//": "[Index] Copy Selected Indexes",
+          "command": "vscode-documentdb.command.copySelectedIndexes",
+          "when": "view =~ /connectionsView|discoveryView|azure(ResourceGroups|FocusView)/ && viewItem =~ /\\btreeitem_index\\b/i && viewItem =~ /\\bexperience_(documentDB|mongoRU|mongoDBAtlas)\\b/i && listMultiSelection",
+          "group": "2@1"
+        },
+        {
           "//": "[Index] Hide Index",
           "command": "vscode-documentdb.command.hideIndex",
           "when": "view =~ /connectionsView|discoveryView|azure(ResourceGroups|FocusView)/ && viewItem =~ /\\btreeitem_index\\b/i && !(viewItem =~ /\\bstate_hidden\\b/i) && !(viewItem =~ /\\bstate_default\\b/i) && viewItem =~ /\\bexperience_(documentDB|mongoRU|mongoDBAtlas)\\b/i && !listMultiSelection",
@@ -1453,6 +1501,30 @@
         },
         {
           "command": "vscode-documentdb.command.dropIndex",
+          "when": "never"
+        },
+        {
+          "command": "vscode-documentdb.command.copyIndex",
+          "when": "never"
+        },
+        {
+          "command": "vscode-documentdb.command.copySelectedIndexes",
+          "when": "never"
+        },
+        {
+          "command": "vscode-documentdb.command.copyIndexes",
+          "when": "never"
+        },
+        {
+          "command": "vscode-documentdb.command.pasteIndexes",
+          "when": "never"
+        },
+        {
+          "command": "vscode-documentdb.command.copyCollection",
+          "when": "never"
+        },
+        {
+          "command": "vscode-documentdb.command.pasteCollection",
           "when": "never"
         },
         {
