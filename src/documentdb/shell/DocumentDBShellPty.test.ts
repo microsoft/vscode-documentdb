@@ -674,6 +674,56 @@ describe('DocumentDBShellPty', () => {
         });
     });
 
+    describe('ghost text — empty prefix at `db.`', () => {
+        /** Dim + gray prefix emitted by ShellGhostText. */
+        const GHOST_STYLE = '\x1b[2m\x1b[90m';
+        const afterGhostDebounce = (): Promise<void> => new Promise((resolve) => setTimeout(resolve, 80));
+
+        /**
+         * `db.` always returns every database method alongside the collections,
+         * so it is never a single candidate.
+         */
+        function mockDbDotCandidates(collectionNames: string[]): void {
+            jest.spyOn(ShellCompletionProvider.prototype, 'getCompletions').mockReturnValue({
+                candidates: [
+                    ...collectionNames.map((name) => ({
+                        label: name,
+                        insertText: name,
+                        kind: 'collection' as const,
+                    })),
+                    { label: 'getName', insertText: 'getName', kind: 'method' as const },
+                    { label: 'runCommand', insertText: 'runCommand', kind: 'method' as const },
+                ],
+                prefix: '',
+                replacementStart: 3,
+            });
+        }
+
+        beforeEach(async () => {
+            pty.open(undefined);
+            await new Promise((resolve) => setTimeout(resolve, 10));
+            written = '';
+        });
+
+        it('suggests the sole collection even though nothing has been typed after the dot', async () => {
+            mockDbDotCandidates(['restaurants']);
+
+            pty.handleInput('db.');
+            await afterGhostDebounce();
+
+            expect(written).toContain(`${GHOST_STYLE}restaurants`);
+        });
+
+        it('stays silent when more than one collection could be meant', async () => {
+            mockDbDotCandidates(['restaurants', 'reviews']);
+
+            pty.handleInput('db.');
+            await afterGhostDebounce();
+
+            expect(written).not.toContain(GHOST_STYLE);
+        });
+    });
+
     describe('prompt width — display columns, not UTF-16 units', () => {
         it('positions the cursor past a wide-character database name', async () => {
             // '日本語> ' is 5 UTF-16 code units but 8 terminal columns: each CJK

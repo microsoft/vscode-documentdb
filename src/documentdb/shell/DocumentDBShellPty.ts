@@ -1202,9 +1202,8 @@ export class DocumentDBShellPty implements vscode.Pseudoterminal {
         // in order: an insertable completion, then the bracket-notation preview,
         // then the candidate's description, then the schema hint, then closing
         // brackets.
-        if (result.candidates.length === 1 && result.prefix.length > 0) {
-            const candidate = result.candidates[0];
-
+        const candidate = this.ghostCandidate(buffer, cursor, result);
+        if (candidate) {
             // Accepting this candidate would rewrite text the user already typed
             // (bracket notation, quoted field paths, special-char collections),
             // which ghost text cannot represent because it only ever appends.
@@ -1286,6 +1285,28 @@ export class DocumentDBShellPty implements vscode.Pseudoterminal {
         }
 
         this.clearGhostState();
+    }
+
+    /**
+     * The single candidate ghost text should speak for, if there is one.
+     *
+     * With a typed prefix that is simply the sole match. At an empty prefix only
+     * `db.` qualifies: it always returns every database method alongside the
+     * collections, so it is never a single candidate — but if exactly one of
+     * those candidates is a collection, that is unambiguously what the user
+     * means by `db.` and is worth suggesting.
+     */
+    private ghostCandidate(buffer: string, cursor: number, result: CompletionResult): CompletionCandidate | undefined {
+        if (result.prefix.length > 0) {
+            return result.candidates.length === 1 ? result.candidates[0] : undefined;
+        }
+
+        if (this._completionProvider.detectContext(buffer, cursor).kind !== 'db-dot') {
+            return undefined;
+        }
+
+        const collections = result.candidates.filter((c) => c.kind === 'collection');
+        return collections.length === 1 ? collections[0] : undefined;
     }
 
     /**
