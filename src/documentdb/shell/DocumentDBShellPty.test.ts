@@ -214,6 +214,38 @@ describe('DocumentDBShellPty', () => {
             expect(written).toContain(`Authentication: ${expectedLabel}`);
         });
 
+        it('should display an optional account name as the identity', async () => {
+            mockInitialize.mockResolvedValueOnce({
+                host: 'test-host.documents.azure.com:10255',
+                authMechanism: 'MicrosoftEntraID',
+                isEmulator: false,
+                displayName: 'alex@contoso.com',
+            });
+
+            pty.open(undefined);
+            await new Promise((resolve) => setTimeout(resolve, 10));
+
+            expect(written).toContain(
+                'Identity: alex@contoso.com | Authentication: Microsoft Entra ID (Account) | Database: testdb',
+            );
+        });
+
+        it('should display a SCRAM username as the identity', async () => {
+            mockInitialize.mockResolvedValueOnce({
+                host: 'test-host.documents.azure.com:10255',
+                authMechanism: 'NativeAuth',
+                isEmulator: false,
+                username: 'app-user',
+            });
+
+            pty.open(undefined);
+            await new Promise((resolve) => setTimeout(resolve, 10));
+
+            expect(written).toContain(
+                'Identity: app-user | Authentication: Username and Password (SCRAM) | Database: testdb',
+            );
+        });
+
         it('should show error and stay open on connection failure', async () => {
             mockInitialize.mockRejectedValue(new Error('Connection refused'));
             pty.open(undefined);

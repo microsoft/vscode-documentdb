@@ -44,6 +44,8 @@ export interface ShellConnectionMetadata {
     readonly isEmulator: boolean;
     /** Username for SCRAM auth (undefined for Entra ID). */
     readonly username: string | undefined;
+    /** Optional human-readable name of the authenticated identity. */
+    readonly displayName?: string;
 }
 
 /**
@@ -82,6 +84,8 @@ export class ShellSessionManager implements vscode.Disposable {
     private _activeDatabase: string;
     /** Auth mechanism used for the current session (set after init). */
     private _authMethod: 'NativeAuth' | 'MicrosoftEntraID' | 'ManagedIdentity' | 'NoAuth' | undefined;
+    /** Human-readable identity name resolved during authentication, when available. */
+    private _displayName: string | undefined;
 
     constructor(connectionInfo: ShellConnectionInfo, callbacks?: ShellSessionCallbacks) {
         this._connectionInfo = connectionInfo;
@@ -185,6 +189,7 @@ export class ShellSessionManager implements vscode.Disposable {
                 CredentialCache.getCredentials(this._connectionInfo.clusterId)?.emulatorConfiguration?.isEmulator ??
                 false,
             username,
+            displayName: this._displayName,
         };
     }
 
@@ -354,6 +359,7 @@ export class ShellSessionManager implements vscode.Disposable {
                 }
 
                 accessToken = session.accessToken;
+                this._displayName = session.account.label || undefined;
             }
 
             postResponse({

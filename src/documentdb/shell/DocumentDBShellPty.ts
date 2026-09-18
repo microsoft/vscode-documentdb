@@ -510,12 +510,13 @@ export class DocumentDBShellPty implements vscode.Pseudoterminal {
 
             this.writeLine(this._outputFormatter.formatSystemMessage(l10n.t('Connected to: {0}', hostLabel)));
 
-            if (metadata.username) {
+            const identity = metadata.username ?? metadata.displayName;
+            if (identity) {
                 this.writeLine(
                     this._outputFormatter.formatSystemMessage(
                         l10n.t(
-                            'User: {0} | Authentication: {1} | Database: {2}',
-                            metadata.username,
+                            'Identity: {0} | Authentication: {1} | Database: {2}',
+                            identity,
                             authLabel,
                             this._currentDatabase,
                         ),
