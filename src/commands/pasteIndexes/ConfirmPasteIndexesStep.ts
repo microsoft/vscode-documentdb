@@ -12,6 +12,11 @@ export class ConfirmPasteIndexesStep extends AzureWizardPromptStep<PasteIndexesW
         const action = vscode.l10n.t('Paste Indexes');
         const detail = this.buildConfirmationDetail(context);
         const hasDocumentAffectingIndexes = context.uniqueIndexNames.length > 0 || context.ttlIndexNames.length > 0;
+        context.telemetry.properties.uniqueIndexWarningShown =
+            context.uniqueIndexNames.length > 0 ? 'true' : 'false';
+        context.telemetry.properties.ttlIndexWarningShown = context.ttlIndexNames.length > 0 ? 'true' : 'false';
+        context.telemetry.measurements.sourceUniqueIndexCount = context.uniqueIndexNames.length;
+        context.telemetry.measurements.sourceTtlIndexCount = context.ttlIndexNames.length;
         const response = hasDocumentAffectingIndexes
             ? await vscode.window.showWarningMessage(
                   vscode.l10n.t('Paste indexes into "{0}"?', context.target.collectionName),
@@ -84,7 +89,7 @@ export class ConfirmPasteIndexesStep extends AzureWizardPromptStep<PasteIndexesW
         lines.push(
             '',
             vscode.l10n.t(
-                'Equivalent indexes are skipped, name collisions are renamed, and cancellation does not remove indexes already created.',
+                'Equivalent indexes and same-key option conflicts are skipped, different-key name collisions are renamed, and cancellation does not remove indexes already created.',
             ),
         );
         if (context.uniqueIndexNames.length > 0) {

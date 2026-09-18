@@ -329,6 +329,17 @@ still shows a TTL or unique warning, so `ConfirmOperationStep` needs nothing her
 signal for the collection flow is the refusal itself — the `wizardFailureReason` and counts listed
 under D3. Implement both at the same time so the two flows stay comparable in the data.
 
+**Resolution progress (commit `feat(telemetry): record index warning exposure`):** implemented on
+the dedicated confirmation event. `uniqueIndexWarningShown` and `ttlIndexWarningShown` are explicit
+boolean properties; `sourceUniqueIndexCount` and `sourceTtlIndexCount` are zero-inclusive
+measurements matching the collection-refusal event. Existing `operationConfirmed` distinguishes
+warnings that were accepted from those dismissed. Index names are not emitted.
+
+**Alternatives evaluated:** sending names was rejected as unnecessary user-derived data; one
+combined document-affecting flag could not separate deletion and rejection risk; task-only
+telemetry occurs after confirmation and cannot measure dismissed warnings. Reusing
+`operationConfirmed` avoids a redundant pair of warning-confirmed fields.
+
 ### T2 — `renamedIndexCount` does not isolate the risky rename
 
 **Severity:** Medium. Without this there is no field evidence for how often D1 actually fires.

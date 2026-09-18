@@ -45,7 +45,9 @@ describe('ConfirmPasteIndexesStep', () => {
     });
 
     it('shows parent catalog counts and itemized exclusions', async () => {
-        await new ConfirmPasteIndexesStep().prompt(createContext({ kind: 'allIndexes' }));
+        const context = createContext({ kind: 'allIndexes' });
+
+        await new ConfirmPasteIndexesStep().prompt(context);
 
         const options = showInformationMessage.mock.calls[0][1];
         expect(options.detail).toContain('2 of 4 indexes will be copied.');
@@ -54,6 +56,16 @@ describe('ConfirmPasteIndexesStep', () => {
         );
         expect(options.detail).toContain('"search" (search index - recreate it manually on the target)');
         expect(options.detail).toContain('Search-index exclusions are best-effort');
+        expect(options.detail).toContain('same-key option conflicts are skipped');
+        expect(context.telemetry.properties).toMatchObject({
+            uniqueIndexWarningShown: 'false',
+            ttlIndexWarningShown: 'false',
+            operationConfirmed: 'true',
+        });
+        expect(context.telemetry.measurements).toMatchObject({
+            sourceUniqueIndexCount: 0,
+            sourceTtlIndexCount: 0,
+        });
     });
 
     it('shows only the selected index and selected warnings for a single-index copy', async () => {
@@ -84,6 +96,15 @@ describe('ConfirmPasteIndexesStep', () => {
         expect(options.detail).toContain('may delete expired documents already in the target collection');
         expect(options.detail).not.toContain('2 of 4');
         expect(options.detail).not.toContain('Not copied:');
+        expect(context.telemetry.properties).toMatchObject({
+            uniqueIndexWarningShown: 'true',
+            ttlIndexWarningShown: 'true',
+            operationConfirmed: 'true',
+        });
+        expect(context.telemetry.measurements).toMatchObject({
+            sourceUniqueIndexCount: 1,
+            sourceTtlIndexCount: 1,
+        });
     });
 
     it('uses dedicated TTL wording about existing target data', async () => {
@@ -123,7 +144,9 @@ describe('ConfirmPasteIndexesStep', () => {
 
     it('cancels before execution when confirmation is dismissed', async () => {
         showInformationMessage.mockResolvedValue(undefined);
+        const context = createContext({ kind: 'allIndexes' });
 
-        await expect(new ConfirmPasteIndexesStep().prompt(createContext({ kind: 'allIndexes' }))).rejects.toThrow();
+        await expect(new ConfirmPasteIndexesStep().prompt(context)).rejects.toThrow();
+        expect(context.telemetry.properties.operationConfirmed).toBe('false');
     });
 });
