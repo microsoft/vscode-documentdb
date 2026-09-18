@@ -174,7 +174,7 @@ is luxury 5 / usefulness 3. Both are worth doing; they are not worth doing _in t
 | F2  | Ghost text paints over real text mid-buffer    | XS         | 4   | 1   | Fix       | Shipped `88ef37c5` |
 | F3  | Completion list measured with `String.length`  | S          | 3   | 1   | Fix       | Shipped `eb988c4b` |
 | F4  | Prompt width measured with `String.length`     | XS         | 2   | 1   | Fix       | Shipped `412722bf` |
-| F5  | Shell `help` hard-coded to ~62 columns         | S          | 3   | 2   | Fix       | —                  |
+| F5  | Shell `help` hard-coded to ~62 columns         | S          | 3   | 2   | Fix       | Shipped `d4a2c765` |
 | F6  | Banner and logo drawn at an assumed 80 columns | S          | 1   | 1   | Won't fix | —                  |
 | I1a | Bracket-notation preview hint                  | S          | 4   | 3   | Fix       | —                  |
 | I1b | Replacement-aware ghost text                   | M          | 4   | 5   | Won't fix | —                  |
@@ -436,6 +436,61 @@ the same cost, since it owns the layout and imports no `vscode`.
 | Complexity | Usefulness | Luxury |
 | ---------- | ---------- | ------ |
 | S          | 3          | 2      |
+
+### Shipped — commit `d4a2c765`
+
+**Built in `HelpProvider`, as directed.** But the phrase "at the same cost" is not right, and the
+reason is worth recording because it would have changed the estimate: **`HelpProvider` runs in the
+worker thread.** `DocumentDBShellRuntime` constructs it, and that whole runtime lives behind
+`WorkerSessionManager`. The terminal width lives in `DocumentDBShellPty`, in the extension host.
+So "give `HelpProvider` a column count" is a cross-thread change, which `colorizeHelpText()` would
+not have been.
+
+**It is still cheap, because the width did not need a resize protocol.** There is already a per-eval
+message carrying `displayBatchSize` from the host to the worker. The width rides along on it:
+
+```
+DocumentDBShellPty._columns
+  → ShellSessionManager.evaluate(code, terminalColumns)
+  → MainToWorkerMessage 'eval'.terminalColumns
+  → playgroundWorker → ShellEvalOptions.terminalColumns
+  → DocumentDBShellRuntime.evaluate
+  → CommandInterceptor.tryIntercept(code, columns)
+  → HelpProvider.getHelpResult(columns)
+```
+
+Seven files, every one of them a one-liner except `HelpProvider` itself. The width is sampled at the
+moment `help` is evaluated, which is the only moment it matters — no resize listener, no stale value.
+The field is optional, so the playground path is untouched.
+
+**Layout.** `buildShellHelp()` now builds a `ShellHelpLine[]` (header / blank / entry / tip) and
+`layoutShellHelp()` renders it for a width:
+
+- the command column is sized to the **widest command** (34) rather than a fixed 40, which returns
+  6 columns to every line before anything else happens;
+- descriptions wrap with a hanging indent aligned to the description column;
+- below `MIN_DESCRIPTION_WIDTH = 12` usable columns for the description (≈ 50 terminal columns) the
+  two-column layout is abandoned and entries **stack** — command, then description indented beneath.
+  A description that wraps every two words is worse than one on its own line;
+- the tip line wraps too, rather than relying on the terminal to soft-wrap it.
+
+`ShellOutputFormatter` is unchanged: it still only applies colour. Its entry regex
+(`^( {2})(\S.*\S)( {2,})(\S.+)$`) continues to match two-column entries, and wrapped continuation
+lines fall through to the gray "tip" branch, which is the colour they want anyway.
+
+**Known cosmetic consequence, accepted.** In stacked mode the command line has no trailing
+description, so it no longer matches the entry regex and renders gray rather than yellow. Fixing it
+means teaching the formatter a third line shape; not worth it for terminals under 50 columns, and
+not this item.
+
+Five tests in `HelpProvider.test.ts` (longest line fits at 40/50/60/80/120; exact command-column
+position at 80; stacking at 40; tip wrapping at 40; the 80-column default) and one in
+`DocumentDBShellPty.test.ts` asserting the resized width actually reaches `evaluate()`.
+
+**Existing assertions updated, not weakened.** Seven `expect(mockEvaluate).toHaveBeenCalledWith(code)`
+assertions in `DocumentDBShellPty.test.ts` now also assert the forwarded width — `(code, 80)`. That
+is a strictly stronger assertion, and it is why the change shows up in tests it does not otherwise
+touch.
 
 ## I1. The reported gap: ghost text for bracket-notation collections
 
