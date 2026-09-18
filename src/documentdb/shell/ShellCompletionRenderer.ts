@@ -12,6 +12,7 @@
  */
 
 import { type CompletionCandidate } from './ShellCompletionProvider';
+import { clipToDisplayWidth, terminalDisplayWidth } from './terminalDisplayWidth';
 
 // ─── ANSI constants ──────────────────────────────────────────────────────────
 
@@ -30,6 +31,29 @@ const MIN_COLUMN_WIDTH = 4;
 
 /** Padding between columns. */
 const COLUMN_PADDING = 2;
+
+/** Appended when a label is too wide to fit its column. */
+const ELLIPSIS = '…';
+
+/**
+ * Truncate a label to `maxWidth` display columns, marking the cut with an ellipsis.
+ */
+function clipLabel(label: string, maxWidth: number): string {
+    if (terminalDisplayWidth(label) <= maxWidth) {
+        return label;
+    }
+    return clipToDisplayWidth(label, maxWidth - 1) + ELLIPSIS;
+}
+
+/**
+ * Pad a label to `width` display columns. `String.padEnd` counts UTF-16 code
+ * units and would under-pad any label containing wide or non-BMP characters,
+ * misaligning every column to its right.
+ */
+function padToDisplayWidth(label: string, width: number): string {
+    const padding = width - terminalDisplayWidth(label);
+    return padding > 0 ? label + ' '.repeat(padding) : label;
+}
 
 /**
  * Returns the ANSI color code for a completion candidate kind.
@@ -94,11 +118,15 @@ export function renderCompletionList(candidates: readonly CompletionCandidate[],
         return '';
     }
 
-    // Build display labels (methods get `()` suffix for visual distinction)
-    const displayLabels = candidates.map(formatDisplayLabel);
+    // Build display labels (methods get `()` suffix for visual distinction).
+    // Labels wider than a single column are clipped: without that, colWidth can
+    // exceed terminalWidth, numCols collapses to 1, every entry soft-wraps and
+    // MAX_DISPLAY_ROWS no longer bounds the number of physical rows.
+    const maxLabelWidth = Math.max(MIN_COLUMN_WIDTH, terminalWidth - COLUMN_PADDING);
+    const displayLabels = candidates.map((c) => clipLabel(formatDisplayLabel(c), maxLabelWidth));
 
-    // Calculate column width from longest display label
-    const maxLabelLen = Math.max(...displayLabels.map((l) => l.length));
+    // Calculate column width from the widest display label
+    const maxLabelLen = Math.max(...displayLabels.map((l) => terminalDisplayWidth(l)));
     const colWidth = Math.max(maxLabelLen + COLUMN_PADDING, MIN_COLUMN_WIDTH);
 
     // Calculate number of columns that fit
@@ -127,7 +155,7 @@ export function renderCompletionList(candidates: readonly CompletionCandidate[],
             const color = getKindColor(candidate.kind);
 
             // Pad to column width (except last column)
-            const paddedLabel = col < numCols - 1 ? label.padEnd(colWidth) : label;
+            const paddedLabel = col < numCols - 1 ? padToDisplayWidth(label, colWidth) : label;
             output += color + paddedLabel + ANSI_RESET;
         }
     }

@@ -90,6 +90,36 @@ describe('ShellCompletionRenderer', () => {
             expect(output).toContain('shortname');
             expect(output).toContain('anothername');
         });
+
+        it('should align columns by display width, not UTF-16 length', () => {
+            // '寿司' is 2 code units but 4 terminal columns. Padding with
+            // String.padEnd would emit 2 spaces too many and push the second
+            // column of every row out of alignment.
+            const candidates = [makeCandidate('寿司'), makeCandidate('users'), makeCandidate('orders')];
+            const output = renderCompletionList(candidates, 80);
+
+            // Widest label is 'orders' (6) → colWidth 8. '寿司' occupies 4
+            // columns, so it must be followed by exactly 4 spaces.
+            expect(output).toContain('寿司    \x1b[0m');
+            expect(output).not.toContain('寿司      \x1b[0m');
+        });
+
+        it('should clip a label that is wider than the terminal', () => {
+            const longLabel = 'a'.repeat(60);
+            const candidates = [makeCandidate(longLabel), makeCandidate('users')];
+            const output = renderCompletionList(candidates, 20);
+
+            // No rendered row may be wide enough to soft-wrap, which would break
+            // the MAX_DISPLAY_ROWS bound on physical rows.
+            const rows = output.split('\r\n').filter((r) => r.length > 0);
+            for (const row of rows) {
+                // eslint-disable-next-line no-control-regex
+                const visible = row.replace(/\x1b\[\d+m/g, '');
+                expect(visible.length).toBeLessThanOrEqual(20);
+            }
+            expect(output).toContain('…');
+            expect(output).not.toContain(longLabel);
+        });
     });
 
     describe('findCommonPrefix', () => {
