@@ -825,6 +825,122 @@ describe('DocumentDBShellPty', () => {
         });
     });
 
+    describe('Tab versus ghost text — which key owns which job', () => {
+        const afterGhostDebounce = (): Promise<void> => new Promise((resolve) => setTimeout(resolve, 80));
+
+        const DATABASES = ['Copies', 'MyDatabase', 'SecondDatabase', 'Yelp'];
+
+        /** `use ` offers every database, at an empty prefix. */
+        function mockDatabaseCandidates(): void {
+            jest.spyOn(ShellCompletionProvider.prototype, 'getCompletions').mockReturnValue({
+                candidates: DATABASES.map((name) => ({
+                    label: name,
+                    insertText: name,
+                    kind: 'database' as const,
+                })),
+                prefix: '',
+                replacementStart: 4,
+            });
+        }
+
+        beforeEach(async () => {
+            pty.open(undefined);
+            await new Promise((resolve) => setTimeout(resolve, 10));
+            mockEvaluate.mockResolvedValue({ type: 'string', printable: '"x"', durationMs: 1 });
+            written = '';
+        });
+
+        it('lists the databases at `use ` even while a history suggestion is showing', async () => {
+            mockDatabaseCandidates();
+
+            pty.handleInput('use MyDatabase');
+            pty.handleInput('\r');
+            await new Promise((resolve) => setTimeout(resolve, 20));
+
+            pty.handleInput('use ');
+            await afterGhostDebounce();
+            written = '';
+
+            pty.handleInput('\x09'); // Tab
+
+            for (const name of DATABASES) {
+                expect(written).toContain(name);
+            }
+        });
+
+        it('accepts the history suggestion on Right Arrow', async () => {
+            mockDatabaseCandidates();
+
+            pty.handleInput('use MyDatabase');
+            pty.handleInput('\r');
+            await new Promise((resolve) => setTimeout(resolve, 20));
+
+            pty.handleInput('use ');
+            await afterGhostDebounce();
+
+            pty.handleInput('\x1b[C'); // Right Arrow
+            pty.handleInput('\r');
+            await new Promise((resolve) => setTimeout(resolve, 20));
+
+            expect(mockEvaluate).toHaveBeenLastCalledWith('use MyDatabase', 80);
+        });
+
+        it('still accepts a closing-bracket ghost, which has no completion behind it', async () => {
+            jest.spyOn(ShellCompletionProvider.prototype, 'getCompletions').mockReturnValue({
+                candidates: [],
+                prefix: '',
+                replacementStart: 0,
+            });
+            // Keeps the schema hint out of the way, so the closing-bracket
+            // fallback is the ghost under test.
+            jest.spyOn(ShellCompletionProvider.prototype, 'detectContext').mockReturnValue({ kind: 'unknown' });
+
+            pty.handleInput('db.c.find({ _id: 1 ');
+            await afterGhostDebounce();
+
+            pty.handleInput('\x09'); // Tab
+            pty.handleInput('\r');
+            await new Promise((resolve) => setTimeout(resolve, 20));
+
+            expect(mockEvaluate).toHaveBeenLastCalledWith('db.c.find({ _id: 1 })', 80);
+        });
+
+        it('still completes a single candidate whose ghost is showing', async () => {
+            pty.handleInput('hel');
+            await afterGhostDebounce();
+
+            pty.handleInput('\x09'); // Tab
+            pty.handleInput('\r');
+            await new Promise((resolve) => setTimeout(resolve, 20));
+
+            expect(mockEvaluate).toHaveBeenLastCalledWith('help', 80);
+        });
+
+        it('still completes through a non-insertable preview hint', async () => {
+            jest.spyOn(ShellCompletionProvider.prototype, 'getCompletions').mockReturnValue({
+                candidates: [
+                    {
+                        label: 'restaurants-original',
+                        insertText: "['restaurants-original']",
+                        kind: 'collection',
+                        replaceCharsBefore: 1,
+                    },
+                ],
+                prefix: 'rest',
+                replacementStart: 3,
+            });
+
+            pty.handleInput('db.rest');
+            await afterGhostDebounce();
+
+            pty.handleInput('\x09'); // Tab
+            pty.handleInput('\r');
+            await new Promise((resolve) => setTimeout(resolve, 20));
+
+            expect(mockEvaluate).toHaveBeenLastCalledWith("db['restaurants-original']", 80);
+        });
+    });
+
     describe('prompt width — display columns, not UTF-16 units', () => {
         it('positions the cursor past a wide-character database name', async () => {
             // '日本語> ' is 5 UTF-16 code units but 8 terminal columns: each CJK

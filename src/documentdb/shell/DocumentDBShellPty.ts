@@ -1028,23 +1028,34 @@ export class DocumentDBShellPty implements vscode.Pseudoterminal {
     // ─── Private: Tab completion ────────────────────────────────────────────
 
     /**
-     * Handle Tab keypress — provide completions or accept ghost text.
+     * Handle Tab keypress — provide completions, or accept ghost text when
+     * there is nothing to complete.
+     *
+     * Tab belongs to completion; Right Arrow is the key that accepts ghost
+     * text. Accepting an insertable ghost first would swallow the candidate
+     * list whenever both are available — a history suggestion at `use ` hides
+     * the databases, which is exactly what it is meant to help pick.
+     *
+     * The fallback keeps Tab working for the ghosts that have no completion
+     * behind them: closing brackets, and history at a prefix the provider
+     * knows nothing about.
      */
     private handleTab(buffer: string, cursor: number): void {
-        // If insertable ghost text is visible (not a hint), accept it
-        if (this._ghostText.isVisible && !this._ghostTextIsHint) {
-            this.handleAcceptGhostText();
-            return;
-        }
-
-        // Clear hint ghost text if visible (hints are not insertable)
-        if (this._ghostText.isVisible) {
-            this.clearGhostState();
-        }
+        const ghostIsInsertable = this._ghostText.isVisible && !this._ghostTextIsHint;
 
         const result = this.getCompletionResult(buffer, cursor);
         if (result.candidates.length === 0) {
+            if (ghostIsInsertable) {
+                this.handleAcceptGhostText();
+            } else if (this._ghostText.isVisible) {
+                this.clearGhostState();
+            }
             return;
+        }
+
+        // The completion paths below write to the row the ghost occupies.
+        if (this._ghostText.isVisible) {
+            this.clearGhostState();
         }
 
         if (result.candidates.length === 1) {
