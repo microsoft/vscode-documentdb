@@ -176,7 +176,7 @@ is luxury 5 / usefulness 3. Both are worth doing; they are not worth doing _in t
 | F4  | Prompt width measured with `String.length`     | XS         | 2   | 1   | Fix       | Shipped `412722bf` |
 | F5  | Shell `help` hard-coded to ~62 columns         | S          | 3   | 2   | Fix       | Shipped `d4a2c765` |
 | F6  | Banner and logo drawn at an assumed 80 columns | S          | 1   | 1   | Won't fix | —                  |
-| I1a | Bracket-notation preview hint                  | S          | 4   | 3   | Fix       | —                  |
+| I1a | Bracket-notation preview hint                  | S          | 4   | 3   | Fix       | Shipped `a0774f47` |
 | I1b | Replacement-aware ghost text                   | M          | 4   | 5   | Won't fix | —                  |
 | I1c | Ghost text at an empty prefix                  | S          | 3   | 3   | Fix       | —                  |
 | I2  | History-based autosuggestion (capped)          | M          | 4   | 5   | Fix       | —                  |
@@ -527,6 +527,38 @@ rendering model, no change to `clear()`, and the existing width clipping applies
 | Complexity | Usefulness | Luxury |
 | ---------- | ---------- | ------ |
 | S          | 4          | 3      |
+
+### Shipped — commit `a0774f47`
+
+**Built as specified.** The branch in `evaluateGhostText()` that used to call `clearGhostState()` for
+these candidates now calls `showCompletionPreviewHint()` instead. That is the whole behavioural
+change; the hint machinery already existed.
+
+**It covers more than bracket notation, and that is deliberate.** The guard being replaced fires for
+any candidate where `insertText` does not start with the typed prefix _or_ `replaceCharsBefore > 0`
+— bracket-notation collections, quoted field paths (`address.ci` → `"address.city"`), special-char
+collections. All three were invisible for the same reason and all three are now advertised the same
+way. Narrowing the hint to bracket notation alone would have meant adding a condition to exclude
+cases that have the identical problem.
+
+**Rendering.** `  → <preview>  (Tab)`, where `preview` is the buffer with the replaced region already
+substituted — computed as `buffer.slice(0, len - (prefix.length + replaceCharsBefore)) + insertText`,
+the same arithmetic `applySingleCompletion()` uses. So the preview is the real result, not a
+reconstruction that can drift from it.
+
+**No `l10n` run.** The hint adds no English prose — an arrow, the preview, and `(Tab)` as a key name.
+Consistent with the sibling `showSchemaHint()`.
+
+Two tests, driving a mocked bracket-notation candidate through
+`ShellCompletionProvider.prototype.getCompletions`:
+
+| Test                                                      | Fails before? |
+| ----------------------------------------------------------- | ------------- |
+| `db.rest` emits `  → db['restaurants-something']  (Tab)`    | yes           |
+| Tab then actually produces `db['restaurants-something']`     | no — it pins the preview to reality |
+
+The second test is the one that matters long-term: an advertisement that lies about what Tab does
+is worse than no advertisement, and that is exactly the class of bug Step 14 was.
 
 ### I1b. Replacement-aware ghost text — rejected
 
