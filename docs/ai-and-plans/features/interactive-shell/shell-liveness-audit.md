@@ -179,7 +179,7 @@ is luxury 5 / usefulness 3. Both are worth doing; they are not worth doing _in t
 | I1a | Bracket-notation preview hint                  | S          | 4   | 3   | Fix       | Shipped `a0774f47` |
 | I1b | Replacement-aware ghost text                   | M          | 4   | 5   | Won't fix | —                  |
 | I1c | Ghost text at an empty prefix                  | S          | 3   | 3   | Fix       | Shipped `a22358b0` |
-| I2  | History-based autosuggestion (capped)          | M          | 4   | 5   | Fix       | —                  |
+| I2  | History-based autosuggestion (capped)          | M          | 4   | 5   | Fix       | Shipped `50e6ba53` |
 | I3  | Ctrl+R reverse history search                  | M          | 3   | 4   | Deferred  | —                  |
 | I4  | Persist history across sessions                | M          | 4   | 2   | Deferred  | —                  |
 | I5  | Inline `detail` hint for the single match      | S          | 4   | 4   | Fix       | Shipped `3b93b204` |
@@ -633,6 +633,48 @@ together means raising one silently raises the cost of the other.
 | Complexity | Usefulness | Luxury |
 | ---------- | ---------- | ------ |
 | M          | 4          | 5      |
+
+### Shipped — commit `50e6ba53`
+
+**Both caps are in from the first commit**, as required. `ShellInputHandler.findHistorySuggestion()`
+scans newest-first over at most `_maxHistorySearch = 100` entries and returns on the first hit.
+The constant sits beside `_maxHistory` and is written as an independent value with the reasoning in
+its doc comment, so a later change to `_maxHistory` cannot silently move it.
+
+**One decision the audit left open: precedence against the completion ghost.** I2 and I5 both want
+the row after the cursor, and the audit set the order for neither. The rule adopted — and now
+written into `evaluateGhostText()` — is **insertable beats informational**:
+
+1. completion ghost (insertable)
+2. bracket-notation preview (informational, but it is the _only_ thing that can be said about that
+   candidate)
+3. **history autosuggestion** (insertable)
+4. candidate description — I5 (informational)
+5. schema hint (informational)
+6. closing brackets (insertable, but only reachable when nothing above matched)
+
+The visible consequence, and the reason the rule is worth stating: typing `db` after running
+`db['restaurants-something'].find()` now offers the whole previous line rather than I5's
+`🛈 Current database`. A suggestion the user can accept with one keypress is worth more than a
+description of a word they have already typed.
+
+**One thing deliberately excluded: multi-line history entries.** `_history` stores multi-line
+expressions with embedded `\n`, and `replaceLineWith()` flattens them to spaces for Up-arrow recall.
+Ghost text has no such step — `insertText()` would put a raw newline into a single-line buffer.
+Entries containing `\n` are skipped. Flattening them instead would suggest a command that differs
+from what was actually run, which is the I1a "advertisement that lies" failure again.
+
+**Telemetry** follows the closing-brackets pair exactly: `shell.historySuggestion` with `shown` and
+`accepted` measurements, and a `_ghostTextIsHistory` flag so the accept path can attribute
+correctly. Without it, accepted history suggestions would have been counted as nothing at all.
+
+Seven tests, five on the cap and match semantics (`ShellInputHandler.test.ts`) and three on the
+rendered result (`DocumentDBShellPty.test.ts`: it suggests, it yields to a completion candidate, and
+Right Arrow inserts exactly the remembered command).
+
+**I4 remains deferred and this does not change that.** Session-scoped history was always enough for
+I2 — the array already exists and is already populated. I4 only makes it survive a restart, and its
+blocker is redaction, not storage.
 
 ## I5. Show `detail` for the single-candidate case
 
