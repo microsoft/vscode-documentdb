@@ -151,16 +151,16 @@ flowchart TD
 
 **Interaction inventory**
 
-| # | User action (entry) | Where it lives | Terminal state(s) | Surface | ⚠️ |
-| - | ------------------- | -------------- | ----------------- | ------- | -- |
-| 1 | Copy Collection on a collection | [package.json](../../../../../package.json#L1306) | Marker stored; ready-to-paste toast; Cancel Copy clears it | Tree + toast | |
-| 2 | Paste Collection on a database | [package.json](../../../../../package.json#L1150) | Name, index choice, confirmation, then task; or modal/error/cancel | Tree + wizard + task notification | |
-| 3 | Paste Collection on a collection | [package.json](../../../../../package.json#L1312) | Conflict choice, index choice, confirmation, then task; or modal/error/cancel | Tree + wizard + task notification | |
-| 4 | Copy Index on one copyable index | [package.json](../../../../../package.json#L1228) | Marker stored and ready-to-paste toast; defensive errors for unsupported rows | Tree + toast | |
-| 5 | Copy Selected Indexes on a multi-selection | [package.json](../../../../../package.json#L1234) | Copyable same-collection subset stored; invalid source mix errors | Tree + toast | ⚠️ 4 |
-| 6 | Copy Indexes on an Indexes parent | [package.json](../../../../../package.json#L1216) | Live parent scope stored without loading the catalog | Tree + toast | ⚠️ 1 |
-| 7 | Paste Indexes on a target Indexes parent | [package.json](../../../../../package.json#L1222) | Load, modal confirmation, task progress, then completion/stopped/error notification | Tree + wizard + task notification | ⚠️ 1, 2, 5 |
-| 8 | Cancel a running task | [taskProgressReportingService.ts](../../../../../src/services/taskService/UI/taskProgressReportingService.ts#L103) | Stopping progress, then stopped notification | Progress notification + output | ⚠️ 2 |
+| #   | User action (entry)                        | Where it lives                                                                                                     | Terminal state(s)                                                                   | Surface                           | ⚠️         |
+| --- | ------------------------------------------ | ------------------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------- | --------------------------------- | ---------- |
+| 1   | Copy Collection on a collection            | [package.json](../../../../../package.json#L1306)                                                                  | Marker stored; ready-to-paste toast; Cancel Copy clears it                          | Tree + toast                      |            |
+| 2   | Paste Collection on a database             | [package.json](../../../../../package.json#L1150)                                                                  | Name, index choice, confirmation, then task; or modal/error/cancel                  | Tree + wizard + task notification |            |
+| 3   | Paste Collection on a collection           | [package.json](../../../../../package.json#L1312)                                                                  | Conflict choice, index choice, confirmation, then task; or modal/error/cancel       | Tree + wizard + task notification |            |
+| 4   | Copy Index on one copyable index           | [package.json](../../../../../package.json#L1228)                                                                  | Marker stored and ready-to-paste toast; defensive errors for unsupported rows       | Tree + toast                      |            |
+| 5   | Copy Selected Indexes on a multi-selection | [package.json](../../../../../package.json#L1234)                                                                  | Copyable same-collection subset stored; invalid source mix errors                   | Tree + toast                      | ⚠️ 4       |
+| 6   | Copy Indexes on an Indexes parent          | [package.json](../../../../../package.json#L1216)                                                                  | Live parent scope stored without loading the catalog                                | Tree + toast                      | ⚠️ 1       |
+| 7   | Paste Indexes on a target Indexes parent   | [package.json](../../../../../package.json#L1222)                                                                  | Load, modal confirmation, task progress, then completion/stopped/error notification | Tree + wizard + task notification | ⚠️ 1, 2, 5 |
+| 8   | Cancel a running task                      | [taskProgressReportingService.ts](../../../../../src/services/taskService/UI/taskProgressReportingService.ts#L103) | Stopping progress, then stopped notification                                        | Progress notification + output    | ⚠️ 2       |
 
 ## The story in one paragraph
 
@@ -173,13 +173,13 @@ reconsideration if usage grows.
 
 ## Priority index
 
-| # | Priority | Item | Status |
-| - | -------- | ---- | ------ |
-| 1 | **P1** | A known-empty index selection can report success | 🚫 Closed |
-| 2 | **P1** | Stopped notification hides partial target changes | 🚫 Closed |
-| 3 | **P2** | TTL/unique refusal forces a full wizard restart | 🚫 Closed |
-| 4 | **P2** | Mixed selection silently omits unsupported rows | 🚫 Closed |
-| 5 | **P2** | Dedicated paste result summary is replaced immediately | 🚫 Closed |
+| #   | Priority | Item                                                   | Status    |
+| --- | -------- | ------------------------------------------------------ | --------- |
+| 1   | **P1**   | A known-empty index selection can report success       | 🚫 Closed |
+| 2   | **P1**   | Stopped notification hides partial target changes      | 🚫 Closed |
+| 3   | **P2**   | TTL/unique refusal forces a full wizard restart        | 🚫 Closed |
+| 4   | **P2**   | Mixed selection silently omits unsupported rows        | 🚫 Closed |
+| 5   | **P2**   | Dedicated paste result summary is replaced immediately | 🚫 Closed |
 
 ## P0 - Blocking (the user gets stuck)
 
@@ -225,7 +225,7 @@ non-issue at present usage.
 - ⚠️ Confirmation warns that cancellation does not remove created indexes
   ([ConfirmPasteIndexesStep.ts](../../../../../src/commands/pasteIndexes/ConfirmPasteIndexesStep.ts#L83)).
 - ⚠️ The task computes the useful terminal detail - `Stopped after X/Y indexes. Created indexes
-  remain on the target.` - and writes it to progress and the output channel
+remain on the target.` - and writes it to progress and the output channel
   ([CopyIndexesTask.ts](../../../../../src/services/taskService/tasks/copy-indexes/CopyIndexesTask.ts#L115)).
 - ⚠️ The shared terminal notification ignores that status detail and only says the named task
   `was stopped` ([taskProgressReportingService.ts](../../../../../src/services/taskService/UI/taskProgressReportingService.ts#L321)).
@@ -324,13 +324,13 @@ next one; nothing is dropped without a terminal status.
 
 ### Iteration 1
 
-| # | Item | Decision (why) | Outcome |
-| - | ---- | -------------- | ------- |
-| 1 | Empty index selection | Current behavior is acceptable at present usage | 🚫 Closed - revisit if usage grows |
-| 2 | Partial-state cancellation feedback | Current feedback is sufficient at present usage | 🚫 Closed - revisit if usage grows |
-| 3 | TTL/unique restart flow | Additional recovery is not justified at present usage | 🚫 Closed - revisit if usage grows |
-| 4 | Mixed-selection filtering | Retained-count feedback is sufficient at present usage | 🚫 Closed - revisit if usage grows |
-| 5 | Dedicated result summary | Existing task/output feedback is sufficient at present usage | 🚫 Closed - revisit if usage grows |
+| #   | Item                                | Decision (why)                                               | Outcome                            |
+| --- | ----------------------------------- | ------------------------------------------------------------ | ---------------------------------- |
+| 1   | Empty index selection               | Current behavior is acceptable at present usage              | 🚫 Closed - revisit if usage grows |
+| 2   | Partial-state cancellation feedback | Current feedback is sufficient at present usage              | 🚫 Closed - revisit if usage grows |
+| 3   | TTL/unique restart flow             | Additional recovery is not justified at present usage        | 🚫 Closed - revisit if usage grows |
+| 4   | Mixed-selection filtering           | Retained-count feedback is sufficient at present usage       | 🚫 Closed - revisit if usage grows |
+| 5   | Dedicated result summary            | Existing task/output feedback is sufficient at present usage | 🚫 Closed - revisit if usage grows |
 
 ## Open ideas - options, pros & cons
 
@@ -339,11 +339,11 @@ not decisions.
 
 ### O1. How should a zero-copyable parent scope terminate? (item 1)
 
-| Option | Pros | Cons |
-| ------ | ---- | ---- |
-| **A. Stop after loading with an informational modal** | No false-success task; exclusions can remain visible | Adds a distinct terminal surface |
-| **B. Return to the target tree with a toast** | Fast exit; consistent with command-level validation | Exclusion detail may be harder to inspect |
-| **C. Keep the confirmation and relabel the action** | Preserves the current flow and source/target detail | Still creates a task that cannot change the target |
+| Option                                                | Pros                                                 | Cons                                               |
+| ----------------------------------------------------- | ---------------------------------------------------- | -------------------------------------------------- |
+| **A. Stop after loading with an informational modal** | No false-success task; exclusions can remain visible | Adds a distinct terminal surface                   |
+| **B. Return to the target tree with a toast**         | Fast exit; consistent with command-level validation  | Exclusion detail may be harder to inspect          |
+| **C. Keep the confirmation and relabel the action**   | Preserves the current flow and source/target detail  | Still creates a task that cannot change the target |
 
 > 💡 **Suggested:** Option A, because the wizard already has the complete exclusion report and can
 > explain why no operation will run.

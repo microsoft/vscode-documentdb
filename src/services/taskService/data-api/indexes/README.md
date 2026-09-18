@@ -32,7 +32,7 @@ connection handling. `DocumentDbCollectionEndpoint` remains an alias for existin
 `DocumentDbCollectionIndexCopier` owns:
 
 - validating source connection availability and collection existence at copy execution time, before
-    acquiring the target client;
+  acquiring the target client;
 - reading the collection's index catalog through `ClustersClient`;
 - including the built-in `_id` index in the source catalog summary count;
 - excluding the built-in `_id` index from copying and copy progress;
