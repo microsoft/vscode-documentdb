@@ -138,7 +138,8 @@ cross-cutting summary and lessons. `# Deferred` and `# Won't fix` are untouched.
 
 **Using the shipped build surfaced three more things** — one regression, one design question since
 decided, and one operator request. They are in [Found after Step 15](#found-after-step-15) as
-N1–N3. None is built. Build order is **N1, then N2, then N3**.
+N1–N3. **All three are now built**, in that order, each with its own `### Shipped — commit <sha>`
+subsection.
 
 ## Note: the future standalone shell
 
@@ -197,7 +198,7 @@ is luxury 5 / usefulness 3. Both are worth doing; they are not worth doing _in t
 | I10 | Make `reRenderLine()` ghost-aware              | M          | 3   | 1   | Deferred  | —                  |
 | N1  | Insertable ghosts steal Tab from the list      | S          | 5   | 1   | Fix       | Shipped `829788c1` |
 | N2  | Hint markers, and what `db.` should say        | S          | 4   | 4   | Fix       | Shipped `5526f566` |
-| N3  | Setting to turn the inline hints off           | S          | 4   | 2   | **Open**  | Operator request   |
+| N3  | Setting to turn the inline hints off           | S          | 4   | 2   | Fix       | Shipped `3dc5b368` |
 
 Two entries changed shape during triage. **I7** moved to Deferred once it became clear that the
 version worth having (list stays visible, Tab moves a highlight through it) needs I10 as a
@@ -205,8 +206,8 @@ prerequisite — see I7 for the reasoning. **I10** moved the other way: dropping
 driver, then I7 gave it a new one, so it is deferred rather than closed.
 
 **N1–N3 were raised after Step 15 shipped** and are not part of the original triage — see
-[Found after Step 15](#found-after-step-15). **N1 and N2 are shipped**; N3 remains open. N2's
-decision supersedes the shipped I1c, whose empty-prefix rule was removed when N2 was built.
+[Found after Step 15](#found-after-step-15). **All three are shipped.** N2's decision supersedes the
+shipped I1c, whose empty-prefix rule was removed when N2 was built.
 
 F7 and F8 from the first draft were not defects; they are folded into I5 and I4 as supporting
 evidence.
@@ -806,10 +807,10 @@ Raised by the operator while using the shipped build, plus one design question S
 **None of these were triaged in the original audit** — they are consequences of the work, not
 findings about the code as it stood.
 
-**Status: N1 and N2 are shipped; N3 has a plan and is not built.** Build order is **N1 → N2 → N3**,
-and each plan says why it sits there. One ⬜ marker remains — N3's question of whether
-`autocompletion: false` also disables Tab. N2's ⬜ was resolved by building the recommendation; see
-the note under it.
+**Status: all three are shipped.** They were built in the stated order, N1 → N2 → N3. Both ⬜ markers
+were resolved by building the recommendation recorded against them, because no operator ruling was
+available at build time and no competing proposal existed; each is flagged in place with the single
+change that would reverse it.
 
 ## N1. An insertable ghost steals Tab from the completion list
 
@@ -1191,7 +1192,7 @@ Suite: 13 suites, 505 tests, all passing (was 504).
 
 ## N3. A setting to turn the inline hints off, named in `help`
 
-**Operator request: "some people can be annoyed by the non-stop help."**
+**Shipped in `3dc5b368`.** Operator request: "some people can be annoyed by the non-stop help."
 
 Add a setting that disables the inline hints, and say so in shell `help` so it is discoverable from
 inside the shell rather than only from the settings UI.
@@ -1275,9 +1276,73 @@ automatic suggestions off, Tab still works on demand — is friendlier but makes
 lie. Recommendation: honour the name. Anyone who wanted only the commentary silenced now has
 `inlineHints` for exactly that, which is the reason the split was worth making.
 
+**Resolved by building the recommendation.** `autocompletion: false` returns from `handleTab()`
+before anything else, so Tab does nothing. As with N2's ⬜, no operator ruling was available at build
+time and the recommendation was the only proposal on the table. Reversing it is one deleted guard
+and one inverted test.
+
 | Complexity | Usefulness | Luxury |
 | ---------- | ---------- | ------ |
 | S          | 4          | 2      |
+
+### Shipped — commit `3dc5b368`
+
+**All six steps built**, with two departures from the plan's letter and none from its intent.
+
+**1. The guards live in two render helpers, not at two points in the chain.** The plan assumed the
+precedence chain splits into an insertable region and an informational one. It does not — it
+interleaves: preview hint, completion ghost, description, count, history, schema hint, closing
+brackets. Guarding "two points" was therefore impossible without reordering the chain, which would
+have changed behaviour.
+
+Instead every render now funnels through one of two helpers:
+
+| Helper                  | Marker | Setting          | Called by                                           |
+| ----------------------- | ------ | ---------------- | --------------------------------------------------- |
+| `showInsertableGhost()` | none   | `autocompletion` | completion ghost, history, closing brackets         |
+| `showInlineHint()`      | `🛈`    | `inlineHints`    | preview, description, collection count, schema hint |
+
+This is still two guards, and it delivers what the plan wanted the two guards _for_ — "a future ghost
+inherits the right switch by where it is added" — more strongly than a positional split could,
+because the inheritance is now by which helper you call rather than by where you insert your branch.
+`showInlineHint()` also owns the ` 🛈` prefix, so the marker and its switch are decided in one
+place. Both helpers return whether anything reached the terminal.
+
+**2. A suppressed branch still owns the row — except the collection count.** Falling through when a
+hint is switched off would leak suppressed information: with `autocompletion: false`, `hel` would
+skip its ghost and land on the candidate's description, advertising a completion the user turned
+off. So branches return regardless.
+
+The count is the deliberate exception. It is the only informational hint that _outranks_ an
+insertable one (N2's ⬜), so when it is switched off the ranking it displaced should come back rather
+than leave the row blank — `db.` with `inlineHints: false` shows the history suggestion again, as it
+did before N2. One `if (this.showCollectionCountHint(n)) { return; }`, and a test pins it.
+
+**3. `help` names the settings prefix, not the two ids in full.** F5's width contract
+(`fits within the requested width`, 40 columns among them) cannot hold a 39-character token, and
+`wrapText()` deliberately never splits one — every over-long token in that document is a code
+fragment that must stay copy-pasteable. The tip reads
+`Settings (search "documentDB.shell.display"): autocompletion turns suggestions off, inlineHints hides the 🛈 notes.`
+Longest token is 27 characters, both settings are named, and searching that prefix in the Settings UI
+shows exactly the two of them. **This was the only place the plan could not be followed literally**;
+the alternative was relaxing an F5 contract to fit a help tip, which is the wrong trade.
+
+**Six tests** in a new `display settings — two switches, one per marker` block, plus one in
+`HelpProvider.test.ts`. The suite's config mock gained a `settingOverrides` map so a test can flip a
+setting; unset keys still fall through to their contributed defaults, which is what keeps every
+other test in the file meaningful as a "both true" control.
+
+| Assertion                                                                     |
+| ----------------------------------------------------------------------------- |
+| `autocompletion` false: no ghost at `hel`, and Tab leaves the buffer as `hel` |
+| `autocompletion` false: `help` still emits `🛈 Show help`                      |
+| `inlineHints` false: `help` emits no `🛈`                                      |
+| `inlineHints` false: `db.` emits no count                                     |
+| `inlineHints` false: `db.` shows the history suggestion instead — departure 2 |
+| `inlineHints` false: `hel` still ghosts and Tab still completes               |
+| shell `help` names the prefix and both leaf names                             |
+
+Suites: 17 (shell + shell-runtime), 619 tests, all passing.
 
 ---
 
