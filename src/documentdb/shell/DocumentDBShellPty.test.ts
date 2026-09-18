@@ -543,6 +543,40 @@ describe('DocumentDBShellPty', () => {
         });
     });
 
+    describe('ghost text — append-only invariant', () => {
+        /** Dim + gray prefix emitted by ShellGhostText. */
+        const GHOST_STYLE = '\x1b[2m\x1b[90m';
+        /** Ghost text is debounced by 50 ms in the PTY. */
+        const afterGhostDebounce = (): Promise<void> => new Promise((resolve) => setTimeout(resolve, 80));
+
+        beforeEach(async () => {
+            pty.open(undefined);
+            await new Promise((resolve) => setTimeout(resolve, 10));
+            written = '';
+        });
+
+        it('renders ghost text when the cursor sits at the end of the buffer', async () => {
+            pty.handleInput('hel'); // 'help' is the only top-level command with this prefix
+
+            await afterGhostDebounce();
+
+            expect(written).toContain(`${GHOST_STYLE}p`);
+        });
+
+        it('renders no ghost text when the cursor is mid-buffer', async () => {
+            pty.handleInput('hel))');
+            await afterGhostDebounce();
+
+            pty.handleInput('\x1b[D\x1b[D'); // cursor back between 'hel' and '))'
+            written = '';
+
+            pty.handleInput('\x1b[3~'); // Delete — buffer becomes 'hel)', cursor stays at 3
+            await afterGhostDebounce();
+
+            expect(written).not.toContain(GHOST_STYLE);
+        });
+    });
+
     describe('action line — Open in Collection View', () => {
         beforeEach(async () => {
             pty.open(undefined);

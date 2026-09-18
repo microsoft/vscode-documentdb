@@ -1171,6 +1171,14 @@ export class DocumentDBShellPty implements vscode.Pseudoterminal {
             return;
         }
 
+        // Ghost text is written at the cursor and only ever appends after it.
+        // Rendering it mid-buffer would paint over the real tail and make
+        // availableGhostColumns() treat occupied columns as free.
+        if (cursor !== buffer.length) {
+            this.clearGhostState();
+            return;
+        }
+
         // Need at least 1 character to show ghost text
         if (buffer.trim().length === 0) {
             this.clearGhostState();
