@@ -87,6 +87,10 @@ audit. **Deferred** and **Won't fix** are untouched and remain the live backlog 
 menu-select) and its prerequisite I10 are the largest, and I4 (persisting history) is blocked on a
 redaction decision rather than on storage.
 
+Using the shipped build raised three more, recorded in the audit as **N1–N3**: a regression where an
+insertable ghost takes Tab from the completion list, an inconsistency in the hint markers, and a
+requested setting to turn the inline hints off. N1 should land before the PR goes for review.
+
 ## Decisions
 
 No separate `decisions.md` yet. The reviewed alternatives are inside the iteration documents; the

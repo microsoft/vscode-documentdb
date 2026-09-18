@@ -136,6 +136,10 @@ items shipped in Step 15 — see
 [iterations/15-shell-liveness-audit-fixes.md](./iterations/15-shell-liveness-audit-fixes.md) for the
 cross-cutting summary and lessons. `# Deferred` and `# Won't fix` are untouched.
 
+**Using the shipped build surfaced three more things** — one regression, one open design question and
+one operator request. They are in [Found after Step 15](#found-after-step-15) as N1–N3. N1 should
+land before the PR goes for review.
+
 ## Note: the future standalone shell
 
 > "shell will be the shell for documentdb (like mongosh is for mongodb) and will also be extracted
@@ -191,11 +195,18 @@ is luxury 5 / usefulness 3. Both are worth doing; they are not worth doing _in t
 | I8  | First-run nudge naming a real collection       | S          | 5   | 3   | Won't fix | —                  |
 | I9  | Clickable collection names                     | M          | 3   | 4   | Deferred  | —                  |
 | I10 | Make `reRenderLine()` ghost-aware              | M          | 3   | 1   | Deferred  | —                  |
+| N1  | Insertable ghosts steal Tab from the list      | S          | 5   | 1   | **Open**  | Regression         |
+| N2  | Hint marker vocabulary is inconsistent         | XS         | 3   | 3   | **Open**  | Needs a decision   |
+| N3  | Setting to turn the inline hints off           | S          | 4   | 2   | **Open**  | Operator request   |
 
 Two entries changed shape during triage. **I7** moved to Deferred once it became clear that the
 version worth having (list stays visible, Tab moves a highlight through it) needs I10 as a
 prerequisite — see I7 for the reasoning. **I10** moved the other way: dropping I1b removed its main
 driver, then I7 gave it a new one, so it is deferred rather than closed.
+
+**N1–N3 were raised after Step 15 shipped** and are not part of the original triage — see
+[Found after Step 15](#found-after-step-15). N1 is a live regression and should land before the PR
+goes for review; N2 and N3 are the operator's, to be returned to.
 
 F7 and F8 from the first draft were not defects; they are folded into I5 and I4 as supporting
 evidence.
@@ -607,6 +618,28 @@ neither of which would have answered it alone.
 Two tests: sole collection among database methods at `db.` emits the ghost; two collections emit
 nothing.
 
+### Follow-up — commit `fd2a0a8a`
+
+**The operator hit this immediately, and the item as triaged was wrong.** At `db.` the suggestion
+rendered `  → db['restaurants-original']  (Tab)` — but Tab sees *all* the candidates, the sole
+collection plus nineteen database methods, so it showed the list. The hint promised something that
+did not happen.
+
+Both name shapes were broken, in opposite directions:
+
+| Collection name at `db.` | Ghost                  | Tab actually did                    |
+| -------------------------- | ---------------------- | ----------------------------------- |
+| needs brackets           | hint claiming `(Tab)`  | cleared it, showed the list — **lied** |
+| plain identifier         | insertable dim ghost   | accepted the ghost — **stole the list** |
+
+`fd2a0a8a` makes the empty-prefix suggestion informational: no `(Tab)`, not insertable, Tab keeps
+listing. `(Tab)` now appears only where it is true — a single candidate at a typed prefix.
+
+**It is a partial fix and should be treated as such.** The second row is an instance of **N1**, which
+is wider than `db.` and is a live regression. And making `(Tab)` conditional left two hints sharing
+the `→` shape with different affordances, which is **N2**. If N1 is fixed by taking Tab away from
+ghost text, this special case can be reverted and the empty-prefix suggestion made insertable again.
+
 ## I2. History-based autosuggestion (fish-style)
 
 When the buffer is a prefix of a previous command, ghost the rest of it. This is the single most
@@ -747,6 +780,145 @@ Three tests, asserting on emitted ANSI:
 ## I8. A first-run nudge that names a real collection — rejected
 
 Moved to the **Won't fix** section below.
+
+---
+
+# Found after Step 15
+
+Raised by the operator while using the shipped build, plus one design question Step 15 left open.
+**None of these were triaged in the original audit** — they are consequences of the work, not
+findings about the code as it stood.
+
+## N1. An insertable ghost steals Tab from the completion list
+
+**Regression. Introduced by I2 (`50e6ba53`). Should land before the PR goes for review.**
+
+**Reported.** After switching database once, Tab at `use ` stopped listing the databases:
+
+```
+Copies> use ⇥
+Copies          MyDatabase      SecondDatabase  Yelp
+Copies> use MyDatabase
+switched to db MyDatabase
+...
+MyDatabase> use ⇥
+MyDatabase> use MyDatabase          ← the list never appeared
+```
+
+**Verified**, by driving the PTY with four database candidates and running `use MyDatabase` in
+between:
+
+| State                          | Ghost shown | Tab lists all four |
+| -------------------------------- | ----------- | ------------------ |
+| before `use MyDatabase` is in history | no          | **yes**            |
+| after                          | yes         | **no**             |
+
+**Root cause.** `handleTab()` opens with:
+
+```ts
+if (this._ghostText.isVisible && !this._ghostTextIsHint) {
+    this.handleAcceptGhostText();
+    return;
+}
+```
+
+Tab accepts *any* visible insertable ghost, unconditionally, before it ever asks the completion
+provider what the candidates are. That was harmless until I2, because the only insertable ghost was
+a completion ghost, and that only appears when there is exactly one candidate — so accepting it and
+completing it were the same act. **History autosuggestion has no such coupling.** `use ` matches a
+history entry and offers four completion candidates at the same time, and the ghost wins.
+
+**This is the general form of the `db.` problem**, which was only fixed in its specific case by
+`fd2a0a8a`. The same collision exists for closing-bracket ghosts.
+
+**Proposed fix: give the two keys separate jobs.** Right Arrow accepts ghost text; Tab belongs to
+completion and only falls back to accepting a ghost when there is nothing to complete. That is the
+fish/zsh split, and it makes the `db.` special case in `fd2a0a8a` unnecessary — the empty-prefix
+suggestion could go back to being insertable, because Tab would no longer be the key that takes it.
+
+Worth checking against I7 before building: menu-select would give Tab a third job, and this decides
+which one it displaces.
+
+| Complexity | Usefulness | Luxury |
+| ---------- | ---------- | ------ |
+| S          | 5          | 1      |
+
+## N2. The hint marker vocabulary is inconsistent
+
+**Open design question. Raised by the operator: "it's the one that shows an → arrow and (Tab), no
+other one does that."**
+
+The observation is correct, and the inconsistency got worse in `fd2a0a8a`, which made `(Tab)`
+conditional. Current state:
+
+| Ghost                      | Rendering                          | Can you act on it | Names a key |
+| ---------------------------- | ---------------------------------- | ----------------- | ----------- |
+| completion                 | dim text at the cursor             | yes — Tab or →    | no          |
+| history                    | dim text at the cursor             | yes — Tab or →    | no          |
+| closing brackets           | dim text at the cursor             | yes — Tab or →    | no          |
+| schema hint                | `  🛈 Run db.X.find() first…`      | no                | no          |
+| description (I5)           | `  🛈 <description>`               | no                | no          |
+| rewrite preview (I1a)      | `  → <line>  (Tab)`                | not directly, but Tab produces it | **yes** |
+| empty prefix at `db.`      | `  → <line>`                       | no — Tab lists instead | no      |
+
+The last two rows share a shape and differ in affordance, distinguished only by a trailing token
+the user has to notice. The affordance belongs on the marker, not on a suffix.
+
+**There is a coherent three-marker rule already latent in the table:**
+
+- **no marker** — position is the message: this text will be appended right where you are looking
+- **`🛈`** — information; no key does anything
+- **`→`** — Tab rewrites your whole line to this
+
+Under that rule `→` is unavailable for the `db.` case, because Tab lists there rather than
+rewriting. Two decisions follow, and they are the operator's:
+
+1. **Does `(Tab)` survive?** It is the only place the shell names a key. Defensible — `→` is the one
+   hint whose payoff is not visible from position — but the inverse is awkward: the three ghosts you
+   genuinely can accept never say how. Recommendation: keep it, exactly there, nowhere else, because
+   I1a's whole justification is that users do not know Tab completion exists.
+2. **What does `db.` render as?** Candidates: `  🛈 db['restaurants-original']` (consistent marker,
+   reads a little blankly); `  🛈 1 collection — Tab to list` (teaches the feature at the earliest
+   keystroke, costs a localized string, does not name the collection); or nothing at all, since Tab
+   already lists it in cyan.
+
+**N1 may dissolve part of this.** If Tab stops taking ghost text, the empty-prefix suggestion can be
+insertable again and the whole `→`-without-`(Tab)` row disappears. **Decide N1 first.**
+
+| Complexity | Usefulness | Luxury |
+| ---------- | ---------- | ------ |
+| XS         | 3          | 3      |
+
+## N3. A setting to turn the inline hints off, named in `help`
+
+**Operator request: "some people can be annoyed by the non-stop help."**
+
+Add a setting that disables the inline hints, and say so in shell `help` so it is discoverable from
+inside the shell rather than only from the settings UI.
+
+**The scope needs deciding, and the axis is affordance, not source.** The honest split is the one N2
+describes: informational hints (`🛈` description, `🛈` schema hint, `→` preview) are the ones that
+appear unbidden and cannot be acted on, so they are what "non-stop help" means. The insertable
+ghosts (completion, history, closing brackets) are suggestions the user is about to use. A single
+on/off covering all six would also silence autosuggestion, which is probably not the intent — but a
+two-level setting costs a second name and a second thing to explain. Worth one decision rather than
+guessing.
+
+**Implementation notes, so the estimate is honest:**
+
+- Precedent exists: `documentDB.shell.display.colorSupport`, read per-use via
+  `vscode.workspace.getConfiguration()` in `ShellOutputFormatter` and `DocumentDBShellPty`. The hint
+  paths all run in the extension host, so reading the setting there is free — no worker plumbing,
+  unlike F5.
+- **The `help` mention is the part with a wrinkle.** `HelpProvider` runs in the worker and imports no
+  `vscode`, so it cannot read settings. It does not need to: naming the setting is static text. It
+  should *name* the setting, not report its current value.
+- Needs a `package.json` contribution point and a `package.nls.json` description, so this is the
+  first item in this document that genuinely requires `npm run l10n`.
+
+| Complexity | Usefulness | Luxury |
+| ---------- | ---------- | ------ |
+| S          | 4          | 2      |
 
 ---
 
@@ -1002,6 +1174,14 @@ minutes.
 
 # Open questions for the operator
 
+- **Which key owns ghost text?** N1 is the forcing question: Tab currently accepts any insertable
+  ghost before consulting the completion provider, which was harmless only while the sole insertable
+  ghost implied a sole candidate. Deciding this also settles N2's second half and I7's key bindings,
+  so it is one decision, not three.
+- **What counts as "help" for the purpose of turning it off?** N3 needs a line between suggestions
+  the user is about to accept and commentary that merely appears. Drawing it at
+  insertable-vs-informational is the defensible answer; a single on/off would also silence
+  autosuggestion, which is probably not what "annoyed by the non-stop help" means.
 - **Is "append only" the permanent ghost text contract?** Rejecting I1b answers it for now, and F2
   would write it down. But I7-as-menu-select needs the renderer to own rows it does not write today,
   which is the same question approached from the other side. Worth one decision covering both rather
