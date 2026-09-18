@@ -894,26 +894,23 @@ export class ConnectionStorageService {
     ): Promise<StoredItem[]> {
         const items = await storageService.getItems<StoredItemProperties>(connectionType);
 
-        ext.outputChannel.trace(
-            `[Storage] getAllItems(${connectionType}): loaded ${items.length} raw item(s) from storage`,
-        );
-
         // Filter out items with unknown versions (future-proofing)
+        let unknownVersionItemsSkipped = 0;
         const knownItems = items.filter((item) => {
             if (!KNOWN_STORAGE_VERSIONS.has(item.version)) {
-                ext.outputChannel.trace(
-                    `[Storage] Skipping item "${item.id}" (version: "${item.version}") — unknown storage version`,
-                );
+                unknownVersionItemsSkipped++;
                 return false;
             }
             return true;
         });
 
         const result: StoredItem[] = [];
+        let corruptItemsSkipped = 0;
         for (const item of knownItems) {
             try {
                 result.push(this.fromStorageItem(item));
             } catch (error) {
+                corruptItemsSkipped++;
                 // Do not let one corrupt item break the entire list.
                 // Log at warn level so it is visible in the output channel.
                 const errorMessage = redactCredentialsFromConnectionString(
@@ -928,8 +925,10 @@ export class ConnectionStorageService {
             }
         }
 
+        const connectionCount = result.filter((item) => item.properties.type === ItemType.Connection).length;
+        const folderCount = result.length - connectionCount;
         ext.outputChannel.trace(
-            `[Storage] getAllItems(${connectionType}): returning ${result.length} valid item(s) (${knownItems.length - result.length} skipped due to errors)`,
+            `[Storage] getAllItems(${connectionType}): ${items.length} raw item(s); ${result.length} valid (${connectionCount} connection(s), ${folderCount} folder(s)); ${unknownVersionItemsSkipped + corruptItemsSkipped} skipped (${unknownVersionItemsSkipped} unknown version, ${corruptItemsSkipped} corrupt).`,
         );
 
         return result;
@@ -1151,10 +1150,6 @@ export class ConnectionStorageService {
         // raw stored item into the current `StoredItem` shape. It is NOT a persisted migration —
         // nothing is written back to storage here. The wrapped result is recomputed on every read,
         // which is intentional and cheap (string parsing + object reshaping, no I/O).
-        ext.outputChannel.trace(
-            `[Storage] fromStorageItem (in-memory wrap): id=${item.id}, name="${item.name}", version=${item.version ?? 'none'}, type=${item.properties?.type ?? 'undefined'}`,
-        );
-
         switch (item.version) {
             case '3.0':
                 // v3.0 - already current shape, reconstruct directly from storage
@@ -1247,10 +1242,6 @@ export class ConnectionStorageService {
     private static wrapV1AsV2(item: StorageItem): StoredItem {
         // in V2, the connection string shouldn't contain the username/password combo
         const rawSecret = item?.secrets?.[0] ?? '';
-
-        ext.outputChannel.trace(
-            `[Storage] wrapV1AsV2 (in-memory): id=${item.id}, name="${item.name}", secret length=${rawSecret.length}`,
-        );
 
         // Guard: If the stored connection string is empty or clearly invalid, we cannot
         // parse it. Throw a descriptive error so the caller (getAllItems) can skip it.

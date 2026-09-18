@@ -5,6 +5,7 @@
 
 import { type IActionContext } from '@microsoft/vscode-azext-utils';
 import { API } from '../DocumentDBExperiences';
+import { ext } from '../extensionVariables';
 import {
     ConnectionStorageService,
     ConnectionType,
@@ -322,6 +323,33 @@ describe('ConnectionStorageService', () => {
                 expect(allItems).toHaveLength(2);
                 expect(allItems.some((i) => i.properties.type === ItemType.Connection)).toBe(true);
                 expect(allItems.some((i) => i.properties.type === ItemType.Folder)).toBe(true);
+            });
+
+            it('should summarize valid and skipped item counts in one trace message', async () => {
+                await ConnectionStorageService.save(
+                    ConnectionType.Clusters,
+                    createTestConnectionItem({ id: 'conn-1' }),
+                );
+                await ConnectionStorageService.save(ConnectionType.Clusters, createTestFolderItem({ id: 'folder-1' }));
+                mockStorage.setItem(ConnectionType.Clusters, {
+                    id: 'future-item',
+                    name: 'Future Item',
+                    version: '4.0',
+                    properties: {
+                        type: ItemType.Connection,
+                        api: API.DocumentDB,
+                        availableAuthMethods: [],
+                    },
+                    secrets: ['mongodb://localhost:27017'],
+                });
+                jest.clearAllMocks();
+
+                await ConnectionStorageService.getAllItems(ConnectionType.Clusters);
+
+                expect(ext.outputChannel.trace).toHaveBeenCalledTimes(1);
+                expect(ext.outputChannel.trace).toHaveBeenCalledWith(
+                    '[Storage] getAllItems(clusters): 3 raw item(s); 2 valid (1 connection(s), 1 folder(s)); 1 skipped (1 unknown version, 0 corrupt).',
+                );
             });
         });
 
