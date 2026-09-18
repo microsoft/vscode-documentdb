@@ -22,6 +22,7 @@ export interface PasteIndexesWizardContext extends IActionContext {
     readonly targetConnectionName: string;
     readonly targetIndexesId: string;
     readonly scope: CopiedIndexScope;
+    readonly copyOperationCorrelationId: string;
     readonly indexCopier: CollectionIndexCopier;
     sourceIndexNames?: readonly string[];
     catalogCount: number;

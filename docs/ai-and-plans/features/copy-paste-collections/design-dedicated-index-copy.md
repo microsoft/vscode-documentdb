@@ -865,6 +865,8 @@ Copy commands:
 
 Paste Indexes wizard:
 
+- property `copyScope` and measurement `selectedIndexCount` for the confirmed set;
+- property `copyOperationCorrelationId`, shared with the task events for this paste attempt;
 - measurements `catalogIndexCount`, `copyableIndexCount`, and `excludedIndexCount` from the
   full classified catalog in either scope, even though single-index confirmation does not display
   these values. This is now the only place the extension learns how often real users hit
@@ -874,7 +876,8 @@ Paste Indexes wizard:
 
 Dedicated task:
 
-- properties `isCrossConnection`, `isCrossDatabase`, `copyScope`, `indexCopyCancelled`;
+- properties `isCrossConnection`, `isCrossDatabase`, `copyScope`, `copyOperationCorrelationId`,
+  `indexCopyCancelled`;
 - measurements `selectedIndexCount`, `createdIndexCount`, `skippedIndexCount`, and
   `renamedIndexCount`;
 - a stable error codename for an additional `indexCopyError` classification when needed, not a raw
@@ -890,6 +893,11 @@ behavior.
 
 Do not duplicate duration, result, or generic error telemetry already emitted by command and task
 frameworks. Do not record connection, database, collection, or index names.
+
+Paste Collection uses the same `copyOperationCorrelationId` mechanism. The name is intentionally
+purpose-qualified: `journeyCorrelationId` already describes tree-discovery lineage and
+`connectionCorrelationId` describes connection attempts; no generic `correlationId` telemetry
+contract exists in the repository.
 
 ## Error behavior
 

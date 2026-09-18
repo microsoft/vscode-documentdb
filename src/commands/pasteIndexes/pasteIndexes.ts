@@ -4,6 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { AzureWizard, type IActionContext } from '@microsoft/vscode-azext-utils';
+import { randomUUID } from 'crypto';
 import * as vscode from 'vscode';
 import { CredentialCache } from '../../documentdb/CredentialCache';
 import { CopyPasteBufferService, type CopiedIndexSelection } from '../../services/CopyPasteBufferService';
@@ -43,6 +44,14 @@ export async function pasteIndexes(context: IActionContext, targetNode: IndexesI
         throw new Error(vscode.l10n.t('Source and target must be different collections.'));
     }
 
+    const copyOperationCorrelationId = randomUUID();
+    const sourceIndexNames = getSourceIndexNames(copied.scope);
+    context.telemetry.properties.copyOperationCorrelationId = copyOperationCorrelationId;
+    context.telemetry.properties.copyScope = copied.scope.kind;
+    if (sourceIndexNames !== undefined) {
+        context.telemetry.measurements.selectedIndexCount = sourceIndexNames.length;
+    }
+
     const wizardContext: PasteIndexesWizardContext = {
         ...context,
         source: copied.source,
@@ -51,8 +60,9 @@ export async function pasteIndexes(context: IActionContext, targetNode: IndexesI
         targetConnectionName: targetNode.cluster.name,
         targetIndexesId: targetNode.id,
         scope: copied.scope,
+        copyOperationCorrelationId,
         indexCopier: createIndexCopier(copied.source, target),
-        sourceIndexNames: getSourceIndexNames(copied.scope),
+        sourceIndexNames,
         catalogCount: 0,
         copyableCount: 0,
         copyableIndexNames: [],

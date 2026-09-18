@@ -67,6 +67,9 @@ durable intent and rationale. Code and tests remain authoritative for current be
   created and prevents document transfer.
 - Progress, result counts, diagnostics, telemetry, and a cancellation-aware completion pause are
   reported by the task and copier.
+- Each paste wizard shares a purpose-specific `copyOperationCorrelationId` with its task
+  initialization and execution events; Paste Indexes also records confirmed scope and selection
+  size on the wizard event.
 - Dedicated Copy Index uses one stable index name or an immutable selected-name subset; Copy
   Indexes retains a live parent scope until paste-time loading, then freezes the resolved names
   through confirmation and task execution.

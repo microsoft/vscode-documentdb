@@ -102,6 +102,8 @@ export class LoadSourceIndexesStep extends AzureWizardPromptStep<PasteIndexesWiz
             context.telemetry.measurements.catalogIndexCount = context.catalogCount;
             context.telemetry.measurements.copyableIndexCount = context.copyableCount;
             context.telemetry.measurements.excludedIndexCount = context.excluded.length;
+            context.telemetry.measurements.selectedIndexCount = context.sourceIndexNames.length;
+            context.telemetry.properties.copyScope = context.scope.kind;
         } catch (error) {
             if (signal.aborted) {
                 throw error;

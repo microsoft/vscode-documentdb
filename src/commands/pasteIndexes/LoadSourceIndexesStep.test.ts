@@ -35,6 +35,7 @@ function createContext(scope: CopiedIndexScope, indexCopier: CollectionIndexCopi
         targetConnectionName: 'Target',
         targetIndexesId: 'target/indexes',
         scope,
+        copyOperationCorrelationId: 'operation-id',
         indexCopier,
         sourceIndexNames: scope.kind === 'index' ? [scope.indexName] : undefined,
         catalogCount: 0,
@@ -95,7 +96,9 @@ describe('LoadSourceIndexesStep', () => {
             catalogIndexCount: 3,
             copyableIndexCount: 1,
             excludedIndexCount: 2,
+            selectedIndexCount: 1,
         });
+        expect(context.telemetry.properties.copyScope).toBe('allIndexes');
     });
 
     it('retains ordinary counts and _id exclusion when the advisory search read fails', async () => {

@@ -47,7 +47,9 @@ function createContext(): PasteIndexesWizardContext {
         targetConnectionName: 'Target',
         targetIndexesId: 'target-tree/indexes',
         scope: { kind: 'allIndexes' },
+        copyOperationCorrelationId: 'operation-id',
         indexCopier: {} as CollectionIndexCopier,
+        sourceIndexNames: ['email_1', 'region_1'],
         catalogCount: 0,
         copyableCount: 0,
         copyableIndexNames: [],
@@ -70,6 +72,14 @@ describe('Paste Indexes ExecuteStep', () => {
             await new ExecuteStep().execute(createContext());
 
             expect(CopyIndexesTask).toHaveBeenCalled();
+            expect(CopyIndexesTask).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    sourceIndexNames: ['email_1', 'region_1'],
+                    copyScope: 'allIndexes',
+                    copyOperationCorrelationId: 'operation-id',
+                }),
+                expect.any(Object),
+            );
             expect(TaskService.registerTask).toHaveBeenCalledWith(fakeTask);
             expect(ext.state.runWithTemporaryDescription).toHaveBeenCalledWith(
                 'target-tree/indexes',

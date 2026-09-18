@@ -62,6 +62,7 @@ export class ExecuteStep extends AzureWizardExecuteStep<PasteCollectionWizardCon
             },
             onConflict: conflictResolutionStrategy,
             copyIndexes: context.copyIndexes,
+            copyOperationCorrelationId: context.copyOperationCorrelationId,
         };
 
         // Create the document reader and writer instances

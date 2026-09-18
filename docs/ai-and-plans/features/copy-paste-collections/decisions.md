@@ -39,6 +39,7 @@ created: 2026-09-16
 | 0025 | Filter index tree multi-selection into one source subset       | Accepted            | Extended the first version after validating the cluster move pattern | 2026-09-17 | #930 |
 | 0026 | Refuse document-affecting indexes during collection paste      | Accepted            | Reverses the warning-and-copy behavior for TTL and unique indexes    | 2026-09-18 | #930 |
 | 0027 | Freeze parent index selection at confirmation                   | Accepted            | Replaces execution-time catalog expansion with a confirmed snapshot  | 2026-09-18 | #930 |
+| 0028 | Correlate paste wizards with their tasks                        | Accepted            | Adds an operation-specific ID instead of reusing discovery lineage   | 2026-09-18 | #930 |
 
 > Entries below are semantically immutable. Append a new decision rather than rewriting an old one,
 > and record a reversal as a new entry plus a status change in the table.
@@ -694,3 +695,36 @@ the loading step makes the confirmed and executed sets identical.
 Indexes added after confirmation wait for a later paste. If a confirmed index is removed before
 execution, the copier reports `Source indexes were not found` and creates nothing for that missing
 set instead of silently shrinking the operation.
+
+## 0028 — Correlate paste wizards with their tasks
+
+**Status:** Accepted · **Date:** 2026-09-18 · **Raised by:** telemetry review
+
+### Decision
+
+Generate one `copyOperationCorrelationId` for each Paste Indexes or Paste Collection wizard and
+carry it through task configuration to task initialization and execution telemetry. Paste Indexes
+also records the copied scope and confirmed selected count on the wizard event. Carry `copyScope`
+explicitly into `CopyIndexesTask` rather than deriving it from the frozen name list.
+
+### Reasoning
+
+Task Service creates telemetry contexts independently from command telemetry. A config value is the
+smallest shared state that can join all three events. After D0027, a parent copy has an explicit name
+array, so deriving scope from array shape would incorrectly label it as a selected subset.
+
+### Alternatives considered
+
+- **Reuse `journeyCorrelationId`.** Rejected because it identifies discovery/tree lineage and can
+  span unrelated commands, not one paste attempt.
+- **Use a plain `correlationId`.** Rejected because the repository has no generic correlation
+  contract and already distinguishes connection and journey IDs by purpose.
+- **Use the task ID.** It does not exist while the wizard event is being populated.
+- **Infer scope from selected-name count.** It cannot distinguish a parent snapshot from an
+  explicitly selected subset of the same size.
+
+### Consequence
+
+Wizard exposure, task initialization, and task outcomes can be joined per operation without
+recording source or target names. Parent-scope analytics remain accurate after the operation freezes
+its confirmed names.

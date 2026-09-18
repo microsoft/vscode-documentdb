@@ -19,6 +19,8 @@ export class ExecuteStep extends AzureWizardExecuteStep<PasteIndexesWizardContex
                 source: context.source,
                 target: context.target,
                 sourceIndexNames: context.sourceIndexNames,
+                copyScope: context.scope.kind,
+                copyOperationCorrelationId: context.copyOperationCorrelationId,
             },
             context.indexCopier,
         );

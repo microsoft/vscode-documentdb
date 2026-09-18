@@ -9,6 +9,7 @@ import {
     type AzureWizardPromptStep,
     type IActionContext,
 } from '@microsoft/vscode-azext-utils';
+import { randomUUID } from 'crypto';
 import * as l10n from '@vscode/l10n';
 import * as vscode from 'vscode';
 import { ClustersClient } from '../../documentdb/ClustersClient';
@@ -31,6 +32,8 @@ export async function pasteCollection(
 ): Promise<void> {
     // Record telemetry for wizard start
     context.telemetry.properties.wizardStarted = 'true';
+    const copyOperationCorrelationId = randomUUID();
+    context.telemetry.properties.copyOperationCorrelationId = copyOperationCorrelationId;
 
     if (!targetNode) {
         throw new Error(l10n.t('No target node selected.'));
@@ -112,6 +115,7 @@ export async function pasteCollection(
     // Create wizard context
     const wizardContext: PasteCollectionWizardContext = {
         ...context,
+        copyOperationCorrelationId,
         sourceCollectionName: sourceNode.collectionInfo.name,
         sourceDatabaseName: sourceNode.databaseInfo.name,
         sourceConnectionId: sourceNode.cluster.clusterId,

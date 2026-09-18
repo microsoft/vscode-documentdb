@@ -17,6 +17,8 @@ export interface CopyIndexesConfig {
     readonly source: DocumentDbCollectionEndpoint;
     readonly target: DocumentDbCollectionEndpoint;
     readonly sourceIndexNames?: readonly string[];
+    readonly copyScope: 'index' | 'indexes' | 'allIndexes';
+    readonly copyOperationCorrelationId: string;
 }
 
 export class CopyIndexesTask extends Task implements ResourceTrackingTask {
@@ -44,6 +46,9 @@ export class CopyIndexesTask extends Task implements ResourceTrackingTask {
     }
 
     protected async onInitialize(signal: AbortSignal, context?: IActionContext): Promise<void> {
+        if (context) {
+            context.telemetry.properties.copyOperationCorrelationId = this.config.copyOperationCorrelationId;
+        }
         if (!CredentialCache.hasCredentials(this.config.source.clusterId)) {
             if (context) {
                 context.telemetry.properties.sourceClusterDisconnected = 'true';
@@ -70,12 +75,6 @@ export class CopyIndexesTask extends Task implements ResourceTrackingTask {
     }
 
     protected async doWork(signal: AbortSignal, context?: IActionContext): Promise<void> {
-        const copyScope =
-            this.config.sourceIndexNames === undefined
-                ? 'allIndexes'
-                : this.config.sourceIndexNames.length === 1
-                  ? 'index'
-                  : 'indexes';
         let total = 0;
         let completed = 0;
 
@@ -84,7 +83,8 @@ export class CopyIndexesTask extends Task implements ResourceTrackingTask {
                 this.config.source.clusterId !== this.config.target.clusterId ? 'true' : 'false';
             context.telemetry.properties.isCrossDatabase =
                 this.config.source.databaseName !== this.config.target.databaseName ? 'true' : 'false';
-            context.telemetry.properties.copyScope = copyScope;
+            context.telemetry.properties.copyScope = this.config.copyScope;
+            context.telemetry.properties.copyOperationCorrelationId = this.config.copyOperationCorrelationId;
         }
 
         let result: IndexCopyResult;

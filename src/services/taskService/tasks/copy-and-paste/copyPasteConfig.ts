@@ -12,6 +12,9 @@ export { ConflictResolutionStrategy } from '../../data-api/types';
  * Configuration for copy-paste operations
  */
 export interface CopyPasteConfig {
+    /** Correlates the command wizard with task initialization and execution telemetry. */
+    copyOperationCorrelationId: string;
+
     /**
      * Source collection information
      */

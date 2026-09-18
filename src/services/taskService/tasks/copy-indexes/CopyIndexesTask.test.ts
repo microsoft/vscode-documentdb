@@ -45,6 +45,8 @@ const config: CopyIndexesConfig = {
     source: { clusterId: 'source', databaseName: 'sourceDb', collectionName: 'sourceCollection' },
     target: { clusterId: 'target', databaseName: 'targetDb', collectionName: 'targetCollection' },
     sourceIndexNames: ['email_1'],
+    copyScope: 'index',
+    copyOperationCorrelationId: 'operation-id',
 };
 
 function createContext(): IActionContext {
@@ -64,10 +66,12 @@ describe('CopyIndexesTask', () => {
         const task = new TestCopyIndexesTask(config, {} as CollectionIndexCopier);
         const signal = new AbortController().signal;
 
-        await task.runInitializeForTest(signal, createContext());
+        const context = createContext();
+        await task.runInitializeForTest(signal, context);
 
         expect(CredentialCache.hasCredentials).toHaveBeenCalledWith('source');
         expect(ClustersClient.getClient).toHaveBeenCalledWith('source', signal);
+        expect(context.telemetry.properties.copyOperationCorrelationId).toBe('operation-id');
     });
 
     it('rejects a disconnected source', async () => {
@@ -134,6 +138,7 @@ describe('CopyIndexesTask', () => {
             isCrossConnection: 'true',
             isCrossDatabase: 'true',
             copyScope: 'index',
+            copyOperationCorrelationId: 'operation-id',
             indexCopyCancelled: 'false',
         });
     });
@@ -152,7 +157,10 @@ describe('CopyIndexesTask', () => {
                 };
             }),
         } as unknown as CollectionIndexCopier;
-        const task = new TestCopyIndexesTask({ ...config, sourceIndexNames: undefined }, copier);
+        const task = new TestCopyIndexesTask(
+            { ...config, sourceIndexNames: undefined, copyScope: 'allIndexes' },
+            copier,
+        );
         const context = createContext();
 
         await task.runWorkForTest(new AbortController().signal, context);
@@ -201,7 +209,10 @@ describe('CopyIndexesTask', () => {
                 cancelled: false,
             }),
         } as unknown as CollectionIndexCopier;
-        const task = new TestCopyIndexesTask({ ...config, sourceIndexNames: ['email_1', 'region_1'] }, copier);
+        const task = new TestCopyIndexesTask(
+            { ...config, sourceIndexNames: ['email_1', 'region_1'], copyScope: 'indexes' },
+            copier,
+        );
         const context = createContext();
 
         await task.runWorkForTest(new AbortController().signal, context);

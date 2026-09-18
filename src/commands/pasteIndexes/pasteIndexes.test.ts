@@ -68,15 +68,22 @@ describe('pasteIndexes', () => {
             scope: { kind: 'index', indexName: 'email_1' },
         });
 
-        await pasteIndexes(createContext(), targetNode);
+        const context = createContext();
+        await pasteIndexes(context, targetNode);
 
         expect(AzureWizard).toHaveBeenCalledWith(
             expect.objectContaining({
                 sourceIndexNames: ['email_1'],
                 targetIndexesId: 'target-tree/db/collection/indexes',
+                copyOperationCorrelationId: expect.any(String),
             }),
             expect.any(Object),
         );
+        expect(context.telemetry.properties).toMatchObject({
+            copyScope: 'index',
+            copyOperationCorrelationId: expect.any(String),
+        });
+        expect(context.telemetry.measurements.selectedIndexCount).toBe(1);
         expect(CopyPasteBufferService.clearIndexes).not.toHaveBeenCalled();
     });
 
