@@ -172,7 +172,7 @@ is luxury 5 / usefulness 3. Both are worth doing; they are not worth doing _in t
 | --- | ---------------------------------------------- | ---------- | --- | --- | --------- | ------------------ |
 | F1  | Resize can strand the cursor                   | S          | 5   | 1   | Fix       | Shipped `4c40d050` |
 | F2  | Ghost text paints over real text mid-buffer    | XS         | 4   | 1   | Fix       | Shipped `88ef37c5` |
-| F3  | Completion list measured with `String.length`  | S          | 3   | 1   | Fix       | —                  |
+| F3  | Completion list measured with `String.length`  | S          | 3   | 1   | Fix       | Shipped `eb988c4b` |
 | F4  | Prompt width measured with `String.length`     | XS         | 2   | 1   | Fix       | Shipped `412722bf` |
 | F5  | Shell `help` hard-coded to ~62 columns         | S          | 3   | 2   | Fix       | —                  |
 | F6  | Banner and logo drawn at an assumed 80 columns | S          | 1   | 1   | Won't fix | —                  |
@@ -357,6 +357,27 @@ cap no longer bounds the number of _physical_ rows, and the list can push the pr
 | Complexity | Usefulness | Luxury |
 | ---------- | ---------- | ------ |
 | S          | 3          | 1      |
+
+### Shipped — commit `eb988c4b`
+
+**The finding reproduced, and it had a third instance the audit did not name.** Measurement
+(`maxLabelLen`) and the missing clip were both as described. The third was `label.padEnd(colWidth)`
+in the row loop — also `String.length`, and actually the one that produces the visible misalignment:
+measuring wrong sizes the column, but padding wrong is what pushes the next column sideways. Fixed
+via a local `padToDisplayWidth()` helper.
+
+The clip is `Math.max(MIN_COLUMN_WIDTH, terminalWidth - COLUMN_PADDING)` with an `…` marker, which
+also guarantees `colWidth <= terminalWidth`, so `numCols >= 1` and a rendered row can never soft-wrap.
+That is what restores `MAX_DISPLAY_ROWS` as a bound on _physical_ rows.
+
+Two tests, both failing against the unfixed module:
+
+| Test                                                                 | Asserts on            |
+| ---------------------------------------------------------------------- | --------------------- |
+| `寿司` (2 code units, 4 columns) is followed by exactly 4 pad spaces   | the emitted row string |
+| a 60-char label in a 20-column terminal clips, and no row exceeds 20 visible columns | every emitted row, escapes stripped |
+
+**Unblocks I6 and I7** — both were gated on width-correct measurement here. They remain deferred.
 
 ## F4. `setPromptWidth(prompt.length)` — same `String.length` problem, three call sites
 
