@@ -55,6 +55,27 @@ export enum BSONTypes {
 }
 
 export namespace BSONTypes {
+    /**
+     * Maps the `_bsontype` discriminator carried by every BSON wrapper instance to our enum.
+     * Used as a fallback when `instanceof` fails because the value originated from a
+     * different copy of the `bson` package (dual-package hazard).
+     */
+    const bsonTypeTagMap: Record<string, BSONTypes> = {
+        Binary: BSONTypes.Binary,
+        BSONRegExp: BSONTypes.RegExp,
+        BSONSymbol: BSONTypes.Symbol,
+        Code: BSONTypes.Code,
+        DBRef: BSONTypes.DBRef,
+        Decimal128: BSONTypes.Decimal128,
+        Double: BSONTypes.Double,
+        Int32: BSONTypes.Int32,
+        Long: BSONTypes.Long,
+        MaxKey: BSONTypes.MaxKey,
+        MinKey: BSONTypes.MinKey,
+        ObjectId: BSONTypes.ObjectId,
+        Timestamp: BSONTypes.Timestamp,
+    };
+
     const displayStringMap: Record<BSONTypes, string> = {
         [BSONTypes.String]: 'String',
         [BSONTypes.Number]: 'Number',
@@ -188,12 +209,35 @@ export namespace BSONTypes {
                     }
                 }
 
-                // Default to Object if none of the above match
-                return BSONTypes.Object;
+                // The `instanceof` checks above all fail when the value was created by a
+                // different copy of the `bson` package than the one linked here. Fall back to
+                // the `_bsontype` tag, otherwise a wrapper would be reported as a plain object
+                // and its internals (ObjectId.buffer, Double.value, ...) leak as schema fields.
+                return inferTypeFromTag(value) ?? BSONTypes.Object;
             default:
                 // This should never happen, but if it does, we'll catch it here
                 // TODO: add telemetry somewhere to know when it happens (not here, this could get hit too often)
                 return BSONTypes._UNKNOWN_;
         }
+    }
+
+    function inferTypeFromTag(value: object): BSONTypes | undefined {
+        const tag = (value as { _bsontype?: unknown })._bsontype;
+        if (typeof tag !== 'string') return undefined;
+
+        const mapped = bsonTypeTagMap[tag];
+        if (mapped === undefined) return undefined;
+
+        if (mapped === BSONTypes.Binary) {
+            const subType = (value as { sub_type?: unknown }).sub_type;
+            if (subType === Binary.SUBTYPE_UUID) return BSONTypes.UUID;
+            if (subType === Binary.SUBTYPE_UUID_OLD) return BSONTypes.UUID_LEGACY;
+        }
+
+        if (mapped === BSONTypes.Code && (value as { scope?: unknown }).scope) {
+            return BSONTypes.CodeWithScope;
+        }
+
+        return mapped;
     }
 }

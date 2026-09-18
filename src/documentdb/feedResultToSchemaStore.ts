@@ -13,6 +13,7 @@
  * @see {@link SchemaStore} for the underlying cache architecture.
  */
 
+import { EJSON } from 'bson';
 import { type Document, type WithId } from 'mongodb';
 import { meterSilentCatch } from '../utils/accumulatingTelemetry';
 import { SchemaStore } from './SchemaStore';
@@ -113,10 +114,14 @@ export function feedResultToSchemaStore(result: SchemaFeedableResult, clusterId:
  * (ObjectId, Date, Decimal128, etc.) so that SchemaAnalyzer correctly identifies
  * field types.
  *
+ * `EJSON` must be imported statically: a dynamic `import('bson')` resolves the
+ * package's ESM entry, giving BSON classes distinct from the CommonJS ones the
+ * driver uses, which breaks every `instanceof` check downstream.
+ *
  * @param serResult - The serialized result with EJSON printable string.
  * @returns A deserialized result suitable for {@link feedResultToSchemaStore}.
  */
-export async function deserializeResultForSchema(serResult: {
+export function deserializeResultForSchema(serResult: {
     readonly type: string | null;
     readonly printable: string;
     readonly source?: {
@@ -125,10 +130,9 @@ export async function deserializeResultForSchema(serResult: {
             readonly collection: string;
         };
     };
-}): Promise<SchemaFeedableResult> {
+}): SchemaFeedableResult {
     let printable: unknown;
     try {
-        const { EJSON } = await import('bson');
         printable = EJSON.parse(serResult.printable, { relaxed: false });
     } catch {
         meterSilentCatch('feedResultToSchemaStore_ejson');
