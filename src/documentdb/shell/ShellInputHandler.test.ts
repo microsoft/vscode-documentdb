@@ -805,6 +805,37 @@ describe('ShellInputHandler', () => {
             handler.handleInput('X'); // Insert in middle
             expect(handler.getBuffer()).toBe('a'.repeat(50) + 'X' + 'a'.repeat(50));
         });
+
+        it('should track the cursor row across a narrowing resize', () => {
+            // prompt=5, cols=80, 10 chars → absolute column 15, still row 0.
+            handler.setColumns(80);
+            handler.setPromptWidth(5);
+            handler.handleInput('a'.repeat(10));
+
+            // Narrow to 10 columns: xterm.js reflows and column 15 is now row 1.
+            handler.setColumns(10);
+            written = '';
+            handler.handleInput('b');
+
+            // Step 1 must climb back to the prompt row. Assuming row 0 would
+            // repaint one row too high and orphan everything above it.
+            expect(extractMoveUp(written)).toBe(1);
+        });
+
+        it('should track the cursor row across a widening resize', () => {
+            // prompt=5, cols=10, 10 chars → absolute column 15, row 1.
+            handler.setColumns(10);
+            handler.setPromptWidth(5);
+            handler.handleInput('a'.repeat(10));
+
+            // Widen to 80 columns: the line no longer wraps, so the cursor is
+            // back on the prompt row and there is nothing to climb.
+            handler.setColumns(80);
+            written = '';
+            handler.handleInput('b');
+
+            expect(extractMoveUp(written)).toBe(0);
+        });
     });
 
     describe('cursorColumn', () => {

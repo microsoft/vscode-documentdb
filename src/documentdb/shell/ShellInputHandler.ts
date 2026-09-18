@@ -105,9 +105,25 @@ export class ShellInputHandler {
      */
     setColumns(columns: number): void {
         this._columns = columns;
-        // Reset tracked cursor row — after a resize xterm.js reflows content,
-        // making the previous _lastCursorRow stale.
-        this._lastCursorRow = 0;
+        // xterm.js reflows the wrapped input line on resize and keeps the cursor
+        // on the same character, so the tracked row has to be recomputed against
+        // the new width. Zeroing it would claim the cursor is on the prompt row
+        // and the next re-render would paint over whatever is above it.
+        this._lastCursorRow = this.cursorRowForColumns(columns);
+    }
+
+    /**
+     * Terminal row of the cursor, relative to the prompt row, at a given width.
+     *
+     * Deferred-wrap aware: content that exactly fills a row leaves the cursor
+     * on that row until one more character arrives.
+     */
+    private cursorRowForColumns(columns: number): number {
+        if (columns <= 0) {
+            return 0;
+        }
+        const absCol = this.cursorColumn;
+        return absCol > 0 ? Math.floor((absCol - 1) / columns) : 0;
     }
 
     /**

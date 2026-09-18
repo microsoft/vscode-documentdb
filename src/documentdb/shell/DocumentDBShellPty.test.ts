@@ -608,6 +608,46 @@ describe('DocumentDBShellPty', () => {
         });
     });
 
+    describe('setDimensions', () => {
+        beforeEach(async () => {
+            pty.open(undefined);
+            await new Promise((resolve) => setTimeout(resolve, 10));
+            written = '';
+        });
+
+        it('repaints the input line at the new width', () => {
+            pty.handleInput('db.test');
+            written = '';
+
+            pty.setDimensions({ columns: 40, rows: 24 });
+
+            // A full re-render: back to the prompt column, then the buffer.
+            expect(written).toContain('\r\x1b[8C');
+            expect(written).toContain('db.test');
+        });
+
+        it('does not touch the terminal while a command is evaluating', async () => {
+            let resolveEval!: (value: unknown) => void;
+            mockEvaluate.mockReturnValue(
+                new Promise((resolve) => {
+                    resolveEval = resolve;
+                }),
+            );
+
+            pty.handleInput('db.test.find()');
+            pty.handleInput('\r');
+            await new Promise((resolve) => setTimeout(resolve, 10));
+            written = '';
+
+            pty.setDimensions({ columns: 40, rows: 24 });
+
+            expect(written).not.toContain('db.test.find()');
+
+            resolveEval({ type: 'string', printable: '"x"', durationMs: 1 });
+            await new Promise((resolve) => setTimeout(resolve, 10));
+        });
+    });
+
     describe('action line — Open in Collection View', () => {
         beforeEach(async () => {
             pty.open(undefined);

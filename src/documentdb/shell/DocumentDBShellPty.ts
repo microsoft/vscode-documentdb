@@ -289,6 +289,16 @@ export class DocumentDBShellPty implements vscode.Pseudoterminal {
     setDimensions(dimensions: vscode.TerminalDimensions): void {
         this._columns = dimensions.columns;
         this._inputHandler.setColumns(dimensions.columns);
+
+        // Nothing else repaints the input line, so without this it stays laid
+        // out for the old width until the next keystroke. Only safe while a
+        // prompt is actually awaiting input — during evaluation the terminal
+        // belongs to the command's output.
+        if (this._closed || this._evaluating || !this._inputHandler.isEnabled) {
+            return;
+        }
+        this.clearGhostState();
+        this._inputHandler.renderCurrentLine();
     }
 
     // ─── Private: Multi-line paste handling ──────────────────────────────────
