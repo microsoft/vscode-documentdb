@@ -862,9 +862,12 @@ Copy commands:
 - property `copyScope`: `index`, `indexes`, or `allIndexes`;
 - property `copyCancelled`: whether **Cancel Copy** was chosen;
 - property `learnMoreClicked`: whether **Learn More** was chosen.
+- property `copyFailureReason` for defensive exits such as built-in, non-copyable, empty, or
+  cross-collection selections.
 
 Paste Indexes wizard:
 
+- properties `wizardStarted`, `wizardCompletedSuccessfully`, and stable `wizardFailureReason` codes;
 - property `copyScope` and measurement `selectedIndexCount` for the confirmed set;
 - property `copyOperationCorrelationId`, shared with the task events for this paste attempt;
 - measurements `catalogIndexCount`, `copyableIndexCount`, and `excludedIndexCount` from the

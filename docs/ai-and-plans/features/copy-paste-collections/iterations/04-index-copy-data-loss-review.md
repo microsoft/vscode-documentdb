@@ -438,6 +438,17 @@ establishes the convention with `wizardFailureReason` and `wizardCompletedSucces
 **Proposed resolution:** tag each early exit with a stable reason code, and record wizard outcome
 properties for `pasteIndexes` to match `pasteCollection`.
 
+**Resolution progress (commit `feat(telemetry): classify index command exits`):** implemented.
+Copy Index commands emit `copyFailureReason` for missing, built-in, non-copyable, empty, and
+cross-collection selections. Paste Indexes records `wizardStarted`,
+`wizardCompletedSuccessfully`, cancellation, and `wizardFailureReason` codes for missing buffer,
+unavailable source, same-collection target, cancellation, and execution failure.
+
+**Alternatives evaluated:** one generic `failureReason` property across commands was shorter but
+removed the owning workflow from the schema; reusing `wizardFailureReason` for Copy Index mislabeled
+a single command as a wizard. Purpose-specific properties keep queries clear, and stable codes avoid
+server/user text.
+
 ### T7 — Hidden-index re-hide failure has no dedicated signal
 
 **Severity:** Low.

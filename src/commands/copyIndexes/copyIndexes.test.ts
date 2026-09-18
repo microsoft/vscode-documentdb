@@ -108,15 +108,17 @@ describe('copyIndexes commands', () => {
     );
 
     it('rejects selected indexes from different collections', async () => {
+        const context = createContext();
         const emailIndex = createIndexNode({ name: 'email_1', type: 'traditional', key: { email: 1 } });
         const otherIndex = createIndexNode(
             { name: 'region_1', type: 'traditional', key: { region: 1 } },
             { collectionName: 'otherCollection' },
         );
 
-        await expect(copyIndex(createContext(), emailIndex, [emailIndex, otherIndex])).rejects.toThrow(
+        await expect(copyIndex(context, emailIndex, [emailIndex, otherIndex])).rejects.toThrow(
             'Select indexes from only one collection before copying.',
         );
+        expect(context.telemetry.properties.copyFailureReason).toBe('crossCollectionSelection');
         expect(CopyPasteBufferService.setIndexes).not.toHaveBeenCalled();
     });
 
@@ -139,8 +141,13 @@ describe('copyIndexes commands', () => {
         [{ name: '_id_', type: 'traditional', key: { _id: 1 } }, 'built-in _id index cannot be copied'],
         [{ name: 'search', type: 'vectorSearch' }, 'not supported by Copy/Paste Indexes'],
     ] as const)('rejects a non-copyable index defensively', async (indexInfo, message) => {
-        await expect(copyIndex(createContext(), createIndexNode(indexInfo))).rejects.toThrow(message);
+        const context = createContext();
+
+        await expect(copyIndex(context, createIndexNode(indexInfo))).rejects.toThrow(message);
         expect(CopyPasteBufferService.setIndexes).not.toHaveBeenCalled();
+        expect(context.telemetry.properties.copyFailureReason).toBe(
+            indexInfo.name === '_id_' ? 'builtInId' : 'notCopyable',
+        );
     });
 
     it('clears only the index buffer when Cancel Copy is selected', async () => {

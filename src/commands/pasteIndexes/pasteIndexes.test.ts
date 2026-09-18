@@ -45,8 +45,14 @@ describe('pasteIndexes', () => {
 
     it('rejects an empty copied-index buffer with an actionable message', async () => {
         jest.mocked(CopyPasteBufferService.getIndexes).mockReturnValue(undefined);
+        const context = createContext();
 
-        await expect(pasteIndexes(createContext(), targetNode)).rejects.toThrow('Use Copy Index or Copy Indexes first');
+        await expect(pasteIndexes(context, targetNode)).rejects.toThrow('Use Copy Index or Copy Indexes first');
+        expect(context.telemetry.properties).toMatchObject({
+            wizardStarted: 'true',
+            wizardCompletedSuccessfully: 'false',
+            wizardFailureReason: 'noCopiedIndexes',
+        });
     });
 
     it('rejects the same source and target collection using stable identity', async () => {
@@ -56,9 +62,11 @@ describe('pasteIndexes', () => {
             scope: { kind: 'allIndexes' },
         });
 
-        await expect(pasteIndexes(createContext(), targetNode)).rejects.toThrow(
+        const context = createContext();
+        await expect(pasteIndexes(context, targetNode)).rejects.toThrow(
             'Source and target must be different collections',
         );
+        expect(context.telemetry.properties.wizardFailureReason).toBe('sameCollectionTarget');
     });
 
     it('accepts a cross-connection target and leaves the buffer intact', async () => {
@@ -84,6 +92,7 @@ describe('pasteIndexes', () => {
             copyOperationCorrelationId: expect.any(String),
         });
         expect(context.telemetry.measurements.selectedIndexCount).toBe(1);
+        expect(context.telemetry.properties.wizardCompletedSuccessfully).toBe('true');
         expect(CopyPasteBufferService.clearIndexes).not.toHaveBeenCalled();
     });
 
@@ -110,9 +119,11 @@ describe('pasteIndexes', () => {
         });
         jest.mocked(CredentialCache.hasCredentials).mockReturnValue(false);
 
-        await expect(pasteIndexes(createContext(), targetNode)).rejects.toThrow(
+        const context = createContext();
+        await expect(pasteIndexes(context, targetNode)).rejects.toThrow(
             'source connection is no longer available',
         );
         expect(CopyPasteBufferService.clearIndexes).toHaveBeenCalledTimes(1);
+        expect(context.telemetry.properties.wizardFailureReason).toBe('sourceConnectionUnavailable');
     });
 });

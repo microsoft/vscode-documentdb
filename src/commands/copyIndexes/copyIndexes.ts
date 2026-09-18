@@ -21,6 +21,7 @@ export async function copyIndex(
     selectedItems?: TreeElement[],
 ): Promise<void> {
     if (!clickedNode) {
+        context.telemetry.properties.copyFailureReason = 'noIndexSelection';
         throw new Error(vscode.l10n.t('No index selected.'));
     }
 
@@ -34,9 +35,11 @@ export async function copyIndex(
     if (!sourceNode) {
         const exclusionReason = getIndexExclusionReason(clickedNode.indexInfo);
         if (exclusionReason === 'builtInId') {
+            context.telemetry.properties.copyFailureReason = 'builtInId';
             throw new Error(vscode.l10n.t('The built-in _id index cannot be copied.'));
         }
         if (exclusionReason === 'notCopyable') {
+            context.telemetry.properties.copyFailureReason = 'notCopyable';
             throw new Error(
                 vscode.l10n.t(
                     'The selected {0} index is not supported by Copy/Paste Indexes.',
@@ -44,11 +47,13 @@ export async function copyIndex(
                 ),
             );
         }
+        context.telemetry.properties.copyFailureReason = 'noCopyableIndexes';
         throw new Error(vscode.l10n.t('No copyable indexes are selected.'));
     }
 
     const crossCollectionIndex = selectedIndexNodes.find((item) => !hasSameSource(sourceNode, item));
     if (crossCollectionIndex) {
+        context.telemetry.properties.copyFailureReason = 'crossCollectionSelection';
         throw new Error(vscode.l10n.t('Select indexes from only one collection before copying.'));
     }
 
@@ -73,6 +78,7 @@ export async function copyIndex(
 
 export async function copyIndexes(context: IActionContext, node: IndexesItem): Promise<void> {
     if (!node) {
+        context.telemetry.properties.copyFailureReason = 'noIndexesSelection';
         throw new Error(vscode.l10n.t('No indexes node selected.'));
     }
 
