@@ -8,23 +8,7 @@ import { EJSON } from 'bson';
 import * as vscode from 'vscode';
 import { meterSilentCatch } from '../../utils/accumulatingTelemetry';
 import { type SerializableExecutionResult } from '../playground/workerTypes';
-
-/**
- * ANSI color codes for terminal output.
- */
-const ANSI = {
-    reset: '\x1b[0m',
-    bold: '\x1b[1m',
-    defaultForeground: '\x1b[39m',
-    underline: '\x1b[4m',
-    noUnderline: '\x1b[24m',
-    red: '\x1b[31m',
-    green: '\x1b[32m',
-    yellow: '\x1b[33m',
-    magenta: '\x1b[35m',
-    cyan: '\x1b[36m',
-    gray: '\x1b[90m',
-} as const;
+import { shellAnsi, shellStyles } from './shellStyles';
 
 /**
  * Matches a technical error code prefix at the start of an error message.
@@ -104,7 +88,7 @@ export class ShellOutputFormatter {
         // Add cursor "more" indicator
         if (result.cursorHasMore) {
             const moreText = l10n.t('Type "it" for more');
-            output += '\r\n' + (colorEnabled ? `${ANSI.gray}${moreText}${ANSI.reset}` : moreText);
+            output += '\r\n' + (colorEnabled ? `${shellStyles.muted}${moreText}${shellAnsi.reset}` : moreText);
         }
 
         return output;
@@ -119,7 +103,7 @@ export class ShellOutputFormatter {
     formatError(error: string): string {
         const colorEnabled = this.isColorEnabled();
         if (colorEnabled) {
-            return `${ANSI.red}${error}${ANSI.reset}`;
+            return `${shellStyles.error}${error}${shellAnsi.reset}`;
         }
         return error;
     }
@@ -130,7 +114,7 @@ export class ShellOutputFormatter {
     formatSystemMessage(message: string): string {
         const colorEnabled = this.isColorEnabled();
         if (colorEnabled) {
-            return `${ANSI.gray}${message}${ANSI.reset}`;
+            return `${shellStyles.muted}${message}${shellAnsi.reset}`;
         }
         return message;
     }
@@ -142,7 +126,7 @@ export class ShellOutputFormatter {
         if (!this.isColorEnabled()) {
             return message;
         }
-        return `${ANSI.bold}${message}${ANSI.reset}`;
+        return `${shellStyles.emphasis}${message}${shellAnsi.reset}`;
     }
 
     /**
@@ -153,7 +137,7 @@ export class ShellOutputFormatter {
         if (!this.isColorEnabled()) {
             return value;
         }
-        return `${ANSI.bold}${ANSI.defaultForeground}${value}${ANSI.reset}${ANSI.gray}`;
+        return `${shellStyles.value}${value}${shellAnsi.reset}${shellStyles.muted}`;
     }
 
     // ─── Private: Value formatting ───────────────────────────────────────────
@@ -163,16 +147,16 @@ export class ShellOutputFormatter {
             return '';
         }
         if (value === null) {
-            return colorEnabled ? `${ANSI.magenta}null${ANSI.reset}` : 'null';
+            return colorEnabled ? `${shellStyles.result.boolean}null${shellAnsi.reset}` : 'null';
         }
         if (typeof value === 'string') {
             return value;
         }
         if (typeof value === 'number') {
-            return colorEnabled ? `${ANSI.yellow}${String(value)}${ANSI.reset}` : String(value);
+            return colorEnabled ? `${shellStyles.result.number}${String(value)}${shellAnsi.reset}` : String(value);
         }
         if (typeof value === 'boolean') {
-            return colorEnabled ? `${ANSI.magenta}${String(value)}${ANSI.reset}` : String(value);
+            return colorEnabled ? `${shellStyles.result.boolean}${String(value)}${shellAnsi.reset}` : String(value);
         }
 
         // Objects and arrays — pretty-print as EJSON
@@ -260,8 +244,11 @@ export class ShellOutputFormatter {
         return line.replace(
             /^(\s*)"([^"]+)"(\s*:\s*)(.*)/,
             (_match: string, indent: string, key: string, colon: string, rest: string) => {
-                const keyColor = key === '_id' ? `${ANSI.bold}${ANSI.cyan}` : ANSI.cyan;
-                const coloredKey = `${indent}${keyColor}"${key}"${ANSI.reset}${colon}`;
+                const keyColor =
+                    key === '_id'
+                        ? `${shellStyles.emphasis}${shellStyles.result.key}`
+                        : shellStyles.result.key;
+                const coloredKey = `${indent}${keyColor}"${key}"${shellAnsi.reset}${colon}`;
                 return coloredKey + this.colorizeValue(rest);
             },
         );
@@ -272,18 +259,27 @@ export class ShellOutputFormatter {
 
         // String value: "..."
         if (trimmed.startsWith('"')) {
-            return value.replace(/"(?:[^"\\]|\\.)*"/, (match) => `${ANSI.green}${match}${ANSI.reset}`);
+            return value.replace(
+                /"(?:[^"\\]|\\.)*"/,
+                (match) => `${shellStyles.result.string}${match}${shellAnsi.reset}`,
+            );
         }
 
         // Boolean or null
         const boolOrNull = trimmed.replace(/[,\s]/g, '');
         if (boolOrNull === 'true' || boolOrNull === 'false' || boolOrNull === 'null') {
-            return value.replace(/(true|false|null)/, (match) => `${ANSI.magenta}${match}${ANSI.reset}`);
+            return value.replace(
+                /(true|false|null)/,
+                (match) => `${shellStyles.result.boolean}${match}${shellAnsi.reset}`,
+            );
         }
 
         // Number
         if (/^-?\d+(\.\d+)?[,\s]*$/.test(trimmed)) {
-            return value.replace(/-?\d+(\.\d+)?/, (match) => `${ANSI.yellow}${match}${ANSI.reset}`);
+            return value.replace(
+                /-?\d+(\.\d+)?/,
+                (match) => `${shellStyles.result.number}${match}${shellAnsi.reset}`,
+            );
         }
 
         return value;
@@ -330,7 +326,7 @@ export class ShellOutputFormatter {
             .map((line) => {
                 // Section headers: "# Title"
                 if (line.startsWith('# ')) {
-                    return `${ANSI.bold}${line.slice(2)}${ANSI.reset}`;
+                    return `${shellStyles.emphasis}${line.slice(2)}${shellAnsi.reset}`;
                 }
 
                 // Command entries: "  command(padded)     description"
@@ -340,12 +336,12 @@ export class ShellOutputFormatter {
                 const entryMatch = /^( {2})(\S.*\S)( {2,})(\S.+)$/.exec(line);
                 if (entryMatch) {
                     const [, indent, command, gap, description] = entryMatch;
-                    return `${indent}${ANSI.yellow}${command}${ANSI.reset}${gap}${ANSI.gray}${description}${ANSI.reset}`;
+                    return `${indent}${shellStyles.completion.action}${command}${shellAnsi.reset}${gap}${shellStyles.muted}${description}${shellAnsi.reset}`;
                 }
 
                 // Tip lines (indented text without two-column structure)
                 if (line.startsWith('  ') && line.trim().length > 0) {
-                    return `${ANSI.gray}${line}${ANSI.reset}`;
+                    return `${shellStyles.muted}${line}${shellAnsi.reset}`;
                 }
 
                 return line;
@@ -364,7 +360,7 @@ export class ShellOutputFormatter {
      * communicates clickability, not decoration.
      */
     formatLinkSentinel(text: string): string {
-        return `${ANSI.underline}${text}${ANSI.noUnderline}`;
+        return `${shellAnsi.underline}${text}${shellAnsi.noUnderline}`;
     }
 
     // ─── Private: Settings ───────────────────────────────────────────────────

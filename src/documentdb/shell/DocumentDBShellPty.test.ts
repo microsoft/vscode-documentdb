@@ -558,11 +558,12 @@ describe('DocumentDBShellPty', () => {
 
     describe('ghost text — append-only invariant', () => {
         /** Dim + gray prefix emitted by ShellGhostText. */
-        const GHOST_STYLE = '\x1b[2m\x1b[90m';
+        const GHOST_STYLE = '\x1b[2m';
         /** Ghost text is debounced by 50 ms in the PTY. */
         const afterGhostDebounce = (): Promise<void> => new Promise((resolve) => setTimeout(resolve, 80));
 
         beforeEach(async () => {
+            settingOverrides['documentDB.shell.display.colorSupport'] = true;
             pty.open(undefined);
             await new Promise((resolve) => setTimeout(resolve, 10));
             written = '';
@@ -592,10 +593,11 @@ describe('DocumentDBShellPty', () => {
 
     describe('ghost text — candidate description hint', () => {
         /** Dim + gray prefix emitted by ShellGhostText. */
-        const GHOST_STYLE = '\x1b[2m\x1b[90m';
+        const GHOST_STYLE = '\x1b[2m';
         const afterGhostDebounce = (): Promise<void> => new Promise((resolve) => setTimeout(resolve, 80));
 
         beforeEach(async () => {
+            settingOverrides['documentDB.shell.display.colorSupport'] = true;
             pty.open(undefined);
             await new Promise((resolve) => setTimeout(resolve, 10));
             written = '';
@@ -656,7 +658,7 @@ describe('DocumentDBShellPty', () => {
 
     describe('ghost text — bracket-notation preview', () => {
         /** Dim + gray prefix emitted by ShellGhostText. */
-        const GHOST_STYLE = '\x1b[2m\x1b[90m';
+        const GHOST_STYLE = '\x1b[2m';
         const afterGhostDebounce = (): Promise<void> => new Promise((resolve) => setTimeout(resolve, 80));
 
         /**
@@ -679,6 +681,7 @@ describe('DocumentDBShellPty', () => {
         }
 
         beforeEach(async () => {
+            settingOverrides['documentDB.shell.display.colorSupport'] = true;
             pty.open(undefined);
             await new Promise((resolve) => setTimeout(resolve, 10));
             written = '';
@@ -710,7 +713,7 @@ describe('DocumentDBShellPty', () => {
 
     describe('ghost text — collection count at `db.`', () => {
         /** Dim + gray prefix emitted by ShellGhostText. */
-        const GHOST_STYLE = '\x1b[2m\x1b[90m';
+        const GHOST_STYLE = '\x1b[2m';
         const afterGhostDebounce = (): Promise<void> => new Promise((resolve) => setTimeout(resolve, 80));
 
         /**
@@ -734,6 +737,7 @@ describe('DocumentDBShellPty', () => {
         }
 
         beforeEach(async () => {
+            settingOverrides['documentDB.shell.display.colorSupport'] = true;
             pty.open(undefined);
             await new Promise((resolve) => setTimeout(resolve, 10));
             written = '';
@@ -820,10 +824,11 @@ describe('DocumentDBShellPty', () => {
 
     describe('ghost text — history autosuggestion', () => {
         /** Dim + gray prefix emitted by ShellGhostText. */
-        const GHOST_STYLE = '\x1b[2m\x1b[90m';
+        const GHOST_STYLE = '\x1b[2m';
         const afterGhostDebounce = (): Promise<void> => new Promise((resolve) => setTimeout(resolve, 80));
 
         beforeEach(async () => {
+            settingOverrides['documentDB.shell.display.colorSupport'] = true;
             pty.open(undefined);
             await new Promise((resolve) => setTimeout(resolve, 10));
             mockEvaluate.mockResolvedValue({ type: 'string', printable: '"x"', durationMs: 1 });
@@ -990,14 +995,15 @@ describe('DocumentDBShellPty', () => {
     });
 
     describe('display settings — two switches, one per marker', () => {
-        /** Dim + gray prefix emitted by ShellGhostText. */
-        const GHOST_STYLE = '\x1b[2m\x1b[90m';
+        /** Dim prefix emitted by ShellGhostText. */
+        const GHOST_STYLE = '\x1b[2m';
         const afterGhostDebounce = (): Promise<void> => new Promise((resolve) => setTimeout(resolve, 80));
 
         const AUTOCOMPLETION = 'documentDB.shell.display.autocompletion';
         const INLINE_HINTS = 'documentDB.shell.display.inlineHints';
 
         beforeEach(async () => {
+            settingOverrides['documentDB.shell.display.colorSupport'] = true;
             pty.open(undefined);
             await new Promise((resolve) => setTimeout(resolve, 10));
             mockEvaluate.mockResolvedValue({ type: 'string', printable: '"x"', durationMs: 1 });

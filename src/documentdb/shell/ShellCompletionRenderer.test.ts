@@ -68,6 +68,15 @@ describe('ShellCompletionRenderer', () => {
             expect(output).toContain('\x1b[33m'); // yellow for method
         });
 
+        it('should omit decorative ANSI when color is disabled', () => {
+            const candidates = [makeCandidate('restaurants', 'collection'), makeCandidate('aggregate', 'method')];
+            const output = renderCompletionList(candidates, 80, false);
+
+            expect(output).toContain('restaurants');
+            expect(output).toContain('aggregate()');
+            expect(output).not.toMatch(/\x1b\[\d+m/);
+        });
+
         it('should wrap to multiple rows when needed', () => {
             const candidates = Array.from({ length: 20 }, (_, i) => makeCandidate(`item${String(i)}`));
             const output = renderCompletionList(candidates, 40);

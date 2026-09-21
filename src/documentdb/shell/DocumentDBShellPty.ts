@@ -125,7 +125,7 @@ export class DocumentDBShellPty implements vscode.Pseudoterminal {
         this._initialInput = options.initialInput;
 
         this._completionProvider = new ShellCompletionProvider();
-        this._ghostText = new ShellGhostText();
+        this._ghostText = new ShellGhostText(() => this.isColorEnabled());
 
         const sessionCallbacks: ShellSessionCallbacks = {
             onConsoleOutput: (output: string) => {
@@ -1072,7 +1072,7 @@ export class DocumentDBShellPty implements vscode.Pseudoterminal {
         }
 
         // Render the completion list below the prompt
-        const listOutput = renderCompletionList(result.candidates, this._columns);
+        const listOutput = renderCompletionList(result.candidates, this._columns, this.isColorEnabled());
         if (listOutput.length > 0) {
             this._writeEmitter.fire(listOutput);
             this._completionListVisible = true;

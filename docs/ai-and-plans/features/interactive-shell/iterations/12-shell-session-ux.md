@@ -115,6 +115,41 @@ remains a single transient `Connecting and authenticating...` line and does not 
 - The focused PTY and spinner suites passed with 67 tests.
 - `npm run build` and `npm run webpack-dev-ext` passed.
 
+## WI4: Shared Semantic Terminal Styles
+
+**Status:** Implemented
+
+Shell colors had accumulated independently in the result formatter, input token colorizer,
+completion renderer, ghost-text renderer, and spinner. The visible RGB values still came from the
+active terminal theme's ANSI slots, but the role-to-slot decisions were duplicated and could drift.
+
+`shellStyles.ts` now owns two layers:
+
+- `shellAnsi` contains theme-resolved ANSI styling controls such as red, cyan, bold, dim, and reset;
+- `shellStyles` assigns those controls to semantic roles such as error, muted text, string, number,
+  operator, completion action, and spinner.
+
+Renderers continue to own layout and terminal mechanics. Cursor movement, line clearing, clipping,
+and spinner animation do not belong in the style map. This keeps the shared module focused on visual
+meaning rather than turning it into a general terminal utility.
+
+Input syntax and output results now share the same string and number roles. Completion candidates,
+help and JSON output, errors, the spinner, and the shell header consume the same map. Ghost text uses
+dim default foreground rather than dim gray because it communicates reduced emphasis, not a semantic
+color category.
+
+`documentDB.shell.display.colorSupport` is now authoritative for completion-list colors and ghost
+text as well as the existing syntax, result, help, error, header, and spinner surfaces. Disabling it
+removes decorative styling while retaining cursor-control sequences required for terminal behavior.
+Link underlines remain independent because they communicate clickability rather than decoration.
+
+### Verification
+
+- Shared-role contract tests verify that input and output reuse string and number styles and that
+  ghost text assigns no color.
+- Focused formatter, syntax-colorizer, completion, ghost-text, spinner, and PTY suites passed with
+  200 tests before the final contract tests were added.
+
 ## Next Work Items
 
 Add further items only after an issue has a concrete reproduction, an owning code path, and a scoped

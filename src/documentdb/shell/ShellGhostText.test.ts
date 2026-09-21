@@ -34,11 +34,22 @@ describe('ShellGhostText', () => {
             expect(ghostText.currentText).toBe('aurants');
         });
 
-        it('should write dim gray ANSI codes', () => {
+        it('should write dim ANSI without assigning a color', () => {
             ghostText.show('hello', write);
-            expect(written).toContain('\x1b[2m\x1b[90m');
+            expect(written).toContain('\x1b[2mhello');
+            expect(written).not.toContain('\x1b[90m');
             expect(written).toContain('hello');
             expect(written).toContain('\x1b[0m');
+        });
+
+        it('should omit decorative ANSI when color is disabled', () => {
+            ghostText = new ShellGhostText(() => false);
+
+            ghostText.show('hello', write);
+
+            expect(written).toContain('hello');
+            expect(written).not.toContain('\x1b[2m');
+            expect(written).not.toContain('\x1b[0m');
         });
 
         it('should move cursor back after ghost text', () => {
@@ -84,19 +95,19 @@ describe('ShellGhostText', () => {
     describe('width clipping', () => {
         /** Display width of the text between the dim-style prefix and the reset. */
         const renderedWidth = (data: string): number => {
-            const match = /\x1b\[2m\x1b\[90m(.*?)\x1b\[0m/s.exec(data);
+            const match = /\x1b\[2m(.*?)\x1b\[0m/s.exec(data);
             return match ? [...match[1]].length : 0;
         };
 
         it('should render in full when the text fits', () => {
             ghostText.show('abcde', write, 10);
-            expect(written).toContain('\x1b[2m\x1b[90mabcde\x1b[0m');
+            expect(written).toContain('\x1b[2mabcde\x1b[0m');
             expect(written).toContain('\x1b[5D');
         });
 
         it('should clip to the available columns and mark the truncation', () => {
             ghostText.show('abcdefghij', write, 5);
-            expect(written).toContain('\x1b[2m\x1b[90mabcd…\x1b[0m');
+            expect(written).toContain('\x1b[2mabcd…\x1b[0m');
             expect(written).toContain('\x1b[5D');
         });
 
@@ -137,13 +148,13 @@ describe('ShellGhostText', () => {
             ghostText.show('completion', write, 4);
             written = '';
             ghostText.show('completion', write, 20);
-            expect(written).toContain('\x1b[2m\x1b[90mcompletion\x1b[0m');
+            expect(written).toContain('\x1b[2mcompletion\x1b[0m');
         });
 
         it('should not split a surrogate pair when clipping', () => {
             // Clipping at 2 columns leaves room for 1 column + the ellipsis.
             ghostText.show('a🛈bcdef', write, 3);
-            const match = /\x1b\[2m\x1b\[90m(.*?)\x1b\[0m/s.exec(written);
+            const match = /\x1b\[2m(.*?)\x1b\[0m/s.exec(written);
             expect(match?.[1]).toBe('a🛈…');
             expect(written).toContain('\x1b[3D');
         });

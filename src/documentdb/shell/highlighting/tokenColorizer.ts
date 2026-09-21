@@ -11,33 +11,32 @@
  */
 
 import { type TokenSpan } from './monarchRunner';
+import { shellAnsi, shellStyles } from '../shellStyles';
 
 // ─── ANSI escape codes ──────────────────────────────────────────────────────
 
-const RESET = '\x1b[0m';
-
 /** Map from token type prefix to ANSI color code. */
 const TOKEN_COLORS: Record<string, string> = {
-    keyword: '\x1b[36m', // Cyan — JS keywords
-    'keyword.other': '\x1b[36m', // Cyan — regex flags (i, g, m, etc.)
-    string: '\x1b[32m', // Green — matches output formatter
-    'string.escape': '\x1b[33m', // Yellow — escape sequences stand out
-    'string.escape.invalid': '\x1b[31m', // Red — invalid escapes
-    'string.invalid': '\x1b[31m', // Red — unterminated strings
-    number: '\x1b[33m', // Yellow — matches output formatter
-    'number.float': '\x1b[33m', // Yellow
-    'number.hex': '\x1b[33m', // Yellow
-    'number.octal': '\x1b[33m', // Yellow
-    'number.binary': '\x1b[33m', // Yellow
-    comment: '\x1b[90m', // Gray — subdued
-    'comment.doc': '\x1b[90m', // Gray — subdued
-    regexp: '\x1b[31m', // Red — distinct from strings
-    'regexp.escape': '\x1b[31m', // Red
-    'regexp.escape.control': '\x1b[31m', // Red
-    'regexp.invalid': '\x1b[31m', // Red
-    'bson.constructor': '\x1b[36m', // Cyan — built-in constructors
-    'documentdb.operator': '\x1b[33m', // Yellow — stand out in query objects
-    'shell.command': '\x1b[35m', // Magenta — visually distinct from JS keywords
+    keyword: shellStyles.syntax.keyword,
+    'keyword.other': shellStyles.syntax.keyword,
+    string: shellStyles.syntax.string,
+    'string.escape': shellStyles.syntax.escape,
+    'string.escape.invalid': shellStyles.syntax.invalid,
+    'string.invalid': shellStyles.syntax.invalid,
+    number: shellStyles.syntax.number,
+    'number.float': shellStyles.syntax.number,
+    'number.hex': shellStyles.syntax.number,
+    'number.octal': shellStyles.syntax.number,
+    'number.binary': shellStyles.syntax.number,
+    comment: shellStyles.syntax.comment,
+    'comment.doc': shellStyles.syntax.comment,
+    regexp: shellStyles.syntax.regexp,
+    'regexp.escape': shellStyles.syntax.regexp,
+    'regexp.escape.control': shellStyles.syntax.regexp,
+    'regexp.invalid': shellStyles.syntax.invalid,
+    'bson.constructor': shellStyles.syntax.constructor,
+    'documentdb.operator': shellStyles.syntax.operator,
+    'shell.command': shellStyles.syntax.command,
 };
 
 // ─── Public API ──────────────────────────────────────────────────────────────
@@ -67,7 +66,7 @@ export function colorizeInput(input: string, tokens: TokenSpan[]): string {
         const color = getTokenColor(token.type);
 
         if (color) {
-            result += color + text + RESET;
+            result += color + text + shellAnsi.reset;
         } else {
             result += text;
         }

@@ -6,22 +6,20 @@
 /**
  * Ghost text (inline suggestion) rendering for the interactive shell.
  *
- * Shows a dim, gray suggestion after the cursor when there is a single
+ * Shows a dim suggestion after the cursor when there is a single
  * obvious completion. The user accepts the ghost text with Right Arrow
  * or Tab, or dismisses it by typing another character or pressing Escape.
  *
- * Ghost text is rendered using ANSI dim + gray escape codes (`\x1b[2m\x1b[90m`)
- * and the cursor is repositioned back to the editing position so the user
+ * Ghost text is rendered using ANSI dim intensity without assigning a color,
+ * then the cursor is repositioned back to the editing position so the user
  * continues typing at the same location.
  */
 
+import { shellAnsi, shellStyles } from './shellStyles';
 import { clipToDisplayWidth, terminalDisplayWidth } from './terminalDisplayWidth';
 
 // ─── ANSI constants ──────────────────────────────────────────────────────────
 
-/** Dim + gray for ghost text appearance. */
-const GHOST_STYLE = '\x1b[2m\x1b[90m';
-const ANSI_RESET = '\x1b[0m';
 /** Erase from cursor to end of line. */
 const ERASE_TO_EOL = '\x1b[K';
 /** Appended when the suggestion is too wide to fit on the current row. */
@@ -42,6 +40,8 @@ export class ShellGhostText {
     private _renderedGhost: string = '';
     /** Whether ghost text is currently visible. */
     private _visible: boolean = false;
+
+    constructor(private readonly _isColorEnabled: () => boolean = () => true) {}
 
     /**
      * Whether ghost text is currently visible.
@@ -99,8 +99,8 @@ export class ShellGhostText {
         this._renderedGhost = renderText;
         this._visible = true;
 
-        // Write ghost text in dim gray, then move cursor back
-        write(GHOST_STYLE + renderText + ANSI_RESET);
+        // Ghost text communicates reduced emphasis, not a semantic color category.
+        write(this._isColorEnabled() ? shellStyles.ghostText + renderText + shellAnsi.reset : renderText);
         const displayWidth = terminalDisplayWidth(renderText);
         if (displayWidth > 0) {
             write(`\x1b[${String(displayWidth)}D`);
