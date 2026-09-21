@@ -160,9 +160,7 @@ export function renderCompletionList(
     if (truncated) {
         const remaining = candidates.length - displayCount;
         const moreText = `\u2026and ${String(remaining)} more`;
-        output +=
-            '\r\n' +
-            (colorEnabled ? `${shellStyles.completion.other}${moreText}${shellAnsi.reset}` : moreText);
+        output += '\r\n' + (colorEnabled ? `${shellStyles.completion.other}${moreText}${shellAnsi.reset}` : moreText);
     }
 
     return output;

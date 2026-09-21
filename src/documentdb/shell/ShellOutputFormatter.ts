@@ -245,9 +245,7 @@ export class ShellOutputFormatter {
             /^(\s*)"([^"]+)"(\s*:\s*)(.*)/,
             (_match: string, indent: string, key: string, colon: string, rest: string) => {
                 const keyColor =
-                    key === '_id'
-                        ? `${shellStyles.emphasis}${shellStyles.result.key}`
-                        : shellStyles.result.key;
+                    key === '_id' ? `${shellStyles.emphasis}${shellStyles.result.key}` : shellStyles.result.key;
                 const coloredKey = `${indent}${keyColor}"${key}"${shellAnsi.reset}${colon}`;
                 return coloredKey + this.colorizeValue(rest);
             },
@@ -276,10 +274,7 @@ export class ShellOutputFormatter {
 
         // Number
         if (/^-?\d+(\.\d+)?[,\s]*$/.test(trimmed)) {
-            return value.replace(
-                /-?\d+(\.\d+)?/,
-                (match) => `${shellStyles.result.number}${match}${shellAnsi.reset}`,
-            );
+            return value.replace(/-?\d+(\.\d+)?/, (match) => `${shellStyles.result.number}${match}${shellAnsi.reset}`);
         }
 
         return value;
@@ -291,7 +286,7 @@ export class ShellOutputFormatter {
      * Format help text for terminal display.
      *
      * Shell help uses a structured format:
-    * - Lines starting with `# ` are section headers → rendered bold
+     * - Lines starting with `# ` are section headers → rendered bold
      * - Lines starting with `  ` contain a padded command/description pair → command in yellow
      * - Other lines (tips, blanks) are rendered as-is in gray
      *
@@ -369,5 +364,4 @@ export class ShellOutputFormatter {
         const config = vscode.workspace.getConfiguration();
         return config.get<boolean>('documentDB.shell.display.colorSupport', true);
     }
-
 }

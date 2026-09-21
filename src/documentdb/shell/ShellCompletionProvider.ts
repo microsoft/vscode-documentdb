@@ -161,6 +161,26 @@ export class ShellCompletionProvider {
     private readonly _backgroundFetchTriggered = new Set<string>();
 
     /**
+     * Warm the collection cache for a database without blocking shell input.
+     */
+    async prewarmCollections(context: ShellCompletionContext): Promise<void> {
+        const fetchKey = `colls:${context.clusterId}:${context.databaseName}`;
+        if (this._backgroundFetchTriggered.has(fetchKey)) {
+            return;
+        }
+
+        this._backgroundFetchTriggered.add(fetchKey);
+        try {
+            const client = await ClustersClient.getClient(context.clusterId);
+            await client.listCollections(context.databaseName, true);
+        } catch {
+            // Non-critical — completions degrade gracefully when discovery fails
+        } finally {
+            this._backgroundFetchTriggered.delete(fetchKey);
+        }
+    }
+
+    /**
      * Get completion candidates for the current input buffer and cursor position.
      *
      * All data reads are synchronous (from caches). If a cache is empty, a
@@ -638,18 +658,7 @@ export class ShellCompletionProvider {
                 }
             } else {
                 // Trigger background fetch
-                const fetchKey = `colls:${context.clusterId}:${context.databaseName}`;
-                if (!this._backgroundFetchTriggered.has(fetchKey)) {
-                    this._backgroundFetchTriggered.add(fetchKey);
-                    void client
-                        .listCollections(context.databaseName)
-                        .catch(() => {
-                            // Non-critical
-                        })
-                        .finally(() => {
-                            this._backgroundFetchTriggered.delete(fetchKey);
-                        });
-                }
+                void this.prewarmCollections(context);
             }
         }
 
@@ -723,18 +732,7 @@ export class ShellCompletionProvider {
                 }
             } else {
                 // Trigger background fetch
-                const fetchKey = `colls:${context.clusterId}:${context.databaseName}`;
-                if (!this._backgroundFetchTriggered.has(fetchKey)) {
-                    this._backgroundFetchTriggered.add(fetchKey);
-                    void client
-                        .listCollections(context.databaseName)
-                        .catch(() => {
-                            // Non-critical
-                        })
-                        .finally(() => {
-                            this._backgroundFetchTriggered.delete(fetchKey);
-                        });
-                }
+                void this.prewarmCollections(context);
             }
         }
 

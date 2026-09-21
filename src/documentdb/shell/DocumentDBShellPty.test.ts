@@ -429,10 +429,27 @@ describe('DocumentDBShellPty', () => {
     });
 
     describe('database switching', () => {
+        let prewarmCollections: jest.SpyInstance;
+
         beforeEach(async () => {
+            mockInitialize.mockResolvedValue({
+                host: 'test-host.documents.azure.com:10255',
+                authMechanism: 'NativeAuth',
+                isEmulator: false,
+            });
+            prewarmCollections = jest
+                .spyOn(ShellCompletionProvider.prototype, 'prewarmCollections')
+                .mockResolvedValue(undefined);
             pty.open(undefined);
             await new Promise((resolve) => setTimeout(resolve, 10));
             written = '';
+        });
+
+        it('should prewarm collections for the initial database after connecting', () => {
+            expect(prewarmCollections).toHaveBeenCalledWith({
+                clusterId: 'test-cluster-id',
+                databaseName: 'testdb',
+            });
         });
 
         it('should update prompt after use <db> result', async () => {
@@ -447,6 +464,10 @@ describe('DocumentDBShellPty', () => {
             await new Promise((resolve) => setTimeout(resolve, 10));
 
             expect(written).toContain('newdb> ');
+            expect(prewarmCollections).toHaveBeenCalledWith({
+                clusterId: 'test-cluster-id',
+                databaseName: 'newdb',
+            });
         });
 
         it('should update terminal title after use <db> for Entra ID sessions', async () => {

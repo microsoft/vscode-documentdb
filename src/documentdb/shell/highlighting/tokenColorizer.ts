@@ -10,8 +10,8 @@
  * so that input and output highlighting are visually consistent.
  */
 
-import { type TokenSpan } from './monarchRunner';
 import { shellAnsi, shellStyles } from '../shellStyles';
+import { type TokenSpan } from './monarchRunner';
 
 // ─── ANSI escape codes ──────────────────────────────────────────────────────
 

@@ -464,6 +464,11 @@ export class DocumentDBShellPty implements vscode.Pseudoterminal {
         try {
             const metadata = await this._sessionManager.initialize();
 
+            void this._completionProvider.prewarmCollections({
+                clusterId: this._connectionInfo.clusterId,
+                databaseName: this._currentDatabase,
+            });
+
             // Stop the connection spinner
             this._spinner?.stop();
             this._spinner = undefined;
@@ -843,6 +848,10 @@ export class DocumentDBShellPty implements vscode.Pseudoterminal {
         if (newDb) {
             this._currentDatabase = newDb;
             this._sessionManager.setActiveDatabase(newDb);
+            void this._completionProvider.prewarmCollections({
+                clusterId: this._connectionInfo.clusterId,
+                databaseName: newDb,
+            });
             this.updateTerminalTitle();
         }
     }

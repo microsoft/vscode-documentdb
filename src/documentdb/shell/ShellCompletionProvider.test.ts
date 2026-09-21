@@ -205,6 +205,18 @@ describe('ShellCompletionProvider', () => {
         });
     });
 
+    describe('collection prewarming', () => {
+        it('should populate the shared cache for the requested database', async () => {
+            const listCollections = jest.fn().mockResolvedValue([]);
+            (ClustersClient.getClient as jest.Mock).mockResolvedValue({ listCollections });
+
+            await provider.prewarmCollections(TEST_CONTEXT);
+
+            expect(ClustersClient.getClient).toHaveBeenCalledWith('test-cluster');
+            expect(listCollections).toHaveBeenCalledWith('testdb', true);
+        });
+    });
+
     describe('use database completions', () => {
         it('should return database names from ClustersClient cache', () => {
             mockClustersClient([{ name: 'admin' }, { name: 'mydb' }, { name: 'testdb' }]);
