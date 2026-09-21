@@ -17,6 +17,9 @@ import { shellAnsi, shellStyles } from './shellStyles';
  */
 const ERROR_CODE_PREFIX_RE = /^\[([A-Z]+-\d+)\]\s*/;
 
+/** Compact settings markers embedded in shell help and handled by the terminal link provider. */
+const HELP_SETTINGS_LINK_RE = /\u{2699} \[[^\]]+\]/gu;
+
 /**
  * Result of extracting a technical error code from an error message.
  */
@@ -305,11 +308,8 @@ export class ShellOutputFormatter {
             return this.toEjsonString(printable);
         }
 
-        if (!this.isColorEnabled()) {
-            return text;
-        }
-
-        return this.colorizeHelpText(text);
+        const formatted = this.isColorEnabled() ? this.colorizeHelpText(text) : text;
+        return formatted.replace(HELP_SETTINGS_LINK_RE, (link) => this.formatLinkSentinel(link));
     }
 
     /**

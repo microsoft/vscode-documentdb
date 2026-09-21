@@ -270,14 +270,16 @@ export class HelpProvider {
             entry('cls / clear', 'Clear the screen'),
             blank,
 
+            header('Settings'),
+            tip('Select an option to open it in VS Code Settings.'),
+            tip('⚙ [colorSupport] Toggle syntax and output colors.'),
+            tip('Manual access: search Settings for documentDB.shell.display.colorSupport'),
+            tip('⚙ [inlineHints] Toggle 🛈 descriptions, counts, and previews.'),
+            tip('Manual access: search Settings for documentDB.shell.display.inlineHints'),
+            blank,
+
             header('Tips'),
             tip('Variables persist across commands. console.log() output appears inline.'),
-            // The settings prefix is named once rather than twice in full: a
-            // 39-character id does not fit a 40-column line, and wrapText
-            // deliberately never splits a token.
-            tip(
-                'Settings (search "documentDB.shell.display"): autocompletion turns suggestions off, inlineHints hides the 🛈 notes.',
-            ),
         ];
 
         return this.layoutShellHelp(document, columns).join('\n');

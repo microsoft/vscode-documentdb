@@ -268,6 +268,25 @@ describe('ShellTerminalLinkProvider', () => {
             });
         });
 
+        it.each([
+            ['colorSupport', 'documentDB.shell.display.colorSupport'],
+            ['inlineHints', 'documentDB.shell.display.inlineHints'],
+        ])('should resolve the %s help marker to its full setting key', (marker, settingKey) => {
+            registerShellTerminal(mockTerminal, () => mockShellInfo('test-id'));
+
+            const context = {
+                terminal: mockTerminal,
+                line: `  ${SETTINGS_ACTION_PREFIX}[${marker}] Toggle this setting`,
+            } as vscode.TerminalLinkContext;
+
+            const links = provider.provideTerminalLinks(context);
+            expect(links).toHaveLength(1);
+            expect(links[0]).toMatchObject({
+                linkType: 'settings',
+                settingKey,
+            });
+        });
+
         it('should handle ANSI-wrapped settings action line', () => {
             registerShellTerminal(mockTerminal, () => mockShellInfo('test-id'));
 

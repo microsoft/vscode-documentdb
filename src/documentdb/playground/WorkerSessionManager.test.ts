@@ -94,6 +94,34 @@ describe('WorkerSessionManager', () => {
         });
     });
 
+    describe('initialization timeout', () => {
+        it('explains the failed connection and identifies the timeout setting', async () => {
+            jest.useFakeTimers();
+            const manager = new WorkerSessionManager(callbacks);
+            const initPromise = manager.ensureWorker(
+                'cluster-1',
+                {
+                    type: 'init',
+                    requestId: '',
+                    connectionString: 'mongodb://cluster-1:27017',
+                    clientOptions: {} as never,
+                    databaseName: 'testdb',
+                    authMechanism: 'NativeAuth',
+                },
+                1000,
+            );
+
+            jest.advanceTimersByTime(1000);
+
+            await expect(initPromise).rejects.toMatchObject({
+                message: 'Operation timed out after 1 seconds.',
+                settingKey: 'documentDB.shell.initTimeout',
+                settingsHint: 'The shell did not finish connecting. You can increase the timeout in Settings:',
+            });
+            jest.useRealTimers();
+        });
+    });
+
     // ── TDD Contract Tests ──────────────────────────────────────────────
     // =====================================================================
     // ⚠️  TDD CONTRACT TESTS — If any test below fails, do NOT auto-fix

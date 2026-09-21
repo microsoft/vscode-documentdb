@@ -106,6 +106,12 @@ export const PLAYGROUND_ACTION_PREFIX = '\u{2197} Query Playground '; // '↗ Qu
  */
 export const SETTINGS_ACTION_PREFIX = '\u{2699} '; // ⚙ + space
 
+/** Compact setting names used by shell help so links remain intact in narrow terminals. */
+const HELP_SETTING_ALIASES: Readonly<Record<string, string>> = {
+    colorSupport: 'documentDB.shell.display.colorSupport',
+    inlineHints: 'documentDB.shell.display.inlineHints',
+};
+
 /**
  * Regex to match the "Open in Collection View" action line.
  *
@@ -256,7 +262,7 @@ export class ShellTerminalLinkProvider implements vscode.TerminalLinkProvider<Sh
         // Check for settings action line
         const settingsMatch = SETTINGS_LINE_PATTERN.exec(context.line);
         if (settingsMatch) {
-            const settingKey = settingsMatch[1];
+            const settingKey = HELP_SETTING_ALIASES[settingsMatch[1]] ?? settingsMatch[1];
             return [
                 {
                     linkType: 'settings',

@@ -301,6 +301,17 @@ describe('ShellOutputFormatter', () => {
             const output = formatter.formatResult(result);
             expect(output).not.toContain('\x1b[');
         });
+
+        it('should underline compact settings markers as clickable links', () => {
+            const helpText = '# Settings\n  ⚙ [colorSupport] Toggle syntax and output colors.';
+            const result = makeResult({
+                type: 'Help',
+                printable: EJSON.stringify(helpText, { relaxed: false }),
+            });
+
+            const output = formatter.formatResult(result);
+            expect(output).toContain('\x1b[4m⚙ [colorSupport]\x1b[24m');
+        });
     });
 });
 
