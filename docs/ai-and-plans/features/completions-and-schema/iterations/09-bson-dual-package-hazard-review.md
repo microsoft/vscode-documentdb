@@ -45,7 +45,9 @@ Diagnosis and fix are sound. Everything below is refinement.
 
 ### Low — `bsonTypeTagMap` accepted inherited `Object.prototype` members
 
-_Reviewer comment on `packages/documentdb-js-schema-analyzer/src/BSONTypes.ts`._
+_Reviewer comment on `packages/documentdb-js-schema-analyzer/src/BSONTypes.ts`:_
+[comment](https://github.com/microsoft/vscode-documentdb/pull/933#discussion_r4050878049) ·
+[reply](https://github.com/microsoft/vscode-documentdb/pull/933#discussion_r4060932309)
 
 Valid, and mechanically exact. The tag comes from user data. With an object literal,
 `_bsontype: '__proto__'` returned `Object.prototype` and `'constructor'` returned a function; both
@@ -72,7 +74,9 @@ code. A `Map` also cannot be silently undone by a later edit the way a null prot
 
 ### Low — synchronous schema feeding now precedes the prompt
 
-_Reviewer comment on `src/documentdb/shell/DocumentDBShellPty.ts`._
+_Reviewer comment on `src/documentdb/shell/DocumentDBShellPty.ts`:_
+[comment](https://github.com/microsoft/vscode-documentdb/pull/933#discussion_r4050878111) ·
+[reply](https://github.com/microsoft/vscode-documentdb/pull/933#discussion_r4060933341)
 
 The ordering claim is valid. `deserializeResultForSchema()` became synchronous, so it runs before
 `handleLineInput()`'s `finally` re-enables input and draws the next prompt, where previously the
@@ -110,7 +114,9 @@ it is recorded as future work rather than bolted on here.
 
 ### Low — the README claimed the fallback "degrades loudly"
 
-_Reviewer comment on `docs/ai-and-plans/features/completions-and-schema/README.md`._
+_Reviewer comment on `docs/ai-and-plans/features/completions-and-schema/README.md`:_
+[comment](https://github.com/microsoft/vscode-documentdb/pull/933#discussion_r4050878152) ·
+[reply](https://github.com/microsoft/vscode-documentdb/pull/933#discussion_r4060934388)
 
 Valid. Nothing is loud: the fallback classifies foreign wrappers correctly and emits no warning and
 no telemetry. The wording implied an operational signal that does not exist, in an active design
@@ -134,7 +140,9 @@ alarm worth having, but it does not belong in the release that freezes the API.
 
 ### Low–Medium — the fallback was tested for six of thirteen tags
 
-_Reviewer comment on `packages/documentdb-js-schema-analyzer/test/SchemaAnalyzer.foreignBson.test.ts`._
+_Reviewer comment on `packages/documentdb-js-schema-analyzer/test/SchemaAnalyzer.foreignBson.test.ts`:_
+[comment](https://github.com/microsoft/vscode-documentdb/pull/933#discussion_r4050878199) ·
+[reply](https://github.com/microsoft/vscode-documentdb/pull/933#discussion_r4060935690)
 
 Valid as regression protection. Worth noting that no key was actually wrong — every one was
 verified against `bson@7.2.0` — so this is not a latent bug, but the map is the entire claim of the
