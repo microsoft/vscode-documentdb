@@ -5,6 +5,9 @@
 
 import { callWithTelemetryAndErrorHandling } from '@microsoft/vscode-azext-utils';
 import * as l10n from '@vscode/l10n';
+// Must stay a static import. `await import('bson')` resolves the package's ESM entry and
+// loads a second copy, whose classes fail every `instanceof` check against the driver's —
+// silently corrupting schema inference. Re-verify during the ESM migration (#687).
 import { EJSON } from 'bson';
 import { randomUUID } from 'crypto';
 import type * as vscode from 'vscode';
@@ -301,10 +304,6 @@ export class PlaygroundEvaluator implements vscode.Disposable {
      * Deserialize the worker result — printable is a canonical EJSON string from the worker.
      * Canonical EJSON preserves all BSON types (ObjectId, Date, Decimal128, Int32,
      * Long, Double, etc.) so that SchemaAnalyzer correctly identifies field types.
-     *
-     * `EJSON` must be imported statically: a dynamic `import('bson')` resolves the
-     * package's ESM entry, giving BSON classes distinct from the CommonJS ones the
-     * driver uses, which breaks every `instanceof` check downstream.
      */
     private deserializeResult(serResult: {
         type: string | null;

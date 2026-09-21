@@ -15,6 +15,9 @@
  */
 
 import { DocumentDBShellRuntime } from '@documentdb-js/shell-runtime';
+// Must stay a static import. `await import('bson')` resolves the package's ESM entry and
+// loads a second copy, whose classes fail every `instanceof` check against the driver's —
+// silently corrupting schema inference. Re-verify during the ESM migration (#687).
 import { EJSON } from 'bson';
 import { randomUUID } from 'crypto';
 import { type MongoClientOptions, type MongoClient as MongoClientType } from 'mongodb';

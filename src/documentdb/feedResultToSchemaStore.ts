@@ -13,6 +13,9 @@
  * @see {@link SchemaStore} for the underlying cache architecture.
  */
 
+// Must stay a static import. `await import('bson')` resolves the package's ESM entry and
+// loads a second copy, whose classes fail every `instanceof` check against the driver's —
+// silently corrupting schema inference. Re-verify during the ESM migration (#687).
 import { EJSON } from 'bson';
 import { type Document, type WithId } from 'mongodb';
 import { meterSilentCatch } from '../utils/accumulatingTelemetry';
@@ -113,10 +116,6 @@ export function feedResultToSchemaStore(result: SchemaFeedableResult, clusterId:
  * raw objects. Canonical EJSON (`relaxed: false`) preserves all BSON types
  * (ObjectId, Date, Decimal128, etc.) so that SchemaAnalyzer correctly identifies
  * field types.
- *
- * `EJSON` must be imported statically: a dynamic `import('bson')` resolves the
- * package's ESM entry, giving BSON classes distinct from the CommonJS ones the
- * driver uses, which breaks every `instanceof` check downstream.
  *
  * @param serResult - The serialized result with EJSON printable string.
  * @returns A deserialized result suitable for {@link feedResultToSchemaStore}.
