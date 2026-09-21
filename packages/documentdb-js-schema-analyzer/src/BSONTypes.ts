@@ -59,22 +59,26 @@ export namespace BSONTypes {
      * Maps the `_bsontype` discriminator carried by every BSON wrapper instance to our enum.
      * Used as a fallback when `instanceof` fails because the value originated from a
      * different copy of the `bson` package (dual-package hazard).
+     *
+     * A `Map`, not an object literal: the tag comes from user data, so `_bsontype:
+     * '__proto__'` or `'constructor'` would otherwise resolve to an inherited member and
+     * be treated as a supported tag.
      */
-    const bsonTypeTagMap: Record<string, BSONTypes> = {
-        Binary: BSONTypes.Binary,
-        BSONRegExp: BSONTypes.RegExp,
-        BSONSymbol: BSONTypes.Symbol,
-        Code: BSONTypes.Code,
-        DBRef: BSONTypes.DBRef,
-        Decimal128: BSONTypes.Decimal128,
-        Double: BSONTypes.Double,
-        Int32: BSONTypes.Int32,
-        Long: BSONTypes.Long,
-        MaxKey: BSONTypes.MaxKey,
-        MinKey: BSONTypes.MinKey,
-        ObjectId: BSONTypes.ObjectId,
-        Timestamp: BSONTypes.Timestamp,
-    };
+    const bsonTypeTagMap = new Map<string, BSONTypes>([
+        ['Binary', BSONTypes.Binary],
+        ['BSONRegExp', BSONTypes.RegExp],
+        ['BSONSymbol', BSONTypes.Symbol],
+        ['Code', BSONTypes.Code],
+        ['DBRef', BSONTypes.DBRef],
+        ['Decimal128', BSONTypes.Decimal128],
+        ['Double', BSONTypes.Double],
+        ['Int32', BSONTypes.Int32],
+        ['Long', BSONTypes.Long],
+        ['MaxKey', BSONTypes.MaxKey],
+        ['MinKey', BSONTypes.MinKey],
+        ['ObjectId', BSONTypes.ObjectId],
+        ['Timestamp', BSONTypes.Timestamp],
+    ]);
 
     const displayStringMap: Record<BSONTypes, string> = {
         [BSONTypes.String]: 'String',
@@ -225,7 +229,7 @@ export namespace BSONTypes {
         const tag = (value as { _bsontype?: unknown })._bsontype;
         if (typeof tag !== 'string') return undefined;
 
-        const mapped = bsonTypeTagMap[tag];
+        const mapped = bsonTypeTagMap.get(tag);
         if (mapped === undefined) return undefined;
 
         if (mapped === BSONTypes.Binary) {
