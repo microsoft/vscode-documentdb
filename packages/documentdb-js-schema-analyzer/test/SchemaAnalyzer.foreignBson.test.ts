@@ -42,6 +42,24 @@ describe('SchemaAnalyzer with BSON values from a foreign bson copy', () => {
         ]);
     });
 
+    // MinKey and MaxKey have no own enumerable properties, so misclassifying them as objects
+    // made the fields vanish from the output entirely rather than report a wrong type.
+    it('keeps fields whose wrapper has no own properties', () => {
+        const document = {
+            _id: foreign('ObjectId', { buffer: new Uint8Array(12) }),
+            lowest: foreign('MinKey', {}),
+            highest: foreign('MaxKey', {}),
+        } as unknown as WithId<Document>;
+
+        const fields = SchemaAnalyzer.fromDocument(document).getKnownFields();
+
+        expect(fields.map((f) => `${f.path}:${f.bsonType}`)).toEqual([
+            '_id:objectid',
+            'highest:maxkey',
+            'lowest:minkey',
+        ]);
+    });
+
     it('still treats untagged plain objects as nested documents', () => {
         const document = {
             _id: foreign('ObjectId', { buffer: new Uint8Array(12) }),
