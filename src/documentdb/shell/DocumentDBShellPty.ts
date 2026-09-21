@@ -716,9 +716,8 @@ export class DocumentDBShellPty implements vscode.Pseudoterminal {
             // Show "Open in Collection View" action line for query results with a namespace
             this.maybeWriteActionLine(result);
 
-            // Feed query result documents to SchemaStore for field completions.
-            // This runs asynchronously after output is displayed — schema feeding
-            // is non-blocking and failure is non-critical.
+            // Feed query result documents to SchemaStore for field completions. Synchronous,
+            // so it precedes the next prompt — on the payload formatResult() just walked above.
             this.maybeFeedSchemaStore(result);
         });
     }
