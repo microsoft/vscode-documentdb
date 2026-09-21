@@ -113,7 +113,8 @@ parentPort.on('message', (msg: MainToWorkerMessage) => {
 async function handleInit(msg: Extract<MainToWorkerMessage, { type: 'init' }>): Promise<void> {
     log('debug', `Initializing worker (auth: ${msg.authMechanism}, db: ${msg.databaseName})`);
 
-    // Lazy-import the MongoDB API driver
+    // Lazy-import the MongoDB API driver. Safe only while `mongodb` publishes no `exports`
+    // map — it re-exports the bson classes, so an ESM entry would duplicate them here.
     const { MongoClient } = await import('mongodb');
 
     // Build client options from the serializable subset

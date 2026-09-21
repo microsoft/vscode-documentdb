@@ -136,6 +136,13 @@ preserves the existing `Binary` + `sub_type` → `UUID`/`UUID_LEGACY` and `Code`
 dependency that ships split `import`/`require` conditions and exposes classes compared with
 `instanceof` — the driver's own `bson` re-export is the one that matters here.
 
+`playgroundWorker.ts` still lazy-imports the driver itself (`await import('mongodb')`). That is
+safe today only by accident of packaging: `mongodb@7.2.0` publishes no `exports` field, so every
+resolution lands on `lib/index.js` (CommonJS), including the `bson` classes it re-exports. A
+future driver release that adds an `exports` map with an ESM entry would reintroduce the identical
+hazard through the driver rather than through `bson`. Re-check on driver major upgrades, and on
+the ESM migration (#687).
+
 Post-build check, since webpack does not clean `dist/`:
 
 ```bash

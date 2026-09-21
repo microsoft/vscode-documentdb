@@ -58,7 +58,8 @@ Sibling areas: [query-playground](../query-playground/README.md),
   them.
 - **`bson` is imported statically, never via `await import('bson')`.** `bson` ships split
   `import`/`require` export conditions, so a dynamic import loads a second copy of the package and
-  every `instanceof` check in `SchemaAnalyzer` silently fails. `BSONTypes.inferType()` also falls
+  every `instanceof` check in `SchemaAnalyzer` silently fails. The same applies to anything that
+  re-exports its classes, `mongodb` included. `BSONTypes.inferType()` also falls
   back to the `_bsontype` tag, so a duplicated copy still classifies correctly — but it does so
   silently: there is no warning and no telemetry, and nothing else in the extension is protected.
   The post-build chunk check in the iteration note is the only detector. See
