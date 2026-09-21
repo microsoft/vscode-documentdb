@@ -16,7 +16,6 @@ import {
     MinKey,
     ObjectId,
     Timestamp,
-    UUID,
 } from 'mongodb';
 
 /**
@@ -201,9 +200,8 @@ export namespace BSONTypes {
                 if (value instanceof BSONSymbol) return BSONTypes.Symbol;
                 if (value instanceof DBRef) return BSONTypes.DBRef;
                 if (value instanceof Map) return BSONTypes.Map;
-                if (value instanceof UUID && value.sub_type === Binary.SUBTYPE_UUID) return BSONTypes.UUID;
-                if (value instanceof UUID && value.sub_type === Binary.SUBTYPE_UUID_OLD) return BSONTypes.UUID_LEGACY;
-                if (value instanceof Buffer || value instanceof Binary) return BSONTypes.Binary;
+                if (value instanceof Binary) return binaryTypeForSubType(value.sub_type);
+                if (value instanceof Buffer) return BSONTypes.Binary;
                 if (value instanceof RegExp) return BSONTypes.RegExp;
                 if (value instanceof Code) {
                     if (value.scope) {
@@ -233,9 +231,7 @@ export namespace BSONTypes {
         if (mapped === undefined) return undefined;
 
         if (mapped === BSONTypes.Binary) {
-            const subType = (value as { sub_type?: unknown }).sub_type;
-            if (subType === Binary.SUBTYPE_UUID) return BSONTypes.UUID;
-            if (subType === Binary.SUBTYPE_UUID_OLD) return BSONTypes.UUID_LEGACY;
+            return binaryTypeForSubType((value as { sub_type?: unknown }).sub_type);
         }
 
         if (mapped === BSONTypes.Code && (value as { scope?: unknown }).scope) {
@@ -243,5 +239,16 @@ export namespace BSONTypes {
         }
 
         return mapped;
+    }
+
+    /**
+     * `UUID` extends `Binary` and carries `_bsontype: 'Binary'`, so the subtype is the only
+     * discriminator available to the tag fallback. Both paths route through here to keep the
+     * same value from being classified differently depending on which one ran.
+     */
+    function binaryTypeForSubType(subType: unknown): BSONTypes {
+        if (subType === Binary.SUBTYPE_UUID) return BSONTypes.UUID;
+        if (subType === Binary.SUBTYPE_UUID_OLD) return BSONTypes.UUID_LEGACY;
+        return BSONTypes.Binary;
     }
 }
