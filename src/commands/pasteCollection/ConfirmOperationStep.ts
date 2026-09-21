@@ -21,15 +21,27 @@ export class ConfirmOperationStep extends AzureWizardPromptStep<PasteCollectionW
 
         const conflictStrategy = this.formatConflictStrategy(context.conflictResolutionStrategy!);
         const indexesSetting = context.copyIndexes ? l10n.t('Yes') : l10n.t('No');
+        const indexesSummary =
+            context.copyIndexes && context.sourceIndexCount !== undefined
+                ? l10n.t('Copy Indexes: {yesNoValue} ({indexCount} available)', {
+                      yesNoValue: indexesSetting,
+                      indexCount: context.sourceIndexCount.toLocaleString(),
+                  })
+                : l10n.t('Copy Indexes: {yesNoValue}', { yesNoValue: indexesSetting });
 
-        const warningText = context.isTargetExistingCollection
-            ? l10n.t(
-                  '⚠️ Warning: This will modify the existing collection. Documents with matching _id values will be handled based on your conflict resolution setting.',
-              )
-            : l10n.t(
-                  'This operation will copy all documents from the source to the target collection. Large collections may take several minutes to complete.',
-              );
-
+        const importantNotes = context.isTargetExistingCollection
+            ? [
+                  l10n.t('This will modify the existing collection.'),
+                  l10n.t(
+                      'Documents with matching _id values will be handled based on your conflict resolution setting.',
+                  ),
+              ]
+            : [
+                  l10n.t('This operation will copy all documents from the source to the target collection.'),
+                  ...(context.largeCollectionWarningShown
+                      ? [l10n.t('Large collections may take several minutes to complete.')]
+                      : []),
+              ];
         // Combine all parts
         const confirmationMessage = [
             l10n.t('Source:'),
@@ -55,9 +67,10 @@ export class ConfirmOperationStep extends AzureWizardPromptStep<PasteCollectionW
             '',
             l10n.t('Settings:'),
             ' • ' + l10n.t('Conflict Resolution: {strategyName}', { strategyName: conflictStrategy }),
-            ' • ' + l10n.t('Copy Indexes: {yesNoValue}', { yesNoValue: indexesSetting }),
+            ' • ' + indexesSummary,
             '',
-            warningText,
+            l10n.t('Important:'),
+            ...importantNotes.map((note) => ' • ' + note),
         ].join('\n');
 
         const actionButton = context.isTargetExistingCollection
@@ -80,7 +93,7 @@ export class ConfirmOperationStep extends AzureWizardPromptStep<PasteCollectionW
         context.telemetry.properties.operationConfirmed = confirmation === actionButton ? 'true' : 'false';
         context.telemetry.properties.operationType = context.isTargetExistingCollection ? 'merge' : 'paste';
         context.telemetry.properties.conflictResolutionStrategy = context.conflictResolutionStrategy;
-        context.telemetry.properties.copyIndexesEnabled = context.copyIndexes ? 'true' : 'false';
+        context.telemetry.properties.copyIndexes = context.copyIndexes ? 'true' : 'false';
 
         // Record measurements for operation scope
         if (context.sourceCollectionSize) {

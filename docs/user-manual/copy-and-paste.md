@@ -1,6 +1,6 @@
 <!-- Learn More Section Badge or Breadcrumb -->
 
-> **Learn More** - [Back to Learn More Index](./index.md)
+> **Learn More** - [Back to Learn More Index](../index#user-manual)
 
 ---
 
@@ -11,6 +11,8 @@ The **Copy and Paste** feature in DocumentDB for VS Code provides a convenient w
 **Table of Contents**
 
 - [How It Works](#how-it-works)
+- [Copy and Paste Indexes Without Documents](#copy-and-paste-indexes-without-documents)
+  - [Why Collection Paste Refuses TTL and Unique Indexes](#why-collection-paste-refuses-ttl-and-unique-indexes)
 - [Important Considerations](#important-considerations)
 - [Step-by-Step Guide](#step-by-step-guide)
   - [Flow 1: Paste into a Database (Create a New Collection)](#flow-1-paste-into-a-database-create-a-new-collection)
@@ -28,7 +30,60 @@ The copy-and-paste process is designed to be efficient for smaller collections b
 3.  **Bulk Write Operation**: Once the buffer is full, the extension performs a bulk write operation to the target collection. This is more efficient than writing documents one at a time.
 4.  **Continuous Cycle**: This process repeats - refilling the buffer from the source and writing to the target - until all documents from the source collection have been copied.
 
+Optionally, the extension can also copy secondary indexes. Copied indexes are requested as background builds before document streaming begins. Hidden source indexes are created first and then hidden to preserve their visibility state. Equivalent indexes already on the target are skipped without changing their visibility. A same-key definition with different options is skipped as a conflict, while a source index whose name is used by a different key receives a suffix. The built-in `_id` index is not copied.
+
+The extension reads the source index summary only after you choose to copy indexes. If that read fails, the paste stops before confirmation and displays the reason. Document-only copies do not read source indexes.
+
+Cancelling during index creation stops before the next index; indexes already created remain on the target. An index creation failure also leaves indexes already created on the target and stops before any documents are copied. The failure notification includes the index and server reason and links to the output log. Retry the paste and choose **No, only copy documents** when the source contains an index that the target cannot recreate.
+
 This method avoids loading the entire collection into memory at once, making it suitable for collections that are moderately sized.
+
+## Copy and Paste Indexes Without Documents
+
+Use the Explorer's Indexes nodes when you need to recreate indexes without copying documents:
+
+1. Expand a source collection's **Indexes** node.
+2. To select one ordinary secondary index, right-click it and select **Copy Index…**. To copy a
+   subset, select multiple index rows, right-click any selected index, and select **Copy Selected
+   Indexes…**. Expanded field rows, `_id`, and non-copyable search entries in the selection are
+   ignored. To select every copyable secondary index, right-click the **Indexes** parent and select
+   **Copy Indexes…**. This parent selection resolves the source's copyable indexes when you paste,
+   so it includes catalog changes made after copying. The resolved set is frozen when the
+   confirmation is shown: indexes added afterward are not copied, and removing a confirmed index
+   causes a visible failure.
+3. Expand the target collection, right-click its **Indexes** node, and select **Paste Indexes…**.
+4. Review the source, target, selected indexes, exclusions, and any unique or TTL warnings, then
+   confirm.
+
+For each selected secondary index, the extension sends the target database a `createIndexes`
+command containing one index definition. The definition includes the ordered key specification,
+the source name when it is available, and creation options reported by the source catalog, such as
+`unique`, `sparse`, `expireAfterSeconds`, `partialFilterExpression`, and vector configuration. The
+extension requests background creation. If the source index is hidden, it restores that state after
+creation with a separate `collMod` command.
+
+The built-in `_id` index is always excluded because the target collection creates it automatically.
+Catalog entries without an ordinary key definition cannot be represented by this `createIndexes`
+flow and are not copied.
+
+Equivalent target definitions are skipped. A same-key definition with different options is skipped
+as a conflict. If a name is already used by a different key, the copied index receives a
+deterministic suffix. Cancellation leaves indexes already created on
+the target. A successful paste keeps the source selection available so you can paste it into another
+target; use **Cancel Copy** or copy another index selection to replace it. Select **Learn More** in
+the copy notification to open this guide without clearing the selection.
+
+### Why Collection Paste Refuses TTL and Unique Indexes
+
+Collection paste does not copy TTL or unique indexes together with documents. TTL indexes can delete
+documents as they arrive, and unique indexes can reject documents for values other than `_id`. Either
+case could make a completed copy contain fewer documents than the source.
+
+When you choose **Yes, copy indexes**, the wizard checks the source catalog before confirmation. If it
+finds a TTL or unique index, the paste stops and names the affected indexes. Run Paste Collection
+again with **No, only copy documents**. Then use **Copy Index…**, **Copy Selected Indexes…**, or
+**Copy Indexes…** followed by **Paste Indexes…** to create those indexes as a separate, explicitly
+confirmed operation.
 
 ## Important Considerations
 
@@ -67,7 +122,11 @@ If the source collection contains a large number of documents, a warning dialog 
 
 You will be prompted to provide a name for the new collection.
 
-#### Step 3: Confirmation
+#### Step 3: Choose Whether to Copy Indexes
+
+Choose whether to copy the source collection's secondary indexes. If selected, the wizard reads and displays how many indexes are available to copy. Sources with TTL or unique indexes must use the separate index-only flow described above.
+
+#### Step 4: Confirmation
 
 A final summary is displayed, showing the source and target details, including the new collection name. You must confirm to start the operation.
 
@@ -176,7 +235,11 @@ You will be prompted to choose one of four strategies:
   ```
   The original document in the target remains untouched.
 
-#### Step 3: Confirmation
+#### Step 3: Choose Whether to Copy Indexes
+
+Choose whether to copy the source collection's secondary indexes. If selected, the wizard reads and displays how many indexes are available to copy. Sources with TTL or unique indexes must use the separate index-only flow described above. Existing equivalent index definitions are not recreated.
+
+#### Step 4: Confirmation
 
 A final summary is displayed, showing the source, the target, and the chosen conflict resolution strategy. You must confirm to start the operation.
 
