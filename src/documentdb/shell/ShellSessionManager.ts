@@ -44,6 +44,8 @@ export interface ShellConnectionMetadata {
     readonly isEmulator: boolean;
     /** Username for SCRAM auth (undefined for Entra ID). */
     readonly username: string | undefined;
+    /** Optional human-readable name of the authenticated identity. */
+    readonly displayName?: string;
 }
 
 /**
@@ -82,6 +84,8 @@ export class ShellSessionManager implements vscode.Disposable {
     private _activeDatabase: string;
     /** Auth mechanism used for the current session (set after init). */
     private _authMethod: 'NativeAuth' | 'MicrosoftEntraID' | 'ManagedIdentity' | 'NoAuth' | undefined;
+    /** Human-readable identity name resolved during authentication, when available. */
+    private _displayName: string | undefined;
 
     constructor(connectionInfo: ShellConnectionInfo, callbacks?: ShellSessionCallbacks) {
         this._connectionInfo = connectionInfo;
@@ -185,6 +189,7 @@ export class ShellSessionManager implements vscode.Disposable {
                 CredentialCache.getCredentials(this._connectionInfo.clusterId)?.emulatorConfiguration?.isEmulator ??
                 false,
             username,
+            displayName: this._displayName,
         };
     }
 
@@ -196,9 +201,10 @@ export class ShellSessionManager implements vscode.Disposable {
      * and `it` are handled by @mongosh within the persistent context.
      *
      * @param code - JavaScript code or shell command to evaluate.
+     * @param terminalColumns - current terminal width, for width-aware output such as `help`.
      * @returns The serializable execution result from the worker.
      */
-    async evaluate(code: string): Promise<SerializableExecutionResult> {
+    async evaluate(code: string, terminalColumns?: number): Promise<SerializableExecutionResult> {
         // Reconnect if the worker is not alive — handles all cases:
         // timeout kills, Ctrl+C cancellation, unexpected worker crashes.
         if (!this._initialized || !this._workerManager.isAlive) {
@@ -219,6 +225,7 @@ export class ShellSessionManager implements vscode.Disposable {
             code,
             databaseName: this._activeDatabase,
             displayBatchSize: getBatchSizeSetting(),
+            terminalColumns,
         };
 
         const workerResult = await this._workerManager.sendEval(evalMsg);
@@ -354,6 +361,7 @@ export class ShellSessionManager implements vscode.Disposable {
                 }
 
                 accessToken = session.accessToken;
+                this._displayName = session.account.label || undefined;
             }
 
             postResponse({

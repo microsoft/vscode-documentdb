@@ -23,8 +23,8 @@ import { randomUUID } from 'crypto';
 import { type MongoClientOptions, type MongoClient as MongoClientType } from 'mongodb';
 import { parentPort } from 'worker_threads';
 import { DOCUMENTDB_ENTRA_SCOPE } from '../auth/entraScopes';
-import { expiresInSecondsFromTimestamp } from '../auth/ManagedIdentityAuthHandler';
 import { getOidcAllowedHosts } from '../auth/oidcAllowedHosts';
+import { expiresInSecondsFromTimestamp } from '../auth/tokenExpiry';
 import { type MainToWorkerMessage, type WorkerToMainMessage } from './workerTypes';
 
 if (!parentPort) {
@@ -213,6 +213,7 @@ async function handleEval(msg: Extract<MainToWorkerMessage, { type: 'eval' }>): 
     // Evaluate via shell-runtime (handles @mongosh setup, command interception, result transformation)
     const result = await shellRuntime.evaluate(msg.code, msg.databaseName, {
         displayBatchSize: msg.displayBatchSize,
+        terminalColumns: msg.terminalColumns,
     });
 
     // Proactively extract cursorHasMore before serialization.

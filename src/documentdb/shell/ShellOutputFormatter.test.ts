@@ -238,6 +238,24 @@ describe('ShellOutputFormatter', () => {
         });
     });
 
+    describe('connection banner formatting', () => {
+        it('should use neutral emphasis for the title and values', () => {
+            expect(formatter.formatShellTitle('DocumentDB Shell: Demo')).toBe(
+                '\x1b[1mDocumentDB Shell: Demo\x1b[0m',
+            );
+            expect(formatter.formatConnectionValue('value')).toBe('\x1b[1m\x1b[39mvalue\x1b[0m\x1b[90m');
+        });
+
+        it('should preserve plain text when color support is disabled', () => {
+            jest.spyOn(vscode.workspace, 'getConfiguration').mockReturnValue({
+                get: jest.fn(() => false),
+            } as unknown as vscode.WorkspaceConfiguration);
+
+            expect(formatter.formatShellTitle('DocumentDB Shell: Demo')).toBe('DocumentDB Shell: Demo');
+            expect(formatter.formatConnectionValue('alex@contoso.com')).toBe('alex@contoso.com');
+        });
+    });
+
     describe('Help result formatting', () => {
         it('should format help text directly from string', () => {
             const result = makeResult({
@@ -248,15 +266,15 @@ describe('ShellOutputFormatter', () => {
             expect(output).toContain('Available commands');
         });
 
-        it('should colorize section headers with bold cyan when color enabled', () => {
+        it('should emphasize section headers with bold default text when color enabled', () => {
             const helpText = '# Query\n  db.find({})                             Find documents';
             const result = makeResult({
                 type: 'Help',
                 printable: EJSON.stringify(helpText, { relaxed: false }),
             });
             const output = formatter.formatResult(result);
-            // Header should be bold+cyan
-            expect(output).toContain('\x1b[1m\x1b[36mQuery\x1b[0m');
+            expect(output).toContain('\x1b[1mQuery\x1b[0m');
+            expect(output).not.toContain('\x1b[36mQuery');
         });
 
         it('should colorize command entries with yellow command and gray description', () => {

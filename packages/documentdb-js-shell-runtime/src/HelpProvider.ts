@@ -13,6 +13,56 @@ import { type ShellEvaluationResult } from './types';
  */
 export type HelpSurface = 'playground' | 'shell';
 
+/** Indent applied to every shell help entry. */
+const ENTRY_INDENT = '  ';
+
+/** Blank columns between the command and description columns. */
+const COLUMN_GAP = 2;
+
+/**
+ * Narrowest description column worth keeping. Below this the two-column layout
+ * is abandoned and entries are stacked, because a description that wraps every
+ * two or three words is harder to read than one on its own line.
+ */
+const MIN_DESCRIPTION_WIDTH = 12;
+
+/** Assumed terminal width when the caller does not supply one. */
+const DEFAULT_HELP_COLUMNS = 80;
+
+/** One line of the shell help document, before it is laid out for a width. */
+type ShellHelpLine =
+    | { readonly kind: 'header'; readonly text: string }
+    | { readonly kind: 'blank' }
+    | { readonly kind: 'entry'; readonly command: string; readonly description: string }
+    | { readonly kind: 'tip'; readonly text: string };
+
+/**
+ * Greedy word wrap. Words longer than `width` are left intact rather than split,
+ * since every over-long token here is a code fragment.
+ */
+function wrapText(text: string, width: number): string[] {
+    if (width <= 0) {
+        return [text];
+    }
+
+    const lines: string[] = [];
+    let current = '';
+    for (const word of text.split(' ')) {
+        if (current.length === 0) {
+            current = word;
+        } else if (current.length + 1 + word.length <= width) {
+            current += ' ' + word;
+        } else {
+            lines.push(current);
+            current = word;
+        }
+    }
+    if (current.length > 0) {
+        lines.push(current);
+    }
+    return lines.length > 0 ? lines : [''];
+}
+
 /**
  * Provides DocumentDB-specific help text for the `help` and `help()` commands.
  *
@@ -30,21 +80,26 @@ export class HelpProvider {
 
     /**
      * Returns help text appropriate for the configured surface.
+     *
+     * @param columns - terminal width in columns. Shell help lays itself out to
+     * fit; the playground format is fixed-width and ignores this.
      */
-    getHelpText(): string {
+    getHelpText(columns?: number): string {
         if (this._surface === 'shell') {
-            return this.buildShellHelp();
+            return this.buildShellHelp(columns);
         }
         return this.buildPlaygroundHelp();
     }
 
     /**
      * Returns a help evaluation result with durationMs: 0 (no server round-trip).
+     *
+     * @param columns - terminal width in columns, forwarded to {@link getHelpText}.
      */
-    getHelpResult(): ShellEvaluationResult {
+    getHelpResult(columns?: number): ShellEvaluationResult {
         return {
             type: 'Help',
-            printable: this.getHelpText(),
+            printable: this.getHelpText(columns),
             durationMs: 0,
         };
     }
@@ -158,7 +213,12 @@ export class HelpProvider {
     // ─── Private: Shell compact format ───────────────────────────────────────
 
     /**
-     * Build compact shell help with two-column layout.
+     * Build compact shell help, laid out to fit `columns` terminal columns.
+     *
+     * The command column is sized to the widest command rather than a fixed 40,
+     * and descriptions wrap with a hanging indent so they stay in their column.
+     * When there is not enough room for a usable description column, entries are
+     * stacked instead — command on one line, description indented beneath it.
      *
      * The output uses a line-prefix convention that {@link ShellOutputFormatter.colorizeHelpText}
      * uses to apply theme-aware ANSI colors:
@@ -171,40 +231,104 @@ export class HelpProvider {
      * - Other indented lines → treated as plain tip text (gray).
      * - Blank lines → passed through as-is.
      */
-    private buildShellHelp(): string {
-        const entry = (command: string, description: string) => `  ${command.padEnd(40)}${description}`;
+    private buildShellHelp(columns: number = DEFAULT_HELP_COLUMNS): string {
+        const header = (text: string): ShellHelpLine => ({ kind: 'header', text });
+        const blank: ShellHelpLine = { kind: 'blank' };
+        const entry = (command: string, description: string): ShellHelpLine => ({
+            kind: 'entry',
+            command,
+            description,
+        });
+        const tip = (text: string): ShellHelpLine => ({ kind: 'tip', text });
 
-        return [
-            '# DocumentDB Shell: Quick Reference',
-            '',
+        const document: ShellHelpLine[] = [
+            header('DocumentDB Shell: Quick Reference'),
+            blank,
 
-            '# Query',
+            header('Query'),
             entry('db.<coll>.find({})', 'Find documents'),
             entry('db.<coll>.findOne({})', 'Find a single document'),
             entry('db.<coll>.aggregate([...])', 'Aggregation pipeline'),
             entry('.limit(n)  .skip(n)  .sort({f:1})', 'Chain on cursors'),
-            '',
+            blank,
 
-            '# Write',
+            header('Write'),
             entry('db.<coll>.insertOne({...})', 'Insert a document'),
             entry('db.<coll>.updateOne({}, {$set:{}})', 'Update one document'),
             entry('db.<coll>.deleteOne({})', 'Delete one document'),
-            '',
+            blank,
 
-            '# Database',
+            header('Database'),
             entry('show dbs', 'List databases'),
             entry('show collections', 'List collections'),
             entry('use <db>', 'Switch database'),
-            '',
+            blank,
 
-            '# Shell',
+            header('Shell'),
             entry('help', 'Show this reference'),
             entry('exit / quit', 'Close the shell'),
             entry('cls / clear', 'Clear the screen'),
-            '',
+            blank,
 
-            '# Tips',
-            '  Variables persist across commands. console.log() output appears inline.',
-        ].join('\n');
+            header('Tips'),
+            tip('Variables persist across commands. console.log() output appears inline.'),
+            // The settings prefix is named once rather than twice in full: a
+            // 39-character id does not fit a 40-column line, and wrapText
+            // deliberately never splits a token.
+            tip(
+                'Settings (search "documentDB.shell.display"): autocompletion turns suggestions off, inlineHints hides the 🛈 notes.',
+            ),
+        ];
+
+        return this.layoutShellHelp(document, columns).join('\n');
+    }
+
+    /**
+     * Lay the shell help document out for a given terminal width.
+     */
+    private layoutShellHelp(document: readonly ShellHelpLine[], columns: number): string[] {
+        const commandWidth = Math.max(
+            ...document.filter((line) => line.kind === 'entry').map((line) => line.command.length),
+        );
+
+        const descriptionWidth = columns - ENTRY_INDENT.length - commandWidth - COLUMN_GAP;
+        const stacked = descriptionWidth < MIN_DESCRIPTION_WIDTH;
+        const tipWidth = Math.max(1, columns - ENTRY_INDENT.length);
+
+        const output: string[] = [];
+        for (const line of document) {
+            switch (line.kind) {
+                case 'header':
+                    output.push(`# ${line.text}`);
+                    break;
+                case 'blank':
+                    output.push('');
+                    break;
+                case 'tip':
+                    for (const wrapped of wrapText(line.text, tipWidth)) {
+                        output.push(ENTRY_INDENT + wrapped);
+                    }
+                    break;
+                case 'entry':
+                    if (stacked) {
+                        output.push(ENTRY_INDENT + line.command);
+                        for (const wrapped of wrapText(line.description, Math.max(1, columns - 4))) {
+                            output.push('    ' + wrapped);
+                        }
+                    } else {
+                        const wrapped = wrapText(line.description, descriptionWidth);
+                        const hangingIndent = ' '.repeat(ENTRY_INDENT.length + commandWidth + COLUMN_GAP);
+                        output.push(
+                            ENTRY_INDENT + line.command.padEnd(commandWidth) + ' '.repeat(COLUMN_GAP) + wrapped[0],
+                        );
+                        for (const continuation of wrapped.slice(1)) {
+                            output.push(hangingIndent + continuation);
+                        }
+                    }
+                    break;
+            }
+        }
+
+        return output;
     }
 }

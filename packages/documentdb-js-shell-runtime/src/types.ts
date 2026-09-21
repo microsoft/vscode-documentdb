@@ -69,4 +69,6 @@ export interface ShellRuntimeOptions {
 export interface ShellEvalOptions {
     /** Override the display batch size for this evaluation. */
     displayBatchSize?: number;
+    /** Terminal width in columns, so width-aware output (shell `help`) can lay itself out. */
+    terminalColumns?: number;
 }

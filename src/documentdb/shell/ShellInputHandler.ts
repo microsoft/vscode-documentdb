@@ -57,6 +57,15 @@ export class ShellInputHandler {
     private _savedInput: string = '';
     /** Maximum history entries. */
     private readonly _maxHistory: number = 500;
+    /**
+     * How far back autosuggestion looks, newest first.
+     *
+     * Deliberately not derived from {@link _maxHistory}: how much to remember
+     * and how far back to suggest from are different questions, and this one is
+     * answered on the typing path. A hit on the 400th-oldest command is not
+     * what the user meant.
+     */
+    private readonly _maxHistorySearch: number = 100;
 
     /** Whether input is currently accepted. */
     private _enabled: boolean = true;
@@ -105,9 +114,25 @@ export class ShellInputHandler {
      */
     setColumns(columns: number): void {
         this._columns = columns;
-        // Reset tracked cursor row — after a resize xterm.js reflows content,
-        // making the previous _lastCursorRow stale.
-        this._lastCursorRow = 0;
+        // xterm.js reflows the wrapped input line on resize and keeps the cursor
+        // on the same character, so the tracked row has to be recomputed against
+        // the new width. Zeroing it would claim the cursor is on the prompt row
+        // and the next re-render would paint over whatever is above it.
+        this._lastCursorRow = this.cursorRowForColumns(columns);
+    }
+
+    /**
+     * Terminal row of the cursor, relative to the prompt row, at a given width.
+     *
+     * Deferred-wrap aware: content that exactly fills a row leaves the cursor
+     * on that row until one more character arrives.
+     */
+    private cursorRowForColumns(columns: number): number {
+        if (columns <= 0) {
+            return 0;
+        }
+        const absCol = this.cursorColumn;
+        return absCol > 0 ? Math.floor((absCol - 1) / columns) : 0;
     }
 
     /**
@@ -122,6 +147,25 @@ export class ShellInputHandler {
      */
     get isEnabled(): boolean {
         return this._enabled;
+    }
+
+    /**
+     * Absolute terminal column of the cursor (prompt width + display width of
+     * the buffer up to the cursor). Callers rendering after the cursor need
+     * this to stay inside the terminal width.
+     */
+    get cursorColumn(): number {
+        return this._promptWidth + terminalDisplayWidth(this._buffer.slice(0, this._cursor));
+    }
+
+    /** Current line contents. */
+    get buffer(): string {
+        return this._buffer;
+    }
+
+    /** Cursor position within {@link buffer}. */
+    get cursor(): number {
+        return this._cursor;
     }
 
     /**
@@ -167,6 +211,32 @@ export class ShellInputHandler {
      */
     getCursor(): number {
         return this._cursor;
+    }
+
+    /**
+     * Most recent command that begins with `prefix`, for inline autosuggestion.
+     *
+     * Scans newest-first over at most {@link _maxHistorySearch} entries and
+     * returns the first hit — ghost text shows one suggestion, so there is
+     * nothing to do with the rest.
+     *
+     * Multi-line entries are skipped: their newlines cannot be inserted into a
+     * single-line buffer.
+     */
+    findHistorySuggestion(prefix: string): string | undefined {
+        if (prefix.length === 0) {
+            return undefined;
+        }
+
+        const oldest = Math.max(0, this._history.length - this._maxHistorySearch);
+        for (let i = this._history.length - 1; i >= oldest; i--) {
+            const entry = this._history[i];
+            if (entry.length > prefix.length && entry.startsWith(prefix) && !entry.includes('\n')) {
+                return entry;
+            }
+        }
+
+        return undefined;
     }
 
     /**

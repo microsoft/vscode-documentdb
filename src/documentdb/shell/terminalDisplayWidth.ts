@@ -38,6 +38,39 @@ export function terminalDisplayWidth(text: string): number {
 }
 
 /**
+ * Truncate `text` so it occupies at most `maxWidth` display columns.
+ *
+ * Clipping happens on grapheme-cluster boundaries, so surrogate pairs and
+ * combining sequences are never split. A wide character that would straddle
+ * the limit is dropped entirely rather than half-rendered.
+ */
+export function clipToDisplayWidth(text: string, maxWidth: number): string {
+    if (maxWidth <= 0) {
+        return '';
+    }
+
+    // Fast path: ASCII-only strings (common case)
+    if (/^[\x20-\x7e]*$/.test(text)) {
+        return text.length <= maxWidth ? text : text.slice(0, maxWidth);
+    }
+
+    let width = 0;
+    let result = '';
+    const segmenter = new Intl.Segmenter(undefined, { granularity: 'grapheme' });
+    for (const { segment } of segmenter.segment(text)) {
+        const cp = segment.codePointAt(0) ?? 0;
+        const segmentWidth = isWideCharacter(cp) ? 2 : 1;
+        if (width + segmentWidth > maxWidth) {
+            break;
+        }
+        width += segmentWidth;
+        result += segment;
+    }
+
+    return result;
+}
+
+/**
  * Returns true for code points that occupy 2 terminal columns.
  * Covers CJK Unified Ideographs and common full-width ranges.
  */

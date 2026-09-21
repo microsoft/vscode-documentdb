@@ -15,7 +15,7 @@
  * continues typing at the same location.
  */
 
-import { terminalDisplayWidth } from './terminalDisplayWidth';
+import { clipToDisplayWidth, terminalDisplayWidth } from './terminalDisplayWidth';
 
 // ─── ANSI constants ──────────────────────────────────────────────────────────
 
@@ -24,6 +24,8 @@ const GHOST_STYLE = '\x1b[2m\x1b[90m';
 const ANSI_RESET = '\x1b[0m';
 /** Erase from cursor to end of line. */
 const ERASE_TO_EOL = '\x1b[K';
+/** Appended when the suggestion is too wide to fit on the current row. */
+const ELLIPSIS = '…';
 
 /**
  * Manages the lifecycle of ghost text in the terminal.
@@ -36,6 +38,8 @@ const ERASE_TO_EOL = '\x1b[K';
 export class ShellGhostText {
     /** The currently displayed ghost text (empty if none). */
     private _currentGhost: string = '';
+    /** The possibly-clipped text actually written to the terminal. */
+    private _renderedGhost: string = '';
     /** Whether ghost text is currently visible. */
     private _visible: boolean = false;
 
@@ -58,16 +62,31 @@ export class ShellGhostText {
      *
      * @param text - the suggestion text to display (the part NOT yet typed)
      * @param write - function to write ANSI data to the terminal
+     * @param availableColumns - columns left on the cursor's row; the text is
+     * clipped to fit. Omit only when the width is genuinely unknown — an
+     * unclipped suggestion that wraps strands the cursor on the next row,
+     * because the cursor-back sequence below cannot move between rows.
      * @returns `true` if new ghost text was rendered, `false` if skipped (empty or unchanged)
      */
-    show(text: string, write: (data: string) => void): boolean {
+    show(text: string, write: (data: string) => void, availableColumns?: number): boolean {
         if (!text || text.length === 0) {
             this.clear(write);
             return false;
         }
 
+        let renderText = text;
+        if (availableColumns !== undefined && terminalDisplayWidth(text) > availableColumns) {
+            // Reserve one column for the ellipsis marker.
+            renderText = clipToDisplayWidth(text, availableColumns - 1);
+            if (renderText.length === 0) {
+                this.clear(write);
+                return false;
+            }
+            renderText += ELLIPSIS;
+        }
+
         // If the same ghost text is already showing, don't re-render
-        if (this._visible && this._currentGhost === text) {
+        if (this._visible && this._currentGhost === text && this._renderedGhost === renderText) {
             return false;
         }
 
@@ -77,11 +96,12 @@ export class ShellGhostText {
         }
 
         this._currentGhost = text;
+        this._renderedGhost = renderText;
         this._visible = true;
 
         // Write ghost text in dim gray, then move cursor back
-        write(GHOST_STYLE + text + ANSI_RESET);
-        const displayWidth = terminalDisplayWidth(text);
+        write(GHOST_STYLE + renderText + ANSI_RESET);
+        const displayWidth = terminalDisplayWidth(renderText);
         if (displayWidth > 0) {
             write(`\x1b[${String(displayWidth)}D`);
         }
@@ -103,6 +123,7 @@ export class ShellGhostText {
         write(ERASE_TO_EOL);
 
         this._currentGhost = '';
+        this._renderedGhost = '';
         this._visible = false;
     }
 
@@ -123,6 +144,7 @@ export class ShellGhostText {
 
         const accepted = this._currentGhost;
         this._currentGhost = '';
+        this._renderedGhost = '';
         this._visible = false;
 
         // Erase the dim ghost text
@@ -139,6 +161,7 @@ export class ShellGhostText {
      */
     reset(): void {
         this._currentGhost = '';
+        this._renderedGhost = '';
         this._visible = false;
     }
 }

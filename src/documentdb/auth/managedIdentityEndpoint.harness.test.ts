@@ -153,7 +153,7 @@ describe('ManagedIdentityCredential against a fake identity endpoint', () => {
     it('propagates a usable expiry, so the driver can cache the token', async () => {
         await startEndpoint((_request, response) => respondJson(response, 200, successBody(3600)));
 
-        const { expiresInSecondsFromTimestamp } = await import('./ManagedIdentityAuthHandler');
+        const { expiresInSecondsFromTimestamp } = await import('./tokenExpiry');
         const token = await acquireToken();
         const expiresInSeconds = expiresInSecondsFromTimestamp(token.expiresOnTimestamp);
 
