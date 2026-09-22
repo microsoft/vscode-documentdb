@@ -745,7 +745,7 @@ export class DocumentDBShellPty implements vscode.Pseudoterminal {
             // Feed query result documents to SchemaStore for field completions.
             // This runs asynchronously after output is displayed — schema feeding
             // is non-blocking and failure is non-critical.
-            this.maybeFeedSchemaStore(result);
+            void this.maybeFeedSchemaStore(result);
         });
     }
 
@@ -1031,7 +1031,7 @@ export class DocumentDBShellPty implements vscode.Pseudoterminal {
      * types) and delegates to the shared {@link feedResultToSchemaStore} utility.
      * Failures are silently ignored — schema feeding is best-effort.
      */
-    private maybeFeedSchemaStore(result: SerializableExecutionResult): void {
+    private async maybeFeedSchemaStore(result: SerializableExecutionResult): Promise<void> {
         // Only Cursor and Document results with a namespace are worth parsing
         if (result.type !== 'Cursor' && result.type !== 'Document') {
             return;
@@ -1041,7 +1041,8 @@ export class DocumentDBShellPty implements vscode.Pseudoterminal {
         }
 
         try {
-            feedResultToSchemaStore(deserializeResultForSchema(result), this._connectionInfo.clusterId);
+            const deserialized = await deserializeResultForSchema(result);
+            feedResultToSchemaStore(deserialized, this._connectionInfo.clusterId);
         } catch {
             // Non-critical — schema feeding is best-effort
         }

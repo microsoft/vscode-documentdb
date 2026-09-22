@@ -5,6 +5,9 @@ status: active
 created: 2026-09-18
 code:
   - src/documentdb/shell/**
+  - src/documentdb/auth/tokenExpiry.ts
+  - src/documentdb/playground/**
+  - packages/documentdb-js-shell-runtime/src/HelpProvider.ts
 ---
 
 # Iteration 12: Shell Session UX
@@ -90,9 +93,18 @@ handler and playground worker share that module without crossing the extension-h
 
 **Status:** Implemented
 
-The startup header now uses a compact three-line `DocumentDB Shell` mark. It deliberately carries no
-connection name or host: `Connected to:` is the single persistent source of destination context, and
-duplicating it in the header made long connection names dominate the first screen.
+The startup header now uses a prompt-focused three-line mark:
+
+```text
+╭────╮
+│ >_ │ DocumentDB Shell
+╰────╯
+```
+
+It deliberately carries no connection name or host: `Connected to:` is the single persistent source
+of destination context, and duplicating it in the header made long connection names dominate the
+first screen. The mark is emitted immediately, before asynchronous connection work, while connection
+details remain grouped with the successful result.
 
 The connection summary uses a minimal, theme-safe hierarchy when
 `documentDB.shell.display.colorSupport` is enabled:
@@ -106,6 +118,9 @@ The connection summary uses a minimal, theme-safe hierarchy when
 implements the minimal connection summary.
 [`66901005`](https://github.com/microsoft/vscode-documentdb/commit/66901005326617c068f4fa3a26054746f795a6f9)
 applies the same bold-default treatment to help section headings instead of cyan.
+[`72bf2de0`](https://github.com/microsoft/vscode-documentdb/commit/72bf2de0) introduced the compact
+header; `60660726`, `6596bb04`, and `a46fd42f` record the final logo exploration, prompt-focused
+choice, and immediate rendering behavior.
 
 With color support disabled, the same content is emitted without ANSI styling. The connection spinner
 remains a single transient `Connecting and authenticating...` line and does not repeat the destination.
@@ -149,6 +164,46 @@ Link underlines remain independent because they communicate clickability rather 
   ghost text assigns no color.
 - Focused formatter, syntax-colorizer, completion, ghost-text, spinner, and PTY suites passed with
   200 tests before the final contract tests were added.
+
+## WI5: Prewarm Collection Completions
+
+**Status:** Implemented
+
+Collection completion used to discover names only after the user first requested a `db.` or
+bracket-notation completion. That request remained cache-only and non-blocking, so an empty cache
+made the first Tab press produce no collection candidates while a background fetch started.
+
+Commit `cc22ff42` prewarms the shared `ClustersClient` collection cache after a shell connects and
+again after `use <database>` changes the active database. The fetch is fire-and-forget: shell input
+does not wait for it, failures remain non-critical, duplicate in-flight requests are suppressed, and
+the existing on-demand fetch remains the fallback. Passing `true` to `listCollections()` forces a
+refresh for the database the shell has just entered rather than trusting an older shared cache.
+
+Focused PTY tests cover the initial and switched-database calls. Provider tests cover the requested
+cluster/database and forced refresh.
+
+## WI6: Discoverable Display Settings
+
+**Status:** Implemented
+
+N3 made `autocompletion` and `inlineHints` real settings, but its first `help` wording could only name
+a search prefix: the full setting IDs exceed the 40-column help contract. Commits `92036b79` and
+`b2d2adfa` replace that prose with two compact markers:
+
+```text
+1. ⚙ [colorSupport] Toggle syntax and output colors.
+2. ⚙ [inlineHints] Toggle 🛈 descriptions, counts, and previews.
+```
+
+The terminal link provider expands those aliases to the full setting IDs and opens VS Code Settings.
+The markers remain links when color support is disabled, because clickability is behavior rather
+than decoration. Each entry also includes a wrapped manual-search fallback, and the indentation is
+part of the width-aware help layout rather than fixed output. `autocompletion` remains documented in
+the user manual; the in-shell shortcuts focus on the two display controls a user needs to interpret
+visible shell output.
+
+The same round made connection-timeout guidance specific to shell initialization before linking to
+`documentDB.shell.initTimeout`.
 
 ## Next Work Items
 

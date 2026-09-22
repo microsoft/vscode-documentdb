@@ -45,12 +45,30 @@ write-up, because a commit cannot reference its own hash.
 
 Deferred and won't-fix items were not touched. F6 was re-checked against F1 and still holds.
 
+## Follow-ups found in the shipped build
+
+Four issues surfaced while using the nine-item build. They are recorded in full under
+[Found after Step 15](../shell-liveness-audit.md#found-after-step-15); all four shipped on this
+branch.
+
+| Item | Commit     | What changed                                                                 |
+| ---- | ---------- | ---------------------------------------------------------------------------- |
+| N1   | `829788c1` | Tab asks the completion provider before accepting an insertable ghost         |
+| N2   | `5526f566` | Informational hints use `🛈`; `db.` reports the collection count               |
+| N3   | `3dc5b368` | Autocompletion and informational hints are controlled by separate settings   |
+| N4   | `77d39bbe` | Accepting a completion re-evaluates the next suggestion or informational hint |
+
+N2 supersedes I1c's empty-prefix insertion. `db.` now reports how many collections are available;
+typing enough of a collection name still reaches the normal completion or bracket-notation preview.
+N3 then makes the visible affordance the setting boundary: unmarked, insertable text belongs to
+`autocompletion`, while every `🛈` line belongs to `inlineHints`.
+
 ## The user complaint that opened the audit
 
 > "I had only one collection called `restaurants-something` and when I typed `db.`, the ghost text
 > didn't show."
 
-Two independent gates caused that, and it took two items to close:
+Two independent gates caused that, and it initially took two items to close:
 
 - **I1c** lets `db.` suggest at all, by ignoring database methods and asking whether exactly one
   _collection_ is on offer.
@@ -58,7 +76,9 @@ Two independent gates caused that, and it took two items to close:
   cannot render inline — so it is advertised instead: `db.` → `  → db['restaurants-something']  (Tab)`.
 
 Neither would have answered the complaint alone. That is worth remembering when triage splits a
-single report into separate items.
+single report into separate items. N2 later replaced I1c's special one-collection insertion with a
+collection-count hint because Tab could not honor that insertion consistently; I1a remains the
+bracket-notation path once the user narrows the prefix.
 
 ## Findings that did not match the audit
 
