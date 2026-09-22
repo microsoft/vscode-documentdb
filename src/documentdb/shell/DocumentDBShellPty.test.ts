@@ -142,8 +142,9 @@ describe('DocumentDBShellPty', () => {
         // The shell has exactly two hint markers: nothing (appendable) and 🛈
         // (informational). It names no keys. Asserted for every test so a new
         // hint cannot quietly reintroduce a third marker or a `(Tab)` suffix.
-        expect(written).not.toContain('→');
-        expect(written).not.toContain('(Tab)');
+        if (written.includes('→') || written.includes('(Tab)')) {
+            throw new Error('Shell output contains a deprecated hint marker');
+        }
 
         jest.restoreAllMocks();
     });

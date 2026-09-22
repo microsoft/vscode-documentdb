@@ -74,7 +74,7 @@ describe('ShellCompletionRenderer', () => {
 
             expect(output).toContain('restaurants');
             expect(output).toContain('aggregate()');
-            expect(output).not.toMatch(/\x1b\[\d+m/);
+            expect(output).not.toContain('\x1b[');
         });
 
         it('should wrap to multiple rows when needed', () => {

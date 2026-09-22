@@ -93,9 +93,12 @@ describe('ShellGhostText', () => {
     });
 
     describe('width clipping', () => {
+        const escapeCharacter = String.fromCharCode(27);
+        const dimmedTextPattern = new RegExp(`${escapeCharacter}\\[2m(.*?)${escapeCharacter}\\[0m`, 's');
+
         /** Display width of the text between the dim-style prefix and the reset. */
         const renderedWidth = (data: string): number => {
-            const match = /\x1b\[2m(.*?)\x1b\[0m/s.exec(data);
+            const match = dimmedTextPattern.exec(data);
             return match ? [...match[1]].length : 0;
         };
 
@@ -122,7 +125,7 @@ describe('ShellGhostText', () => {
 
         it('should move the cursor back exactly as far as it wrote', () => {
             ghostText.show('  🛈 Run db.vector_index_debug_cases.find() first', write, 12);
-            const back = /\x1b\[(\d+)D/.exec(written);
+            const back = new RegExp(`${escapeCharacter}\\[(\\d+)D`).exec(written);
             expect(back).not.toBeNull();
             expect(Number(back?.[1])).toBe(renderedWidth(written));
         });
@@ -154,7 +157,7 @@ describe('ShellGhostText', () => {
         it('should not split a surrogate pair when clipping', () => {
             // Clipping at 2 columns leaves room for 1 column + the ellipsis.
             ghostText.show('a🛈bcdef', write, 3);
-            const match = /\x1b\[2m(.*?)\x1b\[0m/s.exec(written);
+            const match = dimmedTextPattern.exec(written);
             expect(match?.[1]).toBe('a🛈…');
             expect(written).toContain('\x1b[3D');
         });
