@@ -879,7 +879,11 @@ export class DocumentDBShellPty implements vscode.Pseudoterminal {
     // ─── Private: Terminal output helpers ────────────────────────────────────
 
     private showLogo(): void {
-        const logo = '╭──────────────────────╮\n│ DocumentDB Shell  >_ │\n╰──────────────────────╯';
+        const logo = [
+            '╭──────────────────────╮',
+            '│ DocumentDB Shell  >_ │',
+            '╰──────────────────────╯',
+        ].join('\n');
         this.writeLine(this._outputFormatter.formatShellTitle(logo));
     }
 
