@@ -57,9 +57,11 @@ jest.mock('../../extensionVariables', () => ({
 }));
 
 jest.mock('../../utils/accumulatingTelemetry', () => ({
-    accumulateTelemetry: jest.fn((_eventName: string, update: (sample: { measurements: Record<string, number> }) => void) => {
-        update({ measurements: {} });
-    }),
+    accumulateTelemetry: jest.fn(
+        (_eventName: string, update: (sample: { measurements: Record<string, number> }) => void) => {
+            update({ measurements: {} });
+        },
+    ),
 }));
 
 // Mock ShellSessionManager

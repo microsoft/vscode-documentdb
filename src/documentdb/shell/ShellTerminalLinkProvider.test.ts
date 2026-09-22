@@ -4,8 +4,8 @@
  *--------------------------------------------------------------------------------------------*/
 
 import * as vscode from 'vscode';
-import { HelpProvider } from '../../../packages/documentdb-js-shell-runtime/src/HelpProvider';
 import packageJson from '../../../package.json';
+import { HelpProvider } from '../../../packages/documentdb-js-shell-runtime/src/HelpProvider';
 import {
     ACTION_LINE_PREFIX,
     HELP_SETTING_ALIASES,

@@ -175,30 +175,30 @@ is luxury 5 / usefulness 3. Both are worth doing; they are not worth doing _in t
 
 ## Decisions at a glance
 
-| #   | Item                                           | Complexity | Use | Lux | Decision  | Status             |
-| --- | ---------------------------------------------- | ---------- | --- | --- | --------- | ------------------ |
-| F1  | Resize can strand the cursor                   | S          | 5   | 1   | Fix       | Shipped `4c40d050` |
-| F2  | Ghost text paints over real text mid-buffer    | XS         | 4   | 1   | Fix       | Shipped `88ef37c5` |
-| F3  | Completion list measured with `String.length`  | S          | 3   | 1   | Fix       | Shipped `eb988c4b` |
-| F4  | Prompt width measured with `String.length`     | XS         | 2   | 1   | Fix       | Shipped `412722bf` |
-| F5  | Shell `help` hard-coded to ~62 columns         | S          | 3   | 2   | Fix       | Shipped `d4a2c765` |
-| F6  | Banner summary drawn at an assumed 80 columns  | S          | 3   | 1   | Fix       | Shipped `9793eb6c` |
-| I1a | Bracket-notation preview hint                  | S          | 4   | 3   | Fix       | Shipped `a0774f47` |
-| I1b | Replacement-aware ghost text                   | M          | 4   | 5   | Won't fix | —                  |
-| I1c | Ghost text at an empty prefix                  | S          | 3   | 3   | Fix       | Superseded by N2   |
-| I2  | History-based autosuggestion (capped)          | M          | 4   | 5   | Fix       | Shipped `50e6ba53` |
-| I3  | Ctrl+R reverse history search                  | M          | 3   | 4   | Deferred  | —                  |
-| I4  | Persist history across sessions                | M          | 4   | 2   | Deferred  | —                  |
-| I5  | Inline `detail` hint for the single match      | S          | 4   | 4   | Fix       | Shipped `3b93b204` |
-| I6  | `detail` in the multi-column list              | M          | 3   | 3   | Deferred  | —                  |
-| I7  | Tab-cycling — as menu-select, with the list    | L (+ I10)  | 3   | 5   | Deferred  | —                  |
-| I8  | First-run nudge naming a real collection       | S          | 5   | 3   | Won't fix | —                  |
-| I9  | Clickable collection names                     | M          | 3   | 4   | Deferred  | —                  |
-| I10 | Make `reRenderLine()` ghost-aware              | M          | 3   | 1   | Deferred  | —                  |
-| N1  | Insertable ghosts steal Tab from the list      | S          | 5   | 1   | Fix       | Shipped `829788c1` |
-| N2  | Hint markers, and what `db.` should say        | S          | 4   | 4   | Fix       | Shipped `5526f566` |
-| N3  | Setting to turn the inline hints off           | S          | 4   | 2   | Fix       | Shipped `3dc5b368` |
-| N4  | Accepting a completion ends the ghost chain    | XS         | 4   | 2   | Fix       | Shipped `77d39bbe` |
+| #   | Item                                          | Complexity | Use | Lux | Decision  | Status             |
+| --- | --------------------------------------------- | ---------- | --- | --- | --------- | ------------------ |
+| F1  | Resize can strand the cursor                  | S          | 5   | 1   | Fix       | Shipped `4c40d050` |
+| F2  | Ghost text paints over real text mid-buffer   | XS         | 4   | 1   | Fix       | Shipped `88ef37c5` |
+| F3  | Completion list measured with `String.length` | S          | 3   | 1   | Fix       | Shipped `eb988c4b` |
+| F4  | Prompt width measured with `String.length`    | XS         | 2   | 1   | Fix       | Shipped `412722bf` |
+| F5  | Shell `help` hard-coded to ~62 columns        | S          | 3   | 2   | Fix       | Shipped `d4a2c765` |
+| F6  | Banner summary drawn at an assumed 80 columns | S          | 3   | 1   | Fix       | Shipped `9793eb6c` |
+| I1a | Bracket-notation preview hint                 | S          | 4   | 3   | Fix       | Shipped `a0774f47` |
+| I1b | Replacement-aware ghost text                  | M          | 4   | 5   | Won't fix | —                  |
+| I1c | Ghost text at an empty prefix                 | S          | 3   | 3   | Fix       | Superseded by N2   |
+| I2  | History-based autosuggestion (capped)         | M          | 4   | 5   | Fix       | Shipped `50e6ba53` |
+| I3  | Ctrl+R reverse history search                 | M          | 3   | 4   | Deferred  | —                  |
+| I4  | Persist history across sessions               | M          | 4   | 2   | Deferred  | —                  |
+| I5  | Inline `detail` hint for the single match     | S          | 4   | 4   | Fix       | Shipped `3b93b204` |
+| I6  | `detail` in the multi-column list             | M          | 3   | 3   | Deferred  | —                  |
+| I7  | Tab-cycling — as menu-select, with the list   | L (+ I10)  | 3   | 5   | Deferred  | —                  |
+| I8  | First-run nudge naming a real collection      | S          | 5   | 3   | Won't fix | —                  |
+| I9  | Clickable collection names                    | M          | 3   | 4   | Deferred  | —                  |
+| I10 | Make `reRenderLine()` ghost-aware             | M          | 3   | 1   | Deferred  | —                  |
+| N1  | Insertable ghosts steal Tab from the list     | S          | 5   | 1   | Fix       | Shipped `829788c1` |
+| N2  | Hint markers, and what `db.` should say       | S          | 4   | 4   | Fix       | Shipped `5526f566` |
+| N3  | Setting to turn the inline hints off          | S          | 4   | 2   | Fix       | Shipped `3dc5b368` |
+| N4  | Accepting a completion ends the ghost chain   | XS         | 4   | 2   | Fix       | Shipped `77d39bbe` |
 
 Two entries changed shape during triage. **I7** moved to Deferred once it became clear that the
 version worth having (list stays visible, Tab moves a highlight through it) needs I10 as a

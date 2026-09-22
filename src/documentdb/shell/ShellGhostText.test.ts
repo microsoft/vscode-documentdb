@@ -128,7 +128,12 @@ describe('ShellGhostText', () => {
         it('should keep emitted ghost text on the cursor row across widths and character classes', () => {
             const buffers = ['ascii'.repeat(50), '日本語'.repeat(50), '📦'.repeat(100), 'é'.repeat(100)];
             const suggestions = ['suggestion', '候補一覧', '📦 inventory', 'café menu'];
-            const inputHandler = new ShellInputHandler({ write: jest.fn(), onLine: jest.fn() });
+            const inputHandler = new ShellInputHandler({
+                write: jest.fn(),
+                onLine: jest.fn(),
+                onInterrupt: jest.fn(),
+                onContinuation: jest.fn(),
+            });
 
             for (let columns = 20; columns <= 200; columns++) {
                 for (const buffer of buffers) {

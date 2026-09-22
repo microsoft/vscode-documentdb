@@ -879,13 +879,13 @@ item — it is P1's regression net.
 
 ## Filed as issues
 
-| Source                                                                                         | Issue scope                                                                                                        |
-| ---------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------ |
-| [P2](#p2--collection-prewarming-can-open-a-second-cluster-connection-on-shell-open) option D   | [#938] — ask the worker for the collection list instead of the extension host                                      |
-| [P8](#p8--maybefeedschemastore-is-async-with-nothing-to-await) option C                        | [#939] — feed `SchemaStore` from the worker; drop the serialize/parse round trip                                   |
-| [B1](#b1--this-pr-increased-the-unlocalized-surface-of-the-shell) option B                     | [#940] — **how** a `vscode`-free worker package emits localized text                                               |
-| [B3](#b3--the-screen-reader-story-is-one-colorsupport-toggle-and-this-pr-made-the-row-noisier) | [#941] — accessibility pass for the terminal surface                                                              |
-| [B4](#b4--history-autosuggestion-replays-whatever-was-typed-including-secrets)                 | [#945] — redaction; carries the **accepted exposure** and the I4 shared-list constraint                            |
+| Source                                                                                         | Issue scope                                                                             |
+| ---------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------- |
+| [P2](#p2--collection-prewarming-can-open-a-second-cluster-connection-on-shell-open) option D   | [#938] — ask the worker for the collection list instead of the extension host           |
+| [P8](#p8--maybefeedschemastore-is-async-with-nothing-to-await) option C                        | [#939] — feed `SchemaStore` from the worker; drop the serialize/parse round trip        |
+| [B1](#b1--this-pr-increased-the-unlocalized-surface-of-the-shell) option B                     | [#940] — **how** a `vscode`-free worker package emits localized text                    |
+| [B3](#b3--the-screen-reader-story-is-one-colorsupport-toggle-and-this-pr-made-the-row-noisier) | [#941] — accessibility pass for the terminal surface                                    |
+| [B4](#b4--history-autosuggestion-replays-whatever-was-typed-including-secrets)                 | [#945] — redaction; carries the **accepted exposure** and the I4 shared-list constraint |
 
 ## On hold
 
@@ -984,7 +984,7 @@ Per [CONTRIBUTING §6.1](../../../../../CONTRIBUTING.md#61-stage-1-ai-review-pas
 - [x] Step 4 — independent sweep beyond the captured issues
 - [x] Stage 2 — operator decisions recorded, 2026-09-22, including the contest pass
 - [x] Stage 3 — implemented in grouped shell/test and documentation commits as authorized by the
-  operator; each finding is logged inline above
+      operator; each finding is logged inline above
 - [x] File the five issues listed above and link them here
 
 Twelve work items ship in this PR, plus P10 conditionally. Suggested order, so that each item lands
