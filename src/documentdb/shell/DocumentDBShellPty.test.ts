@@ -928,6 +928,19 @@ describe('DocumentDBShellPty', () => {
             expect(written).not.toContain(`${GHOST_STYLE}p me`);
         });
 
+        it('yields to the description of a fully typed candidate', async () => {
+            pty.handleInput('db.restaurants.find()');
+            pty.handleInput('\r');
+            await new Promise((resolve) => setTimeout(resolve, 20));
+            written = '';
+
+            pty.handleInput('db');
+            await afterGhostDebounce();
+
+            expect(written).toContain(`${GHOST_STYLE}  🛈 Current database`);
+            expect(written).not.toContain(`${GHOST_STYLE}.restaurants.find()`);
+        });
+
         it('is insertable', async () => {
             pty.handleInput('db.restaurants.countDocuments({})');
             pty.handleInput('\r');

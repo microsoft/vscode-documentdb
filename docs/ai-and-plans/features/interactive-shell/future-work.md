@@ -91,7 +91,7 @@ Pre-fill the Collection View with the same filter/sort/projection the user ran i
 
 **Priority:** Low
 
-- ~~Auto-suggest from history (ghost text)~~ — Inline ghost text for single prefix matches implemented in [PR #576](https://github.com/microsoft/vscode-documentdb/pull/576). History-based ghost text not implemented (deferred).
+- ~~Auto-suggest from history (ghost text)~~ — Single-candidate completion shipped in [PR #576](https://github.com/microsoft/vscode-documentdb/pull/576); in-session history autosuggestions shipped in PR #937. Ordering remains a separate UX question below.
 - Prompt coloring (green when connected, red when disconnected)
 - Execution status indicator (spinner while running)
 
@@ -102,3 +102,16 @@ Pre-fill the Collection View with the same filter/sort/projection the user ran i
 **Priority:** Low
 
 Command history that survives VS Code restarts via `globalState`. Currently, history is per-session only.
+
+---
+
+## 7. History Versus Description Priority
+
+**Priority:** Low | **Status:** deferred UX decision, not a pending correctness fix
+
+PR #937 C3 preserves the shipped ordering by operator decision: fully-typed candidate descriptions
+and the empty-prefix `db.` collection count precede history. Consider whether history should instead
+precede descriptions while retaining the count exception. That would improve one-key recall but
+reduce contextual explanations; it requires a new operator decision and targeted precedence tests.
+The current count falls through to history when inline hints are disabled; candidate branches do
+not. See the [superseding decision record](./iterations/15-shell-liveness-audit-fixes.md#the-decision-the-audit-left-open).

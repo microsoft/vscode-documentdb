@@ -1264,11 +1264,11 @@ export class DocumentDBShellPty implements vscode.Pseudoterminal {
 
         const result = this.getCompletionResult(buffer, cursor);
 
-        // Only one writer may own the row after the cursor, and an insertable
-        // suggestion always beats an informational one. The precedence is:
-        // completion ghost, bracket-notation preview, the candidate's
-        // description, the collection count, history autosuggestion, the schema
-        // hint, then closing brackets.
+        // Only one writer may own the row: a candidate's rewrite preview,
+        // appendable completion, or fully-typed description; then the db-dot
+        // collection count, history, schema hint, and closing brackets.
+        // Candidate branches return even if their renderer is disabled; the
+        // collection count falls through to history when inline hints are off.
         const candidate = this.ghostCandidate(result);
         if (candidate) {
             // Accepting this candidate would rewrite text the user already typed
@@ -1299,8 +1299,8 @@ export class DocumentDBShellPty implements vscode.Pseudoterminal {
             }
         }
 
-        // `db.` says how much is there. This is the one place an informational
-        // hint outranks an insertable one: `db.` is a prefix of nearly every
+        // `db.` says how much is there. Like a fully-typed candidate's description,
+        // this informational hint outranks history: `db.` is a prefix of nearly every
         // command ever run, so a history match on it carries almost no
         // information, while the count is about exactly where the cursor is.
         //

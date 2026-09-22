@@ -111,6 +111,18 @@ F1 clears ghost state explicitly.)
 
 ## The decision the audit left open
 
+> **Superseding clarification (2026-09-22, PR #937 C3):** the order and `db` example below record
+> the earlier intent, not the shipped behavior. The operator confirmed retaining the current order:
+> a single candidate's rewrite preview, appendable completion, or fully-typed description first;
+> then the empty-prefix `db.` collection count, history, missing-schema hint, and closing brackets.
+> Thus typing `db` after a previous query shows `Current database`, not the history suffix; typing
+> `db.` shows a count when cached collections exist. The count falls through to history when inline
+> hints are off, but candidate branches return even when their renderer is disabled. Descriptions
+> as well as counts can outrank history; "insertable beats informational" is not a general invariant.
+> Existing count/fallback tests and a description/history collision test pin this policy. A possible
+> future history-first change is tracked in [future-work.md](../future-work.md#7-history-versus-description-priority).
+> No precedence behavior is changed by this correction.
+
 I2 and I5 both want the single row after the cursor, and nothing said which wins. The rule adopted,
 and now written into `evaluateGhostText()` as a comment and enforced by branch order, is
 **insertable beats informational**:

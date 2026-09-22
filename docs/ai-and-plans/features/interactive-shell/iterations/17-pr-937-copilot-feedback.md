@@ -185,6 +185,14 @@ Binary UUID subtype handling, and Code-with-scope behavior.
 **Verdict:** correct about the cache flag. **Severity:** Medium, completion freshness rather than query correctness.
 **Disposition:** open; option A confirmed by the operator, not yet implemented.
 
+> **Implementation (2026-09-22):** completed in [e2820fd4](https://github.com/microsoft/vscode-documentdb/commit/e2820fd4).
+> Option A shipped: omit the cache-first flag and correct WI5's inverted explanation. Tests execute
+> the real client cache method with a fake driver, proving both cold-cache fetching and replacement
+> of seeded stale names in subsequent completions. Concurrent deduplication, later refresh, retry
+> after rejection, and no-new-client behavior are covered; all 98 provider tests pass. One lifecycle
+> metadata request is the accepted cost; synchronous typing remains cache-only. A wider cache API
+> redesign would add churn without improving this fix. GitHub reply pending publication of the commit.
+
 ### Evidence
 
 [ShellCompletionProvider.prewarmCollections](../../../../../src/documentdb/shell/ShellCompletionProvider.ts#L166)

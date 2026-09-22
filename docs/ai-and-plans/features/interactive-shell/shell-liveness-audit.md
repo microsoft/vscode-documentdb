@@ -1150,6 +1150,16 @@ It is one branch, guarded by context, and reversing it means deleting that branc
 wrong call, say so — the test `outranks a history suggestion, which \`db.\` almost always has` is the
 one to invert.
 
+> **Superseding clarification (2026-09-22, PR #937 C3):** the operator has now confirmed keeping
+> the shipped order. Candidate rewrite previews, appendable completions, and fully-typed descriptions
+> precede this count; the count precedes history, which precedes schema hints and closing brackets.
+> After a previous query, `db` shows `Current database`, while `db.` shows the cached collection count.
+> Disabling inline hints lets the count fall through to history, but candidate branches still return
+> when their renderer is disabled. Counts are therefore not the only informational content ahead of
+> history. The earlier history-first claim in iteration 15 is superseded, not a reason to reorder code.
+> [Future work](./future-work.md#7-history-versus-description-priority) keeps a history-first UX change
+> available for a separate operator decision with regression updates.
+
 | Complexity | Usefulness | Luxury |
 | ---------- | ---------- | ------ |
 | S          | 4          | 4      |

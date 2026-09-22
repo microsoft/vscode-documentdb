@@ -59,6 +59,10 @@ program-level narrative, and the sibling areas
 - **Inline assistance has two user-controlled affordances.** Insertable suggestions and Tab
   completion are governed by `documentDB.shell.display.autocompletion`; informational lines marked
   `🛈` are governed independently by `documentDB.shell.display.inlineHints`.
+  Candidate previews, completions, and fully-typed descriptions precede the `db.` collection count,
+  then history, missing-schema hints, and closing brackets. The count falls through when hints are
+  disabled; candidate branches do not. A future history-first UX change is explicitly deferred in
+  [future-work.md](./future-work.md#7-history-versus-description-priority).
 - **Clickable action sentinels** after query results are registered through VS Code's
   `TerminalLinkProvider`. VS Code offers no way to style terminal links at rest, which is why
   visibility had to be solved in the emitted text itself. The same provider turns compact setting
