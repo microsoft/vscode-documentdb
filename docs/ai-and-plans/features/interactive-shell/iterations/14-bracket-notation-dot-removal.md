@@ -2,7 +2,7 @@
 feature: interactive-shell
 kind: iteration
 status: active
-prs: []
+prs: [937]
 created: 2026-09-18
 code:
     - src/documentdb/shell/ShellCompletionProvider.ts

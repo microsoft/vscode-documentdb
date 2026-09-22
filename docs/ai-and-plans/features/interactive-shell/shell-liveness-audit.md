@@ -2,7 +2,7 @@
 feature: interactive-shell
 kind: exploration
 status: active
-prs: []
+prs: [937]
 created: 2026-09-18
 updated: 2026-09-18
 ---
