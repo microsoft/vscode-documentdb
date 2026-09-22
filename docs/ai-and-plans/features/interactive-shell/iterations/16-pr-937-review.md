@@ -29,7 +29,8 @@ Two parts:
 Each finding carries a severity, the evidence it rests on, solution options with trade-offs, a
 recommendation, and the operator's **Decision**. Start at
 [Disposition after Stage 2](#disposition-after-stage-2) for the index, and at
-[Contested on-hold items](#contested-on-hold-items) for the four deferrals argued back.
+[Contested on-hold items](#contested-on-hold-items--and-how-they-landed) for the five deferrals
+argued back and how each landed.
 
 ## Review status legend
 
@@ -117,6 +118,11 @@ this finding as new evidence for it.
 **Decision — accepted, option B.** Move the arithmetic into `ShellInputHandler` alongside
 `cursorRowForColumns()` and have the PTY ask, plus the regression test at `cursorColumn === cols`.
 D is not reopened here; it stays I10.
+
+**Amended after the contest pass:** [B7](#b7--no-property-test-across-the-three-width-consumers) is
+folded into this item. The regression net is the property test over widths 20–200, not only the
+single `cursorColumn === cols` case — the exact-multiple case is the one that was missed, so a test
+that only covers it proves nothing about the next one.
 
 ---
 
@@ -410,7 +416,9 @@ twice per candidate (clip, then pad).
 stateless across `segment()` calls, so there is no correctness trade-off to weigh — this is a
 one-line change with no downside.
 
-**Decision — on hold.** Not decided in this pass.
+**Decision — accepted after the contest pass.** Hoist a module-level `GRAPHEME_SEGMENTER` shared by
+`terminalDisplayWidth()` and `clipToDisplayWidth()`. Taken because P4 opens this file anyway; the
+only cost of deferring was a second PR touching it.
 
 ---
 
@@ -433,7 +441,10 @@ replacing four independent booleans that must be kept consistent by hand. This i
 invariant structural" move the PR already made for `showInsertableGhost` / `showInlineHint`, applied
 one level deeper.
 
-**Decision — on hold.** Not decided in this pass.
+**Decision — accepted after the contest pass, conditionally.** Replace the four booleans with a
+single ghost-kind value **if P1's implementation already moves that state**. If P1 lands without
+touching the flags, this stays on hold — it is a latent trap, not a live defect, and does not justify
+its own commit.
 
 ---
 
@@ -521,13 +532,16 @@ D is a handful of lines with no architectural argument attached. C should not be
 placement decision was reasoned and recent, and reversing it for localization alone would trade a
 correctness property (width is sampled where `help` runs) for a translation property.
 
-**Decision — option B becomes an issue; nothing in this PR.** The tracking issue is the question
-itself: _how does a `vscode`-free worker package emit localized text?_ That is the reusable problem —
-`documentdb-js-shell-runtime` will not be the last package in this position — so the issue is scoped
-to the mechanism, not to translating `help`.
+**Decision — option B becomes an issue; option A taken after the contest pass.** The tracking issue is
+the question itself: _how does a `vscode`-free worker package emit localized text?_ That is the
+reusable problem — `documentdb-js-shell-runtime` will not be the last package in this position — so
+the issue is scoped to the mechanism, not to translating `help`.
 
-A (document the constraint in the README) and D (localize the host-side strings) were **not** taken.
-See [the contest note](#contested-on-hold-items) for why A is worth reconsidering.
+**Option A is now in scope for this PR:** a paragraph in the feature README stating that shell `help`
+is English **by design**, because it is generated in a worker in a package that cannot depend on
+`vscode`. Without it the gap reads as an oversight and gets re-filed — this review did exactly that.
+
+D (localize the host-side strings) was not taken.
 
 ---
 
@@ -640,13 +654,24 @@ inherits one redaction rule rather than inventing a second. This is the highest-
 section: it is small, it is on the path the PR just built, and it retires a blocker on a deferred
 item at the same time.
 
-**Decision — issue only; nothing in this PR.** This overrides the review's recommendation, which
-argued for doing option A here. The issue must carry the shared-pattern-list constraint, because the
-value of A was never the filter on its own — it was that the same list unblocks
-[I4](../shell-liveness-audit.md#i4-persist-history-across-sessions). An issue that files only "redact
-secrets from autosuggestion" loses the half that mattered.
+**Decision — issue only, and the exposure is explicitly accepted for this release.** Confirmed after
+the contest pass.
 
-See [the contest note](#contested-on-hold-items) — this is the deferral I would push back on hardest.
+**Operator's reasoning:** shell history is never persisted. It lives in memory for the life of the
+terminal and is gone when the terminal closes — nothing reaches disk, secret storage, or telemetry.
+What autosuggestion re-displays is text the user typed in this session, in a window they are already
+looking at.
+
+**What that reasoning does not cover, stated so it is not lost:** the residual is on-screen and
+timing, not storage — a secret typed early in a session is re-offered later on a matching prefix, and
+Right Arrow accepts it in one keypress. The two situations where that matters are screen sharing and
+an unattended window. This is accepted, not unrecognized.
+
+**The issue must carry both**: the exposure decision above, and the shared-pattern-list constraint —
+the value of option A was never the filter alone, it was that the same list unblocks
+[I4](../shell-liveness-audit.md#i4-persist-history-across-sessions). An issue filed as only "redact
+secrets from autosuggestion" loses the half that mattered and reads like a backlog item rather than a
+decision.
 
 ---
 
@@ -717,29 +742,42 @@ columns − cursor column − 1"_. That invariant is stated in `availableGhostCo
 already; nothing checks it. This is cheap relative to what it covers, and would have caught P1
 without anyone thinking of the exact-multiple case.
 
-**Decision — on hold.** Not decided in this pass.
+**Decision — accepted after the contest pass, folded into
+[P1](#p1--availableghostcolumns-and-rerenderline-disagree-about-deferred-wrap).** Not a separate work
+item: it ships as P1's regression net, covering widths 20–200 over ASCII, CJK, emoji and combining
+marks. P4 widens the alphabet that invariant must hold over, so both changes land against the same
+test.
 
 ---
 
 # Disposition after Stage 2
 
-Decided by the operator on 2026-09-22. The per-finding reasoning is on each **Decision** line above;
-this is the index.
+Decided by the operator on 2026-09-22, in two passes: the initial decisions, then a contest pass over
+the items first left on hold. The per-finding reasoning is on each **Decision** line above; this is
+the index.
 
 ## Build in this PR
 
-| Finding                                                                                                                 | Severity | Decided                                            |
-| ----------------------------------------------------------------------------------------------------------------------- | -------- | -------------------------------------------------- |
-| [P1](#p1--availableghostcolumns-and-rerenderline-disagree-about-deferred-wrap) deferred-wrap disagreement               | Medium   | Option B — one owner in `ShellInputHandler` + test |
-| [P2](#p2--collection-prewarming-can-open-a-second-cluster-connection-on-shell-open) prewarm opens a connection          | Medium   | Option A — `getExistingClient()`                   |
-| [P3](#p3--the-bracket-notation-preview-clips-away-the-part-it-exists-to-show) preview clipping                          | Medium   | Option A **without the arrow** — `🛈 ['name']`      |
-| [P4](#p4--iswidecharacter-has-no-emoji-coverage-and-this-pr-multiplies--usage) emoji width                              | Low–Med  | Option A — emoji ranges + VS16, table-driven test  |
-| [P5](#p5--help_setting_aliases-duplicates-help-text-across-a-package-boundary-unguarded) alias drift                    | Low      | Options A + C — contract test, drop the fallback   |
-| [P7](#p7--shellhistorysuggestion-shownaccepted-is-not-a-usable-ratio) telemetry ratio                                   | Low      | Option A — count per matched entry                 |
-| [P8](#p8--maybefeedschemastore-is-async-with-nothing-to-await) signature cleanup                                        | Low      | Option A — drop `async`/`void`                     |
-| [P11](#p11--shell-help-advertises-two-of-five-settings-and-not-the-one-it-just-made-real) `help` omits `autocompletion` | Low      | Accepted — add the third entry                     |
-| [B2](#b2--the-connection-banner-is-now-the-last-width-unaware-surface) banner width                                     | Medium   | Option A — stack below a threshold; re-rate F6     |
-| [B5](#b5--shellghosttextaccept-is-still-dead-code) dead `accept()`                                                      | Low      | Accepted — delete it and its tests                 |
+| Finding                                                                                                                 | Severity | Decided                                                     |
+| ----------------------------------------------------------------------------------------------------------------------- | -------- | ----------------------------------------------------------- |
+| [P1](#p1--availableghostcolumns-and-rerenderline-disagree-about-deferred-wrap) deferred-wrap disagreement               | Medium   | Option B — one owner in `ShellInputHandler`; **absorbs B7** |
+| [P2](#p2--collection-prewarming-can-open-a-second-cluster-connection-on-shell-open) prewarm opens a connection          | Medium   | Option A — `getExistingClient()`                            |
+| [P3](#p3--the-bracket-notation-preview-clips-away-the-part-it-exists-to-show) preview clipping                          | Medium   | Option A **without the arrow** — `🛈 ['name']`               |
+| [P4](#p4--iswidecharacter-has-no-emoji-coverage-and-this-pr-multiplies--usage) emoji width                              | Low–Med  | Option A — emoji ranges + VS16, table-driven test           |
+| [P5](#p5--help_setting_aliases-duplicates-help-text-across-a-package-boundary-unguarded) alias drift                    | Low      | Options A + C — contract test, drop the fallback            |
+| [P7](#p7--shellhistorysuggestion-shownaccepted-is-not-a-usable-ratio) telemetry ratio                                   | Low      | Option A — count per matched entry                          |
+| [P8](#p8--maybefeedschemastore-is-async-with-nothing-to-await) signature cleanup                                        | Low      | Option A — drop `async`/`void`                              |
+| [P9](#p9--intlsegmenter-is-constructed-on-every-call-in-two-hot-functions) Segmenter hoist                              | Low      | Accepted in the contest pass — rides with P4                |
+| [P11](#p11--shell-help-advertises-two-of-five-settings-and-not-the-one-it-just-made-real) `help` omits `autocompletion` | Low      | Accepted — add the third entry                              |
+| [B1](#b1--this-pr-increased-the-unlocalized-surface-of-the-shell) l10n constraint                                       | Medium   | Option A — README paragraph (mechanism → issue)             |
+| [B2](#b2--the-connection-banner-is-now-the-last-width-unaware-surface) banner width                                     | Medium   | Option A — stack below a threshold; re-rate F6              |
+| [B5](#b5--shellghosttextaccept-is-still-dead-code) dead `accept()`                                                      | Low      | Accepted — delete it and its tests                          |
+
+**Conditional:** [P10](#p10--_ghosttextishistory-is-cleared-in-only-one-place) (ghost-kind value)
+ships **only if** P1's implementation already moves those flags. Otherwise it returns to on hold.
+
+**Absorbed:** [B7](#b7--no-property-test-across-the-three-width-consumers) is not a separate work
+item — it is P1's regression net.
 
 ## No change (decided)
 
@@ -749,31 +787,28 @@ this is the index.
 
 ## Filed as issues
 
-| Source                                                                                         | Issue scope                                                                 |
-| ---------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------- |
-| [P2](#p2--collection-prewarming-can-open-a-second-cluster-connection-on-shell-open) option D   | Ask the worker for the collection list instead of the extension host        |
-| [P8](#p8--maybefeedschemastore-is-async-with-nothing-to-await) option C                        | Feed `SchemaStore` from the worker; drop the serialize/parse round trip     |
-| [B1](#b1--this-pr-increased-the-unlocalized-surface-of-the-shell) option B                     | **How** a `vscode`-free worker package emits localized text                 |
-| [B3](#b3--the-screen-reader-story-is-one-colorsupport-toggle-and-this-pr-made-the-row-noisier) | Accessibility pass for the terminal surface                                 |
-| [B4](#b4--history-autosuggestion-replays-whatever-was-typed-including-secrets)                 | Redact secrets from autosuggestion — **with the I4 shared-list constraint** |
+| Source                                                                                         | Issue scope                                                                                                 |
+| ---------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------- |
+| [P2](#p2--collection-prewarming-can-open-a-second-cluster-connection-on-shell-open) option D   | Ask the worker for the collection list instead of the extension host                                        |
+| [P8](#p8--maybefeedschemastore-is-async-with-nothing-to-await) option C                        | Feed `SchemaStore` from the worker; drop the serialize/parse round trip                                     |
+| [B1](#b1--this-pr-increased-the-unlocalized-surface-of-the-shell) option B                     | **How** a `vscode`-free worker package emits localized text                                                 |
+| [B3](#b3--the-screen-reader-story-is-one-colorsupport-toggle-and-this-pr-made-the-row-noisier) | Accessibility pass for the terminal surface                                                                 |
+| [B4](#b4--history-autosuggestion-replays-whatever-was-typed-including-secrets)                 | Redact secrets from autosuggestion — must state the **accepted exposure** and the I4 shared-list constraint |
 
 ## On hold
 
-Not decided in this pass: [P9](#p9--intlsegmenter-is-constructed-on-every-call-in-two-hot-functions),
-[P10](#p10--_ghosttextishistory-is-cleared-in-only-one-place),
-[P12](#p12--a-clipped-ghost-inserts-more-than-it-showed),
-[B6](#b6--i10-is-the-root-cause-of-p1-step-13-and-f2-and-it-is-still-deferred),
-[B7](#b7--no-property-test-across-the-three-width-consumers).
+Still undecided after both passes:
+[P12](#p12--a-clipped-ghost-inserts-more-than-it-showed) and
+[B6](#b6--i10-is-the-root-cause-of-p1-step-13-and-f2-and-it-is-still-deferred). Neither was
+contested — see [Not contested](#not-contested) for why both are correctly parked.
 
-See below for the ones worth reopening before the branch moves on.
+## Contested on-hold items — and how they landed
 
-## Contested on-hold items
+Five items were argued back after the first pass. **All five were resolved**; the outcome is on each
+subsection and reflected in the tables above. Kept in full because the argument, not just the
+outcome, is the part that is hard to reconstruct later.
 
-Three of the five on-hold items get materially cheaper or more valuable **because of decisions
-already taken**, and one declined option is worth a second look. Raised here so the record shows
-they were argued rather than forgotten.
-
-### B7 — the width property test. Reopen.
+### B7 — the width property test. Reopen. → **Accepted, folded into P1**
 
 P1 is being fixed, and the fix is a **behavioral** change to cursor arithmetic. The accepted plan
 adds one regression test at `cursorColumn === cols`. That test only proves the case someone thought
@@ -786,13 +821,17 @@ verifying it by example both times.
 
 **Ask:** fold B7 into P1 as its regression net rather than treating it as a separate item.
 
-### P9 — hoist the `Intl.Segmenter`. Reopen, at effectively zero cost.
+**Resolved:** agreed — folded into P1. B7 has no commit of its own.
+
+### P9 — hoist the `Intl.Segmenter`. Reopen, at effectively zero cost. → **Accepted**
 
 One line, no trade-off recorded on either side, in a file **P4 is about to edit anyway**. Leaving it
 on hold means either a second PR touching `terminalDisplayWidth.ts` or a permanent per-keystroke
 allocation. There is no version of this that is cheaper later.
 
-### P10 — the ghost-kind tuple. Reopen, conditionally.
+**Resolved:** agreed — ships with P4.
+
+### P10 — the ghost-kind tuple. Reopen, conditionally. → **Accepted, conditionally**
 
 P1 opens `DocumentDBShellPty` and `ShellInputHandler`; B5 deletes part of `ShellGhostText`. The four
 loosely-coupled booleans are exactly the state this work is moving around. If P1 lands without it,
@@ -801,7 +840,10 @@ the next person adding a writer to that row inherits the trap described in the f
 **Ask:** take it only if P1's implementation already touches the flags. If P1 lands cleanly without
 them, leave it on hold — it is a latent issue, not a live one.
 
-### B4 — deferred to an issue. Push back.
+**Resolved:** agreed, on exactly that condition. The implementing commit for P1 must state which way
+it went, so the condition is not silently dropped.
+
+### B4 — deferred to an issue. Push back. → **Exposure accepted, with reasoning**
 
 Recorded here rather than silently accepted: this was the review's highest-value beyond-the-PR item
 and the only one with a **security** dimension. Deferring it means shipping a feature that, in this
@@ -814,7 +856,13 @@ the moment this PR merges, and the mitigation is a `startsWith` check over four 
 **Ask:** either take option A now, or state in the issue that the exposure is **accepted for this
 release** and why. An issue that reads like a backlog item will not convey that a decision was made.
 
-### B1 option A — documenting the constraint. Reopen.
+**Resolved:** the second branch — the exposure is **accepted**, because shell history is never
+persisted. The full reasoning, and the residual it does not cover, are recorded on
+[B4](#b4--history-autosuggestion-replays-whatever-was-typed-including-secrets) itself. This is the
+one place where the review's recommendation was overruled on the merits rather than on scope, which
+is why the reasoning is written out rather than summarized.
+
+### B1 option A — documenting the constraint. Reopen. → **Accepted**
 
 The issue covers the _mechanism_. It does not cover the fact that shell `help` is English **by
 design** because it is generated in a `vscode`-free worker package. Until that sentence is in the
@@ -822,6 +870,8 @@ feature README, the gap looks like an oversight, and the next reviewer will file
 review just did.
 
 **Ask:** one paragraph in the feature README, independent of when the issue is worked.
+
+**Resolved:** agreed — the README paragraph ships in this PR; the mechanism stays an issue.
 
 ### Not contested
 
@@ -840,9 +890,13 @@ Per [CONTRIBUTING §6.1](../../../../../CONTRIBUTING.md#61-stage-1-ai-review-pas
       is still a draft with no reviews)
 - [ ] Step 3 — validation gate with a different vendor's model
 - [x] Step 4 — independent sweep beyond the captured issues
-- [x] Stage 2 — operator decisions recorded, 2026-09-22
+- [x] Stage 2 — operator decisions recorded, 2026-09-22, including the contest pass
 - [ ] Stage 3 — implement, one commit per work item, each logged back into this file
 - [ ] File the five issues listed above and link them here
+
+Twelve work items ship in this PR, plus P10 conditionally. Suggested order, so that each item lands
+against a file the previous one already opened: P1 (with B7), P10 if it falls out, P4 + P9, P2, P3,
+P5, P7, P8, P11, B2, B5, B1.
 
 Before the PR moves to ready for review, the Case 2 command list in
 [copilot-instructions.md](../../../../../.github/copilot-instructions.md) applies in full —
