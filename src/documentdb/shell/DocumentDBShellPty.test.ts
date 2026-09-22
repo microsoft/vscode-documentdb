@@ -149,10 +149,8 @@ describe('DocumentDBShellPty', () => {
     });
 
     describe('open', () => {
-        it('should display welcome banner after connecting', async () => {
+        it('should display welcome banner immediately', () => {
             pty.open(undefined);
-
-            await new Promise((resolve) => setTimeout(resolve, 10));
 
             expect(written).toContain('DocumentDB Shell');
         });
