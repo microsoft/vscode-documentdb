@@ -71,6 +71,7 @@ import {
     QUICK_START_DEFAULT_TAG,
     QUICK_START_IMAGE,
     QUICK_START_IMAGE_REPOSITORY,
+    QUICK_START_MIN_PASSWORD_LENGTH,
     QUICK_START_PORT,
     type StageEvent,
 } from '../../../services/localQuickStart/quickStartTypes';
@@ -928,6 +929,12 @@ export const LocalQuickStart = (): JSX.Element => {
             }
             if (user.length > 128) {
                 return { field: 'username', message: l10n.t('Username must be 128 characters or fewer.') };
+            }
+            if (hasPass && pass.length < QUICK_START_MIN_PASSWORD_LENGTH) {
+                return {
+                    field: 'password',
+                    message: l10n.t('Password must be at least {0} characters.', QUICK_START_MIN_PASSWORD_LENGTH),
+                };
             }
             if (pass.length > 256) {
                 return { field: 'password', message: l10n.t('Password must be 256 characters or fewer.') };

@@ -1585,6 +1585,7 @@
   "Password copied to clipboard.": "Password copied to clipboard.",
   "Password for {username_at_resource}": "Password for {username_at_resource}",
   "Password must be 256 characters or fewer.": "Password must be 256 characters or fewer.",
+  "Password must be at least {0} characters.": "Password must be at least {0} characters.",
   "Password must not contain control characters.": "Password must not contain control characters.",
   "Paste a find query from clipboard into the editors": "Paste a find query from clipboard into the editors",
   "Paste Collection": "Paste Collection",

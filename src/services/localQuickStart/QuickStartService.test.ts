@@ -3,13 +3,16 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+import * as fs from 'fs/promises';
+import * as os from 'os';
+import * as path from 'path';
 import * as vscode from 'vscode';
 import { ext } from '../../extensionVariables';
 import { StorageService } from '../storageService';
 import { disposeQuickStartOutputChannel, type IContainerRuntime } from './ContainerRuntime';
 
 import { formatQuickStartMessage } from './quickStartMessages';
-import { QuickStartServiceImpl } from './QuickStartService';
+import { QuickStartServiceImpl, sweepStaleQuickStartEnvFiles } from './QuickStartService';
 import { listInstances, PROVISIONING_LEASE_TTL_MS, upsertInstance, writeConnectionString } from './quickStartStore';
 import {
     DEFAULT_ALIAS,
@@ -1924,5 +1927,47 @@ describe('QuickStartService — likely-installed hint', () => {
         expect(await service.deleteContainer()).toBe('deleted');
 
         expect(service.isLikelyInstalled).toBe(false);
+    });
+});
+
+describe('sweepStaleQuickStartEnvFiles', () => {
+    let dir: string;
+    // Far above any real pid_max, so `kill(pid, 0)` reports ESRCH.
+    const DEAD_PID = 2 ** 30;
+
+    beforeEach(async () => {
+        dir = await fs.mkdtemp(path.join(os.tmpdir(), 'qs-sweep-'));
+    });
+
+    afterEach(async () => {
+        await fs.rm(dir, { recursive: true, force: true });
+    });
+
+    async function writeEnvFile(name: string, ageMs = 0): Promise<void> {
+        const filePath = path.join(dir, name);
+        await fs.writeFile(filePath, 'PASSWORD=secret\n');
+        const time = new Date(Date.now() - ageMs);
+        await fs.utimes(filePath, time, time);
+    }
+
+    it('removes a fresh file whose owning process is gone and keeps one owned by a live process', async () => {
+        await writeEnvFile(`documentdb-quickstart-${DEAD_PID}-0123456789abcdef.env`);
+        await writeEnvFile(`documentdb-quickstart-${process.pid}-0123456789abcdef.env`);
+
+        await sweepStaleQuickStartEnvFiles(dir);
+
+        expect(await fs.readdir(dir)).toEqual([`documentdb-quickstart-${process.pid}-0123456789abcdef.env`]);
+    });
+
+    it('removes any file older than an hour, including legacy PID-less names', async () => {
+        const hour = 60 * 60 * 1000;
+        await writeEnvFile(`documentdb-quickstart-${process.pid}-0000000000000000.env`, 2 * hour);
+        await writeEnvFile('documentdb-quickstart-1111111111111111.env', 2 * hour);
+        await writeEnvFile('documentdb-quickstart-2222222222222222.env');
+        await writeEnvFile('unrelated.env', 2 * hour);
+
+        await sweepStaleQuickStartEnvFiles(dir);
+
+        expect((await fs.readdir(dir)).sort()).toEqual(['documentdb-quickstart-2222222222222222.env', 'unrelated.env']);
     });
 });

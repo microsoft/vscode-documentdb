@@ -152,7 +152,11 @@ class ContainerRuntimeImpl implements IContainerRuntime {
         },
     });
 
-    private makeRunner(secrets: ReadonlyArray<string>, token?: vscode.CancellationToken) {
+    /**
+     * `echoStdout: false` is for commands whose stdout is parsed JSON (inspect, ps): it carries the
+     * container's env (including `PASSWORD=`), which the caller may have no secret to mask with.
+     */
+    private makeRunner(secrets: ReadonlyArray<string>, token?: vscode.CancellationToken, echoStdout = true) {
         const channel = getQuickStartOutputChannel();
         const factory = new ShellStreamCommandRunnerFactory({
             // Non-strict: a non-zero exit still rejects, but harmless stderr warnings
@@ -160,7 +164,7 @@ class ContainerRuntimeImpl implements IContainerRuntime {
             strict: false,
             shellProvider: SHELL_PROVIDER,
             onCommand: (command: string) => channel.appendLine('$ ' + maskSecrets(command, secrets)),
-            stdOutPipe: new MaskedChannelWritable(channel, secrets),
+            stdOutPipe: echoStdout ? new MaskedChannelWritable(channel, secrets) : undefined,
             stdErrPipe: new MaskedChannelWritable(channel, secrets),
             cancellationToken: token,
         });
@@ -237,7 +241,7 @@ class ContainerRuntimeImpl implements IContainerRuntime {
 
     public async inspectContainer(nameOrId: string): Promise<InspectContainersItem | undefined> {
         try {
-            const runner = this.makeRunner([]);
+            const runner = this.makeRunner([], undefined, false);
             const items = await runner(this.client.inspectContainers({ containers: [nameOrId] }));
             return items?.[0];
         } catch {
@@ -314,7 +318,7 @@ class ContainerRuntimeImpl implements IContainerRuntime {
     }
 
     public async listByLabel(labels: Record<string, string | boolean>): Promise<ListContainersItem[]> {
-        const runner = this.makeRunner([]);
+        const runner = this.makeRunner([], undefined, false);
         return runner(this.client.listContainers({ all: true, labels }));
     }
 

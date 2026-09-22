@@ -30,6 +30,7 @@ import {
     type DockerStatusResult,
     type InstanceStatusUpdate,
     type PortAvailability,
+    QUICK_START_MIN_PASSWORD_LENGTH,
     type QuickStartStatus,
     type StageEvent,
 } from '../../../services/localQuickStart/quickStartTypes';
@@ -66,7 +67,7 @@ const advancedOptionsSchema = z
         password: z
             .string()
             .trim()
-            .min(1)
+            .min(QUICK_START_MIN_PASSWORD_LENGTH)
             .max(256)
             // eslint-disable-next-line no-control-regex
             .regex(/^[^\u0000-\u001f\u007f]+$/, 'Password must not contain control characters')

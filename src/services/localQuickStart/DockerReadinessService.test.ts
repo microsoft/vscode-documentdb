@@ -517,6 +517,72 @@ describe('DockerReadinessService', () => {
         });
     });
 
+    it('logs a docker info summary instead of piping its JSON to the channel', async () => {
+        const appendDiagnostic = jest.fn();
+        const stdOutPipe = new Writable({ write: (_chunk, _encoding, callback): void => callback() });
+        const pipedProbes: string[] = [];
+        const runProbe = jest.fn(async (options: RunDockerProbeOptions): Promise<DockerProbeEvidence> => {
+            if (options.stdOutPipe) {
+                pipedProbes.push(options.probe);
+            }
+            if (options.probe === 'info') {
+                return evidence('info', {
+                    stdout: JSON.stringify({
+                        OSType: 'linux',
+                        OperatingSystem: 'Docker Desktop',
+                        Architecture: 'x86_64',
+                        ServerVersion: '29.8.0',
+                        ServerErrors: [],
+                    }),
+                });
+            }
+            return evidence(options.probe, { stdout: 'Docker version 28.1.1' });
+        });
+        const service = new DockerReadinessService({
+            client: createClient(),
+            shellProvider: new Bash(),
+            platform: 'linux',
+            environmentVariables: {},
+            runProbe,
+            createProbeOutput: () => ({ stdOutPipe, appendDiagnostic }),
+        });
+
+        await expect(service.getReadiness()).resolves.toMatchObject({ outcome: 'ready' });
+        expect(pipedProbes).toEqual(['cliVersion']);
+        expect(appendDiagnostic.mock.calls).toEqual([
+            ['[readiness] docker server=29.8.0 os=linux (Docker Desktop) arch=x86_64'],
+        ]);
+    });
+
+    it('logs docker info server errors as diagnostics on failure', async () => {
+        const appendDiagnostic = jest.fn();
+        const runProbe = jest.fn(async (options: RunDockerProbeOptions): Promise<DockerProbeEvidence> => {
+            if (options.probe === 'info') {
+                return evidence('info', {
+                    exitCode: 1,
+                    stdout: JSON.stringify({ ServerErrors: ['Cannot connect to the Docker daemon'] }),
+                });
+            }
+            if (options.probe === 'contexts') {
+                return evidence('contexts', { stdout: '[]' });
+            }
+            return evidence('cliVersion', { stdout: 'Docker version 28.1.1' });
+        });
+        const service = new DockerReadinessService({
+            client: createClient(),
+            shellProvider: new Bash(),
+            platform: 'linux',
+            environmentVariables: {},
+            runProbe,
+            probeEndpoint: async (endpoint) => ({ kind: endpoint.kind, source: endpoint.source }),
+            createProbeOutput: () => ({ appendDiagnostic }),
+        });
+
+        await service.getReadiness();
+
+        expect(appendDiagnostic).toHaveBeenCalledWith('[readiness] server error: Cannot connect to the Docker daemon');
+    });
+
     it('diagnoses a reachable Windows-container daemon', async () => {
         const runProbe = jest.fn(async (options: RunDockerProbeOptions): Promise<DockerProbeEvidence> => {
             if (options.probe === 'info') {
@@ -799,7 +865,7 @@ describe('DockerReadinessService', () => {
         expect(writeProviderMemory).toHaveBeenCalledWith(undefined);
     });
 
-    it('suppresses successful poll transcripts and retains a failing probe transcript', async () => {
+    it('suppresses successful poll transcripts and retains a failing probe command and stderr', async () => {
         const onCommand = jest.fn();
         const stdout: string[] = [];
         const stderr: string[] = [];
@@ -841,7 +907,8 @@ describe('DockerReadinessService', () => {
 
         expect(onCommand).toHaveBeenCalledTimes(1);
         expect(onCommand).toHaveBeenCalledWith('docker info');
-        expect(stdout).toEqual(['failed stdout']);
+        // `docker info` stdout is JSON; only its summary/server errors are logged.
+        expect(stdout).toEqual([]);
         expect(stderr).toEqual(['failed stderr']);
     });
 });
