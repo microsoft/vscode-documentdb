@@ -177,8 +177,12 @@ made the first Tab press produce no collection candidates while a background fet
 Commit `cc22ff42` prewarms the shared `ClustersClient` collection cache after a shell connects and
 again after `use <database>` changes the active database. The fetch is fire-and-forget: shell input
 does not wait for it, failures remain non-critical, duplicate in-flight requests are suppressed, and
-the existing on-demand fetch remains the fallback. Passing `true` to `listCollections()` forces a
-refresh for the database the shell has just entered rather than trusting an older shared cache.
+the existing on-demand fetch remains the fallback.
+
+**Correction (PR #937, C2):** the original record inverted the cache flag: `true` means cache-first,
+not force-refresh. Prewarming now omits that flag to refresh the database the shell has just entered
+rather than trust an older shared cache. This costs one metadata request per lifecycle event; typing
+still reads the cache synchronously, and no new host connection is created.
 
 Focused PTY tests cover the initial and switched-database calls. Provider tests cover the requested
 cluster/database and forced refresh.

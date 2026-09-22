@@ -214,7 +214,57 @@ describe('ShellCompletionProvider', () => {
 
             expect(ClustersClient.getExistingClient).toHaveBeenCalledWith('test-cluster');
             expect(ClustersClient.getClient).not.toHaveBeenCalled();
-            expect(listCollections).toHaveBeenCalledWith('testdb', true);
+            expect(listCollections).toHaveBeenCalledWith('testdb');
+        });
+
+        it.each([
+            { label: 'cold', cached: [] },
+            { label: 'stale', cached: [{ name: 'old', type: 'collection' }] },
+        ])('refreshes a $label cache through the client and exposes the new names', async ({ cached }) => {
+            const { ClustersClient: ActualClustersClient } =
+                jest.requireActual<typeof import('../ClustersClient')>('../ClustersClient');
+            const toArray = jest.fn().mockResolvedValue([{ name: 'new', type: 'collection' }]);
+            const listCollections = jest.fn().mockReturnValue({ toArray });
+            const database = jest.fn().mockReturnValue({ listCollections });
+            const client = Object.assign(Object.create(ActualClustersClient.prototype) as ClustersClient, {
+                _mongoClient: { db: database },
+                _collectionsCache: new Map(cached.length > 0 ? [[TEST_CONTEXT.databaseName, cached]] : []),
+            });
+            (ClustersClient.getExistingClient as jest.Mock).mockReturnValue(client);
+
+            await provider.prewarmCollections(TEST_CONTEXT);
+
+            expect(database).toHaveBeenCalledWith(TEST_CONTEXT.databaseName);
+            expect(toArray).toHaveBeenCalledTimes(1);
+            expect(client.getCachedCollections(TEST_CONTEXT.databaseName)).toEqual([
+                expect.objectContaining({ name: 'new', type: 'collection' }),
+            ]);
+            const names = provider.getCompletions('db.', 3, TEST_CONTEXT).candidates.map((candidate) => candidate.label);
+            expect(names).toContain('new');
+            expect(names).not.toContain('old');
+            expect(ClustersClient.getClient).not.toHaveBeenCalled();
+        });
+
+        it('deduplicates concurrent requests but allows a later refresh', async () => {
+            const listCollections = jest.fn().mockResolvedValue([]);
+            (ClustersClient.getExistingClient as jest.Mock).mockReturnValue({ listCollections });
+
+            const firstFetch = provider.prewarmCollections(TEST_CONTEXT);
+            const concurrentFetch = provider.prewarmCollections(TEST_CONTEXT);
+            expect(listCollections).toHaveBeenCalledTimes(1);
+            await Promise.all([firstFetch, concurrentFetch]);
+
+            await provider.prewarmCollections(TEST_CONTEXT);
+            expect(listCollections).toHaveBeenCalledTimes(2);
+        });
+
+        it('ignores a rejected fetch and allows the next refresh to retry', async () => {
+            const listCollections = jest.fn().mockRejectedValueOnce(new Error('unavailable')).mockResolvedValueOnce([]);
+            (ClustersClient.getExistingClient as jest.Mock).mockReturnValue({ listCollections });
+
+            await expect(provider.prewarmCollections(TEST_CONTEXT)).resolves.toBeUndefined();
+            await expect(provider.prewarmCollections(TEST_CONTEXT)).resolves.toBeUndefined();
+            expect(listCollections).toHaveBeenCalledTimes(2);
         });
 
         it('should not create a client when the cluster has no cached client', async () => {

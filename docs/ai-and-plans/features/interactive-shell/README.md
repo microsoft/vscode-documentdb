@@ -52,7 +52,7 @@ program-level narrative, and the sibling areas
   second grammar, so the input line and the result formatter colorize the same way.
 - **Completions are terminal-native.** Tab completion and ghost text are driven from the same
   operator registry and `SchemaStore` that feed the editors, and shell query results feed documents
-  back into `SchemaStore`. Collection names are prewarmed after connect and after `use <database>`
+  back into `SchemaStore`. Collection names are refreshed after connect and after `use <database>`
   only when the extension host already has a client for that cluster; completion never creates a
   second connection. Having the connected worker supply this data is tracked in
   [#938](https://github.com/microsoft/vscode-documentdb/issues/938).

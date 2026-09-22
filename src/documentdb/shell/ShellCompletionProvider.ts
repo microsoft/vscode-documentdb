@@ -176,7 +176,8 @@ export class ShellCompletionProvider {
 
         this._backgroundFetchTriggered.add(fetchKey);
         try {
-            await client.listCollections(context.databaseName, true);
+            // Refresh on session entry even when the shared cache already contains collection names.
+            await client.listCollections(context.databaseName);
         } catch {
             // Non-critical — completions degrade gracefully when discovery fails
         } finally {

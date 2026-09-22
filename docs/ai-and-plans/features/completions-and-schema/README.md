@@ -60,7 +60,9 @@ Sibling areas: [query-playground](../query-playground/README.md),
   `import`/`require` export conditions, so a dynamic import loads a second copy of the package and
   every `instanceof` check in `SchemaAnalyzer` silently fails. The same applies to anything that
   re-exports its classes, `mongodb` included. `BSONTypes.inferType()` also falls
-  back to the `_bsontype` tag, so a duplicated copy still classifies correctly — but it does so
+  back to inherited `_bsontype` tags on non-plain objects, so a duplicated copy still classifies
+  correctly. Plain/null-prototype objects and objects with own tags remain document data and are
+  traversed; the fallback is not an authenticity check. Classification still happens
   silently: there is no warning and no telemetry, and nothing else in the extension is protected.
   The post-build chunk check in the iteration note is the only detector. See
   [iterations/09-bson-dual-package-hazard.md](./iterations/09-bson-dual-package-hazard.md).
