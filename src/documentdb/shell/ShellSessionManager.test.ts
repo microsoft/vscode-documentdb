@@ -6,11 +6,8 @@
 import { type AuthenticationSession } from 'vscode';
 import { AuthMethodId } from '../auth/AuthMethod';
 import { CredentialCache } from '../CredentialCache';
-import {
-    type MainToWorkerMessage,
-    type WorkerToMainMessage,
-} from '../playground/workerTypes';
 import { type WorkerSessionCallbacks } from '../playground/WorkerSessionManager';
+import { type MainToWorkerMessage, type WorkerToMainMessage } from '../playground/workerTypes';
 import { ShellSessionManager } from './ShellSessionManager';
 
 const mockGetSessionFromVSCode = jest.fn();
@@ -25,10 +22,7 @@ jest.mock('../playground/WorkerSessionManager', () => ({
         workerCallbacks = callbacks;
         return {
             ensureWorker: jest.fn(
-                async (
-                    _clusterId: string,
-                    initMessage: MainToWorkerMessage & { type: 'init' },
-                ): Promise<void> => {
+                async (_clusterId: string, initMessage: MainToWorkerMessage & { type: 'init' }): Promise<void> => {
                     if (initMessage.authMechanism !== 'MicrosoftEntraID') {
                         return;
                     }

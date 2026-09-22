@@ -62,7 +62,7 @@ if (displayWidth > 0) {
 1. The ghost text ran past the right edge and xterm.js wrapped it onto the next row.
 2. **CUB (`\x1b[nD`) does not move between rows** — it clamps at column 1 of the current row. The
    cursor was left stranded on the wrapped row.
-3. The next keystroke called `clearGhostState()`, whose `\x1b[K` erased the *wrapped* row and left
+3. The next keystroke called `clearGhostState()`, whose `\x1b[K` erased the _wrapped_ row and left
    the ghost fragment sitting on the real input row.
 4. `reRenderLine()` Step 1 consults `_lastCursorRow`, which is derived only from
    `_promptWidth + bufferWidth`. Ghost text is invisible to that calculation, so with prompt and
@@ -78,7 +78,7 @@ lines are not actually supported by `reRenderLine()`") and I-11 (cursor math usi
 Both were fixed in `6c2e7e4`, which made the renderer wrap-aware and extracted
 `terminalDisplayWidth()` **out of `ShellGhostText.ts`** into a shared module.
 
-That fix covered the *buffer* path only. Ghost text donated the width helper and was then left as
+That fix covered the _buffer_ path only. Ghost text donated the width helper and was then left as
 the one writer that still had no notion of terminal width. This bug is the unclosed half of I-10.
 
 ## Why it was not reproducible at first
@@ -122,12 +122,12 @@ To confirm the mechanism without adjusting the panel, temporarily call
 The operator chose clipping over making `reRenderLine()` ghost-aware. Ghost text is a hint; losing
 its tail is acceptable, whereas a wrapped hint corrupts the line.
 
-| File                     | Change                                                                                                                               |
-| ------------------------ | ------------------------------------------------------------------------------------------------------------------------------------ |
-| `terminalDisplayWidth.ts` | Added `clipToDisplayWidth()` — grapheme-safe truncation via `Intl.Segmenter`, so surrogate pairs are never split                       |
-| `ShellInputHandler.ts`   | Added the `cursorColumn` getter (`_promptWidth` + display width up to the cursor)                                                      |
-| `ShellGhostText.ts`      | `show()` takes optional `availableColumns` and clips to it, appending `…` when truncated                                               |
-| `DocumentDBShellPty.ts`  | Added `availableGhostColumns()`, passed to all three `show()` call sites (completion, closing brackets, schema hint)                    |
+| File                      | Change                                                                                                               |
+| ------------------------- | -------------------------------------------------------------------------------------------------------------------- |
+| `terminalDisplayWidth.ts` | Added `clipToDisplayWidth()` — grapheme-safe truncation via `Intl.Segmenter`, so surrogate pairs are never split     |
+| `ShellInputHandler.ts`    | Added the `cursorColumn` getter (`_promptWidth` + display width up to the cursor)                                    |
+| `ShellGhostText.ts`       | `show()` takes optional `availableColumns` and clips to it, appending `…` when truncated                             |
+| `DocumentDBShellPty.ts`   | Added `availableGhostColumns()`, passed to all three `show()` call sites (completion, closing brackets, schema hint) |
 
 Two details worth preserving:
 

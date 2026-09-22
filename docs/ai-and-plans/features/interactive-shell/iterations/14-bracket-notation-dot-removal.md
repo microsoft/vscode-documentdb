@@ -37,16 +37,16 @@ fail `needsBracketNotation()`. Acceptance, however, lived in
 characters backwards from the cursor. In the `db-dot` context `replacementStart` is
 `'db.'.length`, so the prefix begins **after** the dot:
 
-| Typed     | prefix | deleted | inserted           | result                |
-| --------- | ------ | ------- | ------------------ | --------------------- |
-| `db.sto`  | `sto`  | `sto`   | `['stores (10)']`  | `db.['stores (10)']`  |
-| `db.`     | `''`   | —       | `['stores (10)']`  | `db.['stores (10)']`  |
+| Typed    | prefix | deleted | inserted          | result               |
+| -------- | ------ | ------- | ----------------- | -------------------- |
+| `db.sto` | `sto`  | `sto`   | `['stores (10)']` | `db.['stores (10)']` |
+| `db.`    | `''`   | —       | `['stores (10)']` | `db.['stores (10)']` |
 
 The empty-prefix case took the other branch (`insertText.slice(0)` → plain `insertText()`), so
 both paths were broken for the same underlying reason.
 
-The candidate knew it needed bracket notation. It had no way to say *"and delete the character
-in front of me."* `CompletionResult.replacementStart` is per-context, and the same `db-dot`
+The candidate knew it needed bracket notation. It had no way to say _"and delete the character
+in front of me."_ `CompletionResult.replacementStart` is per-context, and the same `db-dot`
 context legitimately serves both dot- and bracket-notation candidates, so widening it for the
 whole context would have corrupted the normal collection names.
 
@@ -61,11 +61,11 @@ survived a full review round.
 ## Fix — let the candidate own its replacement span
 
 Added an optional `replaceCharsBefore` to `CompletionCandidate`: extra characters to delete
-*before* the typed prefix. Bracket-notation collection candidates set it to `1`.
+_before_ the typed prefix. Bracket-notation collection candidates set it to `1`.
 
-| File                         | Change                                                                                   |
-| ---------------------------- | ---------------------------------------------------------------------------------------- |
-| `ShellCompletionProvider.ts` | `replaceCharsBefore?: number` on `CompletionCandidate`; set to `1` in `makeCollectionCandidate()` for the bracket branch |
+| File                         | Change                                                                                                                     |
+| ---------------------------- | -------------------------------------------------------------------------------------------------------------------------- |
+| `ShellCompletionProvider.ts` | `replaceCharsBefore?: number` on `CompletionCandidate`; set to `1` in `makeCollectionCandidate()` for the bracket branch   |
 | `DocumentDBShellPty.ts`      | `applySingleCompletion()` deletes `prefix.length + replaceCharsBefore`; `evaluateGhostText()` skips candidates that set it |
 
 Two supporting checks needed no change, and it is worth recording why:
@@ -78,7 +78,7 @@ Two supporting checks needed no change, and it is worth recording why:
 
 The ghost-text guard previously relied on `!insertText.startsWith(prefix)` to exclude these
 candidates. That happened to be true for bracket notation, but it is an accident: any future
-candidate that rewrites text *before* the cursor while still starting with the prefix would have
+candidate that rewrites text _before_ the cursor while still starting with the prefix would have
 rendered a ghost that lies about what acceptance will do. The guard now checks
 `replaceCharsBefore` explicitly.
 
@@ -97,6 +97,6 @@ a test that **applies** the replacement to the buffer and asserts the result is
 - Asserting on `insertText` alone is not enough. A completion is `(deleteCount, insertText)`
   applied to a buffer; tests that check only the second half will miss an entire class of bug.
   Prefer at least one test per candidate shape that applies the edit and compares the buffer.
-- When a candidate's insertion is not a pure suffix of what the user typed, the *candidate* has
+- When a candidate's insertion is not a pure suffix of what the user typed, the _candidate_ has
   to carry the replacement span. A per-context `replacementStart` cannot describe a context whose
   candidates replace different amounts of text.

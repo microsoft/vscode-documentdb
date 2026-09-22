@@ -240,9 +240,7 @@ describe('ShellOutputFormatter', () => {
 
     describe('connection banner formatting', () => {
         it('should use neutral emphasis for the title and values', () => {
-            expect(formatter.formatShellTitle('DocumentDB Shell: Demo')).toBe(
-                '\x1b[1mDocumentDB Shell: Demo\x1b[0m',
-            );
+            expect(formatter.formatShellTitle('DocumentDB Shell: Demo')).toBe('\x1b[1mDocumentDB Shell: Demo\x1b[0m');
             expect(formatter.formatConnectionValue('value')).toBe('\x1b[1m\x1b[39mvalue\x1b[0m\x1b[90m');
         });
 
