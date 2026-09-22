@@ -224,6 +224,11 @@ export namespace BSONTypes {
     }
 
     function inferTypeFromTag(value: object): BSONTypes | undefined {
+        // Plain documents carry data fields; foreign BSON wrappers inherit their tag from a class prototype.
+        const prototype: unknown = Object.getPrototypeOf(value);
+        if (prototype === null || prototype === Object.prototype) return undefined;
+        if (Object.prototype.hasOwnProperty.call(value, '_bsontype')) return undefined;
+
         const tag = (value as { _bsontype?: unknown })._bsontype;
         if (typeof tag !== 'string') return undefined;
 

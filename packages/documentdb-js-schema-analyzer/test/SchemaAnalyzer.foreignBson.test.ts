@@ -6,6 +6,11 @@
 import { type Document, type WithId } from 'mongodb';
 import { SchemaAnalyzer } from '../src/SchemaAnalyzer';
 
+interface TaggedDocumentCase {
+    readonly label: string;
+    readonly payload: unknown;
+}
+
 /**
  * Values produced by a second copy of the `bson` package (for example when a bundler
  * resolves the ESM entry for one importer and the CommonJS entry for another) fail every
@@ -69,5 +74,45 @@ describe('SchemaAnalyzer with BSON values from a foreign bson copy', () => {
         const fields = SchemaAnalyzer.fromDocument(document).getKnownFields();
 
         expect(fields.map((f) => f.path)).toEqual(['_id', 'address.street', 'address.zipcode']);
+    });
+
+    it.each<TaggedDocumentCase>([
+        { label: 'plain document', payload: { _bsontype: 'ObjectId', value: 1 } },
+        {
+            label: 'null-prototype document',
+            payload: Object.assign(Object.create(null) as object, { _bsontype: 'ObjectId', value: 1 }),
+        },
+        {
+            label: 'document shadowing hasOwnProperty',
+            payload: { _bsontype: 'ObjectId', value: 1, hasOwnProperty: false },
+        },
+    ])('traverses recognized tag fields in a $label', ({ payload }) => {
+        const document = {
+            _id: foreign('ObjectId', { buffer: new Uint8Array(12) }),
+            payload,
+        } as unknown as WithId<Document>;
+
+        const fields = SchemaAnalyzer.fromDocument(document).getKnownFields();
+
+        expect(fields.map((field) => `${field.path}:${field.bsonType}`)).toEqual(
+            expect.arrayContaining(['_id:objectid', 'payload._bsontype:string', 'payload.value:double']),
+        );
+        expect(fields.some((field) => field.path === 'payload')).toBe(false);
+    });
+
+    it('traverses documents despite a tag on Object.prototype', () => {
+        const previousDescriptor = Object.getOwnPropertyDescriptor(Object.prototype, '_bsontype');
+        try {
+            Object.defineProperty(Object.prototype, '_bsontype', { configurable: true, value: 'ObjectId' });
+            const document = { payload: { value: 1 } } as unknown as WithId<Document>;
+            const fields = SchemaAnalyzer.fromDocument(document).getKnownFields();
+            expect(fields.map((field) => `${field.path}:${field.bsonType}`)).toEqual(['payload.value:double']);
+        } finally {
+            if (previousDescriptor) {
+                Object.defineProperty(Object.prototype, '_bsontype', previousDescriptor);
+            } else {
+                Reflect.deleteProperty(Object.prototype, '_bsontype');
+            }
+        }
     });
 });

@@ -3,6 +3,7 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+import { runInNewContext } from 'node:vm';
 import {
     Binary,
     BSONRegExp,
@@ -87,6 +88,36 @@ describe('BSONTypes.inferType tag fallback', () => {
 
     it.each(taggedCases)('classifies a foreign $label as $expected', ({ tag, props, expected }) => {
         expect(BSONTypes.inferType(foreign(tag, props))).toBe(expected);
+    });
+
+    it.each(taggedCases)('treats an ordinary document with the recognized $tag tag as data', ({ tag }) => {
+        expect(BSONTypes.inferType({ _bsontype: tag, value: 1 })).toBe(BSONTypes.Object);
+    });
+
+    it.each([
+        { label: 'null prototype', value: Object.assign(Object.create(null) as object, { _bsontype: 'ObjectId' }) },
+        { label: 'shadowed hasOwnProperty', value: { _bsontype: 'ObjectId', hasOwnProperty: false } },
+        { label: 'own tag over an inherited tag', value: foreign('Double', { _bsontype: 'ObjectId' }) },
+        { label: 'cross-realm document', value: runInNewContext('({ _bsontype: "ObjectId", value: 1 })') as unknown },
+    ])('treats $label with an own tag as data', ({ value }) => {
+        expect(BSONTypes.inferType(value)).toBe(BSONTypes.Object);
+    });
+
+    it('does not read a tag inherited from Object.prototype', () => {
+        const previousDescriptor = Object.getOwnPropertyDescriptor(Object.prototype, '_bsontype');
+        const readTag = jest.fn(() => 'ObjectId');
+        try {
+            Object.defineProperty(Object.prototype, '_bsontype', { configurable: true, get: readTag });
+            expect(BSONTypes.inferType({ value: 1 })).toBe(BSONTypes.Object);
+            expect(BSONTypes.inferType(Object.create(null) as object)).toBe(BSONTypes.Object);
+            expect(readTag).not.toHaveBeenCalled();
+        } finally {
+            if (previousDescriptor) {
+                Object.defineProperty(Object.prototype, '_bsontype', previousDescriptor);
+            } else {
+                Reflect.deleteProperty(Object.prototype, '_bsontype');
+            }
+        }
     });
 
     // '__proto__', 'constructor' and friends resolved to inherited members back when the tag
