@@ -16,12 +16,14 @@ code:
 Assessment of the six inline Copilot comments on
 [PR #937](https://github.com/microsoft/vscode-documentdb/pull/937), submitted on 2026-09-22.
 This iteration records the review analysis, the option sets, and the fixes the operator has chosen.
-No replies have been posted and no threads have been resolved by this assessment.
+The original assessment posted no replies and resolved no threads; the implementation revision
+below records the subsequent fixes and GitHub follow-ups.
 
 **Implementation revision (2026-09-22):** the original assessment and option sets below are retained
-as history. Inline implementation notes supersede each original disposition. C1, C2, C3, C4, and C6
-are implemented and focused-tested; C5's live PR scope has been corrected. Full verification and
-commit-linked GitHub replies follow after the implementation groups.
+as history. Inline implementation notes supersede each original disposition. All six items are
+complete, full verification passed, and each original Copilot thread has a commit-linked reply.
+All six threads are resolved. The full-check follow-up is
+[fe7df9b9](https://github.com/microsoft/vscode-documentdb/commit/fe7df9b9).
 
 **Revision 2 (2026-09-22):** every finding was re-verified against the working tree and the remote
 head, each option set was re-opened, and every recommendation now carries an explicit decision and
@@ -34,7 +36,7 @@ C6 → A′. These are no longer proposals. The rejected options below are retai
 what was considered and declined; in particular C3's alternative B (history-first ordering) is
 declined, so the shipped precedence stays. Nothing has been implemented yet.
 
-## Review Snapshot
+## Original Review Snapshot
 
 - Reviewed commit: `5b5891337de5bcd6bf410f3362f0eb21e0fa12eb`, still the local checkout at revision 2.
 - Current PR head: `ff7e006182f28fe1ed768ce9788da74dd69e1fdb`; the local branch is still behind by
@@ -97,7 +99,9 @@ All six options below were confirmed and chosen by the operator on 2026-09-22.
 > fallback, and this is not an authenticity check. The shadowed-`hasOwnProperty` traversal regression
 > exposed an inherited-member lookup in the nested schema map; a one-line own-property check was
 > required so the newly traversable document does not crash. Both existing regression suites pass
-> (89 tests). No driver or dependency changes. GitHub reply pending publication of the commit.
+> (89 tests). No driver or dependency changes.
+> [GitHub reply](https://github.com/microsoft/vscode-documentdb/pull/937#discussion_r4076465621)
+> posted with the fix commit; thread resolved.
 
 ### Evidence
 
@@ -196,7 +200,10 @@ Binary UUID subtype handling, and Code-with-scope behavior.
 > of seeded stale names in subsequent completions. Concurrent deduplication, later refresh, retry
 > after rejection, and no-new-client behavior are covered; all 98 provider tests pass. One lifecycle
 > metadata request is the accepted cost; synchronous typing remains cache-only. A wider cache API
-> redesign would add churn without improving this fix. GitHub reply pending publication of the commit.
+> redesign would add churn without improving this fix. Full-check test-fixture cleanup is in
+> [fe7df9b9](https://github.com/microsoft/vscode-documentdb/commit/fe7df9b9).
+> [GitHub reply](https://github.com/microsoft/vscode-documentdb/pull/937#discussion_r4076465956)
+> posted with both commits; thread resolved.
 
 ### Evidence
 
@@ -301,8 +308,9 @@ records are corrected around it. Not yet implemented.
 > overview agree; future work records the history-first UX question. The new fully-typed-description
 > collision regression and existing count/fallback coverage pass in all 86 PTY tests. This preserves
 > tested behavior at the cost of leaving one-key history recall behind contextual hints, an explicit
-> operator choice rather than an accidental documentation-driven change. GitHub reply pending
-> publication of the commit.
+> operator choice rather than an accidental documentation-driven change.
+> [GitHub reply](https://github.com/microsoft/vscode-documentdb/pull/937#discussion_r4076466181)
+> posted with the fix commit; thread resolved.
 
 ### Evidence
 
@@ -396,8 +404,9 @@ Any failing `TDD:` contract requires an operator decision before changing its ex
 > Option A shipped: the manual now names color, inline hints, and autocompletion in help-screen order.
 > The explicit list makes the independent controls discoverable; its small maintenance cost is
 > preferable to the less informative collective wording. Checked against all three help entries and
-> the settings table; the accompanying HelpProvider suite passes (29 tests). GitHub reply pending
-> publication of the commit.
+> the settings table; the accompanying HelpProvider suite passes (29 tests).
+> [GitHub reply](https://github.com/microsoft/vscode-documentdb/pull/937#discussion_r4076466458)
+> posted with the fix commit; thread resolved.
 
 ### Evidence
 
@@ -462,7 +471,9 @@ still needs the correction.
 > is a broader parent PR, now made explicit. The external-only scope fix is recorded in
 > [73ff0fa2](https://github.com/microsoft/vscode-documentdb/commit/73ff0fa2).
 > A fresh API read confirms the obsolete exclusion is gone and the described schema files are in
-> the live PR diff. The GitHub follow-up will cite that audit commit as well as the C1 code fix.
+> the live PR diff.
+> [GitHub follow-up](https://github.com/microsoft/vscode-documentdb/pull/937#discussion_r4076466775)
+> posted with the audit commit and C1 code fix; the already-resolved thread remains resolved.
 
 ### Evidence
 
@@ -523,7 +534,9 @@ follow-up change is still required.
 > reduces only that fallback indent to the available space, preserving the unbroken, copyable ID
 > and existing wider layouts. This trades narrow-terminal indentation for correctness, without
 > splitting identifiers or weakening the width assertion. A new 40-column regression pins it.
-> All 29 HelpProvider tests pass. GitHub follow-up pending publication of the commit.
+> All 29 HelpProvider tests pass.
+> [GitHub follow-up](https://github.com/microsoft/vscode-documentdb/pull/937#discussion_r4076467071)
+> posted with both commits; the already-resolved thread remains resolved.
 
 ### Evidence
 
@@ -622,10 +635,11 @@ Each finding has its fix reference, reasoning, and trade-offs inline. No approve
 were repaired without changing behavior, with the provider suite rerun (98 tests) and the failed
 gates rerun successfully. Localization generated no tracked changes. Packaging produced the VSIX
 with non-blocking webpack size warnings. The AI pre-review and operator decisions are committed in
-iterations 16 and 17. GitHub replies and thread resolution are the remaining publication steps.
+iterations 16 and 17. All fixes are published; all six GitHub replies link the relevant commits,
+and all six threads are resolved. Each reply is linked beside its finding above.
 
 **Not verified by this implementation pass:** a live database/shell UX session, every historical
-BSON driver version, or remote CI for the not-yet-pushed commits. No `TDD:` contract was changed.
+BSON driver version, or completion of remote CI for the new commits. No `TDD:` contract was changed.
 
 ### Original Assessment Outcome
 
