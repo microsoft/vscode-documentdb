@@ -13,6 +13,10 @@
  * @see {@link SchemaStore} for the underlying cache architecture.
  */
 
+// Must stay a static import. `await import('bson')` resolves the package's ESM entry and
+// loads a second copy, whose classes fail every `instanceof` check against the driver's —
+// silently corrupting schema inference. Re-verify during the ESM migration (#687).
+import { EJSON } from 'bson';
 import { type Document, type WithId } from 'mongodb';
 import { meterSilentCatch } from '../utils/accumulatingTelemetry';
 import { SchemaStore } from './SchemaStore';
@@ -116,7 +120,7 @@ export function feedResultToSchemaStore(result: SchemaFeedableResult, clusterId:
  * @param serResult - The serialized result with EJSON printable string.
  * @returns A deserialized result suitable for {@link feedResultToSchemaStore}.
  */
-export async function deserializeResultForSchema(serResult: {
+export function deserializeResultForSchema(serResult: {
     readonly type: string | null;
     readonly printable: string;
     readonly source?: {
@@ -125,10 +129,9 @@ export async function deserializeResultForSchema(serResult: {
             readonly collection: string;
         };
     };
-}): Promise<SchemaFeedableResult> {
+}): SchemaFeedableResult {
     let printable: unknown;
     try {
-        const { EJSON } = await import('bson');
         printable = EJSON.parse(serResult.printable, { relaxed: false });
     } catch {
         meterSilentCatch('feedResultToSchemaStore_ejson');
