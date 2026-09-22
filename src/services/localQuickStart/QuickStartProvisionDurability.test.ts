@@ -324,6 +324,66 @@ describe('QuickStartService — WP-3 provisioning durability and port model', ()
         expect(removeVolume).not.toHaveBeenCalled();
     });
 
+    // Review F2: `docker run` can create the container and volume and still fail (a Cancel after it
+    // returns, a port bind error). The id is never captured, so only the operation-scoped sweep
+    // knows the volume is this run's.
+    it.each([
+        ['a start failure', false],
+        ['a Cancel after docker run returned', true],
+    ])('removes its own volume after %s left an orphaned container', async (_label, cancel) => {
+        const controller = new AbortController();
+        const removeContainer = jest.fn().mockResolvedValue(undefined);
+        const removeVolume = jest.fn().mockResolvedValue(undefined);
+        const runtime = runtimeFor({
+            removeVolume,
+            listByLabel: jest.fn((filter: Record<string, string>) =>
+                Promise.resolve(filter[QUICK_START_OPERATION_LABEL_KEY] ? [{ id: 'orphan1', labels: filter }] : []),
+            ),
+            createAndRunContainer: cancel
+                ? jest.fn(() => {
+                      controller.abort();
+                      return Promise.resolve('c1');
+                  })
+                : jest.fn().mockRejectedValue(new Error('Bind for 127.0.0.1:10260 failed: port is already allocated')),
+        });
+        (runtime as unknown as { removeContainer: jest.Mock }).removeContainer = removeContainer;
+        const service = new QuickStartServiceImpl(runtime);
+
+        await collect(service.provision(controller.signal));
+
+        expect(removeContainer).toHaveBeenCalledWith('orphan1');
+        expect(removeVolume).toHaveBeenCalledTimes(1);
+        expect(removeVolume.mock.invocationCallOrder[0]).toBeGreaterThan(removeContainer.mock.invocationCallOrder[0]);
+    });
+
+    it('keeps the volume when a reusing attempt left an orphaned container', async () => {
+        await upsertInstance({
+            alias: DEFAULT_ALIAS,
+            displayName: 'DocumentDB Local',
+            port: QUICK_START_PORT,
+            phase: 'ready',
+        });
+        await writeConnectionString(
+            DEFAULT_ALIAS,
+            `mongodb://u1:p1@localhost:${QUICK_START_PORT}/?tls=true&tlsAllowInvalidCertificates=true`,
+            { displayName: 'DocumentDB Local', port: QUICK_START_PORT },
+        );
+        const removeVolume = jest.fn().mockResolvedValue(undefined);
+        const service = new QuickStartServiceImpl(
+            runtimeFor({
+                removeVolume,
+                listByLabel: jest.fn((filter: Record<string, string>) =>
+                    Promise.resolve(filter[QUICK_START_OPERATION_LABEL_KEY] ? [{ id: 'orphan1', labels: filter }] : []),
+                ),
+                createAndRunContainer: jest.fn().mockRejectedValue(new Error('port is already allocated')),
+            }),
+        );
+
+        await collect(service.provision(new AbortController().signal));
+
+        expect(removeVolume).not.toHaveBeenCalled();
+    });
+
     // H3/3d: the lease machinery existed but nothing in production ever wrote a 'provisioning'
     // record, so every reconcile branch that depends on it was unreachable.
     it('takes a provisioning lease before the pull and promotes it to ready (H3)', async () => {

@@ -1460,11 +1460,24 @@ describe('QuickStartService — WI-2e-1 provision RR4 volume-wipe gate', () => {
                     daemonReachable: true,
                 },
             ),
-            listByLabel: jest.fn().mockResolvedValue(
-                (opts.containers ?? []).map((container) => ({
-                    id: container.id,
-                    labels: container.alias === undefined ? {} : { [QUICK_START_ALIAS_LABEL_KEY]: container.alias },
-                })),
+            // Honours the filter: these containers predate the run, so the run's operation-scoped
+            // orphan sweep must not find (and "remove") them on its behalf.
+            listByLabel: jest.fn((filter: Record<string, string>) =>
+                Promise.resolve(
+                    (opts.containers ?? [])
+                        .map((container) => ({
+                            id: container.id,
+                            labels: {
+                                [QUICK_START_LABEL_KEY]: '1',
+                                ...(container.alias === undefined
+                                    ? {}
+                                    : { [QUICK_START_ALIAS_LABEL_KEY]: container.alias }),
+                            } as Record<string, string>,
+                        }))
+                        .filter((container) =>
+                            Object.entries(filter).every(([key, value]) => container.labels[key] === value),
+                        ),
+                ),
             ),
             isPortFree: jest.fn().mockResolvedValue(opts.portFree ?? true),
             removeContainer: opts.removeContainer ?? jest.fn().mockResolvedValue(undefined),
@@ -1960,7 +1973,40 @@ describe('QuickStartService — WI-2e-1 provision RR4 volume-wipe gate', () => {
         await drain(service.provision(new AbortController().signal, { port: 10263 }));
 
         expect(removeContainer).toHaveBeenCalledWith('c1');
-        expect(runtime.createAndRunContainer).toHaveBeenCalled();
+        expect(removeContainer.mock.invocationCallOrder[0]).toBeLessThan(
+            (runtime.createAndRunContainer as jest.Mock).mock.invocationCallOrder[0],
+        );
+    });
+
+    it('leaves the existing instance intact when setup is cancelled just before the wipe', async () => {
+        ext.secretStorage = fakeSecretStorage({});
+        ext.context = fakeContext(fakeMemento());
+        await seedInstance(DEFAULT_ALIAS, STORED_CONN);
+        const controller = new AbortController();
+        const removeContainer = jest.fn().mockResolvedValue(undefined);
+        const removeVolume = jest.fn().mockResolvedValue(undefined);
+        const runtime = mockRuntime({
+            ...provisionRuntime({
+                containers: [{ id: 'c1', alias: DEFAULT_ALIAS }],
+                volumeExists: true,
+                removeContainer,
+                removeVolume,
+            }),
+            // The second port check is the pre-wipe re-check; Cancel lands while it runs.
+            isPortFree: jest
+                .fn()
+                .mockResolvedValueOnce(true)
+                .mockImplementationOnce(() => {
+                    controller.abort();
+                    return Promise.resolve(true);
+                }),
+        });
+        const service = new QuickStartServiceImpl(runtime);
+
+        await drain(service.provision(controller.signal, { startFresh: true }));
+
+        expect(removeContainer).not.toHaveBeenCalled();
+        expect(removeVolume).not.toHaveBeenCalled();
     });
 
     it('lets an explicit "Start fresh" recover a credential-unavailable instance instead of refusing', async () => {

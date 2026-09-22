@@ -768,14 +768,24 @@ export class QuickStartServiceImpl {
 
             // --- creating (docker run -d creates and starts) ---
             yield stageEvent('creating', 'active');
+            if (leaseHeld) {
+                await this.renewProvisioningLease(alias, operationId, chosenPort);
+            }
+            // Write credentials to a temp env-file (deleted in finally) so they never
+            // appear on the docker CLI / host process list (design §8.2). The image
+            // reads USERNAME/PASSWORD from the environment.
+            const createdEnvFilePath = await this.writeEnvFile(credentials.username, credentials.password);
+            envFilePath = createdEnvFilePath;
             // Clear the old instance only now that every check has passed and the image is local, so
-            // a bad tag or a failed pull leaves it untouched. The volume goes only when not reusing
-            // (fresh credentials need a clean cluster); a reuse keeps it so the data survives. The
-            // port is re-checked first: the pull can take minutes, and a bind failure after the
-            // wipe would leave the user with nothing.
+            // a bad tag, a failed pull or a Cancel leaves it untouched. Nothing that can fail may run
+            // between here and `docker run`. The volume goes only when not reusing (fresh credentials
+            // need a clean cluster); a reuse keeps it so the data survives. The port is re-checked
+            // first: the pull can take minutes, and a bind failure after the wipe would leave the user
+            // with nothing.
             if (!(await this.isPortAvailable(chosenPort, existing?.id))) {
                 throw new PortTakenDuringPullError(chosenPort);
             }
+            this.throwIfAborted(signal);
             if (existing) {
                 channel.appendLine(`Removing existing Quick Start container ${existing.id} for a clean run…`);
                 await this.runtime
@@ -791,15 +801,7 @@ export class QuickStartServiceImpl {
                     throw new Error(`Could not remove the existing data volume: ${errMessage(error)}`);
                 }
             }
-            if (leaseHeld) {
-                await this.renewProvisioningLease(alias, operationId, chosenPort);
-            }
             createAttempted = true;
-            // Write credentials to a temp env-file (deleted in finally) so they never
-            // appear on the docker CLI / host process list (design §8.2). The image
-            // reads USERNAME/PASSWORD from the environment.
-            const createdEnvFilePath = await this.writeEnvFile(credentials.username, credentials.password);
-            envFilePath = createdEnvFilePath;
             activeDockerStage = 'creating';
             containerId = await this.runProvisionStage('creating', journeyCorrelationId, async () => {
                 const createdContainerId = await this.runtime.createAndRunContainer(
@@ -986,6 +988,14 @@ export class QuickStartServiceImpl {
                         await this.runtime
                             .removeContainer(orphan.id)
                             .catch(() => meterQuickStartSilentCatch('provision_removeOrphanedContainer'));
+                    }
+                    // An orphan carrying this run's label proves our `docker run` created it, and with
+                    // it the volume (a Cancel mid-create, or a start failure such as a port bind). The
+                    // race loser's create fails on the name first, finds no orphan and removes nothing.
+                    if (!reusing && orphans.length > 0) {
+                        await this.runtime
+                            .removeVolume(volumeName(alias))
+                            .catch(() => meterQuickStartSilentCatch('provision_removeOrphanedVolume'));
                     }
                 }
                 // Restore the credential state this attempt overwrote (H3): a discarded attempt
