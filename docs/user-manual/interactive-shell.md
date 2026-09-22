@@ -228,8 +228,8 @@ The following settings control shell behavior:
 | `documentDB.shell.multiLinePasteBehavior` | `ask`   | Controls how multi-line text is handled when pasted into the shell                                                 |
 | `documentDB.batchSize`                    | `50`    | Number of documents to display per cursor iteration (shared with Query Playground)                                 |
 
-Run `help` in the shell for clickable shortcuts to the color and inline-hint settings. Each shortcut
-also prints the full setting ID for manual access.
+Run `help` in the shell for clickable shortcuts to the color, inline-hint, and autocompletion settings.
+Each shortcut also prints the full setting ID for manual access.
 
 ## Tips and Best Practices
 

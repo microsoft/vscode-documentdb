@@ -125,14 +125,17 @@ describe('HelpProvider', () => {
         });
 
         it('advertises display settings as terminal link markers', () => {
-            const text = helpProvider.getHelpText();
+            const text = helpProvider.getHelpText(120);
             expect(text).toContain('  Select an option to open it in VS Code Settings:');
             expect(text).toContain('  1. ⚙ [colorSupport] Toggle syntax and output colors.');
-            expect(text).toContain('     Manual access: search Settings for documentDB.shell.display.colorSupport');
             expect(text).toContain('  2. ⚙ [inlineHints] Toggle 🛈 descriptions, counts, and previews.');
-            expect(text).toContain('     Manual access: search Settings for documentDB.shell.display.inlineHints');
             expect(text).toContain('  3. ⚙ [autocompletion] Toggle Tab completion and inline suggestions.');
-            expect(text).toContain('     Manual access: search Settings for autocompletion');
+            const manualAccessLines = text.split('\n').filter((line) => line.includes('Manual access:'));
+            expect(manualAccessLines).toEqual(
+                ['colorSupport', 'inlineHints', 'autocompletion'].map(
+                    (setting) => `     Manual access: search Settings for documentDB.shell.display.${setting}`,
+                ),
+            );
         });
 
         it('does NOT include keyboard shortcuts', () => {
@@ -157,6 +160,11 @@ describe('HelpProvider', () => {
                     const text = helpProvider.getHelpText(columns);
                     expect(longestLine(text)).toBeLessThanOrEqual(columns);
                 }
+            });
+
+            it('keeps the full autocompletion setting ID intact at 40 columns', () => {
+                const text = helpProvider.getHelpText(40);
+                expect(text.split('\n')).toContain(' documentDB.shell.display.autocompletion');
             });
 
             it('sizes the command column to the widest command, not a fixed 40', () => {

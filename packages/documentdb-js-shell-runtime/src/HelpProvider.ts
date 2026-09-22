@@ -308,7 +308,10 @@ export class HelpProvider {
                     break;
                 case 'tip':
                     for (const wrapped of wrapText(line.text, Math.max(1, columns - line.indent.length))) {
-                        const indent = line.indent.length + wrapped.length <= columns ? line.indent : ENTRY_INDENT;
+                        const indent =
+                            line.indent.length + wrapped.length <= columns
+                                ? line.indent
+                                : ENTRY_INDENT.slice(0, Math.max(0, columns - wrapped.length));
                         output.push(indent + wrapped);
                     }
                     break;
