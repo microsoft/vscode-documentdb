@@ -27,7 +27,9 @@ Two parts:
    caught while the code is open.
 
 Each finding carries a severity, the evidence it rests on, solution options with trade-offs, a
-recommendation, and an empty **Decision** line for Stage 2.
+recommendation, and the operator's **Decision**. Start at
+[Disposition after Stage 2](#disposition-after-stage-2) for the index, and at
+[Contested on-hold items](#contested-on-hold-items) for the four deferrals argued back.
 
 ## Review status legend
 
@@ -112,7 +114,9 @@ pending and asserts the emitted CUB/CUU sequence. B is A's fix with the duplicat
 roughly the same cost. D stays the right long-term answer and is already tracked as I10 — record
 this finding as new evidence for it.
 
-**Decision:**
+**Decision — accepted, option B.** Move the arithmetic into `ShellInputHandler` alongside
+`cursorRowForColumns()` and have the PTY ask, plus the regression test at `cursorColumn === cols`.
+D is not reopened here; it stays I10.
 
 ---
 
@@ -160,7 +164,9 @@ tree, where the client is already cached). D is what this should eventually be: 
 owns a connected client in its worker, and reaching around it to the extension host is the actual
 design smell.
 
-**Decision:**
+**Decision — accepted, option A, and option D becomes an issue.** `prewarmCollections()` switches to
+`getExistingClient()` in this PR, restoring the invariant that completion never causes a connection.
+Asking the worker for the collection list is filed as a tracking issue rather than attempted here.
 
 ---
 
@@ -201,7 +207,17 @@ long enough to need bracket notation in the first place.
 promise the hint makes — that the advertised text is what Tab will produce — which is the Step 14
 lesson written into the plan's own test table.
 
-**Decision:**
+**Decision — overridden to option A, without the arrow.** Preview only the replaced token, rendered
+as `🛈 ['restaurants-original']`.
+
+The review's own option A was written as `🛈 → ['restaurants-original']`, which is wrong on its face:
+[N2](../shell-liveness-audit.md#n2-the-hint-marker-vocabulary-is-inconsistent) already decided that
+the `→` marker folds into `🛈`, and reintroducing it would undo a decision taken two weeks earlier in
+this same branch. A reviewer proposing a rendering must check the marker vocabulary that is already
+settled — noting it here because the mistake was in the review, not in the code.
+
+C (eliding the unchanged prefix) is not taken: it keeps a whole-line reading that nothing has asked
+for, at the cost of a rendering rule that has to be maintained against every future clip case.
 
 ---
 
@@ -236,7 +252,10 @@ code is most likely correct _for this character_. The exposure is structural rat
 characters the shell actually emits alongside a handful of realistic collection names. B is the
 better engineering answer but the VSIX-size trade-off is the operator's call, not the reviewer's.
 
-**Decision:**
+**Decision — accepted, option A.** Extend `isWideCharacter()` with emoji-presentation ranges and
+VS16 handling, with the table-driven test over the characters the shell actually emits plus realistic
+collection names. No new runtime dependency (B declined — the VSIX-size trade-off is not worth it for
+a table this small).
 
 ---
 
@@ -267,7 +286,10 @@ useful. The new test hardcodes the same two pairs, so it passes whether or not t
 **Recommendation: A**, and C as a cheap companion. A is the test that would have been written if the
 two halves lived in the same package.
 
-**Decision:**
+**Decision — accepted, options A and C.** Add the contract test that walks every `⚙ [x]` marker in
+the generated shell help through the alias map and on to `package.json`, and drop the
+`?? settingsMatch[1]` fallback so an unmapped marker renders as plain text rather than a link that
+goes nowhere.
 
 ---
 
@@ -294,7 +316,10 @@ reasonably reach for Tab to indent, the key is simply dead.
 **Recommendation: A + B.** The setting reads honestly now; a release-note line is the whole
 remediation. C is a separate idea that should not ride along in a hardening PR.
 
-**Decision:**
+**Decision — accepted, option A only.** The setting now does what its name always said; no code
+change. **B is declined** — no release-note line. The setting was shipped documented as _"Reserved
+for future use"_, so the population that deliberately set it to `false` is close to empty, and a
+release note about a setting becoming functional costs more reader attention than it returns.
 
 ---
 
@@ -323,7 +348,9 @@ a much narrower trigger, so the two events look comparable on a dashboard and ar
 — a new event name should be registered wherever the existing shell events are, or it will be
 invisible.
 
-**Decision:**
+**Decision — accepted, option A.** Count a suggestion once per matched history entry rather than per
+render, and cross-check that `shell.historySuggestion` is registered wherever the existing shell
+events are.
 
 ---
 
@@ -364,7 +391,9 @@ issue, and a latency one for users who raise the batch size.
 serializes objects to EJSON and the host immediately parses them back purely to feed `SchemaStore` —
 but it is out of scope here.
 
-**Decision:**
+**Decision — accepted, option A, and option C becomes an issue.** Drop the `async`/`Promise<void>`/
+`void` so the signature matches the behavior. Moving the parse into the worker — which already holds
+the raw objects it serializes — is filed as a tracking issue.
 
 ---
 
@@ -381,7 +410,7 @@ twice per candidate (clip, then pad).
 stateless across `segment()` calls, so there is no correctness trade-off to weigh — this is a
 one-line change with no downside.
 
-**Decision:**
+**Decision — on hold.** Not decided in this pass.
 
 ---
 
@@ -404,7 +433,7 @@ replacing four independent booleans that must be kept consistent by hand. This i
 invariant structural" move the PR already made for `showInsertableGhost` / `showInlineHint`, applied
 one level deeper.
 
-**Decision:**
+**Decision — on hold.** Not decided in this pass.
 
 ---
 
@@ -424,7 +453,10 @@ one not listed.
 `help` is a judgement call — arguably `help` should list the _display_ settings and leave the rest to
 the Settings UI, which is a defensible line to draw and worth stating explicitly in the audit.
 
-**Decision:**
+**Decision — accepted.** Add `autocompletion` as a third entry in the shell `help` Settings section,
+with its alias and link. The remaining shell settings stay out: `help` lists the **display**
+settings, and `initTimeout`, `multiLinePasteBehavior` and `batchSize` belong to the Settings UI.
+That is the line, and it is now written down.
 
 ---
 
@@ -443,7 +475,7 @@ of `accept()` could "fix" in the wrong direction, and because no test pins it.
 **Recommendation:** one test asserting that accepting a clipped ghost inserts the unclipped text, and
 one sentence in the user manual. No production change.
 
-**Decision:**
+**Decision — on hold.** Not decided in this pass.
 
 ---
 
@@ -489,7 +521,13 @@ D is a handful of lines with no architectural argument attached. C should not be
 placement decision was reasoned and recent, and reversing it for localization alone would trade a
 correctness property (width is sampled where `help` runs) for a translation property.
 
-**Decision:**
+**Decision — option B becomes an issue; nothing in this PR.** The tracking issue is the question
+itself: _how does a `vscode`-free worker package emit localized text?_ That is the reusable problem —
+`documentdb-js-shell-runtime` will not be the last package in this position — so the issue is scoped
+to the mechanism, not to translating `help`.
+
+A (document the constraint in the README) and D (localize the host-side strings) were **not** taken.
+See [the contest note](#contested-on-hold-items) for why A is worth reconsidering.
 
 ---
 
@@ -525,7 +563,10 @@ updated by `open()`), so this is genuinely cheap — and shipping width-aware `h
 width-blind banner is the inconsistency a reviewer will notice first. Re-rate F6 in the audit with
 the reasoning, whichever way it goes.
 
-**Decision:**
+**Decision — accepted, option A.** Break the connection summary into one label per line below a width
+threshold. F6 is thereby re-rated from **Won't fix** in practice: the logo stays as-is, the summary
+becomes width-aware. Record that re-rating in the audit against F6, with this PR's longer
+`Identity: … | Authentication: … | Database: …` line as the reason it changed.
 
 ---
 
@@ -558,7 +599,11 @@ rather than a guess appended to a large hardening PR — the
 is written for webviews, so the terminal surface has no established pattern to follow yet. Recording
 it as a known gap with a named owner is more valuable than shipping A untested.
 
-**Decision:**
+**Decision — issue only; nothing in this PR.** Confirms the review's own recommendation that this
+needs a dedicated accessibility pass rather than a guess appended to a large hardening PR. Option D
+(document the recommended setting combination) was not taken either — the issue carries the whole
+item, including the open question of whether the terminal surface needs its own accessibility skill
+alongside `accessibility-aria-expert`.
 
 ---
 
@@ -595,7 +640,13 @@ inherits one redaction rule rather than inventing a second. This is the highest-
 section: it is small, it is on the path the PR just built, and it retires a blocker on a deferred
 item at the same time.
 
-**Decision:**
+**Decision — issue only; nothing in this PR.** This overrides the review's recommendation, which
+argued for doing option A here. The issue must carry the shared-pattern-list constraint, because the
+value of A was never the filter on its own — it was that the same list unblocks
+[I4](../shell-liveness-audit.md#i4-persist-history-across-sessions). An issue that files only "redact
+secrets from autosuggestion" loses the half that mattered.
+
+See [the contest note](#contested-on-hold-items) — this is the deferral I would push back on hardest.
 
 ---
 
@@ -614,7 +665,9 @@ natural home for the clipped-vs-full contract, so deleting it and pinning that c
 **Recommendation:** delete `accept()` and its tests, or wire `handleAcceptGhostText()` through it —
 but pick one in this PR, since the next person to open this file will ask the same question again.
 
-**Decision:**
+**Decision — accepted: clean up.** Delete `ShellGhostText.accept()` and its tests. The PR already
+rewrites this class substantially, so "removing it inside an unrelated fix" — Step 15's reason for
+leaving it — no longer applies.
 
 ---
 
@@ -645,7 +698,7 @@ opening a tracking issue per
 [CONTRIBUTING §6.5](../../../../../CONTRIBUTING.md#65-escape-hatch-create-issues-instead-of-blocking-the-pr)
 so it survives outside this document.
 
-**Decision:**
+**Decision — on hold.** Not decided in this pass.
 
 ---
 
@@ -664,46 +717,134 @@ columns − cursor column − 1"_. That invariant is stated in `availableGhostCo
 already; nothing checks it. This is cheap relative to what it covers, and would have caught P1
 without anyone thinking of the exact-multiple case.
 
-**Decision:**
+**Decision — on hold.** Not decided in this pass.
 
 ---
 
-# Recommended disposition
+# Disposition after Stage 2
 
-| Finding                                                                                                                 | Severity | Suggested for this PR                                |
-| ----------------------------------------------------------------------------------------------------------------------- | -------- | ---------------------------------------------------- |
-| [P1](#p1--availableghostcolumns-and-rerenderline-disagree-about-deferred-wrap) deferred-wrap disagreement               | Medium   | **Yes — fix before ready for review**                |
-| [P2](#p2--collection-prewarming-can-open-a-second-cluster-connection-on-shell-open) prewarm opens a connection          | Medium   | **Yes — one-line option A**                          |
-| [P3](#p3--the-bracket-notation-preview-clips-away-the-part-it-exists-to-show) preview clipping                          | Medium   | Yes — it undercuts I1a, which is a headline item     |
-| [B4](#b4--history-autosuggestion-replays-whatever-was-typed-including-secrets) history + secrets                        | Medium   | Yes — small, and retires an I4 blocker               |
-| [P5](#p5--help_setting_aliases-duplicates-help-text-across-a-package-boundary-unguarded) alias contract test            | Low      | Yes — test only                                      |
-| [P9](#p9--intlsegmenter-is-constructed-on-every-call-in-two-hot-functions) Segmenter hoist                              | Low      | Yes — one line, no trade-off                         |
-| [P8](#p8--maybefeedschemastore-is-async-with-nothing-to-await) signature cleanup                                        | Low      | Yes — one line                                       |
-| [P11](#p11--shell-help-advertises-two-of-five-settings-and-not-the-one-it-just-made-real) `help` omits `autocompletion` | Low      | Yes — one entry                                      |
-| [P4](#p4--iswidecharacter-has-no-emoji-coverage-and-this-pr-multiplies--usage) emoji width                              | Low–Med  | Operator's call — depends on the dependency question |
-| [P10](#p10--_ghosttextishistory-is-cleared-in-only-one-place) ghost-kind tuple                                          | Low      | Optional — worth it if P1 opens the file anyway      |
-| [P6](#p6--documentdbshelldisplayautocompletion-went-from-inert-to-load-bearing) setting became live                     | Low      | Release note only                                    |
-| [P7](#p7--shellhistorysuggestion-shownaccepted-is-not-a-usable-ratio) telemetry ratio                                   | Low      | Either way — cheap                                   |
-| [P12](#p12--a-clipped-ghost-inserts-more-than-it-showed) clipped accept                                                 | Info     | Test + one doc sentence                              |
-| [B1](#b1--this-pr-increased-the-unlocalized-surface-of-the-shell) l10n constraint                                       | Medium   | Document the constraint; defer the mechanism         |
-| [B2](#b2--the-connection-banner-is-now-the-last-width-unaware-surface) banner width                                     | Medium   | Yes if cheap — else re-rate F6 explicitly            |
-| [B3](#b3--the-screen-reader-story-is-one-colorsupport-toggle-and-this-pr-made-the-row-noisier) accessibility            | Medium   | **No** — needs its own pass                          |
-| [B5](#b5--shellghosttextaccept-is-still-dead-code) dead `accept()`                                                      | Low      | Decide it, either way                                |
-| [B6](#b6--i10-is-the-root-cause-of-p1-step-13-and-f2-and-it-is-still-deferred) re-rate I10                              | Medium   | Audit update + issue, not code                       |
-| [B7](#b7--no-property-test-across-the-three-width-consumers) width property test                                        | Low      | Yes if P1 is fixed — it is the regression net        |
+Decided by the operator on 2026-09-22. The per-finding reasoning is on each **Decision** line above;
+this is the index.
+
+## Build in this PR
+
+| Finding                                                                                                                 | Severity | Decided                                            |
+| ----------------------------------------------------------------------------------------------------------------------- | -------- | -------------------------------------------------- |
+| [P1](#p1--availableghostcolumns-and-rerenderline-disagree-about-deferred-wrap) deferred-wrap disagreement               | Medium   | Option B — one owner in `ShellInputHandler` + test |
+| [P2](#p2--collection-prewarming-can-open-a-second-cluster-connection-on-shell-open) prewarm opens a connection          | Medium   | Option A — `getExistingClient()`                   |
+| [P3](#p3--the-bracket-notation-preview-clips-away-the-part-it-exists-to-show) preview clipping                          | Medium   | Option A **without the arrow** — `🛈 ['name']`      |
+| [P4](#p4--iswidecharacter-has-no-emoji-coverage-and-this-pr-multiplies--usage) emoji width                              | Low–Med  | Option A — emoji ranges + VS16, table-driven test  |
+| [P5](#p5--help_setting_aliases-duplicates-help-text-across-a-package-boundary-unguarded) alias drift                    | Low      | Options A + C — contract test, drop the fallback   |
+| [P7](#p7--shellhistorysuggestion-shownaccepted-is-not-a-usable-ratio) telemetry ratio                                   | Low      | Option A — count per matched entry                 |
+| [P8](#p8--maybefeedschemastore-is-async-with-nothing-to-await) signature cleanup                                        | Low      | Option A — drop `async`/`void`                     |
+| [P11](#p11--shell-help-advertises-two-of-five-settings-and-not-the-one-it-just-made-real) `help` omits `autocompletion` | Low      | Accepted — add the third entry                     |
+| [B2](#b2--the-connection-banner-is-now-the-last-width-unaware-surface) banner width                                     | Medium   | Option A — stack below a threshold; re-rate F6     |
+| [B5](#b5--shellghosttextaccept-is-still-dead-code) dead `accept()`                                                      | Low      | Accepted — delete it and its tests                 |
+
+## No change (decided)
+
+| Finding                                                                                             | Decided                             |
+| --------------------------------------------------------------------------------------------------- | ----------------------------------- |
+| [P6](#p6--documentdbshelldisplayautocompletion-went-from-inert-to-load-bearing) setting became live | Option A only — **no release note** |
+
+## Filed as issues
+
+| Source                                                                                         | Issue scope                                                                 |
+| ---------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------- |
+| [P2](#p2--collection-prewarming-can-open-a-second-cluster-connection-on-shell-open) option D   | Ask the worker for the collection list instead of the extension host        |
+| [P8](#p8--maybefeedschemastore-is-async-with-nothing-to-await) option C                        | Feed `SchemaStore` from the worker; drop the serialize/parse round trip     |
+| [B1](#b1--this-pr-increased-the-unlocalized-surface-of-the-shell) option B                     | **How** a `vscode`-free worker package emits localized text                 |
+| [B3](#b3--the-screen-reader-story-is-one-colorsupport-toggle-and-this-pr-made-the-row-noisier) | Accessibility pass for the terminal surface                                 |
+| [B4](#b4--history-autosuggestion-replays-whatever-was-typed-including-secrets)                 | Redact secrets from autosuggestion — **with the I4 shared-list constraint** |
+
+## On hold
+
+Not decided in this pass: [P9](#p9--intlsegmenter-is-constructed-on-every-call-in-two-hot-functions),
+[P10](#p10--_ghosttextishistory-is-cleared-in-only-one-place),
+[P12](#p12--a-clipped-ghost-inserts-more-than-it-showed),
+[B6](#b6--i10-is-the-root-cause-of-p1-step-13-and-f2-and-it-is-still-deferred),
+[B7](#b7--no-property-test-across-the-three-width-consumers).
+
+See below for the ones worth reopening before the branch moves on.
+
+## Contested on-hold items
+
+Three of the five on-hold items get materially cheaper or more valuable **because of decisions
+already taken**, and one declined option is worth a second look. Raised here so the record shows
+they were argued rather than forgotten.
+
+### B7 — the width property test. Reopen.
+
+P1 is being fixed, and the fix is a **behavioral** change to cursor arithmetic. The accepted plan
+adds one regression test at `cursorColumn === cols`. That test only proves the case someone thought
+of; P1 itself is the proof that thinking of the case is the hard part.
+
+B7's invariant — _emitted display width after the cursor ≤ columns − cursor column − 1_ — is already
+written in `availableGhostColumns()`'s doc comment, and P4 is about to widen the input alphabet that
+invariant must hold over. Doing P1 and P4 without B7 means changing the width model twice and
+verifying it by example both times.
+
+**Ask:** fold B7 into P1 as its regression net rather than treating it as a separate item.
+
+### P9 — hoist the `Intl.Segmenter`. Reopen, at effectively zero cost.
+
+One line, no trade-off recorded on either side, in a file **P4 is about to edit anyway**. Leaving it
+on hold means either a second PR touching `terminalDisplayWidth.ts` or a permanent per-keystroke
+allocation. There is no version of this that is cheaper later.
+
+### P10 — the ghost-kind tuple. Reopen, conditionally.
+
+P1 opens `DocumentDBShellPty` and `ShellInputHandler`; B5 deletes part of `ShellGhostText`. The four
+loosely-coupled booleans are exactly the state this work is moving around. If P1 lands without it,
+the next person adding a writer to that row inherits the trap described in the finding.
+
+**Ask:** take it only if P1's implementation already touches the flags. If P1 lands cleanly without
+them, leave it on hold — it is a latent issue, not a live one.
+
+### B4 — deferred to an issue. Push back.
+
+Recorded here rather than silently accepted: this was the review's highest-value beyond-the-PR item
+and the only one with a **security** dimension. Deferring it means shipping a feature that, in this
+release, offers `db.auth('admin', 'hunter2')` back as one-keypress ghost text.
+
+The counter-argument for deferring is real — a pattern list is a security control, and shipping one
+hastily inside a large PR is how incomplete filters become permanent. But the exposure is live from
+the moment this PR merges, and the mitigation is a `startsWith` check over four method names.
+
+**Ask:** either take option A now, or state in the issue that the exposure is **accepted for this
+release** and why. An issue that reads like a backlog item will not convey that a decision was made.
+
+### B1 option A — documenting the constraint. Reopen.
+
+The issue covers the _mechanism_. It does not cover the fact that shell `help` is English **by
+design** because it is generated in a `vscode`-free worker package. Until that sentence is in the
+feature README, the gap looks like an oversight, and the next reviewer will file it again — this
+review just did.
+
+**Ask:** one paragraph in the feature README, independent of when the issue is worked.
+
+### Not contested
+
+[P12](#p12--a-clipped-ghost-inserts-more-than-it-showed) and
+[B6](#b6--i10-is-the-root-cause-of-p1-step-13-and-f2-and-it-is-still-deferred) are correctly on hold.
+P12 pins a contract that nothing is currently threatening. B6 is an audit re-rating whose whole
+value is the evidence from P1 — which does not exist until P1 is implemented, so doing it now would
+be writing the conclusion before the work.
 
 ## Still to do in the review workflow
 
-Per [CONTRIBUTING §6.1](../../../../../CONTRIBUTING.md#61-stage-1-ai-review-pass-run-by-the-contributor),
-this file currently holds steps 1 and 4 only:
+Per [CONTRIBUTING §6.1](../../../../../CONTRIBUTING.md#61-stage-1-ai-review-pass-run-by-the-contributor):
 
 - [x] Step 1 — edge-case review with severities
 - [ ] Step 2 — merge the GitHub Copilot reviewer comments and reassess (**none posted yet** — the PR
       is still a draft with no reviews)
 - [ ] Step 3 — validation gate with a different vendor's model
 - [x] Step 4 — independent sweep beyond the captured issues
-- [ ] Stage 2 — author decision and reasoning on each **Decision** line above
+- [x] Stage 2 — operator decisions recorded, 2026-09-22
+- [ ] Stage 3 — implement, one commit per work item, each logged back into this file
+- [ ] File the five issues listed above and link them here
 
 Before the PR moves to ready for review, the Case 2 command list in
 [copilot-instructions.md](../../../../../.github/copilot-instructions.md) applies in full —
-`npm run l10n` will be needed if any option above adds a `vscode.l10n.t()` string.
+`npm run l10n` will be needed if any accepted option adds a `vscode.l10n.t()` string. P11 and B2 are
+the two most likely to.
