@@ -153,7 +153,8 @@ export class RUBranchDataProvider
                 clusterId: sanitizedId, // Sanitized - no '/' characters
                 // Azure-specific data
                 azureResourceId: resource.id, // Keep original Azure Resource ID for ARM API correlation
-                resourceGroup: undefined, // Will be populated from cache
+                // Required for connecting, so it must not depend on the asynchronous metadata load.
+                resourceGroup: getResourceGroupFromId(resource.id),
                 // Tree context (clusterId === treeId after sanitization)
                 treeId: sanitizedId,
                 viewId: Views.AzureResourcesView,
