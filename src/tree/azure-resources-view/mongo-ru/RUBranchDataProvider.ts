@@ -3,7 +3,7 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { getResourceGroupFromId, uiUtils } from '@microsoft/vscode-azext-azureutils';
+import { getResourceGroupFromId, parseAzureResourceId, uiUtils } from '@microsoft/vscode-azext-azureutils';
 import { callWithTelemetryAndErrorHandling, type IActionContext } from '@microsoft/vscode-azext-utils';
 import { type AzureResource, type BranchDataProvider } from '@microsoft/vscode-azureresources-api';
 import { CosmosDBMongoRUExperience } from '../../../DocumentDBExperiences';
@@ -65,7 +65,7 @@ export class RUBranchDataProvider
 
                 const cluster: TreeCluster<AzureClusterModel> = {
                     // Core cluster data
-                    name: ruAccount.name!,
+                    name: ruAccount.name ?? parseAzureResourceId(resourceId).resourceName,
                     connectionString: undefined, // Loaded lazily when connecting
                     dbExperience: CosmosDBMongoRUExperience,
                     clusterId: sanitizedId, // Sanitized - no '/' characters
@@ -147,13 +147,13 @@ export class RUBranchDataProvider
 
             let clusterInfo: TreeCluster<AzureClusterModel> = {
                 // Core cluster data
-                name: resource.name ?? 'Unknown',
+                // Required for connecting, so it must not depend on the asynchronous metadata load.
+                name: resource.name ?? parseAzureResourceId(resource.id).resourceName,
                 connectionString: undefined, // Loaded lazily
                 dbExperience: CosmosDBMongoRUExperience,
                 clusterId: sanitizedId, // Sanitized - no '/' characters
                 // Azure-specific data
                 azureResourceId: resource.id, // Keep original Azure Resource ID for ARM API correlation
-                // Required for connecting, so it must not depend on the asynchronous metadata load.
                 resourceGroup: getResourceGroupFromId(resource.id),
                 // Tree context (clusterId === treeId after sanitization)
                 treeId: sanitizedId,

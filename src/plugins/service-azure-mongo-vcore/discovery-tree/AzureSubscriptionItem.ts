@@ -4,7 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { type AzureTenant } from '@microsoft/vscode-azext-azureauth';
-import { getResourceGroupFromId, uiUtils } from '@microsoft/vscode-azext-azureutils';
+import { getResourceGroupFromId, parseAzureResourceId, uiUtils } from '@microsoft/vscode-azext-azureutils';
 import { callWithTelemetryAndErrorHandling, type IActionContext } from '@microsoft/vscode-azext-utils';
 import { type AzureSubscription } from '@microsoft/vscode-azureresources-api';
 import * as vscode from 'vscode';
@@ -74,7 +74,7 @@ export class AzureSubscriptionItem implements TreeElement, TreeElementWithContex
 
                         const clusterInfo: TreeCluster<AzureClusterModel> = {
                             // Core cluster data
-                            name: account.name ?? 'Unknown',
+                            name: account.name ?? parseAzureResourceId(resourceId).resourceName,
                             connectionString: undefined, // Loaded lazily when connecting
                             dbExperience: DocumentDBExperience,
                             clusterId: prefixedClusterId, // Prefixed with provider ID for uniqueness
