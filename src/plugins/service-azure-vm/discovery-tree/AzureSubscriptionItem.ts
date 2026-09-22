@@ -102,9 +102,7 @@ export class AzureSubscriptionItem implements TreeElement, TreeElementWithContex
                         const host = fqdn || publicIpAddress;
                         let connectionString: string | undefined;
                         if (host) {
-                            const parsedConnectionString = new DocumentDBConnectionString(
-                                'mongodb://localhost:27017/',
-                            );
+                            const parsedConnectionString = new DocumentDBConnectionString('mongodb://localhost:27017/');
                             parsedConnectionString.hosts = [`${host}:27017`];
                             parsedConnectionString.protocol = 'mongodb';
                             connectionString = parsedConnectionString.toString();
