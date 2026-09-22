@@ -4,6 +4,8 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { ShellGhostText } from './ShellGhostText';
+import { ShellInputHandler } from './ShellInputHandler';
+import { terminalDisplayWidth } from './terminalDisplayWidth';
 
 describe('ShellGhostText', () => {
     let ghostText: ShellGhostText;
@@ -120,6 +122,38 @@ describe('ShellGhostText', () => {
                 ghostText.reset();
                 ghostText.show('  🛈 Run db.vector_index_debug_cases.find() first', write, available);
                 expect(renderedWidth(written)).toBeLessThanOrEqual(available);
+            }
+        });
+
+        it('should keep emitted ghost text on the cursor row across widths and character classes', () => {
+            const buffers = ['ascii'.repeat(50), '日本語'.repeat(50), '📦'.repeat(100), 'é'.repeat(100)];
+            const suggestions = ['suggestion', '候補一覧', '📦 inventory', 'café menu'];
+            const inputHandler = new ShellInputHandler({ write: jest.fn(), onLine: jest.fn() });
+
+            for (let columns = 20; columns <= 200; columns++) {
+                for (const buffer of buffers) {
+                    inputHandler.resetLine();
+                    inputHandler.setPromptWidth(5);
+                    inputHandler.setColumns(columns);
+                    inputHandler.handleInput(buffer);
+                    const available = inputHandler.availableColumnsAfterCursor();
+
+                    for (const suggestion of suggestions) {
+                        written = '';
+                        ghostText.reset();
+                        ghostText.show(suggestion, write, available);
+
+                        const match = dimmedTextPattern.exec(written);
+                        if (!match) {
+                            expect(written).toBe('');
+                            continue;
+                        }
+
+                        const width = terminalDisplayWidth(match[1]);
+                        expect(width).toBeLessThanOrEqual(available);
+                        expect(written).toContain(`\x1b[${String(width)}D`);
+                    }
+                }
             }
         });
 
