@@ -169,9 +169,13 @@ export class ShellCompletionProvider {
             return;
         }
 
+        const client = ClustersClient.getExistingClient(context.clusterId);
+        if (!client) {
+            return;
+        }
+
         this._backgroundFetchTriggered.add(fetchKey);
         try {
-            const client = await ClustersClient.getClient(context.clusterId);
             await client.listCollections(context.databaseName, true);
         } catch {
             // Non-critical — completions degrade gracefully when discovery fails

@@ -208,12 +208,21 @@ describe('ShellCompletionProvider', () => {
     describe('collection prewarming', () => {
         it('should populate the shared cache for the requested database', async () => {
             const listCollections = jest.fn().mockResolvedValue([]);
-            (ClustersClient.getClient as jest.Mock).mockResolvedValue({ listCollections });
+            (ClustersClient.getExistingClient as jest.Mock).mockReturnValue({ listCollections });
 
             await provider.prewarmCollections(TEST_CONTEXT);
 
-            expect(ClustersClient.getClient).toHaveBeenCalledWith('test-cluster');
+            expect(ClustersClient.getExistingClient).toHaveBeenCalledWith('test-cluster');
+            expect(ClustersClient.getClient).not.toHaveBeenCalled();
             expect(listCollections).toHaveBeenCalledWith('testdb', true);
+        });
+
+        it('should not create a client when the cluster has no cached client', async () => {
+            (ClustersClient.getExistingClient as jest.Mock).mockReturnValue(undefined);
+
+            await provider.prewarmCollections(TEST_CONTEXT);
+
+            expect(ClustersClient.getClient).not.toHaveBeenCalled();
         });
     });
 

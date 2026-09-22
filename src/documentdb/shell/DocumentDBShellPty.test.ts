@@ -5,6 +5,7 @@
 
 import * as vscode from 'vscode';
 import { ext } from '../../extensionVariables';
+import { accumulateTelemetry } from '../../utils/accumulatingTelemetry';
 import { AuthMethodId } from '../auth/AuthMethod';
 import { CredentialCache } from '../CredentialCache';
 import { DocumentDBShellPty, type DocumentDBShellPtyOptions } from './DocumentDBShellPty';
@@ -53,6 +54,12 @@ jest.mock('../../extensionVariables', () => ({
             appendLine: jest.fn(),
         },
     },
+}));
+
+jest.mock('../../utils/accumulatingTelemetry', () => ({
+    accumulateTelemetry: jest.fn((_eventName: string, update: (sample: { measurements: Record<string, number> }) => void) => {
+        update({ measurements: {} });
+    }),
 }));
 
 // Mock ShellSessionManager
@@ -246,7 +253,7 @@ describe('DocumentDBShellPty', () => {
                 displayName: 'alex@contoso.com',
             });
 
-            pty.open(undefined);
+            pty.open({ columns: 120, rows: 30 });
             await new Promise((resolve) => setTimeout(resolve, 10));
 
             expect(written).toContain(
@@ -262,12 +269,29 @@ describe('DocumentDBShellPty', () => {
                 username: 'app-user',
             });
 
-            pty.open(undefined);
+            pty.open({ columns: 120, rows: 30 });
             await new Promise((resolve) => setTimeout(resolve, 10));
 
             expect(written).toContain(
                 'Identity: app-user | Authentication: Username and Password (SCRAM) | Database: testdb',
             );
+        });
+
+        it('should stack connection details in a narrow terminal', async () => {
+            mockInitialize.mockResolvedValueOnce({
+                host: 'test-host.documents.azure.com:10255',
+                authMechanism: 'ManagedIdentity',
+                isEmulator: false,
+                displayName: 'alex@contoso.com',
+            });
+
+            pty.open({ columns: 80, rows: 30 });
+            await new Promise((resolve) => setTimeout(resolve, 10));
+
+            expect(written).toContain(
+                'Identity: alex@contoso.com\r\nAuthentication: Microsoft Entra ID (Managed Identity)\r\nDatabase: testdb',
+            );
+            expect(written).not.toContain('Identity: alex@contoso.com | Authentication:');
         });
 
         it('should show error and stay open on connection failure', async () => {
@@ -717,7 +741,7 @@ describe('DocumentDBShellPty', () => {
             pty.handleInput('db.rest');
             await afterGhostDebounce();
 
-            expect(written).toContain(`${GHOST_STYLE}  🛈 db['restaurants-something']`);
+            expect(written).toContain(`${GHOST_STYLE}  🛈 ['restaurants-something']`);
         });
 
         it('previews exactly what Tab then produces', async () => {
@@ -842,7 +866,7 @@ describe('DocumentDBShellPty', () => {
             pty.handleInput('db.rest');
             await afterGhostDebounce();
 
-            expect(written).toContain(`${GHOST_STYLE}  🛈 db['restaurants-original']`);
+            expect(written).toContain(`${GHOST_STYLE}  🛈 ['restaurants-original']`);
         });
     });
 
@@ -870,6 +894,22 @@ describe('DocumentDBShellPty', () => {
             await afterGhostDebounce();
 
             expect(written).toContain(`${GHOST_STYLE}'restaurants-something'].find()`);
+        });
+
+        it('counts one shown event while typing through the same history entry', async () => {
+            pty.handleInput('zebra command');
+            pty.handleInput('\r');
+            await new Promise((resolve) => setTimeout(resolve, 20));
+
+            pty.handleInput('z');
+            await afterGhostDebounce();
+            pty.handleInput('e');
+            await afterGhostDebounce();
+
+            const shownCalls = (accumulateTelemetry as jest.Mock).mock.calls.filter(
+                ([eventName]) => eventName === 'shell.historySuggestion',
+            );
+            expect(shownCalls).toHaveLength(1);
         });
 
         it('yields to a completion candidate, which can also be accepted', async () => {

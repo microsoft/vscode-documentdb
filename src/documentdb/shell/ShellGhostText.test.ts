@@ -179,35 +179,6 @@ describe('ShellGhostText', () => {
         });
     });
 
-    describe('accept', () => {
-        it('should return the ghost text', () => {
-            ghostText.show('aurants', write);
-            written = '';
-            const accepted = ghostText.accept(write);
-            expect(accepted).toBe('aurants');
-        });
-
-        it('should become not visible after accept', () => {
-            ghostText.show('text', write);
-            ghostText.accept(write);
-            expect(ghostText.isVisible).toBe(false);
-        });
-
-        it('should write the accepted text in normal color', () => {
-            ghostText.show('rest', write);
-            written = '';
-            ghostText.accept(write);
-            // Should erase dim text and write normal
-            expect(written).toContain('\x1b[K');
-            expect(written).toContain('rest');
-        });
-
-        it('should return empty string if not visible', () => {
-            const accepted = ghostText.accept(write);
-            expect(accepted).toBe('');
-        });
-    });
-
     describe('reset', () => {
         it('should clear state without writing to terminal', () => {
             ghostText.show('text', write);

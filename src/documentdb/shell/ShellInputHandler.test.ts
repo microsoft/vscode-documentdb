@@ -863,6 +863,36 @@ describe('ShellInputHandler', () => {
             handler.handleInput('🛈x'); // 3 code units, 2 display columns
             expect(handler.cursorColumn).toBe(2);
         });
+
+        it('should report no available columns at a deferred-wrap boundary', () => {
+            handler.setColumns(80);
+            handler.setPromptWidth(5);
+            handler.handleInput('a'.repeat(75));
+
+            expect(handler.availableColumnsAfterCursor()).toBe(0);
+        });
+
+        it('should keep available columns within the current row across widths and character classes', () => {
+            const samples = ['ascii'.repeat(50), '日本語'.repeat(50), '📦'.repeat(100), 'é'.repeat(100)];
+
+            for (let columns = 20; columns <= 200; columns++) {
+                for (const sample of samples) {
+                    handler.resetLine();
+                    handler.setPromptWidth(5);
+                    handler.setColumns(columns);
+                    handler.handleInput(sample);
+
+                    const available = handler.availableColumnsAfterCursor();
+                    expect(available).toBeGreaterThanOrEqual(0);
+                    expect(available).toBeLessThan(columns);
+                    if (available > 0) {
+                        expect((handler.cursorColumn + available) % columns).toBe(columns - 1);
+                    } else {
+                        expect([0, columns - 1]).toContain(handler.cursorColumn % columns);
+                    }
+                }
+            }
+        });
     });
 
     describe('findHistorySuggestion', () => {

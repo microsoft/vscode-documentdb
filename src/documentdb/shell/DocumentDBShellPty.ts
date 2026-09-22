@@ -40,6 +40,8 @@ import {
 } from './ShellTerminalLinkProvider';
 import { terminalDisplayWidth } from './terminalDisplayWidth';
 
+const COMPACT_CONNECTION_SUMMARY_MIN_COLUMNS = 100;
+
 /**
  * Configuration for the interactive shell Pseudoterminal.
  */
@@ -107,6 +109,8 @@ export class DocumentDBShellPty implements vscode.Pseudoterminal {
     private _ghostTextIsHistory: boolean = false;
     /** The kind of the completion candidate shown as ghost text (for telemetry). */
     private _ghostCandidateKind: CompletionCandidate['kind'] | undefined;
+    /** Most recent history entry counted as shown for telemetry. */
+    private _lastShownHistorySuggestion: string | undefined;
     /** Optional initial input to pre-fill after initialization. */
     private _initialInput: string | undefined;
 
@@ -529,7 +533,19 @@ export class DocumentDBShellPty implements vscode.Pseudoterminal {
 
             const formattedAuthLabel = this._outputFormatter.formatConnectionValue(authLabel);
             const formattedDatabase = this._outputFormatter.formatConnectionValue(this._currentDatabase);
-            if (identity) {
+            if (this._columns < COMPACT_CONNECTION_SUMMARY_MIN_COLUMNS) {
+                if (identity) {
+                    connectionSummary.push(
+                        this._outputFormatter.formatSystemMessage(
+                            l10n.t('Identity: {0}', this._outputFormatter.formatConnectionValue(identity)),
+                        ),
+                    );
+                }
+                connectionSummary.push(
+                    this._outputFormatter.formatSystemMessage(l10n.t('Authentication: {0}', formattedAuthLabel)),
+                    this._outputFormatter.formatSystemMessage(l10n.t('Database: {0}', formattedDatabase)),
+                );
+            } else if (identity) {
                 connectionSummary.push(
                     this._outputFormatter.formatSystemMessage(
                         l10n.t(
@@ -743,9 +759,8 @@ export class DocumentDBShellPty implements vscode.Pseudoterminal {
             this.maybeWriteActionLine(result);
 
             // Feed query result documents to SchemaStore for field completions.
-            // This runs asynchronously after output is displayed — schema feeding
-            // is non-blocking and failure is non-critical.
-            void this.maybeFeedSchemaStore(result);
+            // Failure is non-critical.
+            this.maybeFeedSchemaStore(result);
         });
     }
 
@@ -1031,7 +1046,7 @@ export class DocumentDBShellPty implements vscode.Pseudoterminal {
      * types) and delegates to the shared {@link feedResultToSchemaStore} utility.
      * Failures are silently ignored — schema feeding is best-effort.
      */
-    private async maybeFeedSchemaStore(result: SerializableExecutionResult): Promise<void> {
+    private maybeFeedSchemaStore(result: SerializableExecutionResult): void {
         // Only Cursor and Document results with a namespace are worth parsing
         if (result.type !== 'Cursor' && result.type !== 'Document') {
             return;
@@ -1194,11 +1209,7 @@ export class DocumentDBShellPty implements vscode.Pseudoterminal {
      * the editing position cannot move between rows.
      */
     private availableGhostColumns(): number {
-        const cols = this._columns;
-        if (cols <= 0) {
-            return 0;
-        }
-        return cols - 1 - (this._inputHandler.cursorColumn % cols);
+        return this._inputHandler.availableColumnsAfterCursor();
     }
 
     /**
@@ -1265,7 +1276,7 @@ export class DocumentDBShellPty implements vscode.Pseudoterminal {
             // which ghost text cannot represent because it only ever appends.
             // Advertise the result as a non-insertable preview instead.
             if (!candidate.insertText.startsWith(result.prefix) || (candidate.replaceCharsBefore ?? 0) > 0) {
-                this.showCompletionPreviewHint(buffer, result.prefix, candidate);
+                this.showCompletionPreviewHint(candidate);
                 return;
             }
 
@@ -1316,7 +1327,7 @@ export class DocumentDBShellPty implements vscode.Pseudoterminal {
             this._ghostTextIsHistory = true;
             this._ghostCandidateKind = undefined;
             if (this.showInsertableGhost(historyMatch.slice(buffer.length))) {
-                this.trackHistorySuggestionShown();
+                this.trackHistorySuggestionShown(historyMatch);
             }
             return;
         }
@@ -1450,11 +1461,8 @@ export class DocumentDBShellPty implements vscode.Pseudoterminal {
      * skipped, which is how a user whose collections all need bracket notation
      * never sees completion at all.
      */
-    private showCompletionPreviewHint(buffer: string, prefix: string, candidate: CompletionCandidate): boolean {
-        const deleteCount = prefix.length + (candidate.replaceCharsBefore ?? 0);
-        const preview = buffer.slice(0, Math.max(0, buffer.length - deleteCount)) + candidate.insertText;
-
-        return this.showInlineHint(preview);
+    private showCompletionPreviewHint(candidate: CompletionCandidate): boolean {
+        return this.showInlineHint(candidate.insertText);
     }
 
     /**
@@ -1600,7 +1608,11 @@ export class DocumentDBShellPty implements vscode.Pseudoterminal {
     /**
      * Track that a history-based autosuggestion was shown.
      */
-    private trackHistorySuggestionShown(): void {
+    private trackHistorySuggestionShown(historyEntry: string): void {
+        if (historyEntry === this._lastShownHistorySuggestion) {
+            return;
+        }
+        this._lastShownHistorySuggestion = historyEntry;
         accumulateTelemetry('shell.historySuggestion', (sample) => {
             sample.measurements.shown = 1;
         });

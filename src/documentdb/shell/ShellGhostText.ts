@@ -31,7 +31,6 @@ const ELLIPSIS = '…';
  * Usage:
  * 1. Call {@link show} with the suggestion text and a write function
  * 2. Call {@link clear} before any buffer modification
- * 3. Call {@link accept} when the user wants to accept the suggestion
  */
 export class ShellGhostText {
     /** The currently displayed ghost text (empty if none). */
@@ -125,34 +124,6 @@ export class ShellGhostText {
         this._currentGhost = '';
         this._renderedGhost = '';
         this._visible = false;
-    }
-
-    /**
-     * Accept the currently displayed ghost text.
-     *
-     * Returns the ghost text that was accepted (for insertion into the buffer).
-     * Clears the ghost state without erasing (the accepted text will be
-     * re-rendered in normal color by the caller).
-     *
-     * @param write - function to write ANSI data to the terminal
-     * @returns the accepted ghost text, or empty string if none was visible
-     */
-    accept(write: (data: string) => void): string {
-        if (!this._visible || !this._currentGhost) {
-            return '';
-        }
-
-        const accepted = this._currentGhost;
-        this._currentGhost = '';
-        this._renderedGhost = '';
-        this._visible = false;
-
-        // Erase the dim ghost text
-        write(ERASE_TO_EOL);
-        // Write the accepted text in normal color
-        write(accepted);
-
-        return accepted;
     }
 
     /**

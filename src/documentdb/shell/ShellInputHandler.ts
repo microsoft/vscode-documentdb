@@ -158,6 +158,20 @@ export class ShellInputHandler {
         return this._promptWidth + terminalDisplayWidth(this._buffer.slice(0, this._cursor));
     }
 
+    /**
+     * Columns available after the cursor without entering deferred wrap.
+     */
+    availableColumnsAfterCursor(): number {
+        const columns = this._columns;
+        if (columns <= 0) {
+            return 0;
+        }
+
+        const absoluteColumn = this.cursorColumn;
+        const column = absoluteColumn > 0 ? ((absoluteColumn - 1) % columns) + 1 : 0;
+        return Math.max(0, columns - 1 - column);
+    }
+
     /** Current line contents. */
     get buffer(): string {
         return this._buffer;

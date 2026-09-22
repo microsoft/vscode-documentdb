@@ -276,6 +276,8 @@ export class HelpProvider {
             tip('Manual access: search Settings for documentDB.shell.display.colorSupport', '     '),
             tip('2. ⚙ [inlineHints] Toggle 🛈 descriptions, counts, and previews.'),
             tip('Manual access: search Settings for documentDB.shell.display.inlineHints', '     '),
+            tip('3. ⚙ [autocompletion] Toggle Tab completion and inline suggestions.'),
+            tip('Manual access: search Settings for autocompletion', '     '),
             blank,
 
             header('Tips'),
