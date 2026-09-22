@@ -16,6 +16,7 @@ import {
     MinKey,
     ObjectId,
     Timestamp,
+    UUID,
 } from 'mongodb';
 
 /**
@@ -54,31 +55,6 @@ export enum BSONTypes {
 }
 
 export namespace BSONTypes {
-    /**
-     * Maps the `_bsontype` discriminator carried by every BSON wrapper instance to our enum.
-     * Used as a fallback when `instanceof` fails because the value originated from a
-     * different copy of the `bson` package (dual-package hazard).
-     *
-     * A `Map`, not an object literal: the tag comes from user data, so `_bsontype:
-     * '__proto__'` or `'constructor'` would otherwise resolve to an inherited member and
-     * be treated as a supported tag.
-     */
-    const bsonTypeTagMap = new Map<string, BSONTypes>([
-        ['Binary', BSONTypes.Binary],
-        ['BSONRegExp', BSONTypes.RegExp],
-        ['BSONSymbol', BSONTypes.Symbol],
-        ['Code', BSONTypes.Code],
-        ['DBRef', BSONTypes.DBRef],
-        ['Decimal128', BSONTypes.Decimal128],
-        ['Double', BSONTypes.Double],
-        ['Int32', BSONTypes.Int32],
-        ['Long', BSONTypes.Long],
-        ['MaxKey', BSONTypes.MaxKey],
-        ['MinKey', BSONTypes.MinKey],
-        ['ObjectId', BSONTypes.ObjectId],
-        ['Timestamp', BSONTypes.Timestamp],
-    ]);
-
     const displayStringMap: Record<BSONTypes, string> = {
         [BSONTypes.String]: 'String',
         [BSONTypes.Number]: 'Number',
@@ -200,8 +176,9 @@ export namespace BSONTypes {
                 if (value instanceof BSONSymbol) return BSONTypes.Symbol;
                 if (value instanceof DBRef) return BSONTypes.DBRef;
                 if (value instanceof Map) return BSONTypes.Map;
-                if (value instanceof Binary) return binaryTypeForSubType(value.sub_type);
-                if (value instanceof Buffer) return BSONTypes.Binary;
+                if (value instanceof UUID && value.sub_type === Binary.SUBTYPE_UUID) return BSONTypes.UUID;
+                if (value instanceof UUID && value.sub_type === Binary.SUBTYPE_UUID_OLD) return BSONTypes.UUID_LEGACY;
+                if (value instanceof Buffer || value instanceof Binary) return BSONTypes.Binary;
                 if (value instanceof RegExp) return BSONTypes.RegExp;
                 if (value instanceof Code) {
                     if (value.scope) {
@@ -211,44 +188,12 @@ export namespace BSONTypes {
                     }
                 }
 
-                // The `instanceof` checks above all fail when the value was created by a
-                // different copy of the `bson` package than the one linked here. Fall back to
-                // the `_bsontype` tag, otherwise a wrapper would be reported as a plain object
-                // and its internals (ObjectId.buffer, Double.value, ...) leak as schema fields.
-                return inferTypeFromTag(value) ?? BSONTypes.Object;
+                // Default to Object if none of the above match
+                return BSONTypes.Object;
             default:
                 // This should never happen, but if it does, we'll catch it here
                 // TODO: add telemetry somewhere to know when it happens (not here, this could get hit too often)
                 return BSONTypes._UNKNOWN_;
         }
-    }
-
-    function inferTypeFromTag(value: object): BSONTypes | undefined {
-        const tag = (value as { _bsontype?: unknown })._bsontype;
-        if (typeof tag !== 'string') return undefined;
-
-        const mapped = bsonTypeTagMap.get(tag);
-        if (mapped === undefined) return undefined;
-
-        if (mapped === BSONTypes.Binary) {
-            return binaryTypeForSubType((value as { sub_type?: unknown }).sub_type);
-        }
-
-        if (mapped === BSONTypes.Code && (value as { scope?: unknown }).scope) {
-            return BSONTypes.CodeWithScope;
-        }
-
-        return mapped;
-    }
-
-    /**
-     * `UUID` extends `Binary` and carries `_bsontype: 'Binary'`, so the subtype is the only
-     * discriminator available to the tag fallback. Both paths route through here to keep the
-     * same value from being classified differently depending on which one ran.
-     */
-    function binaryTypeForSubType(subType: unknown): BSONTypes {
-        if (subType === Binary.SUBTYPE_UUID) return BSONTypes.UUID;
-        if (subType === Binary.SUBTYPE_UUID_OLD) return BSONTypes.UUID_LEGACY;
-        return BSONTypes.Binary;
     }
 }
