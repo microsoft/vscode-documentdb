@@ -316,7 +316,8 @@ export class DockerReadinessService {
         suppressCommandEcho: boolean,
     ): Promise<DockerProbeEvidence> {
         const output = suppressCommandEcho ? undefined : this.dependencies.createProbeOutput?.();
-        // `docker info` JSON is hundreds of lines; runReadiness logs a summary of it instead.
+        // Noise, not secrets: `docker info` JSON is hundreds of lines, so runReadiness logs a summary
+        // instead. Secret-bearing output is handled by ContainerRuntime's parsing runner.
         const echoStdout = probe !== 'info';
         let commandText: string | undefined;
         return this.dependencies

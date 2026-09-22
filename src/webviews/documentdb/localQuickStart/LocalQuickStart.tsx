@@ -71,13 +71,13 @@ import {
     QUICK_START_DEFAULT_TAG,
     QUICK_START_IMAGE,
     QUICK_START_IMAGE_REPOSITORY,
-    QUICK_START_MIN_PASSWORD_LENGTH,
     QUICK_START_PORT,
     type StageEvent,
 } from '../../../services/localQuickStart/quickStartTypes';
 import { useTrpcClient } from '../../_integration/useTrpcClient';
 import { Announcer } from '../../components/accessibility/Announcer';
 import { MessageBlock } from '../../components/MessageBlock';
+import { getCredentialValidation } from './credentialValidation';
 import { pollDockerReadiness } from './dockerReadinessPolling';
 import {
     type DockerDetailFailureKey,
@@ -895,8 +895,6 @@ export const LocalQuickStart = (): JSX.Element => {
     // dead-ends on a server rejection. Returns the offending field (for a per-field error state,
     // a11y §3.3.1) plus the message. Credential/image checks are skipped while reusing an existing
     // instance, since those inputs are hidden and their values are ignored.
-    // eslint-disable-next-line no-control-regex
-    const credForbidden = /[\u0000-\u001f\u007f]/;
     const advValidation = (():
         | { field: 'port' | 'credentials' | 'username' | 'password' | 'tag'; message: string }
         | undefined => {
@@ -917,33 +915,13 @@ export const LocalQuickStart = (): JSX.Element => {
             };
         }
         if (!isRecreate) {
-            const user = advUser.trim();
-            const pass = advPass.trim();
-            const hasUser = user.length > 0;
-            const hasPass = pass.length > 0;
-            if (useCustomCredentials && hasUser !== hasPass) {
-                return {
-                    field: 'credentials',
-                    message: l10n.t('Enter both a username and a password, or leave both blank to auto-generate.'),
-                };
-            }
-            if (user.length > 128) {
-                return { field: 'username', message: l10n.t('Username must be 128 characters or fewer.') };
-            }
-            if (hasPass && pass.length < QUICK_START_MIN_PASSWORD_LENGTH) {
-                return {
-                    field: 'password',
-                    message: l10n.t('Password must be at least {0} characters.', QUICK_START_MIN_PASSWORD_LENGTH),
-                };
-            }
-            if (pass.length > 256) {
-                return { field: 'password', message: l10n.t('Password must be 256 characters or fewer.') };
-            }
-            if (hasUser && credForbidden.test(user)) {
-                return { field: 'username', message: l10n.t('Username must not contain control characters.') };
-            }
-            if (hasPass && credForbidden.test(pass)) {
-                return { field: 'password', message: l10n.t('Password must not contain control characters.') };
+            const credentialError = getCredentialValidation({
+                useCustomCredentials,
+                username: advUser,
+                password: advPass,
+            });
+            if (credentialError) {
+                return credentialError;
             }
             const tag = advTag.trim();
             if (tag && (tag.length > 128 || !/^[\w][\w.-]*$/.test(tag))) {

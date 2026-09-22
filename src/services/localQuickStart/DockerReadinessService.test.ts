@@ -865,7 +865,7 @@ describe('DockerReadinessService', () => {
         expect(writeProviderMemory).toHaveBeenCalledWith(undefined);
     });
 
-    it('suppresses successful poll transcripts and retains a failing probe command and stderr', async () => {
+    it('suppresses successful poll transcripts and retains failing probe transcripts', async () => {
         const onCommand = jest.fn();
         const stdout: string[] = [];
         const stderr: string[] = [];
@@ -875,7 +875,7 @@ describe('DockerReadinessService', () => {
                 return evidence('info', { exitCode: 1, stdout: 'failed stdout', stderr: 'failed stderr' });
             }
             if (options.probe === 'contexts') {
-                return evidence('contexts', { stdout: '[]' });
+                return evidence('contexts', { exitCode: 1, stdout: 'contexts stdout', stderr: 'contexts stderr' });
             }
             return evidence('cliVersion', { stdout: 'Docker version 28.1.1' });
         });
@@ -905,11 +905,10 @@ describe('DockerReadinessService', () => {
 
         await service.getReadiness({ suppressCommandEcho: true });
 
-        expect(onCommand).toHaveBeenCalledTimes(1);
-        expect(onCommand).toHaveBeenCalledWith('docker info');
-        // `docker info` stdout is JSON; only its summary/server errors are logged.
-        expect(stdout).toEqual([]);
-        expect(stderr).toEqual(['failed stderr']);
+        expect(onCommand.mock.calls).toEqual([['docker info'], ['docker contexts']]);
+        // `docker info` stdout is dropped (summarized elsewhere); other failing probes keep theirs.
+        expect(stdout).toEqual(['contexts stdout']);
+        expect(stderr).toEqual(['failed stderr', 'contexts stderr']);
     });
 });
 

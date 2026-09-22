@@ -16,14 +16,16 @@ jest.mock('@microsoft/vscode-container-client', () => ({
 }));
 
 const PASSWORD = 'hunter2-generated-password';
-// What `docker container inspect` / `docker ps` print: the container env carries the credentials.
+// `docker container inspect` output: the container env carries the credentials.
 const STDOUT_WITH_ENV = JSON.stringify({ Config: { Env: ['USERNAME=admin', `PASSWORD=${PASSWORD}`] } });
 
 describe('ContainerRuntime output channel', () => {
     let lines: string[];
+    let stdout: string;
 
     beforeEach(() => {
         lines = [];
+        stdout = STDOUT_WITH_ENV;
         disposeQuickStartOutputChannel();
         jest.spyOn(vscode.window, 'createOutputChannel').mockReturnValue({
             appendLine: (line: string) => lines.push(line),
@@ -34,7 +36,7 @@ describe('ContainerRuntime output channel', () => {
                 ({
                     getCommandRunner: () => async () => {
                         options.onCommand?.('docker …');
-                        options.stdOutPipe?.end(STDOUT_WITH_ENV + '\n');
+                        options.stdOutPipe?.end(stdout + '\n');
                         return [];
                     },
                 }) as unknown as ShellStreamCommandRunnerFactory<ShellStreamCommandRunnerOptions>,
@@ -58,9 +60,10 @@ describe('ContainerRuntime output channel', () => {
     });
 
     it('still echoes stdout for commands whose output is not parsed', async () => {
+        stdout = 'c1';
         await ContainerRuntime.removeContainer('c1');
         await new Promise((resolve) => setImmediate(resolve));
 
-        expect(lines).toContain(STDOUT_WITH_ENV);
+        expect(lines).toContain('c1');
     });
 });

@@ -764,7 +764,7 @@ export class QuickStartServiceImpl {
                 await this.renewProvisioningLease(alias, operationId, chosenPort);
             }
             createAttempted = true;
-            // Write credentials to a temp env-file (deleted in finally) so they never
+            // Write credentials to a temp env-file (deleted right after `docker run`) so they never
             // appear on the docker CLI / host process list (design §8.2). The image
             // reads USERNAME/PASSWORD from the environment.
             const createdEnvFilePath = await this.writeEnvFile(credentials.username, credentials.password);
@@ -981,7 +981,8 @@ export class QuickStartServiceImpl {
             }
             signal.removeEventListener('abort', onAbort);
             cts.dispose();
-            // Delete the temp env-file (it carried the password in plaintext, §8.2).
+            // Backstop only: the creating stage already removed the env-file unless something threw
+            // between writing it and `docker run`.
             if (envFilePath) {
                 await this.removeEnvFile(envFilePath);
             }
@@ -1402,8 +1403,8 @@ export class QuickStartServiceImpl {
 
     /**
      * Write credentials to a temp `--env-file` (mode 600) so they are passed to the
-     * container off the command line / process list (§8.2). The caller deletes it in
-     * a `finally`. The `--env-file` format is line-based `KEY=VALUE` with no quoting,
+     * container off the command line / process list (§8.2). The caller deletes it as soon
+     * as `docker run` settles. The `--env-file` format is line-based `KEY=VALUE` with no quoting,
      * so a newline (or other control char) in a value would inject extra environment
      * variables. Auto-generated credentials use the URL-safe alphabet; custom Advanced
      * credentials are control-char-validated at the router boundary, and this guard is
@@ -1415,11 +1416,7 @@ export class QuickStartServiceImpl {
         if (hasControlChar.test(username) || hasControlChar.test(password)) {
             throw new Error('Credentials must not contain control characters.');
         }
-        // The owning PID lets the activation sweep reclaim a crashed host's file right away.
-        const filePath = path.join(
-            os.tmpdir(),
-            `documentdb-quickstart-${process.pid}-${crypto.randomBytes(8).toString('hex')}.env`,
-        );
+        const filePath = path.join(os.tmpdir(), envFileName(process.pid, crypto.randomBytes(8).toString('hex')));
         await fs.writeFile(filePath, `USERNAME=${username}\nPASSWORD=${password}\n`, { mode: 0o600 });
         return filePath;
     }
@@ -2202,6 +2199,14 @@ export const QuickStartService: QuickStartServiceImpl = new QuickStartServiceImp
 const ENV_FILE_STALE_AFTER_MS = 60 * 60 * 1000;
 
 const ENV_FILE_PATTERN = /^documentdb-quickstart-(?:(\d+)-)?[0-9a-f]{16}\.env$/;
+
+/**
+ * Temp env-file name; must stay matched by {@link ENV_FILE_PATTERN}. The owning PID lets the
+ * activation sweep reclaim a crashed host's file right away.
+ */
+export function envFileName(pid: number, nonce: string): string {
+    return `documentdb-quickstart-${pid}-${nonce}.env`;
+}
 
 /** `kill(pid, 0)` probes without signalling: ESRCH means gone, EPERM means alive but not ours. */
 function isProcessAlive(pid: number): boolean {

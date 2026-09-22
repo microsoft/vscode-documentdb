@@ -10,6 +10,7 @@
  * a provision can be driven end to end — the other suites deliberately stop at pull/create.
  */
 
+import * as fs from 'fs';
 import * as vscode from 'vscode';
 import { ext } from '../../extensionVariables';
 import { StorageService } from '../storageService';
@@ -520,6 +521,55 @@ describe('QuickStartService — WP-3 provisioning durability and port model', ()
             const service = new QuickStartServiceImpl(runtimeFor({ portFree: false }));
 
             await expect(service.checkPort(10333)).resolves.toBe('inUse');
+        });
+    });
+
+    describe('credential exposure (#947)', () => {
+        const PASSWORD = 'custom-password-947';
+
+        it('removes the env-file once docker run settles, before the readiness wait', async () => {
+            let envFile: string | undefined;
+            let presentDuringRun = false;
+            let presentAtProbe: boolean | undefined;
+            const createAndRunContainer = jest.fn(async (options: { environmentFiles?: string[] }) => {
+                envFile = options.environmentFiles?.[0];
+                presentDuringRun = !!envFile && fs.existsSync(envFile);
+                return 'c1';
+            });
+            onProbe = () => {
+                presentAtProbe ??= !!envFile && fs.existsSync(envFile);
+            };
+            const service = new QuickStartServiceImpl(runtimeFor({ createAndRunContainer }));
+
+            await collect(service.provision(new AbortController().signal));
+
+            expect(presentDuringRun).toBe(true);
+            expect(presentAtProbe).toBe(false);
+        });
+
+        it('masks the password in the readiness-timeout detail', async () => {
+            const appendLine = vscode.window.createOutputChannel('test').appendLine as jest.Mock;
+            appendLine.mockClear();
+            const expired = Date.now() + 10 * 60_000;
+            const clock = jest.spyOn(Date, 'now');
+            // The driver error can echo the connection string; expire the wait after one attempt.
+            onProbe = () => {
+                clock.mockReturnValue(expired);
+                throw new Error(`Authentication failed for mongodb://admin:${PASSWORD}@localhost:10260/`);
+            };
+            const service = new QuickStartServiceImpl(runtimeFor());
+
+            try {
+                await collect(
+                    service.provision(new AbortController().signal, { username: 'admin', password: PASSWORD }),
+                );
+            } finally {
+                clock.mockRestore();
+            }
+
+            const lines = appendLine.mock.calls.map(([line]) => String(line));
+            expect(lines.some((line) => line.startsWith('[readiness-timeout]') && line.includes('***'))).toBe(true);
+            expect(lines.join('\n')).not.toContain(PASSWORD);
         });
     });
 });

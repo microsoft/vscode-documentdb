@@ -12,7 +12,7 @@ import { StorageService } from '../storageService';
 import { disposeQuickStartOutputChannel, type IContainerRuntime } from './ContainerRuntime';
 
 import { formatQuickStartMessage } from './quickStartMessages';
-import { QuickStartServiceImpl, sweepStaleQuickStartEnvFiles } from './QuickStartService';
+import { envFileName, QuickStartServiceImpl, sweepStaleQuickStartEnvFiles } from './QuickStartService';
 import { listInstances, PROVISIONING_LEASE_TTL_MS, upsertInstance, writeConnectionString } from './quickStartStore';
 import {
     DEFAULT_ALIAS,
@@ -1951,17 +1951,17 @@ describe('sweepStaleQuickStartEnvFiles', () => {
     }
 
     it('removes a fresh file whose owning process is gone and keeps one owned by a live process', async () => {
-        await writeEnvFile(`documentdb-quickstart-${DEAD_PID}-0123456789abcdef.env`);
-        await writeEnvFile(`documentdb-quickstart-${process.pid}-0123456789abcdef.env`);
+        await writeEnvFile(envFileName(DEAD_PID, '0123456789abcdef'));
+        await writeEnvFile(envFileName(process.pid, '0123456789abcdef'));
 
         await sweepStaleQuickStartEnvFiles(dir);
 
-        expect(await fs.readdir(dir)).toEqual([`documentdb-quickstart-${process.pid}-0123456789abcdef.env`]);
+        expect(await fs.readdir(dir)).toEqual([envFileName(process.pid, '0123456789abcdef')]);
     });
 
     it('removes any file older than an hour, including legacy PID-less names', async () => {
         const hour = 60 * 60 * 1000;
-        await writeEnvFile(`documentdb-quickstart-${process.pid}-0000000000000000.env`, 2 * hour);
+        await writeEnvFile(envFileName(process.pid, '0000000000000000'), 2 * hour);
         await writeEnvFile('documentdb-quickstart-1111111111111111.env', 2 * hour);
         await writeEnvFile('documentdb-quickstart-2222222222222222.env');
         await writeEnvFile('unrelated.env', 2 * hour);
