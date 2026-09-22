@@ -149,17 +149,21 @@ describe('DocumentDBShellPty', () => {
     });
 
     describe('open', () => {
-        it('should display welcome banner', () => {
+        it('should display welcome banner after connecting', async () => {
             pty.open(undefined);
+
+            await new Promise((resolve) => setTimeout(resolve, 10));
+
             expect(written).toContain('DocumentDB Shell');
         });
 
-        it('should display the shell logo without persistent connection details', () => {
+        it('should display the shell logo with connection details', async () => {
             pty.open(undefined);
 
-            expect(written).toContain(
-                '╭──────────────────────╮\r\n│ DocumentDB Shell  >_ │\r\n╰──────────────────────╯',
-            );
+            await new Promise((resolve) => setTimeout(resolve, 10));
+
+            expect(written).toContain('╭────╮\r\n│ >_ │ DocumentDB Shell\r\n╰────╯');
+            expect(written.match(/Connected to: TestCluster/g)).toHaveLength(1);
             expect(written).not.toContain('│ TestCluster');
         });
 

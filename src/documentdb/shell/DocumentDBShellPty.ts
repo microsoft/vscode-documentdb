@@ -192,8 +192,6 @@ export class DocumentDBShellPty implements vscode.Pseudoterminal {
         // Disable input during initialization to prevent race conditions
         this._inputHandler.setEnabled(false);
 
-        this.showLogo();
-
         // Show a labeled spinner during connection
         this._spinner = new ShellSpinner(
             (data) => this._writeEmitter.fire(data),
@@ -523,12 +521,14 @@ export class DocumentDBShellPty implements vscode.Pseudoterminal {
 
             const identity = metadata.username ?? metadata.displayName;
             const formattedHostLabel = this._outputFormatter.formatConnectionValue(hostLabel);
-            this.writeLine(this._outputFormatter.formatSystemMessage(l10n.t('Connected to: {0}', formattedHostLabel)));
+            const connectionSummary = [
+                this._outputFormatter.formatSystemMessage(l10n.t('Connected to: {0}', formattedHostLabel)),
+            ];
 
             const formattedAuthLabel = this._outputFormatter.formatConnectionValue(authLabel);
             const formattedDatabase = this._outputFormatter.formatConnectionValue(this._currentDatabase);
             if (identity) {
-                this.writeLine(
+                connectionSummary.push(
                     this._outputFormatter.formatSystemMessage(
                         l10n.t(
                             'Identity: {0} | Authentication: {1} | Database: {2}',
@@ -539,14 +539,17 @@ export class DocumentDBShellPty implements vscode.Pseudoterminal {
                     ),
                 );
             } else {
-                this.writeLine(
+                connectionSummary.push(
                     this._outputFormatter.formatSystemMessage(
                         l10n.t('Authentication: {0} | Database: {1}', formattedAuthLabel, formattedDatabase),
                     ),
                 );
             }
 
-            this.writeLine(this._outputFormatter.formatSystemMessage(l10n.t('Type "help" for available commands.')));
+            connectionSummary.push(
+                this._outputFormatter.formatSystemMessage(l10n.t('Type "help" for available commands.')),
+            );
+            this.showHeader(connectionSummary);
             this.writeLine('');
 
             // Re-enable input after successful initialization
@@ -878,13 +881,22 @@ export class DocumentDBShellPty implements vscode.Pseudoterminal {
 
     // ─── Private: Terminal output helpers ────────────────────────────────────
 
-    private showLogo(): void {
+    private showHeader(connectionSummary: readonly string[]): void {
         const logo = [
-            '╭──────────────────────╮',
-            '│ DocumentDB Shell  >_ │',
-            '╰──────────────────────╯',
+            '╭────╮',
+            '│ >_ │ DocumentDB Shell',
+            '╰────╯',
         ].join('\n');
+
+        // Design exploration alternative, intentionally retained as not-dead code for easy switching.
+        // const logo = [
+        //     '╭──────────────────────╮',
+        //     '│ DocumentDB Shell  >_ │',
+        //     '╰──────────────────────╯',
+        // ].join('\n');
+
         this.writeLine(this._outputFormatter.formatShellTitle(logo));
+        connectionSummary.forEach((line) => this.writeLine(line));
     }
 
     private showPrompt(): void {
