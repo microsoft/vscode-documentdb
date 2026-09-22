@@ -51,11 +51,11 @@ Four issues surfaced while using the nine-item build. They are recorded in full 
 [Found after Step 15](../shell-liveness-audit.md#found-after-step-15); all four shipped on this
 branch.
 
-| Item | Commit     | What changed                                                                 |
-| ---- | ---------- | ---------------------------------------------------------------------------- |
+| Item | Commit     | What changed                                                                  |
+| ---- | ---------- | ----------------------------------------------------------------------------- |
 | N1   | `829788c1` | Tab asks the completion provider before accepting an insertable ghost         |
 | N2   | `5526f566` | Informational hints use `🛈`; `db.` reports the collection count               |
-| N3   | `3dc5b368` | Autocompletion and informational hints are controlled by separate settings   |
+| N3   | `3dc5b368` | Autocompletion and informational hints are controlled by separate settings    |
 | N4   | `77d39bbe` | Accepting a completion re-evaluates the next suggestion or informational hint |
 
 N2 supersedes I1c's empty-prefix insertion. `db.` now reports how many collections are available;
