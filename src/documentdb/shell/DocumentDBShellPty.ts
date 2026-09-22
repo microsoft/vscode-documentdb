@@ -1041,7 +1041,7 @@ export class DocumentDBShellPty implements vscode.Pseudoterminal {
         }
 
         try {
-            const deserialized = await deserializeResultForSchema(result);
+            const deserialized = deserializeResultForSchema(result);
             feedResultToSchemaStore(deserialized, this._connectionInfo.clusterId);
         } catch {
             // Non-critical — schema feeding is best-effort
