@@ -6,6 +6,10 @@
 
 - **Authentication Method Persistence**: Explicitly saved authentication methods now take precedence over inference from stored credential fields. This keeps managed identity connections on the selected method after reload; existing Native and Microsoft Entra ID connections remain compatible. [#886](https://github.com/microsoft/vscode-documentdb/pull/886)
 
+### Security
+
+- **DocumentDB Local Credentials**: Quick Start no longer writes the instance password to the "DocumentDB Local Setup" output channel, removes its temporary credentials file right after the container is created (and on the next activation after a crash), and requires custom passwords of at least 8 characters. [#951](https://github.com/microsoft/vscode-documentdb/pull/951)
+
 ## 0.10.2
 
 ### Fixes
