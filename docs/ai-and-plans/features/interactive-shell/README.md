@@ -52,8 +52,10 @@ program-level narrative, and the sibling areas
   second grammar, so the input line and the result formatter colorize the same way.
 - **Completions are terminal-native.** Tab completion and ghost text are driven from the same
   operator registry and `SchemaStore` that feed the editors, and shell query results feed documents
-  back into `SchemaStore`. Collection names are prewarmed in the shared client cache after connect
-  and after `use <database>` so the first completion request does not normally race discovery.
+  back into `SchemaStore`. Collection names are prewarmed after connect and after `use <database>`
+  only when the extension host already has a client for that cluster; completion never creates a
+  second connection. Having the connected worker supply this data is tracked in
+  [#938](https://github.com/microsoft/vscode-documentdb/issues/938).
 - **Inline assistance has two user-controlled affordances.** Insertable suggestions and Tab
   completion are governed by `documentDB.shell.display.autocompletion`; informational lines marked
   `🛈` are governed independently by `documentDB.shell.display.inlineHints`.
@@ -61,6 +63,11 @@ program-level narrative, and the sibling areas
   `TerminalLinkProvider`. VS Code offers no way to style terminal links at rest, which is why
   visibility had to be solved in the emitted text itself. The same provider turns compact setting
   markers in shell `help` into links that open the owning VS Code setting.
+- **Shell `help` is English by design today.** Width-sensitive help is generated in the worker by
+  `documentdb-js-shell-runtime`, a package that cannot depend on `vscode` and therefore cannot call
+  `vscode.l10n.t()`. A reusable localization mechanism for vscode-free worker packages is tracked
+  in [#940](https://github.com/microsoft/vscode-documentdb/issues/940); moving help rendering back
+  to the host is not the chosen workaround.
 
 ## Timeline
 

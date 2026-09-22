@@ -182,7 +182,7 @@ is luxury 5 / usefulness 3. Both are worth doing; they are not worth doing _in t
 | F3  | Completion list measured with `String.length`  | S          | 3   | 1   | Fix       | Shipped `eb988c4b` |
 | F4  | Prompt width measured with `String.length`     | XS         | 2   | 1   | Fix       | Shipped `412722bf` |
 | F5  | Shell `help` hard-coded to ~62 columns         | S          | 3   | 2   | Fix       | Shipped `d4a2c765` |
-| F6  | Banner and logo drawn at an assumed 80 columns | S          | 1   | 1   | Won't fix | —                  |
+| F6  | Banner summary drawn at an assumed 80 columns  | S          | 3   | 1   | Fix       | Shipped `9793eb6c` |
 | I1a | Bracket-notation preview hint                  | S          | 4   | 3   | Fix       | Shipped `a0774f47` |
 | I1b | Replacement-aware ghost text                   | M          | 4   | 5   | Won't fix | —                  |
 | I1c | Ghost text at an empty prefix                  | S          | 3   | 3   | Fix       | Superseded by N2   |
@@ -280,10 +280,10 @@ Four tests, two of which fail against the unfixed source:
 
 All four assert on emitted ANSI.
 
-**F6 note.** The audit predicted that "if F1 gives the initial width a sensible value on the way past,
-[F6] stops being a separate problem." It does not: F1 touches the resize path only, and `open()`'s
-80-column default is untouched. F6 remains exactly as recorded — won't fix, for the reason already
-given.
+**F6 note (re-rated by the PR #937 review).** F1 did not make F6 disappear: the connection summary
+grew long enough to wrap styled values even at ordinary widths. Commit `9793eb6c` stacks its labels
+below 100 columns and keeps the compact line at wider dimensions. The fixed 24-column logo remains
+unchanged because it is still cosmetic and safe at realistic terminal widths.
 
 ## F2. Ghost text paints over real text when the cursor is mid-buffer
 
@@ -1615,20 +1615,22 @@ of the risk. **Revisit only if** I1a ships and users still report not understand
 
 ## F6. Banner and logo drawn at an assumed 80 columns
 
-**Operator: accepted as won't fix.**
+**Operator: re-rated and fixed for the connection summary in PR #937.**
 
 `open(initialDimensions)` applies dimensions only when VS Code supplies them; otherwise `_columns`
 stays at its `80` default until the first `setDimensions()` call. `showLogo()` draws a fixed
 24-column box.
 
-Cosmetic and momentary — VS Code calls `setDimensions` promptly. If F1 gives the initial width a
-sensible value on the way past, this stops being a separate problem anyway. Recorded so the next
-person to notice the logo wrapping at 20 columns knows it was seen and judged not worth its own
-change.
+The original decision treated the whole banner as cosmetic. PR #937 added a substantially longer
+identity/authentication/database line, making ordinary narrow terminals hard-wrap in the middle of
+styled values. Commit `9793eb6c` now emits one label per line below 100 columns and preserves the
+compact summary above that threshold. The 24-column logo remains fixed-width: a terminal narrow
+enough to wrap it is still outside the useful shell layout, so changing the logo carries no matching
+benefit.
 
 | Complexity | Usefulness | Luxury |
 | ---------- | ---------- | ------ |
-| S          | 1          | 1      |
+| S          | 3          | 1      |
 
 ---
 

@@ -124,6 +124,12 @@ folded into this item. The regression net is the property test over widths 20–
 single `cursorColumn === cols` case — the exact-multiple case is the one that was missed, so a test
 that only covers it proves nothing about the next one.
 
+> **IMPLEMENTED — `9793eb6c` + follow-up regression test.** `ShellInputHandler` now owns
+> deferred-wrap-aware `availableColumnsAfterCursor()`, and the PTY delegates to it. The tests cover
+> the exact-width boundary and sweep widths 20–200 over ASCII, CJK, emoji and combining graphemes,
+> asserting the actual ghost output and CUB distance never exceed the row. This removes the
+> disagreeing formula rather than patching only the observed value.
+
 ---
 
 ## P2 — Collection prewarming can open a second cluster connection on shell open
@@ -173,6 +179,11 @@ design smell.
 **Decision — accepted, option A, and option D becomes an issue.** `prewarmCollections()` switches to
 `getExistingClient()` in this PR, restoring the invariant that completion never causes a connection.
 Asking the worker for the collection list is filed as a tracking issue rather than attempted here.
+
+> **IMPLEMENTED — `9793eb6c`; follow-up [#938].** Prewarming now returns when
+> `getExistingClient()` has no cached client and has a regression test proving `getClient()` is not
+> called. This preserves the common cached-client speedup without creating a second session; #938
+> owns the worker-sourced design because it requires a new cross-thread contract.
 
 ---
 
@@ -225,6 +236,11 @@ settled — noting it here because the mistake was in the review, not in the cod
 C (eliding the unchanged prefix) is not taken: it keeps a whole-line reading that nothing has asked
 for, at the cost of a rendering rule that has to be maintained against every future clip case.
 
+> **IMPLEMENTED — `9793eb6c`.** Rewrite previews now pass only `candidate.insertText` to the shared
+> hint renderer, producing `🛈 ['name']`. This is shorter, preserves the closing bracket under
+> clipping, and avoids adding a special prefix-elision rule; tests still apply Tab and assert the
+> complete resulting buffer.
+
 ---
 
 ## P4 — `isWideCharacter()` has no emoji coverage, and this PR multiplies 🛈 usage
@@ -263,6 +279,13 @@ VS16 handling, with the table-driven test over the characters the shell actually
 collection names. No new runtime dependency (B declined — the VSIX-size trade-off is not worth it for
 a table this small).
 
+> **IMPLEMENTED WITH A MECHANICAL DEVIATION — `9793eb6c`.** Width calculation uses the runtime
+> Unicode `Emoji_Presentation` property plus explicit VS16 detection rather than a hand-copied range
+> table. **Pros:** no dependency, no range drift, and text-default `🛈` remains one column as xterm
+> expects. **Cons:** behavior follows the Node runtime's Unicode data rather than a frozen table.
+> Table-driven tests cover `🛈`, default emoji, VS16, CJK, combining marks and realistic names. This
+> choice is higher confidence than broad pictograph ranges, which would incorrectly widen `🛈`.
+
 ---
 
 ## P5 — `HELP_SETTING_ALIASES` duplicates help text across a package boundary, unguarded
@@ -297,6 +320,11 @@ the generated shell help through the alias map and on to `package.json`, and dro
 `?? settingsMatch[1]` fallback so an unmapped marker renders as plain text rather than a link that
 goes nowhere.
 
+> **IMPLEMENTED — `9793eb6c`.** The test extracts markers from real `HelpProvider('shell')` output,
+> resolves each through the exported readonly map, and verifies the full key exists in every
+> manifest configuration section. Unknown compact markers now produce no link. The known full
+> `documentDB.shell.initTimeout` marker remains explicitly mapped for timeout errors.
+
 ---
 
 ## P6 — `documentDB.shell.display.autocompletion` went from inert to load-bearing
@@ -326,6 +354,10 @@ remediation. C is a separate idea that should not ride along in a hardening PR.
 change. **B is declined** — no release-note line. The setting was shipped documented as _"Reserved
 for future use"_, so the population that deliberately set it to `false` is close to empty, and a
 release note about a setting becoming functional costs more reader attention than it returns.
+
+> **RESOLVED — no change by decision.** No migration, literal-Tab behavior, or release-note entry was
+> added. The benefit would be negligible for a previously documented no-op, while each alternative
+> adds semantics or reader cost unrelated to the hardening goal.
 
 ---
 
@@ -357,6 +389,11 @@ invisible.
 **Decision — accepted, option A.** Count a suggestion once per matched history entry rather than per
 render, and cross-check that `shell.historySuggestion` is registered wherever the existing shell
 events are.
+
+> **IMPLEMENTED — `9793eb6c`.** The PTY remembers the last matched history entry and increments
+> `shown` only when that entry changes; a test types through one match across multiple debounced
+> renders and observes one event. The event already uses the extension's shared accumulating
+> telemetry path, so no separate event registry change was required.
 
 ---
 
@@ -401,6 +438,10 @@ but it is out of scope here.
 `void` so the signature matches the behavior. Moving the parse into the worker — which already holds
 the raw objects it serializes — is filed as a tracking issue.
 
+> **IMPLEMENTED — `9793eb6c`; follow-up [#939].** `maybeFeedSchemaStore()` is now synchronous in
+> both signature and call site, matching its actual EJSON parse/inference behavior. #939 tracks
+> removing the round trip entirely because that change crosses the worker boundary.
+
 ---
 
 ## P9 — `Intl.Segmenter` is constructed on every call in two hot functions
@@ -419,6 +460,10 @@ one-line change with no downside.
 **Decision — accepted after the contest pass.** Hoist a module-level `GRAPHEME_SEGMENTER` shared by
 `terminalDisplayWidth()` and `clipToDisplayWidth()`. Taken because P4 opens this file anyway; the
 only cost of deferring was a second PR touching it.
+
+> **IMPLEMENTED — `9793eb6c`.** Both width functions share one module-level segmenter. Segmenters
+> are stateless for these calls, so this removes per-keystroke construction without a lifecycle or
+> correctness trade-off.
 
 ---
 
@@ -446,6 +491,11 @@ single ghost-kind value **if P1's implementation already moves that state**. If 
 touching the flags, this stays on hold — it is a latent trap, not a live defect, and does not justify
 its own commit.
 
+> **RESOLVED — condition not met, no change.** P1 centralized only cursor-capacity arithmetic in
+> `ShellInputHandler`; it did not move the PTY's ghost-kind flags. Converting the tuple would therefore
+> be an unrelated state refactor with no live failure fixed, exactly the case the conditional ruling
+> said to leave on hold.
+
 ---
 
 ## P11 — Shell `help` advertises two of five settings, and not the one it just made real
@@ -469,6 +519,10 @@ with its alias and link. The remaining shell settings stay out: `help` lists the
 settings, and `initTimeout`, `multiLinePasteBehavior` and `batchSize` belong to the Settings UI.
 That is the line, and it is now written down.
 
+> **IMPLEMENTED — `9793eb6c`.** Shell help now lists `autocompletion` with a compact clickable
+> marker and narrow-width manual search fallback. The help contract test proves the marker resolves
+> to the contributed display setting; operational settings remain intentionally absent.
+
 ---
 
 ## P12 — A clipped ghost inserts more than it showed
@@ -487,6 +541,10 @@ of `accept()` could "fix" in the wrong direction, and because no test pins it.
 one sentence in the user manual. No production change.
 
 **Decision — on hold.** Not decided in this pass.
+
+> **UNCHANGED — still on hold.** No production behavior or documentation contract was added. The
+> clipped/full acceptance behavior remains covered indirectly by PTY acceptance tests, but the
+> review did not authorize the dedicated user-manual promise proposed here.
 
 ---
 
@@ -543,6 +601,12 @@ is English **by design**, because it is generated in a worker in a package that 
 
 D (localize the host-side strings) was not taken.
 
+> **IMPLEMENTED / TRACKED — feature README; follow-up [#940].** The README now states that worker
+> help is English by design because `documentdb-js-shell-runtime` cannot depend on `vscode`, and that
+> moving width-sensitive rendering to the host is not the workaround. #940 owns the reusable
+> translated-bundle mechanism. This documents the constraint now without pretending the gap is
+> solved.
+
 ---
 
 ## B2 — The connection banner is now the last width-unaware surface
@@ -582,6 +646,11 @@ threshold. F6 is thereby re-rated from **Won't fix** in practice: the logo stays
 becomes width-aware. Record that re-rating in the audit against F6, with this PR's longer
 `Identity: … | Authentication: … | Database: …` line as the reason it changed.
 
+> **IMPLEMENTED — `9793eb6c`.** Below 100 columns the PTY emits identity, authentication and
+> database as separate localized lines; wider terminals retain the compact summary. Narrow and wide
+> tests pin both layouts. The audit now re-rates F6 as shipped for the summary while retaining the
+> original no-change decision for the fixed 24-column logo.
+
 ---
 
 ## B3 — The screen-reader story is one `colorSupport` toggle, and this PR made the row noisier
@@ -618,6 +687,11 @@ needs a dedicated accessibility pass rather than a guess appended to a large har
 (document the recommended setting combination) was not taken either — the issue carries the whole
 item, including the open question of whether the terminal surface needs its own accessibility skill
 alongside `accessibility-aria-expert`.
+
+> **TRACKED — [#941], no code change.** The issue requires evidence from screen readers and VS Code's
+> terminal accessibility modes before choosing defaults or a plain-mode design. Shipping an
+> untested coupling to editor accessibility settings would reduce confidence rather than improve
+> accessibility.
 
 ---
 
@@ -673,6 +747,11 @@ the value of option A was never the filter alone, it was that the same list unbl
 secrets from autosuggestion" loses the half that mattered and reads like a backlog item rather than a
 decision.
 
+> **TRACKED — [#945], exposure accepted for this release.** The issue records both the in-memory-only
+> rationale and the residual screen-sharing/unattended-window risk, and requires one policy shared by
+> autosuggestion and future persistence. No partial pattern list was shipped as if it were a complete
+> security boundary.
+
 ---
 
 ## B5 — `ShellGhostText.accept()` is still dead code
@@ -693,6 +772,10 @@ but pick one in this PR, since the next person to open this file will ask the sa
 **Decision — accepted: clean up.** Delete `ShellGhostText.accept()` and its tests. The PR already
 rewrites this class substantially, so "removing it inside an unrelated fix" — Step 15's reason for
 leaving it — no longer applies.
+
+> **IMPLEMENTED — `9793eb6c`.** The dead method, lifecycle documentation and method-only tests were
+> removed. PTY acceptance remains the single live path and continues to test insertion of the full
+> ghost text.
 
 ---
 
@@ -725,6 +808,11 @@ so it survives outside this document.
 
 **Decision — on hold.** Not decided in this pass.
 
+> **UNCHANGED — still on hold.** P1 now supplies the evidence this re-rating would cite, but the
+> operator did not authorize I10 implementation or an issue in this pass. The accepted narrow fix
+> removes the live corruption without expanding this already-large PR into the renderer redesign;
+> the cost is that the broader five-writer model remains deferred.
+
 ---
 
 ## B7 — No property test across the three width consumers
@@ -747,6 +835,10 @@ without anyone thinking of the exact-multiple case.
 item: it ships as P1's regression net, covering widths 20–200 over ASCII, CJK, emoji and combining
 marks. P4 widens the alphabet that invariant must hold over, so both changes land against the same
 test.
+
+> **IMPLEMENTED WITH P1.** The property sweep drives the shared capacity owner and actual ghost
+> renderer, asserting emitted display width and cursor-back distance across every width and character
+> class named above. It is kept with P1 because the test protects the invariant, not one formula.
 
 ---
 
@@ -787,13 +879,13 @@ item — it is P1's regression net.
 
 ## Filed as issues
 
-| Source                                                                                         | Issue scope                                                                                                 |
-| ---------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------- |
-| [P2](#p2--collection-prewarming-can-open-a-second-cluster-connection-on-shell-open) option D   | Ask the worker for the collection list instead of the extension host                                        |
-| [P8](#p8--maybefeedschemastore-is-async-with-nothing-to-await) option C                        | Feed `SchemaStore` from the worker; drop the serialize/parse round trip                                     |
-| [B1](#b1--this-pr-increased-the-unlocalized-surface-of-the-shell) option B                     | **How** a `vscode`-free worker package emits localized text                                                 |
-| [B3](#b3--the-screen-reader-story-is-one-colorsupport-toggle-and-this-pr-made-the-row-noisier) | Accessibility pass for the terminal surface                                                                 |
-| [B4](#b4--history-autosuggestion-replays-whatever-was-typed-including-secrets)                 | Redact secrets from autosuggestion — must state the **accepted exposure** and the I4 shared-list constraint |
+| Source                                                                                         | Issue scope                                                                                                        |
+| ---------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------ |
+| [P2](#p2--collection-prewarming-can-open-a-second-cluster-connection-on-shell-open) option D   | [#938] — ask the worker for the collection list instead of the extension host                                      |
+| [P8](#p8--maybefeedschemastore-is-async-with-nothing-to-await) option C                        | [#939] — feed `SchemaStore` from the worker; drop the serialize/parse round trip                                   |
+| [B1](#b1--this-pr-increased-the-unlocalized-surface-of-the-shell) option B                     | [#940] — **how** a `vscode`-free worker package emits localized text                                               |
+| [B3](#b3--the-screen-reader-story-is-one-colorsupport-toggle-and-this-pr-made-the-row-noisier) | [#941] — accessibility pass for the terminal surface                                                              |
+| [B4](#b4--history-autosuggestion-replays-whatever-was-typed-including-secrets)                 | [#945] — redaction; carries the **accepted exposure** and the I4 shared-list constraint                            |
 
 ## On hold
 
@@ -891,8 +983,9 @@ Per [CONTRIBUTING §6.1](../../../../../CONTRIBUTING.md#61-stage-1-ai-review-pas
 - [ ] Step 3 — validation gate with a different vendor's model
 - [x] Step 4 — independent sweep beyond the captured issues
 - [x] Stage 2 — operator decisions recorded, 2026-09-22, including the contest pass
-- [ ] Stage 3 — implement, one commit per work item, each logged back into this file
-- [ ] File the five issues listed above and link them here
+- [x] Stage 3 — implemented in grouped shell/test and documentation commits as authorized by the
+  operator; each finding is logged inline above
+- [x] File the five issues listed above and link them here
 
 Twelve work items ship in this PR, plus P10 conditionally. Suggested order, so that each item lands
 against a file the previous one already opened: P1 (with B7), P10 if it falls out, P4 + P9, P2, P3,
@@ -902,3 +995,9 @@ Before the PR moves to ready for review, the Case 2 command list in
 [copilot-instructions.md](../../../../../.github/copilot-instructions.md) applies in full —
 `npm run l10n` will be needed if any accepted option adds a `vscode.l10n.t()` string. P11 and B2 are
 the two most likely to.
+
+[#938]: https://github.com/microsoft/vscode-documentdb/issues/938
+[#939]: https://github.com/microsoft/vscode-documentdb/issues/939
+[#940]: https://github.com/microsoft/vscode-documentdb/issues/940
+[#941]: https://github.com/microsoft/vscode-documentdb/issues/941
+[#945]: https://github.com/microsoft/vscode-documentdb/issues/945
