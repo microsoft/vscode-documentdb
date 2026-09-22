@@ -154,6 +154,7 @@ export type QuickStartMessageKey =
     | 'setupAlreadyInProgress'
     | 'setupCancelled'
     | 'credentialsUnavailable'
+    | 'dataVolumeInUse'
     | 'portInUse'
     | 'dockerCliMissing'
     | 'dockerDaemonUnreachable'

@@ -121,6 +121,9 @@ export interface IContainerRuntime {
     stopContainer(id: string): Promise<void>;
     removeContainer(id: string, force?: boolean): Promise<void>;
     removeVolume(name: string, force?: boolean): Promise<void>;
+    /** Rejects when Docker can't answer, so callers never mistake a failure for "absent". */
+    volumeExists(name: string): Promise<boolean>;
+    listContainersUsingVolume(name: string): Promise<ListContainersItem[]>;
     execShellInContainer(
         id: string,
         script: string,
@@ -266,6 +269,13 @@ class ContainerRuntimeImpl implements IContainerRuntime {
         await runner(this.client.removeVolumes({ volumes: [name], force }));
     }
 
+    /** Lists rather than inspects: `volume inspect` fails the same way for "absent" and "daemon down". */
+    public async volumeExists(name: string): Promise<boolean> {
+        const runner = this.makeRunner([]);
+        const volumes = await runner(this.client.listVolumes({}));
+        return (volumes ?? []).some((volume) => volume.name === name);
+    }
+
     /**
      * Run a `/bin/sh -c <script>` command inside a running container (`docker exec`).
      * Used to seed the image's built-in sample data via its native init script — see
@@ -311,6 +321,11 @@ class ContainerRuntimeImpl implements IContainerRuntime {
         } finally {
             lineBuffer.flush();
         }
+    }
+
+    public async listContainersUsingVolume(name: string): Promise<ListContainersItem[]> {
+        const runner = this.makeRunner([]);
+        return runner(this.client.listContainers({ all: true, volumes: [name] }));
     }
 
     public async listByLabel(labels: Record<string, string | boolean>): Promise<ListContainersItem[]> {

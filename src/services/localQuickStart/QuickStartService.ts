@@ -173,6 +173,14 @@ class DockerNotReadyError extends Error {
     }
 }
 
+/** The port was taken while the image downloaded; reported like a `docker run` bind failure (M5). */
+class PortTakenDuringPullError extends Error {
+    constructor(port: number) {
+        super(`Port ${port} was taken while the image downloaded.`);
+        this.name = 'PortTakenDuringPullError';
+    }
+}
+
 /**
  * Everything a "Wait longer" resume needs to finish adopting a container whose database was
  * still initializing when the initial readiness window elapsed. Retained across the timeout
@@ -692,43 +700,44 @@ export class QuickStartServiceImpl {
             });
             readinessEnvironment = readiness.environment;
 
-            // Remove a pre-existing managed container so the run starts clean (it is labelled as
-            // ours, D9). When NOT reusing (no recoverable credentials) also drop any stale data
-            // volume, so the new credentials initialize a clean cluster. When reusing, the volume is
-            // intentionally KEPT so existing data survives the recreate.
             const existing = await this.findManagedContainer(alias);
             const hasReadyRecord = (await getInstance(alias))?.phase === 'ready';
-            // RR4 / §5.2 volume-wipe gate: NEVER silently destroy an existing instance's data. A
-            // credential-unavailable instance (a managed container and/or a durable `ready` record,
-            // but no readable secret) must not be wiped by a plain Set-up/recreate click. The wipe
-            // below is reachable only for a truly-fresh alias (no managed container AND no `ready`
-            // record, where it is a safe no-op) or when the user explicitly chose "Start fresh" in
-            // the Configure step. A dead failed-attempt orphan has NO managed container (provision's
-            // `finally` removed it) and no `ready` record, so retrying it still works.
-            if (!reusing && !startFresh) {
-                if (existing || hasReadyRecord) {
-                    const credentialsUnavailable: QuickStartMessage = { key: 'credentialsUnavailable' };
-                    this.setStatus(alias, InstanceState.CredentialsMissing, undefined, credentialsUnavailable);
-                    yield stageEvent('checking', 'error', credentialsUnavailable);
+            // Deliberately not best-effort: treating a Docker error as "no volume" would green-light a wipe.
+            const volumePresent = !reusing && (await this.runtime.volumeExists(volumeName(alias)));
+            // RR4 / §5.2 volume-wipe gate: NEVER silently destroy data this profile has no credentials
+            // for. A managed container, a durable `ready` record or the data volume itself (its
+            // container pruned, or created from another VS Code profile) all mean data may exist. Only
+            // an explicit "Start fresh" from the Configure step may wipe it. A failed first attempt
+            // removes its own volume in `finally`, so retrying it still works.
+            if (!reusing && !startFresh && (existing || hasReadyRecord || volumePresent)) {
+                const credentialsUnavailable: QuickStartMessage = { key: 'credentialsUnavailable' };
+                this.setStatus(alias, InstanceState.CredentialsMissing, undefined, credentialsUnavailable);
+                yield stageEvent('checking', 'error', credentialsUnavailable);
+                return;
+            }
+            // `docker volume rm --force` still refuses a volume another container mounts; the new
+            // container would then share the old cluster, with credentials that cannot open it.
+            if (volumePresent) {
+                const holders = (await this.runtime.listContainersUsingVolume(volumeName(alias))).filter(
+                    (container) => container.id !== existing?.id,
+                );
+                if (holders.length > 0) {
+                    const message: QuickStartMessage = {
+                        key: 'dataVolumeInUse',
+                        detail: holders.map((container) => container.name || container.id).join(', '),
+                    };
+                    this.setStatus(alias, InstanceState.Error, undefined, message);
+                    yield stageEvent('checking', 'error', message);
                     return;
                 }
-            }
-            if (existing) {
-                channel.appendLine(`Removing existing Quick Start container ${existing.id} for a clean run…`);
-                await this.runtime
-                    .removeContainer(existing.id)
-                    .catch(() => meterQuickStartSilentCatch('provision_removeExistingContainer'));
-            }
-            if (!reusing) {
-                await this.runtime
-                    .removeVolume(volumeName(alias))
-                    .catch(() => meterQuickStartSilentCatch('provision_removeStaleVolume'));
             }
 
             // The host port is ALWAYS explicit (review L3, "no magic after execute"): the Configure
             // step suggests a free port, validates it while the user can still react, and sends it.
-            // Setup never relocates it — a conflict here is a hard, explained error.
-            if (!(await this.runtime.isPortFree(chosenPort))) {
+            // Setup never relocates it — a conflict here is a hard, explained error. Checked before
+            // anything is removed, so a taken port leaves the existing instance intact; the port our
+            // own soon-to-be-replaced container holds counts as free.
+            if (!(await this.isPortAvailable(chosenPort, existing?.id))) {
                 const message: QuickStartMessage = { key: 'portInUse', port: chosenPort };
                 this.setStatus(alias, InstanceState.Error, undefined, message);
                 yield stageEvent('checking', 'error', message);
@@ -759,6 +768,29 @@ export class QuickStartServiceImpl {
 
             // --- creating (docker run -d creates and starts) ---
             yield stageEvent('creating', 'active');
+            // Clear the old instance only now that every check has passed and the image is local, so
+            // a bad tag or a failed pull leaves it untouched. The volume goes only when not reusing
+            // (fresh credentials need a clean cluster); a reuse keeps it so the data survives. The
+            // port is re-checked first: the pull can take minutes, and a bind failure after the
+            // wipe would leave the user with nothing.
+            if (!(await this.isPortAvailable(chosenPort, existing?.id))) {
+                throw new PortTakenDuringPullError(chosenPort);
+            }
+            if (existing) {
+                channel.appendLine(`Removing existing Quick Start container ${existing.id} for a clean run…`);
+                await this.runtime
+                    .removeContainer(existing.id)
+                    .catch(() => meterQuickStartSilentCatch('provision_removeExistingContainer'));
+            }
+            if (volumePresent) {
+                // Fatal, unlike the container removal: carrying on would start the new credentials
+                // against the old cluster.
+                try {
+                    await this.runtime.removeVolume(volumeName(alias));
+                } catch (error) {
+                    throw new Error(`Could not remove the existing data volume: ${errMessage(error)}`);
+                }
+            }
             if (leaseHeld) {
                 await this.renewProvisioningLease(alias, operationId, chosenPort);
             }
@@ -892,7 +924,10 @@ export class QuickStartServiceImpl {
                 // stale timeout can't offer "Wait longer" against a container we're about to remove.
                 this.stateFor(alias).pendingReadiness = undefined;
                 if (!aborted) {
-                    if (activeDockerStage === 'creating' && isPortAllocationFailure(error)) {
+                    if (
+                        error instanceof PortTakenDuringPullError ||
+                        (activeDockerStage === 'creating' && isPortAllocationFailure(error))
+                    ) {
                         // The port was free at the pre-check but taken while the image downloaded
                         // (M5). Say so in the same words as the pre-check instead of leaking the
                         // raw daemon string; the user re-picks the port in Configure.
@@ -922,6 +957,14 @@ export class QuickStartServiceImpl {
                     await this.runtime
                         .removeContainer(containerId)
                         .catch(() => meterQuickStartSilentCatch('provision_cleanupRemoveContainer'));
+                    // A fresh run's volume was created by this run's `docker run`, so it is ours to
+                    // drop; otherwise the retry would hit the volume gate above. Not for the id-less
+                    // branch below: the loser of a two-window race must not touch the winner's volume.
+                    if (!reusing) {
+                        await this.runtime
+                            .removeVolume(volumeName(alias))
+                            .catch(() => meterQuickStartSilentCatch('provision_cleanupRemoveVolume'));
+                    }
                 } else if (createAttempted && !containerId) {
                     // The CLI may have been killed after the daemon created the container but
                     // before its id was captured — sweep by label. Scoped to THIS run's
@@ -1418,6 +1461,18 @@ export class QuickStartServiceImpl {
         options?: { propagateErrors?: boolean },
     ): Promise<{ id: string } | undefined> {
         return (await this.findManagedContainers(alias, options))[0];
+    }
+
+    /** Free, or held by the managed container this run is about to replace. */
+    private async isPortAvailable(port: number, replacedContainerId: string | undefined): Promise<boolean> {
+        if (await this.runtime.isPortFree(port)) {
+            return true;
+        }
+        if (!replacedContainerId) {
+            return false;
+        }
+        const inspected = await this.runtime.inspectContainer(replacedContainerId);
+        return inspected !== undefined && isRunning(inspected) && getBoundHostPort(inspected) === port;
     }
 
     /**

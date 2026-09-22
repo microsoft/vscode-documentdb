@@ -105,6 +105,7 @@ interface RuntimeOptions {
     readonly containers?: Array<{ id: string; labels?: Record<string, string> }>;
     readonly createAndRunContainer?: jest.Mock;
     readonly listByLabel?: jest.Mock;
+    readonly removeVolume?: jest.Mock;
 }
 
 function runtimeFor(options: RuntimeOptions = {}): IContainerRuntime {
@@ -130,7 +131,9 @@ function runtimeFor(options: RuntimeOptions = {}): IContainerRuntime {
         startContainer: jest.fn().mockResolvedValue(undefined),
         stopContainer: jest.fn().mockResolvedValue(undefined),
         removeContainer: jest.fn().mockResolvedValue(undefined),
-        removeVolume: jest.fn().mockResolvedValue(undefined),
+        removeVolume: options.removeVolume ?? jest.fn().mockResolvedValue(undefined),
+        volumeExists: jest.fn().mockResolvedValue(false),
+        listContainersUsingVolume: jest.fn().mockResolvedValue([]),
         execShellInContainer: jest.fn().mockResolvedValue(undefined),
         followLogs: jest.fn().mockResolvedValue(undefined),
     } as unknown as IContainerRuntime;
@@ -265,6 +268,60 @@ describe('QuickStartService — WP-3 provisioning durability and port model', ()
         // The existing volume is still openable with the credentials it was initialized with — a
         // discarded recreate must not leave the attempt's unusable ones in their place.
         expect(await readConnectionString(DEFAULT_ALIAS)).toBe(previous);
+    });
+
+    // #946: with the pre-clean gone, a fresh attempt's volume would otherwise block every retry.
+    it('removes the volume its own failed fresh attempt created', async () => {
+        const removeVolume = jest.fn().mockResolvedValue(undefined);
+        const createAndRunContainer = jest.fn().mockResolvedValue('c1');
+        const controller = new AbortController();
+        onProbe = () => controller.abort();
+        const service = new QuickStartServiceImpl(runtimeFor({ removeVolume, createAndRunContainer }));
+
+        await collect(service.provision(controller.signal));
+
+        expect(removeVolume).toHaveBeenCalledTimes(1);
+        expect(removeVolume.mock.invocationCallOrder[0]).toBeGreaterThan(
+            createAndRunContainer.mock.invocationCallOrder[0],
+        );
+    });
+
+    it('keeps the volume when a failed attempt was reusing existing data', async () => {
+        await upsertInstance({
+            alias: DEFAULT_ALIAS,
+            displayName: 'DocumentDB Local',
+            port: QUICK_START_PORT,
+            phase: 'ready',
+        });
+        await writeConnectionString(
+            DEFAULT_ALIAS,
+            `mongodb://u1:p1@localhost:${QUICK_START_PORT}/?tls=true&tlsAllowInvalidCertificates=true`,
+            { displayName: 'DocumentDB Local', port: QUICK_START_PORT },
+        );
+        const removeVolume = jest.fn().mockResolvedValue(undefined);
+        const controller = new AbortController();
+        onProbe = () => controller.abort();
+        const service = new QuickStartServiceImpl(runtimeFor({ removeVolume }));
+
+        await collect(service.provision(controller.signal));
+
+        expect(removeVolume).not.toHaveBeenCalled();
+    });
+
+    it('never removes the volume when its own create failed (the two-window race loser)', async () => {
+        const removeVolume = jest.fn().mockResolvedValue(undefined);
+        const service = new QuickStartServiceImpl(
+            runtimeFor({
+                removeVolume,
+                createAndRunContainer: jest
+                    .fn()
+                    .mockRejectedValue(new Error('The container name "/vscode-documentdb-local" is already in use')),
+            }),
+        );
+
+        await collect(service.provision(new AbortController().signal));
+
+        expect(removeVolume).not.toHaveBeenCalled();
     });
 
     // H3/3d: the lease machinery existed but nothing in production ever wrote a 'provisioning'

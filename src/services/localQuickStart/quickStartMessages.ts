@@ -28,6 +28,11 @@ export function formatQuickStartMessage(message: QuickStartMessage): string {
             return l10n.t(
                 'DocumentDB Local has data on disk but its saved credentials are missing, so it cannot be opened. Use "Delete Container" to remove it and start fresh (this erases the data).',
             );
+        case 'dataVolumeInUse':
+            return l10n.t(
+                'The DocumentDB Local data volume is used by another container ({0}), so it cannot be erased for a fresh start. Stop and remove that container, then try again.',
+                detail ?? '',
+            );
         case 'portInUse':
             return l10n.t(
                 'Port {0} is already in use. Go back to Configure to pick a different port, or free it, then try again.',
