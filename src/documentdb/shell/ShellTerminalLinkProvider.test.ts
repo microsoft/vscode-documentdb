@@ -276,7 +276,7 @@ describe('ShellTerminalLinkProvider', () => {
 
             const context = {
                 terminal: mockTerminal,
-                line: `  ${SETTINGS_ACTION_PREFIX}[${marker}] Toggle this setting`,
+                line: `  1. ${SETTINGS_ACTION_PREFIX}[${marker}] Toggle this setting`,
             } as vscode.TerminalLinkContext;
 
             const links = provider.provideTerminalLinks(context);

@@ -34,7 +34,7 @@ type ShellHelpLine =
     | { readonly kind: 'header'; readonly text: string }
     | { readonly kind: 'blank' }
     | { readonly kind: 'entry'; readonly command: string; readonly description: string }
-    | { readonly kind: 'tip'; readonly text: string };
+    | { readonly kind: 'tip'; readonly text: string; readonly indent: string };
 
 /**
  * Greedy word wrap. Words longer than `width` are left intact rather than split,
@@ -239,7 +239,7 @@ export class HelpProvider {
             command,
             description,
         });
-        const tip = (text: string): ShellHelpLine => ({ kind: 'tip', text });
+        const tip = (text: string, indent: string = ENTRY_INDENT): ShellHelpLine => ({ kind: 'tip', text, indent });
 
         const document: ShellHelpLine[] = [
             header('DocumentDB Shell: Quick Reference'),
@@ -271,11 +271,11 @@ export class HelpProvider {
             blank,
 
             header('Settings'),
-            tip('Select an option to open it in VS Code Settings.'),
-            tip('⚙ [colorSupport] Toggle syntax and output colors.'),
-            tip('Manual access: search Settings for documentDB.shell.display.colorSupport'),
-            tip('⚙ [inlineHints] Toggle 🛈 descriptions, counts, and previews.'),
-            tip('Manual access: search Settings for documentDB.shell.display.inlineHints'),
+            tip('Select an option to open it in VS Code Settings:'),
+            tip('1. ⚙ [colorSupport] Toggle syntax and output colors.'),
+            tip('Manual access: search Settings for documentDB.shell.display.colorSupport', '     '),
+            tip('2. ⚙ [inlineHints] Toggle 🛈 descriptions, counts, and previews.'),
+            tip('Manual access: search Settings for documentDB.shell.display.inlineHints', '     '),
             blank,
 
             header('Tips'),
@@ -295,8 +295,6 @@ export class HelpProvider {
 
         const descriptionWidth = columns - ENTRY_INDENT.length - commandWidth - COLUMN_GAP;
         const stacked = descriptionWidth < MIN_DESCRIPTION_WIDTH;
-        const tipWidth = Math.max(1, columns - ENTRY_INDENT.length);
-
         const output: string[] = [];
         for (const line of document) {
             switch (line.kind) {
@@ -307,8 +305,9 @@ export class HelpProvider {
                     output.push('');
                     break;
                 case 'tip':
-                    for (const wrapped of wrapText(line.text, tipWidth)) {
-                        output.push(ENTRY_INDENT + wrapped);
+                    for (const wrapped of wrapText(line.text, Math.max(1, columns - line.indent.length))) {
+                        const indent = line.indent.length + wrapped.length <= columns ? line.indent : ENTRY_INDENT;
+                        output.push(indent + wrapped);
                     }
                     break;
                 case 'entry':

@@ -126,11 +126,15 @@ describe('HelpProvider', () => {
 
         it('advertises color and help annotation settings as terminal link markers', () => {
             const text = helpProvider.getHelpText();
-            expect(text).toContain('VS Code Settings');
-            expect(text).toContain('⚙ [colorSupport]');
-            expect(text).toContain('documentDB.shell.display.colorSupport');
-            expect(text).toContain('⚙ [inlineHints]');
-            expect(text).toContain('documentDB.shell.display.inlineHints');
+            expect(text).toContain('  Select an option to open it in VS Code Settings:');
+            expect(text).toContain('  1. ⚙ [colorSupport] Toggle syntax and output colors.');
+            expect(text).toContain(
+                '      Manual access: search Settings for documentDB.shell.display.colorSupport',
+            );
+            expect(text).toContain('  2. ⚙ [inlineHints] Toggle 🛈 descriptions, counts, and previews.');
+            expect(text).toContain(
+                '      Manual access: search Settings for documentDB.shell.display.inlineHints',
+            );
             expect(text).not.toContain('autocompletion');
         });
 

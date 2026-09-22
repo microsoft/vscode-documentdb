@@ -303,7 +303,7 @@ describe('ShellOutputFormatter', () => {
         });
 
         it('should underline compact settings markers as clickable links', () => {
-            const helpText = '# Settings\n  ⚙ [colorSupport] Toggle syntax and output colors.';
+            const helpText = '# Settings\n  1. ⚙ [colorSupport] Toggle syntax and output colors.';
             const result = makeResult({
                 type: 'Help',
                 printable: EJSON.stringify(helpText, { relaxed: false }),
