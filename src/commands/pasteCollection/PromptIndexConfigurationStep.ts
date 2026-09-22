@@ -12,8 +12,10 @@ export class PromptIndexConfigurationStep extends AzureWizardPromptStep<PasteCol
         const promptItems = [
             {
                 id: 'copy',
-                label: l10n.t('Yes, copy all indexes'),
-                detail: l10n.t('Copy index definitions from source to target collection.'),
+                label: l10n.t('Yes, copy indexes'),
+                detail: l10n.t(
+                    "Copy the source collection's secondary index definitions. TTL and unique indexes must be pasted separately.",
+                ),
                 alwaysShow: true,
             },
             {
@@ -25,12 +27,17 @@ export class PromptIndexConfigurationStep extends AzureWizardPromptStep<PasteCol
         ];
 
         const selectedItem = await context.ui.showQuickPick(promptItems, {
-            placeHolder: l10n.t('Copy index definitions from source collection?'),
+            placeHolder: l10n.t('Copy indexes from the source collection?'),
             stepName: 'indexConfiguration',
             suppressPersistence: true,
         });
 
         context.copyIndexes = selectedItem.id === 'copy';
+        if (!context.copyIndexes) {
+            context.sourceIndexCount = undefined;
+            context.sourceUniqueIndexNames = [];
+            context.sourceTtlIndexNames = [];
+        }
     }
 
     public shouldPrompt(): boolean {

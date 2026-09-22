@@ -12,6 +12,9 @@ export { ConflictResolutionStrategy } from '../../data-api/types';
  * Configuration for copy-paste operations
  */
 export interface CopyPasteConfig {
+    /** Correlates the command wizard with task initialization and execution telemetry. */
+    copyOperationCorrelationId: string;
+
     /**
      * Source collection information
      */
@@ -34,6 +37,11 @@ export interface CopyPasteConfig {
      * Conflict resolution strategy
      */
     onConflict: ConflictResolutionStrategy;
+
+    /**
+     * Whether secondary indexes should be copied before documents.
+     */
+    copyIndexes: boolean;
 
     /**
      * Optional reference to a connection manager or client object.
