@@ -3,7 +3,6 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { runInNewContext } from 'node:vm';
 import {
     Binary,
     BSONRegExp,
@@ -20,6 +19,7 @@ import {
     Timestamp,
     UUID,
 } from 'mongodb';
+import { runInNewContext } from 'node:vm';
 import { BSONTypes } from '../src/BSONTypes';
 
 /**

@@ -459,8 +459,10 @@ still needs the correction.
 > and validation boundary. The rationale is the shared-schema dual-package failure; C1 closes the
 > ordinary-document fallback defect in [24294169](https://github.com/microsoft/vscode-documentdb/commit/24294169).
 > Keeping the accepted scope avoids reversing the operator's choice or splitting history; the cost
-> is a broader parent PR, now made explicit. This document records the external-only scope fix so
-> its GitHub follow-up can cite an auditable commit. Fresh body/diff verification and reply follow.
+> is a broader parent PR, now made explicit. The external-only scope fix is recorded in
+> [73ff0fa2](https://github.com/microsoft/vscode-documentdb/commit/73ff0fa2).
+> A fresh API read confirms the obsolete exclusion is gone and the described schema files are in
+> the live PR diff. The GitHub follow-up will cite that audit commit as well as the C1 code fix.
 
 ### Evidence
 
@@ -602,11 +604,30 @@ alongside width-sensitive help checks. No new live database test is needed.
    UX question; the behavior itself stays, since option B was declined.
 4. Correct C4's sentence, after or with C6, and C5's PR scope text.
 
-The options are approved; none of them is implemented yet. Before any later ready-for-review handoff,
-follow the repository's required verification gates for the actual code changes; the probes below
-are evidence for this assessment, not a substitute for regression tests or a release build.
+At approval time none of these options was implemented. The inline implementation notes above now
+record completion; the original assessment probes below remain historical evidence, not substitutes
+for the implementation verification recorded here.
 
 ## Outcome
+
+**Implementation outcome (2026-09-22):** all six confirmed options are implemented. C1 preserves
+ordinary tagged documents without dropping foreign BSON wrapper support; C2 refreshes stale
+collection names; C3 reconciles records without changing precedence; C4/C6 align help and manual
+shortcuts, including the newly exposed 40-column layout defect; C5 corrects the live PR scope.
+Each finding has its fix reference, reasoning, and trade-offs inline. No approved option was rejected.
+
+**Full PR verification:** `npm run l10n`, `npm run prettier-fix`, `npm run lint`,
+`npx jest --no-coverage` (275 suites, 4,208 tests, 4 snapshots), `npm run build`, and
+`npm run package` passed. The full gates caught two test-fixture typing/style issues in C2; these
+were repaired without changing behavior, with the provider suite rerun (98 tests) and the failed
+gates rerun successfully. Localization generated no tracked changes. Packaging produced the VSIX
+with non-blocking webpack size warnings. The AI pre-review and operator decisions are committed in
+iterations 16 and 17. GitHub replies and thread resolution are the remaining publication steps.
+
+**Not verified by this implementation pass:** a live database/shell UX session, every historical
+BSON driver version, or remote CI for the not-yet-pushed commits. No `TDD:` contract was changed.
+
+### Original Assessment Outcome
 
 All six Copilot comments are assessed with original thread links, evidence, severity, alternatives,
 trade-offs, decisions, and suggested replies. Revision 2 re-verified each finding, re-opened

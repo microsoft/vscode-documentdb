@@ -10,6 +10,10 @@ import { ClustersClient } from '../ClustersClient';
 import { SchemaStore } from '../SchemaStore';
 import { ShellCompletionProvider, type ShellCompletionContext } from './ShellCompletionProvider';
 
+interface ClustersClientModule {
+    readonly ClustersClient: typeof ClustersClient;
+}
+
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
 const TEST_CONTEXT: ShellCompletionContext = {
@@ -222,11 +226,12 @@ describe('ShellCompletionProvider', () => {
             { label: 'stale', cached: [{ name: 'old', type: 'collection' }] },
         ])('refreshes a $label cache through the client and exposes the new names', async ({ cached }) => {
             const { ClustersClient: ActualClustersClient } =
-                jest.requireActual<typeof import('../ClustersClient')>('../ClustersClient');
+                jest.requireActual<ClustersClientModule>('../ClustersClient');
             const toArray = jest.fn().mockResolvedValue([{ name: 'new', type: 'collection' }]);
             const listCollections = jest.fn().mockReturnValue({ toArray });
             const database = jest.fn().mockReturnValue({ listCollections });
-            const client = Object.assign(Object.create(ActualClustersClient.prototype) as ClustersClient, {
+            const client = Object.create(ActualClustersClient.prototype) as ClustersClient;
+            Object.assign(client, {
                 _mongoClient: { db: database },
                 _collectionsCache: new Map(cached.length > 0 ? [[TEST_CONTEXT.databaseName, cached]] : []),
             });
@@ -239,7 +244,9 @@ describe('ShellCompletionProvider', () => {
             expect(client.getCachedCollections(TEST_CONTEXT.databaseName)).toEqual([
                 expect.objectContaining({ name: 'new', type: 'collection' }),
             ]);
-            const names = provider.getCompletions('db.', 3, TEST_CONTEXT).candidates.map((candidate) => candidate.label);
+            const names = provider
+                .getCompletions('db.', 3, TEST_CONTEXT)
+                .candidates.map((candidate) => candidate.label);
             expect(names).toContain('new');
             expect(names).not.toContain('old');
             expect(ClustersClient.getClient).not.toHaveBeenCalled();
