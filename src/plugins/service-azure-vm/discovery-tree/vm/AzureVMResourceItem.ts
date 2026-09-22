@@ -64,7 +64,7 @@ export class AzureVMResourceItem extends ClusterItemBase<VirtualMachineModel> {
             tooltipParts.push(`**Public IP:** ${cluster.publicIpAddress}`);
         }
 
-        if (cluster.publicIpAddress && !cluster.fqdn) {
+        if (!cluster.publicIpAddress && !cluster.fqdn) {
             this.descriptionOverride = l10n.t('No Connectivity');
             tooltipParts.push(l10n.t('**No public IP or FQDN available for direct connection.**'));
         }
@@ -78,6 +78,10 @@ export class AzureVMResourceItem extends ClusterItemBase<VirtualMachineModel> {
             context.telemetry.properties.view = Views.DiscoveryView;
             if (this.journeyCorrelationId) {
                 context.telemetry.properties.journeyCorrelationId = this.journeyCorrelationId;
+            }
+
+            if (!this.cluster.connectionString) {
+                return undefined;
             }
 
             const newPort = await context.ui.showInputBox({
@@ -159,6 +163,14 @@ export class AzureVMResourceItem extends ClusterItemBase<VirtualMachineModel> {
                 availableAuthMethods: [AuthMethodId.NativeAuth],
             };
         });
+    }
+
+    public getTreeItem(): vscode.TreeItem {
+        const treeItem = super.getTreeItem();
+        if (!this.cluster.connectionString) {
+            treeItem.collapsibleState = vscode.TreeItemCollapsibleState.None;
+        }
+        return treeItem;
     }
 
     /**
