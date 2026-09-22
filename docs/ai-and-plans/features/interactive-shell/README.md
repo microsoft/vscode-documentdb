@@ -90,6 +90,11 @@ program-level narrative, and the sibling areas
 Iteration numbers 8, 9 and 9.1 are the original step numbers of the shell-integration program and
 are preserved. Steps 10 and 11 are new numbers for work that had none.
 
+PR #937 also deliberately includes the reintroduced schema-analyzer work from PR #933: static BSON
+imports, foreign-wrapper inference, and its package metadata/tests. The ordinary-document guard,
+collection refresh, help fixes, and precedence clarification from the Copilot follow-up are recorded
+in [iteration 17](./iterations/17-pr-937-copilot-feedback.md), including per-finding fix references.
+
 ## Open backlog
 
 [shell-liveness-audit.md](./shell-liveness-audit.md) — an audit of the first minutes of shell use,

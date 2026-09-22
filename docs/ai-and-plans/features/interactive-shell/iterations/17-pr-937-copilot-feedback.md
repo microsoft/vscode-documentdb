@@ -18,6 +18,11 @@ Assessment of the six inline Copilot comments on
 This iteration records the review analysis, the option sets, and the fixes the operator has chosen.
 No replies have been posted and no threads have been resolved by this assessment.
 
+**Implementation revision (2026-09-22):** the original assessment and option sets below are retained
+as history. Inline implementation notes supersede each original disposition. C1, C2, C3, C4, and C6
+are implemented and focused-tested; C5's live PR scope has been corrected. Full verification and
+commit-linked GitHub replies follow after the implementation groups.
+
 **Revision 2 (2026-09-22):** every finding was re-verified against the working tree and the remote
 head, each option set was re-opened, and every recommendation now carries an explicit decision and
 its reasoning. Two recommendations changed: C1 moves from the own-property guard to a structural
@@ -289,6 +294,16 @@ deduplication and recovery after a rejected fetch if extending prewarm tests.
 **Disposition:** open; option A′ confirmed by the operator, so the shipped precedence stays and the
 records are corrected around it. Not yet implemented.
 
+> **Implementation (2026-09-22):** completed in [dd10598d](https://github.com/microsoft/vscode-documentdb/commit/dd10598d).
+> Option A′ shipped without reordering runtime branches. Superseding notes in iteration 15 and the
+> count decision record distinguish `db` descriptions from `db.` counts, document descriptions
+> ahead of history, and explain disabled-renderer behavior. The code comment and current feature
+> overview agree; future work records the history-first UX question. The new fully-typed-description
+> collision regression and existing count/fallback coverage pass in all 86 PTY tests. This preserves
+> tested behavior at the cost of leaving one-key history recall behind contextual hints, an explicit
+> operator choice rather than an accidental documentation-driven change. GitHub reply pending
+> publication of the commit.
+
 ### Evidence
 
 [Iteration 15](./15-shell-liveness-audit-fixes.md#L112) puts history before candidate descriptions,
@@ -436,6 +451,16 @@ table. No runtime behavior change or localization regeneration is required for t
 **Severity:** Low, review/release communication rather than a demonstrated runtime defect.
 **Disposition:** resolved on GitHub; option A confirmed by the operator, and the live PR description
 still needs the correction.
+
+> **Implementation (2026-09-22):** option A completed in the live
+> [PR description](https://github.com/microsoft/vscode-documentdb/pull/937).
+> The obsolete exclusion now states that #933 was deliberately reintroduced, identifies its schema
+> metadata, BSON inference/tests, and static imports, and includes the schema package in the review
+> and validation boundary. The rationale is the shared-schema dual-package failure; C1 closes the
+> ordinary-document fallback defect in [24294169](https://github.com/microsoft/vscode-documentdb/commit/24294169).
+> Keeping the accepted scope avoids reversing the operator's choice or splitting history; the cost
+> is a broader parent PR, now made explicit. This document records the external-only scope fix so
+> its GitHub follow-up can cite an auditable commit. Fresh body/diff verification and reply follow.
 
 ### Evidence
 
