@@ -1723,9 +1723,23 @@ describe('QuickStartService — WI-2e-1 provision RR4 volume-wipe gate', () => {
         await drain(service.provision(new AbortController().signal));
 
         expect(runtime.createAndRunContainer).toHaveBeenCalledTimes(1);
-        // The pre-create clear and the failed attempt's cleanup, so a retry doesn't hit the gate.
-        expect(removeVolume).toHaveBeenCalledTimes(2);
+        // The failed attempt's cleanup, so a retry doesn't hit the gate.
+        expect(removeVolume).toHaveBeenCalledTimes(1);
         expect(service.getStatus().state).toBe(InstanceState.Error);
+    });
+
+    it('leaves alone a data volume that appeared while the image downloaded', async () => {
+        ext.secretStorage = fakeSecretStorage({});
+        ext.context = fakeContext(fakeMemento());
+        const removeVolume = jest.fn().mockResolvedValue(undefined);
+        const runtime = provisionRuntime({ containers: [], removeVolume });
+        (runtime.volumeExists as jest.Mock).mockResolvedValueOnce(false).mockResolvedValueOnce(true);
+        const service = new QuickStartServiceImpl(runtime);
+
+        await drain(service.provision(new AbortController().signal));
+
+        expect(removeVolume).not.toHaveBeenCalled();
+        expect(runtime.createAndRunContainer).not.toHaveBeenCalled();
     });
 
     // #946 DATA-1: a volume left behind by a pruned container or another VS Code profile.
@@ -1753,7 +1767,12 @@ describe('QuickStartService — WI-2e-1 provision RR4 volume-wipe gate', () => {
         await seedInstance(DEFAULT_ALIAS, STORED_CONN);
         const removeVolume = jest.fn().mockResolvedValue(undefined);
         const service = new QuickStartServiceImpl(
-            provisionRuntime({ containers: [{ id: 'c1', alias: DEFAULT_ALIAS }], removeVolume, ...failure }),
+            provisionRuntime({
+                containers: [{ id: 'c1', alias: DEFAULT_ALIAS }],
+                volumeExists: true,
+                removeVolume,
+                ...failure,
+            }),
         );
 
         await drain(service.provision(new AbortController().signal, { startFresh: true }));
@@ -1782,7 +1801,11 @@ describe('QuickStartService — WI-2e-1 provision RR4 volume-wipe gate', () => {
         ext.context = fakeContext(fakeMemento());
         await seedInstance(DEFAULT_ALIAS, STORED_CONN);
         const removeVolume = jest.fn().mockResolvedValue(undefined);
-        const runtime = provisionRuntime({ containers: [{ id: 'c1', alias: DEFAULT_ALIAS }], removeVolume });
+        const runtime = provisionRuntime({
+            containers: [{ id: 'c1', alias: DEFAULT_ALIAS }],
+            volumeExists: true,
+            removeVolume,
+        });
         const service = new QuickStartServiceImpl(runtime);
 
         await drain(service.provision(new AbortController().signal, { startFresh: true }));
@@ -1797,7 +1820,7 @@ describe('QuickStartService — WI-2e-1 provision RR4 volume-wipe gate', () => {
         ext.context = fakeContext(fakeMemento());
         const removeVolume = jest.fn().mockResolvedValue(undefined);
         const service = new QuickStartServiceImpl(
-            provisionRuntime({ containers: [{ id: 'c1', alias: DEFAULT_ALIAS }], removeVolume }),
+            provisionRuntime({ containers: [{ id: 'c1', alias: DEFAULT_ALIAS }], volumeExists: true, removeVolume }),
         );
 
         await drain(service.provision(new AbortController().signal, { startFresh: true }));

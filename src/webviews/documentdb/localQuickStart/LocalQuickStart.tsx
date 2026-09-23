@@ -2290,17 +2290,28 @@ export const LocalQuickStart = (): JSX.Element => {
                     </Button>
                 );
             } else {
-                primaryLabel = canContinueSetup ? l10n.t('Continue setup') : l10n.t('Retry setup');
+                primaryLabel = forcedFresh
+                    ? l10n.t('Start fresh')
+                    : canContinueSetup
+                      ? l10n.t('Continue setup')
+                      : l10n.t('Retry setup');
                 primaryIcon = canContinueSetup ? <RocketRegular /> : <ArrowClockwiseRegular />;
                 primaryDisabled = startingDocker || checkingDockerAgain;
                 onPrimary = handleStart;
-                footerNote = canContinueSetup
+                // Data this profile can't open makes the next run a Start fresh (#946), so say so here
+                // rather than letting "Retry" erase it.
+                footerNote = forcedFresh
                     ? l10n.t(
-                          'Continuing runs every setup step from the beginning, starting with the Docker check. Nothing has been created on your machine yet.',
+                          'This deletes the container named {0} and its data volume, then creates a new one. Everything stored in DocumentDB Local is erased.',
+                          QUICK_START_CONTAINER_NAME,
                       )
-                    : l10n.t(
-                          'Retrying runs every setup step again from the beginning, starting with the Docker check.',
-                      );
+                    : canContinueSetup
+                      ? l10n.t(
+                            'Continuing runs every setup step from the beginning, starting with the Docker check. Nothing has been created on your machine yet.',
+                        )
+                      : l10n.t(
+                            'Retrying runs every setup step again from the beginning, starting with the Docker check.',
+                        );
                 secondaryActions = (
                     <Button appearance="secondary" onClick={handleBackToConfigure}>
                         {l10n.t('Back')}

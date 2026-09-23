@@ -660,6 +660,8 @@ export class QuickStartServiceImpl {
         let earlySecretStored = false;
         let previousStoredConnectionString: string | undefined;
         let readinessEnvironment: DockerHostEnvironment | undefined;
+        // Whether this run mounts a volume that already existed; otherwise its `docker run` creates it.
+        let reusesVolume = reusing;
         let activeDockerStage: Extract<ProvisionStage, 'pulling' | 'creating'> | undefined;
         let provisioningDockerFailureKind: string | undefined;
         // The terminal StageEvent (timeout OR hard error) is buffered and yielded AFTER `finally`
@@ -757,20 +759,30 @@ export class QuickStartServiceImpl {
             // reads USERNAME/PASSWORD from the environment.
             const createdEnvFilePath = await this.writeEnvFile(credentials.username, credentials.password);
             envFilePath = createdEnvFilePath;
+            activeDockerStage = 'creating';
+            const volumeOnDisk = await this.runtime.volumeExists(volumeName(alias));
+            // The gate saw no volume, so one here appeared during the pull and isn't ours to remove.
+            if (!reusing && !startFresh && volumeOnDisk) {
+                throw new Error('The data volume was created by something else while the image downloaded.');
+            }
+            // Retained credentials don't prove the volume survived (e.g. Start over after a timeout
+            // removed it), and only data that is really kept should skip the sample seed.
+            reusesVolume = reusing && volumeOnDisk;
+            this.throwIfAborted(signal);
             // Drop the old data volume only now that the port is checked and the image is local, so a
             // failed check, pull or Cancel leaves it intact (#946). Fresh credentials need a clean
             // cluster; a reuse keeps the volume. A failed removal (e.g. another container mounts it) is
             // fatal: carrying on would start the new credentials against the old cluster.
-            this.throwIfAborted(signal);
-            if (!reusing) {
+            if (!reusing && volumeOnDisk) {
                 try {
                     await this.runtime.removeVolume(volumeName(alias));
                 } catch (error) {
-                    throw new Error(`Could not remove the existing data volume: ${errMessage(error)}`);
+                    throw new Error(
+                        `Could not remove the existing data volume. If another container uses it, remove that container and try again. (${errMessage(error)})`,
+                    );
                 }
             }
             createAttempted = true;
-            activeDockerStage = 'creating';
             containerId = await this.runProvisionStage('creating', journeyCorrelationId, async () => {
                 let createdContainerId: string | undefined;
                 try {
@@ -848,7 +860,7 @@ export class QuickStartServiceImpl {
                 imageRef,
                 sampleDataRequested,
                 journeyCorrelationId,
-                reusing,
+                reusing: reusesVolume,
             };
             this.stateFor(alias).pendingReadiness = pending;
             // Persist the credentials BEFORE the readiness wait (H3). The wait alone can run for
@@ -957,9 +969,9 @@ export class QuickStartServiceImpl {
                             .catch(() => meterQuickStartSilentCatch('provision_removeOrphanedContainer'));
                     }
                 }
-                // A fresh run's volume was created by its own `docker run`; drop it so a retry doesn't
+                // A volume this run's `docker run` created is ours to drop, so a retry doesn't
                 // hit the volume gate above. Docker refuses if another container still mounts it.
-                if (createAttempted && !reusing) {
+                if (createAttempted && !reusesVolume) {
                     await this.runtime
                         .removeVolume(volumeName(alias))
                         .catch(() => meterQuickStartSilentCatch('provision_cleanupRemoveVolume'));

@@ -109,6 +109,7 @@ interface RuntimeOptions {
     readonly containers?: Array<{ id: string; labels?: Record<string, string> }>;
     readonly createAndRunContainer?: jest.Mock;
     readonly listByLabel?: jest.Mock;
+    readonly volumeExists?: boolean;
 }
 
 function runtimeFor(options: RuntimeOptions = {}): IContainerRuntime {
@@ -135,7 +136,7 @@ function runtimeFor(options: RuntimeOptions = {}): IContainerRuntime {
         stopContainer: jest.fn().mockResolvedValue(undefined),
         removeContainer: jest.fn().mockResolvedValue(undefined),
         removeVolume: jest.fn().mockResolvedValue(undefined),
-        volumeExists: jest.fn().mockResolvedValue(false),
+        volumeExists: jest.fn().mockResolvedValue(options.volumeExists ?? false),
         execShellInContainer: jest.fn().mockResolvedValue(undefined),
         followLogs: jest.fn().mockResolvedValue(undefined),
     } as unknown as IContainerRuntime;
@@ -435,7 +436,11 @@ describe('QuickStartService — WP-3 provisioning durability and port model', ()
 
         // #946 DATA-4: a reused volume already had its first setup; re-seeding would bring back
         // sample documents the user deleted.
-        it('does not seed a reused data volume', async () => {
+        // Retained credentials alone (e.g. Start over after a timeout removed the volume) still seed.
+        it.each([
+            ['does not seed a reused data volume', true, 0],
+            ['seeds when the stored credentials outlived their volume', false, 1],
+        ])('%s', async (_label, volumeExists, seedCalls) => {
             await upsertInstance({
                 alias: DEFAULT_ALIAS,
                 displayName: 'DocumentDB Local',
@@ -447,12 +452,12 @@ describe('QuickStartService — WP-3 provisioning durability and port model', ()
                 `mongodb://old:old@localhost:${QUICK_START_PORT}/?tls=true&tlsAllowInvalidCertificates=true`,
                 { displayName: 'DocumentDB Local', port: QUICK_START_PORT },
             );
-            const runtime = runtimeFor();
+            const runtime = runtimeFor({ volumeExists });
             const service = new QuickStartServiceImpl(runtime);
 
             await collect(service.provision(new AbortController().signal));
 
-            expect(runtime.execShellInContainer).not.toHaveBeenCalled();
+            expect(runtime.execShellInContainer).toHaveBeenCalledTimes(seedCalls);
             expect(service.getStatus().state).toBe(InstanceState.Running);
         });
 
