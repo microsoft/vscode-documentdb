@@ -2017,6 +2017,31 @@ describe('QuickStartService — WI-2e-1 provision RR4 volume-wipe gate', () => {
         expect(removeVolume).not.toHaveBeenCalled();
     });
 
+    // The old instance is untouched until the wipe, so a cancelled Start fresh must not relabel a
+    // recoverable instance as "not installed" and hide its Recreate and Delete actions.
+    it('gives a Missing instance back its status when Start fresh is cancelled before the wipe', async () => {
+        ext.secretStorage = fakeSecretStorage({});
+        ext.context = fakeContext(fakeMemento());
+        await seedInstance(DEFAULT_ALIAS, STORED_CONN);
+        const controller = new AbortController();
+        const runtime = provisionRuntime({
+            containers: [],
+            volumeExists: true,
+            pullImage: jest.fn(() => {
+                controller.abort();
+                return Promise.resolve();
+            }),
+        });
+        const service = new QuickStartServiceImpl(runtime);
+        await service.reconcile();
+        expect(service.getStatus()).toMatchObject({ state: InstanceState.Stopped, missing: true });
+
+        await drain(service.provision(controller.signal, { startFresh: true }));
+
+        expect(runtime.removeVolume).not.toHaveBeenCalled();
+        expect(service.getStatus()).toMatchObject({ state: InstanceState.Stopped, missing: true });
+    });
+
     it('reports a held data volume before asking the user to start fresh', async () => {
         ext.secretStorage = fakeSecretStorage({});
         ext.context = fakeContext(fakeMemento());

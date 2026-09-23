@@ -171,6 +171,13 @@ class DockerNotReadyError extends Error {
     }
 }
 
+/** States an untouched instance can be given back after a failed or cancelled setup. */
+const RESTORABLE_STATES: ReadonlySet<InstanceState> = new Set([
+    InstanceState.Running,
+    InstanceState.Stopped,
+    InstanceState.CredentialsMissing,
+]);
+
 /** The data volume appeared while the image downloaded, so it is not this run's to use or remove. */
 class VolumeAppearedError extends Error {
     constructor() {
@@ -679,8 +686,34 @@ export class QuickStartServiceImpl {
         // run settles back to CredentialsMissing, so Configure keeps offering Start fresh.
         let keepsUnopenableData = false;
         let createdVolume = false;
-        const failureState = (): InstanceState =>
-            keepsUnopenableData ? InstanceState.CredentialsMissing : InstanceState.Error;
+        // Until the wipe starts, the old instance is exactly as it was before this run.
+        let oldInstanceTouched = false;
+        const statusBefore = { ...this.stateFor(alias) };
+        // Settle a failed (`message`) or cancelled run. One that never reached the wipe gives back
+        // the status it started from, so the tree keeps offering what the instance really supports.
+        const settleFailure = (message?: QuickStartMessage): void => {
+            if (keepsUnopenableData) {
+                this.setStatus(
+                    alias,
+                    InstanceState.CredentialsMissing,
+                    undefined,
+                    message ?? {
+                        key: 'credentialsUnavailable',
+                    },
+                );
+            } else if (!oldInstanceTouched && RESTORABLE_STATES.has(statusBefore.state)) {
+                const entry = this.stateFor(alias);
+                entry.state = statusBefore.state;
+                entry.missing = statusBefore.missing;
+                entry.error = statusBefore.error;
+                entry.port = statusBefore.port;
+                this.statusEmitter.fire();
+            } else if (message) {
+                this.setStatus(alias, InstanceState.Error, undefined, message);
+            } else {
+                this.setStatus(alias, InstanceState.NotInstalled, undefined, undefined);
+            }
+        };
         let activeDockerStage: Extract<ProvisionStage, 'pulling' | 'creating'> | undefined;
         let provisioningDockerFailureKind: string | undefined;
         // The terminal StageEvent (timeout OR hard error) is buffered and yielded AFTER `finally`
@@ -733,7 +766,7 @@ export class QuickStartServiceImpl {
                         key: 'dataVolumeInUse',
                         detail: holders.map((container) => container.name || container.id).join(', '),
                     };
-                    this.setStatus(alias, failureState(), undefined, message);
+                    settleFailure(message);
                     yield stageEvent('checking', 'error', message);
                     return;
                 }
@@ -757,7 +790,7 @@ export class QuickStartServiceImpl {
             // own soon-to-be-replaced container holds counts as free.
             if (!(await this.isPortAvailable(chosenPort, existing?.id))) {
                 const message: QuickStartMessage = { key: 'portInUse', port: chosenPort };
-                this.setStatus(alias, failureState(), undefined, message);
+                settleFailure(message);
                 yield stageEvent('checking', 'error', message);
                 return;
             }
@@ -812,6 +845,7 @@ export class QuickStartServiceImpl {
             createdVolume = !reusing || !volumeBeforeCreate;
             // Last await before the wipe, so a Cancel during any check above still leaves everything.
             this.throwIfAborted(signal);
+            oldInstanceTouched = true;
             if (existing) {
                 channel.appendLine(`Removing existing Quick Start container ${existing.id} for a clean run…`);
                 await this.runtime
@@ -972,7 +1006,7 @@ export class QuickStartServiceImpl {
                         channel.appendLine(`[pull-failed] ${detail}`);
                         message = { key: 'imagePullFailed', detail: imageRef };
                     }
-                    this.setStatus(alias, failureState(), undefined, message);
+                    settleFailure(message);
                 }
                 // Buffered and emitted after `finally` (like the timeout event) so a Retry click
                 // driven by this event can't race the still-set `provisioning` guard either
@@ -1050,16 +1084,9 @@ export class QuickStartServiceImpl {
                 if (leaseHeld) {
                     await this.releaseProvisioningLease(alias, operationId);
                 }
-                // Interrupted before settling (cancel / unsubscribe) → reset state.
-                // The error path already settled to `Error` in `catch`.
+                // Interrupted before settling (cancel / unsubscribe); the error path settled in `catch`.
                 if (this.stateFor(alias).state === InstanceState.Provisioning) {
-                    if (keepsUnopenableData) {
-                        this.setStatus(alias, InstanceState.CredentialsMissing, undefined, {
-                            key: 'credentialsUnavailable',
-                        });
-                    } else {
-                        this.setStatus(alias, InstanceState.NotInstalled, undefined, undefined);
-                    }
+                    settleFailure();
                 }
             }
             signal.removeEventListener('abort', onAbort);

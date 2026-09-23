@@ -1780,8 +1780,13 @@ export const LocalQuickStart = (): JSX.Element => {
         {
             key: 'sampleData',
             label: l10n.t('Sample data'),
-            value: advLoadSampleData ? l10n.t('Included') : l10n.t('Not included'),
-            action: (
+            // A kept volume already had its first setup and is never seeded again.
+            value: isRecreate
+                ? l10n.t('Kept from the existing instance')
+                : advLoadSampleData
+                  ? l10n.t('Included')
+                  : l10n.t('Not included'),
+            action: isRecreate ? undefined : (
                 <Switch
                     checked={advLoadSampleData}
                     aria-label={l10n.t('Include sample data')}
