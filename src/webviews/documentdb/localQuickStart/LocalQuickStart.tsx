@@ -71,6 +71,7 @@ import {
     QUICK_START_DEFAULT_TAG,
     QUICK_START_IMAGE,
     QUICK_START_IMAGE_REPOSITORY,
+    QUICK_START_MIN_PASSWORD_LENGTH,
     QUICK_START_PORT,
     type StageEvent,
 } from '../../../services/localQuickStart/quickStartTypes';
@@ -166,6 +167,8 @@ const useStyles = makeStyles({
         display: 'grid',
         gridTemplateColumns: 'repeat(2, minmax(0, 1fr))',
         gap: '12px',
+        // A hint or error under one field must not stretch the other field's input.
+        alignItems: 'start',
         width: '100%',
         '@media (max-width: 560px)': { gridTemplateColumns: 'minmax(0, 1fr)' },
     },
@@ -841,6 +844,9 @@ export const LocalQuickStart = (): JSX.Element => {
     const [editingPort, setEditingPort] = useState(false);
     const [editingImage, setEditingImage] = useState(false);
     const [customCredentials, setCustomCredentials] = useState(false);
+    // Credential errors wait for blur so typing a password isn't flagged at every keystroke.
+    const [usernameBlurred, setUsernameBlurred] = useState(false);
+    const [passwordBlurred, setPasswordBlurred] = useState(false);
 
     // The Configure step ASKS whether to keep the existing data (review M4): the service reuses an
     // instance's stored credentials and data volume only when told to. `canReuseExistingData` says
@@ -934,6 +940,12 @@ export const LocalQuickStart = (): JSX.Element => {
         return undefined;
     })();
     const advError = advValidation?.message;
+    // Start stays disabled either way; this only decides when the reason is shown.
+    const credentialErrorField =
+        (advValidation?.field === 'username' && usernameBlurred) ||
+        ((advValidation?.field === 'password' || advValidation?.field === 'credentials') && passwordBlurred)
+            ? advValidation.field
+            : undefined;
 
     useEffect(() => {
         // Sync the settings into a ref (repo stale-closure pattern) so the provisioning
@@ -1705,7 +1717,11 @@ export const LocalQuickStart = (): JSX.Element => {
                 <Switch
                     checked={!useCustomCredentials}
                     aria-label={l10n.t('Generate credentials automatically')}
-                    onChange={(_event, data) => setCustomCredentials(!data.checked)}
+                    onChange={(_event, data) => {
+                        setCustomCredentials(!data.checked);
+                        setUsernameBlurred(false);
+                        setPasswordBlurred(false);
+                    }}
                 />
             ),
             editorOpen: useCustomCredentials,
@@ -1713,38 +1729,45 @@ export const LocalQuickStart = (): JSX.Element => {
                 <div className={styles.credentialFields}>
                     <Field
                         label={l10n.t('Username')}
-                        validationState={advValidation?.field === 'username' ? 'error' : 'none'}
-                        validationMessage={advValidation?.field === 'username' ? advValidation.message : undefined}
+                        validationState={credentialErrorField === 'username' ? 'error' : 'none'}
+                        validationMessage={credentialErrorField === 'username' ? advError : undefined}
                     >
                         <Input
                             value={advUser}
                             maxLength={128}
                             placeholder={l10n.t('Enter a username')}
-                            aria-invalid={advValidation?.field === 'credentials' || undefined}
+                            aria-invalid={credentialErrorField === 'credentials' || undefined}
                             aria-describedby={
-                                advValidation?.field === 'credentials' ? 'quickstart-credentials-error' : undefined
+                                credentialErrorField === 'credentials' ? 'quickstart-credentials-error' : undefined
                             }
                             onChange={(_event, data) => setAdvUser(data.value)}
+                            onBlur={() => setUsernameBlurred(true)}
                         />
                     </Field>
                     <Field
                         label={l10n.t('Password')}
-                        validationState={advValidation?.field === 'password' ? 'error' : 'none'}
-                        validationMessage={advValidation?.field === 'password' ? advValidation.message : undefined}
+                        hint={
+                            credentialErrorField === 'password'
+                                ? undefined
+                                : l10n.t('At least {0} characters.', QUICK_START_MIN_PASSWORD_LENGTH)
+                        }
+                        validationState={credentialErrorField === 'password' ? 'error' : 'none'}
+                        validationMessage={credentialErrorField === 'password' ? advError : undefined}
                     >
                         <Input
                             type="password"
                             value={advPass}
                             maxLength={256}
                             placeholder={l10n.t('Enter a password')}
-                            aria-invalid={advValidation?.field === 'credentials' || undefined}
+                            aria-invalid={credentialErrorField === 'credentials' || undefined}
                             aria-describedby={
-                                advValidation?.field === 'credentials' ? 'quickstart-credentials-error' : undefined
+                                credentialErrorField === 'credentials' ? 'quickstart-credentials-error' : undefined
                             }
                             onChange={(_event, data) => setAdvPass(data.value)}
+                            onBlur={() => setPasswordBlurred(true)}
                         />
                     </Field>
-                    {advValidation?.field === 'credentials' && (
+                    {credentialErrorField === 'credentials' && (
                         <Text
                             id="quickstart-credentials-error"
                             role="alert"
@@ -1752,7 +1775,7 @@ export const LocalQuickStart = (): JSX.Element => {
                             className={styles.credentialsValidation}
                         >
                             <ErrorCircleFilled aria-hidden />
-                            {advValidation.message}
+                            {advError}
                         </Text>
                     )}
                 </div>

@@ -29,18 +29,15 @@ export function getCredentialValidation(input: {
     }
     const user = input.username.trim();
     const pass = input.password.trim();
-    const hasUser = user.length > 0;
-    const hasPass = pass.length > 0;
-    if (hasUser !== hasPass) {
-        return {
-            field: 'credentials',
-            message: l10n.t('Enter both a username and a password, or leave both blank to auto-generate.'),
-        };
+    // Blank fields used to mean "auto-generate", but the switch owns that now; accepting them
+    // would generate credentials while the summary says "Your own username and password".
+    if (!user || !pass) {
+        return { field: 'credentials', message: l10n.t('Enter a username and a password.') };
     }
     if (user.length > 128) {
         return { field: 'username', message: l10n.t('Username must be 128 characters or fewer.') };
     }
-    if (hasPass && pass.length < QUICK_START_MIN_PASSWORD_LENGTH) {
+    if (pass.length < QUICK_START_MIN_PASSWORD_LENGTH) {
         return {
             field: 'password',
             message: l10n.t('Password must be at least {0} characters.', QUICK_START_MIN_PASSWORD_LENGTH),
@@ -49,10 +46,10 @@ export function getCredentialValidation(input: {
     if (pass.length > 256) {
         return { field: 'password', message: l10n.t('Password must be 256 characters or fewer.') };
     }
-    if (hasUser && CONTROL_CHARACTER.test(user)) {
+    if (CONTROL_CHARACTER.test(user)) {
         return { field: 'username', message: l10n.t('Username must not contain control characters.') };
     }
-    if (hasPass && CONTROL_CHARACTER.test(pass)) {
+    if (CONTROL_CHARACTER.test(pass)) {
         return { field: 'password', message: l10n.t('Password must not contain control characters.') };
     }
     return undefined;

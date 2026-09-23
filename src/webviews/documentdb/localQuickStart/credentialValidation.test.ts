@@ -18,13 +18,14 @@ describe('getCredentialValidation', () => {
         );
     });
 
-    it('accepts both blank or both filled with a long enough password', () => {
-        expect(custom('', '')).toBeUndefined();
+    it('accepts a username and a long enough password', () => {
         expect(custom('admin', 'abcdefgh')).toBeUndefined();
         expect(custom(' admin ', ' abcdefgh ')).toBeUndefined();
     });
 
     it('requires both a username and a password', () => {
+        expect(custom('', '')?.field).toBe('credentials');
+        expect(custom('  ', '  ')?.field).toBe('credentials');
         expect(custom('admin', '')?.field).toBe('credentials');
         expect(custom('', 'abcdefgh')?.field).toBe('credentials');
     });
