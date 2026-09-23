@@ -9,31 +9,19 @@ import { settingsKeys } from './settingsKeys';
 type ConfigurationNode = {
     title: string;
     order?: number;
-    properties: Record<string, { order?: number; markdownDeprecationMessage?: string; scope?: string }>;
+    properties: Record<string, { order?: number; default?: unknown; markdownDeprecationMessage?: string; scope?: string }>;
 };
 
 const nodes = packageJson.contributes.configuration as unknown as ConfigurationNode[];
 
-/** Every setting ID declared in package.json, deprecated ones included. */
 function declaredKeys(): string[] {
     return nodes.flatMap((node) => Object.keys(node.properties));
 }
 
-function deprecatedKeys(): string[] {
-    return nodes.flatMap((node) =>
-        Object.entries(node.properties)
-            .filter(([, schema]) => schema.markdownDeprecationMessage !== undefined)
-            .map(([key]) => key),
-    );
-}
-
-/** Every setting ID this extension owns: current plus deprecated. `vsCode` holds VS Code's own keys. */
 function constantKeys(): string[] {
-    const owned = Object.entries(settingsKeys)
-        .filter(([name]) => name !== 'legacy' && name !== 'vsCode')
+    return Object.entries(settingsKeys)
+        .filter(([name]) => name !== 'vsCode')
         .map(([, value]) => value as string);
-
-    return [...owned, ...Object.values(settingsKeys.legacy)];
 }
 
 describe('settings contributions', () => {
@@ -70,12 +58,10 @@ describe('settings contributions', () => {
     describe('property ordering', () => {
         // Mixing ordered and unordered properties in one group scrambles the list: ordered
         // ones come first, the rest fall back to alphabetical by key.
-        it('orders every non-deprecated property within its group', () => {
-            const deprecated = new Set(deprecatedKeys());
-
+        it('orders every property within its group', () => {
             for (const node of nodes) {
                 const unordered = Object.entries(node.properties)
-                    .filter(([key, schema]) => !deprecated.has(key) && typeof schema.order !== 'number')
+                    .filter(([, schema]) => typeof schema.order !== 'number')
                     .map(([key]) => key);
 
                 expect({ group: node.title, unordered }).toEqual({ group: node.title, unordered: [] });
@@ -93,14 +79,20 @@ describe('settings contributions', () => {
             expect(new Set(keys).size).toBe(keys.length);
         });
 
-        it('lists every deprecated setting under settingsKeys.legacy', () => {
-            expect(Object.values(settingsKeys.legacy).sort()).toEqual(deprecatedKeys().sort());
+        it('contributes no deprecated aliases', () => {
+            for (const node of nodes) {
+                for (const schema of Object.values(node.properties)) {
+                    expect(schema.markdownDeprecationMessage).toBeUndefined();
+                }
+            }
         });
 
-        it('points each legacy key at a replacement that is still contributed', () => {
-            const declared = new Set(declaredKeys());
-            expect(declared.has(settingsKeys.confirmationStyle)).toBe(true);
-            expect(declared.has(settingsKeys.enableAIQueryGeneration)).toBe(true);
+        it('keeps the renamed settings and their defaults', () => {
+            const properties = Object.fromEntries(nodes.flatMap((node) => Object.entries(node.properties)));
+            expect(settingsKeys.confirmationStyle).toBe('documentDB.confirmations.style');
+            expect(properties[settingsKeys.confirmationStyle]?.default).toBe('wordConfirmation');
+            expect(settingsKeys.enableAIQueryGeneration).toBe('documentDB.aiAssistant.enableQueryGeneration');
+            expect(properties[settingsKeys.enableAIQueryGeneration]?.default).toBe(false);
         });
     });
 

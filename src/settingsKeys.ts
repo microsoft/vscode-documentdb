@@ -50,15 +50,6 @@ export namespace settingsKeys {
     // Accessibility
     export const hideCountPrefix = 'documentDB.accessibility.hideCountPrefix';
 
-    /**
-     * Renamed in 0.11. Still registered as deprecated so an existing user value keeps applying
-     * until `migrateRenamedSettings` moves it, or the user edits it by hand.
-     */
-    export namespace legacy {
-        export const confirmationStyle = 'documentDB.confirmations.confirmationStyle';
-        export const enableAIQueryGeneration = 'documentDB.experimental.enableAIQueryGeneration';
-    }
-
     /** Settings owned by VS Code itself, read but never contributed by this extension. */
     export namespace vsCode {
         export const proxyStrictSSL = 'http.proxyStrictSSL';

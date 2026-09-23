@@ -1651,12 +1651,6 @@
             "type": "boolean",
             "default": true,
             "description": "Show detailed operation summaries, displaying messages for actions such as database drops, document additions, deletions, or similar events."
-          },
-          "documentDB.confirmations.confirmationStyle": {
-            "type": "string",
-            "default": "wordConfirmation",
-            "description": "The behavior to use when confirming operations that cannot be undone, such as deleting resources.",
-            "markdownDeprecationMessage": "This setting was renamed. Use `#documentDB.confirmations.style#` instead."
           }
         }
       },
@@ -1862,12 +1856,6 @@
             ],
             "description": "Path to a custom prompt template file for single collection query generation. Leave empty to use the built-in template.",
             "default": null
-          },
-          "documentDB.experimental.enableAIQueryGeneration": {
-            "type": "boolean",
-            "default": false,
-            "description": "Enable AI-powered natural language to query translation in the collection view.",
-            "markdownDeprecationMessage": "This setting was renamed. Use `#documentDB.aiAssistant.enableQueryGeneration#` instead."
           }
         }
       },

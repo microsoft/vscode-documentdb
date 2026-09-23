@@ -5,9 +5,9 @@ status: active
 created: 2026-09-23
 verified: 2026-09-23
 code:
-    - src/settingsKeys.ts
-    - src/settingsContributions.test.ts
-    - src/services/renamedSettings.ts
+  - src/settingsKeys.ts
+  - src/settingsContributions.test.ts
+  - package.json
 ---
 
 # Settings
@@ -15,7 +15,7 @@ code:
 **Status:** active · **Verified:** 2026-09-23
 
 > How the extension's settings are grouped in the Settings editor, how setting IDs are named and
-> stored in code, and how a rename is carried out without losing a user's value.
+> stored in code, and which compatibility resets were explicitly accepted for PR #957.
 
 Every user-visible setting this extension owns is declared in `contributes.configuration` in
 `package.json` and mirrored as a constant in `src/settingsKeys.ts`. This area exists because the
@@ -25,9 +25,8 @@ it applies are not documented anywhere in the VS Code API reference.
 ## Code map
 
 - `package.json` → `contributes.configuration` — the eight setting groups, their order and scope
-- `src/settingsKeys.ts` — every setting ID this extension owns, including deprecated aliases
+- `src/settingsKeys.ts` — every setting ID this extension owns
 - `src/settingsContributions.test.ts` — the contract that keeps the two in sync
-- `src/services/renamedSettings.ts` — legacy-key fallback reads and the one-time rename migration
 
 ## Architecture (intent — code is authoritative for behavior)
 
@@ -71,33 +70,39 @@ IDs are compile-time constants, not activation state, so they belong outside `ex
 The same hazard applies to `vscode` enums: never evaluate `vscode.ConfigurationTarget.*` at module
 scope, or suites that stub the `vscode` module fail to load the file at all.
 
-### Renaming a setting
+### Accepted compatibility resets
 
-VS Code exposes **no** configuration-migration API to extensions —
-`registerConfigurationMigrations` is internal to core. A rename therefore needs both halves:
+PR #957 renames two settings without aliases, fallback reads, or migration:
 
-- the old key stays registered with `markdownDeprecationMessage`, and reads fall back to it via
-  `getSettingWithLegacyFallback` (which uses `inspect()`, because `get()` would return the new key's
-  _default_ and silently beat the user's old value);
-- `migrateRenamedSettings` copies the value onto the new key once per profile and clears the old
-  one, so the user does not end up looking at both.
+| Old key (ignored) | Current key | Default |
+| --- | --- | --- |
+| `documentDB.confirmations.confirmationStyle` | `documentDB.confirmations.style` | `wordConfirmation` |
+| `documentDB.experimental.enableAIQueryGeneration` | `documentDB.aiAssistant.enableQueryGeneration` | `false` |
 
-A deprecated setting is **hidden from the Settings editor unless the user has configured it**
-(`createSettingsTreeGroupElement` filters on `isConfigured`). It is still offered in settings.json
-IntelliSense, struck through — the shim does not hide the old name there, and it does **not** make
-the old name findable in search. `keywords` on the _new_ property is what does that.
+Readers use ordinary configuration reads of the current keys, preserving VS Code's normal scope
+precedence. Old entries are left untouched in settings files but no longer affect behavior. Users
+who customized them must configure the new keys again. Activation performs no rename writes or
+migration-state updates. Keywords on the new properties still help users find their replacements.
+
+The three connection/port settings retain `machine-overridable` scope. Remote windows no longer
+read their local User values; users may need to configure Remote User or Workspace values instead.
+Otherwise the existing defaults apply: port `10260`, strategy `matchRemote`, and base port `27100`.
+
+The maintainer accepted these resets for the small user base instead of maintaining compatibility
+machinery. This is specific to this change, not a blanket policy for future settings. See
+[D0008](./decisions.md#0008---accept-default-resets-instead-of-settings-migration).
 
 ## Timeline
 
 | Date       | PR  | What changed                                                                        | Docs                                                                |
 | ---------- | --- | ----------------------------------------------------------------------------------- | ------------------------------------------------------------------- |
-| 2026-09-23 | —   | Eight expandable groups; two renames with shims; setting IDs extracted out of `ext` | [01-settings-regrouping.md](./iterations/01-settings-regrouping.md) |
+| 2026-09-23 | 957 | Eight groups; two direct renames with accepted default resets; setting IDs outside `ext` | [01-settings-regrouping.md](./iterations/01-settings-regrouping.md) |
 
 ## Decisions
 
 See [decisions.md](./decisions.md). The load-bearing ones for future work are **D0002** (group
-titles mirror key namespaces), **D0003** (rename only where a key actively misleads) and **D0005**
-(setting IDs stay out of `ext`).
+titles mirror key namespaces), **D0003** (rename only where a key actively misleads), **D0005**
+(setting IDs stay out of `ext`), and **D0008** (accepted resets without migration).
 
 ## Open gaps
 

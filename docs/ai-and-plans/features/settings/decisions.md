@@ -8,17 +8,18 @@ created: 2026-09-23
 # Settings — Decisions
 
 > How the setting groups were chosen, which renames were rejected and why, and how a rename is
-> carried out without losing a user's value.
+> handled when the operator explicitly accepts resetting old customizations.
 
 | #    | Decision                                                       | Status   | Changed from the proposal?                            | Date       | PR  |
 | ---- | -------------------------------------------------------------- | -------- | ----------------------------------------------------- | ---------- | --- |
 | 0001 | No group title may equal the extension `displayName`           | Accepted | Accepted as proposed                                  | 2026-09-23 | —   |
 | 0002 | Group titles mirror key namespaces, one group per feature area | Accepted | Accepted as proposed                                  | 2026-09-23 | —   |
 | 0003 | Rename only where a key actively misleads                      | Accepted | Reversed the agent's own earlier proposal             | 2026-09-23 | —   |
-| 0004 | `confirmationStyle` → `style` is worth the rename after all    | Accepted | Operator overruled the agent's recommendation to drop | 2026-09-23 | —   |
+| 0004 | `confirmationStyle` → `style` is worth the rename after all    | Accepted (modified) | Rename retained; migration superseded by D0008 | 2026-09-23 | 957 |
 | 0005 | Setting IDs live outside `ext`                                 | Accepted | Added mid-implementation, not in the plan             | 2026-09-23 | —   |
-| 0006 | Port settings are `machine-overridable`, not `machine`         | Accepted | Downgraded from the proposed `machine`                | 2026-09-23 | —   |
+| 0006 | Port settings are `machine-overridable`, not `machine`         | Accepted (modified) | Scope retained; remote compatibility loss accepted in D0008 | 2026-09-23 | 957 |
 | 0007 | Every non-deprecated property carries an explicit `order`      | Accepted | Accepted as proposed                                  | 2026-09-23 | —   |
+| 0008 | Accept default resets instead of settings migration | Accepted | Operator rejected compatibility overhead after review | 2026-09-23 | 957 |
 
 > Entries below are **semantically** immutable: append new entries rather than rewriting old ones,
 > and record reversals as a new entry plus a status change above. Heading text is frozen once
@@ -249,3 +250,47 @@ have a genuine reading order (Interactive Shell: timeout, then paste, then displ
 
 Deprecated properties are exempt: they are hidden from the editor unless configured, so their
 position is irrelevant.
+
+---
+
+## 0008 - Accept default resets instead of settings migration
+
+**Status:** Accepted · **Date:** 2026-09-23 · **Raised by:** operator response to PR #957 review
+
+### Question
+
+The review found that migration could move Remote User values into local User settings, mixed old
+and new names could invert scope precedence, and `machine-overridable` excludes previously honored
+local User values in remote windows. Add more compatibility logic, or accept the resets?
+
+### Decision
+
+Keep the two new names and read only those keys using ordinary configuration reads. Remove the old
+contributions, legacy constants, fallback helper, migration service, and activation call. Do not
+copy or clear existing settings files. When the new keys are unset, use `wordConfirmation` and
+`false` for AI query generation.
+
+Keep all three `machine-overridable` scopes. Accept that users whose local User values no longer
+apply remotely will receive the existing defaults unless they configure Remote User or Workspace
+values. No port migration or additional compatibility layer is needed.
+
+### Reasoning
+
+The operator explicitly accepts requiring users to revisit these preferences: the user base is
+small and preserving these customizations does not justify the startup writes and scope-handling
+complexity. Simpler reads remove the migration risks rather than adding machinery to manage them.
+
+This supersedes D0004's shim-plus-migration treatment and D0006's claim of no silent compatibility
+break. Their naming and scope choices remain accepted. D0003's earlier compatibility-cost argument
+describes the original proposal; D0008 governs the two implemented renames.
+
+### Rejected alternatives
+
+- **Source-aware migration and scope-aware legacy fallback.** More logic and tests than this
+  compatibility requirement warrants, with additional local/remote API constraints.
+- **Undo the renames or port scope changes.** Not requested; the operator accepts the new defaults
+  and the need for affected users to reconfigure.
+- **Keep deprecated aliases indefinitely.** Unnecessary if old values are deliberately ignored.
+
+The reference audit must include shell help, setting links, and warning messages. Historical release
+notes and review records retain old names as historical evidence, not current configuration advice.

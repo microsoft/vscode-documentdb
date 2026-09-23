@@ -3,7 +3,37 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { resolveConfirmationWord } from './getConfirmation';
+import * as vscode from 'vscode';
+import { settingsKeys } from '../../settingsKeys';
+import { getConfirmationAsInSettings, resolveConfirmationWord } from './getConfirmation';
+
+describe('getConfirmationAsInSettings', () => {
+    afterEach(() => {
+        jest.restoreAllMocks();
+        jest.clearAllMocks();
+    });
+
+    it.each([undefined, 'buttonConfirmation'])('reads only the current key with value %s', async (configuredValue) => {
+        const get = jest.fn((key: string, fallback?: unknown): unknown => {
+            if (key === settingsKeys.confirmationStyle && configuredValue !== undefined) {
+                return configuredValue;
+            }
+            return fallback;
+        });
+        jest.spyOn(vscode.workspace, 'getConfiguration').mockReturnValue({
+            get,
+        } as unknown as vscode.WorkspaceConfiguration);
+        const showInputBox = jest.spyOn(vscode.window, 'showInputBox').mockResolvedValue('collection');
+        const showWarningMessage = jest.spyOn(vscode.window, 'showWarningMessage').mockResolvedValue(undefined);
+
+        await getConfirmationAsInSettings('Delete collection', 'Confirm deletion', 'collection');
+
+        expect(get).toHaveBeenCalledTimes(1);
+        expect(get).toHaveBeenCalledWith('documentDB.confirmations.style', 'wordConfirmation');
+        expect(showInputBox).toHaveBeenCalledTimes(configuredValue === undefined ? 1 : 0);
+        expect(showWarningMessage).toHaveBeenCalledTimes(configuredValue === undefined ? 0 : 1);
+    });
+});
 
 describe('resolveConfirmationWord', () => {
     describe('when no fallback is provided', () => {

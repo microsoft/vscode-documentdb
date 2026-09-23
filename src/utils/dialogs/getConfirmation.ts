@@ -6,7 +6,6 @@
 import { DialogResponses, UserCancelledError } from '@microsoft/vscode-azext-utils';
 import * as l10n from '@vscode/l10n';
 import * as vscode from 'vscode';
-import { getSettingWithLegacyFallback } from '../../services/renamedSettings';
 import { settingsKeys } from '../../settingsKeys';
 
 enum ConfirmationStyle {
@@ -59,11 +58,9 @@ export async function getConfirmationAsInSettings(
     expectedConfirmationWord: string,
     options?: WordConfirmationOptions,
 ): Promise<boolean> {
-    const deleteConfirmation: ConfirmationStyle = getSettingWithLegacyFallback<ConfirmationStyle>(
-        settingsKeys.confirmationStyle,
-        settingsKeys.legacy.confirmationStyle,
-        ConfirmationStyle.wordConfirmation,
-    );
+    const deleteConfirmation = vscode.workspace
+        .getConfiguration()
+        .get<ConfirmationStyle>(settingsKeys.confirmationStyle, ConfirmationStyle.wordConfirmation);
 
     if (deleteConfirmation === ConfirmationStyle.wordConfirmation) {
         return await getConfirmationWithWordQuestion(title, message, expectedConfirmationWord, options);

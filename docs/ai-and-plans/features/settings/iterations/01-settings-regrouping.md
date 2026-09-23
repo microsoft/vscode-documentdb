@@ -7,7 +7,7 @@ created: 2026-09-23
 
 # 01 — Settings regrouping
 
-> Eight expandable groups in the Settings editor, two renames with migration, and setting IDs moved
+> Eight expandable groups in the Settings editor, two renames with accepted default resets, and setting IDs moved
 > out of `ext`.
 
 ## Why
@@ -44,18 +44,26 @@ Playground, Interactive Shell, AI Assistant, Accessibility — each with an expl
 and every non-deprecated property carrying an `order` within its group (D0007). Added
 `machine-overridable` scope to the three port settings (D0006).
 
+**Review follow-up (D0008).** These scopes remain. The operator accepts that remote windows stop
+honoring local User values for these settings and that affected users may need to reconfigure.
+
 Also removed an em dash from the `shell.display.inlineHints` description, per house style on
 generated labels.
 
 ### 2. Rename the two keys that actively mislead
 
-Done. `documentDB.confirmations.confirmationStyle` → `documentDB.confirmations.style` (D0004) and
+Initial implementation: `documentDB.confirmations.confirmationStyle` → `documentDB.confirmations.style` (D0004) and
 `documentDB.experimental.enableAIQueryGeneration` → `documentDB.aiAssistant.enableQueryGeneration`
-(D0003). Both old keys stay registered with `markdownDeprecationMessage`.
+(D0003). Both old keys initially stayed registered with `markdownDeprecationMessage`.
 
-`src/services/renamedSettings.ts` carries both halves: `getSettingWithLegacyFallback` reads through
-to the old key using `inspect()` rather than `get()`, and `migrateRenamedSettings` copies the value
-across and clears the old key once per profile.
+The initial `src/services/renamedSettings.ts` used `inspect()` for fallback reads and copied values
+to the new keys once per profile. This implementation was removed after review.
+
+**Review follow-up (D0008).** The operator rejected the compatibility overhead. Removed the aliases,
+legacy constants, fallback reads, migration service, and activation call. The three readers now use
+only the new names. Unset values use `wordConfirmation` and AI query generation disabled. Old
+settings files are neither rewritten nor cleaned up. See the author decisions in
+[the review](./01-settings-regrouping-review.md).
 
 **Deviation from the plan.** The original plan proposed ten renames. Eight were dropped once the
 label-rendering behaviour was understood — see D0003 for the rejected list and the reasoning. One of
@@ -77,6 +85,11 @@ A second instance of the same hazard surfaced immediately afterwards: `renamedSe
 `vscode.ConfigurationTarget.*` at module scope, which broke a suite that stubs the `vscode` module.
 Resolved by reading the enum inside functions. Both hazards are recorded in repository memory.
 
+**Review follow-up.** Searched source, packages, API, tests, resources, and user documentation for
+old names and compatibility helpers. No stale runtime references remained after removal. Shell
+help, timeout links, paste prompts, and batch-size warnings refer to unchanged, valid setting IDs.
+Old names in release history and prior design/review records remain intentionally.
+
 ### 4. Contract test
 
 Done. `src/settingsContributions.test.ts`, 11 tests. It asserts no group title equals `displayName`,
@@ -85,19 +98,27 @@ that group titles and orders are unique and explicit, that every non-deprecated 
 every deprecated key is listed under `settingsKeys.legacy`, and that no em dash appears in any
 setting title or description.
 
+**Review follow-up.** The manifest tests now require every property to be ordered, no deprecated
+aliases, and the expected new IDs and defaults. Existing confirmation tests now verify that only
+the current key is read and that default versus explicit values select the expected prompt.
+
 The both-directions assertion is the one that matters: it catches a setting added to package.json
 without a constant, _and_ a constant left behind after a setting is removed.
 
 ## Outcome
 
-**Verified.** `npm run prettier-fix`, `npm run lint` (0), `npm run build` (0),
+**Verified before review follow-up.** `npm run prettier-fix`, `npm run lint` (0), `npm run build` (0),
 `npx jest --no-coverage` (4223 tests, 276 suites, all passing), `npm run package` (0).
+
+**Verified after D0008.** `npm run build` passed; focused Jest passed 8 suites, 263 tests, and
+4 snapshots. A scan of 1,174 tracked source/resource files found no removed keys or legacy helper
+references. Shell help, warnings, and setting links still refer to contributed IDs. Changes remain
+uncommitted; the draft PR was not pushed or marked ready.
 
 **Not verified.** That the Settings editor actually renders eight expandable groups. The contract
 test asserts the contribution shape, which is what caused the original bug, but the rendered tree
-was not confirmed in an Extension Development Host during this iteration. The migration path
-(existing value under an old key being moved onto the new key) was likewise not exercised against a
-real profile — only its inputs are unit-covered.
+was not confirmed in an Extension Development Host during this iteration. The original migration
+was not exercised against a real profile and has now been removed under D0008.
 
 **Left deliberately untouched.** `documentDB.aiAssistant.enablePromptCache` is read by
 `PromptTemplateService` but has never been contributed in package.json, so it always resolves to its
