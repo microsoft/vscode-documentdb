@@ -971,7 +971,7 @@ export class QuickStartServiceImpl {
             if (!aborted && error instanceof DockerNotReadyError) {
                 this.stateFor(alias).pendingReadiness = undefined;
                 message = { key: error.messageKey };
-                this.setStatus(alias, InstanceState.Error, undefined, message);
+                settleFailure(message);
                 terminalEvent = stageEvent('checking', 'error', message);
             } else if (!aborted && error instanceof ReadinessTimeoutError && containerCreated && containerId) {
                 // The container is running but the database did not accept connections within the
@@ -1329,6 +1329,10 @@ export class QuickStartServiceImpl {
                 await this.runtime
                     .removeVolume(volumeName(pending.alias))
                     .catch(() => meterQuickStartSilentCatch('discardTimedOut_removeVolume'));
+                // The attempt's credentials opened only that volume; kept, they would make the next
+                // setup look like a recreate of data that no longer exists.
+                await removeInstance(alias).catch(() => meterQuickStartSilentCatch('discardTimedOut_removeInstance'));
+                entry.metadata = undefined;
             }
             this.setStatus(alias, InstanceState.NotInstalled, undefined, undefined);
             return true;

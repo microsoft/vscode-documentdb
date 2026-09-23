@@ -526,6 +526,37 @@ describe('QuickStartService — WP-3 provisioning durability and port model', ()
         expect(events.at(-1)?.message).toEqual({ key: 'dataVolumeInUse', detail: 'holder' });
     });
 
+    // Start over after a readiness timeout removes the volume the attempt created. The attempt's
+    // credentials opened only that volume, so keeping them made the next setup look like a
+    // recreate of data that no longer exists.
+    it('forgets the credentials of a timed-out attempt when Start over removes its volume', async () => {
+        const removeVolume = jest.fn().mockResolvedValue(undefined);
+        const service = new QuickStartServiceImpl(runtimeFor({ removeVolume }));
+        const prototype = QuickStartServiceImpl.prototype as unknown as Record<string, (...args: unknown[]) => unknown>;
+        const waitForReadiness = prototype.waitForReadiness;
+        const spy = jest.spyOn(prototype, 'waitForReadiness').mockImplementation(async function (
+            this: unknown,
+            ...args
+        ) {
+            // Past the deadline on the first check, so the real method times out without probing.
+            const now = jest.spyOn(Date, 'now').mockReturnValueOnce(0).mockReturnValue(Number.MAX_SAFE_INTEGER);
+            try {
+                return await waitForReadiness.apply(this, args);
+            } finally {
+                now.mockRestore();
+            }
+        });
+
+        const events = await collect(service.provision(new AbortController().signal)).finally(() => spy.mockRestore());
+        expect(events.at(-1)).toMatchObject({ timedOut: true });
+
+        expect(await service.discardTimedOutInstance()).toBe(true);
+
+        expect(removeVolume).toHaveBeenCalled();
+        expect(await service.canReuseExistingData()).toBe(false);
+        expect(await listInstances()).toHaveLength(0);
+    });
+
     describe('sample data initialization', () => {
         // Stored credentials outlive a discarded volume (Start over after a readiness timeout), so
         // the next run reuses them onto a brand-new, empty volume.
