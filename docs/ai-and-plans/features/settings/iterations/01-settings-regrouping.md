@@ -7,8 +7,8 @@ created: 2026-09-23
 
 # 01 — Settings regrouping
 
-> Eight expandable groups in the Settings editor, two renames with accepted default resets, and setting IDs moved
-> out of `ext`.
+> Eight expandable groups in the Settings editor, nine renames with accepted default resets, one
+> shared connection timeout, and setting IDs moved out of `ext`.
 
 ## Why
 
@@ -31,7 +31,8 @@ reference:
   key segment lengthens the rendered label. (D0003)
 - `createSettingsTreeGroupElement` hides deprecated settings unless the user configured them — and
   the same filter applies to search results, so a deprecation shim does not preserve discoverability
-  of the old name. `keywords` on the new property does.
+  of the old name. VS Code 1.105 searches descriptions but not property-level `keywords`, so old IDs
+  must appear in descriptions to remain searchable on the minimum supported version.
 - VS Code exposes no configuration-migration API to extensions; `registerConfigurationMigrations` is
   internal to core.
 
@@ -50,7 +51,7 @@ honoring local User values for these settings and that affected users may need t
 Also removed an em dash from the `shell.display.inlineHints` description, per house style on
 generated labels.
 
-### 2. Rename the two keys that actively mislead
+### 2. Rename misleading or inconsistent keys
 
 Initial implementation: `documentDB.confirmations.confirmationStyle` → `documentDB.confirmations.style` (D0004) and
 `documentDB.experimental.enableAIQueryGeneration` → `documentDB.aiAssistant.enableQueryGeneration`
@@ -65,10 +66,12 @@ only the new names. Unset values use `wordConfirmation` and AI query generation 
 settings files are neither rewritten nor cleaned up. See the author decisions in
 [the review](./01-settings-regrouping-review.md).
 
-**Deviation from the plan.** The original plan proposed ten renames. Eight were dropped once the
-label-rendering behaviour was understood — see D0003 for the rejected list and the reasoning. One of
-the two survivors, `confirmationStyle`, was one the agent had recommended dropping and the operator
-kept (D0004).
+**Deviation from the plan.** The original plan proposed ten renames. Eight were initially dropped
+once the label-rendering behaviour was understood — see D0003 for the rejected list and reasoning.
+The operator later chose to finish seven of those renames in the same release (D0009), including the
+shared shell and Playground connection timeout (D0010). The final change therefore renames nine
+settings. `confirmationStyle` was one the agent had recommended dropping and the operator kept
+(D0004).
 
 ### 3. Consolidate setting-ID literals
 
