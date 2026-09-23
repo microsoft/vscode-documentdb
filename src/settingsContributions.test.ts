@@ -36,8 +36,17 @@ describe('settings contributions', () => {
             expect(titles).not.toContain(packageJson.displayName);
         });
 
-        it('contributes more than one group, so the entry is expandable', () => {
-            expect(nodes.length).toBeGreaterThan(1);
+        it('contributes the expected groups and orders', () => {
+            expect(Object.fromEntries(nodes.map((node) => [node.title, node.order]))).toEqual({
+                General: 10,
+                'Connections & Discovery': 20,
+                'Queries & Results': 30,
+                'Copy & Paste': 40,
+                'Query Playground': 50,
+                'Interactive Shell': 60,
+                'AI Assistant': 70,
+                Accessibility: 80,
+            });
         });
 
         it('gives every group a unique title', () => {
@@ -92,12 +101,34 @@ describe('settings contributions', () => {
 
         it('keeps the renamed settings and their defaults', () => {
             const properties = Object.fromEntries(nodes.flatMap((node) => Object.entries(node.properties)));
-            expect(settingsKeys.confirmationStyle).toBe('documentDB.confirmations.style');
-            expect(properties[settingsKeys.confirmationStyle]?.default).toBe('wordConfirmation');
-            expect(settingsKeys.enableAIQueryGeneration).toBe('documentDB.aiAssistant.enableQueryGeneration');
-            expect(properties[settingsKeys.enableAIQueryGeneration]?.default).toBe(false);
-            expect(settingsKeys.connectionTimeout).toBe('documentDB.connectionTimeout');
-            expect(properties[settingsKeys.connectionTimeout]?.default).toBe(30);
+            const renamedSettings = [
+                [settingsKeys.confirmationStyle, 'documentDB.confirmations.style', 'wordConfirmation'],
+                [settingsKeys.enableAIQueryGeneration, 'documentDB.aiAssistant.enableQueryGeneration', false],
+                [settingsKeys.showOperationSummaries, 'documentDB.userInterface.showOperationSummaries', true],
+                [settingsKeys.indexAdvisorFindPromptPath, 'documentDB.aiAssistant.indexAdvisorFindPromptPath', null],
+                [
+                    settingsKeys.indexAdvisorAggregatePromptPath,
+                    'documentDB.aiAssistant.indexAdvisorAggregatePromptPath',
+                    null,
+                ],
+                [settingsKeys.indexAdvisorCountPromptPath, 'documentDB.aiAssistant.indexAdvisorCountPromptPath', null],
+                [
+                    settingsKeys.queryGenerationCrossCollectionPromptPath,
+                    'documentDB.aiAssistant.queryGenerationCrossCollectionPromptPath',
+                    null,
+                ],
+                [
+                    settingsKeys.queryGenerationSingleCollectionPromptPath,
+                    'documentDB.aiAssistant.queryGenerationSingleCollectionPromptPath',
+                    null,
+                ],
+                [settingsKeys.connectionTimeout, 'documentDB.connectionTimeout', 30],
+            ] as const;
+
+            for (const [actualKey, expectedKey, expectedDefault] of renamedSettings) {
+                expect(actualKey).toBe(expectedKey);
+                expect(properties[actualKey]?.default).toBe(expectedDefault);
+            }
         });
     });
 
