@@ -10,6 +10,7 @@ import * as path from 'path';
 import type * as vscode from 'vscode';
 import { Worker } from 'worker_threads';
 import { ext } from '../../extensionVariables';
+import { settingsKeys } from '../../settingsKeys';
 import { SettingsHintError } from '../shell/SettingsHintError';
 import { type MainToWorkerMessage, type SerializableExecutionResult, type WorkerToMainMessage } from './workerTypes';
 
@@ -226,7 +227,7 @@ export class WorkerSessionManager implements vscode.Disposable {
         // If init fails (bad credentials, unreachable host, etc.), tear down
         // the worker so the next call can respawn cleanly.
         try {
-            await this.sendRequest<void>(initMsg, initTimeoutMs, 'documentDB.shell.initTimeout');
+            await this.sendRequest<void>(initMsg, initTimeoutMs, settingsKeys.shellInitTimeout);
             this._workerState = 'ready';
         } catch (error) {
             this.terminateWorker('intentional');

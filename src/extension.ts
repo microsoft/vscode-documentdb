@@ -30,6 +30,8 @@ import { globalUriHandler } from './vscodeUriHandler';
 import { type AzureResourcesExtensionApi } from '@microsoft/vscode-azureresources-api';
 import { type DocumentDBExtensionApi, type DocumentDBExtensionApiV030 } from '../api/src';
 import { MigrationService } from './services/migrationServices';
+import { getSettingWithLegacyFallback, migrateRenamedSettings } from './services/renamedSettings';
+import { settingsKeys } from './settingsKeys';
 
 export async function activateInternal(
     context: vscode.ExtensionContext,
@@ -95,12 +97,16 @@ export async function activateInternal(
         telemetryContext.errorHandling.suppressDisplay = true;
         telemetryContext.errorHandling.rethrow = false;
 
-        const enableAIQueryGeneration = vscode.workspace
-            .getConfiguration()
-            .get<boolean>(ext.settingsKeys.enableAIQueryGeneration, false);
+        const enableAIQueryGeneration = getSettingWithLegacyFallback<boolean>(
+            settingsKeys.enableAIQueryGeneration,
+            settingsKeys.legacy.enableAIQueryGeneration,
+            false,
+        );
 
         telemetryContext.telemetry.properties.enableAIQueryGeneration = enableAIQueryGeneration ? 'true' : 'false';
     });
+
+    void migrateRenamedSettings();
 
     // Create the DocumentDB Extension API v0.2.0
     const documentDBApiV2: DocumentDBExtensionApi = {

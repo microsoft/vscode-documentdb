@@ -8,6 +8,8 @@ import * as vscode from 'vscode';
 import { API } from '../../../DocumentDBExperiences';
 import { ext } from '../../../extensionVariables';
 import { SettingsService } from '../../../services/SettingsService';
+import { getSettingWithLegacyFallback } from '../../../services/renamedSettings';
+import { settingsKeys } from '../../../settingsKeys';
 import { type AppWebviewController, openAppWebview } from '../../_integration/openAppWebview';
 import { type RouterContext } from './collectionViewRouter';
 
@@ -52,11 +54,14 @@ export function openCollectionWebview(
     const title: string = `${initialData.databaseName}/${initialData.collectionName}`;
 
     // Get the default page size from settings
-    const defaultPageSize = SettingsService.getSetting<number>(ext.settingsKeys.collectionViewDefaultPageSize) ?? 50;
+    const defaultPageSize = SettingsService.getSetting<number>(settingsKeys.collectionViewDefaultPageSize) ?? 50;
 
     // Get the experimental AI query generation setting
-    const enableAIQueryGeneration =
-        SettingsService.getSetting<boolean>(ext.settingsKeys.enableAIQueryGeneration) ?? false;
+    const enableAIQueryGeneration = getSettingWithLegacyFallback<boolean>(
+        settingsKeys.enableAIQueryGeneration,
+        settingsKeys.legacy.enableAIQueryGeneration,
+        false,
+    );
 
     const fullInitialData: CollectionViewWebviewConfigurationType = {
         ...initialData,

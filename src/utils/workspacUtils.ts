@@ -4,7 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import * as vscode from 'vscode';
-import { ext } from '../extensionVariables';
+import { settingsKeys } from '../settingsKeys';
 
 export function getRootPath(): string | undefined {
     // if this is a multi-root workspace, return undefined
@@ -15,5 +15,5 @@ export function getRootPath(): string | undefined {
 
 export function getBatchSizeSetting(): number {
     const config: vscode.WorkspaceConfiguration = vscode.workspace.getConfiguration();
-    return config.get<number>(ext.settingsKeys.batchSize, 50);
+    return config.get<number>(settingsKeys.batchSize, 50);
 }

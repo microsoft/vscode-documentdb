@@ -20,6 +20,7 @@ import {
     type ConnectionItem,
 } from './services/connectionStorageService';
 import { isLegacyEmulatorMigrationComplete } from './services/legacyEmulatorMigration';
+import { settingsKeys } from './settingsKeys';
 import {
     buildConnectionsViewTreePath,
     revealInConnectionsView,
@@ -251,7 +252,7 @@ function parseLocalResourceType(qualifiers: string[]): LocalResourceType {
 async function handleLocalQuickStartRequest(context: IActionContext, resourceType: LocalResourceType): Promise<void> {
     const showUrlHandlingConfirmations = vscode.workspace
         .getConfiguration()
-        .get<boolean>(ext.settingsKeys.showUrlHandlingConfirmations, true);
+        .get<boolean>(settingsKeys.showUrlHandlingConfirmations, true);
 
     if (showUrlHandlingConfirmations) {
         const openSetup = l10n.t('Open setup');
@@ -353,7 +354,7 @@ async function handleConnectionStringRequest(
     // Check if URL handling confirmations are enabled
     const showUrlHandlingConfirmations = vscode.workspace
         .getConfiguration()
-        .get<boolean>(ext.settingsKeys.showUrlHandlingConfirmations, true);
+        .get<boolean>(settingsKeys.showUrlHandlingConfirmations, true);
 
     let storageId: string;
 

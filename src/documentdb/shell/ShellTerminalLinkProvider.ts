@@ -5,6 +5,7 @@
 
 import { callWithTelemetryAndErrorHandling, type IActionContext } from '@microsoft/vscode-azext-utils';
 import * as vscode from 'vscode';
+import { settingsKeys } from '../../settingsKeys';
 import { escapeJsString } from '../../utils/escapeJsString';
 import { PlaygroundCommandIds } from '../playground/constants';
 import { Views } from '../Views';
@@ -108,10 +109,10 @@ export const SETTINGS_ACTION_PREFIX = '\u{2699} '; // ⚙ + space
 
 /** Compact setting names used by shell help so links remain intact in narrow terminals. */
 export const HELP_SETTING_ALIASES: Readonly<Record<string, string>> = {
-    colorSupport: 'documentDB.shell.display.colorSupport',
-    autocompletion: 'documentDB.shell.display.autocompletion',
-    inlineHints: 'documentDB.shell.display.inlineHints',
-    'documentDB.shell.initTimeout': 'documentDB.shell.initTimeout',
+    colorSupport: settingsKeys.shellColorSupport,
+    autocompletion: settingsKeys.shellAutocompletion,
+    inlineHints: settingsKeys.shellInlineHints,
+    [settingsKeys.shellInitTimeout]: settingsKeys.shellInitTimeout,
 };
 
 /**

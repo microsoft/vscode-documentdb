@@ -21,12 +21,14 @@ import {
     type PromptSource,
 } from '../commands/llmEnhancedCommands/promptTemplates';
 import { QueryGenerationType } from '../commands/llmEnhancedCommands/queryGenerationCommands';
+import { settingsKeys } from '../settingsKeys';
 
 /**
  * Service for loading prompt templates from custom files or built-in templates
  */
 export class PromptTemplateService {
-    private static readonly configSection = 'documentDB.aiAssistant';
+    /** Not contributed in package.json; reading it only ever yields the default unless hand-added. */
+    private static readonly enablePromptCacheKey = 'documentDB.aiAssistant.enablePromptCache';
     private static readonly templateCache: Map<
         CommandType | QueryGenerationType,
         { template: string; source: PromptSource }
@@ -39,8 +41,8 @@ export class PromptTemplateService {
      */
     public static async getIndexAdvisorPromptTemplate(commandType: CommandType): Promise<string> {
         // Get configuration
-        const config = vscode.workspace.getConfiguration(this.configSection);
-        const cacheEnabled = config.get<boolean>('enablePromptCache', true);
+        const config = vscode.workspace.getConfiguration();
+        const cacheEnabled = config.get<boolean>(this.enablePromptCacheKey, true);
 
         // Check if have a cached template
         if (cacheEnabled) {
@@ -112,7 +114,7 @@ export class PromptTemplateService {
      */
     public static async getQueryGenerationPromptTemplate(generationType: QueryGenerationType): Promise<string> {
         // Get configuration
-        const config = vscode.workspace.getConfiguration(this.configSection);
+        const config = vscode.workspace.getConfiguration();
         const configKey = this.getQueryGenerationConfigKey(generationType);
         const customTemplatePath = config.get<string | null>(configKey);
 
@@ -171,11 +173,11 @@ export class PromptTemplateService {
     private static getIndexAdvisorConfigKey(commandType: CommandType): string {
         switch (commandType) {
             case CommandType.Find:
-                return 'findQueryPromptPath';
+                return settingsKeys.findQueryPromptPath;
             case CommandType.Aggregate:
-                return 'aggregateQueryPromptPath';
+                return settingsKeys.aggregateQueryPromptPath;
             case CommandType.Count:
-                return 'countQueryPromptPath';
+                return settingsKeys.countQueryPromptPath;
             default:
                 throw new Error(l10n.t('Unknown command type: {type}', { type: commandType }));
         }
@@ -189,9 +191,9 @@ export class PromptTemplateService {
     private static getQueryGenerationConfigKey(generationType: QueryGenerationType): string {
         switch (generationType) {
             case QueryGenerationType.CrossCollection:
-                return 'crossCollectionQueryPromptPath';
+                return settingsKeys.crossCollectionQueryPromptPath;
             case QueryGenerationType.SingleCollection:
-                return 'singleCollectionQueryPromptPath';
+                return settingsKeys.singleCollectionQueryPromptPath;
             default:
                 throw new Error(l10n.t('Unknown query generation type: {type}', { type: generationType }));
         }

@@ -6,6 +6,7 @@
 import * as l10n from '@vscode/l10n';
 import { EJSON } from 'bson';
 import * as vscode from 'vscode';
+import { settingsKeys } from '../../settingsKeys';
 import { meterSilentCatch } from '../../utils/accumulatingTelemetry';
 import { type SerializableExecutionResult } from '../playground/workerTypes';
 import { shellAnsi, shellStyles } from './shellStyles';
@@ -386,6 +387,6 @@ export class ShellOutputFormatter {
 
     private isColorEnabled(): boolean {
         const config = vscode.workspace.getConfiguration();
-        return config.get<boolean>('documentDB.shell.display.colorSupport', true);
+        return config.get<boolean>(settingsKeys.shellColorSupport, true);
     }
 }

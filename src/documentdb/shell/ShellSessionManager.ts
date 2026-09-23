@@ -7,6 +7,7 @@ import * as l10n from '@vscode/l10n';
 import { randomUUID } from 'crypto';
 import * as vscode from 'vscode';
 import { ext } from '../../extensionVariables';
+import { settingsKeys } from '../../settingsKeys';
 import { getBatchSizeSetting } from '../../utils/workspacUtils';
 import { CredentialCache } from '../CredentialCache';
 import { AuthMethodId } from '../auth/AuthMethod';
@@ -316,7 +317,7 @@ export class ShellSessionManager implements vscode.Disposable {
 
     private getInitTimeoutMs(): number {
         const config = vscode.workspace.getConfiguration();
-        const timeoutSec = config.get<number>(ext.settingsKeys.shellInitTimeout, 60);
+        const timeoutSec = config.get<number>(settingsKeys.shellInitTimeout, 60);
         return timeoutSec * 1000;
     }
 
