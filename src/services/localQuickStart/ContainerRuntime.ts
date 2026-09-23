@@ -120,6 +120,8 @@ export interface IContainerRuntime {
     stopContainer(id: string): Promise<void>;
     removeContainer(id: string, force?: boolean): Promise<void>;
     removeVolume(name: string, force?: boolean): Promise<void>;
+    /** Rejects when Docker can't answer, so a failure is never mistaken for "absent". */
+    volumeExists(name: string): Promise<boolean>;
     execShellInContainer(
         id: string,
         script: string,
@@ -264,6 +266,12 @@ class ContainerRuntimeImpl implements IContainerRuntime {
     public async removeVolume(name: string, force = true): Promise<void> {
         const runner = this.makeRunner([]);
         await runner(this.client.removeVolumes({ volumes: [name], force }));
+    }
+
+    public async volumeExists(name: string): Promise<boolean> {
+        const runner = this.makeRunner([]);
+        const volumes = await runner(this.client.listVolumes({}));
+        return volumes.some((volume) => volume.name === name);
     }
 
     /**
