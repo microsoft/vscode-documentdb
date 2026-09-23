@@ -1181,8 +1181,11 @@ export class QuickStartServiceImpl {
         cancellationToken?: vscode.CancellationToken,
     ): Promise<DockerReadiness | undefined> {
         try {
+            // Echo only failing probes: a healthy `docker info` dump would bury the real error in the setup log.
             const readiness = await this.checkDockerReadiness(
-                cancellationToken ? { forceRefresh: true, cancellationToken } : { forceRefresh: true },
+                cancellationToken
+                    ? { forceRefresh: true, suppressCommandEcho: true, cancellationToken }
+                    : { forceRefresh: true, suppressCommandEcho: true },
             );
             return readiness.outcome === 'diagnosed' ? readiness : undefined;
         } catch {

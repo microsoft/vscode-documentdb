@@ -1589,7 +1589,7 @@ describe('QuickStartService — WI-2e-1 provision RR4 volume-wipe gate', () => {
                 },
                 dockerReadiness: unavailable,
             });
-            expect(isDockerReady).toHaveBeenLastCalledWith({ forceRefresh: true });
+            expect(isDockerReady).toHaveBeenLastCalledWith({ forceRefresh: true, suppressCommandEcho: true });
         },
     );
 
