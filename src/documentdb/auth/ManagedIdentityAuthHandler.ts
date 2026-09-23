@@ -13,22 +13,7 @@ import { type AuthHandler, type AuthHandlerResponse } from './AuthHandler';
 import { DOCUMENTDB_ENTRA_SCOPE } from './entraScopes';
 import { getManagedIdentityAccessToken } from './managedIdentityTokenProvider';
 import { getOidcAllowedHosts } from './oidcAllowedHosts';
-
-/**
- * Seconds until an absolute expiry timestamp (milliseconds since the epoch), floored at zero.
- *
- * A small safety margin is subtracted so the driver refreshes slightly early rather than presenting
- * a token that expires in flight.
- */
-export function expiresInSecondsFromTimestamp(expiresOnTimestamp: number, now: number = Date.now()): number {
-    if (!Number.isFinite(expiresOnTimestamp)) {
-        return 0;
-    }
-
-    const EXPIRY_SAFETY_MARGIN_SECONDS = 300;
-    const remaining = Math.floor((expiresOnTimestamp - now) / 1000) - EXPIRY_SAFETY_MARGIN_SECONDS;
-    return remaining > 0 ? remaining : 0;
-}
+import { expiresInSecondsFromTimestamp } from './tokenExpiry';
 
 /**
  * Handler for Microsoft Entra ID authentication using the managed identity of the Azure VM that is

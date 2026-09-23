@@ -161,6 +161,8 @@ This hint cannot be accepted via Tab or Right Arrow — it is purely information
 
 **Reason:** `db.stores (10)` is a SyntaxError. When the user types `db.sto` and the only matching collection is `stores (10)`, Tab completion produces `db['stores (10)']` instead. The `needsBracketNotation()` helper detects names that are not valid JavaScript identifiers and switches to bracket syntax.
 
+> **Correction (Step 14):** only the `needsBracketNotation()` half of this shipped. Acceptance kept the `db.` dot, producing `db.['stores (10)']`, until [14-bracket-notation-dot-removal.md](./14-bracket-notation-dot-removal.md).
+
 **Bracket notation contexts supported:**
 
 - `db[` — shows all collection names with quote+bracket wrapping

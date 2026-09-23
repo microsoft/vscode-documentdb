@@ -62,13 +62,15 @@ export class CommandInterceptor {
      * Check if the input is a command that should be intercepted.
      * Returns a result if intercepted, undefined if the input should
      * proceed through normal evaluation.
+     *
+     * @param terminalColumns - terminal width, used by width-aware commands (`help`).
      */
-    tryIntercept(input: string): ShellEvaluationResult | undefined {
+    tryIntercept(input: string, terminalColumns?: number): ShellEvaluationResult | undefined {
         const trimmed = input.trim();
 
         // Help command (bare, function call, or tagged template literal)
         if (CommandInterceptor.HELP_PATTERN.test(trimmed)) {
-            return this._helpProvider.getHelpResult();
+            return this._helpProvider.getHelpResult(terminalColumns);
         }
 
         // Exit / quit — signal shell close

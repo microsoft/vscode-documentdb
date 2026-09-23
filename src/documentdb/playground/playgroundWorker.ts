@@ -15,12 +15,16 @@
  */
 
 import { DocumentDBShellRuntime } from '@documentdb-js/shell-runtime';
+// Must stay a static import. `await import('bson')` resolves the package's ESM entry and
+// loads a second copy, whose classes fail every `instanceof` check against the driver's —
+// silently corrupting schema inference. Re-verify during the ESM migration (#687).
+import { EJSON } from 'bson';
 import { randomUUID } from 'crypto';
 import { type MongoClientOptions, type MongoClient as MongoClientType } from 'mongodb';
 import { parentPort } from 'worker_threads';
 import { DOCUMENTDB_ENTRA_SCOPE } from '../auth/entraScopes';
-import { expiresInSecondsFromTimestamp } from '../auth/ManagedIdentityAuthHandler';
 import { getOidcAllowedHosts } from '../auth/oidcAllowedHosts';
+import { expiresInSecondsFromTimestamp } from '../auth/tokenExpiry';
 import { type MainToWorkerMessage, type WorkerToMainMessage } from './workerTypes';
 
 if (!parentPort) {
@@ -109,7 +113,8 @@ parentPort.on('message', (msg: MainToWorkerMessage) => {
 async function handleInit(msg: Extract<MainToWorkerMessage, { type: 'init' }>): Promise<void> {
     log('debug', `Initializing worker (auth: ${msg.authMechanism}, db: ${msg.databaseName})`);
 
-    // Lazy-import the MongoDB API driver
+    // Lazy-import the MongoDB API driver. Safe only while `mongodb` publishes no `exports`
+    // map — it re-exports the bson classes, so an ESM entry would duplicate them here.
     const { MongoClient } = await import('mongodb');
 
     // Build client options from the serializable subset
@@ -208,6 +213,7 @@ async function handleEval(msg: Extract<MainToWorkerMessage, { type: 'eval' }>): 
     // Evaluate via shell-runtime (handles @mongosh setup, command interception, result transformation)
     const result = await shellRuntime.evaluate(msg.code, msg.databaseName, {
         displayBatchSize: msg.displayBatchSize,
+        terminalColumns: msg.terminalColumns,
     });
 
     // Proactively extract cursorHasMore before serialization.
@@ -234,7 +240,6 @@ async function handleEval(msg: Extract<MainToWorkerMessage, { type: 'eval' }>): 
     // serialization to EJSON is the worker's IPC concern)
     let printableStr: string;
     try {
-        const { EJSON } = await import('bson');
         printableStr = EJSON.stringify(result.printable, { relaxed: false });
     } catch {
         try {

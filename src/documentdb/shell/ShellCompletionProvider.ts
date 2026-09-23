@@ -44,6 +44,12 @@ export interface CompletionCandidate {
     readonly kind: 'command' | 'database' | 'collection' | 'method' | 'field' | 'operator' | 'bson';
     /** Optional description shown alongside the label. */
     readonly detail?: string;
+    /**
+     * Extra characters to delete *before* the typed prefix when this candidate is
+     * accepted. Bracket-notation collections use `1` to consume the `db.` dot,
+     * turning `db.sto` into `db['stores (10)']` rather than `db.['stores (10)']`.
+     */
+    readonly replaceCharsBefore?: number;
 }
 
 /**
@@ -153,6 +159,31 @@ function needsBracketNotation(name: string): boolean {
 export class ShellCompletionProvider {
     /** Tracks background fetches already triggered to avoid duplicate network requests. */
     private readonly _backgroundFetchTriggered = new Set<string>();
+
+    /**
+     * Warm the collection cache for a database without blocking shell input.
+     */
+    async prewarmCollections(context: ShellCompletionContext): Promise<void> {
+        const fetchKey = `colls:${context.clusterId}:${context.databaseName}`;
+        if (this._backgroundFetchTriggered.has(fetchKey)) {
+            return;
+        }
+
+        const client = ClustersClient.getExistingClient(context.clusterId);
+        if (!client) {
+            return;
+        }
+
+        this._backgroundFetchTriggered.add(fetchKey);
+        try {
+            // Refresh on session entry even when the shared cache already contains collection names.
+            await client.listCollections(context.databaseName);
+        } catch {
+            // Non-critical — completions degrade gracefully when discovery fails
+        } finally {
+            this._backgroundFetchTriggered.delete(fetchKey);
+        }
+    }
 
     /**
      * Get completion candidates for the current input buffer and cursor position.
@@ -632,18 +663,7 @@ export class ShellCompletionProvider {
                 }
             } else {
                 // Trigger background fetch
-                const fetchKey = `colls:${context.clusterId}:${context.databaseName}`;
-                if (!this._backgroundFetchTriggered.has(fetchKey)) {
-                    this._backgroundFetchTriggered.add(fetchKey);
-                    void client
-                        .listCollections(context.databaseName)
-                        .catch(() => {
-                            // Non-critical
-                        })
-                        .finally(() => {
-                            this._backgroundFetchTriggered.delete(fetchKey);
-                        });
-                }
+                void this.prewarmCollections(context);
             }
         }
 
@@ -717,18 +737,7 @@ export class ShellCompletionProvider {
                 }
             } else {
                 // Trigger background fetch
-                const fetchKey = `colls:${context.clusterId}:${context.databaseName}`;
-                if (!this._backgroundFetchTriggered.has(fetchKey)) {
-                    this._backgroundFetchTriggered.add(fetchKey);
-                    void client
-                        .listCollections(context.databaseName)
-                        .catch(() => {
-                            // Non-critical
-                        })
-                        .finally(() => {
-                            this._backgroundFetchTriggered.delete(fetchKey);
-                        });
-                }
+                void this.prewarmCollections(context);
             }
         }
 
@@ -934,6 +943,8 @@ export class ShellCompletionProvider {
                 label: name,
                 insertText: `['${escaped}']`,
                 kind: 'collection',
+                // The `.` of `db.` must go away — `db.['x']` is not valid JavaScript.
+                replaceCharsBefore: 1,
             };
         }
         return {

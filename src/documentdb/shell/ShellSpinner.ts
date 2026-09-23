@@ -3,6 +3,8 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+import { shellAnsi, shellStyles } from './shellStyles';
+
 /**
  * Braille spinner frames — the classic npm/ora "dots" animation.
  * A single dot rotates around the Braille cell. All characters are the
@@ -14,12 +16,6 @@ const SPINNER_FRAMES = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', 
 const CURSOR_HIDE = '\x1b[?25l';
 /** ANSI escape: show the text cursor. */
 const CURSOR_SHOW = '\x1b[?25h';
-
-/**
- * DocumentDB blue — used for the spinner when color output is enabled.
- */
-const ANSI_BLUE = '\x1b[34m';
-const ANSI_RESET = '\x1b[0m';
 
 /**
  * Erase one character behind the cursor: backspace, space (overwrite), backspace.
@@ -175,7 +171,7 @@ export class ShellSpinner {
 
     private writeFrame(): void {
         const frame = SPINNER_FRAMES[this._frameIndex];
-        const colorFrame = this._colorEnabled ? `${ANSI_BLUE}${frame}${ANSI_RESET}` : frame;
+        const colorFrame = this._colorEnabled ? `${shellStyles.spinner}${frame}${shellAnsi.reset}` : frame;
         const display = this._label ? `${colorFrame} ${this._label}` : colorFrame;
         // Track visible length (1 char + optional space + label length)
         this._lastWriteLen = this._label ? 2 + this._label.length : 1;

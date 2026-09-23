@@ -38,6 +38,9 @@ import {
     type ShellTerminalInfo,
     unregisterShellTerminal,
 } from './ShellTerminalLinkProvider';
+import { terminalDisplayWidth } from './terminalDisplayWidth';
+
+const COMPACT_CONNECTION_SUMMARY_MIN_COLUMNS = 100;
 
 /**
  * Configuration for the interactive shell Pseudoterminal.
@@ -102,8 +105,12 @@ export class DocumentDBShellPty implements vscode.Pseudoterminal {
     private _ghostTextIsHint: boolean = false;
     /** Whether the current ghost text is a closing-brackets suggestion. */
     private _ghostTextIsClosingBrackets: boolean = false;
+    /** Whether the current ghost text came from command history. */
+    private _ghostTextIsHistory: boolean = false;
     /** The kind of the completion candidate shown as ghost text (for telemetry). */
     private _ghostCandidateKind: CompletionCandidate['kind'] | undefined;
+    /** Most recent history entry counted as shown for telemetry. */
+    private _lastShownHistorySuggestion: string | undefined;
     /** Optional initial input to pre-fill after initialization. */
     private _initialInput: string | undefined;
 
@@ -122,7 +129,7 @@ export class DocumentDBShellPty implements vscode.Pseudoterminal {
         this._initialInput = options.initialInput;
 
         this._completionProvider = new ShellCompletionProvider();
-        this._ghostText = new ShellGhostText();
+        this._ghostText = new ShellGhostText(() => this.isColorEnabled());
 
         const sessionCallbacks: ShellSessionCallbacks = {
             onConsoleOutput: (output: string) => {
@@ -189,12 +196,7 @@ export class DocumentDBShellPty implements vscode.Pseudoterminal {
         // Disable input during initialization to prevent race conditions
         this._inputHandler.setEnabled(false);
 
-        // Display welcome banner
-        this.writeLine(
-            this._outputFormatter.formatSystemMessage(
-                l10n.t('DocumentDB Shell: {0}', this._connectionInfo.clusterDisplayName),
-            ),
-        );
+        this.showLogo();
 
         // Show a labeled spinner during connection
         this._spinner = new ShellSpinner(
@@ -293,6 +295,16 @@ export class DocumentDBShellPty implements vscode.Pseudoterminal {
     setDimensions(dimensions: vscode.TerminalDimensions): void {
         this._columns = dimensions.columns;
         this._inputHandler.setColumns(dimensions.columns);
+
+        // Nothing else repaints the input line, so without this it stays laid
+        // out for the old width until the next keystroke. Only safe while a
+        // prompt is actually awaiting input — during evaluation the terminal
+        // belongs to the command's output.
+        if (this._closed || this._evaluating || !this._inputHandler.isEnabled) {
+            return;
+        }
+        this.clearGhostState();
+        this._inputHandler.renderCurrentLine();
     }
 
     // ─── Private: Multi-line paste handling ──────────────────────────────────
@@ -456,6 +468,11 @@ export class DocumentDBShellPty implements vscode.Pseudoterminal {
         try {
             const metadata = await this._sessionManager.initialize();
 
+            void this._completionProvider.prewarmCollections({
+                clusterId: this._connectionInfo.clusterId,
+                databaseName: this._currentDatabase,
+            });
+
             // Stop the connection spinner
             this._spinner?.stop();
             this._spinner = undefined;
@@ -490,42 +507,71 @@ export class DocumentDBShellPty implements vscode.Pseudoterminal {
             let authLabel: string;
             switch (metadata.authMechanism) {
                 case 'MicrosoftEntraID':
-                    authLabel = l10n.t('Microsoft Entra account');
+                    authLabel = l10n.t('Microsoft Entra ID (Account)');
                     break;
                 case 'ManagedIdentity':
-                    authLabel = l10n.t('Managed Identity');
+                    authLabel = l10n.t('Microsoft Entra ID (Managed Identity)');
                     break;
                 case 'NoAuth':
                     authLabel = l10n.t('No Authentication');
                     break;
                 default:
-                    authLabel = l10n.t('SCRAM');
+                    authLabel = l10n.t('Username and Password (SCRAM)');
                     break;
             }
-            const hostLabel = metadata.isEmulator ? l10n.t('{0} (Emulator)', metadata.host) : metadata.host;
+            const hostSummary =
+                metadata.additionalHostCount > 0
+                    ? l10n.t('{0} +{1} more', metadata.host, metadata.additionalHostCount)
+                    : metadata.host;
+            const connectionLabel =
+                this._connectionInfo.clusterDisplayName === hostSummary
+                    ? this._connectionInfo.clusterDisplayName
+                    : l10n.t('{0} ({1})', this._connectionInfo.clusterDisplayName, hostSummary);
+            const hostLabel = metadata.isEmulator ? l10n.t('{0} (Emulator)', connectionLabel) : connectionLabel;
 
-            this.writeLine(this._outputFormatter.formatSystemMessage(l10n.t('Connected to: {0}', hostLabel)));
+            const identity = metadata.username ?? metadata.displayName;
+            const formattedHostLabel = this._outputFormatter.formatConnectionValue(hostLabel);
+            const connectionSummary = [
+                this._outputFormatter.formatSystemMessage(l10n.t('Connected to: {0}', formattedHostLabel)),
+            ];
 
-            if (metadata.username) {
-                this.writeLine(
+            const formattedAuthLabel = this._outputFormatter.formatConnectionValue(authLabel);
+            const formattedDatabase = this._outputFormatter.formatConnectionValue(this._currentDatabase);
+            if (this._columns < COMPACT_CONNECTION_SUMMARY_MIN_COLUMNS) {
+                if (identity) {
+                    connectionSummary.push(
+                        this._outputFormatter.formatSystemMessage(
+                            l10n.t('Identity: {0}', this._outputFormatter.formatConnectionValue(identity)),
+                        ),
+                    );
+                }
+                connectionSummary.push(
+                    this._outputFormatter.formatSystemMessage(l10n.t('Authentication: {0}', formattedAuthLabel)),
+                    this._outputFormatter.formatSystemMessage(l10n.t('Database: {0}', formattedDatabase)),
+                );
+            } else if (identity) {
+                connectionSummary.push(
                     this._outputFormatter.formatSystemMessage(
                         l10n.t(
-                            'User: {0} | Authentication: {1} | Database: {2}',
-                            metadata.username,
-                            authLabel,
-                            this._currentDatabase,
+                            'Identity: {0} | Authentication: {1} | Database: {2}',
+                            this._outputFormatter.formatConnectionValue(identity),
+                            formattedAuthLabel,
+                            formattedDatabase,
                         ),
                     ),
                 );
             } else {
-                this.writeLine(
+                connectionSummary.push(
                     this._outputFormatter.formatSystemMessage(
-                        l10n.t('Authentication: {0} | Database: {1}', authLabel, this._currentDatabase),
+                        l10n.t('Authentication: {0} | Database: {1}', formattedAuthLabel, formattedDatabase),
                     ),
                 );
             }
 
-            this.writeLine(this._outputFormatter.formatSystemMessage(l10n.t('Type "help" for available commands.')));
+            connectionSummary.push(
+                this._outputFormatter.formatSystemMessage(l10n.t('Type "help" for available commands.')),
+            );
+            connectionSummary.forEach((line) => this.writeLine(line));
             this.writeLine('');
 
             // Re-enable input after successful initialization
@@ -675,7 +721,7 @@ export class DocumentDBShellPty implements vscode.Pseudoterminal {
 
             let result: SerializableExecutionResult;
             try {
-                result = await this._sessionManager.evaluate(input);
+                result = await this._sessionManager.evaluate(input, this._columns);
             } catch (evalError) {
                 // Ctrl+C kills the worker, producing a "Worker terminated" error.
                 // Re-classify as user cancellation for accurate telemetry.
@@ -717,8 +763,7 @@ export class DocumentDBShellPty implements vscode.Pseudoterminal {
             this.maybeWriteActionLine(result);
 
             // Feed query result documents to SchemaStore for field completions.
-            // This runs asynchronously after output is displayed — schema feeding
-            // is non-blocking and failure is non-critical.
+            // Failure is non-critical.
             this.maybeFeedSchemaStore(result);
         });
     }
@@ -828,6 +873,10 @@ export class DocumentDBShellPty implements vscode.Pseudoterminal {
         if (newDb) {
             this._currentDatabase = newDb;
             this._sessionManager.setActiveDatabase(newDb);
+            void this._completionProvider.prewarmCollections({
+                clusterId: this._connectionInfo.clusterId,
+                databaseName: newDb,
+            });
             this.updateTerminalTitle();
         }
     }
@@ -854,9 +903,13 @@ export class DocumentDBShellPty implements vscode.Pseudoterminal {
 
     // ─── Private: Terminal output helpers ────────────────────────────────────
 
+    private showLogo(): void {
+        this.writeLine(this._outputFormatter.formatShellLogo());
+    }
+
     private showPrompt(): void {
         const prompt = `${this._currentDatabase}> `;
-        this._inputHandler.setPromptWidth(prompt.length);
+        this._inputHandler.setPromptWidth(terminalDisplayWidth(prompt));
         this._inputHandler.resetLine();
         this._ghostText.reset();
         this._completionListVisible = false;
@@ -879,7 +932,7 @@ export class DocumentDBShellPty implements vscode.Pseudoterminal {
      */
     private showContinuationPrompt(): void {
         const prompt = '┆ > ';
-        this._inputHandler.setPromptWidth(prompt.length);
+        this._inputHandler.setPromptWidth(terminalDisplayWidth(prompt));
         this._writeEmitter.fire(prompt);
     }
 
@@ -984,7 +1037,7 @@ export class DocumentDBShellPty implements vscode.Pseudoterminal {
      *
      * Deserializes the EJSON printable string back to raw objects (preserving BSON
      * types) and delegates to the shared {@link feedResultToSchemaStore} utility.
-     * Runs asynchronously and never blocks the prompt — failures are silently ignored.
+     * Failures are silently ignored — schema feeding is best-effort.
      */
     private maybeFeedSchemaStore(result: SerializableExecutionResult): void {
         // Only Cursor and Document results with a namespace are worth parsing
@@ -995,35 +1048,49 @@ export class DocumentDBShellPty implements vscode.Pseudoterminal {
             return;
         }
 
-        void deserializeResultForSchema(result)
-            .then((deserialized) => {
-                feedResultToSchemaStore(deserialized, this._connectionInfo.clusterId);
-            })
-            .catch(() => {
-                // Non-critical — schema feeding is best-effort
-            });
+        try {
+            const deserialized = deserializeResultForSchema(result);
+            feedResultToSchemaStore(deserialized, this._connectionInfo.clusterId);
+        } catch {
+            // Non-critical — schema feeding is best-effort
+        }
     }
 
     // ─── Private: Tab completion ────────────────────────────────────────────
 
     /**
-     * Handle Tab keypress — provide completions or accept ghost text.
+     * Handle Tab keypress — provide completions, or accept ghost text when
+     * there is nothing to complete.
+     *
+     * Tab belongs to completion; Right Arrow is the key that accepts ghost
+     * text. Accepting an insertable ghost first would swallow the candidate
+     * list whenever both are available — a history suggestion at `use ` hides
+     * the databases, which is exactly what it is meant to help pick.
+     *
+     * The fallback keeps Tab working for the ghosts that have no completion
+     * behind them: closing brackets, and history at a prefix the provider
+     * knows nothing about.
      */
     private handleTab(buffer: string, cursor: number): void {
-        // If insertable ghost text is visible (not a hint), accept it
-        if (this._ghostText.isVisible && !this._ghostTextIsHint) {
-            this.handleAcceptGhostText();
+        if (!this.isAutocompletionEnabled()) {
             return;
         }
 
-        // Clear hint ghost text if visible (hints are not insertable)
-        if (this._ghostText.isVisible) {
-            this.clearGhostState();
-        }
+        const ghostIsInsertable = this._ghostText.isVisible && !this._ghostTextIsHint;
 
         const result = this.getCompletionResult(buffer, cursor);
         if (result.candidates.length === 0) {
+            if (ghostIsInsertable) {
+                this.handleAcceptGhostText();
+            } else if (this._ghostText.isVisible) {
+                this.clearGhostState();
+            }
             return;
+        }
+
+        // The completion paths below write to the row the ghost occupies.
+        if (this._ghostText.isVisible) {
+            this.clearGhostState();
         }
 
         if (result.candidates.length === 1) {
@@ -1039,7 +1106,7 @@ export class DocumentDBShellPty implements vscode.Pseudoterminal {
         }
 
         // Render the completion list below the prompt
-        const listOutput = renderCompletionList(result.candidates, this._columns);
+        const listOutput = renderCompletionList(result.candidates, this._columns, this.isColorEnabled());
         if (listOutput.length > 0) {
             this._writeEmitter.fire(listOutput);
             this._completionListVisible = true;
@@ -1060,14 +1127,16 @@ export class DocumentDBShellPty implements vscode.Pseudoterminal {
      */
     private applySingleCompletion(result: CompletionResult): void {
         const candidate = result.candidates[0];
+        const extraBefore = candidate.replaceCharsBefore ?? 0;
 
         // If insertText doesn't start with the typed prefix, replace
         // the prefix entirely. Covers bracket notation (db[re → 'restaurants']),
         // quoted field paths (address.ci → "address.city"), and
         // special-char collections (sto → ['stores (10)']).
-        if (result.prefix.length > 0 && !candidate.insertText.startsWith(result.prefix)) {
-            this._inputHandler.replaceText(result.prefix.length, candidate.insertText);
+        if (extraBefore > 0 || (result.prefix.length > 0 && !candidate.insertText.startsWith(result.prefix))) {
+            this._inputHandler.replaceText(result.prefix.length + extraBefore, candidate.insertText);
             this.trackCompletionAccepted(candidate.kind, 'tab');
+            this.reevaluateGhostText();
             return;
         }
 
@@ -1075,7 +1144,20 @@ export class DocumentDBShellPty implements vscode.Pseudoterminal {
         if (remaining.length > 0) {
             this._inputHandler.insertText(remaining);
             this.trackCompletionAccepted(candidate.kind, 'tab');
+            this.reevaluateGhostText();
         }
+    }
+
+    /**
+     * Ask for the next suggestion after the PTY itself changed the buffer.
+     *
+     * `insertText()` and `replaceText()` deliberately do not fire
+     * `onBufferChange`, so an accepted completion has to say so on its own —
+     * otherwise `$ex` + Tab lands on `$exists` without the description that
+     * typing `$exists` in full would have shown.
+     */
+    private reevaluateGhostText(): void {
+        this.handleBufferChange(this._inputHandler.buffer, this._inputHandler.cursor);
     }
 
     /**
@@ -1094,7 +1176,7 @@ export class DocumentDBShellPty implements vscode.Pseudoterminal {
      */
     private rewriteCurrentLine(): void {
         const prompt = `${this._currentDatabase}> `;
-        this._inputHandler.setPromptWidth(prompt.length);
+        this._inputHandler.setPromptWidth(terminalDisplayWidth(prompt));
         this._writeEmitter.fire(prompt);
         this._inputHandler.renderCurrentLine();
     }
@@ -1108,7 +1190,19 @@ export class DocumentDBShellPty implements vscode.Pseudoterminal {
         this._ghostText.clear((d) => this._writeEmitter.fire(d));
         this._ghostTextIsHint = false;
         this._ghostTextIsClosingBrackets = false;
+        this._ghostTextIsHistory = false;
         this._ghostCandidateKind = undefined;
+    }
+
+    /**
+     * Columns still free on the cursor's terminal row.
+     *
+     * The last column is deliberately excluded: writing into it sets the
+     * terminal's deferred-wrap flag, and the cursor-back sequence that restores
+     * the editing position cannot move between rows.
+     */
+    private availableGhostColumns(): number {
+        return this._inputHandler.availableColumnsAfterCursor();
     }
 
     /**
@@ -1147,6 +1241,14 @@ export class DocumentDBShellPty implements vscode.Pseudoterminal {
             return;
         }
 
+        // Ghost text is written at the cursor and only ever appends after it.
+        // Rendering it mid-buffer would paint over the real tail and make
+        // availableGhostColumns() treat occupied columns as free.
+        if (cursor !== buffer.length) {
+            this.clearGhostState();
+            return;
+        }
+
         // Need at least 1 character to show ghost text
         if (buffer.trim().length === 0) {
             this.clearGhostState();
@@ -1155,29 +1257,72 @@ export class DocumentDBShellPty implements vscode.Pseudoterminal {
 
         const result = this.getCompletionResult(buffer, cursor);
 
-        if (result.candidates.length === 1 && result.prefix.length > 0) {
-            const candidate = result.candidates[0];
-
-            // Skip ghost text when insertText doesn't start with the typed prefix
-            // (e.g., bracket notation, quoted field paths, special-char collections).
-            // The visual would be misleading since the insertion replaces the prefix.
-            if (!candidate.insertText.startsWith(result.prefix)) {
-                this.clearGhostState();
+        // Only one writer may own the row: a candidate's rewrite preview,
+        // appendable completion, or fully-typed description; then the db-dot
+        // collection count, history, schema hint, and closing brackets.
+        // Candidate branches return even if their renderer is disabled; the
+        // collection count falls through to history when inline hints are off.
+        const candidate = this.ghostCandidate(result);
+        if (candidate) {
+            // Accepting this candidate would rewrite text the user already typed
+            // (bracket notation, quoted field paths, special-char collections),
+            // which ghost text cannot represent because it only ever appends.
+            // Advertise the result as a non-insertable preview instead.
+            if (!candidate.insertText.startsWith(result.prefix) || (candidate.replaceCharsBefore ?? 0) > 0) {
+                this.showCompletionPreviewHint(candidate);
                 return;
             }
 
             // Single match with a typed prefix — show ghost text
             const remaining = candidate.insertText.slice(result.prefix.length);
             if (remaining.length > 0) {
-                this._ghostTextIsHint = false;
                 this._ghostTextIsClosingBrackets = false;
                 this._ghostCandidateKind = candidate.kind;
-                const rendered = this._ghostText.show(remaining, (d) => this._writeEmitter.fire(d));
-                if (rendered) {
+                if (this.showInsertableGhost(remaining)) {
                     this.trackCompletionGhostShown(candidate.kind);
                 }
                 return;
             }
+
+            // The candidate is fully typed, so there is nothing to insert and
+            // the row is free for its description.
+            if (candidate.detail) {
+                this.showDetailHint(candidate.detail);
+                return;
+            }
+        }
+
+        // `db.` says how much is there. Like a fully-typed candidate's description,
+        // this informational hint outranks history: `db.` is a prefix of nearly every
+        // command ever run, so a history match on it carries almost no
+        // information, while the count is about exactly where the cursor is.
+        //
+        // The candidates already carry the answer, so a cold cache yields zero
+        // collections and nothing is shown — no network call reaches the typing
+        // path.
+        //
+        // It is also the only hint that falls through when it is switched off:
+        // the ranking it displaces should come back, not leave the row blank.
+        if (result.prefix.length === 0) {
+            const collectionCount = result.candidates.filter((c) => c.kind === 'collection').length;
+            if (collectionCount > 0 && this._completionProvider.detectContext(buffer, cursor).kind === 'db-dot') {
+                if (this.showCollectionCountHint(collectionCount)) {
+                    return;
+                }
+            }
+        }
+
+        // Fish-style history autosuggestion. A pure append, so it needs nothing
+        // from the ghost text contract beyond what completions already use.
+        const historyMatch = this._inputHandler.findHistorySuggestion(buffer);
+        if (historyMatch) {
+            this._ghostTextIsClosingBrackets = false;
+            this._ghostTextIsHistory = true;
+            this._ghostCandidateKind = undefined;
+            if (this.showInsertableGhost(historyMatch.slice(buffer.length))) {
+                this.trackHistorySuggestionShown(historyMatch);
+            }
+            return;
         }
 
         // No completions inside a method argument — show schema hint only if
@@ -1210,11 +1355,9 @@ export class DocumentDBShellPty implements vscode.Pseudoterminal {
             if (lastCh && !expectsMoreInput.includes(lastCh)) {
                 const closing = getClosingBrackets(buffer);
                 if (closing.length > 0) {
-                    this._ghostTextIsHint = false;
                     this._ghostTextIsClosingBrackets = true;
                     this._ghostCandidateKind = undefined;
-                    const closingRendered = this._ghostText.show(closing, (d) => this._writeEmitter.fire(d));
-                    if (closingRendered) {
+                    if (this.showInsertableGhost(closing)) {
                         this.trackClosingBracketsShown();
                     }
                     return;
@@ -1226,13 +1369,93 @@ export class DocumentDBShellPty implements vscode.Pseudoterminal {
     }
 
     /**
+     * The single candidate ghost text should speak for, if there is one.
+     *
+     * Only a typed prefix qualifies. At an empty prefix Tab shows the candidate
+     * list rather than completing — `db.` always offers every database method
+     * alongside the collections — so there is no single candidate to speak for.
+     * That position is covered by {@link showCollectionCountHint} instead.
+     */
+    private ghostCandidate(result: CompletionResult): CompletionCandidate | undefined {
+        if (result.prefix.length === 0) {
+            return undefined;
+        }
+
+        return result.candidates.length === 1 ? result.candidates[0] : undefined;
+    }
+
+    /**
+     * Render an appendable suggestion, subject to `display.autocompletion`.
+     *
+     * Every unmarked ghost goes through here, so a future one inherits the
+     * setting by where it is written rather than by someone remembering to
+     * check it.
+     *
+     * @returns whether anything reached the terminal
+     */
+    private showInsertableGhost(text: string): boolean {
+        this._ghostTextIsHint = false;
+        if (!this.isAutocompletionEnabled()) {
+            return false;
+        }
+        return this._ghostText.show(text, (d) => this._writeEmitter.fire(d), this.availableGhostColumns());
+    }
+
+    /**
+     * Render an informational `🛈` line, subject to `display.inlineHints`.
+     *
+     * The counterpart to {@link showInsertableGhost}: the marker on screen and
+     * the setting that governs it are decided in the same place.
+     *
+     * @returns whether anything reached the terminal
+     */
+    private showInlineHint(text: string): boolean {
+        this._ghostTextIsHint = true;
+        this._ghostTextIsClosingBrackets = false;
+        this._ghostCandidateKind = undefined;
+        if (!this.areInlineHintsEnabled()) {
+            return false;
+        }
+        return this._ghostText.show(`  🛈 ${text}`, (d) => this._writeEmitter.fire(d), this.availableGhostColumns());
+    }
+
+    /**
      * Show a hint as ghost text when no schema data is available for a collection.
      * The hint is non-insertable — pressing Tab or Right Arrow won't accept it.
      */
-    private showSchemaHint(collectionName: string): void {
-        const hint = `  🛈 Run db.${collectionName}.find() first for field suggestions`;
-        this._ghostTextIsHint = true;
-        this._ghostText.show(hint, (d) => this._writeEmitter.fire(d));
+    private showSchemaHint(collectionName: string): boolean {
+        return this.showInlineHint(`Run db.${collectionName}.find() first for field suggestions`);
+    }
+
+    /**
+     * Show a fully-typed candidate's own description as ghost text.
+     * Non-insertable, like every other hint.
+     */
+    private showDetailHint(detail: string): boolean {
+        return this.showInlineHint(detail);
+    }
+
+    /**
+     * Show how many collections `db.` could stand for. Non-insertable — Tab
+     * still lists the candidates.
+     */
+    private showCollectionCountHint(count: number): boolean {
+        return this.showInlineHint(
+            count === 1 ? vscode.l10n.t('1 collection') : vscode.l10n.t('{0} collections', count),
+        );
+    }
+
+    /**
+     * Preview the completion a candidate stands for, e.g. `db.rest` →
+     * `db['restaurants-original']`. Never insertable.
+     *
+     * A candidate that rewrites already-typed text cannot be shown inline,
+     * because ghost text only appends — without this it would be silently
+     * skipped, which is how a user whose collections all need bracket notation
+     * never sees completion at all.
+     */
+    private showCompletionPreviewHint(candidate: CompletionCandidate): boolean {
+        return this.showInlineHint(candidate.insertText);
     }
 
     /**
@@ -1254,6 +1477,7 @@ export class DocumentDBShellPty implements vscode.Pseudoterminal {
 
         const ghostText = this._ghostText.currentText;
         const wasClosingBrackets = this._ghostTextIsClosingBrackets;
+        const wasHistory = this._ghostTextIsHistory;
         const candidateKind = this._ghostCandidateKind;
 
         // Clear ghost state and erase the dim rendering
@@ -1263,6 +1487,8 @@ export class DocumentDBShellPty implements vscode.Pseudoterminal {
             // ── Telemetry: track ghost text acceptance ───────────────
             if (wasClosingBrackets) {
                 this.trackClosingBracketsAccepted();
+            } else if (wasHistory) {
+                this.trackHistorySuggestionAccepted();
             } else if (candidateKind) {
                 this.trackCompletionAccepted(candidateKind, 'ghostText');
                 this.trackCompletionGhostAccepted(candidateKind);
@@ -1271,6 +1497,7 @@ export class DocumentDBShellPty implements vscode.Pseudoterminal {
             // Insert the ghost text into the buffer through the input handler.
             // insertText handles buffer update + terminal echo in normal color.
             this._inputHandler.insertText(ghostText);
+            this.reevaluateGhostText();
         }
 
         return ghostText;
@@ -1281,6 +1508,18 @@ export class DocumentDBShellPty implements vscode.Pseudoterminal {
     private isColorEnabled(): boolean {
         const config = vscode.workspace.getConfiguration();
         return config.get<boolean>('documentDB.shell.display.colorSupport', true);
+    }
+
+    /** Governs Tab completion, the candidate list, and every unmarked ghost. */
+    private isAutocompletionEnabled(): boolean {
+        const config = vscode.workspace.getConfiguration();
+        return config.get<boolean>('documentDB.shell.display.autocompletion', true);
+    }
+
+    /** Governs everything rendered with the `🛈` marker. */
+    private areInlineHintsEnabled(): boolean {
+        const config = vscode.workspace.getConfiguration();
+        return config.get<boolean>('documentDB.shell.display.inlineHints', true);
     }
 
     // ─── Private: Telemetry helpers ──────────────────────────────────────────
@@ -1355,6 +1594,28 @@ export class DocumentDBShellPty implements vscode.Pseudoterminal {
      */
     private trackClosingBracketsAccepted(): void {
         accumulateTelemetry('shell.closingBrackets', (sample) => {
+            sample.measurements.accepted = 1;
+        });
+    }
+
+    /**
+     * Track that a history-based autosuggestion was shown.
+     */
+    private trackHistorySuggestionShown(historyEntry: string): void {
+        if (historyEntry === this._lastShownHistorySuggestion) {
+            return;
+        }
+        this._lastShownHistorySuggestion = historyEntry;
+        accumulateTelemetry('shell.historySuggestion', (sample) => {
+            sample.measurements.shown = 1;
+        });
+    }
+
+    /**
+     * Track that a history-based autosuggestion was accepted.
+     */
+    private trackHistorySuggestionAccepted(): void {
+        accumulateTelemetry('shell.historySuggestion', (sample) => {
             sample.measurements.accepted = 1;
         });
     }

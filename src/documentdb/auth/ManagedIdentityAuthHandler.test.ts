@@ -6,7 +6,8 @@
 import { type OIDCCallbackParams, type OIDCResponse } from 'mongodb';
 import { type CachedClusterCredentials } from '../CredentialCache';
 import { AuthMethodId } from './AuthMethod';
-import { expiresInSecondsFromTimestamp, ManagedIdentityAuthHandler } from './ManagedIdentityAuthHandler';
+import { ManagedIdentityAuthHandler } from './ManagedIdentityAuthHandler';
+import { expiresInSecondsFromTimestamp } from './tokenExpiry';
 
 const getManagedIdentityAccessToken = jest.fn();
 

@@ -87,6 +87,8 @@ export type MainToWorkerMessage =
           readonly databaseName: string;
           /** Display batch size — number of documents per cursor iteration. Read from settings per-eval. */
           readonly displayBatchSize: number;
+          /** Terminal width in columns, when the caller is a terminal. Used by width-aware output. */
+          readonly terminalColumns?: number;
       }
     | {
           readonly type: 'shutdown';

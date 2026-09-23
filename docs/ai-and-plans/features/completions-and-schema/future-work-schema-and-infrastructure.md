@@ -48,6 +48,32 @@ Dedicated schema visualization panel showing field presence probability, type di
 
 ---
 
+## Parse Shell Results in the Worker
+
+**Priority:** P3 | **Impact:** Medium | **Effort:** 1–2 days
+
+The shell worker holds the raw result objects, serializes them to EJSON for IPC, and the extension
+host parses them straight back to feed `SchemaStore`. Have the worker compute the schema
+contribution instead and ship a delta. Removes a redundant stringify/parse round trip and takes the
+work off the main thread entirely — today it runs synchronously before the next prompt is drawn.
+Raised during the PR #933 review; see
+[iterations/09-bson-dual-package-hazard-review.md](./iterations/09-bson-dual-package-hazard-review.md).
+
+---
+
+## Dual-Package Hazard Signal in `SchemaAnalyzer`
+
+**Priority:** P3 | **Impact:** Low | **Effort:** 0.5 day
+
+`BSONTypes.inferType()` falls back to the `_bsontype` tag when `instanceof` fails, which keeps
+inference correct when a second copy of `bson` is loaded — but silently. Expose a cheap monotonic
+counter of fallback hits that the extension can sample into accumulating telemetry, so a bundler
+regression is visible rather than merely survivable. Deliberately held back from 1.0.0: it adds
+public API at the point the package commits to stability, and the call path is far too hot to
+instrument per call.
+
+---
+
 ## Constants & API Surface
 
 ### Full API Constants Package
@@ -71,6 +97,15 @@ Extend `operator-registry` (or create a sibling package) with shell API method m
 **Priority:** P3 | **Effort:** 0.5 day
 
 On `@mongosh` version upgrade, check if the 7 externalized optional dependencies are still needed.
+
+### Assert a Single `bson` Copy in the Bundle
+
+**Priority:** P3 | **Effort:** 0.5 day
+
+Iteration 09 leaves a manual post-build check that `dist/` contains no ESM `bson` chunk. Promote it
+to a packaging assertion so a dynamic import cannot silently reintroduce a second copy — the
+original regression went unnoticed for three and a half months precisely because nothing checked.
+Note that `grep -c` exits non-zero on zero matches, so the check must be written as `! grep -q`.
 
 ### Lazy Operator Data Loading
 
