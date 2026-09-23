@@ -54,22 +54,34 @@ Sibling areas: [query-playground](../query-playground/README.md),
 - **The Playground uses two layers:** TypeScript-based completions through a TS Server plugin, and a
   custom provider for DocumentDB-specific items.
 - **Schema is shared, not per-tab.** `SchemaStore` accumulates documents from the Collection View,
-  the Playground, and the Shell against the same key.
+  the Playground, and the Shell against the same key. One surface feeding bad data degrades all of
+  them.
+- **`bson` is imported statically, never via `await import('bson')`.** `bson` ships split
+  `import`/`require` export conditions, so a dynamic import loads a second copy of the package and
+  every `instanceof` check in `SchemaAnalyzer` silently fails. The same applies to anything that
+  re-exports its classes, `mongodb` included. `BSONTypes.inferType()` also falls
+  back to inherited `_bsontype` tags on non-plain objects, so a duplicated copy still classifies
+  correctly. Plain/null-prototype objects and objects with own tags remain document data and are
+  traversed; the fallback is not an authenticity check. Classification still happens
+  silently: there is no warning and no telemetry, and nothing else in the extension is protected.
+  The post-build chunk check in the iteration note is the only detector. See
+  [iterations/09-bson-dual-package-hazard.md](./iterations/09-bson-dual-package-hazard.md).
 
 ## Timeline
 
-| Step | PR   | What changed                                          | Docs                                                                                                       |
-| ---- | ---- | ----------------------------------------------------- | ---------------------------------------------------------------------------------------------------------- |
-| 2    | #506 | `SchemaAnalyzer` extracted into a package             | [iterations/02-schema-analyzer-refactor.md](./iterations/02-schema-analyzer-refactor.md)                   |
-| 3    | #513 | `operator-registry` package                           | [iterations/03-documentdb-constants.md](./iterations/03-documentdb-constants.md)                           |
-| 3.5  | —    | Monaco language architecture decision (Option E)      | [iterations/03.5-monaco-language-architecture.md](./iterations/03.5-monaco-language-architecture.md)       |
-| 4    | #518 | Filter `CompletionItemProvider` and hover provider    | [iterations/04-filter-completion-provider.md](./iterations/04-filter-completion-provider.md)               |
-| 4.5  | #530 | Context-sensitive completions                         | [iterations/04.5-context-sensitive-completions.md](./iterations/04.5-context-sensitive-completions.md)     |
-| 4.6  | #532 | Collection View and autocompletion UX fixes           | [iterations/04.6-collection-view-ux-improvements.md](./iterations/04.6-collection-view-ux-improvements.md) |
-| 6.1  | #538 | Shared schema cache (`SchemaStore`)                   | [iterations/06.1-shared-schema-cache.md](./iterations/06.1-shared-schema-cache.md)                         |
-| 7    | #543 | Playground `CompletionItemProvider`                   | [iterations/07-playground-completion-provider.md](./iterations/07-playground-completion-provider.md)       |
-| 7.1  | #551 | Shared completion code moved out of `webviews/`       | [iterations/07.1-shared-completion-migration.md](./iterations/07.1-shared-completion-migration.md)         |
-| 8    | #717 | Correct aggregation references for unsafe field names | [iterations/08-referenceText-unsafe-field-names.md](./iterations/08-referenceText-unsafe-field-names.md)   |
+| Step | PR   | What changed                                          | Docs                                                                                                                                                   |
+| ---- | ---- | ----------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| 2    | #506 | `SchemaAnalyzer` extracted into a package             | [iterations/02-schema-analyzer-refactor.md](./iterations/02-schema-analyzer-refactor.md)                                                               |
+| 3    | #513 | `operator-registry` package                           | [iterations/03-documentdb-constants.md](./iterations/03-documentdb-constants.md)                                                                       |
+| 3.5  | —    | Monaco language architecture decision (Option E)      | [iterations/03.5-monaco-language-architecture.md](./iterations/03.5-monaco-language-architecture.md)                                                   |
+| 4    | #518 | Filter `CompletionItemProvider` and hover provider    | [iterations/04-filter-completion-provider.md](./iterations/04-filter-completion-provider.md)                                                           |
+| 4.5  | #530 | Context-sensitive completions                         | [iterations/04.5-context-sensitive-completions.md](./iterations/04.5-context-sensitive-completions.md)                                                 |
+| 4.6  | #532 | Collection View and autocompletion UX fixes           | [iterations/04.6-collection-view-ux-improvements.md](./iterations/04.6-collection-view-ux-improvements.md)                                             |
+| 6.1  | #538 | Shared schema cache (`SchemaStore`)                   | [iterations/06.1-shared-schema-cache.md](./iterations/06.1-shared-schema-cache.md)                                                                     |
+| 7    | #543 | Playground `CompletionItemProvider`                   | [iterations/07-playground-completion-provider.md](./iterations/07-playground-completion-provider.md)                                                   |
+| 7.1  | #551 | Shared completion code moved out of `webviews/`       | [iterations/07.1-shared-completion-migration.md](./iterations/07.1-shared-completion-migration.md)                                                     |
+| 8    | #717 | Correct aggregation references for unsafe field names | [iterations/08-referenceText-unsafe-field-names.md](./iterations/08-referenceText-unsafe-field-names.md)                                               |
+| 9    | #933 | BSON wrapper types misclassified (bson dual-package)  | [iterations/09-bson-dual-package-hazard.md](./iterations/09-bson-dual-package-hazard.md), [review](./iterations/09-bson-dual-package-hazard-review.md) |
 
 Iteration numbers are the original step numbers of the shell-integration program where one existed.
 
