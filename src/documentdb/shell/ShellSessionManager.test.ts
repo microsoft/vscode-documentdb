@@ -91,4 +91,22 @@ describe('ShellSessionManager', () => {
 
         expect(metadata.displayName).toBe('alex@contoso.com');
     });
+
+    it('returns the first host and count of additional hosts', async () => {
+        CredentialCache.setAuthCredentials(
+            clusterId,
+            AuthMethodId.NoAuth,
+            'mongodb://db-a.example.com:27017,db-b.example.com:27017,db-c.example.com:27017,db-d.example.com:27017',
+        );
+        const manager = new ShellSessionManager({
+            clusterId,
+            clusterDisplayName: 'Test Cluster',
+            databaseName: 'test',
+        });
+
+        const metadata = await manager.initialize();
+
+        expect(metadata.host).toBe('db-a.example.com:27017');
+        expect(metadata.additionalHostCount).toBe(3);
+    });
 });

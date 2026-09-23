@@ -48,6 +48,10 @@ program-level narrative, and the sibling areas
   survivable and keeps clients isolated. The user-visible consequences are documented in the
   user manual; the reasoning for the shell/playground split is in
   [query-playground/multi-connection-behavior.md](../query-playground/multi-connection-behavior.md).
+- **The connection summary keeps multi-host seed lists compact.** A single host is shown unchanged;
+  when the connection string contains several hosts, the summary shows the first seed followed by
+  `+N more`. This display rule is independent of terminal width and does not imply that the first
+  seed is the active primary.
 - **Highlighting reuses the Monarch tokenizer** extracted for the query editors rather than a
   second grammar, so the input line and the result formatter colorize the same way.
 - **Completions are terminal-native.** Tab completion and ghost text are driven from the same

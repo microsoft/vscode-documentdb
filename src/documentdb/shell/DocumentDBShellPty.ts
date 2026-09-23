@@ -519,10 +519,14 @@ export class DocumentDBShellPty implements vscode.Pseudoterminal {
                     authLabel = l10n.t('Username and Password (SCRAM)');
                     break;
             }
+            const hostSummary =
+                metadata.additionalHostCount > 0
+                    ? l10n.t('{0} +{1} more', metadata.host, metadata.additionalHostCount)
+                    : metadata.host;
             const connectionLabel =
-                this._connectionInfo.clusterDisplayName === metadata.host
+                this._connectionInfo.clusterDisplayName === hostSummary
                     ? this._connectionInfo.clusterDisplayName
-                    : l10n.t('{0} ({1})', this._connectionInfo.clusterDisplayName, metadata.host);
+                    : l10n.t('{0} ({1})', this._connectionInfo.clusterDisplayName, hostSummary);
             const hostLabel = metadata.isEmulator ? l10n.t('{0} (Emulator)', connectionLabel) : connectionLabel;
 
             const identity = metadata.username ?? metadata.displayName;

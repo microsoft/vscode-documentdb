@@ -67,6 +67,7 @@ jest.mock('../../utils/accumulatingTelemetry', () => ({
 // Mock ShellSessionManager
 const mockInitialize = jest.fn().mockResolvedValue({
     host: 'test-host.documents.azure.com:10255',
+    additionalHostCount: 0,
     authMechanism: 'NativeAuth',
     isEmulator: false,
 });
@@ -218,6 +219,7 @@ describe('DocumentDBShellPty', () => {
         it('should not repeat the host when it matches the connection name', async () => {
             mockInitialize.mockResolvedValueOnce({
                 host: 'TestCluster',
+                additionalHostCount: 0,
                 authMechanism: 'NativeAuth',
                 isEmulator: false,
             });
@@ -227,6 +229,20 @@ describe('DocumentDBShellPty', () => {
 
             expect(written).toContain('Connected to: TestCluster');
             expect(written).not.toContain('Connected to: TestCluster (TestCluster)');
+        });
+
+        it('should summarize additional hosts in the connection label', async () => {
+            mockInitialize.mockResolvedValueOnce({
+                host: 'db-a.example.com:27017',
+                additionalHostCount: 3,
+                authMechanism: 'NativeAuth',
+                isEmulator: false,
+            });
+
+            pty.open(undefined);
+            await new Promise((resolve) => setTimeout(resolve, 10));
+
+            expect(written).toContain('Connected to: TestCluster (db-a.example.com:27017 +3 more)');
         });
 
         it.each([
