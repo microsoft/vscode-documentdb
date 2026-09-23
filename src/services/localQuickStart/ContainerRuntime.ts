@@ -7,11 +7,12 @@
  * Thin wrapper over `@microsoft/vscode-container-client` (Docker) for the Local
  * Quick Start POC (WI-0).
  *
- * - Command lines, stderr and the stdout of non-parsed commands go through a
+ * - All runtime stdout/stderr/command lines are routed through a single
  *   {@link MaskedChannelWritable} that **line-buffers** and **redacts secrets**
- *   before writing to the "DocumentDB Local Setup" OutputChannel (D14). Parsed
- *   stdout (inspect, ps) is not echoed at all: inspect carries the container env,
- *   password included, and callers often have no secret to mask it with.
+ *   before writing to the "DocumentDB Local Setup" OutputChannel (D14):
+ *   the generated password must never reach the channel, even when a stream
+ *   chunk splits it across a buffer boundary. Inspect stdout is the exception:
+ *   it carries the container env, so it is not echoed at all.
  * - `docker run` is detached (D4); because a detached run streams nothing back,
  *   {@link ContainerRuntime.followLogs} streams `docker logs -f` so the channel
  *   isn't silent during the readiness wait.
@@ -22,7 +23,6 @@ import {
     DockerClient,
     type InspectContainersItem,
     type ListContainersItem,
-    type PortBinding,
     ShellStreamCommandRunnerFactory,
 } from '@microsoft/vscode-container-client';
 import { Bash, Cmd, type Shell, type ShellQuotedString, ShellQuoting } from '@microsoft/vscode-processutils';
@@ -151,20 +151,7 @@ class ContainerRuntimeImpl implements IContainerRuntime {
         },
     });
 
-    private makeRunner(secrets: ReadonlyArray<string>, token?: vscode.CancellationToken) {
-        return this.createRunner(secrets, token, true);
-    }
-
-    /** For commands whose stdout is parsed (inspect, ps). Use it for any new one: see the module doc. */
-    private makeParsingRunner() {
-        return this.createRunner([], undefined, false);
-    }
-
-    private createRunner(
-        secrets: ReadonlyArray<string>,
-        token: vscode.CancellationToken | undefined,
-        echoStdout: boolean,
-    ) {
+    private makeRunner(secrets: ReadonlyArray<string>, token?: vscode.CancellationToken, echoStdout = true) {
         const channel = getQuickStartOutputChannel();
         const factory = new ShellStreamCommandRunnerFactory({
             // Non-strict: a non-zero exit still rejects, but harmless stderr warnings
@@ -249,17 +236,10 @@ class ContainerRuntimeImpl implements IContainerRuntime {
 
     public async inspectContainer(nameOrId: string): Promise<InspectContainersItem | undefined> {
         try {
-            const runner = this.makeParsingRunner();
+            // Don't echo stdout: it carries the container env (PASSWORD=…), and callers often have no secret to mask it with.
+            const runner = this.makeRunner([], undefined, false);
             const items = await runner(this.client.inspectContainers({ containers: [nameOrId] }));
-            const item = items?.[0];
-            // Stdout isn't echoed, so say what came back; otherwise the command looks like it returned nothing.
-            // Inspect reports names as `/name`; strip the slash so the line matches `[ps]`.
-            getQuickStartOutputChannel().appendLine(
-                item
-                    ? `[inspect] ${item.name.replace(/^\//, '')}: ${item.status ?? 'unknown'}${formatPorts(item.ports)}`
-                    : `[inspect] ${nameOrId}: not found`,
-            );
-            return item;
+            return items?.[0];
         } catch {
             return undefined;
         }
@@ -334,14 +314,8 @@ class ContainerRuntimeImpl implements IContainerRuntime {
     }
 
     public async listByLabel(labels: Record<string, string | boolean>): Promise<ListContainersItem[]> {
-        const runner = this.makeParsingRunner();
-        const items = await runner(this.client.listContainers({ all: true, labels }));
-        getQuickStartOutputChannel().appendLine(
-            items.length === 0
-                ? '[ps] no matching containers'
-                : `[ps] ${items.map((item) => `${item.name}: ${item.state}${formatPorts(item.ports)}`).join('; ')}`,
-        );
-        return items;
+        const runner = this.makeRunner([]);
+        return runner(this.client.listContainers({ all: true, labels }));
     }
 
     /**
@@ -381,6 +355,7 @@ class ContainerRuntimeImpl implements IContainerRuntime {
     }
 }
 
+/** Singleton container runtime. */
 /**
  * Read the host port actually bound to `containerPort` (design §8.3, D11). Pure inspector
  * (no IO) — kept off {@link IContainerRuntime} so that contract stays an IO-only surface.
@@ -391,13 +366,6 @@ export function getBoundHostPort(
 ): number | undefined {
     const binding = item.ports?.find((p) => p.containerPort === containerPort && typeof p.hostPort === 'number');
     return binding?.hostPort;
-}
-
-function formatPorts(ports: ReadonlyArray<PortBinding> | undefined): string {
-    const bound = ports?.filter((p) => p.hostPort !== undefined) ?? [];
-    return bound.length === 0
-        ? ''
-        : `, ${bound.map((p) => `${p.hostIp ?? '0.0.0.0'}:${p.hostPort}->${p.containerPort}`).join(', ')}`;
 }
 
 /** True when the inspected container reports a "running" status. Pure inspector (no IO). */

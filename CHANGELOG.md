@@ -8,7 +8,7 @@
 
 ### Security
 
-- **DocumentDB Local Credentials**: Quick Start no longer writes the instance password to the "DocumentDB Local Setup" output channel, removes its temporary credentials file right after the container is created (and on the next activation after a crash), and requires custom passwords of at least 8 characters. [#951](https://github.com/microsoft/vscode-documentdb/pull/951)
+- **DocumentDB Local Credentials**: Quick Start no longer writes the instance password to the "DocumentDB Local Setup" output channel, and removes its temporary credentials file right after the container is created (or on the next activation after a crash). [#951](https://github.com/microsoft/vscode-documentdb/pull/951)
 
 ## 0.10.2
 

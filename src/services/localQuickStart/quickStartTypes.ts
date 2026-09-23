@@ -67,9 +67,6 @@ export const QUICK_START_ALIAS = 'vscode-documentdb-local';
 /** Canonical DocumentDB local port (also the image default). */
 export const QUICK_START_PORT = 10260;
 
-/** Minimum custom password length. The output masker redacts every occurrence, so a trivially short one garbles the log. */
-export const QUICK_START_MIN_PASSWORD_LENGTH = 8;
-
 /**
  * Persistent named volume + the image's in-container data directory (`DATA_PATH`,
  * verified in the documentdb-local entrypoint). Mounting the volume at this path

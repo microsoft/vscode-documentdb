@@ -65,9 +65,10 @@ export class MaskingLineBuffer {
             this.buffer = this.buffer.slice(newlineIndex + 1);
             this.emit(sanitizeOutput(line, this.secrets));
         }
-        // No newline in sight: emit what we have, but keep a tail at least as long as the longest
-        // secret so a secret straddling the cut is still whole on the next pass and gets masked.
+        // No newline in sight: emit what we have. Mask first so the cut can't split a whole secret;
+        // the kept tail is as long as any secret, so one still arriving stays raw until it completes.
         if (this.buffer.length > MAX_BUFFERED_CHARS) {
+            this.buffer = maskSecrets(this.buffer, this.secrets);
             const keep = Math.max(this.maxSecretLength, 1);
             const cut = this.buffer.length - keep;
             if (cut > 0) {

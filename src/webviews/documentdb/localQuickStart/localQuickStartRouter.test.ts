@@ -111,20 +111,6 @@ describe('localQuickStartRouter', () => {
         expect(mockRevealQuickStartInstance).toHaveBeenCalledWith(context.actionContext);
     });
 
-    it.each(['short', '  abcdefg  '])(
-        'rejects a custom password under the minimum length before provisioning (%j)',
-        async (password) => {
-            const { QuickStartService } = jest.requireMock<{ QuickStartService: { provision: jest.Mock } }>(
-                '../../../services/localQuickStart/QuickStartService',
-            );
-            QuickStartService.provision.mockClear();
-            const caller = createCallerFactory(localQuickStartRouter)(createContext());
-
-            await expect(caller.startQuickStart({ username: 'admin', password })).rejects.toThrow();
-            expect(QuickStartService.provision).not.toHaveBeenCalled();
-        },
-    );
-
     it('suppresses telemetry for polled Docker readiness queries', async () => {
         mockIsDockerReady.mockResolvedValue({
             outcome: 'ready',
