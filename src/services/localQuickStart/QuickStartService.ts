@@ -744,6 +744,9 @@ export class QuickStartServiceImpl {
                 return result;
             });
             readinessEnvironment = readiness.environment;
+            // Docker is fine from here on, so the data and port checks below fail as setup errors
+            // rather than marking the Docker stage failed.
+            yield stageEvent('checking', 'done');
 
             const existing = await this.findManagedContainer(alias);
             const hasReadyRecord = (await getInstance(alias))?.phase === 'ready';
@@ -767,7 +770,7 @@ export class QuickStartServiceImpl {
                         detail: holders.map((container) => container.name || container.id).join(', '),
                     };
                     settleFailure(message);
-                    yield stageEvent('checking', 'error', message);
+                    yield stageEvent('error', 'error', message);
                     return;
                 }
             }
@@ -779,7 +782,7 @@ export class QuickStartServiceImpl {
             if (!reusing && !startFresh && (existing || hasReadyRecord || volumePresent)) {
                 const credentialsUnavailable: QuickStartMessage = { key: 'credentialsUnavailable' };
                 this.setStatus(alias, InstanceState.CredentialsMissing, undefined, credentialsUnavailable);
-                yield stageEvent('checking', 'error', credentialsUnavailable);
+                yield stageEvent('error', 'error', credentialsUnavailable);
                 return;
             }
 
@@ -791,11 +794,10 @@ export class QuickStartServiceImpl {
             if (!(await this.isPortAvailable(chosenPort, existing?.id))) {
                 const message: QuickStartMessage = { key: 'portInUse', port: chosenPort };
                 settleFailure(message);
-                yield stageEvent('checking', 'error', message);
+                yield stageEvent('error', 'error', message);
                 return;
             }
             this.throwIfAborted(signal);
-            yield stageEvent('checking', 'done');
 
             // Take the durable provisioning lease BEFORE the pull (H3): a host killed anywhere from
             // here to `finalizeReadyInstance` then reconciles as "Provisioning…" (fresh lease) or is

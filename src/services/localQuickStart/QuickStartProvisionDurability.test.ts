@@ -476,7 +476,9 @@ describe('QuickStartService — WP-3 provisioning durability and port model', ()
 
         const events = await collect(service.provision(new AbortController().signal, { port: QUICK_START_PORT }));
 
-        expect(events.at(-1)).toMatchObject({ stage: 'checking', status: 'error' });
+        // Docker itself passed, so the port failure must not mark the Docker stage failed.
+        expect(events).toContainEqual(expect.objectContaining({ stage: 'checking', status: 'done' }));
+        expect(events.at(-1)).toMatchObject({ stage: 'error', status: 'error' });
         expect(events.at(-1)?.message).toEqual({ key: 'portInUse', port: QUICK_START_PORT });
         expect(service.getStatus().state).toBe(InstanceState.Error);
     });
