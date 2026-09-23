@@ -93,9 +93,9 @@ authenticating for both the Interactive Shell and the Query Playground (previous
 Readers use ordinary configuration reads of the current keys, preserving VS Code's normal scope
 precedence. Old entries are left untouched in settings files but no longer affect behavior. Users
 who customized them must configure the new keys again. Activation performs no rename writes or
-migration-state updates. Each old ID appears in the new property's description so it remains
-searchable on the minimum supported VS Code 1.105; property-level keywords provide additional
-search support on newer versions.
+migration-state updates. Property-level keywords may help users find replacements on newer VS Code
+versions; preserving old-ID search on VS Code 1.105 was rejected because it would require exposing
+technical migration text in every affected setting description.
 
 The three connection/port settings retain `machine-overridable` scope. Remote windows no longer
 read their local User values; users may need to configure Remote User or Workspace values instead.

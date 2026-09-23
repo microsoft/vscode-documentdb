@@ -1619,7 +1619,7 @@
           "documentDB.confirmations.style": {
             "order": 1,
             "type": "string",
-            "description": "The behavior to use when confirming operations that cannot be undone, such as deleting resources. Previous setting ID: documentDB.confirmations.confirmationStyle.",
+            "description": "The behavior to use when confirming operations that cannot be undone, such as deleting resources.",
             "enum": [
               "buttonConfirmation",
               "challengeConfirmation",
@@ -1650,7 +1650,7 @@
             "order": 3,
             "type": "boolean",
             "default": true,
-            "description": "Show detailed operation summaries, displaying messages for actions such as database drops, document additions, deletions, or similar events. Previous setting ID: documentDB.userInterface.ShowOperationSummaries."
+            "description": "Show detailed operation summaries, displaying messages for actions such as database drops, document additions, deletions, or similar events."
           }
         }
       },
@@ -1661,7 +1661,7 @@
           "documentDB.connectionTimeout": {
             "order": 1,
             "type": "number",
-            "description": "Maximum time (in seconds) to wait for the Interactive Shell or Query Playground to connect and authenticate. Previous setting ID: documentDB.shell.initTimeout.",
+            "description": "Maximum time (in seconds) to wait for the Interactive Shell or Query Playground to connect and authenticate.",
             "default": 30,
             "minimum": 5,
             "keywords": [
@@ -1813,7 +1813,7 @@
             "keywords": [
               "enableAIQueryGeneration"
             ],
-            "markdownDescription": "Enable AI-powered natural language to query translation in the collection view. When enabled, you can type questions in plain language and have them translated into database queries.\n\nPrevious setting ID: `documentDB.experimental.enableAIQueryGeneration`.\n\nNote: Experimental features might not work as expected, and AI-generated content might not always be accurate."
+            "markdownDescription": "Enable AI-powered natural language to query translation in the collection view. When enabled, you can type questions in plain language and have them translated into database queries.\n\nNote: Experimental features might not work as expected, and AI-generated content might not always be accurate."
           },
           "documentDB.aiAssistant.queryGenerationSingleCollectionPromptPath": {
             "order": 2,
@@ -1821,7 +1821,7 @@
               "string",
               "null"
             ],
-            "description": "Path to a custom prompt template file for single collection query generation. Leave empty to use the built-in template. Previous setting ID: documentDB.aiAssistant.singleCollectionQueryPromptPath.",
+            "description": "Path to a custom prompt template file for single collection query generation. Leave empty to use the built-in template.",
             "default": null,
             "keywords": [
               "singleCollectionQueryPromptPath"
@@ -1833,7 +1833,7 @@
               "string",
               "null"
             ],
-            "description": "Path to a custom prompt template file for cross-collection query generation. Leave empty to use the built-in template. Previous setting ID: documentDB.aiAssistant.crossCollectionQueryPromptPath.",
+            "description": "Path to a custom prompt template file for cross-collection query generation. Leave empty to use the built-in template.",
             "default": null,
             "keywords": [
               "crossCollectionQueryPromptPath"
@@ -1845,7 +1845,7 @@
               "string",
               "null"
             ],
-            "description": "Path to a custom prompt template file for Index Advisor recommendations on find queries. Leave empty to use the built-in template. Previous setting ID: documentDB.aiAssistant.findQueryPromptPath.",
+            "description": "Path to a custom prompt template file for Index Advisor recommendations on find queries. Leave empty to use the built-in template.",
             "default": null,
             "keywords": [
               "findQueryPromptPath"
@@ -1857,7 +1857,7 @@
               "string",
               "null"
             ],
-            "description": "Path to a custom prompt template file for Index Advisor recommendations on aggregation pipelines. Leave empty to use the built-in template. Previous setting ID: documentDB.aiAssistant.aggregateQueryPromptPath.",
+            "description": "Path to a custom prompt template file for Index Advisor recommendations on aggregation pipelines. Leave empty to use the built-in template.",
             "default": null,
             "keywords": [
               "aggregateQueryPromptPath"
@@ -1869,7 +1869,7 @@
               "string",
               "null"
             ],
-            "description": "Path to a custom prompt template file for Index Advisor recommendations on count queries. Leave empty to use the built-in template. Previous setting ID: documentDB.aiAssistant.countQueryPromptPath.",
+            "description": "Path to a custom prompt template file for Index Advisor recommendations on count queries. Leave empty to use the built-in template.",
             "default": null,
             "keywords": [
               "countQueryPromptPath"

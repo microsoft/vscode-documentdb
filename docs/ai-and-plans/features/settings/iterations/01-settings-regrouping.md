@@ -31,8 +31,9 @@ reference:
   key segment lengthens the rendered label. (D0003)
 - `createSettingsTreeGroupElement` hides deprecated settings unless the user configured them — and
   the same filter applies to search results, so a deprecation shim does not preserve discoverability
-  of the old name. VS Code 1.105 searches descriptions but not property-level `keywords`, so old IDs
-  must appear in descriptions to remain searchable on the minimum supported version.
+  of the old name. VS Code 1.105 searches descriptions but not property-level `keywords`; preserving
+  old-ID search there was rejected because it would clutter user-facing descriptions with migration
+  details.
 - VS Code exposes no configuration-migration API to extensions; `registerConfigurationMigrations` is
   internal to core.
 

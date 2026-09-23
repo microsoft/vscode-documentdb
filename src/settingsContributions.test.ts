@@ -14,8 +14,6 @@ type ConfigurationNode = {
         {
             order?: number;
             default?: unknown;
-            description?: string;
-            markdownDescription?: string;
             markdownDeprecationMessage?: string;
             scope?: string;
         }
@@ -138,36 +136,6 @@ describe('settings contributions', () => {
             }
         });
 
-        it('keeps previous setting IDs searchable on the minimum VS Code version', () => {
-            const properties = Object.fromEntries(nodes.flatMap((node) => Object.entries(node.properties)));
-            const renamedSettings = [
-                [settingsKeys.confirmationStyle, 'documentDB.confirmations.confirmationStyle'],
-                [settingsKeys.enableAIQueryGeneration, 'documentDB.experimental.enableAIQueryGeneration'],
-                [settingsKeys.showOperationSummaries, 'documentDB.userInterface.ShowOperationSummaries'],
-                [settingsKeys.indexAdvisorFindPromptPath, 'documentDB.aiAssistant.findQueryPromptPath'],
-                [settingsKeys.indexAdvisorAggregatePromptPath, 'documentDB.aiAssistant.aggregateQueryPromptPath'],
-                [settingsKeys.indexAdvisorCountPromptPath, 'documentDB.aiAssistant.countQueryPromptPath'],
-                [
-                    settingsKeys.queryGenerationCrossCollectionPromptPath,
-                    'documentDB.aiAssistant.crossCollectionQueryPromptPath',
-                ],
-                [
-                    settingsKeys.queryGenerationSingleCollectionPromptPath,
-                    'documentDB.aiAssistant.singleCollectionQueryPromptPath',
-                ],
-                [settingsKeys.connectionTimeout, 'documentDB.shell.initTimeout'],
-            ] as const;
-
-            for (const [currentKey, previousKey] of renamedSettings) {
-                const schema = properties[currentKey];
-                const searchableText = [currentKey, schema?.description, schema?.markdownDescription]
-                    .filter((value): value is string => typeof value === 'string')
-                    .join(' ')
-                    .toLowerCase();
-
-                expect(searchableText).toContain(previousKey.toLowerCase());
-            }
-        });
     });
 
     describe('user-facing text', () => {

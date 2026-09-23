@@ -333,9 +333,10 @@ remaining cost is one reset, and paying it once is better than paying it again i
   prompt belongs to without adding a key segment, so D0003's label-length concern does not apply.
 - Very few users set custom prompt paths, so these resets affect almost no one.
 
-Old names are included in the new property descriptions so searching still finds them on the
-minimum supported VS Code 1.105. They are also listed as property-level `keywords` for newer VS Code
-versions that support that search field.
+Old names remain as property-level `keywords` for newer VS Code versions that support that search
+field. They are not included in descriptions solely to preserve search on VS Code 1.105; the
+operator rejected exposing technical migration text in user-facing setting descriptions for this
+small user base.
 
 ### Rejected alternatives
 
