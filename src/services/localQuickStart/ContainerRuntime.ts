@@ -59,11 +59,13 @@ export const CREATE_CONTAINER_TIMEOUT_MS = 90_000;
 /** Bound for the status reads polled while the user waits, so a hung daemon cannot stall the wait. */
 const POLLED_QUERY_TIMEOUT_MS = 10_000;
 
-/**
- * Bound for start/stop/remove and the container listing. Setup's cleanup runs these right after a
- * `docker run` timed out, against the same daemon; unbounded, setup would never report that timeout.
- */
-const DOCKER_COMMAND_TIMEOUT_MS = 60_000;
+/** Bound for setup's cleanup after a `docker run` timed out; unbounded, setup would never report that timeout. */
+export const SETUP_CLEANUP_TIMEOUT_MS = 60_000;
+
+/** For commands that must not hang, such as setup's cleanup. */
+export interface DockerCommandBounds {
+    readonly timeoutMs?: number;
+}
 
 let outputChannel: vscode.OutputChannel | undefined;
 
@@ -142,8 +144,8 @@ export interface IContainerRuntime {
         options?: { quiet?: boolean; token?: vscode.CancellationToken },
     ): Promise<InspectContainersItem | undefined>;
     startContainer(id: string): Promise<void>;
-    stopContainer(id: string): Promise<void>;
-    removeContainer(id: string, force?: boolean): Promise<void>;
+    stopContainer(id: string, bounds?: DockerCommandBounds): Promise<void>;
+    removeContainer(id: string, force?: boolean, bounds?: DockerCommandBounds): Promise<void>;
     removeVolume(name: string, force?: boolean): Promise<void>;
     /** Rejects when Docker can't answer, so a failure is never mistaken for "absent". */
     volumeExists(name: string): Promise<boolean>;
@@ -153,7 +155,7 @@ export interface IContainerRuntime {
         secrets: ReadonlyArray<string>,
         token?: vscode.CancellationToken,
     ): Promise<void>;
-    listByLabel(labels: Record<string, string | boolean>): Promise<ListContainersItem[]>;
+    listByLabel(labels: Record<string, string | boolean>, bounds?: DockerCommandBounds): Promise<ListContainersItem[]>;
     followLogs(id: string, secrets: ReadonlyArray<string>, token?: vscode.CancellationToken): Promise<void>;
     /** The container's last `lineCount` log lines, formatting stripped and secrets masked. */
     readRecentLogs(
@@ -317,40 +319,25 @@ class ContainerRuntimeImpl implements IContainerRuntime {
     }
 
     public async startContainer(id: string): Promise<void> {
-        await this.runCommand(
-            this.client.startContainers({ container: [id] }),
-            [],
-            undefined,
-            DOCKER_COMMAND_TIMEOUT_MS,
-        );
+        await this.runCommand(this.client.startContainers({ container: [id] }));
     }
 
-    public async stopContainer(id: string): Promise<void> {
-        await this.runCommand(
-            this.client.stopContainers({ container: [id] }),
-            [],
-            undefined,
-            DOCKER_COMMAND_TIMEOUT_MS,
-        );
+    public async stopContainer(id: string, bounds?: DockerCommandBounds): Promise<void> {
+        await this.runCommand(this.client.stopContainers({ container: [id] }), [], undefined, bounds?.timeoutMs);
     }
 
-    public async removeContainer(id: string, force = true): Promise<void> {
+    public async removeContainer(id: string, force = true, bounds?: DockerCommandBounds): Promise<void> {
         await this.runCommand(
             this.client.removeContainers({ containers: [id], force }),
             [],
             undefined,
-            DOCKER_COMMAND_TIMEOUT_MS,
+            bounds?.timeoutMs,
         );
     }
 
     /** Remove a named volume (best-effort; used for a clean fresh provision and on Delete). */
     public async removeVolume(name: string, force = true): Promise<void> {
-        await this.runCommand(
-            this.client.removeVolumes({ volumes: [name], force }),
-            [],
-            undefined,
-            DOCKER_COMMAND_TIMEOUT_MS,
-        );
+        await this.runCommand(this.client.removeVolumes({ volumes: [name], force }));
     }
 
     public async volumeExists(name: string): Promise<boolean> {
@@ -408,13 +395,16 @@ class ContainerRuntimeImpl implements IContainerRuntime {
         }
     }
 
-    public async listByLabel(labels: Record<string, string | boolean>): Promise<ListContainersItem[]> {
+    public async listByLabel(
+        labels: Record<string, string | boolean>,
+        bounds?: DockerCommandBounds,
+    ): Promise<ListContainersItem[]> {
         return (
             (await this.runCommand(
                 this.client.listContainers({ all: true, labels }),
                 [],
                 undefined,
-                DOCKER_COMMAND_TIMEOUT_MS,
+                bounds?.timeoutMs,
             )) ?? []
         );
     }

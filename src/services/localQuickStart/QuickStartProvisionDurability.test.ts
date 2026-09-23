@@ -15,7 +15,7 @@ import * as fsPromises from 'fs/promises';
 import * as vscode from 'vscode';
 import { ext } from '../../extensionVariables';
 import { StorageService } from '../storageService';
-import { disposeQuickStartOutputChannel, type IContainerRuntime } from './ContainerRuntime';
+import { disposeQuickStartOutputChannel, type IContainerRuntime, SETUP_CLEANUP_TIMEOUT_MS } from './ContainerRuntime';
 import { DockerCommandError, DockerCommandTimeoutError } from './dockerCommand';
 import { QuickStartServiceImpl } from './QuickStartService';
 import {
@@ -604,7 +604,7 @@ describe('QuickStartService — WP-3 provisioning durability and port model', ()
         });
 
         // ERR-3: `docker run` can hang forever on Docker Desktop (e.g. port 65535).
-        it('reports a create deadline and removes whatever the killed run left behind', async () => {
+        it('reports a create deadline and removes, within a bound, whatever the killed run left behind', async () => {
             const listByLabel = jest.fn().mockResolvedValue([]);
             const removeContainer = jest.fn().mockResolvedValue(undefined);
             const service = new QuickStartServiceImpl(
@@ -622,7 +622,9 @@ describe('QuickStartService — WP-3 provisioning durability and port model', ()
 
             expect(events.at(-1)).toMatchObject({ stage: 'error', message: { key: 'createTimedOut' } });
             expect(events.at(-1)?.timedOut).toBeUndefined();
-            expect(removeContainer).toHaveBeenCalledWith('half-created');
+            const cleanupBounds = { timeoutMs: SETUP_CLEANUP_TIMEOUT_MS };
+            expect(listByLabel).toHaveBeenCalledWith(expect.anything(), cleanupBounds);
+            expect(removeContainer).toHaveBeenCalledWith('half-created', undefined, cleanupBounds);
         });
     });
 
@@ -668,7 +670,7 @@ describe('QuickStartService — WP-3 provisioning durability and port model', ()
             });
             expect(events.at(-1)?.timedOut).toBeUndefined();
             // A dead container is discarded like any failed attempt, not kept for "Wait longer".
-            expect(runtime.removeContainer).toHaveBeenCalledWith('c1');
+            expect(runtime.removeContainer).toHaveBeenCalledWith('c1', undefined, undefined);
             expect(service.getStatus().canResumeReadiness).toBe(false);
         });
 
@@ -708,7 +710,7 @@ describe('QuickStartService — WP-3 provisioning durability and port model', ()
                 key: 'credentialsRejected',
                 detail: 'Invalid account: User details not found in the database',
             });
-            expect(runtime.removeContainer).toHaveBeenCalledWith('c1');
+            expect(runtime.removeContainer).toHaveBeenCalledWith('c1', undefined, undefined);
         });
 
         // A recreate keeps the data and its saved credentials; Configure has nothing to edit there.
@@ -760,68 +762,6 @@ describe('QuickStartService — WP-3 provisioning durability and port model', ()
             expect(events.at(-1)?.message).toEqual({ key: 'passwordNotSupported' });
         });
 
-        // Docker Desktop quitting mid-wait used to end, three minutes later, in "Wait longer".
-        it('stops waiting and shows the Docker remediation when Docker goes away', async () => {
-            onProbe = () => {
-                throw new Error('connect ECONNREFUSED 127.0.0.1:10260');
-            };
-            const unavailable = {
-                outcome: 'diagnosed',
-                environment: 'linux',
-                endpointKind: 'unixSocket',
-                provider: 'dockerDesktop',
-                providerEvidence: 'rememberedProvider',
-                executionTarget: 'local',
-                failureKind: 'daemonUnavailable',
-                canContinueAnyway: false,
-                checkedAtMs: 2,
-                cliInstalled: true,
-                daemonReachable: false,
-            };
-            let inspections = 0;
-            const runtime = runtimeFor({
-                overrides: {
-                    isDockerReady: jest
-                        .fn()
-                        .mockResolvedValueOnce({
-                            outcome: 'ready',
-                            environment: 'linux',
-                            endpointKind: 'unixSocket',
-                            canContinueAnyway: false,
-                            checkedAtMs: 1,
-                            cliInstalled: true,
-                            daemonReachable: true,
-                        })
-                        .mockResolvedValue(unavailable),
-                    inspectContainer: jest.fn(() => {
-                        inspections += 1;
-                        return Promise.resolve(
-                            inspections === 1
-                                ? {
-                                      id: 'c1',
-                                      status: 'running',
-                                      ports: [{ containerPort: QUICK_START_PORT, hostPort: QUICK_START_PORT }],
-                                  }
-                                : undefined,
-                        );
-                    }) as unknown as IContainerRuntime['inspectContainer'],
-                },
-            });
-            const service = new QuickStartServiceImpl(runtime);
-
-            const events = await collect(service.provision(new AbortController().signal));
-
-            expect(events.at(-1)).toMatchObject({
-                stage: 'error',
-                message: { key: 'dockerUnavailableDuringSetup' },
-                dockerReadiness: unavailable,
-            });
-            expect(events.at(-1)?.timedOut).toBeUndefined();
-            // Kept with its credentials, so it can be recreated once Docker is back.
-            expect(runtime.removeContainer).not.toHaveBeenCalled();
-            expect(await readConnectionString(DEFAULT_ALIAS)).toBeDefined();
-        });
-
         it('treats a password SASLprep refuses as final', async () => {
             onProbe = () => {
                 throw new Error('Unassigned code point, see https://tools.ietf.org/html/rfc4013#section-2.5');
@@ -831,6 +771,51 @@ describe('QuickStartService — WP-3 provisioning durability and port model', ()
             const events = await collect(service.provision(new AbortController().signal));
 
             expect(events.at(-1)?.message).toEqual({ key: 'passwordNotSupported' });
+        });
+
+        // A timed-out attempt keeps its credentials and data, so Configure offers reuse and hides the fields.
+        it('words a rejection after Wait longer around the saved data', async () => {
+            const realNow = Date.now.bind(Date);
+            let skipped = 0;
+            const now = jest.spyOn(Date, 'now').mockImplementation(() => realNow() + skipped);
+            try {
+                onProbe = () => {
+                    skipped += 200_000;
+                    throw new Error('connect ECONNREFUSED 127.0.0.1:10260');
+                };
+                const service = new QuickStartServiceImpl(runtimeFor());
+                const first = await collect(service.provision(new AbortController().signal));
+                expect(first.at(-1)?.timedOut).toBe(true);
+
+                onProbe = rejectCredentials;
+                const resumed = await collect(service.resumeReadiness(new AbortController().signal));
+
+                expect(resumed.at(-1)?.message?.key).toBe('savedCredentialsRejected');
+            } finally {
+                now.mockRestore();
+            }
+        });
+
+        it('words a saved password SASLprep refuses around the existing data', async () => {
+            await upsertInstance({
+                alias: DEFAULT_ALIAS,
+                displayName: 'DocumentDB Local',
+                port: QUICK_START_PORT,
+                phase: 'ready',
+            });
+            await writeConnectionString(
+                DEFAULT_ALIAS,
+                `mongodb://saved:saved@localhost:${QUICK_START_PORT}/?tls=true&tlsAllowInvalidCertificates=true`,
+                { displayName: 'DocumentDB Local', port: QUICK_START_PORT },
+            );
+            onProbe = () => {
+                throw new Error('Unassigned code point, see https://tools.ietf.org/html/rfc4013#section-2.5');
+            };
+            const service = new QuickStartServiceImpl(runtimeFor());
+
+            const events = await collect(service.provision(new AbortController().signal));
+
+            expect(events.at(-1)?.message?.key).toBe('savedCredentialsRejected');
         });
     });
 

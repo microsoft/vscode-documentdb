@@ -41,6 +41,7 @@ import {
     hasExited,
     type IContainerRuntime,
     isRunning,
+    SETUP_CLEANUP_TIMEOUT_MS,
 } from './ContainerRuntime';
 import { DockerCommandError, DockerCommandTimeoutError } from './dockerCommand';
 import { maskSecrets } from './outputMasking';
@@ -147,9 +148,10 @@ function describeCredentialRejection(error: unknown): QuickStartMessage | undefi
     return undefined;
 }
 
-/** Credentials the user never typed can only be fixed by erasing the data they were saved for. */
-function describeReadinessFailure(reason: QuickStartMessage, reusing: boolean): QuickStartMessage {
-    return reason.key === 'credentialsRejected' && reusing ? { ...reason, key: 'savedCredentialsRejected' } : reason;
+/** Once credentials are saved with the data, Configure no longer edits them; it only offers to erase the data. */
+function describeReadinessFailure(reason: QuickStartMessage, savedWithData: boolean): QuickStartMessage {
+    const credentialFailure = reason.key === 'credentialsRejected' || reason.key === 'passwordNotSupported';
+    return credentialFailure && savedWithData ? { ...reason, key: 'savedCredentialsRejected' } : reason;
 }
 
 /**
@@ -245,14 +247,6 @@ class ReadinessFailedError extends Error {
     constructor(readonly reason: QuickStartMessage) {
         super(reason.key);
         this.name = 'ReadinessFailedError';
-    }
-}
-
-/** Docker itself went away during the readiness wait, so the container cannot come up either. */
-class DockerUnavailableError extends Error {
-    constructor(readonly readiness: DockerReadiness) {
-        super('');
-        this.name = 'DockerUnavailableError';
     }
 }
 
@@ -749,7 +743,7 @@ export class QuickStartServiceImpl {
         let success = false;
         let portTaken = false;
         let readinessTimedOut = false;
-        let dockerLostDuringWait = false;
+        let createTimedOut = false;
         // Owner nonce for this run: stamped on the container (H4) and on the provisioning lease (H3),
         // so both the cleanup sweep and the registry reservation are provably this run's own. This is
         // load-bearing today for concurrent windows, not only for the multi-instance seam.
@@ -1006,13 +1000,9 @@ export class QuickStartServiceImpl {
             yield stageEvent('done', 'done', { key: 'instanceRunning', port: boundPort }, boundPort);
         } catch (error) {
             const aborted = signal.aborted;
-            const dockerReadiness = aborted
-                ? undefined
-                : error instanceof DockerUnavailableError
-                  ? error.readiness
-                  : activeDockerStage
-                    ? await this.getProvisioningDockerReadiness()
-                    : undefined;
+            createTimedOut = error instanceof DockerCommandTimeoutError;
+            const dockerReadiness =
+                !aborted && activeDockerStage ? await this.getProvisioningDockerReadiness() : undefined;
             provisioningDockerFailureKind = dockerReadiness?.failureKind;
             const detail = errMessage(error);
             let message: QuickStartMessage = aborted ? { key: 'setupCancelled' } : { key: 'unexpectedFailure', detail };
@@ -1037,10 +1027,6 @@ export class QuickStartServiceImpl {
                 // Any other failure (or cancel) discards the attempt — drop the retained state so a
                 // stale timeout can't offer "Wait longer" against a container we're about to remove.
                 this.stateFor(alias).pendingReadiness = undefined;
-                // Except when Docker itself went away: teardown could not reach the container, and
-                // dropping its saved credentials would leave it unopenable once Docker is back. Kept,
-                // the next setup recreates it like any existing instance.
-                dockerLostDuringWait = !aborted && error instanceof DockerUnavailableError;
                 if (!aborted) {
                     if (activeDockerStage === 'creating' && isPortAllocationFailure(error)) {
                         // The port was free at the pre-check but taken while the image downloaded
@@ -1069,18 +1055,20 @@ export class QuickStartServiceImpl {
             // Stop the followLogs stream (started with cts.token). Disposing alone
             // does NOT signal cancellation — only cancel() stops `docker logs -f`.
             cts.cancel();
-            if (!success && !readinessTimedOut && !dockerLostDuringWait) {
+            if (!success && !readinessTimedOut) {
                 // Only a run that got a container can have created the volume; otherwise it may be someone else's.
                 let ownsContainer = false;
                 // Cleanup (D12): when a container exists, stop+remove it.
+                // Bounded only after a hung `docker run`: the same daemon may hang these too.
+                const cleanupBounds = createTimedOut ? { timeoutMs: SETUP_CLEANUP_TIMEOUT_MS } : undefined;
                 if (containerCreated && containerId) {
                     ownsContainer = true;
                     channel.appendLine(`Cleaning up container ${containerId}…`);
                     await this.runtime
-                        .stopContainer(containerId)
+                        .stopContainer(containerId, cleanupBounds)
                         .catch(() => meterQuickStartSilentCatch('provision_cleanupStopContainer'));
                     await this.runtime
-                        .removeContainer(containerId)
+                        .removeContainer(containerId, undefined, cleanupBounds)
                         .catch(() => meterQuickStartSilentCatch('provision_cleanupRemoveContainer'));
                 } else if (createAttempted && !containerId) {
                     // The CLI may have been killed after the daemon created the container but
@@ -1090,10 +1078,13 @@ export class QuickStartServiceImpl {
                     // create race reaches exactly this branch (its `docker run` failed on the
                     // duplicate name).
                     const orphans = await this.runtime
-                        .listByLabel({
-                            [QUICK_START_LABEL_KEY]: '1',
-                            [QUICK_START_OPERATION_LABEL_KEY]: operationId,
-                        })
+                        .listByLabel(
+                            {
+                                [QUICK_START_LABEL_KEY]: '1',
+                                [QUICK_START_OPERATION_LABEL_KEY]: operationId,
+                            },
+                            cleanupBounds,
+                        )
                         .catch(() => {
                             meterQuickStartSilentCatch('provision_listOrphanedContainers');
                             return [];
@@ -1102,7 +1093,7 @@ export class QuickStartServiceImpl {
                     for (const orphan of orphans) {
                         channel.appendLine(`Removing orphaned container ${orphan.id}…`);
                         await this.runtime
-                            .removeContainer(orphan.id)
+                            .removeContainer(orphan.id, undefined, cleanupBounds)
                             .catch(() => meterQuickStartSilentCatch('provision_removeOrphanedContainer'));
                     }
                 }
@@ -1177,16 +1168,10 @@ export class QuickStartServiceImpl {
         }
     }
 
-    private async getProvisioningDockerReadiness(
-        cancellationToken?: vscode.CancellationToken,
-    ): Promise<DockerReadiness | undefined> {
+    private async getProvisioningDockerReadiness(): Promise<DockerReadiness | undefined> {
         try {
             // Echo only failing probes: a healthy `docker info` dump would bury the real error in the setup log.
-            const readiness = await this.checkDockerReadiness(
-                cancellationToken
-                    ? { forceRefresh: true, suppressCommandEcho: true, cancellationToken }
-                    : { forceRefresh: true, suppressCommandEcho: true },
-            );
+            const readiness = await this.checkDockerReadiness({ forceRefresh: true, suppressCommandEcho: true });
             return readiness.outcome === 'diagnosed' ? readiness : undefined;
         } catch {
             meterQuickStartSilentCatch('provision_getDockerReadiness');
@@ -1324,11 +1309,10 @@ export class QuickStartServiceImpl {
                 ? { key: 'stillInitializing' }
                 : isTimeout
                   ? { key: 'readinessTimeout', environment: this.dockerReadiness?.environment }
-                  : error instanceof DockerUnavailableError
-                    ? { key: 'dockerUnavailableDuringSetup' }
-                    : error instanceof ReadinessFailedError
-                      ? describeReadinessFailure(error.reason, pending.reusing)
-                      : { key: 'unexpectedFailure', detail: errMessage(error) };
+                  : error instanceof ReadinessFailedError
+                    ? // The timeout that led here kept the credentials and data, so setup now offers to reuse them.
+                      describeReadinessFailure(error.reason, true)
+                    : { key: 'unexpectedFailure', detail: errMessage(error) };
             if (!finalized) {
                 this.setStatus(alias, InstanceState.Error, undefined, aborted ? undefined : message);
             }
@@ -1338,14 +1322,7 @@ export class QuickStartServiceImpl {
             if (!timedOut) {
                 this.stateFor(alias).pendingReadiness = undefined;
             }
-            terminalEvent = stageEvent(
-                'waiting',
-                'error',
-                message,
-                undefined,
-                timedOut,
-                error instanceof DockerUnavailableError ? error.readiness : undefined,
-            );
+            terminalEvent = stageEvent('waiting', 'error', message, undefined, timedOut);
         } finally {
             signal.removeEventListener('abort', onAbort);
             // Stop the followLogs stream (started with cts.token) before disposing.
@@ -1462,15 +1439,8 @@ export class QuickStartServiceImpl {
         token: vscode.CancellationToken,
     ): Promise<void> {
         const inspected = await this.runtime.inspectContainer(containerId, { quiet: true, token });
-        if (!inspected) {
-            // Either Docker is down or the inspect failed; only the first is worth giving up for.
-            const readiness = await this.getProvisioningDockerReadiness(token);
-            if (readiness) {
-                throw new DockerUnavailableError(readiness);
-            }
-            return;
-        }
-        if (!hasExited(inspected)) {
+        // An inspect that failed says nothing about the container, so keep waiting.
+        if (!inspected || !hasExited(inspected)) {
             return;
         }
         const logs = await this.runtime
