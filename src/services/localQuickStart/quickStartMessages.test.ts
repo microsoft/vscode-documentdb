@@ -18,6 +18,7 @@ describe('formatQuickStartMessage', () => {
         'setupCancelled',
         'credentialsUnavailable',
         'dataVolumeInUse',
+        'imagePullFailed',
         'portInUse',
         'dockerCliMissing',
         'dockerDaemonUnreachable',

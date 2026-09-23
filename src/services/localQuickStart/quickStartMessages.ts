@@ -26,11 +26,16 @@ export function formatQuickStartMessage(message: QuickStartMessage): string {
             return l10n.t('Setup was cancelled.');
         case 'credentialsUnavailable':
             return l10n.t(
-                'DocumentDB Local has data on disk but its saved credentials are missing, so it cannot be opened. Use "Delete Container" to remove it and start fresh (this erases the data).',
+                'DocumentDB Local has data on disk but its saved credentials are missing, so it cannot be opened. Review setup and choose "Start fresh" to erase the data and create a new instance.',
             );
         case 'dataVolumeInUse':
             return l10n.t(
-                'The DocumentDB Local data volume is used by another container ({0}), so it cannot be erased for a fresh start. Stop and remove that container, then try again.',
+                'The DocumentDB Local data volume is used by another container ({0}). Stop and remove that container, then try again.',
+                detail ?? '',
+            );
+        case 'imagePullFailed':
+            return l10n.t(
+                'Could not download {0}. Check that the image tag exists and that this machine can reach the registry, then try again.',
                 detail ?? '',
             );
         case 'portInUse':

@@ -34,7 +34,6 @@ import {
 
 /** Called on every readiness/sample-data probe, so a test can observe the world mid-provision. */
 let onProbe: () => void | Promise<void> = () => undefined;
-let existingDatabases: string[] = ['sampledb'];
 
 jest.mock('mongodb', () => ({
     MongoClient: class {
@@ -46,9 +45,6 @@ jest.mock('mongodb', () => ({
         public db(): unknown {
             return {
                 command: () => Promise.resolve({ ok: 1 }),
-                admin: () => ({
-                    listDatabases: () => Promise.resolve({ databases: existingDatabases.map((name) => ({ name })) }),
-                }),
             };
         }
         public close(): Promise<void> {
@@ -106,6 +102,7 @@ interface RuntimeOptions {
     readonly createAndRunContainer?: jest.Mock;
     readonly listByLabel?: jest.Mock;
     readonly removeVolume?: jest.Mock;
+    readonly volumeExists?: jest.Mock;
 }
 
 function runtimeFor(options: RuntimeOptions = {}): IContainerRuntime {
@@ -132,7 +129,7 @@ function runtimeFor(options: RuntimeOptions = {}): IContainerRuntime {
         stopContainer: jest.fn().mockResolvedValue(undefined),
         removeContainer: jest.fn().mockResolvedValue(undefined),
         removeVolume: options.removeVolume ?? jest.fn().mockResolvedValue(undefined),
-        volumeExists: jest.fn().mockResolvedValue(false),
+        volumeExists: options.volumeExists ?? jest.fn().mockResolvedValue(false),
         listContainersUsingVolume: jest.fn().mockResolvedValue([]),
         execShellInContainer: jest.fn().mockResolvedValue(undefined),
         followLogs: jest.fn().mockResolvedValue(undefined),
@@ -195,7 +192,6 @@ describe('QuickStartService — WP-3 provisioning durability and port model', ()
         ext.secretStorage = secretStorage;
         ext.context = fakeContext(globalState);
         onProbe = () => undefined;
-        existingDatabases = ['sampledb'];
     });
 
     afterEach(() => {
@@ -301,7 +297,9 @@ describe('QuickStartService — WP-3 provisioning durability and port model', ()
         const removeVolume = jest.fn().mockResolvedValue(undefined);
         const controller = new AbortController();
         onProbe = () => controller.abort();
-        const service = new QuickStartServiceImpl(runtimeFor({ removeVolume }));
+        const service = new QuickStartServiceImpl(
+            runtimeFor({ volumeExists: jest.fn().mockResolvedValue(true), removeVolume }),
+        );
 
         await collect(service.provision(controller.signal));
 
@@ -371,6 +369,7 @@ describe('QuickStartService — WP-3 provisioning durability and port model', ()
         const removeVolume = jest.fn().mockResolvedValue(undefined);
         const service = new QuickStartServiceImpl(
             runtimeFor({
+                volumeExists: jest.fn().mockResolvedValue(true),
                 removeVolume,
                 listByLabel: jest.fn((filter: Record<string, string>) =>
                     Promise.resolve(filter[QUICK_START_OPERATION_LABEL_KEY] ? [{ id: 'orphan1', labels: filter }] : []),
@@ -491,9 +490,58 @@ describe('QuickStartService — WP-3 provisioning durability and port model', ()
         expect((createAndRunContainer.mock.calls[0][0] as { hostPort: number }).hostPort).toBe(10333);
     });
 
+    // Someone else created the volume while the image downloaded. Mounting it would use their data,
+    // and a failure would then remove it.
+    it('stops without touching a data volume that appeared during the pull', async () => {
+        const removeVolume = jest.fn().mockResolvedValue(undefined);
+        const runtime = runtimeFor({
+            removeVolume,
+            volumeExists: jest.fn().mockResolvedValueOnce(false).mockResolvedValue(true),
+        });
+        const service = new QuickStartServiceImpl(runtime);
+
+        const events = await collect(service.provision(new AbortController().signal));
+
+        expect(runtime.createAndRunContainer).not.toHaveBeenCalled();
+        expect(removeVolume).not.toHaveBeenCalled();
+        expect(events.at(-1)?.message).toEqual({ key: 'credentialsUnavailable' });
+        expect(service.getStatus().state).toBe(InstanceState.CredentialsMissing);
+    });
+
+    it('refuses to recreate onto a data volume another container mounts', async () => {
+        await writeConnectionString(
+            DEFAULT_ALIAS,
+            `mongodb://u1:p1@localhost:${QUICK_START_PORT}/?tls=true&tlsAllowInvalidCertificates=true`,
+            { displayName: 'DocumentDB Local', port: QUICK_START_PORT },
+        );
+        const runtime = runtimeFor({ volumeExists: jest.fn().mockResolvedValue(true) });
+        (runtime.listContainersUsingVolume as jest.Mock).mockResolvedValue([{ id: 'h1', name: 'holder' }]);
+        const service = new QuickStartServiceImpl(runtime);
+
+        const events = await collect(service.provision(new AbortController().signal));
+
+        expect(runtime.createAndRunContainer).not.toHaveBeenCalled();
+        expect(events.at(-1)?.message).toEqual({ key: 'dataVolumeInUse', detail: 'holder' });
+    });
+
     describe('sample data initialization', () => {
+        // Stored credentials outlive a discarded volume (Start over after a readiness timeout), so
+        // the next run reuses them onto a brand-new, empty volume.
+        it('seeds a new volume even when it reuses stored credentials', async () => {
+            await writeConnectionString(
+                DEFAULT_ALIAS,
+                `mongodb://u1:p1@localhost:${QUICK_START_PORT}/?tls=true&tlsAllowInvalidCertificates=true`,
+                { displayName: 'DocumentDB Local', port: QUICK_START_PORT },
+            );
+            const runtime = runtimeFor();
+            const service = new QuickStartServiceImpl(runtime);
+
+            await collect(service.provision(new AbortController().signal));
+
+            expect(runtime.execShellInContainer).toHaveBeenCalledTimes(1);
+        });
+
         it('detects environment-based passwords for 0.116 while preserving older image tags', async () => {
-            existingDatabases = [];
             const runtime = runtimeFor();
             const service = new QuickStartServiceImpl(runtime);
 
@@ -513,7 +561,6 @@ describe('QuickStartService — WP-3 provisioning durability and port model', ()
         });
 
         it('finishes loading sample data before reporting the instance as running', async () => {
-            existingDatabases = [];
             const runtime = runtimeFor();
             const service = new QuickStartServiceImpl(runtime);
             let seeded = false;
@@ -539,7 +586,6 @@ describe('QuickStartService — WP-3 provisioning durability and port model', ()
         });
 
         it('does not load sample data when the user disables it', async () => {
-            existingDatabases = [];
             const runtime = runtimeFor();
             const service = new QuickStartServiceImpl(runtime);
 
@@ -549,8 +595,21 @@ describe('QuickStartService — WP-3 provisioning durability and port model', ()
             expect(service.getStatus().state).toBe(InstanceState.Running);
         });
 
-        it('does not overwrite an existing sample database', async () => {
-            const runtime = runtimeFor();
+        // #946 DATA-4: a reused volume already had its first setup; seeding again would bring back
+        // sample documents the user deleted.
+        it('does not seed a reused data volume', async () => {
+            await upsertInstance({
+                alias: DEFAULT_ALIAS,
+                displayName: 'DocumentDB Local',
+                port: QUICK_START_PORT,
+                phase: 'ready',
+            });
+            await writeConnectionString(
+                DEFAULT_ALIAS,
+                `mongodb://u1:p1@localhost:${QUICK_START_PORT}/?tls=true&tlsAllowInvalidCertificates=true`,
+                { displayName: 'DocumentDB Local', port: QUICK_START_PORT },
+            );
+            const runtime = runtimeFor({ volumeExists: jest.fn().mockResolvedValue(true) });
             const service = new QuickStartServiceImpl(runtime);
 
             await collect(service.provision(new AbortController().signal));
@@ -560,7 +619,6 @@ describe('QuickStartService — WP-3 provisioning durability and port model', ()
         });
 
         it('keeps the database usable without retrying a failed sample load', async () => {
-            existingDatabases = [];
             const runtime = runtimeFor();
             jest.spyOn(runtime, 'execShellInContainer').mockRejectedValue(new Error('initialization failed'));
             const service = new QuickStartServiceImpl(runtime);

@@ -16,6 +16,7 @@ import {
     type DockerReadiness,
     InstanceState,
     QUICK_START_ALIAS_LABEL_KEY,
+    QUICK_START_IMAGE,
     QUICK_START_LABEL_KEY,
     QUICK_START_PORT,
     type StageEvent,
@@ -197,6 +198,34 @@ describe('QuickStartService — stored-credential volume safety', () => {
         expect(removeContainer).not.toHaveBeenCalled();
         expect(removeVolume).not.toHaveBeenCalled();
         expect(service.getStatus().state).toBe(InstanceState.CredentialsMissing);
+    });
+
+    // #946: a data volume whose container was pruned (or that another profile created) is surfaced
+    // up front, so Configure explains it before the user starts setup.
+    it('reconcile() surfaces a leftover data volume with no record or credentials as credential-unavailable', async () => {
+        ext.secretStorage = fakeSecretStorage({});
+        ext.context = fakeContext(fakeMemento());
+        const removeVolume = jest.fn().mockResolvedValue(undefined);
+        const service = new QuickStartServiceImpl(
+            mockRuntime({ volumeExists: jest.fn().mockResolvedValue(true), removeVolume }),
+        );
+
+        await service.reconcile();
+
+        expect(removeVolume).not.toHaveBeenCalled();
+        expect(service.getStatus().state).toBe(InstanceState.CredentialsMissing);
+    });
+
+    it('reconcile() stays NotInstalled when it cannot tell whether a data volume exists', async () => {
+        ext.secretStorage = fakeSecretStorage({});
+        ext.context = fakeContext(fakeMemento());
+        const service = new QuickStartServiceImpl(
+            mockRuntime({ volumeExists: jest.fn().mockRejectedValue(new Error('daemon hiccup')) }),
+        );
+
+        await service.reconcile();
+
+        expect(service.getStatus().state).toBe(InstanceState.NotInstalled);
     });
 
     it('deleteContainer() drops the record AND the credentials (a full clean slate)', async () => {
@@ -1627,7 +1656,7 @@ describe('QuickStartService — WI-2e-1 provision RR4 volume-wipe gate', () => {
 
         expect(events.at(-1)).toMatchObject({
             stage: 'error',
-            message: { key: 'unexpectedFailure', detail: 'manifest unknown' },
+            message: { key: 'imagePullFailed', detail: QUICK_START_IMAGE },
         });
         expect(events.at(-1)?.dockerReadiness).toBeUndefined();
     });
@@ -1676,7 +1705,7 @@ describe('QuickStartService — WI-2e-1 provision RR4 volume-wipe gate', () => {
 
         expect(events.at(-1)).toMatchObject({
             stage: 'error',
-            message: { key: 'unexpectedFailure', detail: 'manifest unknown' },
+            message: { key: 'imagePullFailed', detail: QUICK_START_IMAGE },
         });
         expect(events.at(-1)?.dockerReadiness).toBeUndefined();
     });
@@ -1912,6 +1941,75 @@ describe('QuickStartService — WI-2e-1 provision RR4 volume-wipe gate', () => {
         expect(removeContainer).not.toHaveBeenCalled();
         expect(removeVolume).not.toHaveBeenCalled();
         expect(runtime.pullImage).not.toHaveBeenCalled();
+    });
+
+    // A Start fresh that fails before the wipe leaves the old data in place, so the instance must
+    // stay CredentialsMissing: Configure keeps its warning and Retry repeats the Start fresh.
+    it('stays credential-unavailable when a Start fresh fails before the wipe', async () => {
+        ext.secretStorage = fakeSecretStorage({});
+        ext.context = fakeContext(fakeMemento());
+        const removeVolume = jest.fn().mockResolvedValue(undefined);
+        const runtime = provisionRuntime({
+            containers: [],
+            volumeExists: true,
+            removeVolume,
+            pullImage: jest.fn().mockRejectedValue(new Error('Process exited with code 1')),
+        });
+        const service = new QuickStartServiceImpl(runtime);
+        const events: StageEvent[] = [];
+
+        for await (const event of service.provision(new AbortController().signal, {
+            startFresh: true,
+            imageTag: '0.117.0-nope',
+        })) {
+            events.push(event);
+        }
+
+        expect(removeVolume).not.toHaveBeenCalled();
+        expect(events.at(-1)?.message).toEqual({
+            key: 'imagePullFailed',
+            detail: 'ghcr.io/documentdb/documentdb/documentdb-local:0.117.0-nope',
+        });
+        expect(service.getStatus().state).toBe(InstanceState.CredentialsMissing);
+    });
+
+    it('stays credential-unavailable when a Start fresh is cancelled before the wipe', async () => {
+        ext.secretStorage = fakeSecretStorage({});
+        ext.context = fakeContext(fakeMemento());
+        const controller = new AbortController();
+        const runtime = provisionRuntime({
+            containers: [],
+            volumeExists: true,
+            pullImage: jest.fn(() => {
+                controller.abort();
+                return Promise.resolve();
+            }),
+        });
+        const service = new QuickStartServiceImpl(runtime);
+
+        await drain(service.provision(controller.signal, { startFresh: true }));
+
+        expect(runtime.removeVolume).not.toHaveBeenCalled();
+        expect(service.getStatus().state).toBe(InstanceState.CredentialsMissing);
+    });
+
+    it('reports a held data volume before asking the user to start fresh', async () => {
+        ext.secretStorage = fakeSecretStorage({});
+        ext.context = fakeContext(fakeMemento());
+        const runtime = provisionRuntime({
+            containers: [],
+            volumeExists: true,
+            volumeHolders: [{ id: 'h1', name: 'holder' }],
+        });
+        const service = new QuickStartServiceImpl(runtime);
+        const events: StageEvent[] = [];
+
+        for await (const event of service.provision(new AbortController().signal)) {
+            events.push(event);
+        }
+
+        // Otherwise the user picks Start fresh only to be stopped by the holder on the next run.
+        expect(events.at(-1)?.message).toEqual({ key: 'dataVolumeInUse', detail: 'holder' });
     });
 
     it('proceeds when only the container it is replacing uses the data volume', async () => {

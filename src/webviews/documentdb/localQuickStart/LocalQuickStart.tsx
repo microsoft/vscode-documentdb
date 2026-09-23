@@ -811,6 +811,9 @@ export const LocalQuickStart = (): JSX.Element => {
      * {@link canReuseExistingData} any more, which is what resolves N1 (a stale inferred value).
      */
     const [dataChoice, setDataChoice] = useState<'reuse' | 'fresh'>('reuse');
+    // Whether the last run the user started was a Start fresh. The instance state can turn
+    // CredentialsMissing during a run, which flips `startFresh` on; Retry must not inherit that.
+    const [lastRunStartFresh, setLastRunStartFresh] = useState(false);
     const [stageStatus, setStageStatus] = useState<Record<ProvisionStage, StageStatus>>(emptyStageStatus);
     const [errorMessage, setErrorMessage] = useState<string | undefined>(undefined);
     const [successMessage, setSuccessMessage] = useState<string | undefined>(undefined);
@@ -1209,6 +1212,7 @@ export const LocalQuickStart = (): JSX.Element => {
             const options = continueAnyway
                 ? { ...(advancedRef.current ?? {}), continueAnyway: true }
                 : advancedRef.current;
+            setLastRunStartFresh(options?.startFresh === true);
             runStream((handlers) => trpcClient.localQuickStart.startQuickStart.subscribe(options, handlers));
         },
         [trpcClient, runStream],
@@ -2287,6 +2291,19 @@ export const LocalQuickStart = (): JSX.Element => {
                 secondaryActions = (
                     <Button appearance="secondary" onClick={handleStartOver}>
                         {l10n.t('Start over')}
+                    </Button>
+                );
+            } else if (startFresh && !lastRunStartFresh) {
+                // The run found data it has no credentials for. Retrying now would erase it, so send
+                // the user back to Configure, where Start fresh and its warning are shown.
+                primaryLabel = l10n.t('Review setup');
+                onPrimary = handleBackToConfigure;
+                footerNote = l10n.t(
+                    'Nothing has been changed. Starting fresh erases the existing data, so review it in the Configure step first.',
+                );
+                secondaryActions = (
+                    <Button appearance="secondary" onClick={handleClose}>
+                        {l10n.t('Close')}
                     </Button>
                 );
             } else {
