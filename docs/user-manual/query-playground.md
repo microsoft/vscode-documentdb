@@ -1,4 +1,4 @@
-> **User Manual** &mdash; [Back to User Manual](../index#user-manual)
+> **User Manual** - [Back to User Manual](../index#user-manual)
 
 ---
 
@@ -95,7 +95,7 @@ Each execution reuses the connection you established when you connected to the c
 Each playground file runs in its own isolated worker thread. This means:
 
 - A long-running or infinite query in one playground does not freeze VS Code or affect other playgrounds.
-- If a query takes too long, the worker is terminated and a fresh one is created for the next run.
+- Queries have no extension-side time limit. Use **Cancel** to stop a running operation. Cancellation terminates the worker, and a fresh one is created for the next run.
 
 ## Results Panel
 
@@ -181,13 +181,18 @@ For more details on the Interactive Shell, see the [Interactive Shell](./interac
 
 ## Settings
 
-The following settings control playground behavior:
+Open VS Code Settings and expand **Extensions** > **DocumentDB for VS Code**. The Run All confirmation
+is under **Query Playground**. The shared batch size is under **Queries & Results**, and the shared
+connection timeout is under **Connections & Discovery**. You can also search for a setting ID from the table.
 
-| Setting                               | Default | Description                                                                                       |
-| ------------------------------------- | ------- | ------------------------------------------------------------------------------------------------- |
-| `documentDB.playground.confirmRunAll` | `true`  | Show a confirmation dialog before running the entire playground file with Run All                 |
-| `documentDB.batchSize`                | `50`    | Number of documents to display per cursor iteration in the Query Playground and Interactive Shell |
-| `documentDB.connectionTimeout`        | `30`    | Maximum time (in seconds) to wait for the playground to connect and authenticate                  |
+| Setting                               | Default | Description                                                                                                      |
+| ------------------------------------- | ------- | ---------------------------------------------------------------------------------------------------------------- |
+| `documentDB.playground.confirmRunAll` | `true`  | Show a confirmation dialog before running the entire playground file with Run All                                |
+| `documentDB.batchSize`                | `50`    | Number of documents to display per cursor iteration in the Query Playground and Interactive Shell                |
+| `documentDB.connectionTimeout`        | `30`    | Maximum time (in seconds) to wait for the playground to connect and authenticate (shared with Interactive Shell) |
+
+The connection timeout does not limit query execution. Use **Cancel** to stop a long-running query,
+or use `.maxTimeMS()` on a supported query to set a server-side limit.
 
 ## Tips and Best Practices
 
