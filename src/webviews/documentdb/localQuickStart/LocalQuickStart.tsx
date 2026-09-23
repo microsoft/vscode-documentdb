@@ -817,6 +817,8 @@ export const LocalQuickStart = (): JSX.Element => {
      * exists — a button that cannot do anything.
      */
     const [instanceMissing, setInstanceMissing] = useState(false);
+    /** The container and its data were both found gone, so setup creates a new, empty instance. */
+    const [instanceDataRemoved, setInstanceDataRemoved] = useState(false);
     /**
      * The user's explicit recreate-vs-fresh choice (review M4). Nothing is inferred from
      * {@link canReuseExistingData} any more, which is what resolves N1 (a stale inferred value).
@@ -836,6 +838,11 @@ export const LocalQuickStart = (): JSX.Element => {
     // True when the terminal failure was a readiness timeout (the container was left running),
     // so the failed view offers Wait longer / Start over instead of just Retry (§9.1).
     const [timedOut, setTimedOut] = useState(false);
+    // Read by the long-lived instance-status subscription, which would otherwise see a stale value.
+    const timedOutRef = useRef(false);
+    useEffect(() => {
+        timedOutRef.current = timedOut;
+    }, [timedOut]);
 
     // Settings (P1-4). The port and tag fields carry the real defaults rather than placeholder
     // text, so what the user sees in the box is what will be used. The port is seeded from the
@@ -1059,6 +1066,7 @@ export const LocalQuickStart = (): JSX.Element => {
                 setCanReuseExistingData(result.canReuseExistingData);
                 setInstanceState(result.status.state);
                 setInstanceMissing(result.status.missing === true);
+                setInstanceDataRemoved(result.status.dataRemoved === true);
                 // Absent on polled calls (M6-b); keep the last suggestion in that case.
                 if (result.suggestedPort !== undefined) {
                     setSuggestedPort(result.suggestedPort);
@@ -1285,6 +1293,7 @@ export const LocalQuickStart = (): JSX.Element => {
                         setCanReuseExistingData(result.canReuseExistingData);
                         setInstanceState(result.status.state);
                         setInstanceMissing(result.status.missing === true);
+                        setInstanceDataRemoved(result.status.dataRemoved === true);
                     },
                 });
                 if (abortController.signal.aborted) return;
@@ -1333,7 +1342,20 @@ export const LocalQuickStart = (): JSX.Element => {
             onData(update: InstanceStatusUpdate) {
                 setInstanceState(update.status.state);
                 setInstanceMissing(update.status.missing === true);
+                setInstanceDataRemoved(update.status.dataRemoved === true);
                 setCanReuseExistingData(update.canReuseExistingData);
+                // The timed-out container is gone (e.g. deleted from the tree), so "Wait longer" has
+                // nothing left to wait for. While it is still retained the instance stays in Error.
+                if (
+                    timedOutRef.current &&
+                    !update.status.canResumeReadiness &&
+                    update.status.state !== InstanceState.Error
+                ) {
+                    setTimedOut(false);
+                    setErrorMessage(undefined);
+                    setStageStatus(emptyStageStatus());
+                    setPhase((current) => (current === 'failed' ? 'configure' : current));
+                }
             },
             onError() {
                 // The mount-time query already seeded these; a dropped stream only stops updates.
@@ -1879,7 +1901,7 @@ export const LocalQuickStart = (): JSX.Element => {
                 : existingInstanceGuard === 'stopped'
                   ? l10n.t('It is stopped. Start it to use it again, with all your data.')
                   : l10n.t(
-                        'We found an existing DocumentDB Local instance, but its saved credentials are unavailable. Without them, we cannot reopen or reuse the existing data, so you need to start fresh. Nothing has been changed yet. Starting fresh deletes the existing container and its data, then creates a new instance.',
+                        'We found an existing DocumentDB Local instance, but its saved credentials are unavailable. Without them, we cannot reopen or reuse the existing data, so you need to start fresh. Nothing has been changed yet. Starting fresh erases the existing instance and its data, then creates a new one.',
                     )}
         </MessageBlock>
     );
@@ -1900,8 +1922,9 @@ export const LocalQuickStart = (): JSX.Element => {
         <MessageBlock intent="info">
             {instanceMissing && (
                 <div>
+                    {/* Not "removed outside VS Code": Start over on a recreate lands here too. */}
                     {l10n.t(
-                        'The DocumentDB Local container was removed outside VS Code. Its data is still on this machine, and setting up creates the container again.',
+                        'The DocumentDB Local container no longer exists, but its data is still on this machine. Setting up creates the container again.',
                     )}
                 </div>
             )}
@@ -1924,9 +1947,20 @@ export const LocalQuickStart = (): JSX.Element => {
         </MessageBlock>
     );
 
+    // The instance vanished without anyone deleting it here; say why, and how to get it back when the
+    // cause is Docker pointing somewhere else. Setup keeps the old credentials unless custom ones are set.
+    const dataRemovedNotice = instanceDataRemoved && !existingInstanceGuard && (
+        <MessageBlock intent="info">
+            {l10n.t(
+                'The DocumentDB Local container and its data are no longer in Docker, so setup creates a new, empty instance. If you switched Docker to a different engine or context, switch back and refresh the Connections view instead.',
+            )}
+        </MessageBlock>
+    );
+
     const configure = (
         <>
             {existingInstanceNotice}
+            {dataRemovedNotice}
             {dataChoiceBlock}
             <Table size="small" aria-label={l10n.t('Setup settings')}>
                 <colgroup>
