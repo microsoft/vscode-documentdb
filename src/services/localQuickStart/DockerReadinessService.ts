@@ -484,7 +484,7 @@ export class DockerReadinessService {
                     this.dependencies
                         .createProbeOutput?.()
                         ?.appendDiagnostic?.(
-                            `[readiness] docker server=${infoFacts.serverVersion ?? 'unknown'} os=${infoFacts.osType ?? 'unknown'} (${infoFacts.operatingSystem ?? 'unknown'}) arch=${infoFacts.architecture ?? 'unknown'}`,
+                            `[readiness] docker server=${infoFacts.serverVersion ?? 'unknown'} os=${infoFacts.osType ?? 'unknown'}${infoFacts.operatingSystem ? ` (${infoFacts.operatingSystem})` : ''} arch=${infoFacts.architecture ?? 'unknown'}`,
                         );
                 }
                 const provider = classifyDockerProvider({

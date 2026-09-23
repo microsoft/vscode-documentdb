@@ -11,6 +11,7 @@
  */
 
 import * as fs from 'fs';
+import * as fsPromises from 'fs/promises';
 import * as vscode from 'vscode';
 import { ext } from '../../extensionVariables';
 import { StorageService } from '../storageService';
@@ -36,6 +37,12 @@ import {
 /** Called on every readiness/sample-data probe, so a test can observe the world mid-provision. */
 let onProbe: () => void | Promise<void> = () => undefined;
 let existingDatabases: string[] = ['sampledb'];
+
+// Real fs, with `rm` and `writeFile` spyable so a test can fail one env-file write or delete.
+jest.mock('fs/promises', () => {
+    const actual = jest.requireActual<typeof fsPromises>('fs/promises');
+    return { ...actual, rm: jest.fn(actual.rm), writeFile: jest.fn(actual.writeFile) };
+});
 
 jest.mock('mongodb', () => ({
     MongoClient: class {
@@ -545,6 +552,41 @@ describe('QuickStartService — WP-3 provisioning durability and port model', ()
 
             expect(presentDuringRun).toBe(true);
             expect(presentAtProbe).toBe(false);
+        });
+
+        it('retries a failed env-file delete when provisioning ends', async () => {
+            let envFile: string | undefined;
+            const createAndRunContainer = jest.fn(async (options: { environmentFiles?: string[] }) => {
+                envFile = options.environmentFiles?.[0];
+                return 'c1';
+            });
+            const rm = jest.mocked(fsPromises.rm);
+            rm.mockClear();
+            rm.mockRejectedValueOnce(Object.assign(new Error('busy'), { code: 'EPERM' }));
+            const service = new QuickStartServiceImpl(runtimeFor({ createAndRunContainer }));
+
+            await collect(service.provision(new AbortController().signal));
+
+            expect(rm.mock.calls.filter(([p]) => p === envFile)).toHaveLength(2);
+            expect(fs.existsSync(envFile!)).toBe(false);
+        });
+
+        it('removes a partly written env file when the write fails', async () => {
+            const actual = jest.requireActual<typeof fsPromises>('fs/promises');
+            let envFile: string | undefined;
+            jest.mocked(fsPromises.writeFile).mockImplementationOnce(async (file, _data, options) => {
+                envFile = file as string;
+                await actual.writeFile(envFile, 'USERNAME=admin\nPASSWORD=', options);
+                throw Object.assign(new Error('disk full'), { code: 'ENOSPC' });
+            });
+            const createAndRunContainer = jest.fn();
+            const service = new QuickStartServiceImpl(runtimeFor({ createAndRunContainer }));
+
+            await collect(service.provision(new AbortController().signal));
+
+            expect(envFile).toMatch(/documentdb-quickstart-\d+-[0-9a-f]{16}\.env$/);
+            expect(fs.existsSync(envFile!)).toBe(false);
+            expect(createAndRunContainer).not.toHaveBeenCalled();
         });
 
         it('masks the password in the readiness-timeout detail', async () => {

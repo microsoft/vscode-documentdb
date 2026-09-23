@@ -799,8 +799,10 @@ export class QuickStartServiceImpl {
                     );
                 } finally {
                     // Docker reads the env-file at create time; don't keep the password on disk through the readiness wait.
-                    envFilePath = undefined;
-                    await this.removeEnvFile(createdEnvFilePath);
+                    // A failed delete (e.g. a scanner holding the file on Windows) keeps the path for the retry below.
+                    if (await this.removeEnvFile(createdEnvFilePath)) {
+                        envFilePath = undefined;
+                    }
                 }
                 this.throwIfAborted(signal);
                 return createdContainerId;
@@ -981,8 +983,7 @@ export class QuickStartServiceImpl {
             }
             signal.removeEventListener('abort', onAbort);
             cts.dispose();
-            // Backstop only: the creating stage already removed the env-file unless something threw
-            // between writing it and `docker run`.
+            // Retry: set only if something threw before `docker run` or the creating stage's delete failed.
             if (envFilePath) {
                 await this.removeEnvFile(envFilePath);
             }
@@ -1417,14 +1418,25 @@ export class QuickStartServiceImpl {
             throw new Error('Credentials must not contain control characters.');
         }
         const filePath = path.join(os.tmpdir(), envFileName(process.pid, crypto.randomBytes(8).toString('hex')));
-        await fs.writeFile(filePath, `USERNAME=${username}\nPASSWORD=${password}\n`, { mode: 0o600 });
+        try {
+            await fs.writeFile(filePath, `USERNAME=${username}\nPASSWORD=${password}\n`, { mode: 0o600 });
+        } catch (error) {
+            // A write that fails part-way can leave the password behind, and no caller ever learns this path.
+            await this.removeEnvFile(filePath);
+            throw error;
+        }
         return filePath;
     }
 
-    private async removeEnvFile(filePath: string): Promise<void> {
-        await fs
-            .rm(filePath, { force: true })
-            .catch(() => meterQuickStartSilentCatch('provision_removeEnvironmentFile'));
+    /** Returns false when the file could not be deleted, so the caller can retry later. */
+    private async removeEnvFile(filePath: string): Promise<boolean> {
+        try {
+            await fs.rm(filePath, { force: true });
+            return true;
+        } catch {
+            meterQuickStartSilentCatch('provision_removeEnvironmentFile');
+            return false;
+        }
     }
 
     private async findManagedContainer(

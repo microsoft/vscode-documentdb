@@ -22,6 +22,7 @@ import {
     DockerClient,
     type InspectContainersItem,
     type ListContainersItem,
+    type PortBinding,
     ShellStreamCommandRunnerFactory,
 } from '@microsoft/vscode-container-client';
 import { Bash, Cmd, type Shell, type ShellQuotedString, ShellQuoting } from '@microsoft/vscode-processutils';
@@ -250,7 +251,15 @@ class ContainerRuntimeImpl implements IContainerRuntime {
         try {
             const runner = this.makeParsingRunner();
             const items = await runner(this.client.inspectContainers({ containers: [nameOrId] }));
-            return items?.[0];
+            const item = items?.[0];
+            // Stdout isn't echoed, so say what came back; otherwise the command looks like it returned nothing.
+            // Inspect reports names as `/name`; strip the slash so the line matches `[ps]`.
+            getQuickStartOutputChannel().appendLine(
+                item
+                    ? `[inspect] ${item.name.replace(/^\//, '')}: ${item.status ?? 'unknown'}${formatPorts(item.ports)}`
+                    : `[inspect] ${nameOrId}: not found`,
+            );
+            return item;
         } catch {
             return undefined;
         }
@@ -326,7 +335,13 @@ class ContainerRuntimeImpl implements IContainerRuntime {
 
     public async listByLabel(labels: Record<string, string | boolean>): Promise<ListContainersItem[]> {
         const runner = this.makeParsingRunner();
-        return runner(this.client.listContainers({ all: true, labels }));
+        const items = await runner(this.client.listContainers({ all: true, labels }));
+        getQuickStartOutputChannel().appendLine(
+            items.length === 0
+                ? '[ps] no matching containers'
+                : `[ps] ${items.map((item) => `${item.name}: ${item.state}${formatPorts(item.ports)}`).join('; ')}`,
+        );
+        return items;
     }
 
     /**
@@ -376,6 +391,13 @@ export function getBoundHostPort(
 ): number | undefined {
     const binding = item.ports?.find((p) => p.containerPort === containerPort && typeof p.hostPort === 'number');
     return binding?.hostPort;
+}
+
+function formatPorts(ports: ReadonlyArray<PortBinding> | undefined): string {
+    const bound = ports?.filter((p) => p.hostPort !== undefined) ?? [];
+    return bound.length === 0
+        ? ''
+        : `, ${bound.map((p) => `${p.hostIp ?? '0.0.0.0'}:${p.hostPort}->${p.containerPort}`).join(', ')}`;
 }
 
 /** True when the inspected container reports a "running" status. Pure inspector (no IO). */
