@@ -1326,13 +1326,22 @@ export class QuickStartServiceImpl {
                 .removeContainer(pending.containerId)
                 .catch(() => meterQuickStartSilentCatch('discardTimedOut_removeContainer'));
             if (pending.createdVolume) {
-                await this.runtime
+                const volumeRemoved = await this.runtime
                     .removeVolume(volumeName(pending.alias))
-                    .catch(() => meterQuickStartSilentCatch('discardTimedOut_removeVolume'));
+                    .then(() => true)
+                    .catch(() => {
+                        meterQuickStartSilentCatch('discardTimedOut_removeVolume');
+                        return false;
+                    });
                 // The attempt's credentials opened only that volume; kept, they would make the next
-                // setup look like a recreate of data that no longer exists.
-                await removeInstance(alias).catch(() => meterQuickStartSilentCatch('discardTimedOut_removeInstance'));
-                entry.metadata = undefined;
+                // setup look like a recreate of data that no longer exists. If the volume survived,
+                // they are still the only way into it.
+                if (volumeRemoved) {
+                    await removeInstance(alias).catch(() =>
+                        meterQuickStartSilentCatch('discardTimedOut_removeInstance'),
+                    );
+                    entry.metadata = undefined;
+                }
             }
             this.setStatus(alias, InstanceState.NotInstalled, undefined, undefined);
             return true;

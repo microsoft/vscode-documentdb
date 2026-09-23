@@ -557,6 +557,29 @@ describe('QuickStartService — WP-3 provisioning durability and port model', ()
         expect(await listInstances()).toHaveLength(0);
     });
 
+    it('keeps the credentials of a timed-out attempt when its volume could not be removed', async () => {
+        const removeVolume = jest.fn().mockRejectedValue(new Error('daemon down'));
+        const service = new QuickStartServiceImpl(runtimeFor({ removeVolume }));
+        const prototype = QuickStartServiceImpl.prototype as unknown as Record<string, (...args: unknown[]) => unknown>;
+        const waitForReadiness = prototype.waitForReadiness;
+        const spy = jest.spyOn(prototype, 'waitForReadiness').mockImplementation(async function (
+            this: unknown,
+            ...args
+        ) {
+            const now = jest.spyOn(Date, 'now').mockReturnValueOnce(0).mockReturnValue(Number.MAX_SAFE_INTEGER);
+            try {
+                return await waitForReadiness.apply(this, args);
+            } finally {
+                now.mockRestore();
+            }
+        });
+
+        await collect(service.provision(new AbortController().signal)).finally(() => spy.mockRestore());
+        await service.discardTimedOutInstance();
+
+        expect(await service.canReuseExistingData()).toBe(true);
+    });
+
     describe('sample data initialization', () => {
         // Stored credentials outlive a discarded volume (Start over after a readiness timeout), so
         // the next run reuses them onto a brand-new, empty volume.
