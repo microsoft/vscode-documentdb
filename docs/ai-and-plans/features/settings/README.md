@@ -72,12 +72,23 @@ scope, or suites that stub the `vscode` module fail to load the file at all.
 
 ### Accepted compatibility resets
 
-PR #957 renames two settings without aliases, fallback reads, or migration:
+PR #957 renames these settings without aliases, fallback reads, or migration:
 
-| Old key (ignored) | Current key | Default |
-| --- | --- | --- |
-| `documentDB.confirmations.confirmationStyle` | `documentDB.confirmations.style` | `wordConfirmation` |
-| `documentDB.experimental.enableAIQueryGeneration` | `documentDB.aiAssistant.enableQueryGeneration` | `false` |
+| Old key (ignored)                                        | Current key                                                        | Default            |
+| -------------------------------------------------------- | ------------------------------------------------------------------ | ------------------ |
+| `documentDB.confirmations.confirmationStyle`             | `documentDB.confirmations.style`                                   | `wordConfirmation` |
+| `documentDB.experimental.enableAIQueryGeneration`        | `documentDB.aiAssistant.enableQueryGeneration`                     | `false`            |
+| `documentDB.userInterface.ShowOperationSummaries`        | `documentDB.userInterface.showOperationSummaries`                  | `true`             |
+| `documentDB.aiAssistant.findQueryPromptPath`             | `documentDB.aiAssistant.indexAdvisorFindPromptPath`                | `null`             |
+| `documentDB.aiAssistant.aggregateQueryPromptPath`        | `documentDB.aiAssistant.indexAdvisorAggregatePromptPath`           | `null`             |
+| `documentDB.aiAssistant.countQueryPromptPath`            | `documentDB.aiAssistant.indexAdvisorCountPromptPath`               | `null`             |
+| `documentDB.aiAssistant.crossCollectionQueryPromptPath`  | `documentDB.aiAssistant.queryGenerationCrossCollectionPromptPath`  | `null`             |
+| `documentDB.aiAssistant.singleCollectionQueryPromptPath` | `documentDB.aiAssistant.queryGenerationSingleCollectionPromptPath` | `null`             |
+| `documentDB.shell.initTimeout`                           | `documentDB.connectionTimeout`                                     | `30` (was `60`)    |
+
+`documentDB.connectionTimeout` is the only timeout setting. It covers connecting and
+authenticating for both the Interactive Shell and the Query Playground (previously a hard-coded
+30 s). Running queries have no extension-side limit; see [D0010](./decisions.md).
 
 Readers use ordinary configuration reads of the current keys, preserving VS Code's normal scope
 precedence. Old entries are left untouched in settings files but no longer affect behavior. Users
@@ -94,15 +105,16 @@ machinery. This is specific to this change, not a blanket policy for future sett
 
 ## Timeline
 
-| Date       | PR  | What changed                                                                        | Docs                                                                |
-| ---------- | --- | ----------------------------------------------------------------------------------- | ------------------------------------------------------------------- |
-| 2026-09-23 | 957 | Eight groups; two direct renames with accepted default resets; setting IDs outside `ext` | [01-settings-regrouping.md](./iterations/01-settings-regrouping.md) |
+| Date       | PR  | What changed                                                                                                 | Docs                                                                |
+| ---------- | --- | ------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------- |
+| 2026-09-23 | 957 | Eight groups; direct renames with accepted default resets; one connection timeout; setting IDs outside `ext` | [01-settings-regrouping.md](./iterations/01-settings-regrouping.md) |
 
 ## Decisions
 
 See [decisions.md](./decisions.md). The load-bearing ones for future work are **D0002** (group
 titles mirror key namespaces), **D0003** (rename only where a key actively misleads), **D0005**
-(setting IDs stay out of `ext`), and **D0008** (accepted resets without migration).
+(setting IDs stay out of `ext`), **D0008** (accepted resets without migration), and **D0010** (one
+connection timeout, no query-execution timeout).
 
 ## Open gaps
 

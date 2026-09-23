@@ -112,7 +112,7 @@ export const HELP_SETTING_ALIASES: Readonly<Record<string, string>> = {
     colorSupport: settingsKeys.shellColorSupport,
     autocompletion: settingsKeys.shellAutocompletion,
     inlineHints: settingsKeys.shellInlineHints,
-    [settingsKeys.shellInitTimeout]: settingsKeys.shellInitTimeout,
+    [settingsKeys.connectionTimeout]: settingsKeys.connectionTimeout,
 };
 
 /**
@@ -147,7 +147,7 @@ const PLAYGROUND_LINE_PATTERN = /(?:\x1b\[\d+m)*\u{2197} Query Playground \[([^\
  * Regex to match the "Open Settings" action line.
  *
  * Captures:
- * - Group 1: the VS Code setting key (e.g., `documentDB.shell.initTimeout`)
+ * - Group 1: the VS Code setting key (e.g., `documentDB.connectionTimeout`)
  *
  * The pattern accounts for optional ANSI color codes that wrap the line.
  * The format is locale-independent.

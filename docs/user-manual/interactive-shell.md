@@ -221,7 +221,7 @@ The following settings control shell behavior:
 
 | Setting                                   | Default | Description                                                                                                        |
 | ----------------------------------------- | ------- | ------------------------------------------------------------------------------------------------------------------ |
-| `documentDB.shell.initTimeout`            | `60`    | Maximum time (in seconds) to wait for the shell to connect during initialization                                   |
+| `documentDB.connectionTimeout`            | `30`    | Maximum time (in seconds) to wait for the shell to connect and authenticate (shared with Query Playground)         |
 | `documentDB.shell.display.colorSupport`   | `true`  | Enable ANSI color support for syntax highlighting and formatted output. Disable for screen readers or piped output |
 | `documentDB.shell.display.autocompletion` | `true`  | Tab completion, the candidate list, and the dim inline suggestions at the cursor                                   |
 | `documentDB.shell.display.inlineHints`    | `true`  | The informational hints marked with 🛈, which are never inserted into your input                                    |

@@ -10,16 +10,18 @@ created: 2026-09-23
 > How the setting groups were chosen, which renames were rejected and why, and how a rename is
 > handled when the operator explicitly accepts resetting old customizations.
 
-| #    | Decision                                                       | Status   | Changed from the proposal?                            | Date       | PR  |
-| ---- | -------------------------------------------------------------- | -------- | ----------------------------------------------------- | ---------- | --- |
-| 0001 | No group title may equal the extension `displayName`           | Accepted | Accepted as proposed                                  | 2026-09-23 | —   |
-| 0002 | Group titles mirror key namespaces, one group per feature area | Accepted | Accepted as proposed                                  | 2026-09-23 | —   |
-| 0003 | Rename only where a key actively misleads                      | Accepted | Reversed the agent's own earlier proposal             | 2026-09-23 | —   |
-| 0004 | `confirmationStyle` → `style` is worth the rename after all    | Accepted (modified) | Rename retained; migration superseded by D0008 | 2026-09-23 | 957 |
-| 0005 | Setting IDs live outside `ext`                                 | Accepted | Added mid-implementation, not in the plan             | 2026-09-23 | —   |
+| #    | Decision                                                       | Status              | Changed from the proposal?                                  | Date       | PR  |
+| ---- | -------------------------------------------------------------- | ------------------- | ----------------------------------------------------------- | ---------- | --- |
+| 0001 | No group title may equal the extension `displayName`           | Accepted            | Accepted as proposed                                        | 2026-09-23 | —   |
+| 0002 | Group titles mirror key namespaces, one group per feature area | Accepted            | Accepted as proposed                                        | 2026-09-23 | —   |
+| 0003 | Rename only where a key actively misleads                      | Accepted (modified) | Two rejected alternatives reversed by D0009                 | 2026-09-23 | —   |
+| 0004 | `confirmationStyle` → `style` is worth the rename after all    | Accepted (modified) | Rename retained; migration superseded by D0008              | 2026-09-23 | 957 |
+| 0005 | Setting IDs live outside `ext`                                 | Accepted            | Added mid-implementation, not in the plan                   | 2026-09-23 | —   |
 | 0006 | Port settings are `machine-overridable`, not `machine`         | Accepted (modified) | Scope retained; remote compatibility loss accepted in D0008 | 2026-09-23 | 957 |
-| 0007 | Every non-deprecated property carries an explicit `order`      | Accepted | Accepted as proposed                                  | 2026-09-23 | —   |
-| 0008 | Accept default resets instead of settings migration | Accepted | Operator rejected compatibility overhead after review | 2026-09-23 | 957 |
+| 0007 | Every non-deprecated property carries an explicit `order`      | Accepted            | Accepted as proposed                                        | 2026-09-23 | —   |
+| 0008 | Accept default resets instead of settings migration            | Accepted            | Operator rejected compatibility overhead after review       | 2026-09-23 | 957 |
+| 0009 | Finish the renames in the same release as the regroup          | Accepted            | Operator: "rename them all"                                 | 2026-09-23 | 957 |
+| 0010 | One connection timeout, no query-execution timeout             | Accepted (modified) | Default lowered from 60 s to 30 s by the operator           | 2026-09-23 | 957 |
 
 > Entries below are **semantically** immutable: append new entries rather than rewriting old ones,
 > and record reversals as a new entry plus a status change above. Heading text is frozen once
@@ -294,3 +296,89 @@ describes the original proposal; D0008 governs the two implemented renames.
 
 The reference audit must include shell help, setting links, and warning messages. Historical release
 notes and review records retain old names as historical evidence, not current configuration advice.
+
+---
+
+## 0009 - Finish the renames in the same release as the regroup
+
+**Status:** Accepted · **Date:** 2026-09-23 · **Raised by:** operator: "any further setting you'd rename? I don't want to do it again in a couple of releases"
+
+### Question
+
+D0008 already resets two settings. Are there other keys that would force a second reset later?
+
+### Decision
+
+Rename these in PR #957 too, with the same no-migration treatment as D0008:
+
+| Old key (ignored)                                        | Current key                                                        |
+| -------------------------------------------------------- | ------------------------------------------------------------------ |
+| `documentDB.userInterface.ShowOperationSummaries`        | `documentDB.userInterface.showOperationSummaries`                  |
+| `documentDB.aiAssistant.findQueryPromptPath`             | `documentDB.aiAssistant.indexAdvisorFindPromptPath`                |
+| `documentDB.aiAssistant.aggregateQueryPromptPath`        | `documentDB.aiAssistant.indexAdvisorAggregatePromptPath`           |
+| `documentDB.aiAssistant.countQueryPromptPath`            | `documentDB.aiAssistant.indexAdvisorCountPromptPath`               |
+| `documentDB.aiAssistant.crossCollectionQueryPromptPath`  | `documentDB.aiAssistant.queryGenerationCrossCollectionPromptPath`  |
+| `documentDB.aiAssistant.singleCollectionQueryPromptPath` | `documentDB.aiAssistant.queryGenerationSingleCollectionPromptPath` |
+| `documentDB.shell.initTimeout`                           | `documentDB.connectionTimeout` (see D0010)                         |
+
+### Reasoning
+
+D0003 priced each rename as a permanent alias plus migration. D0008 removed that cost, so the
+remaining cost is one reset, and paying it once is better than paying it again in a later release.
+
+- **`ShowOperationSummaries`** is the only PascalCase key. D0003 left it because it renders the
+  same; with resets already accepted, fixing the convention now is free.
+- **The first three prompt paths configure Index Advisor**, not query generation, yet sat next to
+  the query-generation paths with the same naming pattern. The new names say which feature each
+  prompt belongs to without adding a key segment, so D0003's label-length concern does not apply.
+- Very few users set custom prompt paths, so these resets affect almost no one.
+
+Old names are listed as `keywords` on the new properties so searching the old name still finds them.
+
+### Rejected alternatives
+
+- **An `aiAssistant.prompts.*` or `aiAssistant.indexAdvisor.*` sub-namespace.** Adds a segment and
+  lengthens every label (D0003).
+- **Flatten `shell.display.*`.** "Display" does not describe autocompletion, but dropping it resets
+  two shipped settings for little gain.
+
+---
+
+## 0010 - One connection timeout, no query-execution timeout
+
+**Status:** Accepted (modified) · **Date:** 2026-09-23 · **Raised by:** review finding that the Query Playground ignored `documentDB.shell.initTimeout` but pointed users to it
+
+### Question
+
+The Query Playground always waited a hard-coded 30 s to connect, while its timeout message linked to
+the shell-only `documentDB.shell.initTimeout` (60 s). Add a Playground timeout, add a `timeouts.*`
+family for future connection and query limits, or unify?
+
+### Decision
+
+One setting, `documentDB.connectionTimeout`, in Connections & Discovery. The Interactive Shell and
+the Query Playground both read it, and every timeout hint links to it. Default **30 s**, chosen by
+the operator (the shell previously defaulted to 60 s). It covers connecting and authenticating only.
+
+There is no query-execution timeout setting. Running queries have no extension-side limit; users
+cancel, or add `.maxTimeMS()` so the database enforces a limit.
+
+### Reasoning
+
+The operator's position: "in the end, who will tweak every one of these. One timeout should be
+enough." A top-level key renders as the short label "Document DB: Connection Timeout" and can later
+be reused by other connection paths without another rename.
+
+A shared connection-and-query value was considered and rejected. Connecting should fail within
+seconds, while a legitimate query can run for minutes, so one number cannot serve both. The previous
+`documentDB.timeout` setting capped query execution by killing the worker, which overrode
+`.maxTimeMS()`; it was removed in commit 6acebbb0 for that reason, and a shared cap would bring the
+problem back. A future Collection View limit should pass `maxTimeMS` to the database per query.
+
+### Rejected alternatives
+
+- **A dedicated Playground timeout.** Two settings for the same thing.
+- **A `documentDB.timeouts.*` namespace or "Timeouts" group.** Implies a family of timeouts nobody
+  will tune individually.
+- **Reusing the name `documentDB.timeout`.** Users who still have the old query timeout set from
+  v0.7 or earlier would find that value suddenly applying to connections.

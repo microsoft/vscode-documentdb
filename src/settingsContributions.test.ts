@@ -9,7 +9,10 @@ import { settingsKeys } from './settingsKeys';
 type ConfigurationNode = {
     title: string;
     order?: number;
-    properties: Record<string, { order?: number; default?: unknown; markdownDeprecationMessage?: string; scope?: string }>;
+    properties: Record<
+        string,
+        { order?: number; default?: unknown; markdownDeprecationMessage?: string; scope?: string }
+    >;
 };
 
 const nodes = packageJson.contributes.configuration as unknown as ConfigurationNode[];
@@ -93,6 +96,8 @@ describe('settings contributions', () => {
             expect(properties[settingsKeys.confirmationStyle]?.default).toBe('wordConfirmation');
             expect(settingsKeys.enableAIQueryGeneration).toBe('documentDB.aiAssistant.enableQueryGeneration');
             expect(properties[settingsKeys.enableAIQueryGeneration]?.default).toBe(false);
+            expect(settingsKeys.connectionTimeout).toBe('documentDB.connectionTimeout');
+            expect(properties[settingsKeys.connectionTimeout]?.default).toBe(30);
         });
     });
 

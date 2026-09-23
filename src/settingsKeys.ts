@@ -14,9 +14,10 @@ export namespace settingsKeys {
     // General
     export const confirmationStyle = 'documentDB.confirmations.style';
     export const showUrlHandlingConfirmations = 'documentDB.confirmations.showUrlHandlingConfirmations';
-    export const showOperationSummaries = 'documentDB.userInterface.ShowOperationSummaries';
+    export const showOperationSummaries = 'documentDB.userInterface.showOperationSummaries';
 
     // Connections & Discovery
+    export const connectionTimeout = 'documentDB.connectionTimeout';
     export const localPort = 'documentDB.local.port';
     export const kubernetesLocalPortStrategy = 'documentDB.serviceDiscovery.kubernetes.portForward.localPortStrategy';
     export const kubernetesLocalPortBase = 'documentDB.serviceDiscovery.kubernetes.portForward.localPortBase';
@@ -33,7 +34,6 @@ export namespace settingsKeys {
     export const playgroundConfirmRunAll = 'documentDB.playground.confirmRunAll';
 
     // Interactive Shell
-    export const shellInitTimeout = 'documentDB.shell.initTimeout';
     export const shellMultiLinePasteBehavior = 'documentDB.shell.multiLinePasteBehavior';
     export const shellColorSupport = 'documentDB.shell.display.colorSupport';
     export const shellAutocompletion = 'documentDB.shell.display.autocompletion';
@@ -41,11 +41,13 @@ export namespace settingsKeys {
 
     // AI Assistant
     export const enableAIQueryGeneration = 'documentDB.aiAssistant.enableQueryGeneration';
-    export const findQueryPromptPath = 'documentDB.aiAssistant.findQueryPromptPath';
-    export const aggregateQueryPromptPath = 'documentDB.aiAssistant.aggregateQueryPromptPath';
-    export const countQueryPromptPath = 'documentDB.aiAssistant.countQueryPromptPath';
-    export const crossCollectionQueryPromptPath = 'documentDB.aiAssistant.crossCollectionQueryPromptPath';
-    export const singleCollectionQueryPromptPath = 'documentDB.aiAssistant.singleCollectionQueryPromptPath';
+    export const queryGenerationSingleCollectionPromptPath =
+        'documentDB.aiAssistant.queryGenerationSingleCollectionPromptPath';
+    export const queryGenerationCrossCollectionPromptPath =
+        'documentDB.aiAssistant.queryGenerationCrossCollectionPromptPath';
+    export const indexAdvisorFindPromptPath = 'documentDB.aiAssistant.indexAdvisorFindPromptPath';
+    export const indexAdvisorAggregatePromptPath = 'documentDB.aiAssistant.indexAdvisorAggregatePromptPath';
+    export const indexAdvisorCountPromptPath = 'documentDB.aiAssistant.indexAdvisorCountPromptPath';
 
     // Accessibility
     export const hideCountPrefix = 'documentDB.accessibility.hideCountPrefix';

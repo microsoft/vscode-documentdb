@@ -227,7 +227,7 @@ export class WorkerSessionManager implements vscode.Disposable {
         // If init fails (bad credentials, unreachable host, etc.), tear down
         // the worker so the next call can respawn cleanly.
         try {
-            await this.sendRequest<void>(initMsg, initTimeoutMs, settingsKeys.shellInitTimeout);
+            await this.sendRequest<void>(initMsg, initTimeoutMs, settingsKeys.connectionTimeout);
             this._workerState = 'ready';
         } catch (error) {
             this.terminateWorker('intentional');
@@ -282,7 +282,7 @@ export class WorkerSessionManager implements vscode.Disposable {
                                       message,
                                       timeoutSettingKey,
                                       l10n.t(
-                                          'The shell did not finish connecting. You can increase the timeout in Settings:',
+                                          'The connection did not finish in time. You can increase the timeout in Settings:',
                                       ),
                                   )
                                 : new Error(message),

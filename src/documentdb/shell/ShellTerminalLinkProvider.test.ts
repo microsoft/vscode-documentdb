@@ -257,7 +257,7 @@ describe('ShellTerminalLinkProvider', () => {
         it('should detect settings action line and return a settings link', () => {
             registerShellTerminal(mockTerminal, () => mockShellInfo('test-id'));
 
-            const actionLine = `${SETTINGS_ACTION_PREFIX}[documentDB.shell.initTimeout]`;
+            const actionLine = `${SETTINGS_ACTION_PREFIX}[documentDB.connectionTimeout]`;
             const context = {
                 terminal: mockTerminal,
                 line: actionLine,
@@ -267,7 +267,7 @@ describe('ShellTerminalLinkProvider', () => {
             expect(links).toHaveLength(1);
             expect(links[0]).toMatchObject({
                 linkType: 'settings',
-                settingKey: 'documentDB.shell.initTimeout',
+                settingKey: 'documentDB.connectionTimeout',
             });
         });
 
@@ -309,7 +309,7 @@ describe('ShellTerminalLinkProvider', () => {
         it('should handle ANSI-wrapped settings action line', () => {
             registerShellTerminal(mockTerminal, () => mockShellInfo('test-id'));
 
-            const actionLine = `\x1b[90m${SETTINGS_ACTION_PREFIX}[documentDB.shell.initTimeout]\x1b[0m`;
+            const actionLine = `\x1b[90m${SETTINGS_ACTION_PREFIX}[documentDB.connectionTimeout]\x1b[0m`;
             const context = {
                 terminal: mockTerminal,
                 line: actionLine,
@@ -319,14 +319,14 @@ describe('ShellTerminalLinkProvider', () => {
             expect(links).toHaveLength(1);
             expect(links[0]).toMatchObject({
                 linkType: 'settings',
-                settingKey: 'documentDB.shell.initTimeout',
+                settingKey: 'documentDB.connectionTimeout',
             });
         });
 
         it('should handle underline-wrapped settings action line', () => {
             registerShellTerminal(mockTerminal, () => mockShellInfo('test-id'));
 
-            const actionLine = `\x1b[90m\x1b[4m${SETTINGS_ACTION_PREFIX}[documentDB.shell.initTimeout]\x1b[24m\x1b[0m`;
+            const actionLine = `\x1b[90m\x1b[4m${SETTINGS_ACTION_PREFIX}[documentDB.connectionTimeout]\x1b[24m\x1b[0m`;
             const context = {
                 terminal: mockTerminal,
                 line: actionLine,
@@ -338,14 +338,14 @@ describe('ShellTerminalLinkProvider', () => {
                 linkType: 'settings',
                 startIndex: 0,
                 length: actionLine.length,
-                settingKey: 'documentDB.shell.initTimeout',
+                settingKey: 'documentDB.connectionTimeout',
             });
         });
 
         it('should not match settings line for non-shell terminals', () => {
             const context = {
                 terminal: { name: 'bash' } as unknown as vscode.Terminal,
-                line: `${SETTINGS_ACTION_PREFIX}[documentDB.shell.initTimeout]`,
+                line: `${SETTINGS_ACTION_PREFIX}[documentDB.connectionTimeout]`,
             } as vscode.TerminalLinkContext;
 
             const links = provider.provideTerminalLinks(context);
@@ -359,14 +359,14 @@ describe('ShellTerminalLinkProvider', () => {
                 linkType: 'settings' as const,
                 startIndex: 0,
                 length: 40,
-                settingKey: 'documentDB.shell.initTimeout',
+                settingKey: 'documentDB.connectionTimeout',
             };
 
             provider.handleTerminalLink(link as Parameters<typeof provider.handleTerminalLink>[0]);
 
             return new Promise<void>((resolve) => {
                 setTimeout(() => {
-                    expect(spy).toHaveBeenCalledWith('workbench.action.openSettings', 'documentDB.shell.initTimeout');
+                    expect(spy).toHaveBeenCalledWith('workbench.action.openSettings', 'documentDB.connectionTimeout');
                     spy.mockRestore();
                     resolve();
                 }, 50);

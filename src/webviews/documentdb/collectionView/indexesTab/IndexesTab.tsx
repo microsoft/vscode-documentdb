@@ -213,7 +213,7 @@ export const IndexesTab = (): JSX.Element => {
 
     /**
      * Show a completion toast for a successful action, gated by the
-     * `documentDB.userInterface.ShowOperationSummaries` setting. This is the
+     * `documentDB.userInterface.showOperationSummaries` setting. This is the
      * webview counterpart to the tree-view `showConfirmationAsInSettings`
      * helper, so both surfaces honour the same user preference. Use it for
      * "X succeeded" notifications (never for errors — those use `showError`).

@@ -187,6 +187,7 @@ The following settings control playground behavior:
 | ------------------------------------- | ------- | ------------------------------------------------------------------------------------------------- |
 | `documentDB.playground.confirmRunAll` | `true`  | Show a confirmation dialog before running the entire playground file with Run All                 |
 | `documentDB.batchSize`                | `50`    | Number of documents to display per cursor iteration in the Query Playground and Interactive Shell |
+| `documentDB.connectionTimeout`        | `30`    | Maximum time (in seconds) to wait for the playground to connect and authenticate                  |
 
 ## Tips and Best Practices
 

@@ -1646,7 +1646,7 @@
             "default": true,
             "description": "Show confirmation dialogs when handling external URLs that open DocumentDB resources or setup experiences in VS Code."
           },
-          "documentDB.userInterface.ShowOperationSummaries": {
+          "documentDB.userInterface.showOperationSummaries": {
             "order": 3,
             "type": "boolean",
             "default": true,
@@ -1658,15 +1658,25 @@
         "title": "Connections & Discovery",
         "order": 20,
         "properties": {
-          "documentDB.local.port": {
+          "documentDB.connectionTimeout": {
             "order": 1,
+            "type": "number",
+            "description": "Maximum time (in seconds) to wait for the Interactive Shell or Query Playground to connect and authenticate.",
+            "default": 30,
+            "minimum": 5,
+            "keywords": [
+              "initTimeout"
+            ]
+          },
+          "documentDB.local.port": {
+            "order": 2,
             "type": "integer",
             "default": 10260,
             "scope": "machine-overridable",
             "description": "Port to use when connecting to a DocumentDB Local instance."
           },
           "documentDB.serviceDiscovery.kubernetes.portForward.localPortStrategy": {
-            "order": 2,
+            "order": 3,
             "type": "string",
             "default": "matchRemote",
             "scope": "machine-overridable",
@@ -1681,7 +1691,7 @@
             "description": "How to choose the local port when opening a port-forward tunnel to a ClusterIP Kubernetes service."
           },
           "documentDB.serviceDiscovery.kubernetes.portForward.localPortBase": {
-            "order": 3,
+            "order": 4,
             "type": "integer",
             "default": 27100,
             "minimum": 1024,
@@ -1751,15 +1761,8 @@
         "title": "Interactive Shell",
         "order": 60,
         "properties": {
-          "documentDB.shell.initTimeout": {
-            "order": 1,
-            "type": "number",
-            "description": "Maximum time (in seconds) to wait for the Interactive Shell to connect during initialization. Default value is 60 seconds.",
-            "default": 60,
-            "minimum": 5
-          },
           "documentDB.shell.multiLinePasteBehavior": {
-            "order": 2,
+            "order": 1,
             "type": "string",
             "description": "Controls how multi-line text is handled when pasted into the Interactive Shell. When set to 'ask', the prompt is only shown if VS Code's built-in paste warning (terminal.integrated.enableMultiLinePasteWarning) is disabled.",
             "default": "ask",
@@ -1777,19 +1780,19 @@
             ]
           },
           "documentDB.shell.display.colorSupport": {
-            "order": 3,
+            "order": 2,
             "type": "boolean",
             "description": "Enable ANSI color support in the Interactive Shell for syntax highlighting and formatted output. Disable for accessibility (screen readers) or piped output.",
             "default": true
           },
           "documentDB.shell.display.autocompletion": {
-            "order": 4,
+            "order": 3,
             "type": "boolean",
             "description": "Enable autocompletion in the Interactive Shell: Tab completion, the candidate list, and the inline suggestions that appear in dim text at the cursor (completions, command history, closing brackets).",
             "default": true
           },
           "documentDB.shell.display.inlineHints": {
-            "order": 5,
+            "order": 4,
             "type": "boolean",
             "description": "Show informational hints in the Interactive Shell, marked with 🛈. Hints cover command descriptions, collection counts, and previews of what a completion would produce. They are never inserted into your input.",
             "default": true
@@ -1812,50 +1815,65 @@
             ],
             "markdownDescription": "Enable AI-powered natural language to query translation in the collection view. When enabled, you can type questions in plain language and have them translated into database queries.\n\nNote: Experimental features might not work as expected, and AI-generated content might not always be accurate."
           },
-          "documentDB.aiAssistant.findQueryPromptPath": {
+          "documentDB.aiAssistant.queryGenerationSingleCollectionPromptPath": {
             "order": 2,
             "type": [
               "string",
               "null"
             ],
-            "description": "Path to a custom prompt template file for find query optimization. Leave empty to use the built-in template.",
-            "default": null
+            "description": "Path to a custom prompt template file for single collection query generation. Leave empty to use the built-in template.",
+            "default": null,
+            "keywords": [
+              "singleCollectionQueryPromptPath"
+            ]
           },
-          "documentDB.aiAssistant.aggregateQueryPromptPath": {
+          "documentDB.aiAssistant.queryGenerationCrossCollectionPromptPath": {
             "order": 3,
             "type": [
               "string",
               "null"
             ],
-            "description": "Path to a custom prompt template file for aggregate query optimization. Leave empty to use the built-in template.",
-            "default": null
+            "description": "Path to a custom prompt template file for cross-collection query generation. Leave empty to use the built-in template.",
+            "default": null,
+            "keywords": [
+              "crossCollectionQueryPromptPath"
+            ]
           },
-          "documentDB.aiAssistant.countQueryPromptPath": {
+          "documentDB.aiAssistant.indexAdvisorFindPromptPath": {
             "order": 4,
             "type": [
               "string",
               "null"
             ],
-            "description": "Path to a custom prompt template file for count query optimization. Leave empty to use the built-in template.",
-            "default": null
+            "description": "Path to a custom prompt template file for Index Advisor recommendations on find queries. Leave empty to use the built-in template.",
+            "default": null,
+            "keywords": [
+              "findQueryPromptPath"
+            ]
           },
-          "documentDB.aiAssistant.crossCollectionQueryPromptPath": {
+          "documentDB.aiAssistant.indexAdvisorAggregatePromptPath": {
             "order": 5,
             "type": [
               "string",
               "null"
             ],
-            "description": "Path to a custom prompt template file for cross-collection query generation. Leave empty to use the built-in template.",
-            "default": null
+            "description": "Path to a custom prompt template file for Index Advisor recommendations on aggregation pipelines. Leave empty to use the built-in template.",
+            "default": null,
+            "keywords": [
+              "aggregateQueryPromptPath"
+            ]
           },
-          "documentDB.aiAssistant.singleCollectionQueryPromptPath": {
+          "documentDB.aiAssistant.indexAdvisorCountPromptPath": {
             "order": 6,
             "type": [
               "string",
               "null"
             ],
-            "description": "Path to a custom prompt template file for single collection query generation. Leave empty to use the built-in template.",
-            "default": null
+            "description": "Path to a custom prompt template file for Index Advisor recommendations on count queries. Leave empty to use the built-in template.",
+            "default": null,
+            "keywords": [
+              "countQueryPromptPath"
+            ]
           }
         }
       },

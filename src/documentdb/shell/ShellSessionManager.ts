@@ -5,10 +5,9 @@
 
 import * as l10n from '@vscode/l10n';
 import { randomUUID } from 'crypto';
-import * as vscode from 'vscode';
+import type * as vscode from 'vscode';
 import { ext } from '../../extensionVariables';
-import { settingsKeys } from '../../settingsKeys';
-import { getBatchSizeSetting } from '../../utils/workspacUtils';
+import { getBatchSizeSetting, getConnectionTimeoutMs } from '../../utils/workspacUtils';
 import { CredentialCache } from '../CredentialCache';
 import { AuthMethodId } from '../auth/AuthMethod';
 import { WorkerSessionManager, type WorkerSessionCallbacks } from '../playground/WorkerSessionManager';
@@ -171,7 +170,7 @@ export class ShellSessionManager implements vscode.Disposable {
     async initialize(): Promise<ShellConnectionMetadata> {
         const initMsg = this.buildInitMessage();
 
-        const timeoutMs = this.getInitTimeoutMs();
+        const timeoutMs = getConnectionTimeoutMs();
         await this._workerManager.ensureWorker(this._connectionInfo.clusterId, initMsg, timeoutMs);
         this._initialized = true;
         this._authMethod = initMsg.authMechanism;
@@ -314,12 +313,6 @@ export class ShellSessionManager implements vscode.Disposable {
     }
 
     // ─── Private: Token handling ─────────────────────────────────────────────
-
-    private getInitTimeoutMs(): number {
-        const config = vscode.workspace.getConfiguration();
-        const timeoutSec = config.get<number>(settingsKeys.shellInitTimeout, 60);
-        return timeoutSec * 1000;
-    }
 
     /**
      * Extract the host portion from a connection string, stripping credentials.

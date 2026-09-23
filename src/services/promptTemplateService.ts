@@ -173,11 +173,11 @@ export class PromptTemplateService {
     private static getIndexAdvisorConfigKey(commandType: CommandType): string {
         switch (commandType) {
             case CommandType.Find:
-                return settingsKeys.findQueryPromptPath;
+                return settingsKeys.indexAdvisorFindPromptPath;
             case CommandType.Aggregate:
-                return settingsKeys.aggregateQueryPromptPath;
+                return settingsKeys.indexAdvisorAggregatePromptPath;
             case CommandType.Count:
-                return settingsKeys.countQueryPromptPath;
+                return settingsKeys.indexAdvisorCountPromptPath;
             default:
                 throw new Error(l10n.t('Unknown command type: {type}', { type: commandType }));
         }
@@ -191,9 +191,9 @@ export class PromptTemplateService {
     private static getQueryGenerationConfigKey(generationType: QueryGenerationType): string {
         switch (generationType) {
             case QueryGenerationType.CrossCollection:
-                return settingsKeys.crossCollectionQueryPromptPath;
+                return settingsKeys.queryGenerationCrossCollectionPromptPath;
             case QueryGenerationType.SingleCollection:
-                return settingsKeys.singleCollectionQueryPromptPath;
+                return settingsKeys.queryGenerationSingleCollectionPromptPath;
             default:
                 throw new Error(l10n.t('Unknown query generation type: {type}', { type: generationType }));
         }

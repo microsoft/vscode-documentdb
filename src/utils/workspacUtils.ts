@@ -17,3 +17,8 @@ export function getBatchSizeSetting(): number {
     const config: vscode.WorkspaceConfiguration = vscode.workspace.getConfiguration();
     return config.get<number>(settingsKeys.batchSize, 50);
 }
+
+export function getConnectionTimeoutMs(): number {
+    const config: vscode.WorkspaceConfiguration = vscode.workspace.getConfiguration();
+    return config.get<number>(settingsKeys.connectionTimeout, 30) * 1000;
+}
