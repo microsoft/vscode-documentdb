@@ -7,7 +7,7 @@ import { EJSON } from 'bson';
 import * as vscode from 'vscode';
 import { type SerializableExecutionResult } from '../playground/workerTypes';
 import { ShellOutputFormatter } from './ShellOutputFormatter';
-import { shellStyles } from './shellStyles';
+import { shellAnsi, shellStyles } from './shellStyles';
 
 describe('ShellOutputFormatter', () => {
     let formatter: ShellOutputFormatter;
@@ -240,6 +240,16 @@ describe('ShellOutputFormatter', () => {
     });
 
     describe('connection banner formatting', () => {
+        it('should dim the frame and emphasize the prompt and wordmark', () => {
+            expect(formatter.formatShellLogo()).toBe(
+                [
+                    `${shellStyles.ghostText}╭────╮${shellAnsi.reset}`,
+                    `${shellStyles.ghostText}│ ${shellAnsi.reset}${shellStyles.emphasis}>_${shellAnsi.reset}${shellStyles.ghostText} │${shellAnsi.reset} ${shellStyles.emphasis}DocumentDB Shell${shellAnsi.reset}`,
+                    `${shellStyles.ghostText}╰────╯${shellAnsi.reset}`,
+                ].join('\n'),
+            );
+        });
+
         it('should use neutral emphasis for the title and values', () => {
             expect(formatter.formatShellTitle('DocumentDB Shell: Demo')).toBe('\x1b[1mDocumentDB Shell: Demo\x1b[0m');
             expect(formatter.formatConnectionValue('value')).toBe('\x1b[1m\x1b[39mvalue\x1b[0m\x1b[90m');
@@ -251,6 +261,8 @@ describe('ShellOutputFormatter', () => {
             } as unknown as vscode.WorkspaceConfiguration);
 
             expect(formatter.formatShellTitle('DocumentDB Shell: Demo')).toBe('DocumentDB Shell: Demo');
+            expect(formatter.formatShellLogo()).toBe('╭────╮\n│ >_ │ DocumentDB Shell\n╰────╯');
+            expect(formatter.formatShellLogo()).not.toContain('\x1b[');
             expect(formatter.formatConnectionValue('alex@contoso.com')).toBe('alex@contoso.com');
         });
     });

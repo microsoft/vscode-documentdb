@@ -900,18 +900,7 @@ export class DocumentDBShellPty implements vscode.Pseudoterminal {
     // ─── Private: Terminal output helpers ────────────────────────────────────
 
     private showLogo(): void {
-        const logoLine1 = '╭────╮';
-        const logoLine2 = '│ >_ │ DocumentDB Shell';
-        const logoLine3 = '╰────╯';
-
-        // Design exploration alternative, intentionally retained as not-dead code for easy switching.
-        // const logoLine1 = '╭──────────────────────╮';
-        // const logoLine2 = '│ DocumentDB Shell  >_ │';
-        // const logoLine3 = '╰──────────────────────╯';
-
-        const logo = [logoLine1, logoLine2, logoLine3].join('\n');
-
-        this.writeLine(this._outputFormatter.formatShellTitle(logo));
+        this.writeLine(this._outputFormatter.formatShellLogo());
     }
 
     private showPrompt(): void {

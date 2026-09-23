@@ -134,6 +134,25 @@ export class ShellOutputFormatter {
     }
 
     /**
+     * Format the startup logo using only theme-inherited intensity.
+     */
+    formatShellLogo(): string {
+        if (!this.isColorEnabled()) {
+            const logoLine1 = '╭────╮';
+            const logoLine2 = '│ >_ │ DocumentDB Shell';
+            const logoLine3 = '╰────╯';
+
+            return [logoLine1, logoLine2, logoLine3].join('\n');
+        }
+
+        const logoLine1 = `${shellStyles.ghostText}╭────╮${shellAnsi.reset}`;
+        const logoLine2 = `${shellStyles.ghostText}│ ${shellAnsi.reset}${shellStyles.emphasis}>_${shellAnsi.reset}${shellStyles.ghostText} │${shellAnsi.reset} ${shellStyles.emphasis}DocumentDB Shell${shellAnsi.reset}`;
+        const logoLine3 = `${shellStyles.ghostText}╰────╯${shellAnsi.reset}`;
+
+        return [logoLine1, logoLine2, logoLine3].join('\n');
+    }
+
+    /**
      * Format a value embedded in the gray connection-details line.
      * The trailing gray code restores the surrounding system-message style.
      */
