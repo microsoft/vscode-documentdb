@@ -58,6 +58,12 @@ export interface AdvancedQuickStartOptions {
     continueAnyway?: boolean;
 }
 
+/**
+ * Why SASLprep rejects a custom password. The driver runs SASLprep before authenticating, and only
+ * the extension host can run it: its Unicode tables don't bundle into the webview.
+ */
+export type PasswordEncodingProblem = 'unsupportedCharacter' | 'rightToLeft';
+
 /** Fixed container name for the single managed instance (POC). */
 export const QUICK_START_CONTAINER_NAME = 'vscode-documentdb-local';
 

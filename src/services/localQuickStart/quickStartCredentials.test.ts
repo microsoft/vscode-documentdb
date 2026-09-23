@@ -4,7 +4,13 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { DocumentDBConnectionString } from '../../documentdb/utils/DocumentDBConnectionString';
-import { composeConnectionString, generateCredentials, generateToken, secretVariants } from './quickStartCredentials';
+import {
+    composeConnectionString,
+    generateCredentials,
+    generateToken,
+    getPasswordEncodingProblem,
+    secretVariants,
+} from './quickStartCredentials';
 
 const ALNUM = /^[A-Za-z0-9]+$/;
 
@@ -65,6 +71,28 @@ describe('quickStartCredentials (Quick Start D6)', () => {
             const parsed = new DocumentDBConnectionString(composeConnectionString(username, password));
             expect(parsed.username).toBe(username);
             expect(parsed.password).toBe(password);
+        });
+    });
+
+    describe('getPasswordEncodingProblem', () => {
+        it('accepts passwords SASLprep can map', () => {
+            for (const password of ['Str0ng!Pass', 'pässwörd1', 'pass\u00adword1', 'a\u00a0b12345', '\ufb01nance12']) {
+                expect(getPasswordEncodingProblem(password)).toBeUndefined();
+            }
+        });
+
+        // The driver throws these before connecting, so setup used to wait out the readiness timeout.
+        it('flags characters SASLprep rejects', () => {
+            expect(getPasswordEncodingProblem('pass😀word')).toBe('unsupportedCharacter');
+            expect(getPasswordEncodingProblem('₹rupee123')).toBe('unsupportedCharacter');
+        });
+
+        it('flags a password that maps to nothing', () => {
+            expect(getPasswordEncodingProblem('\u00ad\u00ad')).toBe('unsupportedCharacter');
+        });
+
+        it('flags mixed right-to-left and left-to-right text', () => {
+            expect(getPasswordEncodingProblem('abcمرحبا123')).toBe('rightToLeft');
         });
     });
 
