@@ -19,6 +19,7 @@ const ERROR_CODE_PREFIX_RE = /^\[([A-Z]+-\d+)\]\s*/;
 
 /** Compact settings markers embedded in shell help and handled by the terminal link provider. */
 const HELP_SETTINGS_LINK_RE = /\u{2699} \[[^\]]+\]/gu;
+const HELP_MANUAL_ACCESS_PREFIX = 'Manual access:';
 
 /**
  * Result of extracting a technical error code from an error message.
@@ -332,6 +333,10 @@ export class ShellOutputFormatter {
                 if (entryMatch) {
                     const [, indent, command, gap, description] = entryMatch;
                     return `${indent}${shellStyles.completion.action}${command}${shellAnsi.reset}${gap}${shellStyles.muted}${description}${shellAnsi.reset}`;
+                }
+
+                if (line.trimStart().startsWith(HELP_MANUAL_ACCESS_PREFIX)) {
+                    return `${shellStyles.ghostText}${line}${shellAnsi.reset}`;
                 }
 
                 // Tip lines (indented text without two-column structure)

@@ -7,6 +7,7 @@ import { EJSON } from 'bson';
 import * as vscode from 'vscode';
 import { type SerializableExecutionResult } from '../playground/workerTypes';
 import { ShellOutputFormatter } from './ShellOutputFormatter';
+import { shellStyles } from './shellStyles';
 
 describe('ShellOutputFormatter', () => {
     let formatter: ShellOutputFormatter;
@@ -284,6 +285,23 @@ describe('ShellOutputFormatter', () => {
             const output = formatter.formatResult(result);
             expect(output).toContain('\x1b[33mdb.find({})');
             expect(output).toContain('\x1b[90mFind documents');
+        });
+
+        it('should render manual settings access details with the ghost text style', () => {
+            const helpText = [
+                '     Manual access: search Settings for documentDB.shell.display.colorSupport',
+                '     Manual access: search Settings for documentDB.shell.display.inlineHints',
+                '     Manual access: search Settings for documentDB.shell.display.autocompletion',
+            ].join('\n');
+            const result = makeResult({
+                type: 'Help',
+                printable: EJSON.stringify(helpText, { relaxed: false }),
+            });
+
+            const output = formatter.formatResult(result);
+
+            expect(output.split(shellStyles.ghostText)).toHaveLength(4);
+            expect(output).not.toContain('\x1b[90mManual access:');
         });
 
         it('should not colorize help text when color is disabled', () => {
