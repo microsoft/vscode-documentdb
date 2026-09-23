@@ -11,6 +11,7 @@ import * as vscode from 'vscode';
 import { ext } from '../../extensionVariables';
 import { StorageService } from '../storageService';
 import { disposeQuickStartOutputChannel, type IContainerRuntime } from './ContainerRuntime';
+import { DockerCommandError } from './dockerCommand';
 
 import { formatQuickStartMessage } from './quickStartMessages';
 import { envFileName, QuickStartServiceImpl, sweepStaleQuickStartEnvFiles } from './QuickStartService';
@@ -814,6 +815,49 @@ describe('QuickStartService — WI-2d registry-driven reconcile (multi-instance)
         expect(service.getStatus().state).toBe(InstanceState.Running); // corrected to the live state
         expect(service.getStatus().missing).toBe(false);
         info.mockRestore();
+    });
+
+    // The tree row only turns to Error, so the reason has to reach the user some other way.
+    it('start() failure tells the user what Docker said instead of a bare exit code', async () => {
+        ext.secretStorage = fakeSecretStorage({});
+        ext.context = fakeContext(fakeMemento());
+        await seedInstance(DEFAULT_ALIAS, CONN_1);
+
+        const service = new QuickStartServiceImpl(
+            mockRuntime({
+                listByLabel: jest
+                    .fn()
+                    .mockResolvedValue([{ id: 'c1', labels: { [QUICK_START_ALIAS_LABEL_KEY]: DEFAULT_ALIAS } }]),
+                // `docker pause` leaves the tree showing Stopped.
+                inspectContainer: jest.fn((id: string) =>
+                    Promise.resolve({
+                        id,
+                        status: 'paused',
+                        ports: [{ containerPort: QUICK_START_PORT, hostPort: 10260 }],
+                        labels: { [QUICK_START_LABEL_KEY]: '1', [QUICK_START_ALIAS_LABEL_KEY]: DEFAULT_ALIAS },
+                    }),
+                ) as unknown as IContainerRuntime['inspectContainer'],
+                startContainer: jest
+                    .fn()
+                    .mockRejectedValue(
+                        new DockerCommandError(
+                            1,
+                            'Error response from daemon: cannot start a paused container, try unpause instead\nfailed to start containers: c1\n',
+                        ),
+                    ),
+            }),
+        );
+        await service.reconcile();
+        const showError = jest.spyOn(vscode.window, 'showErrorMessage').mockResolvedValue(undefined);
+
+        await service.start();
+
+        expect(showError).toHaveBeenCalledWith(
+            'Could not start DocumentDB Local: cannot start a paused container, try unpause instead',
+            'View setup log',
+        );
+        expect(service.getStatus().state).toBe(InstanceState.Error);
+        showError.mockRestore();
     });
 
     it('stop() on a container that drifted to stopped refreshes silently without stopping', async () => {

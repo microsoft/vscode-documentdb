@@ -22,16 +22,19 @@
 import {
     DockerClient,
     type InspectContainersItem,
+    type Like,
     type ListContainersItem,
     ShellStreamCommandRunnerFactory,
 } from '@microsoft/vscode-container-client';
-import { Bash, Cmd, type Shell, type ShellQuotedString, ShellQuoting } from '@microsoft/vscode-processutils';
+import { type Shell, type ShellQuotedString, ShellQuoting } from '@microsoft/vscode-processutils';
 import * as net from 'net';
 import { Writable } from 'stream';
 import * as vscode from 'vscode';
+import { type DockerCommandResponse, getDockerShellProvider, runDockerCommand } from './dockerCommand';
+import { CapturingTeeWritable } from './dockerProbes';
 import { startDockerProvider as launchDockerProvider } from './DockerProviderLauncher';
 import { DockerReadinessService } from './DockerReadinessService';
-import { MaskingLineBuffer, maskSecrets } from './outputMasking';
+import { MaskingLineBuffer, maskSecrets, sanitizeOutput } from './outputMasking';
 import {
     type DockerLaunchResult,
     type DockerReadiness,
@@ -45,7 +48,22 @@ import {
  * `windowsVerbatimArguments` on Windows and drops quoting, which splits Go-template
  * `--format {{json .}}` arguments on the space and breaks info/inspect/list.
  */
-const SHELL_PROVIDER: Shell = process.platform === 'win32' ? new Cmd() : new Bash();
+const SHELL_PROVIDER: Shell = getDockerShellProvider();
+
+/**
+ * `docker run -d` normally returns within seconds; on Docker Desktop some ports make it hang forever
+ * (65535 on WSL2), so bound it rather than leave setup at "Creating container".
+ */
+export const CREATE_CONTAINER_TIMEOUT_MS = 90_000;
+
+/** Bound for the status reads polled while the user waits, so a hung daemon cannot stall the wait. */
+const POLLED_QUERY_TIMEOUT_MS = 10_000;
+
+/**
+ * Bound for start/stop/remove and the container listing. Setup's cleanup runs these right after a
+ * `docker run` timed out, against the same daemon; unbounded, setup would never report that timeout.
+ */
+const DOCKER_COMMAND_TIMEOUT_MS = 60_000;
 
 let outputChannel: vscode.OutputChannel | undefined;
 
@@ -115,7 +133,14 @@ export interface IContainerRuntime {
         secrets: ReadonlyArray<string>,
         token?: vscode.CancellationToken,
     ): Promise<string | undefined>;
-    inspectContainer(nameOrId: string): Promise<InspectContainersItem | undefined>;
+    /**
+     * `quiet` is for polling: it keeps the command and its JSON out of the setup log, and is bounded
+     * and cancellable. Any failure resolves to `undefined`.
+     */
+    inspectContainer(
+        nameOrId: string,
+        options?: { quiet?: boolean; token?: vscode.CancellationToken },
+    ): Promise<InspectContainersItem | undefined>;
     startContainer(id: string): Promise<void>;
     stopContainer(id: string): Promise<void>;
     removeContainer(id: string, force?: boolean): Promise<void>;
@@ -130,6 +155,13 @@ export interface IContainerRuntime {
     ): Promise<void>;
     listByLabel(labels: Record<string, string | boolean>): Promise<ListContainersItem[]>;
     followLogs(id: string, secrets: ReadonlyArray<string>, token?: vscode.CancellationToken): Promise<void>;
+    /** The container's last `lineCount` log lines, formatting stripped and secrets masked. */
+    readRecentLogs(
+        id: string,
+        lineCount: number,
+        secrets: ReadonlyArray<string>,
+        token?: vscode.CancellationToken,
+    ): Promise<string>;
 }
 
 /**
@@ -173,6 +205,28 @@ class ContainerRuntimeImpl implements IContainerRuntime {
         return factory.getCommandRunner();
     }
 
+    /**
+     * For commands whose failure the user sees: a rejection carries Docker's stderr rather than a
+     * bare exit code, and a cancel or deadline stops the process instead of orphaning it.
+     */
+    private runCommand<T>(
+        command: Like<DockerCommandResponse<T>>,
+        secrets: ReadonlyArray<string> = [],
+        token?: vscode.CancellationToken,
+        timeoutMs?: number,
+    ): Promise<T | undefined> {
+        const channel = getQuickStartOutputChannel();
+        return runDockerCommand(command, {
+            shellProvider: SHELL_PROVIDER,
+            secrets,
+            onCommand: (commandLine: string) => channel.appendLine('$ ' + maskSecrets(commandLine, secrets)),
+            stdOutPipe: new MaskedChannelWritable(channel, secrets),
+            stdErrPipe: new MaskedChannelWritable(channel, secrets),
+            cancellationToken: token,
+            timeoutMs,
+        });
+    }
+
     /** CLI-on-PATH + daemon-reachable check (design §9 prereq cards). */
     public isDockerReady(request?: DockerReadinessRequest): Promise<DockerReadiness> {
         return this.readinessService.getReadiness(request);
@@ -199,8 +253,7 @@ class ContainerRuntimeImpl implements IContainerRuntime {
     }
 
     public async pullImage(imageRef: string, token?: vscode.CancellationToken): Promise<void> {
-        const runner = this.makeRunner([], token);
-        await runner(this.client.pullImage({ imageRef }));
+        await this.runCommand(this.client.pullImage({ imageRef }), [], token);
     }
 
     /** `docker run` detached, returning the new container id. */
@@ -209,7 +262,6 @@ class ContainerRuntimeImpl implements IContainerRuntime {
         secrets: ReadonlyArray<string>,
         token?: vscode.CancellationToken,
     ): Promise<string | undefined> {
-        const runner = this.makeRunner(secrets, token);
         const mounts =
             options.volumeName && options.dataPath
                 ? [
@@ -221,7 +273,7 @@ class ContainerRuntimeImpl implements IContainerRuntime {
                       },
                   ]
                 : undefined;
-        return runner(
+        return this.runCommand(
             this.client.runContainer({
                 imageRef: options.imageRef,
                 name: options.name,
@@ -238,14 +290,26 @@ class ContainerRuntimeImpl implements IContainerRuntime {
                 environmentFiles: options.environmentFiles ? [...options.environmentFiles] : undefined,
                 command: options.command ? [...options.command] : undefined,
             }),
+            secrets,
+            token,
+            CREATE_CONTAINER_TIMEOUT_MS,
         );
     }
 
-    public async inspectContainer(nameOrId: string): Promise<InspectContainersItem | undefined> {
+    public async inspectContainer(
+        nameOrId: string,
+        options?: { quiet?: boolean; token?: vscode.CancellationToken },
+    ): Promise<InspectContainersItem | undefined> {
         try {
             // Don't echo stdout: it carries the container env (PASSWORD=…), and callers often have no secret to mask it with.
-            const runner = this.makeRunner([], undefined, false);
-            const items = await runner(this.client.inspectContainers({ containers: [nameOrId] }));
+            const command = this.client.inspectContainers({ containers: [nameOrId] });
+            const items = options?.quiet
+                ? await runDockerCommand(command, {
+                      shellProvider: SHELL_PROVIDER,
+                      cancellationToken: options.token,
+                      timeoutMs: POLLED_QUERY_TIMEOUT_MS,
+                  })
+                : await this.makeRunner([], undefined, false)(command);
             return items?.[0];
         } catch {
             return undefined;
@@ -253,24 +317,40 @@ class ContainerRuntimeImpl implements IContainerRuntime {
     }
 
     public async startContainer(id: string): Promise<void> {
-        const runner = this.makeRunner([]);
-        await runner(this.client.startContainers({ container: [id] }));
+        await this.runCommand(
+            this.client.startContainers({ container: [id] }),
+            [],
+            undefined,
+            DOCKER_COMMAND_TIMEOUT_MS,
+        );
     }
 
     public async stopContainer(id: string): Promise<void> {
-        const runner = this.makeRunner([]);
-        await runner(this.client.stopContainers({ container: [id] }));
+        await this.runCommand(
+            this.client.stopContainers({ container: [id] }),
+            [],
+            undefined,
+            DOCKER_COMMAND_TIMEOUT_MS,
+        );
     }
 
     public async removeContainer(id: string, force = true): Promise<void> {
-        const runner = this.makeRunner([]);
-        await runner(this.client.removeContainers({ containers: [id], force }));
+        await this.runCommand(
+            this.client.removeContainers({ containers: [id], force }),
+            [],
+            undefined,
+            DOCKER_COMMAND_TIMEOUT_MS,
+        );
     }
 
     /** Remove a named volume (best-effort; used for a clean fresh provision and on Delete). */
     public async removeVolume(name: string, force = true): Promise<void> {
-        const runner = this.makeRunner([]);
-        await runner(this.client.removeVolumes({ volumes: [name], force }));
+        await this.runCommand(
+            this.client.removeVolumes({ volumes: [name], force }),
+            [],
+            undefined,
+            DOCKER_COMMAND_TIMEOUT_MS,
+        );
     }
 
     public async volumeExists(name: string): Promise<boolean> {
@@ -329,8 +409,14 @@ class ContainerRuntimeImpl implements IContainerRuntime {
     }
 
     public async listByLabel(labels: Record<string, string | boolean>): Promise<ListContainersItem[]> {
-        const runner = this.makeRunner([]);
-        return runner(this.client.listContainers({ all: true, labels }));
+        return (
+            (await this.runCommand(
+                this.client.listContainers({ all: true, labels }),
+                [],
+                undefined,
+                DOCKER_COMMAND_TIMEOUT_MS,
+            )) ?? []
+        );
     }
 
     /**
@@ -368,6 +454,24 @@ class ContainerRuntimeImpl implements IContainerRuntime {
             lineBuffer.flush();
         }
     }
+
+    public async readRecentLogs(
+        id: string,
+        lineCount: number,
+        secrets: ReadonlyArray<string>,
+        token?: vscode.CancellationToken,
+    ): Promise<string> {
+        const stdout = new CapturingTeeWritable();
+        const stderr = new CapturingTeeWritable();
+        await runDockerCommand(this.client.logsForContainer({ container: id, tail: lineCount }), {
+            shellProvider: SHELL_PROVIDER,
+            stdOutPipe: stdout,
+            stdErrPipe: stderr,
+            cancellationToken: token,
+            timeoutMs: POLLED_QUERY_TIMEOUT_MS,
+        });
+        return sanitizeOutput(stdout.getOutput() + stderr.getOutput(), secrets);
+    }
 }
 
 /** Singleton container runtime. */
@@ -386,6 +490,22 @@ export function getBoundHostPort(
 /** True when the inspected container reports a "running" status. Pure inspector (no IO). */
 export function isRunning(item: InspectContainersItem | undefined): boolean {
     return !!item?.status && item.status.toLowerCase().includes('running');
+}
+
+/** True once the container's process has ended (not merely paused or still being created). */
+export function hasExited(item: InspectContainersItem): boolean {
+    const status = item.status?.toLowerCase();
+    return status === 'exited' || status === 'dead';
+}
+
+/** The exit code Docker recorded for a stopped container; the normalized item omits it. */
+export function getExitCode(item: InspectContainersItem): number | undefined {
+    try {
+        const raw = JSON.parse(item.raw) as { State?: { ExitCode?: unknown } };
+        return typeof raw.State?.ExitCode === 'number' ? raw.State.ExitCode : undefined;
+    } catch {
+        return undefined;
+    }
 }
 
 /** Singleton Docker-backed runtime; the default injected into {@link QuickStartService} (WI-0). */

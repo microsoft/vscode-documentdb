@@ -21,6 +21,12 @@ describe('formatQuickStartMessage', () => {
         'dockerCliMissing',
         'dockerDaemonUnreachable',
         'dockerUnavailableDuringSetup',
+        'imageNotFound',
+        'createTimedOut',
+        'containerExited',
+        'credentialsRejected',
+        'savedCredentialsRejected',
+        'passwordNotSupported',
         'readinessTimeout',
         'instanceRunning',
         'nothingToResume',
@@ -60,5 +66,32 @@ describe('formatQuickStartMessage', () => {
     it('names the port it is talking about', () => {
         expect(formatQuickStartMessage({ key: 'portInUse', port: 10333 })).toContain('10333');
         expect(formatQuickStartMessage({ key: 'instanceRunning', port: 10333 })).toContain('10333');
+    });
+
+    it('names the image that could not be found', () => {
+        expect(formatQuickStartMessage({ key: 'imageNotFound', image: 'repo/local:0.117.0-nope' })).toContain(
+            'repo/local:0.117.0-nope',
+        );
+    });
+
+    it('gives the exit code and the container own explanation when it stops during setup', () => {
+        expect(
+            formatQuickStartMessage({
+                key: 'containerExited',
+                exitCode: 1,
+                detail: "username 'documentdb' uses reserved prefix 'documentdb'.",
+            }),
+        ).toBe(
+            "The DocumentDB container stopped before it was ready (exit code 1): username 'documentdb' uses reserved prefix 'documentdb'.",
+        );
+        expect(formatQuickStartMessage({ key: 'containerExited', exitCode: 137 })).toBe(
+            'The DocumentDB container stopped before it was ready (exit code 137). View the setup log for details.',
+        );
+    });
+
+    it('does not double the full stop after a server message that ends with one', () => {
+        expect(formatQuickStartMessage({ key: 'credentialsRejected', detail: 'Authentication failed.' })).toBe(
+            'DocumentDB did not accept the username or password: Authentication failed. Go back to Configure to change them.',
+        );
     });
 });

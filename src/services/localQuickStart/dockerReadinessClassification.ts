@@ -85,12 +85,26 @@ const DOCKER_DESKTOP_ENDPOINT_SIGNATURES: ReadonlyArray<RegExp> = [
 ];
 const ROOTLESS_DOCKER_ENDPOINT_SIGNATURE = /[\\/]run[\\/]user[\\/]\d+[\\/]docker\.sock$/i;
 
+/** `sh` exits 127 and `cmd.exe` 9009 for an unknown command. */
+const SHELL_COMMAND_NOT_FOUND_EXIT_CODES: ReadonlySet<number> = new Set([127, 9009]);
+
+/**
+ * Probes run through a shell, so a missing `docker` binary shows up as the shell's "command not
+ * found" exit code; a spawn `ENOENT` only happens when there is no shell in between.
+ */
+export function isDockerCliNotFound(probe: DockerProbeEvidence): boolean {
+    return (
+        probe.spawnErrorCode === 'ENOENT' ||
+        (probe.exitCode !== undefined && SHELL_COMMAND_NOT_FOUND_EXIT_CODES.has(probe.exitCode))
+    );
+}
+
 function hasSignature(values: ReadonlyArray<string>, signatures: ReadonlyArray<RegExp>): boolean {
     return values.some((value) => signatures.some((signature) => signature.test(value)));
 }
 
 function classifyDockerFailureCore(evidence: DockerFailureEvidence): DockerFailureClassification {
-    if (evidence.infoProbe.spawnErrorCode === 'ENOENT') {
+    if (isDockerCliNotFound(evidence.infoProbe)) {
         return { failureKind: 'cliMissing', outcome: 'diagnosed' };
     }
 

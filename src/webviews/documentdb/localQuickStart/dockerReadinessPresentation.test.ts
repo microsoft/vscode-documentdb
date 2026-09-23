@@ -110,7 +110,7 @@ describe('getDockerReadinessPresentation', () => {
         },
     );
 
-    it.each(['linux' as const, 'wsl' as const, 'devContainer' as const])(
+    it.each(['linux' as const, 'devContainer' as const])(
         'keeps the Docker Engine install guide on %s',
         (environment) => {
             expect(
@@ -120,6 +120,15 @@ describe('getDockerReadinessPresentation', () => {
             ).toMatchObject({ guide: 'install', guidance: 'installDocker' });
         },
     );
+
+    // A WSL distribution without Docker Desktop's integration has no `docker` either.
+    it('mentions Docker Desktop WSL integration when docker is missing in WSL', () => {
+        expect(
+            getDockerReadinessPresentation(
+                readiness({ environment: 'wsl', failureKind: 'cliMissing', cliInstalled: false }),
+            ),
+        ).toMatchObject({ guide: 'install', guidance: 'installDockerWsl' });
+    });
 
     it('offers Continue anyway only for an indeterminate result', () => {
         expect(

@@ -79,7 +79,7 @@ const DockerInfoSchema = z.object({
     ServerErrors: z.array(z.string()).nullish(),
 });
 
-class CapturingTeeWritable extends Writable {
+export class CapturingTeeWritable extends Writable {
     private readonly chunks: string[] = [];
 
     public constructor(private readonly destination?: Writable) {
@@ -123,7 +123,7 @@ function getEndedBy(options: RunDockerProbeOptions): DockerProbeEvidence['endedB
     return 'exit';
 }
 
-async function finishCapture(stream: CapturingTeeWritable): Promise<void> {
+export async function finishCapture(stream: CapturingTeeWritable): Promise<void> {
     if (!stream.writableEnded) {
         stream.end();
     }

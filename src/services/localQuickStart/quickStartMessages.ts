@@ -18,6 +18,8 @@ export function formatQuickStartMessage(message: QuickStartMessage): string {
     // Whitespace-only detail is no evidence at all; collapsing it here keeps every branch below
     // from having to decide what an empty string means.
     const detail = message.detail?.trim() || undefined;
+    // Spliced mid-sentence before another full stop, so its own would double up.
+    const reason = detail?.replace(/\.+$/, '') || undefined;
 
     switch (message.key) {
         case 'setupAlreadyInProgress':
@@ -41,6 +43,37 @@ export function formatQuickStartMessage(message: QuickStartMessage): string {
             return detail
                 ? l10n.t('Docker became unavailable during setup: {0}', detail)
                 : l10n.t('Docker became unavailable during setup.');
+        case 'imageNotFound':
+            return l10n.t(
+                'Docker could not find the image {0}. Go back to Configure and check the image tag, or leave it empty to use the latest version.',
+                message.image ?? '',
+            );
+        case 'createTimedOut':
+            return l10n.t(
+                'Docker did not finish creating the container in time. Try again, or go back to Configure and choose a different port. If it keeps happening, restart Docker.',
+            );
+        case 'containerExited':
+            return formatContainerExited(message.exitCode, detail);
+        case 'credentialsRejected':
+            return reason
+                ? l10n.t(
+                      'DocumentDB did not accept the username or password: {0}. Go back to Configure to change them.',
+                      reason,
+                  )
+                : l10n.t('DocumentDB did not accept the username or password. Go back to Configure to change them.');
+        case 'savedCredentialsRejected':
+            return reason
+                ? l10n.t(
+                      'The existing data did not accept the saved username or password: {0}. To start over, go back to Configure and erase the existing data.',
+                      reason,
+                  )
+                : l10n.t(
+                      'The existing data did not accept the saved username or password. To start over, go back to Configure and erase the existing data.',
+                  );
+        case 'passwordNotSupported':
+            return l10n.t(
+                'The password contains characters that cannot be used to sign in, such as emoji. Go back to Configure and choose a different password.',
+            );
         case 'readinessTimeout':
             // A dev container publishes the port on its host, so "it is still starting" would be
             // the wrong thing to tell someone whose port is simply not routed.
@@ -65,4 +98,18 @@ export function formatQuickStartMessage(message: QuickStartMessage): string {
             // with no translated sentence telling them what it is about.
             return detail ? l10n.t('Setup failed: {0}', detail) : l10n.t('Setup failed.');
     }
+}
+
+function formatContainerExited(exitCode: number | undefined, detail: string | undefined): string {
+    if (exitCode === undefined) {
+        return detail
+            ? l10n.t('The DocumentDB container stopped before it was ready: {0}', detail)
+            : l10n.t('The DocumentDB container stopped before it was ready. View the setup log for details.');
+    }
+    return detail
+        ? l10n.t('The DocumentDB container stopped before it was ready (exit code {0}): {1}', String(exitCode), detail)
+        : l10n.t(
+              'The DocumentDB container stopped before it was ready (exit code {0}). View the setup log for details.',
+              String(exitCode),
+          );
 }
