@@ -554,6 +554,35 @@ describe('DockerReadinessService', () => {
         ]);
     });
 
+    it.each([
+        [
+            'missing docker info fields fall back to unknown',
+            false,
+            ['[readiness] docker server=unknown os=unknown arch=unknown'],
+        ],
+        ['a suppressed poll logs no summary', true, []],
+    ])('%s', async (_name, suppressCommandEcho, expected) => {
+        const appendDiagnostic = jest.fn();
+        const runProbe = jest.fn(
+            async (options: RunDockerProbeOptions): Promise<DockerProbeEvidence> =>
+                options.probe === 'info'
+                    ? evidence('info', { stdout: JSON.stringify({ ServerErrors: [] }) })
+                    : evidence(options.probe, { stdout: 'Docker version 28.1.1' }),
+        );
+        const service = new DockerReadinessService({
+            client: createClient(),
+            shellProvider: new Bash(),
+            platform: 'linux',
+            environmentVariables: {},
+            runProbe,
+            createProbeOutput: () => ({ appendDiagnostic }),
+        });
+
+        await service.getReadiness({ suppressCommandEcho });
+
+        expect(appendDiagnostic.mock.calls).toEqual(expected.map((line) => [line]));
+    });
+
     it('logs docker info server errors as diagnostics on failure', async () => {
         const appendDiagnostic = jest.fn();
         const runProbe = jest.fn(async (options: RunDockerProbeOptions): Promise<DockerProbeEvidence> => {

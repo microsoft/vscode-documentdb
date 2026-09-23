@@ -3,6 +3,7 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+import * as crypto from 'crypto';
 import * as fs from 'fs/promises';
 import * as os from 'os';
 import * as path from 'path';
@@ -1957,6 +1958,15 @@ describe('sweepStaleQuickStartEnvFiles', () => {
         await sweepStaleQuickStartEnvFiles(dir);
 
         expect(await fs.readdir(dir)).toEqual([envFileName(process.pid, '0123456789abcdef')]);
+    });
+
+    it('sweeps os.tmpdir() by default', async () => {
+        const name = envFileName(DEAD_PID, crypto.randomBytes(8).toString('hex'));
+        await fs.writeFile(path.join(os.tmpdir(), name), 'PASSWORD=secret\n');
+
+        await sweepStaleQuickStartEnvFiles();
+
+        expect(await fs.readdir(os.tmpdir())).not.toContain(name);
     });
 
     it('removes any file older than an hour, including legacy PID-less names', async () => {
