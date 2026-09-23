@@ -803,7 +803,6 @@ export class QuickStartServiceImpl {
             if (!(await this.isPortAvailable(chosenPort, existing?.id))) {
                 throw new PortTakenDuringPullError(chosenPort);
             }
-            this.throwIfAborted(signal);
             // A volume that appeared during the pull belongs to someone else: mounting it would use,
             // and a failure would then remove, data this run never saw.
             const volumeBeforeCreate = await this.runtime.volumeExists(volumeName(alias));
@@ -811,6 +810,8 @@ export class QuickStartServiceImpl {
                 throw new VolumeAppearedError();
             }
             createdVolume = !reusing || !volumeBeforeCreate;
+            // Last await before the wipe, so a Cancel during any check above still leaves everything.
+            this.throwIfAborted(signal);
             if (existing) {
                 channel.appendLine(`Removing existing Quick Start container ${existing.id} for a clean run…`);
                 await this.runtime

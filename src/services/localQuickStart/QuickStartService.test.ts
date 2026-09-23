@@ -1993,6 +1993,30 @@ describe('QuickStartService — WI-2e-1 provision RR4 volume-wipe gate', () => {
         expect(service.getStatus().state).toBe(InstanceState.CredentialsMissing);
     });
 
+    it('keeps the old data when Cancel lands during the last check before the wipe', async () => {
+        ext.secretStorage = fakeSecretStorage({});
+        ext.context = fakeContext(fakeMemento());
+        const controller = new AbortController();
+        const removeContainer = jest.fn().mockResolvedValue(undefined);
+        const removeVolume = jest.fn().mockResolvedValue(undefined);
+        const runtime = provisionRuntime({
+            containers: [{ id: 'c1', alias: DEFAULT_ALIAS }],
+            volumeExists: true,
+            removeContainer,
+            removeVolume,
+        });
+        (runtime.volumeExists as jest.Mock).mockResolvedValueOnce(true).mockImplementationOnce(() => {
+            controller.abort();
+            return Promise.resolve(true);
+        });
+        const service = new QuickStartServiceImpl(runtime);
+
+        await drain(service.provision(controller.signal, { startFresh: true }));
+
+        expect(removeContainer).not.toHaveBeenCalled();
+        expect(removeVolume).not.toHaveBeenCalled();
+    });
+
     it('reports a held data volume before asking the user to start fresh', async () => {
         ext.secretStorage = fakeSecretStorage({});
         ext.context = fakeContext(fakeMemento());
