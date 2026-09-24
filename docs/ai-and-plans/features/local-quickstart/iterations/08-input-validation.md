@@ -13,7 +13,7 @@ code:
   - src/services/localQuickStart/QuickStartService.ts
 ---
 
-# 07 — Reject credentials and ports setup can't honor (issue #949)
+# 08 — Reject credentials and ports setup can't honor (issue #949)
 
 > Configure accepted usernames, passwords and an empty port that DocumentDB Local then failed on,
 > minutes later or not at all. One rule set now runs in both the webview and the router, and the
@@ -82,9 +82,9 @@ empty field never meant "reuse the old port".
 
 ## Outcome
 
-**Verified (2026-09-24, after rebase).**
+**Verified (2026-09-24, after merging `main` at `1c2b7fab`, #954).**
 
-- 22 suites / 412 tests in `src/services/localQuickStart` and `src/webviews/documentdb/localQuickStart`,
+- 23 suites / 457 tests in `src/services/localQuickStart` and `src/webviews/documentdb/localQuickStart`,
   `tsc`, ESLint and Prettier pass. The l10n bundle regenerates unchanged.
 - With `main`'s `localQuickStartRouter.ts`, 10 of the 19 router tests fail.
 - The rebase onto #958 had no conflicts; #958's `QuickStartService.ts` and `LocalQuickStart.tsx` edits

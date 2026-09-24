@@ -164,6 +164,12 @@ export type QuickStartMessageKey =
     | 'dockerCliMissing'
     | 'dockerDaemonUnreachable'
     | 'dockerUnavailableDuringSetup'
+    | 'imageNotFound'
+    | 'createTimedOut'
+    | 'containerExited'
+    | 'credentialsRejected'
+    | 'savedCredentialsRejected'
+    | 'passwordNotSupported'
     | 'readinessTimeout'
     | 'instanceRunning'
     | 'nothingToResume'
@@ -182,6 +188,10 @@ export interface QuickStartMessage {
     readonly port?: number;
     /** Host environment, for `readinessTimeout`, whose guidance differs per platform. */
     readonly environment?: DockerHostEnvironment;
+    /** Image reference, for `imageNotFound`. */
+    readonly image?: string;
+    /** The container's exit code, for `containerExited`. */
+    readonly exitCode?: number;
     /** Raw daemon / driver text, rendered verbatim beside the localized copy. */
     readonly detail?: string;
 }

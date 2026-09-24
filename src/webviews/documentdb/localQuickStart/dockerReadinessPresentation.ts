@@ -31,6 +31,7 @@ export type DockerGuidanceKey =
     | 'installDocker'
     | 'installDockerWindows'
     | 'installDockerMac'
+    | 'installDockerWsl'
     | 'accessDeniedLinux'
     | 'accessDeniedWsl'
     | 'accessDeniedRemote'
@@ -251,6 +252,9 @@ function getInstallGuidance(readiness: DockerReadiness): DockerGuidanceKey {
             return 'installDockerWindows';
         case 'macos':
             return 'installDockerMac';
+        // Docker Desktop's WSL integration being off looks exactly like no Docker at all.
+        case 'wsl':
+            return 'installDockerWsl';
         default:
             return 'installDocker';
     }

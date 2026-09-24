@@ -379,6 +379,30 @@ describe('DockerReadinessService', () => {
         expect(probeEndpoint).not.toHaveBeenCalled();
     });
 
+    // Probes run through a shell, so a missing binary is the shell's "command not found", not ENOENT.
+    it('returns cliMissing when the shell cannot find docker', async () => {
+        const runProbe = jest.fn(
+            async (options: RunDockerProbeOptions): Promise<DockerProbeEvidence> =>
+                evidence(options.probe, { exitCode: 127, stderr: '/bin/sh: docker: command not found\n' }),
+        );
+        const probeEndpoint = jest.fn();
+        const service = new DockerReadinessService({
+            client: createClient(),
+            shellProvider: new Bash(),
+            platform: 'linux',
+            environmentVariables: {},
+            runProbe,
+            probeEndpoint,
+        });
+
+        await expect(service.getReadiness()).resolves.toMatchObject({
+            failureKind: 'cliMissing',
+            cliInstalled: false,
+            daemonReachable: false,
+        });
+        expect(probeEndpoint).not.toHaveBeenCalled();
+    });
+
     it('reports the CLI as installed when the info process spawned after a failed version probe', async () => {
         const runProbe = jest.fn(async (options: RunDockerProbeOptions): Promise<DockerProbeEvidence> => {
             if (options.probe === 'cliVersion') {

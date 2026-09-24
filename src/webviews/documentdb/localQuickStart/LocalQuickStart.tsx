@@ -437,6 +437,9 @@ function dockerGuidance(): Readonly<Record<DockerGuidanceKey, string>> {
         installDockerMac: l10n.t(
             'Install Docker Desktop, then restart VS Code. A VS Code that was already running does not pick up the PATH the installer adds, so Docker stays undetected until it is restarted. Start Docker Desktop and wait until it is ready, then check again.',
         ),
+        installDockerWsl: l10n.t(
+            'Docker was not found in this WSL distribution. If you use Docker Desktop, turn on its WSL integration for this distribution. Otherwise install Docker Engine here. Then check again.',
+        ),
         accessDeniedLinux: l10n.t(
             'Your user cannot access the Docker socket. Run this command, then sign out and sign back in.',
         ),

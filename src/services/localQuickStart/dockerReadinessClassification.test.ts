@@ -88,6 +88,16 @@ describe('classifyDockerFailure', () => {
             expected: { failureKind: 'cliMissing', outcome: 'diagnosed' },
         },
         {
+            name: 'missing CLI behind sh (exit 127)',
+            probe: { exitCode: 127, endedBy: 'exit' } as const,
+            expected: { failureKind: 'cliMissing', outcome: 'diagnosed' },
+        },
+        {
+            name: 'missing CLI behind cmd.exe (exit 9009)',
+            probe: { exitCode: 9009, endedBy: 'exit' } as const,
+            expected: { failureKind: 'cliMissing', outcome: 'diagnosed' },
+        },
+        {
             name: 'deadline expiry',
             probe: { endedBy: 'deadline' } as const,
             expected: { failureKind: 'probeTimedOut', outcome: 'indeterminate' },

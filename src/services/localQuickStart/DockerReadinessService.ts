@@ -4,10 +4,11 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { DockerClient, type ListContextItem, type PromiseCommandResponse } from '@microsoft/vscode-container-client';
-import { Bash, CancellationTokenLike, Cmd, type Shell } from '@microsoft/vscode-processutils';
+import { CancellationTokenLike, type Shell } from '@microsoft/vscode-processutils';
 import { type Writable } from 'stream';
 import * as vscode from 'vscode';
 import { ext } from '../../extensionVariables';
+import { getDockerShellProvider } from './dockerCommand';
 import {
     detectDockerServiceManager,
     normalizeDaemonArchitecture,
@@ -23,6 +24,7 @@ import {
     classifyDockerFailure,
     classifyDockerProvider,
     getDockerDiagnosticFingerprint,
+    isDockerCliNotFound,
 } from './dockerReadinessClassification';
 import { getDockerRecoveryCommand } from './dockerRecoveryCommands';
 import {
@@ -99,10 +101,6 @@ interface ResolvedDependencies {
 interface DockerContextProbeResult {
     readonly contexts: ReadonlyArray<ListContextItem>;
     readonly succeeded: boolean;
-}
-
-function getDefaultShell(platform: NodeJS.Platform): Shell {
-    return platform === 'win32' ? new Cmd() : new Bash();
 }
 
 function isWslEnvironment(environmentVariables: NodeJS.ProcessEnv): boolean {
@@ -232,7 +230,7 @@ export class DockerReadinessService {
         const platform = dependencies.platform ?? process.platform;
         this.dependencies = {
             client: dependencies.client ?? new DockerClient(),
-            shellProvider: dependencies.shellProvider ?? getDefaultShell(platform),
+            shellProvider: dependencies.shellProvider ?? getDockerShellProvider(platform),
             platform,
             arch: dependencies.arch ?? process.arch,
             environmentVariables: dependencies.environmentVariables ?? process.env,
@@ -449,8 +447,9 @@ export class DockerReadinessService {
             }
 
             const cliVersion = isSuccessfulProbe(versionProbe) ? versionProbe.stdout.trim() : undefined;
-            const cliInstalled = isSuccessfulProbe(versionProbe) || infoProbe.spawnErrorCode !== 'ENOENT';
-            if (infoProbe.spawnErrorCode === 'ENOENT') {
+            const cliNotFound = isDockerCliNotFound(infoProbe);
+            const cliInstalled = isSuccessfulProbe(versionProbe) || !cliNotFound;
+            if (cliNotFound) {
                 return {
                     outcome: 'diagnosed',
                     environment,
