@@ -44,7 +44,12 @@ async function main() {
             extensionTestsEnv: { DEBUGTELEMETRY: 'v' },
         });
     } finally {
-        fs.rmSync(workDir, { recursive: true, force: true });
+        // Best-effort: leftover temp files shouldn't replace the test's own result.
+        try {
+            fs.rmSync(workDir, { recursive: true, force: true, maxRetries: 3 });
+        } catch (error) {
+            console.warn(`Could not remove ${workDir}: ${error.message}`);
+        }
     }
 }
 
