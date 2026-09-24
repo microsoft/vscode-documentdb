@@ -5,18 +5,24 @@
 
 import { Badge, Tooltip } from '@fluentui/react-components';
 import * as l10n from '@vscode/l10n';
-import { Fragment, useState, type JSX } from 'react';
+import { Fragment, useId, useState, type JSX } from 'react';
 
 import { DataBarVerticalAscendingRegular, NetworkCheckRegular } from '@fluentui/react-icons';
 import { type ClusterHealthSample } from '../../../../documentdb/utils/getClusterHealth';
 import { regionToDisplayName } from '../../../../utils/regionToDisplayName';
 import { type ClusterDashboardAzureInfo } from '../clusterDashboardController';
 import { type ClusterDashboardInfo } from '../clusterDashboardRouter';
-import { formatUptime } from '../formatUtils';
+import { formatUptime, getClusterVersions } from '../formatUtils';
 import { buildDetailGroups, DashboardDetailsRegion, DetailsDisclosureButton } from './DashboardDetails';
 
 /** Connection state derived from the most recent samples. */
 export type ConnectionState = 'connecting' | 'connected' | 'disconnected';
+
+interface VersionTag {
+    label: string;
+    value: string;
+    tooltip: string;
+}
 
 /**
  * Summarises the provisioned compute as one line, e.g. `M10 · 1 node · 128 GB`.
@@ -95,6 +101,7 @@ export const DashboardHeader = ({
     isExportingDiagnostics,
 }: DashboardHeaderProps): JSX.Element => {
     const [expanded, setExpanded] = useState(false);
+    const versionId = useId();
 
     const connectionLabel =
         connectionState === 'connected'
@@ -110,12 +117,29 @@ export const DashboardHeader = ({
 
     // Four at most, in the order a reader asks them: what version, where, how big, how long
     // has it been up.
-    const keyFacts: Array<{ label: string; value: string }> = [];
+    const keyFacts: Array<{ label: string; value: string | VersionTag[] }> = [];
 
     if (clusterInfo !== null) {
-        const version = clusterInfo.metadata['serverInfo_version'];
-        if (version !== undefined && version !== '') {
-            keyFacts.push({ label: l10n.t('Version'), value: version });
+        const versions = getClusterVersions(clusterInfo.metadata);
+        const versionParts: VersionTag[] = [];
+        if (versions.engine !== undefined) {
+            versionParts.push({
+                label: l10n.t('DocumentDB'),
+                value: versions.engine,
+                tooltip: l10n.t('DocumentDB engine version reported by the server: {0}', versions.engine),
+            });
+        }
+        if (versions.api !== undefined) {
+            versionParts.push({
+                label: l10n.t('API'),
+                value: versions.api,
+                tooltip: l10n.t('MongoDB API compatibility version reported by the server: {0}', versions.api),
+            });
+        }
+        if (versionParts.length > 0) {
+            keyFacts.push({ label: l10n.t('Version'), value: versionParts });
+        } else if (versions.server !== undefined) {
+            keyFacts.push({ label: l10n.t('Version'), value: versions.server });
         }
 
         if (azure?.location !== undefined) {
@@ -225,8 +249,42 @@ export const DashboardHeader = ({
                                     </span>
                                 )}
                                 <span className="dashboardFact">
-                                    <span className="dashboardFactLabel">{fact.label}</span>
-                                    <span className="dashboardFactValue">{fact.value}</span>
+                                    {Array.isArray(fact.value) ? (
+                                        fact.value.map((version, versionIndex) => (
+                                            <Tooltip
+                                                key={version.label}
+                                                content={version.tooltip}
+                                                relationship="description"
+                                            >
+                                                <span
+                                                    className="dashboardFact"
+                                                    role="group"
+                                                    tabIndex={0}
+                                                    aria-labelledby={`${versionId}-${versionIndex}-label ${versionId}-${versionIndex}-value`}
+                                                >
+                                                    <span
+                                                        className="dashboardFactLabel"
+                                                        id={`${versionId}-${versionIndex}-label`}
+                                                    >
+                                                        {version.label}
+                                                    </span>
+                                                    <span
+                                                        className="dashboardFactValue"
+                                                        id={`${versionId}-${versionIndex}-value`}
+                                                    >
+                                                        {version.value}
+                                                    </span>
+                                                </span>
+                                            </Tooltip>
+                                        ))
+                                    ) : (
+                                        <>
+                                            <span className="dashboardFactLabel">{fact.label}</span>
+                                            <span className="dashboardFactValue" title={fact.value}>
+                                                {fact.value}
+                                            </span>
+                                        </>
+                                    )}
                                 </span>
                             </Fragment>
                         ))}

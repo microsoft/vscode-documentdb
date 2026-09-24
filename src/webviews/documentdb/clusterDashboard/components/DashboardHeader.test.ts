@@ -1,0 +1,161 @@
+/*---------------------------------------------------------------------------------------------
+ *  Copyright (c) Microsoft Corporation. All rights reserved.
+ *  Licensed under the MIT License. See License.txt in the project root for license information.
+ *--------------------------------------------------------------------------------------------*/
+
+import { SSRProvider } from '@fluentui/react-components';
+import { createElement } from 'react';
+// eslint-disable-next-line import/no-internal-modules -- React DOM exposes server rendering through this public subpath.
+import { renderToStaticMarkup } from 'react-dom/server';
+
+import { type ClusterDashboardInfo } from '../clusterDashboardRouter';
+import { buildDetailGroups } from './DashboardDetails';
+import { DashboardHeader } from './DashboardHeader';
+
+jest.mock('@vscode/l10n', () => ({
+    t: (message: string, ...args: unknown[]): string => {
+        const substitutions = args[0];
+        if (typeof substitutions === 'object' && substitutions !== null) {
+            return Object.entries(substitutions).reduce(
+                (result, [key, value]) => result.replace(`{${key}}`, String(value)),
+                message,
+            );
+        }
+        return args.reduce<string>((result, value, index) => result.replace(`{${index}}`, String(value)), message);
+    },
+}));
+
+interface VersionScenario {
+    name: string;
+    metadata: ClusterDashboardInfo['metadata'];
+    headerVersions: string[];
+    rows: Array<{ label: string; value: string }>;
+}
+
+const SCENARIOS: VersionScenario[] = [
+    {
+        name: 'engine and API',
+        metadata: {
+            topology_hello_internal_documentdb_versions: '0.117-0;0.117.0',
+            serverInfo_version: '7.0.0',
+        },
+        headerVersions: ['DocumentDB 0.117.0', 'API 7.0.0'],
+        rows: [
+            { label: 'Engine version', value: '0.117.0' },
+            { label: 'API version', value: '7.0.0' },
+        ],
+    },
+    {
+        name: 'engine only when buildInfo fails',
+        metadata: { topology_hello_internal_documentdb_versions: '0.117.0' },
+        headerVersions: ['DocumentDB 0.117.0'],
+        rows: [{ label: 'Engine version', value: '0.117.0' }],
+    },
+    {
+        name: 'engine only when the API version is unclear',
+        metadata: {
+            topology_hello_internal_documentdb_versions: '0.117.0',
+            serverInfo_version: 'unknown',
+        },
+        headerVersions: ['DocumentDB 0.117.0'],
+        rows: [{ label: 'Engine version', value: '0.117.0' }],
+    },
+    {
+        name: 'API only when the engine version is ambiguous',
+        metadata: {
+            topology_hello_internal_documentdb_versions: '0.117.0;0.118.0',
+            serverInfo_version: '7.0.0',
+        },
+        headerVersions: ['API 7.0.0'],
+        rows: [{ label: 'API version', value: '7.0.0' }],
+    },
+    {
+        name: 'API only when the engine version is empty',
+        metadata: {
+            topology_hello_internal_documentdb_versions: '',
+            serverInfo_version: '7.0.0',
+        },
+        headerVersions: ['API 7.0.0'],
+        rows: [{ label: 'API version', value: '7.0.0' }],
+    },
+    {
+        name: 'existing server wording without DocumentDB metadata',
+        metadata: { serverInfo_version: '8.0.11' },
+        headerVersions: ['8.0.11'],
+        rows: [{ label: 'Server version', value: '8.0.11' }],
+    },
+    {
+        name: 'neither version available',
+        metadata: {},
+        headerVersions: [],
+        rows: [],
+    },
+    {
+        name: 'neither version clear',
+        metadata: { topology_hello_internal_documentdb_versions: 'unknown', serverInfo_version: 'unknown' },
+        headerVersions: [],
+        rows: [],
+    },
+];
+
+describe('Dashboard versions', () => {
+    it.each(SCENARIOS)('renders $name consistently in the header and details', ({ metadata, headerVersions, rows }) => {
+        const clusterInfo: ClusterDashboardInfo = { clusterDisplayName: 'Test cluster', metadata, hosts: [] };
+        const html = renderToStaticMarkup(
+            createElement(
+                SSRProvider,
+                null,
+                createElement(DashboardHeader, {
+                    clusterDisplayName: clusterInfo.clusterDisplayName,
+                    clusterInfo,
+                    connectionState: 'connected',
+                    latestSample: { uptimeSeconds: 3600, pingLatencyMs: 3, errors: [] },
+                    azure: { location: 'westus2', sku: 'M10' },
+                }),
+            ),
+        );
+        const labels = Array.from(
+            html.matchAll(/class="dashboardFactLabel"(?: id="[^"]*")?>([^<]*)</g),
+            (match) => match[1],
+        );
+        const versionLabels = rows.map((row) => {
+            if (row.label === 'Engine version') {
+                return 'DocumentDB';
+            }
+            return row.label === 'API version' ? 'API' : 'Version';
+        });
+        expect(labels).toEqual([...versionLabels, 'Region', 'Compute', 'Uptime']);
+        const tagCount = metadata['topology_hello_internal_documentdb_versions'] === undefined ? 0 : headerVersions.length;
+        const versionGroupCount = headerVersions.length === 0 ? 0 : 1;
+        expect(html.match(/class="dashboardFact"/g)).toHaveLength(3 + versionGroupCount + tagCount);
+        const values = Array.from(
+            html.matchAll(/class="dashboardFactValue"(?: (?:title|id)="[^"]*")?>([^<]*)</g),
+            (match) => match[1],
+        );
+        expect(values.slice(0, headerVersions.length)).toEqual(rows.map((row) => row.value));
+        expect(values).toHaveLength(3 + headerVersions.length);
+        expect(html.match(/class="dashboardFact" role="group" tabindex="0" aria-labelledby=/g) ?? []).toHaveLength(
+            tagCount,
+        );
+        expect(html).not.toContain('DocumentDB 0.117.0 · API 7.0.0');
+        const groups = buildDetailGroups(clusterInfo, undefined);
+        expect(groups).toEqual(
+            rows.length === 0
+                ? []
+                : [{ title: 'Server', details: rows.map((row) => ({ ...row, copyable: false })) }],
+        );
+    });
+
+    it('omits version facts before cluster metadata arrives', () => {
+        const html = renderToStaticMarkup(
+            createElement(DashboardHeader, {
+                clusterDisplayName: 'Test cluster',
+                clusterInfo: null,
+                connectionState: 'connecting',
+                latestSample: null,
+            }),
+        );
+        expect(html).not.toContain('dashboardFactLabel');
+        expect(buildDetailGroups(null, undefined)).toEqual([]);
+    });
+});

@@ -12,6 +12,7 @@ import { Fragment, type JSX } from 'react';
 import { regionToDisplayName } from '../../../../utils/regionToDisplayName';
 import { type ClusterDashboardAzureInfo } from '../clusterDashboardController';
 import { type ClusterDashboardInfo } from '../clusterDashboardRouter';
+import { getClusterVersions } from '../formatUtils';
 
 /** A row in the disclosed details grid. */
 export interface DashboardDetail {
@@ -71,7 +72,10 @@ export function buildDetailGroups(
         );
     }
 
-    pushServer(l10n.t('Server version'), metadata['serverInfo_version']);
+    const versions = getClusterVersions(metadata);
+    pushServer(l10n.t('Engine version'), versions.engine);
+    pushServer(l10n.t('API version'), versions.api);
+    pushServer(l10n.t('Server version'), versions.server);
     pushServer(l10n.t('Platform'), metadata['serverInfo_platform']);
     pushServer(l10n.t('Storage engines'), metadata['serverInfo_storageEngines']);
     pushServer(l10n.t('Topology'), metadata['topology_type']);

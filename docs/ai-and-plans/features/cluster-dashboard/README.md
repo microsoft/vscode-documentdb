@@ -52,6 +52,15 @@ None yet. A user-manual page is due before this ships.
   contracts. Host addresses live in the disclosed Server details, alongside an optional Azure
   resource group of facts and the raw diagnostics action. The disclosure retains both label
   widths, and its mounted Fluent `Collapse` handles opening and closing without a layout toggle.
+- **Engine and API versions are independent facts.** A server reporting DocumentDB version
+  metadata gets separate `DocumentDB <engine>` and `API <api>` tags in the first fact group,
+  with no extra Version label or separator. Tooltips explain each version. There are separate
+  Engine version and API version rows in Server details. Either part is omitted when unclear;
+  neither gets an unknown placeholder. The known extension/binary pair uses the binary version,
+  while a single recognizable version is displayed as reported. Unrecognized multi-entry shapes
+  are omitted rather than choosing an arbitrary entry. Without DocumentDB metadata, the existing
+  server-version wording is retained. The header still has at most four fact groups in versions,
+  Region, Compute, Uptime order. Version tooltips are available on hover and keyboard focus.
 - **The cluster toolbar groups connection tools separately from page utilities.** Open Shell and
   Copy Connection String sit together on the left; Refresh, More actions and feedback sit on the
   right. Fluent overflow moves Copy, then Shell, into More actions as space contracts. Refresh

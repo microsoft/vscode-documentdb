@@ -29,6 +29,25 @@ server/resource facts sit in the animated details disclosure, which also offers 
 See [the current architecture](./README.md#architecture-intent--code-is-authoritative-for-behavior).
 The layout lab and alternate-header toggle are not part of the feature.
 
+**Version display (2026-09-24):** The existing Version fact renders independently available
+engine and API versions as separate JSX tags: `DocumentDB <engine>` and `API <api>`, without
+an extra Version label, a dot separator or a combined string. Each tag has an explanatory
+tooltip available on hover and keyboard focus; the Server disclosure lists them separately.
+Missing, malformed or ambiguous values are omitted, not shown as unknown and not inferred
+from the other version.
+The optional `hello.internal.documentdb_versions` metadata establishes the DocumentDB-specific
+distinction; without it, a valid `buildInfo.version` retains the generic server-version wording.
+The metadata is already delivered to the webview and remains cached per client; this change
+does not introduce new commands or refresh semantics.
+
+The [upstream gateway query](https://github.com/documentdb/documentdb/blob/648db982aed5a9c307fec434b113bc5cadf27a6e/pg_documentdb_gw/documentdb_gateway_core/src/postgres/query_catalog.rs#L635)
+reports the installed extension version followed by the binary version. Recognize the observed
+`major.minor-build;major.minor.patch` pair and display its binary version, including valid
+prerelease/build suffixes. A standalone semantic version or `major.minor-build` is also accepted
+as reported. Ignore empty segments and surrounding whitespace, but reject other multi-entry
+shapes rather than guessing by sort order or choosing any dotted entry. Validate the separate
+build-info version as a semantic version. No version comparison or upgrade warning is implied.
+
 **Settled action language (2026-09-10):** Disclosure labels name their content, while commands
 that open another editor use action verbs. Navigation icons describe the destination or movement,
 not the namespace data type. See [decision 0022](./decisions.md#0022-labels-name-content-icons-communicate-navigation).
@@ -98,8 +117,9 @@ From the compatibility matrix (learn.microsoft.com/en-us/azure/cosmos-db/mongodb
 > published matrix. Two rows above were previously marked ✅ purely on documentation.
 >
 > Also observed: `buildInfo` carries no `platform`, but `hello.internal` reports
-> `{kind: 'azuredocumentdb', documentdb_versions: [...]}`, which is what the header card now
-> shows in place of the two rows vCore leaves empty. And privileges are **not** a proxy for
+> `{kind: 'azuredocumentdb', documentdb_versions: [...]}`. This was collected but not displayed
+> in the original header; the version-display follow-up above surfaces recognized values.
+> The field remains optional across deployments. And privileges are **not** a proxy for
 > capability — the vCore admin role grants the `serverStatus` action while the server
 > rejects the command.
 

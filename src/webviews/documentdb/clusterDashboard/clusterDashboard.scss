@@ -235,7 +235,7 @@ $content-gutter: var(--spacingHorizontalMNudge); // 10px
     .dashboardFact {
         display: inline-flex;
         align-items: baseline;
-        gap: var(--spacingHorizontalXXS);
+        gap: var(--spacingHorizontalSNudge);
         min-width: 0;
         font-size: var(--fontSizeBase200);
         line-height: var(--lineHeightBase300);
