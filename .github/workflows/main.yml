@@ -264,29 +264,11 @@ jobs:
                         body,
                       });
 
-            - name: Read minimum VS Code version
-              id: vscode
-              run: echo "version=$(node -p "require('./package.json').engines.vscode.replace(/^\\^/, '')")" >> $GITHUB_OUTPUT
-
-            - name: Restore VS Code
-              id: vscode-cache
-              uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
-              with:
-                  path: .vscode-test
-                  key: vscode-${{ runner.os }}-${{ steps.vscode.outputs.version }}
-
-            # Installs the VSIX into that VS Code and checks it activates and registers every command it declares.
+            # Installs the VSIX into VS Code and checks it activates and registers every command it declares.
+            # VS Code isn't cached: downloading it took ~5s, restoring it from the Actions cache 75s.
             - name: Smoke Test (packaged VSIX)
               timeout-minutes: 5
               run: xvfb-run -a npm run test:smoke
-
-            # Also after a failed smoke test, so fixing it doesn't re-download; never a cancelled, partial download.
-            - name: Save VS Code
-              if: ${{ !cancelled() && steps.vscode-cache.outputs.cache-hit != 'true' && hashFiles('.vscode-test/*/is-complete') != '' }}
-              uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
-              with:
-                  path: .vscode-test
-                  key: ${{ steps.vscode-cache.outputs.cache-primary-key }}
 
     # The same client code the extension uses, against a real DocumentDB instead of mocks.
     db-integration:
