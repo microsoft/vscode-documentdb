@@ -234,8 +234,8 @@ The connection timeout applies when connecting and authenticating, not while run
 have no extension-side time limit. Press **Ctrl+C** to cancel, or use `.maxTimeMS()` on a supported query
 to set a server-side limit.
 
-Run `help` in the shell for clickable shortcuts to the color, inline-hint, and autocompletion settings.
-Each shortcut also prints the full setting ID for manual access.
+Run `help` in the shell for a single clickable shortcut that opens the Interactive Shell settings group.
+The help output also prints the full Settings search query for manual access.
 
 ## Tips and Best Practices
 

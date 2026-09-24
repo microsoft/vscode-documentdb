@@ -102,8 +102,9 @@ export const PLAYGROUND_ACTION_PREFIX = '\u{2197} Query Playground '; // '↗ Qu
 /**
  * The marker prefix for the "Open Settings" action line.
  *
- * Format: `⚙ [settingKey]`
- * The settings key is NOT localized — it's the programmatic VS Code setting ID.
+ * Format: `⚙ [settingsTarget]`
+ * The target is NOT localized. It must be a key in {@link HELP_SETTINGS_QUERIES}; keys may be
+ * programmatic VS Code setting IDs or compact aliases for Settings search queries.
  */
 export const SETTINGS_ACTION_PREFIX = '\u{2699} '; // ⚙ + space
 
@@ -145,7 +146,7 @@ const PLAYGROUND_LINE_PATTERN = /(?:\x1b\[\d+m)*\u{2197} Query Playground \[([^\
  * Regex to match the "Open Settings" action line.
  *
  * Captures:
- * - Group 1: the VS Code setting key (e.g., `documentDB.connectionTimeout`)
+ * - Group 1: the settings target (e.g., `documentDB.connectionTimeout` or `shellSettings`)
  *
  * The pattern accounts for optional ANSI color codes that wrap the line.
  * The format is locale-independent.
