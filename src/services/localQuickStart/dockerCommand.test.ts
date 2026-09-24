@@ -3,16 +3,18 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { CancellationTokenLike, isCancellationError, ShellQuoting } from '@microsoft/vscode-processutils';
-import { spawnSync } from 'child_process';
+import { CancellationTokenLike, isCancellationError, ShellQuoting, withNamedArg } from '@microsoft/vscode-processutils';
+import { spawnSync, type spawn } from 'child_process';
 import {
     DockerCommandError,
     DockerCommandTimeoutError,
     getDockerShellProvider,
+    killProcessTree,
     runDockerCommand,
     summarizeDockerError,
 } from './dockerCommand';
 import { CapturingTeeWritable } from './dockerProbes';
+import { buildSampleDataSeedScript } from './QuickStartService';
 
 // Real child processes stand in for the docker CLI; process groups are POSIX-only.
 const describePosix = process.platform === 'win32' ? describe.skip : describe;
@@ -176,3 +178,110 @@ describePosix('runDockerCommand', () => {
         expect(result).toBe('done');
     });
 });
+
+// CI runs on Linux, so the Windows branches are exercised here with the platform injected.
+describe('killProcessTree', () => {
+    it('ends the whole tree with taskkill on Windows', () => {
+        const on = jest.fn();
+        const spawnProcess = jest.fn(() => ({ on }));
+
+        killProcessTree({ pid: 4321 }, 'SIGTERM', 'win32', spawnProcess as unknown as typeof spawn);
+
+        expect(spawnProcess).toHaveBeenCalledWith('taskkill', ['/pid', '4321', '/T', '/F'], {
+            stdio: 'ignore',
+            windowsHide: true,
+        });
+        // A missing taskkill must not surface as an unhandled 'error' event.
+        expect(on).toHaveBeenCalledWith('error', expect.any(Function));
+    });
+
+    it('signals the process group elsewhere', () => {
+        const kill = jest.spyOn(process, 'kill').mockImplementation(() => true);
+        const spawnProcess = jest.fn();
+        try {
+            killProcessTree({ pid: 4321 }, 'SIGTERM', 'linux', spawnProcess as unknown as typeof spawn);
+
+            expect(kill).toHaveBeenCalledWith(-4321, 'SIGTERM');
+            expect(spawnProcess).not.toHaveBeenCalled();
+        } finally {
+            kill.mockRestore();
+        }
+    });
+});
+
+describe('Docker command lines under cmd.exe', () => {
+    const cmd = getDockerShellProvider('win32');
+
+    it('keeps an env-file path with spaces in one argument', () => {
+        const envFile = 'C:\\Users\\First Last\\AppData\\Local\\Temp\\documentdb-quickstart-1234-abcd.env';
+
+        const quoted = cmd.quote(withNamedArg('--env-file', envFile)());
+
+        expect(quoted).toEqual(['--env-file', `"${envFile}"`]);
+        expect(parseWindowsArgv(quoted.join(' '))).toEqual(['--env-file', envFile]);
+    });
+
+    it('passes the sample-data seed script to docker exec unchanged', () => {
+        const script = buildSampleDataSeedScript();
+
+        const [quoted] = cmd.quote([{ value: script, quoting: ShellQuoting.Strong }]);
+
+        // cmd.exe toggles quoting at every ", including the \" escapes meant for docker's argv parser,
+        // so anything cmd.exe acts on must sit between an even number of quotes.
+        const outsideCmdQuotes = quoted
+            .split('"')
+            .filter((_, i) => i % 2 === 0)
+            .join('');
+        expect(outsideCmdQuotes).not.toMatch(/[&|<>^]/);
+        // cmd.exe expands %VAR% even inside quotes.
+        expect(quoted).not.toContain('%');
+        expect(parseWindowsArgv(quoted)).toEqual([script]);
+    });
+});
+
+// How docker.exe splits its command line into argv (the MSVCRT rules).
+function parseWindowsArgv(commandLine: string): string[] {
+    const args: string[] = [];
+    let current = '';
+    let inArg = false;
+    let inQuotes = false;
+    for (let i = 0; i < commandLine.length; i++) {
+        const c = commandLine[i];
+        if (c === '\\') {
+            let slashes = 1;
+            while (commandLine[i + slashes] === '\\') {
+                slashes++;
+            }
+            if (commandLine[i + slashes] === '"') {
+                // 2n backslashes before a quote are n backslashes and a delimiter; 2n+1 are n and a literal quote.
+                current += '\\'.repeat(Math.floor(slashes / 2));
+                if (slashes % 2 === 1) {
+                    current += '"';
+                    i += slashes;
+                } else {
+                    i += slashes - 1;
+                }
+            } else {
+                current += '\\'.repeat(slashes);
+                i += slashes - 1;
+            }
+            inArg = true;
+        } else if (c === '"') {
+            inQuotes = !inQuotes;
+            inArg = true;
+        } else if ((c === ' ' || c === '\t') && !inQuotes) {
+            if (inArg) {
+                args.push(current);
+                current = '';
+                inArg = false;
+            }
+        } else {
+            current += c;
+            inArg = true;
+        }
+    }
+    if (inArg) {
+        args.push(current);
+    }
+    return args;
+}
