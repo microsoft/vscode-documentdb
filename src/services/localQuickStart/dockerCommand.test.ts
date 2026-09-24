@@ -28,18 +28,10 @@ function nodeScript(script: string, ...args: string[]) {
     };
 }
 
-// By command line, not pid: a deadline can fire before a loaded machine has started the child at all.
+// By command line, not pid: the child may be killed before it could print one, and a killed
+// grandchild lingers as a zombie until init reaps it, which kill(pid, 0) still reports as alive.
 function isRunning(marker: string): boolean {
     return spawnSync('pgrep', ['-f', marker]).status === 0;
-}
-
-function isAlive(pid: number): boolean {
-    try {
-        process.kill(pid, 0);
-        return true;
-    } catch {
-        return false;
-    }
 }
 
 describe('summarizeDockerError', () => {
@@ -145,9 +137,11 @@ describePosix('runDockerCommand', () => {
     it('kills a command that ignores SIGTERM when cancelled, and settles only once it is gone', async () => {
         const controller = new AbortController();
         const stdout = new CapturingTeeWritable();
+        const marker = `cancel-${process.pid}-${Date.now()}`;
         const pending = runDockerCommand(
             nodeScript(
-                'process.on("SIGTERM", () => {}); process.stdout.write(String(process.pid)); setInterval(() => {}, 1000)',
+                'process.on("SIGTERM", () => {}); process.stdout.write("ready"); setInterval(() => {}, 1000)',
+                marker,
             ),
             {
                 shellProvider,
@@ -156,14 +150,14 @@ describePosix('runDockerCommand', () => {
                 killGraceMs: 100,
             },
         ).catch((reason: unknown) => reason);
-        // Cancel only once the pid is out: a slow start would otherwise leave "" here, and kill(0) always succeeds.
+        // Cancel once it is ignoring SIGTERM, so the test covers the escalation to SIGKILL.
         const started = setInterval(() => stdout.getOutput() && controller.abort(), 20);
 
         const error = await pending;
         clearInterval(started);
 
         expect(isCancellationError(error)).toBe(true);
-        expect(isAlive(Number(stdout.getOutput()))).toBe(false);
+        expect(isRunning(marker)).toBe(false);
     });
 
     // The shell's own exit does not end the wait: a descendant can keep the output pipes open.
