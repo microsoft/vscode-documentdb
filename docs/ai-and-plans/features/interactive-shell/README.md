@@ -72,6 +72,10 @@ program-level narrative, and the sibling areas
   visibility had to be solved in the emitted text itself. The same provider turns compact setting
   markers in shell `help` into links that open a filtered VS Code Settings view. Shell help uses one
   link for the complete Interactive Shell settings group rather than linking each setting separately.
+- **Shell help stays structured through the worker boundary.** The runtime owns help content,
+  width-aware layout, semantic line kinds and link spans. It sends that plain object through the
+  existing EJSON printable channel. The extension host maps those semantic roles to `shellStyles`;
+  it does not infer headers, commands or detail text from prefixes and whitespace.
 - **Shell `help` is English by design today.** Width-sensitive help is generated in the worker by
   `documentdb-js-shell-runtime`, a package that cannot depend on `vscode` and therefore cannot call
   `vscode.l10n.t()`. A reusable localization mechanism for vscode-free worker packages is tracked
