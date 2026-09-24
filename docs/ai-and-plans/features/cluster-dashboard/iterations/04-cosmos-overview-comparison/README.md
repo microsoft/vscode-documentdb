@@ -16,6 +16,12 @@ code:
 > Overview (its original layout and its new "Preview" layout), plus an experimental restyle of our
 > dashboard in their direction. It is a **discussion source**, not a plan. Nothing here is decided.
 
+> [!IMPORTANT]
+> **The reference point is their opt-in Preview.** That is where the Cosmos DB dashboard is
+> heading, so every forward-looking comparison here (gaps, ideas, fit, questions) is made against
+> the Preview. Their current default, the Original layout, is kept for context only: it shows
+> where much of the Preview's data comes from, and the Preview reuses its widgets as detail views.
+
 The experimental restyle lives on
 [`dev/tnaum/experimental-dashboard`](https://github.com/microsoft/vscode-documentdb/tree/dev/tnaum/experimental-dashboard)
 (commit [`056b5c9`](https://github.com/microsoft/vscode-documentdb/commit/056b5c9ef24ffd15b17e5527bd78e637a842366f)).
@@ -57,9 +63,14 @@ on [`dev/dshilov/dashboard-overview-preview`](https://github.com/microsoft/vscod
 | Finding ranking model                  | [`overviewFindingsModel.ts`](https://github.com/microsoft/vscode-cosmosdb/blob/a8457294667f272ca2734cfb42fdd51ad21a3844/src/webviews/cosmosdb/AccountOverviewV2/overviewFindingsModel.ts)      |
 | Metric summary semantics               | [`overviewMetricsModel.ts`](https://github.com/microsoft/vscode-cosmosdb/blob/a8457294667f272ca2734cfb42fdd51ad21a3844/src/webviews/cosmosdb/AccountOverviewV2/overviewMetricsModel.ts)        |
 
-Their Preview is itself an experiment: its spec keeps the Original as the default and makes
-"human usability evaluation and a default-version decision" a release gate. Its own warning applies
-here too: _"Do not assume that a more compact layout is better for detailed investigation."_
+**Status of the Preview.** It is opt-in behind an Original / Preview selector at the top of the
+panel, and it is under active development: increments 1–5 of its spec are implemented, and the
+Data Modeler entry point is still missing. The spec keeps the Original as the default until a usability
+evaluation. We nevertheless treat the Preview as the **direction of travel**: the new presentation work
+lands there, while the spec keeps the Original's markup unchanged and reuses its widgets as the
+Preview's full detail views. Its
+own warning applies to us too: _"Do not assume that a more compact layout is better for detailed
+investigation."_
 
 ### Ours — Cluster Dashboard
 
@@ -89,6 +100,8 @@ The draft changes presentation only. No tRPC procedure, collector or host code c
 
 ## 2. The four layouts at a glance
 
+Read 2.3 (their Preview) as the target. 2.2 (their Original) is context.
+
 All screenshots are rendered from the real webview components with **mocked data** (see
 [§9](#9-how-the-screenshots-were-made)). Names and figures are fictional.
 
@@ -103,16 +116,17 @@ The details disclosure opens below the band:
 
 ![DocumentDB original, details disclosed](./images/documentdb-original-details.png)
 
-### 2.2 Theirs — Original (default today)
+### 2.2 Theirs — Original (default today; context only)
 
 A monitoring dashboard in two columns. The main column has a header with a health pill, nine
 metric tiles that pick the chart below, an inventory table with sparklines, and a partition heatmap.
 The right rail carries Active Alerts, Azure Advisor recommendations and "Derived Advisories", the
-output of their own rule engine.
+output of their own rule engine. Most of these widgets survive unchanged as the Preview's detail
+views (see 2.3).
 
 ![Cosmos DB Account Overview, original layout](./images/cosmos-original-full.png)
 
-### 2.3 Theirs — Preview (opt-in)
+### 2.3 Theirs — Preview (opt-in; **the direction we compare against**)
 
 Problem-first and single-column (max 1120 px). The order is: identity and time/scope controls, a
 compact status row, account actions, **Account health**, **Throughput health**, **Top RU
@@ -167,23 +181,25 @@ Stepped into a database, where the cards follow the level:
 
 ## 3. Side-by-side comparison
 
-| Aspect             | Ours — original                                                  | Cosmos — Original                                                            | Cosmos — Preview                                                                                     | Ours — draft                                                                                           |
-| ------------------ | ---------------------------------------------------------------- | ---------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------ |
-| Genre              | Data inventory ([0006])                                          | Monitoring dashboard                                                         | Problem-first summary over the same monitoring data                                                  | Inventory with a problem-first header                                                                  |
-| Page shape         | Full width, shaded identity band, then content                   | Two columns: main and right rail                                             | Centred column, max 1120 px, section headings outside cards                                          | Same as Preview                                                                                        |
-| Identity           | Icon, name; badge, ping, facts inline                            | Title, health pill, fact chips                                               | Product icon, name, type subtitle; time range, scope, Refresh, Refresh options on the right          | Icon, name, type subtitle; Refresh on the right                                                        |
-| Status facts       | Inline in the band; lower-priority facts shed on narrow widths   | Chips                                                                        | One bordered row: `Provisioning \| Regions \| Capacity mode \| Throughput limit`                     | One bordered row: `Connection \| Version \| Region \| Compute \| Uptime`; wraps rather than sheds      |
-| Details disclosure | "Show/Hide details" button; separate card under the band         | "More details" link                                                          | "Account details" chevron; opens **inside** the status row; footer holds View cost and JSON view     | "Cluster details" chevron inside the row; footer holds Copy Connection String and View Raw Diagnostics |
-| Actions            | Fluent Toolbar with overflow menu; Refresh on the right          | —                                                                            | Link-coloured subtle buttons: Add database, Add container, Delete account                            | Link-coloured buttons: Open Shell, Copy Connection String, Data Migration…                             |
-| Health             | Resilience badges in the header                                  | Health pill, per-row badges, right-rail cards                                | **Account health** rows (severity · source · title · evidence · actions), top 3, "View all findings" | **Cluster health** rows from facts we already had (see §5.1)                                           |
-| Coverage honesty   | Lower-bound `≥` marks and tooltips on tiles; list-level warnings | Reason-specific empty states ("Access required", "Partial coverage" pill)    | "Diagnostic coverage" disclosure per section; "no findings ≠ healthy"                                | "Diagnostic coverage" disclosure; "N checks ran"                                                       |
-| Headline numbers   | Four `MetricGrid` tiles; explanations in tooltips                | Nine tiles, each selects the chart                                           | Three throughput cards and four diagnostic cards; semantics in "Measurement details"                 | Four cards; explanation printed in each                                                                |
-| Charts             | None ([0004] custom sparkline, now unused)                       | Recharts trend with throttling bands, sparklines in table                    | Small inline sparkline; bars; partition mini-histogram                                               | None                                                                                                   |
-| Inventory          | Complete, sortable, filterable, two levels ([0014])              | Complete table: throughput mode, partition key, indexing, sparklines, health | **Top 5** ranked by consumed RU/s; full inventory is a detail view                                   | Complete, unchanged, in a card frame                                                                   |
-| Drill-down         | Step into a database; open a collection                          | Tiles select chart; heatmap selects container                                | Summary → detail views with **Back to summary**, focus moved to the heading                          | Unchanged from original                                                                                |
-| Refresh model      | 5 s ping while visible; storage on open and on demand ([0015])   | Metrics every 60 s, inventory every 30 s; pause toggle; paused while hidden  | Same; "Refresh options" popover with last refreshed and pause                                        | Unchanged from original                                                                                |
-| Time/scope         | Level = cluster or one database                                  | Time range 1H/24H/7D; container scope                                        | Time range and database scope in the header; every section states its own window                     | Level only                                                                                             |
-| Styling            | SCSS on Fluent tokens                                            | Fluent `makeStyles` on `--vscode-*` variables                                | Same as Original                                                                                     | SCSS on Fluent tokens mapped to the same VS Code colours                                               |
+The target column comes first; their Original is last, for context.
+
+| Aspect             | Cosmos — Preview (target)                                                                            | Ours — original                                                  | Ours — draft                                                                                           | Cosmos — Original (context)                                                  |
+| ------------------ | ---------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------- |
+| Genre              | Problem-first summary over the same monitoring data                                                  | Data inventory ([0006])                                          | Inventory with a problem-first header                                                                  | Monitoring dashboard                                                         |
+| Page shape         | Centred column, max 1120 px, section headings outside cards                                          | Full width, shaded identity band, then content                   | Same as Preview                                                                                        | Two columns: main and right rail                                             |
+| Identity           | Product icon, name, type subtitle; time range, scope, Refresh, Refresh options on the right          | Icon, name; badge, ping, facts inline                            | Icon, name, type subtitle; Refresh on the right                                                        | Title, health pill, fact chips                                               |
+| Status facts       | One bordered row: `Provisioning \| Regions \| Capacity mode \| Throughput limit`                     | Inline in the band; lower-priority facts shed on narrow widths   | One bordered row: `Connection \| Version \| Region \| Compute \| Uptime`; wraps rather than sheds      | Chips                                                                        |
+| Details disclosure | "Account details" chevron; opens **inside** the status row; footer holds View cost and JSON view     | "Show/Hide details" button; separate card under the band         | "Cluster details" chevron inside the row; footer holds Copy Connection String and View Raw Diagnostics | "More details" link                                                          |
+| Actions            | Link-coloured subtle buttons: Add database, Add container, Delete account                            | Fluent Toolbar with overflow menu; Refresh on the right          | Link-coloured buttons: Open Shell, Copy Connection String, Data Migration…                             | —                                                                            |
+| Health             | **Account health** rows (severity · source · title · evidence · actions), top 3, "View all findings" | Resilience badges in the header                                  | **Cluster health** rows from facts we already had (see §5.1)                                           | Health pill, per-row badges, right-rail cards                                |
+| Coverage honesty   | "Diagnostic coverage" disclosure per section; "no findings ≠ healthy"                                | Lower-bound `≥` marks and tooltips on tiles; list-level warnings | "Diagnostic coverage" disclosure; "N checks ran"                                                       | Reason-specific empty states ("Access required", "Partial coverage" pill)    |
+| Headline numbers   | Three throughput cards and four diagnostic cards; semantics in "Measurement details"                 | Four `MetricGrid` tiles; explanations in tooltips                | Four cards; explanation printed in each                                                                | Nine tiles, each selects the chart                                           |
+| Charts             | Small inline sparkline; bars; partition mini-histogram                                               | None ([0004] custom sparkline, now unused)                       | None                                                                                                   | Recharts trend with throttling bands, sparklines in table                    |
+| Inventory          | **Top 5** ranked by consumed RU/s; full inventory is a detail view                                   | Complete, sortable, filterable, two levels ([0014])              | Complete, unchanged, in a card frame                                                                   | Complete table: throughput mode, partition key, indexing, sparklines, health |
+| Drill-down         | Summary → detail views with **Back to summary**, focus moved to the heading                          | Step into a database; open a collection                          | Unchanged from original                                                                                | Tiles select chart; heatmap selects container                                |
+| Refresh model      | Same; "Refresh options" popover with last refreshed and pause                                        | 5 s ping while visible; storage on open and on demand ([0015])   | Unchanged from original                                                                                | Metrics every 60 s, inventory every 30 s; pause toggle; paused while hidden  |
+| Time/scope         | Time range and database scope in the header; every section states its own window                     | Level = cluster or one database                                  | Level only                                                                                             | Time range 1H/24H/7D; container scope                                        |
+| Styling            | Same as Original                                                                                     | SCSS on Fluent tokens                                            | SCSS on Fluent tokens mapped to the same VS Code colours                                               | Fluent `makeStyles` on `--vscode-*` variables                                |
 
 [0004]: ../../decisions.md#0004--custom-svg-sparkline-instead-of-a-charting-dependency-reconstructed
 [0006]: ../../decisions.md#0006--the-page-is-a-data-inventory-not-a-performance-dashboard-reconstructed
@@ -245,6 +261,27 @@ Legend: **●** always visible · **◐** one click (disclosure, tooltip, popove
 [0016]: ../../decisions.md#0016--row-context-menu-entries-run-on-the-host
 [0017]: ../../decisions.md#0017--diagnostics-carry-raw-replies-not-a-second-reading-of-them
 
+### 4.3 Their Preview, section by section: where we stand
+
+This is the forward-looking map. Each row is one section of their Preview, top to bottom, with
+our nearest equivalent and the gap. The idea numbers refer to §5 and §6.
+
+| Preview section                | What it gives the reader                                                                  | Ours today (original)                                                                                                        | Draft                           | Gap and candidate ideas                                                                                                                          |
+| ------------------------------ | ----------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------- | ------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Header controls                | Time range, database scope, Refresh, Refresh options (last refreshed, pause)              | Refresh in the toolbar; level via step-in; "Updated … ago" in the table footer                                               | Refresh moved to the header     | A time range only makes sense once we have windowed data (6.2, 6.3). Name the window and scope on every figure now (5.6)                         |
+| Status row and Account details | Four facts; details in place; cost and JSON actions; second-level "additional properties" | Band with facts and badges; Show details with Server and Azure groups; raw diagnostics                                       | Matches the Preview's shape     | Cost and ARM JSON links (6.10); more ARM facts (6.5); a second disclosure tier if the Azure group grows (5.5)                                    |
+| Account actions                | Add database, Add container, Delete account                                               | Open Shell, Copy Connection String, More (raw diagnostics, Data Migration); New Database/Collection in the inventory toolbar | Link row                        | Functionally at parity. Placement only. Deleting a cluster from the page is not proposed                                                         |
+| **Account health**             | Top 3 findings from alerts and derived rules; View all findings; diagnostic coverage      | Resilience badges in the header                                                                                              | **Cluster health**, 4 checks    | Our sources are thin: add derived checks (6.1), fired alerts (6.6), Resource Health (6.8). "View all findings" once there can be more than three |
+| Throughput health              | Normalized RU with sparkline; measured 429 rate; provisioned vs consumed                  | —                                                                                                                            | —                               | vCore has no RU model. The analogue is **compute health**: CPU, memory and storage % of provisioned (6.2, 6.1b), plus request error rate (6.3)   |
+| Top RU consumers               | Top 5 containers ranked by consumed RU/s; bars; per-row details and actions               | Complete inventory with relative size bars; row actions and context menu                                                     | Unchanged                       | Keep the complete table; add traffic, latency and error **columns** and let them be the sort (5.7, 6.3)                                          |
+| Latency and queries            | Peak interval-average latency; query diagnostics from logs                                | —                                                                                                                            | —                               | `MongoRequestDurationMs` (6.3); link to our per-collection Query Insights rather than rebuilding it; logs only after the 0019 question (6.9)     |
+| Partition skew                 | Busiest partition saturation; mini-histogram; full heatmap view                           | —                                                                                                                            | —                               | Per-shard skew for multi-shard clusters (6.4). Not applicable to single-node clusters, and should say so                                         |
+| Storage and index              | Latest data + index storage; document count; growth notes                                 | **Storage Used**, **Documents**, **Indexes / Size** tiles; per-row sizes                                                     | Cards with printed explanations | Our strongest area. Missing: growth over time (Azure Monitor `StorageUsed` history) and index-to-data ratio (6.1a)                               |
+| Availability and resilience    | Availability %; read/write regions; automatic failover                                    | HA and read-only badges; region in the band                                                                                  | HA and replica findings         | HA, replicas and geo-replicas as one card from ARM (6.5). The vCore metric list has no availability metric; Resource Health may stand in (6.8)   |
+| Prioritized recommendations    | Advisor and derived advice, top 3, with evidence and Dismiss                              | —                                                                                                                            | —                               | Advice needs a source: derived rules (6.1a, 6.1c, 6.1d) and Advisor (6.7). Keep it separate from health findings (5.10)                          |
+| Detail views                   | Metric details, Databases and Containers, Partition distribution, All findings            | The inventory is the page                                                                                                    | —                               | A **Metrics** detail view is the natural home for 6.2/6.3 without turning the landing page into a monitor (5.3, [0006])                          |
+| Preview selector               | Original / Preview switch over one shared state owner                                     | —                                                                                                                            | —                               | A way to ship our own redesign without a hard cut-over (5.9)                                                                                     |
+
 **Takeaway.** We already practise most of the "state what is missing" discipline: `N/A`, `≥`,
 list-level warnings. We just express it through tooltips and message bars. Theirs gathers it in one
 predictable place per section, the coverage disclosure, and **names the checks that could not run**.
@@ -254,7 +291,7 @@ That is the idea most worth taking, and it does not require their visual languag
 
 ## 5. Ideas worth revisiting — design patterns
 
-Each idea lists what they do, what the draft did, and how well it fits us. "Fit" judges the idea
+Each idea lists what their **Preview** does, what the draft did, and how well it fits us. "Fit" judges the idea
 against our design language and decisions, not against their styling.
 
 ### 5.1 A "Cluster health" section: findings with severity, source and evidence
@@ -353,6 +390,28 @@ against our design language and decisions, not against their styling.
 | Product icon in the header                                       | PNG                              | We use a Fluent glyph; an SVG product icon needs an asset loader in the webview build |
 | Muted, regular-weight table headings                             | Yes                              | **Reject** for now: our tables match the Collection View index list                   |
 
+### 5.9 Ship the redesign behind an opt-in switch, as they did
+
+- **Theirs.** One state hook owns loading, polling, scope and dismissals. The Original/Preview
+  selector sits above it, and exactly one presentation is mounted. Switching keeps the time
+  window, scope, pause state and dismissals, and does not start a second polling loop. Their spec
+  then makes a usability comparison of both layouts, on the same accounts and tasks, the release
+  gate.
+- **Draft.** Replaced the presentation in place on a branch.
+- **Fit.** Good, if we decide to move toward the Preview. Our state already lives in
+  `ClusterDashboard.tsx`; extracting it into a hook, as their first increment did, would let a new
+  presentation run beside the current one. It would also give us their evaluation protocol
+  (§"Manual comparison protocol" in their spec) almost for free.
+
+### 5.10 Keep health and advice apart
+
+- **Theirs.** "Account health" holds findings about the current state (alerts, hot partitions,
+  throttling). "Prioritized recommendations" holds advice (autoscale, SDK upgrades, indexing). Both
+  use the same row component, but they are separate sections with separate "View all" links.
+- **Draft.** Health only; we have no advice source yet.
+- **Fit.** Good, and it matters as soon as 6.1 lands: "index is 60% of data" is advice, not a health
+  problem, and mixing the two dilutes the health section.
+
 ---
 
 ## 6. Ideas worth revisiting — data we do not have yet
@@ -388,6 +447,9 @@ and [supported logs](https://learn.microsoft.com/azure/azure-monitor/reference/s
 Items marked **unverified** need checking before they are designed for.
 
 ### How they built the equivalent, for reference
+
+Both of their presentations sit on the same host services and the same state hook; the Preview
+adds only opt-in procedures (`getOverviewAnalytics`) on top.
 
 - **Metric fetch contract.** One neutral `MetricSeriesResult` for every metric (`available`,
   `reason`, `points`, `peak`, `timeRange`, scope). Failures become `available: false` plus a reason,
@@ -443,11 +505,15 @@ let our findings grow without growing `ClusterHealth.tsx`.
    `mongoClusters` is confirmed?
 6. **Printed explanations.** Short printed labels plus a disclosure, or keep the current ⓘ
    tooltips?
-7. **Layout.** Anything from their page shape worth taking: the centred max-width column, section
+7. **Layout.** Anything from the Preview's page shape worth taking: the centred max-width column, section
    headings outside cards, details opening inside the fact row? Or none of it?
-8. **Shared components.** They and we both build findings rows, coverage disclosures and metric
-   contracts. Is there appetite for a shared package, like `@microsoft/vscode-ext-webview-fluentui`,
-   so the two extensions converge over time?
+8. **Adopting the Preview's direction.** Move toward it incrementally in our visual language, or
+   build a second presentation behind an opt-in switch (5.9) and compare both with users?
+9. **Compute health.** Is CPU, memory and storage % (6.2, 6.1b) the right counterpart of their
+   Throughput health for vCore, or does it pull us too far into monitoring?
+10. **Shared components.** They and we both build findings rows, coverage disclosures and metric
+    contracts. Is there appetite for a shared package, like `@microsoft/vscode-ext-webview-fluentui`,
+    so the two extensions converge over time?
 
 ---
 
