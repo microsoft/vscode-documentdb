@@ -37,6 +37,7 @@
     user-select: none;
 }
 
+$focus-outline-inset: calc(2 * var(--strokeWidthThick));
 $media-breakpoint-query-control-area: 1024px;
 
 /**

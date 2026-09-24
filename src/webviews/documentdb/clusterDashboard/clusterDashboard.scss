@@ -5,11 +5,8 @@
 
 @use '../../index';
 
-// Space reserved around the header band so a Fluent focus outline (drawn just outside
-// the control, plus its offset) clears the webview's own edges instead of being cropped.
-// Mirrors the Collection View's `$tab-focus-inset`; the band re-escapes it with a matching
-// negative margin so its shade still reaches every edge.
-$focus-inset: calc(2 * var(--strokeWidthThick));
+// Space reserved around the header band so a Fluent focus outline clears the webview's
+// edges. The band re-escapes it with a matching negative margin so its shade stays full-width.
 
 // The gutter every content region shares, so the header text, the toolbar buttons and the
 // tables below all line up on one left edge. Same value the Collection View uses.
@@ -44,7 +41,7 @@ $content-gutter: var(--spacingHorizontalMNudge); // 10px
 
     // Reserve the focus-outline allowance on every side of the content so nothing is
     // cropped by the webview's edges. The header band re-escapes this horizontally.
-    padding-inline: $focus-inset;
+    padding-inline: index.$focus-outline-inset;
 
     // The whole page scrolls here, so the identity band and action bar move with the content.
     // Hiding only the cross axis suppresses cumulative-rounding overflow without clipping the
@@ -77,8 +74,8 @@ $content-gutter: var(--spacingHorizontalMNudge); // 10px
         flex-shrink: 0;
         min-width: 0;
 
-        margin-inline: calc(-1 * #{$focus-inset}); // cancel the view's horizontal inset
-        padding-inline: $focus-inset; // realign with the content below
+        margin-inline: calc(-1 * #{index.$focus-outline-inset}); // cancel the view's horizontal inset
+        padding-inline: index.$focus-outline-inset; // realign with the content below
         // Equal block padding centres the content while exceeding the focus-outline inset.
         padding-block: var(--spacingVerticalS); // 8px
         // The Collection View leaves 8px below its band and a further 4px above the action
@@ -636,7 +633,9 @@ $content-gutter: var(--spacingHorizontalMNudge); // 10px
         width: 100%;
         min-width: 0;
         box-sizing: border-box;
-        padding: $focus-inset;
+        // IMPORTANT: Fluent draws sortable header focus outlines outside the cells. Without this
+        // inset, the scroller clips the top and outer edges of the focused header.
+        padding: index.$focus-outline-inset;
         overflow-x: auto;
     }
 

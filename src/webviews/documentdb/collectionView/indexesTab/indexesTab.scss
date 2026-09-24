@@ -75,6 +75,9 @@
     .indexContentContainer {
         flex: 1 1 auto;
         min-height: 0;
+        // IMPORTANT: Fluent draws sortable header focus outlines outside the cells. Without this
+        // inset, the scroller clips the top and outer edges of the focused header.
+        padding: index.$focus-outline-inset;
         overflow: auto;
     }
 
