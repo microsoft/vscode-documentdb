@@ -4,11 +4,10 @@
  *--------------------------------------------------------------------------------------------*/
 
 import * as vscode from 'vscode';
-import packageJson from '../../../package.json';
 import { HelpProvider } from '../../../packages/documentdb-js-shell-runtime/src/HelpProvider';
 import {
     ACTION_LINE_PREFIX,
-    HELP_SETTING_ALIASES,
+    HELP_SETTINGS_QUERIES,
     PLAYGROUND_ACTION_PREFIX,
     registerShellTerminal,
     SETTINGS_ACTION_PREFIX,
@@ -267,30 +266,26 @@ describe('ShellTerminalLinkProvider', () => {
             expect(links).toHaveLength(1);
             expect(links[0]).toMatchObject({
                 linkType: 'settings',
-                settingKey: 'documentDB.connectionTimeout',
+                settingsQuery: 'documentDB.connectionTimeout',
             });
         });
 
-        it('should resolve every generated help marker to a contributed setting', () => {
+        it('should resolve every generated help marker to a Settings query', () => {
             registerShellTerminal(mockTerminal, () => mockShellInfo('test-id'));
             const helpText = new HelpProvider('shell').getHelpText();
             const markers = [...helpText.matchAll(/⚙ \[([^\]]+)\]/gu)].map((match) => match[1]);
-            const contributedSettings = packageJson.contributes.configuration.flatMap((section) =>
-                Object.keys(section.properties),
-            );
 
-            expect(markers).not.toHaveLength(0);
+            expect(markers).toEqual(['shellSettings']);
             for (const marker of markers) {
-                const settingKey = HELP_SETTING_ALIASES[marker];
-                expect(settingKey).toBeDefined();
-                expect(contributedSettings).toContain(settingKey);
+                const settingsQuery = HELP_SETTINGS_QUERIES[marker];
+                expect(settingsQuery).toBe('@ext:ms-azuretools.vscode-documentdb documentDB.shell');
 
                 const context = {
                     terminal: mockTerminal,
                     line: `  ${SETTINGS_ACTION_PREFIX}[${marker}] Toggle this setting`,
                 } as vscode.TerminalLinkContext;
                 expect(provider.provideTerminalLinks(context)).toEqual([
-                    expect.objectContaining({ linkType: 'settings', settingKey }),
+                    expect.objectContaining({ linkType: 'settings', settingsQuery }),
                 ]);
             }
         });
@@ -319,7 +314,7 @@ describe('ShellTerminalLinkProvider', () => {
             expect(links).toHaveLength(1);
             expect(links[0]).toMatchObject({
                 linkType: 'settings',
-                settingKey: 'documentDB.connectionTimeout',
+                settingsQuery: 'documentDB.connectionTimeout',
             });
         });
 
@@ -338,7 +333,7 @@ describe('ShellTerminalLinkProvider', () => {
                 linkType: 'settings',
                 startIndex: 0,
                 length: actionLine.length,
-                settingKey: 'documentDB.connectionTimeout',
+                settingsQuery: 'documentDB.connectionTimeout',
             });
         });
 
@@ -359,14 +354,17 @@ describe('ShellTerminalLinkProvider', () => {
                 linkType: 'settings' as const,
                 startIndex: 0,
                 length: 40,
-                settingKey: 'documentDB.connectionTimeout',
+                settingsQuery: '@ext:ms-azuretools.vscode-documentdb documentDB.shell',
             };
 
             provider.handleTerminalLink(link as Parameters<typeof provider.handleTerminalLink>[0]);
 
             return new Promise<void>((resolve) => {
                 setTimeout(() => {
-                    expect(spy).toHaveBeenCalledWith('workbench.action.openSettings', 'documentDB.connectionTimeout');
+                    expect(spy).toHaveBeenCalledWith(
+                        'workbench.action.openSettings',
+                        '@ext:ms-azuretools.vscode-documentdb documentDB.shell',
+                    );
                     spy.mockRestore();
                     resolve();
                 }, 50);

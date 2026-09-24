@@ -271,13 +271,8 @@ export class HelpProvider {
             blank,
 
             header('Settings'),
-            tip('Select an option to open it in VS Code Settings:'),
-            tip('1. ⚙ [colorSupport] Toggle syntax and output colors.'),
-            tip('Manual access: search Settings for documentDB.shell.display.colorSupport', '     '),
-            tip('2. ⚙ [inlineHints] Toggle 🛈 descriptions, counts, and previews.'),
-            tip('Manual access: search Settings for documentDB.shell.display.inlineHints', '     '),
-            tip('3. ⚙ [autocompletion] Toggle Tab completion and inline suggestions.'),
-            tip('Manual access: search Settings for documentDB.shell.display.autocompletion', '     '),
+            tip('⚙ [shellSettings] Configure paste behavior, colors, inline hints, and autocompletion.'),
+            tip('Manual access: search Settings for @ext:ms-azuretools.vscode-documentdb documentDB.shell', '  '),
             blank,
 
             header('Tips'),

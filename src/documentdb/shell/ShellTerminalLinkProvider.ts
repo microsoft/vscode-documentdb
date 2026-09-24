@@ -107,11 +107,9 @@ export const PLAYGROUND_ACTION_PREFIX = '\u{2197} Query Playground '; // '↗ Qu
  */
 export const SETTINGS_ACTION_PREFIX = '\u{2699} '; // ⚙ + space
 
-/** Compact setting names used by shell help so links remain intact in narrow terminals. */
-export const HELP_SETTING_ALIASES: Readonly<Record<string, string>> = {
-    colorSupport: settingsKeys.shellColorSupport,
-    autocompletion: settingsKeys.shellAutocompletion,
-    inlineHints: settingsKeys.shellInlineHints,
+/** Compact target names used by shell help so links remain intact in narrow terminals. */
+export const HELP_SETTINGS_QUERIES: Readonly<Record<string, string>> = {
+    shellSettings: '@ext:ms-azuretools.vscode-documentdb documentDB.shell',
     [settingsKeys.connectionTimeout]: settingsKeys.connectionTimeout,
 };
 
@@ -192,8 +190,8 @@ interface PlaygroundTerminalLink extends vscode.TerminalLink {
  */
 interface SettingsTerminalLink extends vscode.TerminalLink {
     readonly linkType: 'settings';
-    /** The VS Code setting key to open. */
-    readonly settingKey: string;
+    /** The query to show in VS Code Settings. */
+    readonly settingsQuery: string;
 }
 
 /**
@@ -265,8 +263,8 @@ export class ShellTerminalLinkProvider implements vscode.TerminalLinkProvider<Sh
         // Check for settings action line
         const settingsMatch = SETTINGS_LINE_PATTERN.exec(context.line);
         if (settingsMatch) {
-            const settingKey = HELP_SETTING_ALIASES[settingsMatch[1]];
-            if (!settingKey) {
+            const settingsQuery = HELP_SETTINGS_QUERIES[settingsMatch[1]];
+            if (!settingsQuery) {
                 return [];
             }
             return [
@@ -274,8 +272,8 @@ export class ShellTerminalLinkProvider implements vscode.TerminalLinkProvider<Sh
                     linkType: 'settings',
                     startIndex: settingsMatch.index,
                     length: settingsMatch[0].length,
-                    tooltip: vscode.l10n.t('Open setting: {0}', settingKey),
-                    settingKey,
+                    tooltip: vscode.l10n.t('Open setting: {0}', settingsQuery),
+                    settingsQuery,
                 },
             ];
         }
@@ -289,9 +287,9 @@ export class ShellTerminalLinkProvider implements vscode.TerminalLinkProvider<Sh
                 'vscode-documentdb.shell.terminalLink.openSettings',
                 async (context: IActionContext) => {
                     context.telemetry.properties.linkType = 'settingsActionLine';
-                    context.telemetry.properties.settingKey = link.settingKey;
+                    context.telemetry.properties.settingsQuery = link.settingsQuery;
 
-                    await vscode.commands.executeCommand('workbench.action.openSettings', link.settingKey);
+                    await vscode.commands.executeCommand('workbench.action.openSettings', link.settingsQuery);
                 },
             );
             return;
