@@ -21,6 +21,7 @@ import {
     InstanceState,
     QUICK_START_ALIAS_LABEL_KEY,
     QUICK_START_LABEL_KEY,
+    QUICK_START_OPERATION_LABEL_KEY,
     QUICK_START_PORT,
     type StageEvent,
 } from './quickStartTypes';
@@ -1718,6 +1719,10 @@ describe('QuickStartService — WI-2e-1 provision RR4 volume-wipe gate', () => {
         ext.context = fakeContext(fakeMemento());
         const removeVolume = jest.fn().mockResolvedValue(undefined);
         const runtime = provisionRuntime({ containers: [], removeVolume });
+        // `docker run` created the container before failing, so the operation sweep finds it.
+        (runtime.listByLabel as jest.Mock).mockImplementation(async (labels: Record<string, string>) =>
+            QUICK_START_OPERATION_LABEL_KEY in labels ? [{ id: 'c1', labels: {} }] : [],
+        );
         const service = new QuickStartServiceImpl(runtime);
 
         await drain(service.provision(new AbortController().signal));
@@ -1725,6 +1730,23 @@ describe('QuickStartService — WI-2e-1 provision RR4 volume-wipe gate', () => {
         expect(runtime.createAndRunContainer).toHaveBeenCalledTimes(1);
         // The failed attempt's cleanup, so a retry doesn't hit the gate.
         expect(removeVolume).toHaveBeenCalledTimes(1);
+        expect(removeVolume.mock.invocationCallOrder[0]).toBeGreaterThan(
+            (runtime.createAndRunContainer as jest.Mock).mock.invocationCallOrder[0],
+        );
+        expect(service.getStatus().state).toBe(InstanceState.Error);
+    });
+
+    it('leaves the volume alone when the failed create left no container (it may not be ours)', async () => {
+        ext.secretStorage = fakeSecretStorage({});
+        ext.context = fakeContext(fakeMemento());
+        const removeVolume = jest.fn().mockResolvedValue(undefined);
+        const runtime = provisionRuntime({ containers: [], removeVolume });
+        const service = new QuickStartServiceImpl(runtime);
+
+        await drain(service.provision(new AbortController().signal));
+
+        expect(runtime.createAndRunContainer).toHaveBeenCalledTimes(1);
+        expect(removeVolume).not.toHaveBeenCalled();
         expect(service.getStatus().state).toBe(InstanceState.Error);
     });
 

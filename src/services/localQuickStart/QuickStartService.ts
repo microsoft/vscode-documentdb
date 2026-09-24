@@ -944,8 +944,11 @@ export class QuickStartServiceImpl {
             // does NOT signal cancellation — only cancel() stops `docker logs -f`.
             cts.cancel();
             if (!success && !readinessTimedOut) {
+                // Only a run that got a container can have created the volume; otherwise it may be someone else's.
+                let ownsContainer = false;
                 // Cleanup (D12): when a container exists, stop+remove it.
                 if (containerCreated && containerId) {
+                    ownsContainer = true;
                     channel.appendLine(`Cleaning up container ${containerId}…`);
                     await this.runtime
                         .stopContainer(containerId)
@@ -969,6 +972,7 @@ export class QuickStartServiceImpl {
                             meterQuickStartSilentCatch('provision_listOrphanedContainers');
                             return [];
                         });
+                    ownsContainer = orphans.length > 0;
                     for (const orphan of orphans) {
                         channel.appendLine(`Removing orphaned container ${orphan.id}…`);
                         await this.runtime
@@ -978,7 +982,7 @@ export class QuickStartServiceImpl {
                 }
                 // A volume this run's `docker run` created is ours to drop, so a retry doesn't
                 // hit the volume gate above. Docker refuses if another container still mounts it.
-                if (createAttempted && !reusesVolume) {
+                if (ownsContainer && !reusesVolume) {
                     await this.runtime
                         .removeVolume(volumeName(alias))
                         .catch(() => meterQuickStartSilentCatch('provision_cleanupRemoveVolume'));
