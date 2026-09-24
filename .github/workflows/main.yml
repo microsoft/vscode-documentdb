@@ -32,6 +32,10 @@ on:
             - release/**
             - feature/**
 
+# Jobs that comment on PRs add pull-requests: write themselves.
+permissions:
+    contents: read
+
 concurrency:
     group: '${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}'
     cancel-in-progress: true
@@ -111,6 +115,7 @@ jobs:
         name: Package
         runs-on: ubuntu-latest
         permissions:
+            contents: read
             pull-requests: write
         if: |
             (github.event_name == 'workflow_dispatch' && inputs.enforce_full_run) ||
