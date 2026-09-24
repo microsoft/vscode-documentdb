@@ -277,6 +277,7 @@ extends:
                         - task: Npm@1
                           displayName: '🧪 Unit Tests (Jest)'
                           continueOnError: true
+                          timeoutInMinutes: 10
                           inputs:
                               command: custom
                               customCommand: run jesttest

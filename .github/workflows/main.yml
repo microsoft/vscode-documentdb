@@ -91,6 +91,7 @@ jobs:
     unit-tests:
         name: Unit Tests
         runs-on: ubuntu-latest
+        timeout-minutes: 10
         steps:
             - name: Checkout Repository
               uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -321,7 +322,9 @@ jobs:
             - name: Run API Extractor
               run: |
                   npm run api-extractor
-                  if [ -n "$(git status --porcelain -- etc)" ]; then
+                  # Assigned first so a failing git status fails the step instead of reading as clean.
+                  status="$(git status --porcelain -- etc)"
+                  if [ -n "$status" ]; then
                       git status --short -- etc
                       git diff -- etc
                       echo "::error::The public API changed. Run 'npm run api-extractor' in api/ and commit api/etc."
@@ -330,6 +333,7 @@ jobs:
 
     # Branch protection requires a check named "Build & Package", so this gate keeps that name
     # and fails if any job above failed.
+    # A new job must join `needs` and have no job-level `if:`, since a skipped job passes the gate.
     ci-gate:
         name: Build & Package
         runs-on: ubuntu-latest

@@ -20,28 +20,32 @@ async function main() {
     // Outside the checkout, so a module left out of the VSIX can't resolve from the repo's node_modules.
     // Short, because VS Code puts its IPC socket under the user-data dir and socket paths max out near 100 chars.
     const workDir = fs.mkdtempSync(path.join(process.platform === 'win32' ? os.tmpdir() : '/tmp', 'ddb-smoke-'));
-    execFileSync('unzip', ['-q', vsix, 'extension/*', '-d', workDir]);
+    try {
+        execFileSync('unzip', ['-q', vsix, 'extension/*', '-d', workDir]);
 
-    const vscodeExecutablePath = await downloadAndUnzipVSCode({
-        version: vscodeVersion,
-        cachePath: path.join(repoRoot, '.vscode-test'),
-    });
-    await runTests({
-        vscodeExecutablePath,
-        extensionDevelopmentPath: path.join(workDir, 'extension'),
-        extensionTestsPath: path.join(__dirname, 'suite.js'),
-        launchArgs: [
-            '--disable-extensions',
-            '--disable-gpu',
-            '--disable-workspace-trust',
-            '--skip-welcome',
-            '--skip-release-notes',
-            `--user-data-dir=${path.join(workDir, 'ud')}`,
-            `--extensions-dir=${path.join(workDir, 'ext')}`,
-        ],
-        // Keeps telemetry local.
-        extensionTestsEnv: { DEBUGTELEMETRY: 'v' },
-    });
+        const vscodeExecutablePath = await downloadAndUnzipVSCode({
+            version: vscodeVersion,
+            cachePath: path.join(repoRoot, '.vscode-test'),
+        });
+        await runTests({
+            vscodeExecutablePath,
+            extensionDevelopmentPath: path.join(workDir, 'extension'),
+            extensionTestsPath: path.join(__dirname, 'suite.js'),
+            launchArgs: [
+                '--disable-extensions',
+                '--disable-gpu',
+                '--disable-workspace-trust',
+                '--skip-welcome',
+                '--skip-release-notes',
+                `--user-data-dir=${path.join(workDir, 'ud')}`,
+                `--extensions-dir=${path.join(workDir, 'ext')}`,
+            ],
+            // Keeps telemetry local.
+            extensionTestsEnv: { DEBUGTELEMETRY: 'v' },
+        });
+    } finally {
+        fs.rmSync(workDir, { recursive: true, force: true });
+    }
 }
 
 function findVsix() {
