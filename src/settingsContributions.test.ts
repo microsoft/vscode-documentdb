@@ -135,7 +135,6 @@ describe('settings contributions', () => {
                 expect(properties[actualKey]?.default).toBe(expectedDefault);
             }
         });
-
     });
 
     describe('user-facing text', () => {
