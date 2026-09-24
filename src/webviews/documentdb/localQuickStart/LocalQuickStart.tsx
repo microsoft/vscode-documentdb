@@ -1778,7 +1778,7 @@ export const LocalQuickStart = (): JSX.Element => {
                     <Field
                         label={l10n.t('Username')}
                         hint={l10n.t(
-                            'Up to 63 characters, with no spaces. Names starting with pg, citus, documentdb, or internal_role are reserved.',
+                            'Up to 63 ASCII characters; fewer for non-ASCII text. No spaces. Names starting with pg, citus, documentdb, or internal_role are reserved.',
                         )}
                         validationState={shownValidation?.field === 'username' ? 'error' : 'none'}
                         validationMessage={shownValidation?.field === 'username' ? shownValidation.message : undefined}

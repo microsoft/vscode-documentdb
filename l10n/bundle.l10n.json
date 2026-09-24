@@ -2352,7 +2352,7 @@
   "Unused": "Unused",
   "Unused Indexes": "Unused Indexes",
   "Up": "Up",
-  "Up to 63 characters, with no spaces. Names starting with pg, citus, documentdb, or internal_role are reserved.": "Up to 63 characters, with no spaces. Names starting with pg, citus, documentdb, or internal_role are reserved.",
+  "Up to 63 ASCII characters; fewer for non-ASCII text. No spaces. Names starting with pg, citus, documentdb, or internal_role are reserved.": "Up to 63 ASCII characters; fewer for non-ASCII text. No spaces. Names starting with pg, citus, documentdb, or internal_role are reserved.",
   "Update Azure Account Extension to at least version \"{0}\"...": "Update Azure Account Extension to at least version \"{0}\"...",
   "Update cluster credentials": "Update cluster credentials",
   "Update Connection String": "Update Connection String",
