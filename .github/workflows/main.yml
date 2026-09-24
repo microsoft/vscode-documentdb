@@ -7,17 +7,17 @@ name: CI
 #      for PR comparisons
 #
 # 2. Pull Requests to `main`, `release/**`, or `feature/**`:
-#    - Runs all jobs: code checks, tests, integration tests, and packaging
+#    - Runs all jobs: code checks, tests, and packaging
 #    - Posts PR comments with code quality report and build size comparison
 #
 # 3. Manual run via `workflow_dispatch`:
-#    - Optional `enforce_full_run` input forces integration tests and packaging on any branch
+#    - Optional `enforce_full_run` input forces packaging on any branch
 
 on:
     workflow_dispatch:
         inputs:
             enforce_full_run:
-                description: 'Run integration tests and packaging jobs on manual dispatch'
+                description: 'Run the packaging job on manual dispatch'
                 required: false
                 type: boolean
                 default: false
@@ -37,8 +37,8 @@ concurrency:
     cancel-in-progress: true
 
 jobs:
-    code-quality-and-tests:
-        name: Code Quality & Tests
+    code-quality:
+        name: Code Quality
         runs-on: ubuntu-latest
         permissions:
             pull-requests: write
@@ -76,9 +76,6 @@ jobs:
               id: prettier
               continue-on-error: true
               run: npm run prettier
-
-            - name: 🧪 Run Unit Tests (Jest)
-              run: npm run jesttest
 
             - name: 💬 Post PR Code Quality Report
               if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository
@@ -152,21 +149,9 @@ jobs:
                   echo "One or more code quality checks failed (l10n=${{ steps.l10n.outcome }}, lint=${{ steps.lint.outcome }}, prettier=${{ steps.prettier.outcome }})"
                   exit 1
 
-    integration-tests:
-        name: Integration Tests
+    unit-tests:
+        name: Unit Tests
         runs-on: ubuntu-latest
-        needs: [code-quality-and-tests]
-        if: |
-            (github.event_name == 'workflow_dispatch' && inputs.enforce_full_run) ||
-            github.ref == 'refs/heads/main' ||
-            startsWith(github.ref, 'refs/heads/release/') ||
-            (startsWith(github.ref, 'refs/pull/') && (
-              github.base_ref == 'main' ||
-              startsWith(github.base_ref, 'release/')
-            ))
-        defaults:
-            run:
-                working-directory: '.'
         steps:
             - name: ✅ Checkout Repository
               uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -181,15 +166,14 @@ jobs:
             - name: 📦 Install Dependencies (npm ci)
               run: npm ci --prefer-offline --no-audit --no-fund --progress=false
 
-            - name: 🔄 Run Integration Tests (Headless UI)
-              if: false # TODO: Disabled — unreliable, needs revisiting
-              run: xvfb-run -a npm test
+            # jest.config's 25% is one worker on a 4-core runner
+            - name: 🧪 Run Unit Tests (Jest)
+              run: npm run jesttest -- --maxWorkers=4
 
     # Run on push to `main`/`release/**` (for cache seeding) and for PRs to main/release/**
     build-and-package:
-        name: Build & Package
+        name: Package
         runs-on: ubuntu-latest
-        needs: [code-quality-and-tests]
         permissions:
             pull-requests: write
         if: |
@@ -348,3 +332,17 @@ jobs:
                         issue_number: context.issue.number,
                         body,
                       });
+
+    # Branch protection requires a check named "Build & Package", so this gate keeps that name
+    # and fails if any job above failed.
+    ci-gate:
+        name: Build & Package
+        runs-on: ubuntu-latest
+        if: always()
+        needs: [code-quality, unit-tests, build-and-package]
+        steps:
+            - name: Check job results
+              if: contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled')
+              run: |
+                  echo "code-quality=${{ needs.code-quality.result }} unit-tests=${{ needs.unit-tests.result }} build-and-package=${{ needs.build-and-package.result }}"
+                  exit 1
