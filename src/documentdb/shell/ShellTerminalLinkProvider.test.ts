@@ -3,8 +3,10 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+import { EJSON } from 'bson';
 import * as vscode from 'vscode';
 import { HelpProvider } from '../../../packages/documentdb-js-shell-runtime/src/HelpProvider';
+import { ShellOutputFormatter } from './ShellOutputFormatter';
 import {
     ACTION_LINE_PREFIX,
     HELP_SETTINGS_QUERIES,
@@ -288,6 +290,30 @@ describe('ShellTerminalLinkProvider', () => {
                     expect.objectContaining({ linkType: 'settings', settingsQuery }),
                 ]);
             }
+        });
+
+        it('should detect the settings marker in formatted structured help', () => {
+            registerShellTerminal(mockTerminal, () => mockShellInfo('test-id'));
+            const helpResult = new HelpProvider('shell').getHelpResult(120);
+            const formattedHelp = new ShellOutputFormatter().formatResult({
+                type: helpResult.type,
+                printable: EJSON.stringify(helpResult.printable, { relaxed: false }),
+                durationMs: helpResult.durationMs,
+            });
+            const settingsLine = formattedHelp.split('\r\n').find((line) => line.includes('[shellSettings]'));
+            expect(settingsLine).toBeDefined();
+
+            const context = {
+                terminal: mockTerminal,
+                line: settingsLine,
+            } as vscode.TerminalLinkContext;
+
+            expect(provider.provideTerminalLinks(context)).toEqual([
+                expect.objectContaining({
+                    linkType: 'settings',
+                    settingsQuery: '@ext:ms-azuretools.vscode-documentdb documentDB.shell',
+                }),
+            ]);
         });
 
         it('should leave an unknown compact marker as plain text', () => {
