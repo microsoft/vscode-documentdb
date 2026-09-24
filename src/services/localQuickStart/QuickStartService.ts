@@ -40,6 +40,7 @@ import {
     type IContainerRuntime,
     isRunning,
 } from './ContainerRuntime';
+import { maskSecrets } from './outputMasking';
 import {
     composeConnectionString,
     generateCredentials,
@@ -763,37 +764,46 @@ export class QuickStartServiceImpl {
                 await this.renewProvisioningLease(alias, operationId, chosenPort);
             }
             createAttempted = true;
-            // Write credentials to a temp env-file (deleted in finally) so they never
+            // Write credentials to a temp env-file (deleted right after `docker run`) so they never
             // appear on the docker CLI / host process list (design §8.2). The image
             // reads USERNAME/PASSWORD from the environment.
             const createdEnvFilePath = await this.writeEnvFile(credentials.username, credentials.password);
             envFilePath = createdEnvFilePath;
             activeDockerStage = 'creating';
             containerId = await this.runProvisionStage('creating', journeyCorrelationId, async () => {
-                const createdContainerId = await this.runtime.createAndRunContainer(
-                    {
-                        imageRef: imageRef,
-                        name: containerName(alias),
-                        labels: {
-                            [QUICK_START_LABEL_KEY]: '1',
-                            [QUICK_START_ALIAS_LABEL_KEY]: alias,
-                            // Per-run nonce so this run's cleanup sweep can only remove ITS container (H4).
-                            [QUICK_START_OPERATION_LABEL_KEY]: operationId,
+                let createdContainerId: string | undefined;
+                try {
+                    createdContainerId = await this.runtime.createAndRunContainer(
+                        {
+                            imageRef: imageRef,
+                            name: containerName(alias),
+                            labels: {
+                                [QUICK_START_LABEL_KEY]: '1',
+                                [QUICK_START_ALIAS_LABEL_KEY]: alias,
+                                // Per-run nonce so this run's cleanup sweep can only remove ITS container (H4).
+                                [QUICK_START_OPERATION_LABEL_KEY]: operationId,
+                            },
+                            hostPort: chosenPort,
+                            containerPort: QUICK_START_PORT,
+                            // Persist data across recreation (§8/§11).
+                            volumeName: volumeName(alias),
+                            dataPath: QUICK_START_DATA_PATH,
+                            // Credentials via env-file (§8.2), not CLI args. We also do NOT bake
+                            // `--init-data true`: older images re-run it on every
+                            // Stop/Start and crash on duplicate keys; sample data is seeded
+                            // once, post-readiness, via `docker exec` (see seedSampleData).
+                            environmentFiles: [createdEnvFilePath],
                         },
-                        hostPort: chosenPort,
-                        containerPort: QUICK_START_PORT,
-                        // Persist data across recreation (§8/§11).
-                        volumeName: volumeName(alias),
-                        dataPath: QUICK_START_DATA_PATH,
-                        // Credentials via env-file (§8.2), not CLI args. We also do NOT bake
-                        // `--init-data true`: older images re-run it on every
-                        // Stop/Start and crash on duplicate keys; sample data is seeded
-                        // once, post-readiness, via `docker exec` (see seedSampleData).
-                        environmentFiles: [createdEnvFilePath],
-                    },
-                    secrets,
-                    cts.token,
-                );
+                        secrets,
+                        cts.token,
+                    );
+                } finally {
+                    // Docker reads the env-file at create time; don't keep the password on disk through the readiness wait.
+                    // A failed delete (e.g. a scanner holding the file on Windows) keeps the path for the retry below.
+                    if (await this.removeEnvFile(createdEnvFilePath)) {
+                        envFilePath = undefined;
+                    }
+                }
                 this.throwIfAborted(signal);
                 return createdContainerId;
             });
@@ -883,7 +893,8 @@ export class QuickStartServiceImpl {
                 // "Wait longer" resume finish adoption. The instance sits in Error until then. The
                 // event is buffered and emitted after `finally` (see below) so the flags are clean.
                 readinessTimedOut = true;
-                channel.appendLine(`[readiness-timeout] ${detail}`);
+                // `detail` carries the driver's last error, which can echo the connection string.
+                channel.appendLine(`[readiness-timeout] ${maskSecrets(detail, secrets)}`);
                 message = { key: 'readinessTimeout', environment: readinessEnvironment };
                 this.setStatus(alias, InstanceState.Error, undefined, message);
                 terminalEvent = stageEvent('waiting', 'error', message, undefined, /* timedOut */ true);
@@ -972,11 +983,9 @@ export class QuickStartServiceImpl {
             }
             signal.removeEventListener('abort', onAbort);
             cts.dispose();
-            // Delete the temp env-file (it carried the password in plaintext, §8.2).
+            // Retry: set only if something threw before `docker run` or the creating stage's delete failed.
             if (envFilePath) {
-                await fs
-                    .rm(envFilePath, { force: true })
-                    .catch(() => meterQuickStartSilentCatch('provision_removeEnvironmentFile'));
+                await this.removeEnvFile(envFilePath);
             }
             // Provisioning outcome telemetry (design §14): result + whether we reused a
             // prior volume/creds + whether a port fallback was used + total duration, plus
@@ -1395,8 +1404,8 @@ export class QuickStartServiceImpl {
 
     /**
      * Write credentials to a temp `--env-file` (mode 600) so they are passed to the
-     * container off the command line / process list (§8.2). The caller deletes it in
-     * a `finally`. The `--env-file` format is line-based `KEY=VALUE` with no quoting,
+     * container off the command line / process list (§8.2). The caller deletes it as soon
+     * as `docker run` settles. The `--env-file` format is line-based `KEY=VALUE` with no quoting,
      * so a newline (or other control char) in a value would inject extra environment
      * variables. Auto-generated credentials use the URL-safe alphabet; custom Advanced
      * credentials are control-char-validated at the router boundary, and this guard is
@@ -1408,9 +1417,26 @@ export class QuickStartServiceImpl {
         if (hasControlChar.test(username) || hasControlChar.test(password)) {
             throw new Error('Credentials must not contain control characters.');
         }
-        const filePath = path.join(os.tmpdir(), `documentdb-quickstart-${crypto.randomBytes(8).toString('hex')}.env`);
-        await fs.writeFile(filePath, `USERNAME=${username}\nPASSWORD=${password}\n`, { mode: 0o600 });
+        const filePath = path.join(os.tmpdir(), envFileName(process.pid, crypto.randomBytes(8).toString('hex')));
+        try {
+            await fs.writeFile(filePath, `USERNAME=${username}\nPASSWORD=${password}\n`, { mode: 0o600 });
+        } catch (error) {
+            // A write that fails part-way can leave the password behind, and no caller ever learns this path.
+            await this.removeEnvFile(filePath);
+            throw error;
+        }
         return filePath;
+    }
+
+    /** Returns false when the file could not be deleted, so the caller can retry later. */
+    private async removeEnvFile(filePath: string): Promise<boolean> {
+        try {
+            await fs.rm(filePath, { force: true });
+            return true;
+        } catch {
+            meterQuickStartSilentCatch('provision_removeEnvironmentFile');
+            return false;
+        }
     }
 
     private async findManagedContainer(
@@ -2181,29 +2207,51 @@ export class QuickStartServiceImpl {
 /** Singleton Quick Start service. */
 export const QuickStartService: QuickStartServiceImpl = new QuickStartServiceImpl();
 
-/** A stale env file is one older than this; younger ones may belong to a live provision. */
+/** Any env file older than this is stale; covers legacy PID-less names and a reused PID. */
 const ENV_FILE_STALE_AFTER_MS = 60 * 60 * 1000;
+
+const ENV_FILE_PATTERN = /^documentdb-quickstart-(?:(\d+)-)?[0-9a-f]{16}\.env$/;
+
+/**
+ * Temp env-file name; must stay matched by {@link ENV_FILE_PATTERN}. The owning PID lets the
+ * activation sweep reclaim a crashed host's file right away.
+ */
+export function envFileName(pid: number, nonce: string): string {
+    return `documentdb-quickstart-${pid}-${nonce}.env`;
+}
+
+/** `kill(pid, 0)` probes without signalling: ESRCH means gone, EPERM means alive but not ours. */
+function isProcessAlive(pid: number): boolean {
+    try {
+        process.kill(pid, 0);
+        return true;
+    } catch (error) {
+        return (error as NodeJS.ErrnoException).code !== 'ESRCH';
+    }
+}
 
 /**
  * Best-effort activation sweep of `documentdb-quickstart-*.env` files left in `os.tmpdir()`
- * (L9). `provision()` deletes its env file in a `finally`, but an extension host killed between
- * the write and that `finally` leaves a plaintext password on disk. Only files older than
- * {@link ENV_FILE_STALE_AFTER_MS} are removed, so a provision running in another window — whose
- * image pull can take a while — never has its env file deleted underneath it.
+ * (L9). `provision()` deletes its env file right after `docker run`, but an extension host killed
+ * before that leaves a plaintext password on disk. A file whose owning PID is dead is removed
+ * immediately; one whose owner is alive may belong to an in-flight provision in another window and
+ * is kept until it passes {@link ENV_FILE_STALE_AFTER_MS}.
  */
-export async function sweepStaleQuickStartEnvFiles(): Promise<void> {
+export async function sweepStaleQuickStartEnvFiles(dir: string = os.tmpdir()): Promise<void> {
     try {
-        const dir = os.tmpdir();
         const entries = await fs.readdir(dir);
         const cutoff = Date.now() - ENV_FILE_STALE_AFTER_MS;
         for (const entry of entries) {
-            if (!/^documentdb-quickstart-[0-9a-f]{16}\.env$/.test(entry)) {
+            const match = ENV_FILE_PATTERN.exec(entry);
+            if (!match) {
                 continue;
             }
             const filePath = path.join(dir, entry);
             try {
-                const stats = await fs.stat(filePath);
-                if (stats.mtimeMs < cutoff) {
+                const pid = Number(match[1]);
+                const ownerDead = Number.isSafeInteger(pid) && pid > 0 && !isProcessAlive(pid);
+                const stale = ownerDead || (await fs.stat(filePath)).mtimeMs < cutoff;
+                if (stale) {
                     await fs.unlink(filePath);
                 }
             } catch {

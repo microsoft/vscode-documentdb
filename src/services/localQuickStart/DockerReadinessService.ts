@@ -316,6 +316,9 @@ export class DockerReadinessService {
         suppressCommandEcho: boolean,
     ): Promise<DockerProbeEvidence> {
         const output = suppressCommandEcho ? undefined : this.dependencies.createProbeOutput?.();
+        // Noise, not secrets: `docker info` JSON is hundreds of lines, so runReadiness logs a summary
+        // instead. Secret-bearing output is handled by ContainerRuntime's parsing runner.
+        const echoStdout = probe !== 'info';
         let commandText: string | undefined;
         return this.dependencies
             .runProbe({
@@ -330,7 +333,7 @@ export class DockerReadinessService {
                         output?.onCommand?.(command);
                     }
                 },
-                stdOutPipe: output?.stdOutPipe,
+                stdOutPipe: echoStdout ? output?.stdOutPipe : undefined,
                 stdErrPipe: output?.stdErrPipe,
                 now: this.dependencies.now,
             })
@@ -340,7 +343,9 @@ export class DockerReadinessService {
                     if (commandText) {
                         failureOutput?.onCommand?.(commandText);
                     }
-                    failureOutput?.stdOutPipe?.end(evidence.stdout);
+                    if (echoStdout) {
+                        failureOutput?.stdOutPipe?.end(evidence.stdout);
+                    }
                     failureOutput?.stdErrPipe?.end(evidence.stderr);
                 }
                 return evidence;
@@ -475,6 +480,13 @@ export class DockerReadinessService {
                 const daemonArchitecture = infoFacts.architecture
                     ? normalizeDaemonArchitecture(infoFacts.architecture)
                     : undefined;
+                if (!suppressCommandEcho) {
+                    this.dependencies
+                        .createProbeOutput?.()
+                        ?.appendDiagnostic?.(
+                            `[readiness] docker server=${infoFacts.serverVersion ?? 'unknown'} os=${infoFacts.osType ?? 'unknown'}${infoFacts.operatingSystem ? ` (${infoFacts.operatingSystem})` : ''} arch=${infoFacts.architecture ?? 'unknown'}`,
+                        );
+                }
                 const provider = classifyDockerProvider({
                     environment,
                     daemonReachable: true,
@@ -650,6 +662,9 @@ export class DockerReadinessService {
             );
             if (infoProbe.stderr.trim()) {
                 diagnosticOutput?.appendDiagnostic?.(`[readiness] stderr: ${infoProbe.stderr.trim()}`);
+            }
+            for (const serverError of infoFacts?.serverErrors ?? []) {
+                diagnosticOutput?.appendDiagnostic?.(`[readiness] server error: ${serverError}`);
             }
             if (classification.outcome === 'diagnosed') {
                 return {

@@ -11,6 +11,10 @@
 
 - **Query Playground Connection Timeout**: The Query Playground now honors the connection timeout setting instead of a fixed 30 seconds, and its timeout message links to the setting that applies. The single `documentDB.connectionTimeout` setting (default 30 seconds) covers both the Query Playground and the Interactive Shell, whose previous default was 60 seconds. [#957](https://github.com/microsoft/vscode-documentdb/pull/957)
 
+### Security
+
+- **DocumentDB Local Credentials**: Quick Start no longer writes the instance password to the "DocumentDB Local Setup" output channel, and removes its temporary credentials file right after the container is created (or on the next activation after a crash). [#951](https://github.com/microsoft/vscode-documentdb/pull/951)
+
 ## 0.10.2
 
 ### Fixes

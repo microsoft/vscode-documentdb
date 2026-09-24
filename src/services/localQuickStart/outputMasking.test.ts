@@ -94,5 +94,17 @@ describe('outputMasking (Quick Start D14)', () => {
             expect(emitted.join('')).not.toContain(PASSWORD);
             expect(emitted.join('')).toContain('***');
         });
+
+        it('never cuts through a whole secret on a forced flush', () => {
+            const { emitted, buffer } = collect();
+            const half = Math.floor(PASSWORD.length / 2);
+            // The whole password arrives in one chunk, with the forced-flush cut falling inside it.
+            buffer.push('x'.repeat(16 * 1024) + PASSWORD + 'y'.repeat(PASSWORD.length - half));
+            buffer.flush();
+            const output = emitted.join('');
+            expect(output).not.toContain(PASSWORD.slice(0, half));
+            expect(output).not.toContain(PASSWORD.slice(half));
+            expect(output).toContain('***');
+        });
     });
 });
