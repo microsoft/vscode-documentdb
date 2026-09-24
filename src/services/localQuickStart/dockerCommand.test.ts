@@ -4,6 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { CancellationTokenLike, isCancellationError, ShellQuoting } from '@microsoft/vscode-processutils';
+import { spawnSync } from 'child_process';
 import {
     DockerCommandError,
     DockerCommandTimeoutError,
@@ -25,6 +26,11 @@ function nodeScript(script: string, ...args: string[]) {
             ...args.map((value) => ({ value, quoting: ShellQuoting.Strong })),
         ],
     };
+}
+
+// By command line, not pid: a deadline can fire before a loaded machine has started the child at all.
+function isRunning(marker: string): boolean {
+    return spawnSync('pgrep', ['-f', marker]).status === 0;
 }
 
 function isAlive(pid: number): boolean {
@@ -126,16 +132,14 @@ describePosix('runDockerCommand', () => {
 
     // A hung `docker run` ignores SIGTERM; the old runner rejected at once and left it running.
     it('kills a command that ignores SIGTERM when its deadline passes', async () => {
-        const stdout = new CapturingTeeWritable();
+        const marker = `deadline-${process.pid}-${Date.now()}`;
         const error: unknown = await runDockerCommand(
-            nodeScript(
-                'process.on("SIGTERM", () => {}); process.stdout.write(String(process.pid)); setInterval(() => {}, 1000)',
-            ),
-            { shellProvider, stdOutPipe: stdout, timeoutMs: 500, killGraceMs: 100 },
+            nodeScript('process.on("SIGTERM", () => {}); setInterval(() => {}, 1000)', marker),
+            { shellProvider, timeoutMs: 500, killGraceMs: 100 },
         ).catch((reason: unknown) => reason);
 
         expect(error).toBeInstanceOf(DockerCommandTimeoutError);
-        expect(isAlive(Number(stdout.getOutput()))).toBe(false);
+        expect(isRunning(marker)).toBe(false);
     });
 
     it('kills a command that ignores SIGTERM when cancelled, and settles only once it is gone', async () => {
@@ -152,9 +156,11 @@ describePosix('runDockerCommand', () => {
                 killGraceMs: 100,
             },
         ).catch((reason: unknown) => reason);
-        setTimeout(() => controller.abort(), 500);
+        // Cancel only once the pid is out: a slow start would otherwise leave "" here, and kill(0) always succeeds.
+        const started = setInterval(() => stdout.getOutput() && controller.abort(), 20);
 
         const error = await pending;
+        clearInterval(started);
 
         expect(isCancellationError(error)).toBe(true);
         expect(isAlive(Number(stdout.getOutput()))).toBe(false);
