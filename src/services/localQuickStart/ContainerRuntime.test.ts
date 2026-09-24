@@ -9,10 +9,15 @@ import {
 } from '@microsoft/vscode-container-client';
 import * as vscode from 'vscode';
 import { ContainerRuntime, disposeQuickStartOutputChannel } from './ContainerRuntime';
+import { runDockerCommand, type DockerCommandOptions } from './dockerCommand';
 
 jest.mock('@microsoft/vscode-container-client', () => ({
     ...jest.requireActual('@microsoft/vscode-container-client'),
     ShellStreamCommandRunnerFactory: jest.fn(),
+}));
+jest.mock('./dockerCommand', () => ({
+    ...jest.requireActual('./dockerCommand'),
+    runDockerCommand: jest.fn(),
 }));
 
 const PASSWORD = 'hunter2-generated-password';
@@ -41,6 +46,11 @@ describe('ContainerRuntime output channel', () => {
                     },
                 }) as unknown as ShellStreamCommandRunnerFactory<ShellStreamCommandRunnerOptions>,
         );
+        jest.mocked(runDockerCommand).mockImplementation(async (_command, options: DockerCommandOptions) => {
+            options.onCommand?.('docker …');
+            options.stdOutPipe?.end(stdout + '\n');
+            return undefined;
+        });
     });
 
     afterEach(() => {
