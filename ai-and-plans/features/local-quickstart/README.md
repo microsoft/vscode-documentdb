@@ -78,6 +78,7 @@ regular new-connection wizard instead ([0001](./decisions.md#0001--single-manage
 | 2026-08-09 | #876 | State sync + infrastructure error translation                | [iterations/05-error-translation.md](./iterations/05-error-translation.md)               |
 | 2026-09-23 | #958 | Setup never wipes a data volume before it can succeed (#946) | [iterations/06-data-volume-protection/](./iterations/06-data-volume-protection/)         |
 | 2026-09-24 | #954 | Setup failures show Docker's error, not an exit code         | [iterations/07-setup-failures.md](./iterations/07-setup-failures.md)                     |
+| 2026-09-24 | #953 | Reject credentials and ports setup can't honor (#949)        | [iterations/08-input-validation.md](./iterations/08-input-validation.md)                 |
 
 ## Decisions
 
