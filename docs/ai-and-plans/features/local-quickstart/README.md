@@ -2,7 +2,7 @@
 feature: local-quickstart
 kind: notes
 status: active
-prs: [653, 798, 876, 954]
+prs: [653, 798, 876, 958, 954, 953, 955]
 verified: 2026-08-14
 code:
   - src/commands/localQuickStart/**
@@ -63,6 +63,9 @@ regular new-connection wizard instead ([0001](./decisions.md#0001--single-manage
 - **Existing data is preserved.** A volume without recoverable credentials requires an explicit
   Start fresh. Its removal waits until the port check and image download succeed. Sample data is
   loaded only into a new volume, so recreating an instance does not restore documents the user deleted.
+- **Refresh reports; it does not clean up.** A container and volume both gone show as not set up, but
+  the record and credentials stay until setup or Delete: Docker pointed at another engine or context
+  looks the same.
 
 ## Timeline
 
@@ -79,6 +82,7 @@ regular new-connection wizard instead ([0001](./decisions.md#0001--single-manage
 | 2026-09-23 | #958 | Setup never wipes a data volume before it can succeed (#946) | [iterations/06-data-volume-protection/](./iterations/06-data-volume-protection/)         |
 | 2026-09-24 | #954 | Setup failures show Docker's error, not an exit code         | [iterations/07-setup-failures.md](./iterations/07-setup-failures.md)                     |
 | 2026-09-24 | #953 | Reject credentials and ports setup can't honor (#949)        | [iterations/08-input-validation.md](./iterations/08-input-validation.md)                 |
+| 2026-09-24 | #955 | Tree and wizard stop showing a stale instance (#950)         | [iterations/09-state-recovery.md](./iterations/09-state-recovery.md)                     |
 
 ## Decisions
 
