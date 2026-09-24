@@ -103,7 +103,8 @@ export const PLAYGROUND_ACTION_PREFIX = '\u{2197} Query Playground '; // '↗ Qu
  * The marker prefix for the "Open Settings" action line.
  *
  * Format: `⚙ [settingKey]`
- * The settings key is NOT localized — it's the programmatic VS Code setting ID.
+ * The settings target is NOT localized — it is either a programmatic VS Code setting ID
+ * or a compact alias that resolves to a Settings search query.
  */
 export const SETTINGS_ACTION_PREFIX = '\u{2699} '; // ⚙ + space
 
