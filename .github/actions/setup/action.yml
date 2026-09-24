@@ -9,11 +9,13 @@ runs:
           uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
           with:
               node-version-file: .nvmrc
+              package-manager-cache: false
 
         # Restoring node_modules takes seconds; npm ci plus the npm cache took ~1 min per job.
+        # Restore and save are split so a cache hit doesn't pay for the save step's post-job check.
         - name: Restore node_modules
           id: modules
-          uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+          uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
           with:
               path: node_modules
               key: node-modules-${{ runner.os }}-${{ steps.node.outputs.node-version }}-${{ hashFiles('**/package-lock.json') }}
@@ -30,3 +32,10 @@ runs:
           if: steps.modules.outputs.cache-hit != 'true'
           shell: bash
           run: npm ci --prefer-offline --no-audit --no-fund --progress=false
+
+        - name: Save node_modules
+          if: steps.modules.outputs.cache-hit != 'true'
+          uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+          with:
+              path: node_modules
+              key: ${{ steps.modules.outputs.cache-primary-key }}

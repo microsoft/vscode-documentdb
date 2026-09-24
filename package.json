@@ -78,7 +78,7 @@
     "prewebpack-dev": "npm run build --workspaces --if-present",
     "webpack-dev": "rimraf ./dist && npm run webpack-dev-ext && npm run webpack-dev-wv",
     "prewebpack-prod": "npm run build --workspaces --if-present",
-    "webpack-prod": "rimraf ./dist && webpack --mode production --config ./webpack.config.ext.js --config ./webpack.config.views.js",
+    "webpack-prod": "rimraf ./dist && npm run webpack-prod-ext && npm run webpack-prod-wv",
     "webpack-dev-ext": "webpack --mode development --config ./webpack.config.ext.js",
     "webpack-dev-wv": "webpack --mode development --config ./webpack.config.views.js",
     "webpack-prod-ext": "webpack --mode production --config ./webpack.config.ext.js",

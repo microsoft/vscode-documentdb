@@ -27,7 +27,15 @@ module.exports = (env, { mode }) => {
             filename: '[name].js',
             libraryTarget: 'module',
         },
-        cache: false,
+        // CI restores this between runs; local and release builds stay uncached.
+        cache: process.env.WEBPACK_CACHE_DIR
+            ? {
+                  type: 'filesystem',
+                  cacheDirectory: path.resolve(process.env.WEBPACK_CACHE_DIR),
+                  name: `${path.basename(__filename, '.js')}-${mode}`,
+                  buildDependencies: { config: [__filename] },
+              }
+            : false,
         experiments: {
             outputModule: true,
         },

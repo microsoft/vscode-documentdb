@@ -135,8 +135,27 @@ jobs:
             - name: Setup Node.js and Dependencies
               uses: ./.github/actions/setup
 
+            # A warm cache turns ~75s of webpack into seconds; output is identical to a cold build.
+            - name: Restore webpack cache
+              id: webpack-cache
+              uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+              with:
+                  path: ${{ runner.temp }}/webpack-cache
+                  key: webpack-${{ runner.os }}-${{ hashFiles('**/package-lock.json', 'webpack.config.*.js') }}-${{ github.sha }}
+                  restore-keys: webpack-${{ runner.os }}-${{ hashFiles('**/package-lock.json', 'webpack.config.*.js') }}-
+
             - name: Package Distributables (vsix/tgz)
               run: npm run package
+              env:
+                  WEBPACK_CACHE_DIR: ${{ runner.temp }}/webpack-cache
+
+            # PRs reuse the cache from their base branch, so only pushes save one (plus a PR's first run, to seed it).
+            - name: Save webpack cache
+              if: github.event_name == 'push' || steps.webpack-cache.outputs.cache-matched-key == ''
+              uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+              with:
+                  path: ${{ runner.temp }}/webpack-cache
+                  key: ${{ steps.webpack-cache.outputs.cache-primary-key }}
 
             - name: Collect build sizes
               id: sizes
