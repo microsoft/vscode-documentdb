@@ -10,14 +10,11 @@
 ### Fixes
 
 - **Query Playground Connection Timeout**: The Query Playground now honors the connection timeout setting instead of a fixed 30 seconds, and its timeout message links to the setting that applies. The single `documentDB.connectionTimeout` setting (default 30 seconds) covers both the Query Playground and the Interactive Shell, whose previous default was 60 seconds. [#957](https://github.com/microsoft/vscode-documentdb/pull/957)
+- **DocumentDB Local Custom Credentials and Port**: The Configure step now rejects usernames and passwords that DocumentDB Local can't use, such as reserved or over-long usernames and passwords the driver can't encode, instead of failing minutes later. Values are no longer trimmed silently, and an empty port field uses the suggested port shown in the summary. [#953](https://github.com/microsoft/vscode-documentdb/pull/953)
 
 ### Security
 
 - **DocumentDB Local Credentials**: Quick Start no longer writes the instance password to the "DocumentDB Local Setup" output channel, and removes its temporary credentials file right after the container is created (or on the next activation after a crash). [#951](https://github.com/microsoft/vscode-documentdb/pull/951)
-
-### Fixes
-
-- **DocumentDB Local Custom Credentials and Port**: The Configure step now rejects usernames and passwords that DocumentDB Local can't use, such as reserved or over-long usernames and passwords the driver can't encode, instead of failing minutes later. Values are no longer trimmed silently, and an empty port field uses the suggested port shown in the summary. [#949](https://github.com/microsoft/vscode-documentdb/issues/949)
 
 ## 0.10.2
 
