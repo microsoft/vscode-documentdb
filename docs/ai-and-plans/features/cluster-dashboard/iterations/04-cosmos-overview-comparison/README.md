@@ -297,12 +297,62 @@ Each is data the extension already reads somewhere and the dashboard drops or ig
 | T2  | **Azure vCore resource state and posture**      | `mongoClusters.list` in `VCoreBranchDataProvider` (Azure Resources view) and `mongoClusters.get` in `getClusterInformationFromAzure` (Discovery view, on connect) return the full resource. We keep `sku`, `diskSize`, `shardCount`, `enableHa`, `replica.role` and drop the rest | `clusterStatus` (Ready, Stopped, Updating…), `provisioningState`, exact HA mode, `replica.replicationState`, `backup.earliestRestoreTime`, `publicNetworkAccess`, private endpoint count, `authConfig.allowedModes` (Entra ID / native), preview features. These give real Azure state findings and an availability and resilience card | Widen `AzureClusterModel` and `ClusterDashboardAzureInfo`; no extra API calls                                                               |
 | T3  | **Atlas cluster facts**                         | `AtlasClusterModel`: `stateName`, `paused`, `clusterType`, provider, region, instance size, `mongoDBVersion`. `openClusterDashboard` only extracts Azure facts, so an Atlas-opened dashboard shows none                                                                           | A compute line ("M10 · AWS eu-west-1 · Replica set") and a "Paused / Updating" finding                                                                                                                                                                                                                                                  | An `extractAtlasInfo` next to `extractAzureInfo`                                                                                            |
 | T4  | **Kubernetes facts**                            | `KubernetesClusterModel`: context, namespace, service type and port, port-forward                                                                                                                                                                                                 | A "Kubernetes" details group; "connected through a port-forward" as a fact                                                                                                                                                                                                                                                              | As T3                                                                                                                                       |
-| T5  | **Server facts collected but not shown**        | `getClusterMetadata` already stores `hostInfo` (cores, memory, OS; time fields redacted), the wire-version range and `hello.internal.documentdb_versions`                                                                                                                         | A compute line for non-Azure clusters (local, Docker, self-hosted), where the server answers `hostInfo`                                                                                                                                                                                                                                 | Parse what is stored. Whether vCore answers `hostInfo` needs checking                                                                       |
+| T5  | **Server facts collected but not shown**        | `getClusterMetadata` already stores `hello.internal.documentdb_versions` (the DocumentDB engine version, e.g. `0.117.0`), the wire-version range and `hostInfo`                                                                                                                   | The engine version beside the API compatibility version we show today (`7.0.0`). `hostInfo` is empty on DocumentDB (see §4.5), so a compute line only works on servers that fill it in                                                                                                                                                  | Parse what is stored                                                                                                                        |
 | T6  | **Observations from figures already on screen** | `dbStats` and `collStats` in `getClusterHealth.ts`: data size, index size, `nindexes`, document counts; ARM `diskSize`                                                                                                                                                            | Index-to-data ratio per database and collection; empty databases and collections; collections with only `_id` and many documents; storage on disk vs provisioned disk (with its caveat)                                                                                                                                                 | Pure functions over loaded data, like `clusterHealthModel.ts`. Worded as observations with the figure and threshold, not as health verdicts |
 | T7  | **Unused and hidden indexes, per database**     | `ClustersClient.getIndexStats` (`$indexStats`) and `listIndexes` (`hidden`), with the Indexes tab's own definition: "non-default, zero recorded usage since the server started tracking"                                                                                          | An "Unused indexes" column at the collections level, linking to the Indexes tab's Unused filter                                                                                                                                                                                                                                         | One `$indexStats` per collection on step-in, under the existing collection cap ([0011]); counts reset on restart, so show the `since` date  |
 
 T1–T5 extend what the page already states and carry no interpretation risk. T6 and T7 are advice,
 so they belong in a separate Recommendations section (5.10), not in Cluster health.
+
+### 4.5 Scenario: a plain DocumentDB cluster, with only what we have today
+
+A cluster added by connection string in the Connections view: not from Azure, Atlas, Kubernetes or
+Quick Start. Here the page has no provider facts and no diagnostics provider applies, so it relies
+on the connection itself and on what the server answers.
+
+What the server answers was **checked against DocumentDB Local 0.117** (image
+`ghcr.io/documentdb/documentdb/documentdb-local:latest`, built 2026-09-10) on 2026-09-24:
+
+| Command                                                              | Answer                                                                                              | Used today?                                                            |
+| -------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------- |
+| `ping`                                                               | ✅ round-trip time                                                                                  | Header                                                                 |
+| `buildInfo`                                                          | ✅ `version: 7.0.0` only (no platform)                                                              | Header "Version"                                                       |
+| `hello`                                                              | ✅ `msg: isdbgrid`, wire 0–21, `readOnly`, `SCRAM-SHA-256`, `internal.documentdb_versions: 0.117.0` | Details and read-only finding; engine version stored, not shown        |
+| `hostInfo`                                                           | ⚠️ answers, but empty: `memSizeMB: 0`, OS name and type `""`                                        | No                                                                     |
+| `serverStatus`                                                       | ❌ not supported, so no uptime                                                                      | Uptime shows nothing                                                   |
+| `replSetGetStatus`, `listShards`, `top`, `getParameter`, `rolesInfo` | ❌ not supported                                                                                    | Diagnostics export only                                                |
+| `listDatabases`, `dbStats`                                           | ✅ sizes, counts                                                                                    | Tiles and database table                                               |
+| `listCollections`                                                    | ✅ type, `options` (capped, validator, time series), `info.readOnly`                                | Type only                                                              |
+| `collStats`                                                          | ✅ `size`, `storageSize`, `count`, `avgObjSize`, `nindexes`, **per-index sizes**, **`indexBuilds`** | Sizes, counts, index count                                             |
+| `$indexStats`                                                        | ✅ `accesses.ops` and `since` per index                                                             | Indexes tab only                                                       |
+| `$collStats` with `latencyStats`                                     | ❌ "not supported yet"                                                                              | No                                                                     |
+| `connectionStatus`                                                   | ✅ signed-in user and roles (e.g. `readWriteAnyDatabase`, `clusterAdmin`)                           | No; deliberately left out of the export because it names the principal |
+| `usersInfo`, `validate`, `currentOp`                                 | ✅                                                                                                  | No (`validate` is expensive; `currentOp` is out of scope, [0019])      |
+
+Plus what the connection itself carries: hosts, the display name, the auth method and user name
+(`ConnectionClusterModel.selectedAuthMethod`, `connectionUser`), and the emulator flag.
+
+**What the page could honestly show, without new plumbing:**
+
+- **Identity line.** `Connected · 3 ms | DocumentDB 0.117.0 (MongoDB API 7.0) | SCRAM-SHA-256 as <user> | Read-write`.
+  Today we show only `7.0.0`, which is the compatibility version, not the engine release.
+- **Findings, only when one exists:** a read-only connection; a disconnect with the driver's own
+  error text (no diagnostics provider applies here); an **index build in progress**
+  (`collStats.indexBuilds`) at the collections level. If `connectionStatus` is read (a separate
+  decision, since it names the principal), also "your roles do not allow writes" before a create
+  fails.
+- **Observations for a Recommendations section:** index-to-data ratio; unused indexes, with the
+  `since` date; large collections with only `_id`; empty databases; capped, time-series and
+  validator badges on collection rows.
+- **Coverage, stated plainly:** "This server does not report uptime, host resources, replication
+  status or sharding." That is a fact about the server, not a gap in the page, and it explains why
+  those rows are absent.
+- **No health verdict.** With this data the page can say what it found and what it could not check.
+  It cannot say the cluster is healthy.
+
+Not verified here: a MongoDB server (for example MongoDB Community) answers `serverStatus`,
+`hostInfo` and `replSetGetStatus`, so the same page would get uptime, host resources, connections
+and replica state there. Today the code reads only `uptime` from `serverStatus`.
 
 **Takeaway.** We already practise most of the "state what is missing" discipline: `N/A`, `≥`,
 list-level warnings. We just express it through tooltips and message bars. Theirs gathers it in one
