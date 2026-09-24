@@ -37,117 +37,60 @@ concurrency:
     cancel-in-progress: true
 
 jobs:
-    code-quality:
-        name: Code Quality
+    localization:
+        name: Localization
         runs-on: ubuntu-latest
-        permissions:
-            pull-requests: write
-        defaults:
-            run:
-                working-directory: '.'
         steps:
             - name: ✅ Checkout Repository
               uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
-            - name: 🛠 Setup Node.js Environment (with cache)
-              uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
-              with:
-                  node-version-file: .nvmrc
-                  cache: npm
-                  cache-dependency-path: '**/package-lock.json'
+            - name: 🛠 Setup Node.js and Dependencies
+              uses: ./.github/actions/setup
 
-            - name: 📦 Install Dependencies (npm ci)
-              run: npm ci --prefer-offline --no-audit --no-fund --progress=false --verbose
+            - name: 🌐 Check Localization Files
+              run: npm run l10n:check
+
+    lint:
+        name: Lint
+        runs-on: ubuntu-latest
+        steps:
+            - name: ✅ Checkout Repository
+              uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+            - name: 🛠 Setup Node.js and Dependencies
+              uses: ./.github/actions/setup
 
             - name: 🔨 Build Workspace Packages
               run: npm run build --workspaces --if-present
 
-            - name: 🌐 Check Localization Files
-              id: l10n
-              continue-on-error: true
-              run: npm run l10n:check
-
             - name: 🧹 Run ESLint
-              id: lint
-              continue-on-error: true
-              run: npm run lint
+              run: npm run lint -- --concurrency=4
+
+    formatting:
+        name: Formatting
+        runs-on: ubuntu-latest
+        steps:
+            - name: ✅ Checkout Repository
+              uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+            - name: 🛠 Setup Node.js and Dependencies
+              uses: ./.github/actions/setup
 
             - name: 🎨 Check Code Formatting (Prettier)
-              id: prettier
-              continue-on-error: true
               run: npm run prettier
 
-            - name: 💬 Post PR Code Quality Report
-              if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository
-              uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
-              with:
-                  github-token: ${{ secrets.GITHUB_TOKEN }}
-                  script: |
-                      const results = {
-                        l10n:     '${{ steps.l10n.outcome }}',
-                        lint:     '${{ steps.lint.outcome }}',
-                        prettier: '${{ steps.prettier.outcome }}',
-                      };
-                      const labels = {
-                        l10n:     'Localization (`l10n`)',
-                        lint:     'ESLint',
-                        prettier: 'Prettier formatting',
-                      };
-                      const hints = {
-                        l10n:     'Run `npm run l10n` and commit the updated files.',
-                        lint:     'Run `npm run lint` and fix the reported issues.',
-                        prettier: 'Run `npm run prettier-fix` to auto-format, then commit.',
-                      };
+    type-check:
+        name: Type Check
+        runs-on: ubuntu-latest
+        steps:
+            - name: ✅ Checkout Repository
+              uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
-                      const marker = '<!-- code-quality-report -->';
-                      const failed = Object.keys(results).filter(k => results[k] === 'failure');
-                      const rows = Object.keys(results).map(k => {
-                        const ok = results[k] === 'success';
-                        const status = ok ? '✅ Passed' : '❌ Failed';
-                        const hint = ok ? '' : hints[k];
-                        return `| ${labels[k]} | ${status} | ${hint} |`;
-                      }).join('\n');
+            - name: 🛠 Setup Node.js and Dependencies
+              uses: ./.github/actions/setup
 
-                      const title = failed.length === 0
-                        ? '## ✅ Code Quality Checks'
-                        : '## ⚠️ Code Quality Issues';
-
-                      const body = [
-                        marker,
-                        title,
-                        '',
-                        '| Check | Status | How to fix |',
-                        '|-------|--------|------------|',
-                        rows,
-                        '',
-                        '_This comment is updated automatically on each push._',
-                      ].join('\n');
-
-                      const { data: comments } = await github.rest.issues.listComments({
-                        owner: context.repo.owner,
-                        repo: context.repo.repo,
-                        issue_number: context.issue.number,
-                      });
-                      const existing = comments.find(c => c.body && c.body.includes(marker));
-                      if (existing) {
-                        await github.rest.issues.deleteComment({
-                          owner: context.repo.owner,
-                          repo: context.repo.repo,
-                          comment_id: existing.id,
-                        });
-                      }
-                      await github.rest.issues.createComment({
-                        owner: context.repo.owner,
-                        repo: context.repo.repo,
-                        issue_number: context.issue.number,
-                        body,
-                      });
-
-            - name: ❌ Fail if code quality checks failed
-              if: steps.l10n.outcome == 'failure' || steps.lint.outcome == 'failure' || steps.prettier.outcome == 'failure'
-              run: |
-                  echo "One or more code quality checks failed (l10n=${{ steps.l10n.outcome }}, lint=${{ steps.lint.outcome }}, prettier=${{ steps.prettier.outcome }})"
-                  exit 1
+            - name: 🏗 Type Check (tsc)
+              run: npm run build
 
     unit-tests:
         name: Unit Tests
@@ -156,15 +99,8 @@ jobs:
             - name: ✅ Checkout Repository
               uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
-            - name: 🛠 Setup Node.js Environment (with cache)
-              uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
-              with:
-                  node-version-file: .nvmrc
-                  cache: npm
-                  cache-dependency-path: '**/package-lock.json'
-
-            - name: 📦 Install Dependencies (npm ci)
-              run: npm ci --prefer-offline --no-audit --no-fund --progress=false
+            - name: 🛠 Setup Node.js and Dependencies
+              uses: ./.github/actions/setup
 
             # jest.config's 25% is one worker on a 4-core runner
             - name: 🧪 Run Unit Tests (Jest)
@@ -191,18 +127,8 @@ jobs:
             - name: ✅ Checkout Repository
               uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
-            - name: 🛠 Setup Node.js Environment (with cache)
-              uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
-              with:
-                  node-version-file: .nvmrc
-                  cache: npm
-                  cache-dependency-path: '**/package-lock.json'
-
-            - name: 📦 Install Dependencies (npm ci)
-              run: npm ci --prefer-offline --no-audit --no-fund --progress=false
-
-            - name: 🏗 Build Project
-              run: npm run build
+            - name: 🛠 Setup Node.js and Dependencies
+              uses: ./.github/actions/setup
 
             - name: 📦 Package Distributables (vsix/tgz)
               run: npm run package
@@ -224,9 +150,8 @@ jobs:
               with:
                   name: Artifacts-${{ github.run_id }}
                   path: |
-                      **/*.vsix
-                      **/*.tgz
-                      !**/node_modules
+                      *.vsix
+                      *.tgz
 
             - name: 💾 Cache build sizes (push only)
               if: github.event_name == 'push'
@@ -339,10 +264,78 @@ jobs:
         name: Build & Package
         runs-on: ubuntu-latest
         if: always()
-        needs: [code-quality, unit-tests, build-and-package]
+        needs: [localization, lint, formatting, type-check, unit-tests, build-and-package]
+        permissions:
+            pull-requests: write
         steps:
+            - name: 💬 Post PR Code Quality Report
+              if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository && !contains(needs.*.result, 'cancelled')
+              uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+              with:
+                  github-token: ${{ secrets.GITHUB_TOKEN }}
+                  script: |
+                      const results = {
+                        l10n:     '${{ needs.localization.result }}',
+                        lint:     '${{ needs.lint.result }}',
+                        prettier: '${{ needs.formatting.result }}',
+                      };
+                      const labels = {
+                        l10n:     'Localization (`l10n`)',
+                        lint:     'ESLint',
+                        prettier: 'Prettier formatting',
+                      };
+                      const hints = {
+                        l10n:     'Run `npm run l10n` and commit the updated files.',
+                        lint:     'Run `npm run lint` and fix the reported issues.',
+                        prettier: 'Run `npm run prettier-fix` to auto-format, then commit.',
+                      };
+
+                      const marker = '<!-- code-quality-report -->';
+                      const failed = Object.keys(results).filter(k => results[k] === 'failure');
+                      const rows = Object.keys(results).map(k => {
+                        const ok = results[k] === 'success';
+                        const status = ok ? '✅ Passed' : '❌ Failed';
+                        const hint = ok ? '' : hints[k];
+                        return `| ${labels[k]} | ${status} | ${hint} |`;
+                      }).join('\n');
+
+                      const title = failed.length === 0
+                        ? '## ✅ Code Quality Checks'
+                        : '## ⚠️ Code Quality Issues';
+
+                      const body = [
+                        marker,
+                        title,
+                        '',
+                        '| Check | Status | How to fix |',
+                        '|-------|--------|------------|',
+                        rows,
+                        '',
+                        '_This comment is updated automatically on each push._',
+                      ].join('\n');
+
+                      const { data: comments } = await github.rest.issues.listComments({
+                        owner: context.repo.owner,
+                        repo: context.repo.repo,
+                        issue_number: context.issue.number,
+                      });
+                      const existing = comments.find(c => c.body && c.body.includes(marker));
+                      if (existing) {
+                        await github.rest.issues.deleteComment({
+                          owner: context.repo.owner,
+                          repo: context.repo.repo,
+                          comment_id: existing.id,
+                        });
+                      }
+                      await github.rest.issues.createComment({
+                        owner: context.repo.owner,
+                        repo: context.repo.repo,
+                        issue_number: context.issue.number,
+                        body,
+                      });
+
             - name: Check job results
               if: contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled')
               run: |
-                  echo "code-quality=${{ needs.code-quality.result }} unit-tests=${{ needs.unit-tests.result }} build-and-package=${{ needs.build-and-package.result }}"
+                  echo '${{ toJSON(needs) }}'
                   exit 1
