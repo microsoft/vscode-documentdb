@@ -36,7 +36,6 @@ import {
 
 /** Called on every readiness/sample-data probe, so a test can observe the world mid-provision. */
 let onProbe: () => void | Promise<void> = () => undefined;
-let existingDatabases: string[] = ['sampledb'];
 
 // Real fs, with `rm` and `writeFile` spyable so a test can fail one env-file write or delete.
 jest.mock('fs/promises', () => {
@@ -54,9 +53,6 @@ jest.mock('mongodb', () => ({
         public db(): unknown {
             return {
                 command: () => Promise.resolve({ ok: 1 }),
-                admin: () => ({
-                    listDatabases: () => Promise.resolve({ databases: existingDatabases.map((name) => ({ name })) }),
-                }),
             };
         }
         public close(): Promise<void> {
@@ -113,6 +109,7 @@ interface RuntimeOptions {
     readonly containers?: Array<{ id: string; labels?: Record<string, string> }>;
     readonly createAndRunContainer?: jest.Mock;
     readonly listByLabel?: jest.Mock;
+    readonly volumeExists?: boolean;
 }
 
 function runtimeFor(options: RuntimeOptions = {}): IContainerRuntime {
@@ -139,6 +136,7 @@ function runtimeFor(options: RuntimeOptions = {}): IContainerRuntime {
         stopContainer: jest.fn().mockResolvedValue(undefined),
         removeContainer: jest.fn().mockResolvedValue(undefined),
         removeVolume: jest.fn().mockResolvedValue(undefined),
+        volumeExists: jest.fn().mockResolvedValue(options.volumeExists ?? false),
         execShellInContainer: jest.fn().mockResolvedValue(undefined),
         followLogs: jest.fn().mockResolvedValue(undefined),
     } as unknown as IContainerRuntime;
@@ -200,7 +198,6 @@ describe('QuickStartService — WP-3 provisioning durability and port model', ()
         ext.secretStorage = secretStorage;
         ext.context = fakeContext(globalState);
         onProbe = () => undefined;
-        existingDatabases = ['sampledb'];
     });
 
     afterEach(() => {
@@ -384,7 +381,6 @@ describe('QuickStartService — WP-3 provisioning durability and port model', ()
 
     describe('sample data initialization', () => {
         it('detects environment-based passwords for 0.116 while preserving older image tags', async () => {
-            existingDatabases = [];
             const runtime = runtimeFor();
             const service = new QuickStartServiceImpl(runtime);
 
@@ -404,7 +400,6 @@ describe('QuickStartService — WP-3 provisioning durability and port model', ()
         });
 
         it('finishes loading sample data before reporting the instance as running', async () => {
-            existingDatabases = [];
             const runtime = runtimeFor();
             const service = new QuickStartServiceImpl(runtime);
             let seeded = false;
@@ -430,7 +425,6 @@ describe('QuickStartService — WP-3 provisioning durability and port model', ()
         });
 
         it('does not load sample data when the user disables it', async () => {
-            existingDatabases = [];
             const runtime = runtimeFor();
             const service = new QuickStartServiceImpl(runtime);
 
@@ -440,18 +434,34 @@ describe('QuickStartService — WP-3 provisioning durability and port model', ()
             expect(service.getStatus().state).toBe(InstanceState.Running);
         });
 
-        it('does not overwrite an existing sample database', async () => {
-            const runtime = runtimeFor();
+        // #946 DATA-4: a reused volume already had its first setup; re-seeding would bring back
+        // sample documents the user deleted.
+        // Retained credentials alone (e.g. Start over after a timeout removed the volume) still seed.
+        it.each([
+            ['does not seed a reused data volume', true, 0],
+            ['seeds when the stored credentials outlived their volume', false, 1],
+        ])('%s', async (_label, volumeExists, seedCalls) => {
+            await upsertInstance({
+                alias: DEFAULT_ALIAS,
+                displayName: 'DocumentDB Local',
+                port: QUICK_START_PORT,
+                phase: 'ready',
+            });
+            await writeConnectionString(
+                DEFAULT_ALIAS,
+                `mongodb://old:old@localhost:${QUICK_START_PORT}/?tls=true&tlsAllowInvalidCertificates=true`,
+                { displayName: 'DocumentDB Local', port: QUICK_START_PORT },
+            );
+            const runtime = runtimeFor({ volumeExists });
             const service = new QuickStartServiceImpl(runtime);
 
             await collect(service.provision(new AbortController().signal));
 
-            expect(runtime.execShellInContainer).not.toHaveBeenCalled();
+            expect(runtime.execShellInContainer).toHaveBeenCalledTimes(seedCalls);
             expect(service.getStatus().state).toBe(InstanceState.Running);
         });
 
         it('keeps the database usable without retrying a failed sample load', async () => {
-            existingDatabases = [];
             const runtime = runtimeFor();
             jest.spyOn(runtime, 'execShellInContainer').mockRejectedValue(new Error('initialization failed'));
             const service = new QuickStartServiceImpl(runtime);

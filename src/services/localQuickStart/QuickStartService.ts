@@ -118,14 +118,12 @@ const PROBE_SERVER_SELECTION_TIMEOUT_MS = 3_000;
  * the gateway is ready, instead of baking `--init-data true` into the run args:
  * older images re-run the baked flag on every Stop/Start, hit a duplicate-key error,
  * and crash the container (`set -e`). Exec-once keeps restarts safe while loading
- * the same `sampledb` (users/products/orders/analytics). `-P` is the container's
+ * the image's sample data. `-P` is the container's
  * internal gateway port (always {@link QUICK_START_PORT} inside the container,
  * independent of the bound host port).
  */
 const SAMPLE_DATA_INIT_SCRIPT = '/home/documentdb/gateway/scripts/init_documentdb_data.sh';
 const SAMPLE_DATA_DIR = '/home/documentdb/gateway/sample-data';
-/** Database the native init script creates; used to make seeding idempotent (§8.4). */
-const SAMPLE_DATA_DB = 'sampledb';
 /**
  * After a `docker start`, a container that re-runs a failing entrypoint reports
  * "running" for a moment before exiting, so a single immediate inspect can be a
@@ -662,6 +660,8 @@ export class QuickStartServiceImpl {
         let earlySecretStored = false;
         let previousStoredConnectionString: string | undefined;
         let readinessEnvironment: DockerHostEnvironment | undefined;
+        // Whether this run mounts a volume that already existed; otherwise its `docker run` creates it.
+        let reusesVolume = reusing;
         let activeDockerStage: Extract<ProvisionStage, 'pulling' | 'creating'> | undefined;
         let provisioningDockerFailureKind: string | undefined;
         // The terminal StageEvent (timeout OR hard error) is buffered and yielded AFTER `finally`
@@ -694,20 +694,16 @@ export class QuickStartServiceImpl {
             readinessEnvironment = readiness.environment;
 
             // Remove a pre-existing managed container so the run starts clean (it is labelled as
-            // ours, D9). When NOT reusing (no recoverable credentials) also drop any stale data
-            // volume, so the new credentials initialize a clean cluster. When reusing, the volume is
-            // intentionally KEPT so existing data survives the recreate.
+            // ours, D9). The data volume survives this; it is only dropped later, right before
+            // `docker run`, and only when not reusing.
             const existing = await this.findManagedContainer(alias);
             const hasReadyRecord = (await getInstance(alias))?.phase === 'ready';
             // RR4 / §5.2 volume-wipe gate: NEVER silently destroy an existing instance's data. A
-            // credential-unavailable instance (a managed container and/or a durable `ready` record,
-            // but no readable secret) must not be wiped by a plain Set-up/recreate click. The wipe
-            // below is reachable only for a truly-fresh alias (no managed container AND no `ready`
-            // record, where it is a safe no-op) or when the user explicitly chose "Start fresh" in
-            // the Configure step. A dead failed-attempt orphan has NO managed container (provision's
-            // `finally` removed it) and no `ready` record, so retrying it still works.
+            // managed container, a durable `ready` record or the data volume itself (its container
+            // pruned, or created from another VS Code profile) all mean data this profile can't open
+            // may exist. Only an explicit "Start fresh" from the Configure step may wipe it (#946).
             if (!reusing && !startFresh) {
-                if (existing || hasReadyRecord) {
+                if (existing || hasReadyRecord || (await this.runtime.volumeExists(volumeName(alias)))) {
                     const credentialsUnavailable: QuickStartMessage = { key: 'credentialsUnavailable' };
                     this.setStatus(alias, InstanceState.CredentialsMissing, undefined, credentialsUnavailable);
                     yield stageEvent('checking', 'error', credentialsUnavailable);
@@ -719,11 +715,6 @@ export class QuickStartServiceImpl {
                 await this.runtime
                     .removeContainer(existing.id)
                     .catch(() => meterQuickStartSilentCatch('provision_removeExistingContainer'));
-            }
-            if (!reusing) {
-                await this.runtime
-                    .removeVolume(volumeName(alias))
-                    .catch(() => meterQuickStartSilentCatch('provision_removeStaleVolume'));
             }
 
             // The host port is ALWAYS explicit (review L3, "no magic after execute"): the Configure
@@ -763,13 +754,42 @@ export class QuickStartServiceImpl {
             if (leaseHeld) {
                 await this.renewProvisioningLease(alias, operationId, chosenPort);
             }
-            createAttempted = true;
             // Write credentials to a temp env-file (deleted right after `docker run`) so they never
             // appear on the docker CLI / host process list (design §8.2). The image
             // reads USERNAME/PASSWORD from the environment.
             const createdEnvFilePath = await this.writeEnvFile(credentials.username, credentials.password);
             envFilePath = createdEnvFilePath;
             activeDockerStage = 'creating';
+            const volumeOnDisk = await this.runtime.volumeExists(volumeName(alias));
+            // The gate saw no volume, so one here appeared during the pull and isn't ours to remove.
+            if (!reusing && !startFresh && volumeOnDisk) {
+                throw new Error(
+                    l10n.t(
+                        'We found an existing data volume after the image downloaded. Setup stopped to protect its data. Go back to Configure and try again.',
+                    ),
+                );
+            }
+            // Retained credentials don't prove the volume survived (e.g. Start over after a timeout
+            // removed it), and only data that is really kept should skip the sample seed.
+            reusesVolume = reusing && volumeOnDisk;
+            this.throwIfAborted(signal);
+            // Drop the old data volume only now that the port is checked and the image is local, so a
+            // failed check, pull or Cancel leaves it intact (#946). Fresh credentials need a clean
+            // cluster; a reuse keeps the volume. A failed removal (e.g. another container mounts it) is
+            // fatal: carrying on would start the new credentials against the old cluster.
+            if (!reusing && volumeOnDisk) {
+                try {
+                    await this.runtime.removeVolume(volumeName(alias));
+                } catch (error) {
+                    throw new Error(
+                        l10n.t(
+                            'We could not remove the existing data volume. Check whether another container is using it, then try again. Docker reported: {0}',
+                            errMessage(error),
+                        ),
+                    );
+                }
+            }
+            createAttempted = true;
             containerId = await this.runProvisionStage('creating', journeyCorrelationId, async () => {
                 let createdContainerId: string | undefined;
                 try {
@@ -847,7 +867,7 @@ export class QuickStartServiceImpl {
                 imageRef,
                 sampleDataRequested,
                 journeyCorrelationId,
-                reusing,
+                reusing: reusesVolume,
             };
             this.stateFor(alias).pendingReadiness = pending;
             // Persist the credentials BEFORE the readiness wait (H3). The wait alone can run for
@@ -924,8 +944,11 @@ export class QuickStartServiceImpl {
             // does NOT signal cancellation — only cancel() stops `docker logs -f`.
             cts.cancel();
             if (!success && !readinessTimedOut) {
+                // Only a run that got a container can have created the volume; otherwise it may be someone else's.
+                let ownsContainer = false;
                 // Cleanup (D12): when a container exists, stop+remove it.
                 if (containerCreated && containerId) {
+                    ownsContainer = true;
                     channel.appendLine(`Cleaning up container ${containerId}…`);
                     await this.runtime
                         .stopContainer(containerId)
@@ -949,12 +972,20 @@ export class QuickStartServiceImpl {
                             meterQuickStartSilentCatch('provision_listOrphanedContainers');
                             return [];
                         });
+                    ownsContainer = orphans.length > 0;
                     for (const orphan of orphans) {
                         channel.appendLine(`Removing orphaned container ${orphan.id}…`);
                         await this.runtime
                             .removeContainer(orphan.id)
                             .catch(() => meterQuickStartSilentCatch('provision_removeOrphanedContainer'));
                     }
+                }
+                // A volume this run's `docker run` created is ours to drop, so a retry doesn't
+                // hit the volume gate above. Docker refuses if another container still mounts it.
+                if (ownsContainer && !reusesVolume) {
+                    await this.runtime
+                        .removeVolume(volumeName(alias))
+                        .catch(() => meterQuickStartSilentCatch('provision_cleanupRemoveVolume'));
                 }
                 // Restore the credential state this attempt overwrote (H3): a discarded attempt
                 // must not leave its own secret behind, nor clobber the previous instance's.
@@ -1044,9 +1075,9 @@ export class QuickStartServiceImpl {
         signal: AbortSignal,
     ): Promise<void> {
         // Seed the image's built-in sample data ONCE — only when requested (Advanced "Load
-        // sample data", default on) and not already present (idempotent, so recreating onto an
-        // existing volume doesn't re-run the init and hit duplicate keys). Best-effort.
-        if (pending.sampleDataRequested && !(await this.sampleDataExists(pending.connectionString))) {
+        // sample data", default on) and only into a fresh volume. A reused volume already had its
+        // first setup; seeding it again would restore documents the user deleted (#946). Best-effort.
+        if (pending.sampleDataRequested && !pending.reusing) {
             await this.seedSampleData(pending.containerId, secretVariants(pending.password), token);
         }
         this.throwIfAborted(signal);
@@ -1288,26 +1319,6 @@ export class QuickStartServiceImpl {
             await this.runtime.execShellInContainer(containerId, script, secrets, token);
         } catch (error) {
             getQuickStartOutputChannel().appendLine(`Sample data load skipped: ${errMessage(error)}`);
-        }
-    }
-
-    /**
-     * Whether the sample database is already present, so seeding can be skipped
-     * (idempotent — a recreate onto an existing volume must not re-run the init).
-     */
-    private async sampleDataExists(connectionString: string): Promise<boolean> {
-        const client = new MongoClient(connectionString, {
-            serverSelectionTimeoutMS: PROBE_SERVER_SELECTION_TIMEOUT_MS,
-            tlsAllowInvalidCertificates: true,
-        });
-        try {
-            await client.connect();
-            const dbs = await client.db().admin().listDatabases();
-            return dbs.databases.some((db) => db.name === SAMPLE_DATA_DB);
-        } catch {
-            return false;
-        } finally {
-            await client.close().catch(() => undefined);
         }
     }
 
@@ -1824,8 +1835,8 @@ export class QuickStartServiceImpl {
                 // records (the clean-slate Delete of a Missing / already-removed instance).
                 // Explicit Delete is a full clean slate: drop the data volume too (alias-derived ⇒ ours by
                 // construction). The container — the only resurrection vector — is now gone, so a volume
-                // removal failure cannot bring the instance back; it only orphans data that the next
-                // same-alias provision reclaims. Surface it as a non-blocking warning (not a silent
+                // removal failure cannot bring the instance back; the next setup finds the leftover volume and
+                // asks the user to start fresh. Surface it as a non-blocking warning (not a silent
                 // swallow) and still complete the delete rather than stranding a container-less instance.
                 const volumeRemoved = await this.runtime
                     .removeVolume(volumeName(alias))

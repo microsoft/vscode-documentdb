@@ -120,6 +120,8 @@ export interface IContainerRuntime {
     stopContainer(id: string): Promise<void>;
     removeContainer(id: string, force?: boolean): Promise<void>;
     removeVolume(name: string, force?: boolean): Promise<void>;
+    /** Rejects when Docker can't answer, so a failure is never mistaken for "absent". */
+    volumeExists(name: string): Promise<boolean>;
     execShellInContainer(
         id: string,
         script: string,
@@ -151,12 +153,17 @@ class ContainerRuntimeImpl implements IContainerRuntime {
         },
     });
 
-    private makeRunner(secrets: ReadonlyArray<string>, token?: vscode.CancellationToken, echoStdout = true) {
+    private makeRunner(
+        secrets: ReadonlyArray<string>,
+        token?: vscode.CancellationToken,
+        echoStdout = true,
+        strict = false,
+    ) {
         const channel = getQuickStartOutputChannel();
         const factory = new ShellStreamCommandRunnerFactory({
-            // Non-strict: a non-zero exit still rejects, but harmless stderr warnings
-            // (e.g. `docker info`) do not. A shellProvider is required for arg quoting.
-            strict: false,
+            // Non-strict parsing silently drops output rows that don't match the expected schema;
+            // a non-zero exit still rejects. A shellProvider is required for arg quoting.
+            strict,
             shellProvider: SHELL_PROVIDER,
             onCommand: (command: string) => channel.appendLine('$ ' + maskSecrets(command, secrets)),
             stdOutPipe: echoStdout ? new MaskedChannelWritable(channel, secrets) : undefined,
@@ -264,6 +271,14 @@ class ContainerRuntimeImpl implements IContainerRuntime {
     public async removeVolume(name: string, force = true): Promise<void> {
         const runner = this.makeRunner([]);
         await runner(this.client.removeVolumes({ volumes: [name], force }));
+    }
+
+    public async volumeExists(name: string): Promise<boolean> {
+        // Strict: a dropped row (e.g. Podman's `Labels` map) would read as "absent" and bypass the wipe gate.
+        // No stdout echo: the listing names every volume on the host.
+        const runner = this.makeRunner([], undefined, false, true);
+        const volumes = await runner(this.client.listVolumes({}));
+        return volumes.some((volume) => volume.name === name);
     }
 
     /**
