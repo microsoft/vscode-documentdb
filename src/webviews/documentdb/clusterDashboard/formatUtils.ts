@@ -21,8 +21,8 @@ export interface ClusterVersions {
 }
 
 /**
- * The known two-entry shape is [installed extension version, binary version], not a list
- * sorted by release. Unrecognised multi-entry shapes are ambiguous and must not be guessed.
+ * Preserve all reported component versions in server order rather than guessing which one
+ * represents the engine release. Malformed entries make the version information unusable.
  */
 export function parseDocumentDbEngineVersion(raw: string | undefined): string | undefined {
     const versions =
@@ -31,13 +31,10 @@ export function parseDocumentDbEngineVersion(raw: string | undefined): string | 
             .map((entry) => entry.trim())
             .filter((entry) => entry !== '') ?? [];
     const extensionVersion = /^\d+\.\d+-\d+$/;
-    if (versions.length === 1 && (valid(versions[0]) !== null || extensionVersion.test(versions[0]))) {
-        return versions[0];
+    if (versions.length === 0 || versions.some((version) => valid(version) === null && !extensionVersion.test(version))) {
+        return undefined;
     }
-    if (versions.length === 2 && extensionVersion.test(versions[0]) && valid(versions[1]) !== null) {
-        return versions[1];
-    }
-    return undefined;
+    return versions.join(' · ');
 }
 
 export function getClusterVersions(metadata: Record<string, string | undefined>): ClusterVersions {

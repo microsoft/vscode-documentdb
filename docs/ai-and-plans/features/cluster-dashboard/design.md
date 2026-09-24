@@ -30,8 +30,8 @@ See [the current architecture](./README.md#architecture-intent--code-is-authorit
 The layout lab and alternate-header toggle are not part of the feature.
 
 **Version display (2026-09-24):** The existing Version fact renders independently available
-engine and API versions as separate JSX tags: `DocumentDB <engine>` and `API <api>`, without
-an extra Version label, a dot separator or a combined string. The shared `|` separator appears
+engine and API versions as separate JSX tags: `DocumentDB <versions>` and `API <api>`, without
+an extra Version label or a combined engine/API string. The shared `|` separator appears
 between the tags only when both are present. Each tag has an explanatory
 tooltip available on hover and keyboard focus; the Server disclosure lists them separately.
 Missing, malformed or ambiguous values are omitted, not shown as unknown and not inferred
@@ -42,12 +42,19 @@ The metadata is already delivered to the webview and remains cached per client; 
 does not introduce new commands or refresh semantics.
 
 The [upstream gateway query](https://github.com/documentdb/documentdb/blob/648db982aed5a9c307fec434b113bc5cadf27a6e/pg_documentdb_gw/documentdb_gateway_core/src/postgres/query_catalog.rs#L635)
-reports the installed extension version followed by the binary version. Recognize the observed
-`major.minor-build;major.minor.patch` pair and display its binary version, including valid
-prerelease/build suffixes. A standalone semantic version or `major.minor-build` is also accepted
-as reported. Ignore empty segments and surrounding whitespace, but reject other multi-entry
-shapes rather than guessing by sort order or choosing any dotted entry. Validate the separate
-build-info version as a semantic version. No version comparison or upgrade warning is implied.
+reports the installed extension version followed by the binary version. Azure diagnostics
+provided by the operator also contain three entries: `1.117-3`, `2.0.0`, `12.1-1`.
+The operator chose to retain all reported versions, joined with ` · `, instead of choosing
+one entry or inferring the identity of each component. This supersedes the initial proposal
+to select a dotted version and the first implementation's single-version/two-entry restriction.
+Both the DocumentDB tag and Server details show `1.117-3 · 2.0.0 · 12.1-1` for that response;
+the API tag independently shows `7.0.0` from build-info. The tooltip carries the full list.
+
+Accept semantic versions (including valid prerelease/build suffixes) and `major.minor-build`
+entries. Ignore empty segments and surrounding whitespace, preserving order and without
+sorting or deduplicating. If any remaining entry is malformed, omit the DocumentDB version
+information rather than displaying a misleading partial list. Validate the separate build-info
+version as a semantic version. No version comparison or upgrade warning is implied.
 
 **Settled action language (2026-09-10):** Disclosure labels name their content, while commands
 that open another editor use action verbs. Navigation icons describe the destination or movement,

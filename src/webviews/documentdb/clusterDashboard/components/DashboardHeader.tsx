@@ -126,7 +126,7 @@ export const DashboardHeader = ({
             versionParts.push({
                 label: l10n.t('DocumentDB'),
                 value: versions.engine,
-                tooltip: l10n.t('DocumentDB engine version reported by the server: {0}', versions.engine),
+                tooltip: l10n.t('DocumentDB version information reported by the server: {0}', versions.engine),
             });
         }
         if (versions.api !== undefined) {

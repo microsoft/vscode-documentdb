@@ -7,12 +7,18 @@ import { getClusterVersions, parseDocumentDbEngineVersion } from './formatUtils'
 
 describe('parseDocumentDbEngineVersion', () => {
     it.each([
-        ['0.117-0;0.117.0', '0.117.0'],
+        ['0.117-0;0.117.0', '0.117-0 · 0.117.0'],
         ['0.117.0', '0.117.0'],
         ['0.118-1', '0.118-1'],
-        [' ; 0.117-0 ; 0.117.0 ; ', '0.117.0'],
-        ['0.117-0;0.118.0', '0.118.0'],
-        ['0.117-0;0.118.0-rc.1', '0.118.0-rc.1'],
+        [' ; 0.117-0 ; 0.117.0 ; ', '0.117-0 · 0.117.0'],
+        ['0.117-0;0.118.0', '0.117-0 · 0.118.0'],
+        ['0.117-0;0.118.0-rc.1', '0.117-0 · 0.118.0-rc.1'],
+        ['1.117-3;2.0.0;12.1-1', '1.117-3 · 2.0.0 · 12.1-1'],
+        [' ; 1.117-3 ; 2.0.0 ; 12.1-1 ; ', '1.117-3 · 2.0.0 · 12.1-1'],
+        ['0.117.0;0.118.0', '0.117.0 · 0.118.0'],
+        ['0.117-0;0.118-1', '0.117-0 · 0.118-1'],
+        ['0.117-0;0.117.0;12.1-1', '0.117-0 · 0.117.0 · 12.1-1'],
+        ['2.0.0;1.117-3;12.1-1;4.0.0', '2.0.0 · 1.117-3 · 12.1-1 · 4.0.0'],
         [undefined, undefined],
         ['', undefined],
         [' ; ; ', undefined],
@@ -20,9 +26,7 @@ describe('parseDocumentDbEngineVersion', () => {
         ['[object Object]', undefined],
         ['0.117-0;unknown', undefined],
         ['unknown;0.117.0', undefined],
-        ['0.117.0;0.118.0', undefined],
-        ['0.117-0;0.118-1', undefined],
-        ['0.117-0;0.117.0;12.1-1', undefined],
+        ['1.117-3;2.0.0;unknown', undefined],
     ])('parses %p as %p', (raw, expected) => {
         expect(parseDocumentDbEngineVersion(raw)).toBe(expected);
     });
@@ -35,7 +39,7 @@ describe('getClusterVersions', () => {
                 topology_hello_internal_documentdb_versions: '0.117-0;0.117.0',
                 serverInfo_version: ' 7.0.0 ',
             }),
-        ).toEqual({ engine: '0.117.0', api: '7.0.0', server: undefined });
+        ).toEqual({ engine: '0.117-0 · 0.117.0', api: '7.0.0', server: undefined });
     });
 
     it.each([undefined, '', ' ', 'unknown', '7.0.0;8.0.0', '[object Object]'])(
@@ -53,7 +57,7 @@ describe('getClusterVersions', () => {
     it('retains the API when the reported engine version is ambiguous', () => {
         expect(
             getClusterVersions({
-                topology_hello_internal_documentdb_versions: '0.117.0;0.118.0',
+                topology_hello_internal_documentdb_versions: '0.117.0;unknown',
                 serverInfo_version: '7.0.0',
             }),
         ).toEqual({ engine: undefined, api: '7.0.0', server: undefined });

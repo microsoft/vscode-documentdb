@@ -57,9 +57,10 @@ None yet. A user-manual page is due before this ships.
   with no extra Version label and the shared `|` separator only when both are present.
   Tooltips explain each version. There are separate
   Engine version and API version rows in Server details. Either part is omitted when unclear;
-  neither gets an unknown placeholder. The known extension/binary pair uses the binary version,
-  while a single recognizable version is displayed as reported. Unrecognized multi-entry shapes
-  are omitted rather than choosing an arbitrary entry. Without DocumentDB metadata, the existing
+  neither gets an unknown placeholder. All recognizable DocumentDB versions are retained in
+  server order and joined with ` · ` within the DocumentDB tag and its details row, rather
+  than selecting a presumed engine release from component versions. Malformed entries cause
+  the DocumentDB version information to be omitted. Without DocumentDB metadata, the existing
   server-version wording is retained. The header still has at most four fact groups in versions,
   Region, Compute, Uptime order. Version tooltips are available on hover and keyboard focus.
 - **The cluster toolbar groups connection tools separately from page utilities.** Open Shell and

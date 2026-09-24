@@ -39,11 +39,29 @@ const SCENARIOS: VersionScenario[] = [
             topology_hello_internal_documentdb_versions: '0.117-0;0.117.0',
             serverInfo_version: '7.0.0',
         },
-        headerVersions: ['DocumentDB 0.117.0', 'API 7.0.0'],
+        headerVersions: ['DocumentDB 0.117-0 · 0.117.0', 'API 7.0.0'],
         rows: [
-            { label: 'Engine version', value: '0.117.0' },
+            { label: 'Engine version', value: '0.117-0 · 0.117.0' },
             { label: 'API version', value: '7.0.0' },
         ],
+    },
+    {
+        name: 'all three reported Azure DocumentDB versions and the separate API version',
+        metadata: {
+            topology_hello_internal_documentdb_versions: '1.117-3;2.0.0;12.1-1',
+            serverInfo_version: '7.0.0',
+        },
+        headerVersions: ['DocumentDB 1.117-3 · 2.0.0 · 12.1-1', 'API 7.0.0'],
+        rows: [
+            { label: 'Engine version', value: '1.117-3 · 2.0.0 · 12.1-1' },
+            { label: 'API version', value: '7.0.0' },
+        ],
+    },
+    {
+        name: 'all reported DocumentDB versions when the API is missing',
+        metadata: { topology_hello_internal_documentdb_versions: '1.117-3;2.0.0;12.1-1' },
+        headerVersions: ['DocumentDB 1.117-3 · 2.0.0 · 12.1-1'],
+        rows: [{ label: 'Engine version', value: '1.117-3 · 2.0.0 · 12.1-1' }],
     },
     {
         name: 'engine only when buildInfo fails',
@@ -63,7 +81,7 @@ const SCENARIOS: VersionScenario[] = [
     {
         name: 'API only when the engine version is ambiguous',
         metadata: {
-            topology_hello_internal_documentdb_versions: '0.117.0;0.118.0',
+            topology_hello_internal_documentdb_versions: '0.117.0;unknown',
             serverInfo_version: '7.0.0',
         },
         headerVersions: ['API 7.0.0'],
