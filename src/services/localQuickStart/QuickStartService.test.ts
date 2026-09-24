@@ -1740,6 +1740,31 @@ describe('QuickStartService — WI-2e-1 provision RR4 volume-wipe gate', () => {
 
         expect(removeVolume).not.toHaveBeenCalled();
         expect(runtime.createAndRunContainer).not.toHaveBeenCalled();
+        expect(service.getStatus()).toMatchObject({
+            error: {
+                key: 'unexpectedFailure',
+                detail: 'We found an existing data volume after the image downloaded. Setup stopped to protect its data. Go back to Configure and try again.',
+            },
+        });
+    });
+
+    it('explains a failed volume removal without suggesting that another container be deleted', async () => {
+        ext.secretStorage = fakeSecretStorage({});
+        ext.context = fakeContext(fakeMemento());
+        const removeVolume = jest.fn().mockRejectedValue(new Error('volume is in use'));
+        const runtime = provisionRuntime({ containers: [], volumeExists: true, removeVolume });
+        const service = new QuickStartServiceImpl(runtime);
+
+        await drain(service.provision(new AbortController().signal, { startFresh: true }));
+
+        expect(removeVolume).toHaveBeenCalledTimes(1);
+        expect(runtime.createAndRunContainer).not.toHaveBeenCalled();
+        expect(service.getStatus()).toMatchObject({
+            error: {
+                key: 'unexpectedFailure',
+                detail: 'We could not remove the existing data volume. Check whether another container is using it, then try again. Docker reported: volume is in use',
+            },
+        });
     });
 
     // #946 DATA-1: a volume left behind by a pruned container or another VS Code profile.

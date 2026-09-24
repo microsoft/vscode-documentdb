@@ -763,7 +763,11 @@ export class QuickStartServiceImpl {
             const volumeOnDisk = await this.runtime.volumeExists(volumeName(alias));
             // The gate saw no volume, so one here appeared during the pull and isn't ours to remove.
             if (!reusing && !startFresh && volumeOnDisk) {
-                throw new Error('The data volume was created by something else while the image downloaded.');
+                throw new Error(
+                    l10n.t(
+                        'We found an existing data volume after the image downloaded. Setup stopped to protect its data. Go back to Configure and try again.',
+                    ),
+                );
             }
             // Retained credentials don't prove the volume survived (e.g. Start over after a timeout
             // removed it), and only data that is really kept should skip the sample seed.
@@ -778,7 +782,10 @@ export class QuickStartServiceImpl {
                     await this.runtime.removeVolume(volumeName(alias));
                 } catch (error) {
                     throw new Error(
-                        `Could not remove the existing data volume. If another container uses it, remove that container and try again. (${errMessage(error)})`,
+                        l10n.t(
+                            'We could not remove the existing data volume. Check whether another container is using it, then try again. Docker reported: {0}',
+                            errMessage(error),
+                        ),
                     );
                 }
             }

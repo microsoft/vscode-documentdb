@@ -550,8 +550,10 @@ authenticated wire-protocol readiness probe succeeds, and waits for it
 before marking setup complete.
 
 - **Seed sample data** is enabled by default and can be disabled in
-  Configure. Seeding is skipped when `sampledb` already exists, so a
-  recreate does not overwrite existing data.
+  Configure. Seeding runs only for a newly created data volume. A recreate
+  that reuses a volume skips seeding, even if its sample database or documents
+  were deleted. This preserves user changes regardless of the sample database
+  name used by the image.
 - The script connects to the container's internal port `10260`, independent
   of the host port selected in Configure.
 - Image `0.116.0` removed the script's `-p` / `--password` argument.

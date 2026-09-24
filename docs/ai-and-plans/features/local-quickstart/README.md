@@ -60,6 +60,9 @@ regular new-connection wizard instead ([0001](./decisions.md#0001--single-manage
   is a Docker CLI that can reach a Linux-container daemon from the extension host.
 - **Collision safety is non-negotiable.** A pre-existing container holding a planned name or port is
   never recreated over. Ours gets re-adopted; anything else is rejected with an inline error.
+- **Existing data is preserved.** A volume without recoverable credentials requires an explicit
+  Start fresh. Its removal waits until the port check and image download succeed. Sample data is
+  loaded only into a new volume, so recreating an instance does not restore documents the user deleted.
 
 ## Timeline
 
