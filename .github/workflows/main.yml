@@ -45,69 +45,69 @@ jobs:
         name: Localization
         runs-on: ubuntu-latest
         steps:
-            - name: ✅ Checkout Repository
+            - name: Checkout Repository
               uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
-            - name: 🛠 Setup Node.js and Dependencies
+            - name: Setup Node.js and Dependencies
               uses: ./.github/actions/setup
 
-            - name: 🌐 Check Localization Files
+            - name: Check Localization Files
               run: npm run l10n:check
 
     lint:
         name: Lint
         runs-on: ubuntu-latest
         steps:
-            - name: ✅ Checkout Repository
+            - name: Checkout Repository
               uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
-            - name: 🛠 Setup Node.js and Dependencies
+            - name: Setup Node.js and Dependencies
               uses: ./.github/actions/setup
 
-            - name: 🔨 Build Workspace Packages
+            - name: Build Workspace Packages
               run: npm run build --workspaces --if-present
 
-            - name: 🧹 Run ESLint
+            - name: Run ESLint
               run: npm run lint -- --concurrency=4
 
     formatting:
         name: Formatting
         runs-on: ubuntu-latest
         steps:
-            - name: ✅ Checkout Repository
+            - name: Checkout Repository
               uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
-            - name: 🛠 Setup Node.js and Dependencies
+            - name: Setup Node.js and Dependencies
               uses: ./.github/actions/setup
 
-            - name: 🎨 Check Code Formatting (Prettier)
+            - name: Check Code Formatting (Prettier)
               run: npm run prettier
 
     type-check:
         name: Type Check
         runs-on: ubuntu-latest
         steps:
-            - name: ✅ Checkout Repository
+            - name: Checkout Repository
               uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
-            - name: 🛠 Setup Node.js and Dependencies
+            - name: Setup Node.js and Dependencies
               uses: ./.github/actions/setup
 
-            - name: 🏗 Type Check (tsc)
+            - name: Type Check (tsc)
               run: npm run build
 
     unit-tests:
         name: Unit Tests
         runs-on: ubuntu-latest
         steps:
-            - name: ✅ Checkout Repository
+            - name: Checkout Repository
               uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
-            - name: 🛠 Setup Node.js and Dependencies
+            - name: Setup Node.js and Dependencies
               uses: ./.github/actions/setup
 
             # jest.config's 25% is one worker on a 4-core runner
-            - name: 🧪 Run Unit Tests (Jest)
+            - name: Run Unit Tests (Jest)
               run: npm run jesttest -- --maxWorkers=4
 
     # Run on push to `main`/`release/**` (for cache seeding) and for PRs to main/release/**
@@ -129,16 +129,16 @@ jobs:
             run:
                 working-directory: '.'
         steps:
-            - name: ✅ Checkout Repository
+            - name: Checkout Repository
               uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
-            - name: 🛠 Setup Node.js and Dependencies
+            - name: Setup Node.js and Dependencies
               uses: ./.github/actions/setup
 
-            - name: 📦 Package Distributables (vsix/tgz)
+            - name: Package Distributables (vsix/tgz)
               run: npm run package
 
-            - name: 📐 Collect build sizes
+            - name: Collect build sizes
               id: sizes
               run: |
                   VSIX_FILE=$(find . -maxdepth 1 -name '*.vsix' | head -1)
@@ -150,7 +150,7 @@ jobs:
                   echo "{\"vsixSize\": $VSIX_SIZE, \"webviewSize\": $WEBVIEW_SIZE}" > build-sizes.json
                   echo "VSIX: $VSIX_FILE ($VSIX_SIZE bytes), Webview: $WEBVIEW_SIZE bytes"
 
-            - name: 📤 Upload Artifacts
+            - name: Upload Artifacts
               uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
               with:
                   name: Artifacts-${{ github.run_id }}
@@ -158,14 +158,14 @@ jobs:
                       *.vsix
                       *.tgz
 
-            - name: 💾 Cache build sizes (push only)
+            - name: Cache build sizes (push only)
               if: github.event_name == 'push'
               uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
               with:
                   path: build-sizes.json
                   key: build-sizes-${{ github.ref_name }}-${{ github.sha }}
 
-            - name: 📥 Restore base branch sizes (PR only)
+            - name: Restore base branch sizes (PR only)
               if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository
               id: base-cache
               uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
@@ -175,14 +175,14 @@ jobs:
                   restore-keys: |
                       build-sizes-${{ github.event.pull_request.base.ref }}-
 
-            - name: 📐 Prepare base sizes for comparison
+            - name: Prepare base sizes for comparison
               if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository && steps.base-cache.outputs.cache-matched-key
               run: |
                   # Cache restore overwrites build-sizes.json with base branch data.
                   # Rename it so the PR comment step can read base vs PR separately.
                   mv build-sizes.json base-sizes.json
 
-            - name: 💬 Post PR Build Size Report
+            - name: Post PR Build Size Report
               if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository
               uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
               with:
@@ -273,7 +273,7 @@ jobs:
         permissions:
             pull-requests: write
         steps:
-            - name: 💬 Post PR Code Quality Report
+            - name: Post PR Code Quality Report
               if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository && !contains(needs.*.result, 'cancelled')
               uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
               with:
