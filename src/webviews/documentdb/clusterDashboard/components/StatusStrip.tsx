@@ -3,14 +3,19 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { MetricGrid } from '@microsoft/vscode-ext-webview-fluentui/components';
+import { Skeleton, SkeletonItem } from '@fluentui/react-components';
+import {
+    DatabaseMultipleRegular,
+    DocumentMultipleRegular,
+    HardDriveRegular,
+    TextBulletListSquareRegular,
+} from '@fluentui/react-icons';
 import * as l10n from '@vscode/l10n';
-import { type JSX } from 'react';
+import { useId, type JSX } from 'react';
 
 import { type ClusterStorageStats } from '../../../../documentdb/utils/getClusterHealth';
-// TODO(dashboard): promote metricsRow to src/webviews/components/ so views don't reach into each other.
-import { CountMetric, GenericMetric } from '../../collectionView/queryInsightsTab/components/metricsRow';
-import { formatBytes } from '../formatUtils';
+import { formatCount } from '../../collectionView/queryInsightsTab/components/metricsRow';
+import { formatApproximateCount, formatBytes, formatExactCount } from '../formatUtils';
 
 export interface StatusStripProps {
     /** `null` while the collectors have not answered yet. */
@@ -29,6 +34,7 @@ export interface StatusStripProps {
  * flattened into a string here.
  */
 interface Tile {
+    icon: 'storage' | 'documents' | 'namespaces' | 'indexes';
     label: string;
     value: string | number | null | undefined;
     tooltip: string;
@@ -107,6 +113,7 @@ function clusterTiles(stats: ClusterStorageStats | null): Tile[] {
 
     return [
         {
+            icon: 'storage',
             label: l10n.t('Storage Used'),
             value: read((loaded) =>
                 asBound(loaded.totalSizeBytes === null ? null : formatBytes(loaded.totalSizeBytes)),
@@ -116,6 +123,7 @@ function clusterTiles(stats: ClusterStorageStats | null): Tile[] {
                 l10n.t('Combined on-disk size of all user databases. Excludes provisioned disk capacity.') + caveat,
         },
         {
+            icon: 'documents',
             label: l10n.t('Documents'),
             value: read((loaded) => sumAcrossDatabases(loaded, (database) => database.objects)),
             render: 'roundedCount',
@@ -124,6 +132,7 @@ function clusterTiles(stats: ClusterStorageStats | null): Tile[] {
                 caveat,
         },
         {
+            icon: 'namespaces',
             label: l10n.t('Databases / Collections'),
             value: read((loaded) => {
                 const totalCollections = sumAcrossDatabases(loaded, (database) => database.collections);
@@ -140,6 +149,7 @@ function clusterTiles(stats: ClusterStorageStats | null): Tile[] {
             tooltip: l10n.t('Number of user databases and their combined collections.'),
         },
         {
+            icon: 'indexes',
             label: l10n.t('Indexes / Size'),
             value: read((loaded) =>
                 describeIndexes(
@@ -164,6 +174,7 @@ function databaseTiles(stats: ClusterStorageStats | null, databaseName: string):
 
     return [
         {
+            icon: 'storage',
             label: l10n.t('Storage Used'),
             value: read((entry) => formatBytes(entry.sizeOnDiskBytes)),
             render: 'text',
@@ -172,6 +183,7 @@ function databaseTiles(stats: ClusterStorageStats | null, databaseName: string):
             }),
         },
         {
+            icon: 'documents',
             label: l10n.t('Documents'),
             value: read((entry) => entry.objects),
             render: 'roundedCount',
@@ -180,12 +192,14 @@ function databaseTiles(stats: ClusterStorageStats | null, databaseName: string):
             }),
         },
         {
+            icon: 'namespaces',
             label: l10n.t('Collections'),
             value: read((entry) => entry.collections),
             render: 'count',
             tooltip: l10n.t('Number of collections in database "{database}".', { database: databaseName }),
         },
         {
+            icon: 'indexes',
             label: l10n.t('Indexes / Size'),
             value: read((entry) => describeIndexes(entry.indexes, entry.indexSizeBytes)),
             render: 'text',
@@ -196,49 +210,87 @@ function databaseTiles(stats: ClusterStorageStats | null, databaseName: string):
     ];
 }
 
+const tileIcons: Record<Tile['icon'], JSX.Element> = {
+    storage: <HardDriveRegular aria-hidden={true} />,
+    documents: <DocumentMultipleRegular aria-hidden={true} />,
+    namespaces: <DatabaseMultipleRegular aria-hidden={true} />,
+    indexes: <TextBulletListSquareRegular aria-hidden={true} />,
+};
+
+const TileValue = ({ tile }: { tile: Tile }): JSX.Element => {
+    if (tile.value === undefined) {
+        return (
+            <Skeleton aria-label={l10n.t('Loading {0}', tile.label)} appearance="translucent">
+                <SkeletonItem className="storageCardValueSkeleton" size={28} />
+            </Skeleton>
+        );
+    }
+
+    if (tile.value === null) {
+        return <p className="storageCardValue storageCardValueUnavailable">{l10n.t('N/A')}</p>;
+    }
+
+    if (typeof tile.value === 'number') {
+        return tile.render === 'roundedCount' ? (
+            <p className="storageCardValue" title={formatExactCount(tile.value)}>
+                {formatApproximateCount(tile.value)}
+            </p>
+        ) : (
+            <p className="storageCardValue">{formatCount(tile.value)}</p>
+        );
+    }
+
+    return <p className="storageCardValue">{tile.value}</p>;
+};
+
 /**
  * The dashboard's headline numbers: what the cluster — or the database being read —
  * *contains*.
  *
- * Deliberately static. The strip summarizes the data inventory, which changes on the
+ * Deliberately static. The cards summarize the data inventory, which changes on the
  * timescale of deployments, not seconds; per the dashboard's motion rule, nothing above the
- * fold animates. Liveness (connection state, latency) lives in the header badge instead.
+ * fold animates. Their explanations are printed in the card rather than hidden in tooltips.
  */
 export const StatusStrip = ({
     storageStats,
     currentDatabase,
     isUnavailable = false,
 }: StatusStripProps): JSX.Element => {
+    const headingId = useId();
     const computedTiles =
         currentDatabase === null ? clusterTiles(storageStats) : databaseTiles(storageStats, currentDatabase);
 
     // A failed read is a terminal state, not slow work: collapse the loading skeleton onto
-    // the "not reported" placeholder so the strip stops implying work is still in flight.
+    // the "not reported" placeholder so the cards stop implying work is still in flight.
     const tiles = isUnavailable ? computedTiles.map((tile) => ({ ...tile, value: tile.value ?? null })) : computedTiles;
 
     return (
-        <div className="statusStrip">
-            <MetricGrid className="metricsRow">
+        <section className="dashboardSection" aria-labelledby={headingId}>
+            <div className="dashboardSectionHeading">
+                <h2 id={headingId} className="dashboardSectionTitle">
+                    {l10n.t('Storage overview')}
+                </h2>
+            </div>
+            <p className="dashboardSectionSubtitle">
+                {currentDatabase === null
+                    ? l10n.t('All user databases · sizes reported by the server, document counts estimated.')
+                    : l10n.t(
+                          'Database “{0}” · sizes reported by the server, document counts estimated.',
+                          currentDatabase,
+                      )}
+            </p>
+            <div className="storageCards">
                 {tiles.map((tile) => (
-                    <div className="statusTile" key={tile.label}>
-                        {tile.render === 'text' ? (
-                            <GenericMetric
-                                label={tile.label}
-                                value={tile.value as string | null | undefined}
-                                tooltipExplanation={tile.tooltip}
-                            />
-                        ) : (
-                            <CountMetric
-                                label={tile.label}
-                                value={tile.value as number | null | undefined}
-                                compact={tile.render === 'roundedCount'}
-                                compactThreshold={1000}
-                                tooltipExplanation={tile.tooltip}
-                            />
-                        )}
-                    </div>
+                    <article className="dashboardCard storageCard" key={tile.label} aria-label={tile.label}>
+                        <h3 className="storageCardTitle">
+                            {tileIcons[tile.icon]}
+                            {tile.label}
+                        </h3>
+                        <TileValue tile={tile} />
+                        <p className="storageCardDetail">{tile.tooltip.trim()}</p>
+                    </article>
                 ))}
-            </MetricGrid>
-        </div>
+            </div>
+        </section>
     );
 };

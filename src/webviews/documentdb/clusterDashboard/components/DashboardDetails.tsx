@@ -3,7 +3,7 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { Button, Card, Tooltip } from '@fluentui/react-components';
+import { Button, Tooltip } from '@fluentui/react-components';
 import { ChevronDownRegular, ChevronUpRegular, CopyRegular, EyeRegular } from '@fluentui/react-icons';
 import { Collapse } from '@fluentui/react-motion-components-preview';
 import * as l10n from '@vscode/l10n';
@@ -125,111 +125,120 @@ export function buildDetailGroups(
 }
 
 /**
- * The header's disclosure control.
+ * The status row's disclosure control.
  *
- * Both labels are always in the DOM, stacked in one grid cell so the button is sized by the longer
- * of the two. Swapping a single label shifted every control beside it on each toggle, and a
- * hardcoded width would only hold for English.
+ * A noun label with a chevron: the chevron already says "expand", so the label only has to
+ * name what is behind it. The label never changes, which also keeps the button's width stable.
  */
 export const DetailsDisclosureButton = ({
     expanded,
+    controlsId,
     onToggle,
 }: {
     expanded: boolean;
+    controlsId: string;
     onToggle: () => void;
 }): JSX.Element => (
     <Button
-        appearance="outline"
+        appearance="subtle"
         size="small"
-        className="dashboardDisclosure"
+        className="dashboardLinkButton dashboardDisclosure"
         aria-expanded={expanded}
+        aria-controls={controlsId}
         icon={expanded ? <ChevronUpRegular /> : <ChevronDownRegular />}
         iconPosition="after"
         onClick={onToggle}
     >
-        <span className="dashboardDisclosureLabel">
-            <span aria-hidden={!expanded} data-inactive={!expanded}>
-                {l10n.t('Hide details')}
-            </span>
-            <span aria-hidden={expanded} data-inactive={expanded}>
-                {l10n.t('Show details')}
-            </span>
-        </span>
+        {l10n.t('Cluster details')}
     </Button>
 );
 
 /**
- * The disclosed panel of cold facts.
+ * The disclosed facts, rendered inside the status card below a divider so opening them
+ * pushes the page down rather than covering it.
  *
  * Copy affordances sit on the values a user actually retypes today — the host list and the
  * subscription id — because those are the reason this panel exists at all.
- *
- * Raw diagnostics lives here rather than only in the overflow menu: this panel is already the
- * answer to "what exactly am I connected to", and the export is the same question asked in full.
  */
 export const DashboardDetailsRegion = ({
+    id,
     expanded,
     groups,
     onShowRawDiagnostics,
+    onCopyConnectionString,
     isExportingDiagnostics,
 }: {
+    id: string;
     expanded: boolean;
     groups: DashboardDetailGroup[];
     onShowRawDiagnostics?: () => void;
+    onCopyConnectionString?: () => void;
     isExportingDiagnostics?: boolean;
 }): JSX.Element => (
     <Collapse visible={expanded} unmountOnExit>
-        <div className="dashboardDetailsRegion">
-            <Card className="dashboardDetailsPanel" appearance="filled">
-                <div className="dashboardDetailsGroups">
-                    {groups.map((group) => (
-                        <section className="dashboardDetailsGroup" key={group.title}>
-                            <h2 className="dashboardDetailsGroupTitle">{group.title}</h2>
-                            <dl className="dashboardDetailsGrid">
-                                {group.details.map((detail) => (
-                                    <Fragment key={detail.label}>
-                                        <dt className="dashboardDetailLabel">{detail.label}</dt>
-                                        <dd className="dashboardDetailValue">
-                                            <span className="dashboardDetailText" title={detail.value}>
-                                                {detail.value}
-                                            </span>
-                                            {detail.copyable === true && (
-                                                <Tooltip
-                                                    content={l10n.t('Copy {0}', detail.label)}
-                                                    relationship="label"
-                                                    withArrow
-                                                >
-                                                    <Button
-                                                        appearance="transparent"
-                                                        size="small"
-                                                        className="dashboardDetailCopy"
-                                                        icon={<CopyRegular />}
-                                                        onClick={() => void navigator.clipboard.writeText(detail.value)}
-                                                    />
-                                                </Tooltip>
-                                            )}
-                                        </dd>
-                                    </Fragment>
-                                ))}
-                            </dl>
-                        </section>
-                    ))}
-                </div>
+        <section id={id} className="dashboardDetailsRegion" aria-label={l10n.t('Cluster details')}>
+            <div className="dashboardDetailsGroups">
+                {groups.map((group) => (
+                    <section className="dashboardDetailsGroup" key={group.title}>
+                        <h2 className="dashboardDetailsGroupTitle">{group.title}</h2>
+                        <dl className="dashboardDetailsGrid">
+                            {group.details.map((detail) => (
+                                <Fragment key={detail.label}>
+                                    <dt className="dashboardDetailLabel">{detail.label}</dt>
+                                    <dd className="dashboardDetailValue">
+                                        <span className="dashboardDetailText" title={detail.value}>
+                                            {detail.value}
+                                        </span>
+                                        {detail.copyable === true && (
+                                            <Tooltip
+                                                content={l10n.t('Copy {0}', detail.label)}
+                                                relationship="label"
+                                                withArrow
+                                            >
+                                                <Button
+                                                    appearance="transparent"
+                                                    size="small"
+                                                    className="dashboardDetailCopy"
+                                                    icon={<CopyRegular />}
+                                                    onClick={() => void navigator.clipboard.writeText(detail.value)}
+                                                />
+                                            </Tooltip>
+                                        )}
+                                    </dd>
+                                </Fragment>
+                            ))}
+                        </dl>
+                    </section>
+                ))}
+            </div>
 
-                {onShowRawDiagnostics !== undefined && (
-                    <div className="dashboardDetailsFooter">
+            {(onShowRawDiagnostics !== undefined || onCopyConnectionString !== undefined) && (
+                <div className="dashboardDetailsFooter">
+                    {onCopyConnectionString !== undefined && (
                         <Button
-                            appearance="secondary"
+                            appearance="subtle"
                             size="small"
+                            className="dashboardLinkButton"
+                            icon={<CopyRegular />}
+                            onClick={onCopyConnectionString}
+                        >
+                            {l10n.t('Copy Connection String')}
+                        </Button>
+                    )}
+                    {onShowRawDiagnostics !== undefined && (
+                        <Button
+                            appearance="subtle"
+                            size="small"
+                            className="dashboardLinkButton"
                             icon={<EyeRegular />}
                             disabled={isExportingDiagnostics === true}
                             onClick={onShowRawDiagnostics}
                         >
                             {l10n.t('View Raw Diagnostics')}
                         </Button>
-                    </div>
-                )}
-            </Card>
-        </div>
+                    )}
+                </div>
+            )}
+        </section>
     </Collapse>
 );

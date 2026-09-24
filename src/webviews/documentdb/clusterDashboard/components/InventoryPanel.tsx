@@ -26,7 +26,7 @@ import {
     ErrorCircleFilled,
 } from '@fluentui/react-icons';
 import * as l10n from '@vscode/l10n';
-import { useCallback, useEffect, useMemo, useState, type JSX } from 'react';
+import { useCallback, useEffect, useId, useMemo, useState, type JSX } from 'react';
 
 import { type ClusterStorageStats } from '../../../../documentdb/utils/getClusterHealth';
 import { useTrpcClient } from '../../../_integration/useTrpcClient';
@@ -161,6 +161,7 @@ export const InventoryPanel = ({
     const { sort, filterText, currentDatabase } = viewState;
     const trpcClient = useTrpcClient();
     const report = useDashboardReporter();
+    const headingId = useId();
 
     const setFilterText = (next: string): void => onViewStateChange((current) => ({ ...current, filterText: next }));
 
@@ -436,7 +437,12 @@ export const InventoryPanel = ({
     };
 
     return (
-        <div className="inventoryPanel">
+        <section className="dashboardSection inventoryPanel" aria-labelledby={headingId}>
+            <div className="dashboardSectionHeading">
+                <h2 id={headingId} className="dashboardSectionTitle">
+                    {l10n.t('Databases and collections')}
+                </h2>
+            </div>
             {/* The breadcrumb is the only control that yields width when the inventory toolbar is constrained. */}
             <Toolbar className="inventoryToolbar" size="small" aria-label={l10n.t('Inventory controls')}>
                 <Breadcrumb aria-label={l10n.t('Inventory level')} size="medium">
@@ -533,24 +539,26 @@ export const InventoryPanel = ({
                 </MessageBar>
             )}
 
-            {inventoryIsLoading ? (
-                <NamespaceTableSkeleton rowCount={skeletonRowCount} />
-            ) : allRows.length === 0 ? (
-                renderEmptyState()
-            ) : (
-                // A filter that matches nothing leaves the table standing and empty, as the
-                // index list does: the footer below already says "Showing 0 of N", and
-                // swapping the columns out for a sentence hides the filter's own effect.
-                <NamespaceTable
-                    level={currentDatabase === null ? 'databases' : 'collections'}
-                    rows={rows}
-                    sort={sort}
-                    onSortToggle={toggleSort}
-                    onActivate={activate}
-                    databaseName={currentDatabase ?? undefined}
-                    busyNames={busyNames}
-                />
-            )}
+            <div className="tableFrame">
+                {inventoryIsLoading ? (
+                    <NamespaceTableSkeleton rowCount={skeletonRowCount} />
+                ) : allRows.length === 0 ? (
+                    renderEmptyState()
+                ) : (
+                    // A filter that matches nothing leaves the table standing and empty, as the
+                    // index list does: the footer below already says "Showing 0 of N", and
+                    // swapping the columns out for a sentence hides the filter's own effect.
+                    <NamespaceTable
+                        level={currentDatabase === null ? 'databases' : 'collections'}
+                        rows={rows}
+                        sort={sort}
+                        onSortToggle={toggleSort}
+                        onActivate={activate}
+                        databaseName={currentDatabase ?? undefined}
+                        busyNames={busyNames}
+                    />
+                )}
+            </div>
 
             {/*
              * The index list's footer: how much of the list the filter is hiding, which is
@@ -595,6 +603,6 @@ export const InventoryPanel = ({
                     </div>
                 </div>
             )}
-        </div>
+        </section>
     );
 };
