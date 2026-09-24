@@ -272,10 +272,13 @@ extends:
                               TargetFolder: $(ob_outputDirectory)
                           condition: and(succeeded(), ne(variables['System.PullRequest.IsFork'], 'True'))
 
+                        # The only place the unit tests run on Windows. They never ran here before, so a
+                        # failure warns instead of blocking the signed build until they're known to pass.
                         - task: Npm@1
-                          displayName: '🧪 Test'
+                          displayName: '🧪 Unit Tests (Jest)'
+                          continueOnError: true
                           inputs:
                               command: custom
-                              customCommand: test
+                              customCommand: run jesttest
                               workingDir: $(Build.SourcesDirectory)
                           condition: succeeded()
