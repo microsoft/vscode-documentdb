@@ -6,13 +6,11 @@
 import { type IActionContext } from '@microsoft/vscode-azext-utils';
 import * as net from 'net';
 import * as vscode from 'vscode';
+import { settingsKeys } from '../../settingsKeys';
 import { type KubeServiceInfo } from './kubernetesClient';
 
 type LocalPortStrategy = 'matchRemote' | 'autoSelect';
 
-const KUBERNETES_SETTINGS_SECTION = 'documentDB.serviceDiscovery.kubernetes';
-const LOCAL_PORT_STRATEGY_KEY = 'portForward.localPortStrategy';
-const LOCAL_PORT_BASE_KEY = 'portForward.localPortBase';
 const DEFAULT_LOCAL_PORT_BASE = 27100;
 const LOCAL_PORT_SCAN_LIMIT = 100;
 
@@ -74,16 +72,16 @@ async function resolveSuggestedLocalPort(remotePort: number, strategy: LocalPort
 
 function getLocalPortStrategy(): LocalPortStrategy {
     const configured = vscode.workspace
-        .getConfiguration(KUBERNETES_SETTINGS_SECTION)
-        .get<string>(LOCAL_PORT_STRATEGY_KEY, 'matchRemote');
+        .getConfiguration()
+        .get<string>(settingsKeys.kubernetesLocalPortStrategy, 'matchRemote');
 
     return configured === 'autoSelect' ? 'autoSelect' : 'matchRemote';
 }
 
 function getLocalPortBase(): number {
     const configured = vscode.workspace
-        .getConfiguration(KUBERNETES_SETTINGS_SECTION)
-        .get<number>(LOCAL_PORT_BASE_KEY, DEFAULT_LOCAL_PORT_BASE);
+        .getConfiguration()
+        .get<number>(settingsKeys.kubernetesLocalPortBase, DEFAULT_LOCAL_PORT_BASE);
 
     if (!Number.isInteger(configured) || configured < 1024 || configured > 65535) {
         return DEFAULT_LOCAL_PORT_BASE;

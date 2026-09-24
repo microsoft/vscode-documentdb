@@ -34,7 +34,7 @@ When you run a query in the Query Playground or Interactive Shell, the extension
 
 1. **Reuses the existing connection**: The runtime uses the database connection you already established when you connected to the cluster in the tree view. No new connection is created, and no credentials need to be re-entered.
 2. **Evaluates in a sandboxed context**: Your code runs in an isolated JavaScript context with access to the `db` object, BSON constructors (`ObjectId`, `ISODate`, etc.), and standard JavaScript globals.
-3. **Runs in a worker thread**: Each execution happens in a separate worker thread, so a slow or infinite query cannot freeze VS Code. If a query exceeds the timeout, the worker is terminated and a fresh one is created for the next run.
+3. **Runs in a worker thread**: Each execution happens in a separate worker thread, so a slow or infinite query cannot freeze VS Code. Queries have no extension-side time limit: stop a long-running query with Cancel or Ctrl+C, or add `.maxTimeMS()` to let the database enforce a limit.
 4. **Returns structured results**: Results are normalized into a consistent format with metadata (document count, execution time, cursor state), then displayed in the results panel or terminal.
 
 The Query Playground uses **fresh context** mode by default: each execution starts with a clean slate. The Interactive Shell uses **persistent context** mode: variables, functions, and state carry over between commands within a session.

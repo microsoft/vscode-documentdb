@@ -5,6 +5,11 @@
 ### Improvements
 
 - **Authentication Method Persistence**: Explicitly saved authentication methods now take precedence over inference from stored credential fields. This keeps managed identity connections on the selected method after reload; existing Native and Microsoft Entra ID connections remain compatible. [#886](https://github.com/microsoft/vscode-documentdb/pull/886)
+- **Settings Organization**: Settings are now grouped into expandable sections (General, Connections & Discovery, Queries & Results, Copy & Paste, Query Playground, Interactive Shell, AI Assistant, Accessibility). Several settings were renamed; previous values under the old names are ignored and must be set again: `confirmations.confirmationStyle` → `confirmations.style`, `experimental.enableAIQueryGeneration` → `aiAssistant.enableQueryGeneration`, `userInterface.ShowOperationSummaries` → `userInterface.showOperationSummaries`, `shell.initTimeout` → `connectionTimeout`, and the five `aiAssistant.*PromptPath` settings → `aiAssistant.indexAdvisor{Find,Aggregate,Count}PromptPath` and `aiAssistant.queryGeneration{CrossCollection,SingleCollection}PromptPath` (all prefixed with `documentDB.`). `documentDB.local.port` and the Kubernetes port-forward settings no longer read local User values in remote windows. [#957](https://github.com/microsoft/vscode-documentdb/pull/957)
+
+### Fixes
+
+- **Query Playground Connection Timeout**: The Query Playground now honors the connection timeout setting instead of a fixed 30 seconds, and its timeout message links to the setting that applies. The single `documentDB.connectionTimeout` setting (default 30 seconds) covers both the Query Playground and the Interactive Shell, whose previous default was 60 seconds. [#957](https://github.com/microsoft/vscode-documentdb/pull/957)
 
 ### Security
 

@@ -25,6 +25,7 @@ jest.mock('net', () => ({
     createServer: (...args: unknown[]) => mockCreateServer(...args),
 }));
 
+import { settingsKeys } from '../../settingsKeys';
 import { type KubeServiceInfo } from './kubernetesClient';
 import { promptForLocalPort } from './promptForLocalPort';
 
@@ -96,7 +97,7 @@ describe('promptForLocalPort', () => {
 
     it('uses the remote service port by default with matchRemote strategy', async () => {
         setConfiguration({
-            'portForward.localPortStrategy': 'matchRemote',
+            [settingsKeys.kubernetesLocalPortStrategy]: 'matchRemote',
         });
 
         await promptForLocalPort(createService(10260));
@@ -107,8 +108,8 @@ describe('promptForLocalPort', () => {
 
     it('uses the first available port from localPortBase with autoSelect strategy', async () => {
         setConfiguration({
-            'portForward.localPortStrategy': 'autoSelect',
-            'portForward.localPortBase': 27100,
+            [settingsKeys.kubernetesLocalPortStrategy]: 'autoSelect',
+            [settingsKeys.kubernetesLocalPortBase]: 27100,
         });
         mockCreateServer.mockImplementation(() =>
             createMockServer(
@@ -127,8 +128,8 @@ describe('promptForLocalPort', () => {
 
     it('falls back to the default base port when localPortBase is invalid', async () => {
         setConfiguration({
-            'portForward.localPortStrategy': 'autoSelect',
-            'portForward.localPortBase': 100,
+            [settingsKeys.kubernetesLocalPortStrategy]: 'autoSelect',
+            [settingsKeys.kubernetesLocalPortBase]: 100,
         });
 
         await promptForLocalPort(createService(10260));
@@ -138,8 +139,8 @@ describe('promptForLocalPort', () => {
 
     it('falls back to the remote service port when no port is available in the scan window', async () => {
         setConfiguration({
-            'portForward.localPortStrategy': 'autoSelect',
-            'portForward.localPortBase': 27100,
+            [settingsKeys.kubernetesLocalPortStrategy]: 'autoSelect',
+            [settingsKeys.kubernetesLocalPortBase]: 27100,
         });
         mockCreateServer.mockImplementation(() => {
             const busyPorts = Array.from({ length: 100 }, (_value, index) => [27100 + index, false] as const);

@@ -1613,16 +1613,11 @@
     ],
     "configuration": [
       {
-        "title": "DocumentDB for VS Code",
+        "title": "General",
+        "order": 10,
         "properties": {
-          "documentDB.confirmations.showUrlHandlingConfirmations": {
+          "documentDB.confirmations.style": {
             "order": 1,
-            "type": "boolean",
-            "default": true,
-            "description": "Show confirmation dialogs when handling external URLs that open DocumentDB resources or setup experiences in VS Code."
-          },
-          "documentDB.confirmations.confirmationStyle": {
-            "order": 0,
             "type": "string",
             "description": "The behavior to use when confirming operations that cannot be undone, such as deleting resources.",
             "enum": [
@@ -1640,37 +1635,51 @@
               "Prompts with a challenge where you select the correct number among multiple options to confirm deletion.",
               "Prompts with an input box where you enter the name of the resource to confirm deletion."
             ],
-            "default": "wordConfirmation"
+            "default": "wordConfirmation",
+            "keywords": [
+              "confirmationStyle"
+            ]
           },
-          "documentDB.userInterface.ShowOperationSummaries": {
-            "order": 11,
+          "documentDB.confirmations.showUrlHandlingConfirmations": {
+            "order": 2,
+            "type": "boolean",
+            "default": true,
+            "description": "Show confirmation dialogs when handling external URLs that open DocumentDB resources or setup experiences in VS Code."
+          },
+          "documentDB.userInterface.showOperationSummaries": {
+            "order": 3,
             "type": "boolean",
             "default": true,
             "description": "Show detailed operation summaries, displaying messages for actions such as database drops, document additions, deletions, or similar events."
-          },
-          "documentDB.copyPaste.showLargeCollectionWarning": {
-            "order": 12,
-            "type": "boolean",
-            "default": true,
-            "description": "Show a warning dialog before copying large collections. When disabled, copy operations will proceed without any size-based warnings."
-          },
-          "documentDB.copyPaste.largeCollectionWarningThreshold": {
-            "order": 13,
+          }
+        }
+      },
+      {
+        "title": "Connections & Discovery",
+        "order": 20,
+        "properties": {
+          "documentDB.connectionTimeout": {
+            "order": 1,
             "type": "number",
-            "default": 100000,
-            "minimum": 1,
-            "description": "The number of documents in a source collection that triggers a warning about potentially slow copy and paste operations. Set to a higher value to reduce warnings, or a lower value to see warnings for smaller collections."
+            "description": "Maximum time (in seconds) to wait for the Interactive Shell or Query Playground to connect and authenticate.",
+            "default": 30,
+            "minimum": 5,
+            "keywords": [
+              "initTimeout"
+            ]
           },
           "documentDB.local.port": {
-            "order": 20,
+            "order": 2,
             "type": "integer",
             "default": 10260,
-            "description": "Port to use when connecting to DocumentDB Local instance"
+            "scope": "machine-overridable",
+            "description": "Port to use when connecting to a DocumentDB Local instance."
           },
           "documentDB.serviceDiscovery.kubernetes.portForward.localPortStrategy": {
-            "order": 30,
+            "order": 3,
             "type": "string",
             "default": "matchRemote",
+            "scope": "machine-overridable",
             "enum": [
               "matchRemote",
               "autoSelect"
@@ -1682,47 +1691,78 @@
             "description": "How to choose the local port when opening a port-forward tunnel to a ClusterIP Kubernetes service."
           },
           "documentDB.serviceDiscovery.kubernetes.portForward.localPortBase": {
-            "order": 31,
+            "order": 4,
             "type": "integer",
             "default": 27100,
             "minimum": 1024,
             "maximum": 65535,
+            "scope": "machine-overridable",
             "description": "Starting port for automatic local port selection when localPortStrategy is 'autoSelect'. The extension scans upward until a free port is found."
+          }
+        }
+      },
+      {
+        "title": "Copy & Paste",
+        "order": 40,
+        "properties": {
+          "documentDB.copyPaste.showLargeCollectionWarning": {
+            "order": 1,
+            "type": "boolean",
+            "default": true,
+            "description": "Show a warning dialog before copying large collections. When disabled, copy operations will proceed without any size-based warnings."
           },
+          "documentDB.copyPaste.largeCollectionWarningThreshold": {
+            "order": 2,
+            "type": "number",
+            "default": 100000,
+            "minimum": 1,
+            "description": "The number of documents in a source collection that triggers a warning about potentially slow copy and paste operations. Set to a higher value to reduce warnings, or a lower value to see warnings for smaller collections."
+          }
+        }
+      },
+      {
+        "title": "Query Playground",
+        "order": 50,
+        "properties": {
           "documentDB.playground.confirmRunAll": {
-            "order": 14,
+            "order": 1,
             "type": "boolean",
             "default": true,
             "description": "Show a confirmation dialog before running the entire playground file with Run All."
-          },
+          }
+        }
+      },
+      {
+        "title": "Queries & Results",
+        "order": 30,
+        "properties": {
           "documentDB.batchSize": {
+            "order": 1,
             "type": "integer",
             "description": "Number of documents to display per cursor iteration in the Query Playground and Interactive Shell. Applies to find(), aggregate(), and other cursor-returning operations.",
             "default": 50,
             "minimum": 1
           },
-          "documentDB.shell.initTimeout": {
+          "documentDB.collectionView.defaultPageSize": {
+            "order": 2,
             "type": "number",
-            "description": "Maximum time (in seconds) to wait for the Interactive Shell to connect during initialization. Default value is 60 seconds.",
-            "default": 60,
-            "minimum": 5
-          },
-          "documentDB.shell.display.colorSupport": {
-            "type": "boolean",
-            "description": "Enable ANSI color support in the Interactive Shell for syntax highlighting and formatted output. Disable for accessibility (screen readers) or piped output.",
-            "default": true
-          },
-          "documentDB.shell.display.autocompletion": {
-            "type": "boolean",
-            "description": "Enable autocompletion in the Interactive Shell: Tab completion, the candidate list, and the inline suggestions that appear in dim text at the cursor (completions, command history, closing brackets).",
-            "default": true
-          },
-          "documentDB.shell.display.inlineHints": {
-            "type": "boolean",
-            "description": "Show informational hints in the Interactive Shell, marked with 🛈 — command descriptions, collection counts, and previews of what a completion would produce. These are never inserted into your input.",
-            "default": true
-          },
+            "description": "Default page size for loading data in the collection view.",
+            "default": 50,
+            "enum": [
+              10,
+              50,
+              100,
+              500
+            ]
+          }
+        }
+      },
+      {
+        "title": "Interactive Shell",
+        "order": 60,
+        "properties": {
           "documentDB.shell.multiLinePasteBehavior": {
+            "order": 1,
             "type": "string",
             "description": "Controls how multi-line text is handled when pasted into the Interactive Shell. When set to 'ask', the prompt is only shown if VS Code's built-in paste warning (terminal.integrated.enableMultiLinePasteWarning) is disabled.",
             "default": "ask",
@@ -1739,70 +1779,107 @@
               "Always run each pasted line independently."
             ]
           },
-          "documentDB.collectionView.defaultPageSize": {
-            "type": "number",
-            "description": "Default page size for loading data in the collection view.",
-            "default": 50,
-            "enum": [
-              10,
-              50,
-              100,
-              500
-            ]
+          "documentDB.shell.display.colorSupport": {
+            "order": 2,
+            "type": "boolean",
+            "description": "Enable ANSI color support in the Interactive Shell for syntax highlighting and formatted output. Disable for accessibility (screen readers) or piped output.",
+            "default": true
           },
-          "documentDB.experimental.enableAIQueryGeneration": {
-            "order": 30,
+          "documentDB.shell.display.autocompletion": {
+            "order": 3,
+            "type": "boolean",
+            "description": "Enable autocompletion in the Interactive Shell: Tab completion, the candidate list, and the inline suggestions that appear in dim text at the cursor (completions, command history, closing brackets).",
+            "default": true
+          },
+          "documentDB.shell.display.inlineHints": {
+            "order": 4,
+            "type": "boolean",
+            "description": "Show informational hints in the Interactive Shell, marked with 🛈. Hints cover command descriptions, collection counts, and previews of what a completion would produce. They are never inserted into your input.",
+            "default": true
+          }
+        }
+      },
+      {
+        "title": "AI Assistant",
+        "order": 70,
+        "properties": {
+          "documentDB.aiAssistant.enableQueryGeneration": {
+            "order": 1,
             "type": "boolean",
             "default": false,
             "tags": [
               "experimental"
             ],
+            "keywords": [
+              "enableAIQueryGeneration"
+            ],
             "markdownDescription": "Enable AI-powered natural language to query translation in the collection view. When enabled, you can type questions in plain language and have them translated into database queries.\n\nNote: Experimental features might not work as expected, and AI-generated content might not always be accurate."
           },
-          "documentDB.aiAssistant.findQueryPromptPath": {
-            "type": [
-              "string",
-              "null"
-            ],
-            "description": "Path to a custom prompt template file for find query optimization. Leave empty to use the built-in template.",
-            "default": null
-          },
-          "documentDB.aiAssistant.aggregateQueryPromptPath": {
-            "type": [
-              "string",
-              "null"
-            ],
-            "description": "Path to a custom prompt template file for aggregate query optimization. Leave empty to use the built-in template.",
-            "default": null
-          },
-          "documentDB.aiAssistant.countQueryPromptPath": {
-            "type": [
-              "string",
-              "null"
-            ],
-            "description": "Path to a custom prompt template file for count query optimization. Leave empty to use the built-in template.",
-            "default": null
-          },
-          "documentDB.aiAssistant.crossCollectionQueryPromptPath": {
-            "type": [
-              "string",
-              "null"
-            ],
-            "description": "Path to a custom prompt template file for cross-collection query generation. Leave empty to use the built-in template.",
-            "default": null
-          },
-          "documentDB.aiAssistant.singleCollectionQueryPromptPath": {
+          "documentDB.aiAssistant.queryGenerationSingleCollectionPromptPath": {
+            "order": 2,
             "type": [
               "string",
               "null"
             ],
             "description": "Path to a custom prompt template file for single collection query generation. Leave empty to use the built-in template.",
-            "default": null
+            "default": null,
+            "keywords": [
+              "singleCollectionQueryPromptPath"
+            ]
+          },
+          "documentDB.aiAssistant.queryGenerationCrossCollectionPromptPath": {
+            "order": 3,
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Path to a custom prompt template file for cross-collection query generation. Leave empty to use the built-in template.",
+            "default": null,
+            "keywords": [
+              "crossCollectionQueryPromptPath"
+            ]
+          },
+          "documentDB.aiAssistant.indexAdvisorFindPromptPath": {
+            "order": 4,
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Path to a custom prompt template file for Index Advisor recommendations on find queries. Leave empty to use the built-in template.",
+            "default": null,
+            "keywords": [
+              "findQueryPromptPath"
+            ]
+          },
+          "documentDB.aiAssistant.indexAdvisorAggregatePromptPath": {
+            "order": 5,
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Path to a custom prompt template file for Index Advisor recommendations on aggregation pipelines. Leave empty to use the built-in template.",
+            "default": null,
+            "keywords": [
+              "aggregateQueryPromptPath"
+            ]
+          },
+          "documentDB.aiAssistant.indexAdvisorCountPromptPath": {
+            "order": 6,
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Path to a custom prompt template file for Index Advisor recommendations on count queries. Leave empty to use the built-in template.",
+            "default": null,
+            "keywords": [
+              "countQueryPromptPath"
+            ]
           }
         }
       },
       {
         "title": "Accessibility",
+        "order": 80,
         "properties": {
           "documentDB.accessibility.hideCountPrefix": {
             "order": 1,

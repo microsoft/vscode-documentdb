@@ -5,6 +5,7 @@
 
 import { callWithTelemetryAndErrorHandling, type IActionContext } from '@microsoft/vscode-azext-utils';
 import * as vscode from 'vscode';
+import { settingsKeys } from '../../settingsKeys';
 import { escapeJsString } from '../../utils/escapeJsString';
 import { PlaygroundCommandIds } from '../playground/constants';
 import { Views } from '../Views';
@@ -101,17 +102,16 @@ export const PLAYGROUND_ACTION_PREFIX = '\u{2197} Query Playground '; // '↗ Qu
 /**
  * The marker prefix for the "Open Settings" action line.
  *
- * Format: `⚙ [settingKey]`
- * The settings key is NOT localized — it's the programmatic VS Code setting ID.
+ * Format: `⚙ [settingsTarget]`
+ * The target is NOT localized. It must be a key in {@link HELP_SETTINGS_QUERIES}; keys may be
+ * programmatic VS Code setting IDs or compact aliases for Settings search queries.
  */
 export const SETTINGS_ACTION_PREFIX = '\u{2699} '; // ⚙ + space
 
-/** Compact setting names used by shell help so links remain intact in narrow terminals. */
-export const HELP_SETTING_ALIASES: Readonly<Record<string, string>> = {
-    colorSupport: 'documentDB.shell.display.colorSupport',
-    autocompletion: 'documentDB.shell.display.autocompletion',
-    inlineHints: 'documentDB.shell.display.inlineHints',
-    'documentDB.shell.initTimeout': 'documentDB.shell.initTimeout',
+/** Compact target names used by shell help so links remain intact in narrow terminals. */
+export const HELP_SETTINGS_QUERIES: Readonly<Record<string, string>> = {
+    shellSettings: '@ext:ms-azuretools.vscode-documentdb documentDB.shell',
+    [settingsKeys.connectionTimeout]: settingsKeys.connectionTimeout,
 };
 
 /**
@@ -146,7 +146,7 @@ const PLAYGROUND_LINE_PATTERN = /(?:\x1b\[\d+m)*\u{2197} Query Playground \[([^\
  * Regex to match the "Open Settings" action line.
  *
  * Captures:
- * - Group 1: the VS Code setting key (e.g., `documentDB.shell.initTimeout`)
+ * - Group 1: the settings target (e.g., `documentDB.connectionTimeout` or `shellSettings`)
  *
  * The pattern accounts for optional ANSI color codes that wrap the line.
  * The format is locale-independent.
@@ -191,8 +191,8 @@ interface PlaygroundTerminalLink extends vscode.TerminalLink {
  */
 interface SettingsTerminalLink extends vscode.TerminalLink {
     readonly linkType: 'settings';
-    /** The VS Code setting key to open. */
-    readonly settingKey: string;
+    /** The query to show in VS Code Settings. */
+    readonly settingsQuery: string;
 }
 
 /**
@@ -264,8 +264,8 @@ export class ShellTerminalLinkProvider implements vscode.TerminalLinkProvider<Sh
         // Check for settings action line
         const settingsMatch = SETTINGS_LINE_PATTERN.exec(context.line);
         if (settingsMatch) {
-            const settingKey = HELP_SETTING_ALIASES[settingsMatch[1]];
-            if (!settingKey) {
+            const settingsQuery = HELP_SETTINGS_QUERIES[settingsMatch[1]];
+            if (!settingsQuery) {
                 return [];
             }
             return [
@@ -273,8 +273,8 @@ export class ShellTerminalLinkProvider implements vscode.TerminalLinkProvider<Sh
                     linkType: 'settings',
                     startIndex: settingsMatch.index,
                     length: settingsMatch[0].length,
-                    tooltip: vscode.l10n.t('Open setting: {0}', settingKey),
-                    settingKey,
+                    tooltip: vscode.l10n.t('Open setting: {0}', settingsQuery),
+                    settingsQuery,
                 },
             ];
         }
@@ -288,9 +288,9 @@ export class ShellTerminalLinkProvider implements vscode.TerminalLinkProvider<Sh
                 'vscode-documentdb.shell.terminalLink.openSettings',
                 async (context: IActionContext) => {
                     context.telemetry.properties.linkType = 'settingsActionLine';
-                    context.telemetry.properties.settingKey = link.settingKey;
+                    context.telemetry.properties.settingsQuery = link.settingsQuery;
 
-                    await vscode.commands.executeCommand('workbench.action.openSettings', link.settingKey);
+                    await vscode.commands.executeCommand('workbench.action.openSettings', link.settingsQuery);
                 },
             );
             return;
