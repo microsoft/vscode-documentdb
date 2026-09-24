@@ -139,7 +139,7 @@ export const DetailsDisclosureButton = ({
     onToggle: () => void;
 }): JSX.Element => (
     <Button
-        appearance="transparent"
+        appearance="outline"
         size="small"
         className="dashboardDisclosure"
         aria-expanded={expanded}

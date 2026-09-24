@@ -333,7 +333,7 @@ $content-gutter: var(--spacingHorizontalMNudge); // 10px
     // a margin on the panel would sit outside the clip and jump when the motion ends.
 
     .dashboardDetailsRegion {
-        padding-block: var(--spacingVerticalXS);
+        padding-block: var(--spacingVerticalS) var(--spacingVerticalXS);
     }
 
     .dashboardDetailsPanel {
