@@ -834,8 +834,8 @@ export class QuickStartServiceImpl {
                 const volumeAtGate = await this.runtime.volumeExists(volumeName(alias));
                 if (!existing && !volumeAtGate && hasReadyRecord) {
                     // Its container and data volume were both removed outside VS Code, so the record
-                    // protects nothing: set up from scratch instead of refusing for good. The record and
-                    // credentials stay until success replaces them; a failed run restores any it overwrote.
+                    // protects nothing: set up from scratch instead of refusing for good. The record stays
+                    // until success; credentials written before `docker run` are restored only if it fails.
                 } else if (existing || hasReadyRecord || volumeAtGate) {
                     const credentialsUnavailable: QuickStartMessage = { key: 'credentialsUnavailable' };
                     this.setStatus(alias, InstanceState.CredentialsMissing, undefined, credentialsUnavailable);

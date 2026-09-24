@@ -53,8 +53,9 @@ Configure explains why. Docker pointed at another engine or context looks exactl
 deleting on refresh would lock the user out of their data once they switched back.
 
 Setup then treats it as new. It keeps the stored credentials unless the user sets custom ones, so
-the original engine's instance still opens after a switch back. Even with custom ones, the old record
-and credentials stay until setup succeeds, so a cancelled or failed run loses nothing.
+the original engine's instance still opens after a switch back. With custom ones, the old record
+stays until setup succeeds. The new credentials are saved just before `docker run` and put back if
+the run fails or is cancelled; only a crash mid-run leaves the new ones.
 
 | Option                                               | Verdict                                                                             |
 | ---------------------------------------------------- | ----------------------------------------------------------------------------------- |
