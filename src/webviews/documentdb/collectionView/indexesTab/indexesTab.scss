@@ -432,6 +432,10 @@
         display: flex;
         flex-direction: column;
         overflow-y: auto;
+        // IMPORTANT: Keep room for the index-kind tabs' outward focus ring, including when
+        // keyboard focus scrolls the drawer (which would otherwise consume the top padding).
+        padding-top: index.$focus-outline-inset;
+        scroll-padding-top: index.$focus-outline-inset;
         padding-bottom: var(--spacingVerticalL);
     }
 
