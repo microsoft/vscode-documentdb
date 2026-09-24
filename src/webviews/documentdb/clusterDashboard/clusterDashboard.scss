@@ -635,6 +635,8 @@ $content-gutter: var(--spacingHorizontalMNudge); // 10px
     .tableScroller {
         width: 100%;
         min-width: 0;
+        box-sizing: border-box;
+        padding: $focus-inset;
         overflow-x: auto;
     }
 
