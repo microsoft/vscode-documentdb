@@ -1,4 +1,4 @@
-> **User Manual** &mdash; [Back to Service Discovery](./service-discovery) | [Back to User Manual](../index#user-manual)
+> **User Manual** - [Back to Service Discovery](./service-discovery) | [Back to User Manual](../index#user-manual)
 
 ---
 
@@ -50,7 +50,7 @@ You can drag a kubeconfig file from your file manager (or from the VS Code Explo
 
 When the editor runs in a remote context (WSL, SSH, Dev Containers, Codespaces), the extension can only read files on the machine where it runs. A file dropped from the **Windows host into a WSL window** is automatically located on the WSL drive mount (`/mnt/<drive>`) and linked from there when found. If the file is not reachable that way (for example a different remote host, a network share, or a web link), the drop is rejected with an explanation instead of guessing. In that case, copy the file into the editor's filesystem (for example your WSL or remote home directory) and drop that, or use **Paste kubeconfig YAML…** to add its contents as a copy.
 
-> **⚠️ Only add kubeconfig sources you trust.** A kubeconfig is executable configuration: it can reference external credential helper programs through an [`exec` credential plugin](https://kubernetes.io/docs/reference/access-authn-authz/authentication/#client-go-credential-plugins) (the standard mechanism used by AKS, EKS, and GKE — for example `kubelogin`, `aws`, or `gke-gcloud-auth-plugin`). When you expand a source to list its contexts and namespaces, the Kubernetes client may run the command configured in that kubeconfig on your machine, with your privileges. This is the same trust model as `kubectl`. Only add, paste, or drop a kubeconfig that comes from a source you trust; treat a kubeconfig pasted from the clipboard or dropped from disk with the same caution as any script you would run locally.
+> **⚠️ Only add kubeconfig sources you trust.** A kubeconfig is executable configuration: it can reference external credential helper programs through an [`exec` credential plugin](https://kubernetes.io/docs/reference/access-authn-authz/authentication/#client-go-credential-plugins) (the standard mechanism used by AKS, EKS, and GKE, for example `kubelogin`, `aws`, or `gke-gcloud-auth-plugin`). When you expand a source to list its contexts and namespaces, the Kubernetes client may run the command configured in that kubeconfig on your machine, with your privileges. This is the same trust model as `kubectl`. Only add, paste, or drop a kubeconfig that comes from a source you trust; treat a kubeconfig pasted from the clipboard or dropped from disk with the same caution as any script you would run locally.
 
 ## Manage existing sources
 
@@ -235,12 +235,17 @@ When you **save** a discovered target to the Connections view, the `tlsAllowInva
 | **ClusterIP**           | Starts a local port-forward tunnel to a ready backing pod and connects through `127.0.0.1:<localPort>`.                                                             |
 | **ExternalName**        | Not resolved automatically. Use the external DNS name to connect manually.                                                                                          |
 
-For ClusterIP targets the extension prompts for a local port when needed. By default, the suggested local port matches the remote service port. You can change this under **DocumentDB** > **Service Discovery** > **Kubernetes** > **Port Forward** in VS Code settings:
+For ClusterIP targets the extension prompts for a local port when needed. By default, the suggested local port matches the remote service port. Open VS Code Settings and expand **Extensions** > **DocumentDB for VS Code** > **Connections & Discovery** to change this behavior. You can also search for either setting ID:
 
 - **Local Port Strategy** (`documentDB.serviceDiscovery.kubernetes.portForward.localPortStrategy`):
   - **matchRemote**: use the same port number as the remote Kubernetes service port.
   - **autoSelect**: automatically find a free local port starting from **Local Port Base**.
 - **Local Port Base** (`documentDB.serviceDiscovery.kubernetes.portForward.localPortBase`, default `27100`): the starting port for the **autoSelect** strategy.
+
+These settings are machine-specific but allow Workspace overrides. In Remote SSH, WSL, and dev-container
+windows, local User values do not apply. Set them in **Remote** User settings or **Workspace** settings
+instead. If you previously customized only local User settings, configure those values again in the
+remote window; otherwise the defaults (`matchRemote` and `27100`) apply.
 
 If the final port is already in use, the extension can use an existing process on that port (such as a manually started `kubectl port-forward`) if you confirm.
 
