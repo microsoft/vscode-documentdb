@@ -853,7 +853,7 @@ describe('QuickStartService — WI-2d registry-driven reconcile (multi-instance)
         await service.start();
 
         expect(showError).toHaveBeenCalledWith(
-            'Could not start DocumentDB Local: cannot start a paused container, try unpause instead',
+            'We could not start DocumentDB Local: cannot start a paused container, try unpause instead. View the setup log for details.',
             'View setup log',
         );
         expect(service.getStatus().state).toBe(InstanceState.Error);

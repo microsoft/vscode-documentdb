@@ -171,17 +171,21 @@ function lastContainerErrorLine(logs: string): string | undefined {
 }
 
 function describeLifecycleFailure(kind: QuickStartOperationKind, detail: string): string {
+    const reason = detail.trim().replace(/\.+$/, '');
     switch (kind) {
         case 'starting':
-            return l10n.t('Could not start DocumentDB Local: {0}', detail);
+            return l10n.t('We could not start DocumentDB Local: {0}. View the setup log for details.', reason);
         case 'stopping':
-            return l10n.t('Could not stop DocumentDB Local: {0}', detail);
+            return l10n.t('We could not stop DocumentDB Local: {0}. View the setup log for details.', reason);
         case 'restarting':
-            return l10n.t('Could not restart DocumentDB Local: {0}', detail);
+            return l10n.t('We could not restart DocumentDB Local: {0}. View the setup log for details.', reason);
         case 'deleting':
-            return l10n.t('Could not delete DocumentDB Local: {0}', detail);
+            return l10n.t('We could not delete DocumentDB Local: {0}. View the setup log for details.', reason);
         default:
-            return l10n.t('DocumentDB Local failed: {0}', detail);
+            return l10n.t(
+                'We could not complete the DocumentDB Local operation: {0}. View the setup log for details.',
+                reason,
+            );
     }
 }
 

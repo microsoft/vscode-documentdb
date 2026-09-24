@@ -82,7 +82,7 @@ describe('formatQuickStartMessage', () => {
                 detail: "username 'documentdb' uses reserved prefix 'documentdb'.",
             }),
         ).toBe(
-            "The DocumentDB container stopped before it was ready (exit code 1): username 'documentdb' uses reserved prefix 'documentdb'.",
+            "The DocumentDB container stopped before it was ready (exit code 1): username 'documentdb' uses reserved prefix 'documentdb'. View the setup log for details.",
         );
         expect(formatQuickStartMessage({ key: 'containerExited', exitCode: 137 })).toBe(
             'The DocumentDB container stopped before it was ready (exit code 137). View the setup log for details.',
@@ -91,7 +91,31 @@ describe('formatQuickStartMessage', () => {
 
     it('does not double the full stop after a server message that ends with one', () => {
         expect(formatQuickStartMessage({ key: 'credentialsRejected', detail: 'Authentication failed.' })).toBe(
-            'DocumentDB did not accept the username or password: Authentication failed. Go back to Configure to change them.',
+            'We could not sign in with this username and password: Authentication failed. Go back to Configure and check the credentials.',
+        );
+    });
+
+    it.each([undefined, 'Authentication failed.'])(
+        'names the Configure option and warns about data loss for saved credentials (%j)',
+        (detail) => {
+            const message = formatQuickStartMessage({ key: 'savedCredentialsRejected', detail });
+
+            expect(message).toContain('We could not sign in with the saved username and password');
+            expect(message).toContain('go back to Configure and choose "Erase the existing data and start empty"');
+            expect(message).toContain('This permanently deletes all data in DocumentDB Local.');
+            expect(message).not.toContain('..');
+        },
+    );
+
+    it('explains how to recover from unsupported password characters', () => {
+        expect(formatQuickStartMessage({ key: 'passwordNotSupported' })).toBe(
+            'We could not sign in because this password contains unsupported characters. Go back to Configure and choose a different password.',
+        );
+    });
+
+    it('points to the setup log when an exited container has no reported exit code', () => {
+        expect(formatQuickStartMessage({ key: 'containerExited', detail: 'Initialization failed.' })).toBe(
+            'The DocumentDB container stopped before it was ready: Initialization failed. View the setup log for details.',
         );
     });
 });

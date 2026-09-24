@@ -57,22 +57,24 @@ export function formatQuickStartMessage(message: QuickStartMessage): string {
         case 'credentialsRejected':
             return reason
                 ? l10n.t(
-                      'DocumentDB did not accept the username or password: {0}. Go back to Configure to change them.',
-                      reason,
-                  )
-                : l10n.t('DocumentDB did not accept the username or password. Go back to Configure to change them.');
-        case 'savedCredentialsRejected':
-            return reason
-                ? l10n.t(
-                      'The existing data did not accept the saved username or password: {0}. To start over, go back to Configure and erase the existing data.',
+                      'We could not sign in with this username and password: {0}. Go back to Configure and check the credentials.',
                       reason,
                   )
                 : l10n.t(
-                      'The existing data did not accept the saved username or password. To start over, go back to Configure and erase the existing data.',
+                      'We could not sign in with this username and password. Go back to Configure and check the credentials.',
+                  );
+        case 'savedCredentialsRejected':
+            return reason
+                ? l10n.t(
+                      'We could not sign in with the saved username and password: {0}. To start over, go back to Configure and choose "Erase the existing data and start empty". This permanently deletes all data in DocumentDB Local.',
+                      reason,
+                  )
+                : l10n.t(
+                      'We could not sign in with the saved username and password. To start over, go back to Configure and choose "Erase the existing data and start empty". This permanently deletes all data in DocumentDB Local.',
                   );
         case 'passwordNotSupported':
             return l10n.t(
-                'The password contains characters that cannot be used to sign in, such as emoji. Go back to Configure and choose a different password.',
+                'We could not sign in because this password contains unsupported characters. Go back to Configure and choose a different password.',
             );
         case 'readinessTimeout':
             // A dev container publishes the port on its host, so "it is still starting" would be
@@ -101,13 +103,21 @@ export function formatQuickStartMessage(message: QuickStartMessage): string {
 }
 
 function formatContainerExited(exitCode: number | undefined, detail: string | undefined): string {
+    const reason = detail?.replace(/\.+$/, '') || undefined;
     if (exitCode === undefined) {
-        return detail
-            ? l10n.t('The DocumentDB container stopped before it was ready: {0}', detail)
+        return reason
+            ? l10n.t(
+                  'The DocumentDB container stopped before it was ready: {0}. View the setup log for details.',
+                  reason,
+              )
             : l10n.t('The DocumentDB container stopped before it was ready. View the setup log for details.');
     }
-    return detail
-        ? l10n.t('The DocumentDB container stopped before it was ready (exit code {0}): {1}', String(exitCode), detail)
+    return reason
+        ? l10n.t(
+              'The DocumentDB container stopped before it was ready (exit code {0}): {1}. View the setup log for details.',
+              String(exitCode),
+              reason,
+          )
         : l10n.t(
               'The DocumentDB container stopped before it was ready (exit code {0}). View the setup log for details.',
               String(exitCode),
