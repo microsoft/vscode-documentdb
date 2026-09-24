@@ -119,8 +119,11 @@ The tool `@vscode/l10n-dev` which collects all strings for localization requires
 const message1 = l10n.t('Hello ' + name);
 const message2 = l10n.t(`Hello ${name}`);
 const message3 = l10n.t(name ? 'Hello {0}' : '', name);
-const message4 = l10n.t('Hello \
-{0}', name);
+const message4 = l10n.t(
+  'Hello \
+{0}',
+  name,
+);
 ```
 
 ### Localization other dependencies

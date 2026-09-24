@@ -125,8 +125,9 @@ emulator, VMs, FerretDB, RU) may support `serverStatus` — so the design must
   server version, created-at) is already populated by the discovery/Azure views via ARM —
   no new API calls needed to show it. There is **no Azure Monitor usage yet** (no
   `@azure/arm-monitor` dependency) — that is a Phase-2 addition.
-- **Themed metric tiles already exist**: `collectionView/components/queryInsightsTab/components/metricsRow/`
-  (`MetricBase`, `CountMetric`, `TimeMetric`, `RatioMetric`, `formatUtils`) — promote to shared
+- **Themed metric tiles already exist**: `CountMetric`, `TimeMetric`, `RatioMetric`, and
+  `formatUtils` in Collection View's `queryInsightsTab/components/metricsRow/` use the shared
+  `MetricCard` and `MetricGrid` from `@microsoft/vscode-ext-webview-fluentui`. Reuse these
   components rather than rebuilding.
 - **Theming**: `DynamicThemeProvider` + `useThemeState()` derive Fluent (and Monaco) themes
   from live VS Code tokens — chart colors must come from here, never hard-coded palettes.

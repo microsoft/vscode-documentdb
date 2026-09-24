@@ -124,6 +124,20 @@ describe('HelpProvider', () => {
             expect(text).toContain('console.log()');
         });
 
+        it('advertises display settings as terminal link markers', () => {
+            const text = helpProvider.getHelpText(120);
+            expect(text).toContain('  Select an option to open it in VS Code Settings:');
+            expect(text).toContain('  1. ⚙ [colorSupport] Toggle syntax and output colors.');
+            expect(text).toContain('  2. ⚙ [inlineHints] Toggle 🛈 descriptions, counts, and previews.');
+            expect(text).toContain('  3. ⚙ [autocompletion] Toggle Tab completion and inline suggestions.');
+            const manualAccessLines = text.split('\n').filter((line) => line.includes('Manual access:'));
+            expect(manualAccessLines).toEqual(
+                ['colorSupport', 'inlineHints', 'autocompletion'].map(
+                    (setting) => `     Manual access: search Settings for documentDB.shell.display.${setting}`,
+                ),
+            );
+        });
+
         it('does NOT include keyboard shortcuts', () => {
             const text = helpProvider.getHelpText();
             expect(text).not.toContain('Run current block');
@@ -134,6 +148,58 @@ describe('HelpProvider', () => {
             const text = helpProvider.getHelpText();
             expect(text).not.toContain('Separate code blocks with blank lines');
             expect(text).not.toContain('Playground Output');
+        });
+
+        describe('width-aware layout', () => {
+            function longestLine(text: string): number {
+                return Math.max(...text.split('\n').map((l) => l.length));
+            }
+
+            it('fits within the requested width', () => {
+                for (const columns of [40, 50, 60, 80, 120]) {
+                    const text = helpProvider.getHelpText(columns);
+                    expect(longestLine(text)).toBeLessThanOrEqual(columns);
+                }
+            });
+
+            it('keeps the full autocompletion setting ID intact at 40 columns', () => {
+                const text = helpProvider.getHelpText(40);
+                expect(text.split('\n')).toContain(' documentDB.shell.display.autocompletion');
+            });
+
+            it('sizes the command column to the widest command, not a fixed 40', () => {
+                const text = helpProvider.getHelpText(80);
+                const findLine = text.split('\n').find((l) => l.includes('db.<coll>.find({})'));
+
+                // Widest command is 'db.<coll>.updateOne({}, {$set:{}})' (34 columns),
+                // so the description starts at column 2 + 34 + 2 = 38.
+                expect(findLine).toBe('  db.<coll>.find({})' + ' '.repeat(18) + 'Find documents');
+            });
+
+            it('stacks entries when there is no room for a description column', () => {
+                const text = helpProvider.getHelpText(40);
+                const lines = text.split('\n');
+                const commandIndex = lines.findIndex((l) => l === '  db.<coll>.find({})');
+
+                expect(commandIndex).toBeGreaterThan(-1);
+                expect(lines[commandIndex + 1]).toBe('    Find documents');
+            });
+
+            it('wraps the tip line rather than letting the terminal soft-wrap it', () => {
+                const text = helpProvider.getHelpText(40);
+                const tipLines = text
+                    .split('\n')
+                    .filter((l) => l.includes('Variables persist') || l.includes('inline'));
+
+                expect(tipLines.length).toBeGreaterThan(1);
+                for (const line of tipLines) {
+                    expect(line.startsWith('  ')).toBe(true);
+                }
+            });
+
+            it('defaults to 80 columns when no width is supplied', () => {
+                expect(helpProvider.getHelpText()).toBe(helpProvider.getHelpText(80));
+            });
         });
     });
 

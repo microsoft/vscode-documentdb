@@ -4,7 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { type AzureTenant } from '@microsoft/vscode-azext-azureauth';
-import { getResourceGroupFromId, uiUtils } from '@microsoft/vscode-azext-azureutils';
+import { getResourceGroupFromId, parseAzureResourceId, uiUtils } from '@microsoft/vscode-azext-azureutils';
 import { callWithTelemetryAndErrorHandling, type IActionContext } from '@microsoft/vscode-azext-utils';
 import { type AzureSubscription } from '@microsoft/vscode-azureresources-api';
 import * as vscode from 'vscode';
@@ -60,7 +60,7 @@ export class AzureSubscriptionItem implements TreeElement, TreeElementWithContex
                 context.telemetry.measurements.discoveryResourcesCount = accounts.length;
                 context.telemetry.measurements.discoveryLoadTimeMs = Date.now() - startTime;
 
-                return accounts
+                const resourceItems = accounts
                     .sort((a, b) => (a.name || '').localeCompare(b.name || '', undefined, { numeric: true }))
                     .map((account) => {
                         const resourceId = nonNullProp(account, 'id', 'account.id', 'AzureSubscriptionItem.ts');
@@ -74,7 +74,7 @@ export class AzureSubscriptionItem implements TreeElement, TreeElementWithContex
 
                         const clusterInfo: TreeCluster<AzureClusterModel> = {
                             // Core cluster data
-                            name: account.name ?? 'Unknown',
+                            name: account.name ?? parseAzureResourceId(resourceId).resourceName,
                             connectionString: undefined, // Loaded lazily when connecting
                             dbExperience: DocumentDBExperience,
                             clusterId: prefixedClusterId, // Prefixed with provider ID for uniqueness
@@ -86,16 +86,15 @@ export class AzureSubscriptionItem implements TreeElement, TreeElementWithContex
                             viewId: Views.DiscoveryView,
                         };
 
-                        ext.outputChannel.trace(
-                            `[DiscoveryView/vCore] Created cluster model: name="${clusterInfo.name}", clusterId="${clusterInfo.clusterId}", treeId="${clusterInfo.treeId}"`,
-                        );
-
                         return new DocumentDBResourceItem(
                             this.journeyCorrelationId,
                             this.subscription.subscription,
                             clusterInfo,
                         );
                     });
+
+                ext.outputChannel.trace(`[DiscoveryView/vCore] Loaded ${resourceItems.length} cluster(s).`);
+                return resourceItems;
             },
         );
     }

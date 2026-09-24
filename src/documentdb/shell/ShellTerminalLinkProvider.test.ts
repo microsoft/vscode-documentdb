@@ -4,8 +4,11 @@
  *--------------------------------------------------------------------------------------------*/
 
 import * as vscode from 'vscode';
+import packageJson from '../../../package.json';
+import { HelpProvider } from '../../../packages/documentdb-js-shell-runtime/src/HelpProvider';
 import {
     ACTION_LINE_PREFIX,
+    HELP_SETTING_ALIASES,
     PLAYGROUND_ACTION_PREFIX,
     registerShellTerminal,
     SETTINGS_ACTION_PREFIX,
@@ -266,6 +269,41 @@ describe('ShellTerminalLinkProvider', () => {
                 linkType: 'settings',
                 settingKey: 'documentDB.shell.initTimeout',
             });
+        });
+
+        it('should resolve every generated help marker to a contributed setting', () => {
+            registerShellTerminal(mockTerminal, () => mockShellInfo('test-id'));
+            const helpText = new HelpProvider('shell').getHelpText();
+            const markers = [...helpText.matchAll(/⚙ \[([^\]]+)\]/gu)].map((match) => match[1]);
+            const contributedSettings = packageJson.contributes.configuration.flatMap((section) =>
+                Object.keys(section.properties),
+            );
+
+            expect(markers).not.toHaveLength(0);
+            for (const marker of markers) {
+                const settingKey = HELP_SETTING_ALIASES[marker];
+                expect(settingKey).toBeDefined();
+                expect(contributedSettings).toContain(settingKey);
+
+                const context = {
+                    terminal: mockTerminal,
+                    line: `  ${SETTINGS_ACTION_PREFIX}[${marker}] Toggle this setting`,
+                } as vscode.TerminalLinkContext;
+                expect(provider.provideTerminalLinks(context)).toEqual([
+                    expect.objectContaining({ linkType: 'settings', settingKey }),
+                ]);
+            }
+        });
+
+        it('should leave an unknown compact marker as plain text', () => {
+            registerShellTerminal(mockTerminal, () => mockShellInfo('test-id'));
+
+            const context = {
+                terminal: mockTerminal,
+                line: `  ${SETTINGS_ACTION_PREFIX}[unknownSetting] Unknown setting`,
+            } as vscode.TerminalLinkContext;
+
+            expect(provider.provideTerminalLinks(context)).toEqual([]);
         });
 
         it('should handle ANSI-wrapped settings action line', () => {

@@ -100,11 +100,13 @@ export class AzureSubscriptionItem implements TreeElement, TreeElementWithContex
                         }
 
                         const host = fqdn || publicIpAddress;
-
-                        const connectionString = new DocumentDBConnectionString('mongodb://localhost:27017/'); // Placeholder host, will be replaced
-
-                        connectionString.hosts = [host + ':27017']; // Set the actual host and default port
-                        connectionString.protocol = 'mongodb';
+                        let connectionString: string | undefined;
+                        if (host) {
+                            const parsedConnectionString = new DocumentDBConnectionString('mongodb://localhost:27017/');
+                            parsedConnectionString.hosts = [`${host}:27017`];
+                            parsedConnectionString.protocol = 'mongodb';
+                            connectionString = parsedConnectionString.toString();
+                        }
 
                         // Sanitize Azure Resource ID: replace '/' with '_' for treeId
                         const sanitizedId = sanitizeAzureResourceIdForTreeId(vm.id!);
@@ -115,7 +117,7 @@ export class AzureSubscriptionItem implements TreeElement, TreeElementWithContex
                         const vmInfo: TreeCluster<VirtualMachineModel> = {
                             // Core cluster data
                             name: vm.name!,
-                            connectionString: connectionString.toString(),
+                            connectionString,
                             dbExperience: DocumentDBExperience,
                             clusterId: prefixedClusterId, // Prefixed with provider ID for uniqueness
                             // Azure-specific data
@@ -130,10 +132,6 @@ export class AzureSubscriptionItem implements TreeElement, TreeElementWithContex
                             viewId: Views.DiscoveryView,
                         };
 
-                        ext.outputChannel.trace(
-                            `[DiscoveryView/VM] Created cluster model: name="${vmInfo.name}", clusterId="${vmInfo.clusterId}", treeId="${vmInfo.treeId}"`,
-                        );
-
                         vmItems.push(
                             new AzureVMResourceItem(this.journeyCorrelationId, this.subscription.subscription, vmInfo),
                         );
@@ -143,6 +141,8 @@ export class AzureSubscriptionItem implements TreeElement, TreeElementWithContex
                 // Add enhanced telemetry for discovery
                 context.telemetry.measurements.discoveryResourcesCount = vmItems.length;
                 context.telemetry.measurements.discoveryLoadTimeMs = Date.now() - startTime;
+
+                ext.outputChannel.trace(`[DiscoveryView/VM] Loaded ${vmItems.length} tagged virtual machine(s).`);
 
                 return vmItems.sort((a, b) =>
                     a.cluster.name.localeCompare(b.cluster.name, undefined, { numeric: true }),

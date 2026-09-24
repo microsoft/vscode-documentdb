@@ -1,5 +1,21 @@
 # Change Log
 
+## Unreleased
+
+### Improvements
+
+- **Authentication Method Persistence**: Explicitly saved authentication methods now take precedence over inference from stored credential fields. This keeps managed identity connections on the selected method after reload; existing Native and Microsoft Entra ID connections remain compatible. [#886](https://github.com/microsoft/vscode-documentdb/pull/886)
+
+## 0.10.2
+
+### Fixes
+
+- **DocumentDB Local Demo Data**: Restores sample-data loading in DocumentDB Local Quick Start for DocumentDB 0.116 and later, while retaining compatibility with earlier images that use the legacy initialization password argument. [#913](https://github.com/microsoft/vscode-documentdb/pull/913)
+
+### Security
+
+- **Dependency Security Updates**: Updates `fast-uri` in the extension and API package to 3.1.7, `postcss-selector-parser` to 7.1.6, and `fflate` to 0.8.3, addressing URI, selector parsing, and archive handling vulnerabilities. [#903](https://github.com/microsoft/vscode-documentdb/pull/903), [#902](https://github.com/microsoft/vscode-documentdb/pull/902), [#900](https://github.com/microsoft/vscode-documentdb/pull/900), [#906](https://github.com/microsoft/vscode-documentdb/pull/906)
+
 ## 0.10.1
 
 ### Improvements

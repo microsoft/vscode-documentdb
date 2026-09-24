@@ -14,6 +14,9 @@
  * clusters and counts each one as 1 column unless it is a known
  * full-width/wide character (CJK Unified Ideographs, etc.).
  */
+const GRAPHEME_SEGMENTER = new Intl.Segmenter(undefined, { granularity: 'grapheme' });
+const EMOJI_PRESENTATION_PATTERN = /\p{Emoji_Presentation}/u;
+
 export function terminalDisplayWidth(text: string): number {
     // Fast path: ASCII-only strings (common case)
     if (/^[\x20-\x7e]*$/.test(text)) {
@@ -21,20 +24,48 @@ export function terminalDisplayWidth(text: string): number {
     }
 
     let width = 0;
-    // Use Intl.Segmenter to properly iterate grapheme clusters
-    // This handles surrogate pairs, combining marks, ZWJ sequences, etc.
-    const segmenter = new Intl.Segmenter(undefined, { granularity: 'grapheme' });
-    for (const { segment } of segmenter.segment(text)) {
-        const cp = segment.codePointAt(0) ?? 0;
-        // Full-width / wide characters occupy 2 columns
-        if (isWideCharacter(cp)) {
-            width += 2;
-        } else {
-            width += 1;
-        }
+    for (const { segment } of GRAPHEME_SEGMENTER.segment(text)) {
+        width += graphemeDisplayWidth(segment);
     }
 
     return width;
+}
+
+/**
+ * Truncate `text` so it occupies at most `maxWidth` display columns.
+ *
+ * Clipping happens on grapheme-cluster boundaries, so surrogate pairs and
+ * combining sequences are never split. A wide character that would straddle
+ * the limit is dropped entirely rather than half-rendered.
+ */
+export function clipToDisplayWidth(text: string, maxWidth: number): string {
+    if (maxWidth <= 0) {
+        return '';
+    }
+
+    // Fast path: ASCII-only strings (common case)
+    if (/^[\x20-\x7e]*$/.test(text)) {
+        return text.length <= maxWidth ? text : text.slice(0, maxWidth);
+    }
+
+    let width = 0;
+    let result = '';
+    for (const { segment } of GRAPHEME_SEGMENTER.segment(text)) {
+        const segmentWidth = graphemeDisplayWidth(segment);
+        if (width + segmentWidth > maxWidth) {
+            break;
+        }
+        width += segmentWidth;
+        result += segment;
+    }
+
+    return result;
+}
+
+function graphemeDisplayWidth(segment: string): number {
+    const codePoint = segment.codePointAt(0) ?? 0;
+    const hasEmojiPresentation = EMOJI_PRESENTATION_PATTERN.test(segment) || segment.includes('\ufe0f');
+    return isWideCharacter(codePoint) || hasEmojiPresentation ? 2 : 1;
 }
 
 /**

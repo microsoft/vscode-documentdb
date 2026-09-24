@@ -17,6 +17,7 @@ async function executeNewConnectionWizard(
     parentId: string,
     parentTreeId?: string,
 ): Promise<void> {
+    context.telemetry.properties.authFlowOrigin = 'newConnection';
     const wizardContext: NewConnectionWizardContext = {
         ...context,
         parentId,

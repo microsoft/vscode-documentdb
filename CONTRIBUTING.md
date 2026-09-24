@@ -21,7 +21,7 @@ The document consists of seven sections:
 | `main`               | Default trunk. All PRs target it. Always open. Releases are tagged here.                        | No, protected | Long-lived                                |
 | `dev/<user>/<topic>` | Personal working branches                                                                       | Allowed       | Short                                     |
 | `feature/<name>`     | Shared collaboration on large features before they are ready for `main`                         | Discouraged   | Variable                                  |
-| `release/<X.Y>`      | Created only when a patch must ship while `main` is not releasable. Branched off a release tag. | Discouraged   | Short (deleted after the patch is tagged) |
+| `release/<X.Y.Z>`    | Created only when a patch must ship while `main` is not releasable. Branched off a release tag. | Discouraged   | Short (deleted after the patch is tagged) |
 
 See [1.6 Force-push policy](#16-force-push-policy) for the rules behind the force-push column.
 
@@ -40,19 +40,19 @@ Releases are tags-first. Normally there are no release branches at all:
 1. When the team is ready to release, a maintainer tags a chosen `main` commit, for example `v0.9.0`. Every release has a tag.
 2. Later patch releases (`v0.9.1`, `v0.9.2`, and so on) normally tag later commits on `main` in the same way.
 
-The tag is the immutable marker of what shipped, not the publication source: the Marketplace pipeline builds and publishes from a branch — normally `main`, or the `release/<X.Y>` branch when one had to be cut (see [§7.9](#79-publish-to-the-marketplace)). Tag the commit you intend to release, and release from that commit.
+The tag is the immutable marker of what shipped, not the publication source: the Marketplace pipeline builds and publishes from a branch — normally `main`, or the `release/<X.Y.Z>` branch when one had to be cut (see [§7.9](#79-publish-to-the-marketplace)). Tag the commit you intend to release, and release from that commit.
 
-A `release/<X.Y>` branch is created for one scenario only: a quick patch release must ship while `main` is not yet in a releasable state. In that case:
+A `release/<X.Y.Z>` branch is created for one scenario only: a quick patch release must ship while `main` is not yet in a releasable state. In that case:
 
-1. Branch `release/<X.Y>` off the relevant release tag, for example off `v0.9.0`.
-2. Apply the patch on that branch and open it as a PR to `release/<X.Y>`.
+1. Branch `release/<X.Y.Z>` off the relevant release tag, **naming the branch for the version it will ship, not for the minor line** — so `release/0.9.1` cut off the `v0.9.0` tag, never `release/0.9`.
+2. Apply the patch on that branch and open it as a PR to `release/<X.Y.Z>`.
 3. Tag the patch release (`v0.9.1`) on that branch and run the release pipeline against it.
 4. Forward-merge the fix back into `main` so `main` stays up to date.
 5. Delete the release branch. The tag preserves the release permanently, so deleting the branch is safe and loses nothing. If another patch is needed later, re-branch from the tag.
 
 **The tag is the release.** If you have a PR you want in the upcoming release, merge it to `main` before the release is tagged. Once a version is tagged, new PRs merged to `main` target the _next_ release.
 
-> **Example:** The team is preparing v0.9. A contributor submits PR #690, a small connection timeout fix the team wants to include. The maintainer merges #690 to `main`, then tags `v0.9.0` on that commit, so the fix is in. Later, a critical bug is found but `main` already contains half-finished work for v0.10. The maintainer branches `release/0.9` off the `v0.9.0` tag, applies the fix, tags `v0.9.1` from that branch, forward-merges the fix into `main`, and then deletes `release/0.9`.
+> **Example:** The team is preparing v0.9. A contributor submits PR #690, a small connection timeout fix the team wants to include. The maintainer merges #690 to `main`, then tags `v0.9.0` on that commit, so the fix is in. Later, a critical bug is found but `main` already contains half-finished work for v0.10. The maintainer branches `release/0.9.1` off the `v0.9.0` tag, applies the fix, tags `v0.9.1` from that branch, forward-merges the fix into `main`, and then deletes `release/0.9.1`.
 
 ### 1.4 Large features
 
@@ -424,7 +424,7 @@ Always ship the signed artifact from the pipeline. A locally packaged `.vsix` is
 
 ### 7.9 Publish to the Marketplace
 
-Run the second internal Azure DevOps pipeline, the **release** pipeline, which publishes to the Visual Studio Marketplace from whichever branch holds the release commit — `main` for a normal release, or the `release/<X.Y>` branch when a patch was cut off a tag ([§1.3](#13-releases)). This is a separate pipeline from the build in §7.7: one produces and signs the artifact, the other ships it.
+Run the second internal Azure DevOps pipeline, the **release** pipeline, which publishes to the Visual Studio Marketplace from whichever branch holds the release commit — `main` for a normal release, or the `release/<X.Y.Z>` branch when a patch was cut off a tag ([§1.3](#13-releases)). This is a separate pipeline from the build in §7.7: one produces and signs the artifact, the other ships it.
 
 ## You're Ready to Contribute! 🎉
 

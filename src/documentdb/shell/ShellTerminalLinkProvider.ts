@@ -27,7 +27,7 @@ export interface ShellTerminalInfo {
     /** Worker thread state. */
     readonly workerState: 'idle' | 'spawning' | 'ready' | 'executing';
     /** Authentication method used. */
-    readonly authMethod: 'NativeAuth' | 'MicrosoftEntraID' | 'NoAuth' | undefined;
+    readonly authMethod: 'NativeAuth' | 'MicrosoftEntraID' | 'ManagedIdentity' | 'NoAuth' | undefined;
     /** Username for SCRAM auth (undefined for Entra ID or before init). */
     readonly username: string | undefined;
 }
@@ -105,6 +105,14 @@ export const PLAYGROUND_ACTION_PREFIX = '\u{2197} Query Playground '; // '↗ Qu
  * The settings key is NOT localized — it's the programmatic VS Code setting ID.
  */
 export const SETTINGS_ACTION_PREFIX = '\u{2699} '; // ⚙ + space
+
+/** Compact setting names used by shell help so links remain intact in narrow terminals. */
+export const HELP_SETTING_ALIASES: Readonly<Record<string, string>> = {
+    colorSupport: 'documentDB.shell.display.colorSupport',
+    autocompletion: 'documentDB.shell.display.autocompletion',
+    inlineHints: 'documentDB.shell.display.inlineHints',
+    'documentDB.shell.initTimeout': 'documentDB.shell.initTimeout',
+};
 
 /**
  * Regex to match the "Open in Collection View" action line.
@@ -256,7 +264,10 @@ export class ShellTerminalLinkProvider implements vscode.TerminalLinkProvider<Sh
         // Check for settings action line
         const settingsMatch = SETTINGS_LINE_PATTERN.exec(context.line);
         if (settingsMatch) {
-            const settingKey = settingsMatch[1];
+            const settingKey = HELP_SETTING_ALIASES[settingsMatch[1]];
+            if (!settingKey) {
+                return [];
+            }
             return [
                 {
                     linkType: 'settings',

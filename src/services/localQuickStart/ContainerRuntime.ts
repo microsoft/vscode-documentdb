@@ -270,7 +270,7 @@ class ContainerRuntimeImpl implements IContainerRuntime {
      * Run a `/bin/sh -c <script>` command inside a running container (`docker exec`).
      * Used to seed the image's built-in sample data via its native init script — see
      * {@link QuickStartService} — instead of baking `--init-data true` into the run args
-     * (which re-runs on every restart and crashes the container).
+     * (which re-runs on every restart and crashes older images).
      *
      * The script is passed as a single STRONG-quoted argument (single quotes on bash,
      * double quotes on cmd) so the host shell the command runner spawns through does NOT

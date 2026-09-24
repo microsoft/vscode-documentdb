@@ -518,7 +518,7 @@ $content-gutter: var(--spacingHorizontalMNudge); // 10px
         gap: 4px;
     }
 
-    // `MetricsRow` picks its column count from *viewport* media queries, which is wrong for
+    // `MetricGrid` picks its column count from *viewport* media queries, which is wrong for
     // a tile row measured against the panel: at a 1000–1200px window the viewport says "four
     // columns" while the panel is only wide enough for three, and the last tile was clipped
     // mid-value. The same 1 → 2 → 4 progression is kept, but measured against the content
@@ -534,24 +534,13 @@ $content-gutter: var(--spacingHorizontalMNudge); // 10px
         }
     }
 
-    // 860px, not the 800px `MetricsRow` uses against the viewport: the widest value here is
+    // 860px, not the 800px `MetricGrid` uses against the viewport: the widest value here is
     // a pair (`37 / 62.53 MB`), which needs ~205px of tile including padding. Four of those
     // plus the gaps do not fit until 860, and below it the fourth tile ellipsised.
     @container dashboardMain (min-width: 860px) {
         .statusStrip .metricsRow {
             grid-template-columns: repeat(4, 1fr);
         }
-    }
-
-    // The figures themselves are the last line of defence: a long pair like
-    // `37 / 62.53 MB` in a squeezed tile clips with an ellipsis instead of spilling.
-    .statusStrip .metricCard .dataValue {
-        min-width: 0;
-        max-width: 100%;
-        overflow: hidden;
-        text-overflow: ellipsis;
-        white-space: nowrap;
-        display: block;
     }
 
     // ---- Inventory panel ---------------------------------------------------

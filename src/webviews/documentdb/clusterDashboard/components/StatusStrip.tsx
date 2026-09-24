@@ -3,12 +3,13 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+import { MetricGrid } from '@microsoft/vscode-ext-webview-fluentui/components';
 import * as l10n from '@vscode/l10n';
 import { type JSX } from 'react';
 
 import { type ClusterStorageStats } from '../../../../documentdb/utils/getClusterHealth';
 // TODO(dashboard): promote metricsRow to src/webviews/components/ so views don't reach into each other.
-import { CountMetric, GenericMetric, MetricsRow } from '../../collectionView/queryInsightsTab/components/metricsRow';
+import { CountMetric, GenericMetric } from '../../collectionView/queryInsightsTab/components/metricsRow';
 import { formatBytes } from '../formatUtils';
 
 export interface StatusStripProps {
@@ -38,7 +39,7 @@ interface Tile {
 /**
  * What a composed value shows for the half of it the server did not report.
  *
- * The same text `MetricBase` renders for a wholly unavailable value, so `2 / N/A` and a
+ * The same text `MetricCard` renders for a wholly unavailable value, so `2 / N/A` and a
  * dimmed `N/A` say the same thing in the same words.
  */
 function unavailable(): string {
@@ -217,7 +218,7 @@ export const StatusStrip = ({
 
     return (
         <div className="statusStrip">
-            <MetricsRow>
+            <MetricGrid className="metricsRow">
                 {tiles.map((tile) => (
                     <div className="statusTile" key={tile.label}>
                         {tile.render === 'text' ? (
@@ -237,7 +238,7 @@ export const StatusStrip = ({
                         )}
                     </div>
                 ))}
-            </MetricsRow>
+            </MetricGrid>
         </div>
     );
 };

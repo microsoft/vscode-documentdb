@@ -544,28 +544,32 @@ truth.
 
 ### 8.4 Container initialization and seed data
 
-Initialization uses the container image's **standard init-script
-convention**, not a bespoke VS Code mechanism. This keeps the behavior
-portable (it works identically when the user runs the image by hand) and
-testable outside the extension.
+Quick Start uses the image's bundled `init_documentdb_data.sh` and
+`sample-data` directory. It runs the script through `docker exec` after the
+authenticated wire-protocol readiness probe succeeds, and waits for it
+before marking setup complete.
 
-- On create, Quick Start mounts a host directory into the image's
-  documented init directory. Scripts placed there run once, the first time
-  the data volume is initialized.
-- **Seed sample data** (the Advanced toggle and the success-card button)
-  simply drops a known, bundled init script into that directory before the
-  first start. It is therefore the same mechanism as user init scripts, not
-  a special path.
-- **Init-script development.** The Advanced panel lets the user point at a
-  local scripts folder, which is mounted into the init directory. Editing a
-  script and resetting the data volume re-runs it, so users can iterate on
-  their own initialization without leaving VS Code.
+- **Seed sample data** is enabled by default and can be disabled in
+  Configure. Seeding is skipped when `sampledb` already exists, so a
+  recreate does not overwrite existing data.
+- The script connects to the container's internal port `10260`, independent
+  of the host port selected in Configure.
+- Image `0.116.0` removed the script's `-p` / `--password` argument.
+  Quick Start passes `DOCUMENTDB_PASSWORD="$PASSWORD"` in the container's
+  shell instead. The value comes from the credentials supplied at creation
+  through `--env-file`; it is not placed on the host command line.
+- Quick Start detects environment-password support from the script's
+  `--help` output. Older image-tag overrides retain the legacy `-p`
+  invocation. A failed help command stops seeding; an initialization
+  failure is never retried with another password interface.
+- Quick Start does not set `--init-data true` on the container. Older image
+  versions rerun that flag on restart and fail on duplicate sample keys.
+  Post-readiness seeding keeps those restarts safe.
+- A seed failure is logged in **DocumentDB Local Setup** and remains
+  non-fatal: the ready database can still be used without sample data.
 
-Because init scripts run only on first volume initialization, re-running
-them requires a **Reset** (drops the data volume, §11), never a plain
-restart. Seed and init scripts must never embed the generated password;
-they receive credentials through the same `--env-file` the container uses
-(§8.2).
+The previously described custom init-folder mounting and separate
+success-card load action are not implemented by Quick Start.
 
 ---
 

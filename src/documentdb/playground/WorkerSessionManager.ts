@@ -280,7 +280,9 @@ export class WorkerSessionManager implements vscode.Disposable {
                                 ? new SettingsHintError(
                                       message,
                                       timeoutSettingKey,
-                                      l10n.t('You can increase the timeout in Settings:'),
+                                      l10n.t(
+                                          'The shell did not finish connecting. You can increase the timeout in Settings:',
+                                      ),
                                   )
                                 : new Error(message),
                         );

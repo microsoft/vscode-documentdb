@@ -12,15 +12,8 @@
  */
 
 import { type CompletionCandidate } from './ShellCompletionProvider';
-
-// ─── ANSI constants ──────────────────────────────────────────────────────────
-
-const ANSI_GRAY = '\x1b[90m';
-const ANSI_CYAN = '\x1b[36m';
-const ANSI_YELLOW = '\x1b[33m';
-const ANSI_GREEN = '\x1b[32m';
-const ANSI_MAGENTA = '\x1b[35m';
-const ANSI_RESET = '\x1b[0m';
+import { shellAnsi, shellStyles } from './shellStyles';
+import { clipToDisplayWidth, terminalDisplayWidth } from './terminalDisplayWidth';
 
 /** Maximum number of rows to display before truncating. */
 const MAX_DISPLAY_ROWS = 8;
@@ -30,6 +23,29 @@ const MIN_COLUMN_WIDTH = 4;
 
 /** Padding between columns. */
 const COLUMN_PADDING = 2;
+
+/** Appended when a label is too wide to fit its column. */
+const ELLIPSIS = '…';
+
+/**
+ * Truncate a label to `maxWidth` display columns, marking the cut with an ellipsis.
+ */
+function clipLabel(label: string, maxWidth: number): string {
+    if (terminalDisplayWidth(label) <= maxWidth) {
+        return label;
+    }
+    return clipToDisplayWidth(label, maxWidth - 1) + ELLIPSIS;
+}
+
+/**
+ * Pad a label to `width` display columns. `String.padEnd` counts UTF-16 code
+ * units and would under-pad any label containing wide or non-BMP characters,
+ * misaligning every column to its right.
+ */
+function padToDisplayWidth(label: string, width: number): string {
+    const padding = width - terminalDisplayWidth(label);
+    return padding > 0 ? label + ' '.repeat(padding) : label;
+}
 
 /**
  * Returns the ANSI color code for a completion candidate kind.
@@ -44,18 +60,18 @@ const COLUMN_PADDING = 2;
 function getKindColor(kind: CompletionCandidate['kind']): string {
     switch (kind) {
         case 'collection':
-            return ANSI_CYAN;
+            return shellStyles.completion.collection;
         case 'method':
         case 'command':
-            return ANSI_YELLOW;
+            return shellStyles.completion.action;
         case 'field':
-            return ANSI_GREEN;
+            return shellStyles.completion.field;
         case 'operator':
         case 'bson':
-            return ANSI_MAGENTA;
+            return shellStyles.completion.operator;
         case 'database':
         default:
-            return ANSI_GRAY;
+            return shellStyles.completion.other;
     }
 }
 
@@ -82,9 +98,14 @@ function formatDisplayLabel(candidate: CompletionCandidate): string {
  *
  * @param candidates - the candidates to display
  * @param terminalWidth - the terminal width in columns (default 80)
+ * @param colorEnabled - whether to apply decorative ANSI colors
  * @returns the ANSI-formatted string to write to the terminal
  */
-export function renderCompletionList(candidates: readonly CompletionCandidate[], terminalWidth: number = 80): string {
+export function renderCompletionList(
+    candidates: readonly CompletionCandidate[],
+    terminalWidth: number = 80,
+    colorEnabled: boolean = true,
+): string {
     if (candidates.length === 0) {
         return '';
     }
@@ -94,11 +115,15 @@ export function renderCompletionList(candidates: readonly CompletionCandidate[],
         return '';
     }
 
-    // Build display labels (methods get `()` suffix for visual distinction)
-    const displayLabels = candidates.map(formatDisplayLabel);
+    // Build display labels (methods get `()` suffix for visual distinction).
+    // Labels wider than a single column are clipped: without that, colWidth can
+    // exceed terminalWidth, numCols collapses to 1, every entry soft-wraps and
+    // MAX_DISPLAY_ROWS no longer bounds the number of physical rows.
+    const maxLabelWidth = Math.max(MIN_COLUMN_WIDTH, terminalWidth - COLUMN_PADDING);
+    const displayLabels = candidates.map((c) => clipLabel(formatDisplayLabel(c), maxLabelWidth));
 
-    // Calculate column width from longest display label
-    const maxLabelLen = Math.max(...displayLabels.map((l) => l.length));
+    // Calculate column width from the widest display label
+    const maxLabelLen = Math.max(...displayLabels.map((l) => terminalDisplayWidth(l)));
     const colWidth = Math.max(maxLabelLen + COLUMN_PADDING, MIN_COLUMN_WIDTH);
 
     // Calculate number of columns that fit
@@ -124,17 +149,18 @@ export function renderCompletionList(candidates: readonly CompletionCandidate[],
 
             const candidate = visibleCandidates[idx];
             const label = visibleLabels[idx];
-            const color = getKindColor(candidate.kind);
+            const color = colorEnabled ? getKindColor(candidate.kind) : '';
 
             // Pad to column width (except last column)
-            const paddedLabel = col < numCols - 1 ? label.padEnd(colWidth) : label;
-            output += color + paddedLabel + ANSI_RESET;
+            const paddedLabel = col < numCols - 1 ? padToDisplayWidth(label, colWidth) : label;
+            output += color + paddedLabel + (colorEnabled ? shellAnsi.reset : '');
         }
     }
 
     if (truncated) {
         const remaining = candidates.length - displayCount;
-        output += '\r\n' + ANSI_GRAY + `\u2026and ${String(remaining)} more` + ANSI_RESET;
+        const moreText = `\u2026and ${String(remaining)} more`;
+        output += '\r\n' + (colorEnabled ? `${shellStyles.completion.other}${moreText}${shellAnsi.reset}` : moreText);
     }
 
     return output;

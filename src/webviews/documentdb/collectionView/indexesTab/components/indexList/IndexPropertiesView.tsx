@@ -3,10 +3,10 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { Badge, Tooltip } from '@fluentui/react-components';
+import { Tooltip } from '@fluentui/react-components';
+import { FocusableBadge } from '@microsoft/vscode-ext-webview-fluentui/components';
 import * as l10n from '@vscode/l10n';
 import { type JSX } from 'react';
-import '../../../../../components/focusableBadge/focusableBadge.scss';
 import { type IndexRow } from '../../types';
 import { formatShellJson } from '../../utils/format';
 import { formatVectorAlgorithm } from '../../utils/vectorIndex';
@@ -64,17 +64,15 @@ export const IndexPropertiesView = ({ index }: IndexPropertiesViewProps): JSX.El
         <div className="indexPropertiesCell">
             {badges.map(({ label, tooltip }) => {
                 const badge = (
-                    <Badge
+                    <FocusableBadge
                         appearance="outline"
                         color="informative"
                         shape="rounded"
                         size="medium"
-                        tabIndex={tooltip ? 0 : undefined}
-                        className={tooltip ? 'focusableBadge' : undefined}
-                        aria-label={tooltip ? l10n.t('{0}. {1}', label, tooltip) : undefined}
+                        focusable={Boolean(tooltip)}
                     >
-                        <span aria-hidden={tooltip ? true : undefined}>{label}</span>
-                    </Badge>
+                        {label}
+                    </FocusableBadge>
                 );
                 if (!tooltip) {
                     return <span key={label}>{badge}</span>;

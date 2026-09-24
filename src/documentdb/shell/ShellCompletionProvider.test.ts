@@ -10,6 +10,10 @@ import { ClustersClient } from '../ClustersClient';
 import { SchemaStore } from '../SchemaStore';
 import { ShellCompletionProvider, type ShellCompletionContext } from './ShellCompletionProvider';
 
+interface ClustersClientModule {
+    readonly ClustersClient: typeof ClustersClient;
+}
+
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
 const TEST_CONTEXT: ShellCompletionContext = {
@@ -202,6 +206,80 @@ describe('ShellCompletionProvider', () => {
             const labels = result.candidates.map((c) => c.label);
             expect(labels).toContain('dbs');
             expect(labels).toContain('databases');
+        });
+    });
+
+    describe('collection prewarming', () => {
+        it('should populate the shared cache for the requested database', async () => {
+            const listCollections = jest.fn().mockResolvedValue([]);
+            (ClustersClient.getExistingClient as jest.Mock).mockReturnValue({ listCollections });
+
+            await provider.prewarmCollections(TEST_CONTEXT);
+
+            expect(ClustersClient.getExistingClient).toHaveBeenCalledWith('test-cluster');
+            expect(ClustersClient.getClient).not.toHaveBeenCalled();
+            expect(listCollections).toHaveBeenCalledWith('testdb');
+        });
+
+        it.each([
+            { label: 'cold', cached: [] },
+            { label: 'stale', cached: [{ name: 'old', type: 'collection' }] },
+        ])('refreshes a $label cache through the client and exposes the new names', async ({ cached }) => {
+            const { ClustersClient: ActualClustersClient } =
+                jest.requireActual<ClustersClientModule>('../ClustersClient');
+            const toArray = jest.fn().mockResolvedValue([{ name: 'new', type: 'collection' }]);
+            const listCollections = jest.fn().mockReturnValue({ toArray });
+            const database = jest.fn().mockReturnValue({ listCollections });
+            const client = Object.create(ActualClustersClient.prototype) as ClustersClient;
+            Object.assign(client, {
+                _mongoClient: { db: database },
+                _collectionsCache: new Map(cached.length > 0 ? [[TEST_CONTEXT.databaseName, cached]] : []),
+            });
+            (ClustersClient.getExistingClient as jest.Mock).mockReturnValue(client);
+
+            await provider.prewarmCollections(TEST_CONTEXT);
+
+            expect(database).toHaveBeenCalledWith(TEST_CONTEXT.databaseName);
+            expect(toArray).toHaveBeenCalledTimes(1);
+            expect(client.getCachedCollections(TEST_CONTEXT.databaseName)).toEqual([
+                expect.objectContaining({ name: 'new', type: 'collection' }),
+            ]);
+            const names = provider
+                .getCompletions('db.', 3, TEST_CONTEXT)
+                .candidates.map((candidate) => candidate.label);
+            expect(names).toContain('new');
+            expect(names).not.toContain('old');
+            expect(ClustersClient.getClient).not.toHaveBeenCalled();
+        });
+
+        it('deduplicates concurrent requests but allows a later refresh', async () => {
+            const listCollections = jest.fn().mockResolvedValue([]);
+            (ClustersClient.getExistingClient as jest.Mock).mockReturnValue({ listCollections });
+
+            const firstFetch = provider.prewarmCollections(TEST_CONTEXT);
+            const concurrentFetch = provider.prewarmCollections(TEST_CONTEXT);
+            expect(listCollections).toHaveBeenCalledTimes(1);
+            await Promise.all([firstFetch, concurrentFetch]);
+
+            await provider.prewarmCollections(TEST_CONTEXT);
+            expect(listCollections).toHaveBeenCalledTimes(2);
+        });
+
+        it('ignores a rejected fetch and allows the next refresh to retry', async () => {
+            const listCollections = jest.fn().mockRejectedValueOnce(new Error('unavailable')).mockResolvedValueOnce([]);
+            (ClustersClient.getExistingClient as jest.Mock).mockReturnValue({ listCollections });
+
+            await expect(provider.prewarmCollections(TEST_CONTEXT)).resolves.toBeUndefined();
+            await expect(provider.prewarmCollections(TEST_CONTEXT)).resolves.toBeUndefined();
+            expect(listCollections).toHaveBeenCalledTimes(2);
+        });
+
+        it('should not create a client when the cluster has no cached client', async () => {
+            (ClustersClient.getExistingClient as jest.Mock).mockReturnValue(undefined);
+
+            await provider.prewarmCollections(TEST_CONTEXT);
+
+            expect(ClustersClient.getClient).not.toHaveBeenCalled();
         });
     });
 
@@ -890,6 +968,26 @@ describe('ShellCompletionProvider', () => {
 
             expect(escaped).toBeDefined();
             expect(escaped!.insertText).toBe("['a\\\\b\\'c']");
+        });
+
+        it('should ask for the preceding dot to be removed on bracket-notation candidates', () => {
+            const result = provider.getCompletions('db.sto', 6, TEST_CONTEXT);
+            expect(result.candidates[0].replaceCharsBefore).toBe(1);
+        });
+
+        it('should not remove any character for dot-notation candidates', () => {
+            const result = provider.getCompletions('db.res', 6, TEST_CONTEXT);
+            expect(result.candidates[0].label).toBe('restaurants');
+            expect(result.candidates[0].replaceCharsBefore).toBeUndefined();
+        });
+
+        it('should produce valid JS when the replacement is applied to the buffer', () => {
+            const buffer = 'db.sto';
+            const result = provider.getCompletions(buffer, buffer.length, TEST_CONTEXT);
+            const candidate = result.candidates[0];
+            const deleteCount = result.prefix.length + (candidate.replaceCharsBefore ?? 0);
+
+            expect(buffer.slice(0, buffer.length - deleteCount) + candidate.insertText).toBe("db['stores (10)']");
         });
     });
 });

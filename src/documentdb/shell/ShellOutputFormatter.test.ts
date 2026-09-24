@@ -7,6 +7,7 @@ import { EJSON } from 'bson';
 import * as vscode from 'vscode';
 import { type SerializableExecutionResult } from '../playground/workerTypes';
 import { ShellOutputFormatter } from './ShellOutputFormatter';
+import { shellAnsi, shellStyles } from './shellStyles';
 
 describe('ShellOutputFormatter', () => {
     let formatter: ShellOutputFormatter;
@@ -238,6 +239,34 @@ describe('ShellOutputFormatter', () => {
         });
     });
 
+    describe('connection banner formatting', () => {
+        it('should dim the frame and emphasize the prompt and wordmark', () => {
+            expect(formatter.formatShellLogo()).toBe(
+                [
+                    `${shellStyles.ghostText}╭────╮${shellAnsi.reset}`,
+                    `${shellStyles.ghostText}│ ${shellAnsi.reset}${shellStyles.emphasis}>_${shellAnsi.reset}${shellStyles.ghostText} │${shellAnsi.reset} ${shellStyles.emphasis}DocumentDB Shell${shellAnsi.reset}`,
+                    `${shellStyles.ghostText}╰────╯${shellAnsi.reset}`,
+                ].join('\n'),
+            );
+        });
+
+        it('should use neutral emphasis for the title and values', () => {
+            expect(formatter.formatShellTitle('DocumentDB Shell: Demo')).toBe('\x1b[1mDocumentDB Shell: Demo\x1b[0m');
+            expect(formatter.formatConnectionValue('value')).toBe('\x1b[1m\x1b[39mvalue\x1b[0m\x1b[90m');
+        });
+
+        it('should preserve plain text when color support is disabled', () => {
+            jest.spyOn(vscode.workspace, 'getConfiguration').mockReturnValue({
+                get: jest.fn(() => false),
+            } as unknown as vscode.WorkspaceConfiguration);
+
+            expect(formatter.formatShellTitle('DocumentDB Shell: Demo')).toBe('DocumentDB Shell: Demo');
+            expect(formatter.formatShellLogo()).toBe('╭────╮\n│ >_ │ DocumentDB Shell\n╰────╯');
+            expect(formatter.formatShellLogo()).not.toContain('\x1b[');
+            expect(formatter.formatConnectionValue('alex@contoso.com')).toBe('alex@contoso.com');
+        });
+    });
+
     describe('Help result formatting', () => {
         it('should format help text directly from string', () => {
             const result = makeResult({
@@ -248,15 +277,15 @@ describe('ShellOutputFormatter', () => {
             expect(output).toContain('Available commands');
         });
 
-        it('should colorize section headers with bold cyan when color enabled', () => {
+        it('should emphasize section headers with bold default text when color enabled', () => {
             const helpText = '# Query\n  db.find({})                             Find documents';
             const result = makeResult({
                 type: 'Help',
                 printable: EJSON.stringify(helpText, { relaxed: false }),
             });
             const output = formatter.formatResult(result);
-            // Header should be bold+cyan
-            expect(output).toContain('\x1b[1m\x1b[36mQuery\x1b[0m');
+            expect(output).toContain('\x1b[1mQuery\x1b[0m');
+            expect(output).not.toContain('\x1b[36mQuery');
         });
 
         it('should colorize command entries with yellow command and gray description', () => {
@@ -268,6 +297,23 @@ describe('ShellOutputFormatter', () => {
             const output = formatter.formatResult(result);
             expect(output).toContain('\x1b[33mdb.find({})');
             expect(output).toContain('\x1b[90mFind documents');
+        });
+
+        it('should render manual settings access details with the ghost text style', () => {
+            const helpText = [
+                '     Manual access: search Settings for documentDB.shell.display.colorSupport',
+                '     Manual access: search Settings for documentDB.shell.display.inlineHints',
+                '     Manual access: search Settings for documentDB.shell.display.autocompletion',
+            ].join('\n');
+            const result = makeResult({
+                type: 'Help',
+                printable: EJSON.stringify(helpText, { relaxed: false }),
+            });
+
+            const output = formatter.formatResult(result);
+
+            expect(output.split(shellStyles.ghostText)).toHaveLength(4);
+            expect(output).not.toContain('\x1b[90mManual access:');
         });
 
         it('should not colorize help text when color is disabled', () => {
@@ -282,6 +328,17 @@ describe('ShellOutputFormatter', () => {
             });
             const output = formatter.formatResult(result);
             expect(output).not.toContain('\x1b[');
+        });
+
+        it('should underline compact settings markers as clickable links', () => {
+            const helpText = '# Settings\n  1. ⚙ [colorSupport] Toggle syntax and output colors.';
+            const result = makeResult({
+                type: 'Help',
+                printable: EJSON.stringify(helpText, { relaxed: false }),
+            });
+
+            const output = formatter.formatResult(result);
+            expect(output).toContain('\x1b[4m⚙ [colorSupport]\x1b[24m');
         });
     });
 });
