@@ -12,7 +12,7 @@ import {
 import * as l10n from '@vscode/l10n';
 import * as vscode from 'vscode';
 import { API } from '../../DocumentDBExperiences';
-import { ext } from '../../extensionVariables';
+import { settingsKeys } from '../../settingsKeys';
 import { type FolderItem } from '../../tree/connections-view/FolderItem';
 import { type LocalEmulatorsItem } from '../../tree/connections-view/LocalEmulators/LocalEmulatorsItem';
 import { NewEmulatorConnectionItemCV } from '../../tree/connections-view/LocalEmulators/NewEmulatorConnectionItemCV';
@@ -33,7 +33,7 @@ async function executeLocalConnectionWizard(
     parentTreeElementId: string,
     parentStorageId?: string,
 ): Promise<void> {
-    const portString = vscode.workspace.getConfiguration().get<number>(ext.settingsKeys.localPort, 10260);
+    const portString = vscode.workspace.getConfiguration().get<number>(settingsKeys.localPort, 10260);
     const portNumber = Number(portString);
 
     const wizardContext: NewLocalConnectionWizardContext = {

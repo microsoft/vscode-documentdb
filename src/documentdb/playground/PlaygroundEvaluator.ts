@@ -13,7 +13,7 @@ import { randomUUID } from 'crypto';
 import type * as vscode from 'vscode';
 import { ext } from '../../extensionVariables';
 import { meterSilentCatch } from '../../utils/accumulatingTelemetry';
-import { getBatchSizeSetting } from '../../utils/workspacUtils';
+import { getBatchSizeSetting, getConnectionTimeoutMs } from '../../utils/workspacUtils';
 import { AuthMethodId } from '../auth/AuthMethod';
 import { CredentialCache } from '../CredentialCache';
 import { resolveAllowInvalidCertificates } from '../utils/tlsException';
@@ -192,7 +192,7 @@ export class PlaygroundEvaluator implements vscode.Disposable {
             context.errorHandling.rethrow = true;
             context.telemetry.properties.authMethod = initMsg.authMechanism;
             context.telemetry.properties.needsSpawn = needsSpawn ? 'true' : 'false';
-            await this._workerManager.ensureWorker(connection.clusterId, initMsg);
+            await this._workerManager.ensureWorker(connection.clusterId, initMsg, getConnectionTimeoutMs());
         });
         this._lastInitDurationMs = needsSpawn ? Date.now() - initStartTime : 0;
 

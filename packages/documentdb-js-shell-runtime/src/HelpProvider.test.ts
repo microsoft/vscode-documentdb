@@ -124,18 +124,15 @@ describe('HelpProvider', () => {
             expect(text).toContain('console.log()');
         });
 
-        it('advertises display settings as terminal link markers', () => {
+        it('links to all Interactive Shell settings with a manual fallback', () => {
             const text = helpProvider.getHelpText(120);
-            expect(text).toContain('  Select an option to open it in VS Code Settings:');
-            expect(text).toContain('  1. ⚙ [colorSupport] Toggle syntax and output colors.');
-            expect(text).toContain('  2. ⚙ [inlineHints] Toggle 🛈 descriptions, counts, and previews.');
-            expect(text).toContain('  3. ⚙ [autocompletion] Toggle Tab completion and inline suggestions.');
-            const manualAccessLines = text.split('\n').filter((line) => line.includes('Manual access:'));
-            expect(manualAccessLines).toEqual(
-                ['colorSupport', 'inlineHints', 'autocompletion'].map(
-                    (setting) => `     Manual access: search Settings for documentDB.shell.display.${setting}`,
-                ),
+            expect(text).toContain(
+                '  ⚙ [shellSettings] Configure paste behavior, colors, inline hints, and autocompletion.',
             );
+            const manualAccessLines = text.split('\n').filter((line) => line.includes('Manual access:'));
+            expect(manualAccessLines).toEqual([
+                '  Manual access: search Settings for @ext:ms-azuretools.vscode-documentdb documentDB.shell',
+            ]);
         });
 
         it('does NOT include keyboard shortcuts', () => {
@@ -162,9 +159,9 @@ describe('HelpProvider', () => {
                 }
             });
 
-            it('keeps the full autocompletion setting ID intact at 40 columns', () => {
+            it('keeps the full shell settings query intact at 40 columns', () => {
                 const text = helpProvider.getHelpText(40);
-                expect(text.split('\n')).toContain(' documentDB.shell.display.autocompletion');
+                expect(text.replace(/\s+/gu, ' ')).toContain('@ext:ms-azuretools.vscode-documentdb documentDB.shell');
             });
 
             it('sizes the command column to the widest command, not a fixed 40', () => {

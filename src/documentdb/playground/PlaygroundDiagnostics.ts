@@ -5,7 +5,7 @@
 
 import * as l10n from '@vscode/l10n';
 import * as vscode from 'vscode';
-import { ext } from '../../extensionVariables';
+import { settingsKeys } from '../../settingsKeys';
 import { getBatchSizeSetting } from '../../utils/workspacUtils';
 import { PLAYGROUND_LANGUAGE_ID } from './constants';
 
@@ -60,7 +60,7 @@ export class PlaygroundDiagnostics implements vscode.Disposable {
         // Re-analyze when the batch size setting changes
         this._disposables.push(
             vscode.workspace.onDidChangeConfiguration((e) => {
-                if (e.affectsConfiguration(ext.settingsKeys.batchSize)) {
+                if (e.affectsConfiguration(settingsKeys.batchSize)) {
                     for (const editor of vscode.window.visibleTextEditors) {
                         if (editor.document.languageId === PLAYGROUND_LANGUAGE_ID) {
                             this.analyzeDocument(editor.document);
@@ -143,7 +143,7 @@ export class PlaygroundDiagnostics implements vscode.Disposable {
                     '.limit({0}) exceeds the display batch size ({1}), so only {1} documents will be shown. Use .toArray() to retrieve all {0}, or increase "{2}" in Settings.',
                     limitValue,
                     batchSize,
-                    ext.settingsKeys.batchSize,
+                    settingsKeys.batchSize,
                 ),
                 vscode.DiagnosticSeverity.Warning,
             );
@@ -191,7 +191,7 @@ class PlaygroundCodeActionProvider implements vscode.CodeActionProvider {
             settingsAction.command = {
                 title: l10n.t('Open batch size setting'),
                 command: 'workbench.action.openSettings',
-                arguments: [ext.settingsKeys.batchSize],
+                arguments: [settingsKeys.batchSize],
             };
             actions.push(settingsAction);
         }

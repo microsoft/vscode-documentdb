@@ -211,7 +211,7 @@ const commonRouter = router({
             void vscode.window.showInformationMessage(input.message);
         }),
     /**
-     * Completion toast gated by the `documentDB.userInterface.ShowOperationSummaries`
+     * Completion toast gated by the `documentDB.userInterface.showOperationSummaries`
      * setting, so webviews honour the same user preference as the tree-view commands.
      */
     displayOperationSummary: publicProcedure

@@ -4,12 +4,12 @@
  *--------------------------------------------------------------------------------------------*/
 
 import * as vscode from 'vscode';
-import { ext } from '../../extensionVariables';
+import { settingsKeys } from '../../settingsKeys';
 
 export function showConfirmationAsInSettings(message: string) {
     const showSummary: boolean = vscode.workspace
         .getConfiguration()
-        .get<boolean>(ext.settingsKeys.showOperationSummaries, true);
+        .get<boolean>(settingsKeys.showOperationSummaries, true);
 
     if (showSummary) {
         vscode.window.showInformationMessage(message);
