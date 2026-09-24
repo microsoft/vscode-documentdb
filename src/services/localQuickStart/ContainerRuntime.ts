@@ -11,13 +11,12 @@
  *   {@link MaskedChannelWritable} that **line-buffers** and **redacts secrets**
  *   before writing to the "DocumentDB Local Setup" OutputChannel (D14):
  *   the generated password must never reach the channel, even when a stream
- *   chunk splits it across a buffer boundary.
+ *   chunk splits it across a buffer boundary. Inspect stdout is the exception:
+ *   it carries the container env, so it is not echoed at all.
  * - `docker run` is detached (D4); because a detached run streams nothing back,
  *   {@link ContainerRuntime.followLogs} streams `docker logs -f` so the channel
  *   isn't silent during the readiness wait.
- * - The image takes credentials as **post-image args** (`--username/--password`),
- *   which the client supports via `runContainer({ command: [...] })` — validated
- *   in WI-0, so no raw-CLI fallback is needed.
+ * - Credentials reach the container through a temp `--env-file`, never argv.
  */
 
 import {
@@ -152,7 +151,7 @@ class ContainerRuntimeImpl implements IContainerRuntime {
         },
     });
 
-    private makeRunner(secrets: ReadonlyArray<string>, token?: vscode.CancellationToken) {
+    private makeRunner(secrets: ReadonlyArray<string>, token?: vscode.CancellationToken, echoStdout = true) {
         const channel = getQuickStartOutputChannel();
         const factory = new ShellStreamCommandRunnerFactory({
             // Non-strict: a non-zero exit still rejects, but harmless stderr warnings
@@ -160,7 +159,7 @@ class ContainerRuntimeImpl implements IContainerRuntime {
             strict: false,
             shellProvider: SHELL_PROVIDER,
             onCommand: (command: string) => channel.appendLine('$ ' + maskSecrets(command, secrets)),
-            stdOutPipe: new MaskedChannelWritable(channel, secrets),
+            stdOutPipe: echoStdout ? new MaskedChannelWritable(channel, secrets) : undefined,
             stdErrPipe: new MaskedChannelWritable(channel, secrets),
             cancellationToken: token,
         });
@@ -237,7 +236,8 @@ class ContainerRuntimeImpl implements IContainerRuntime {
 
     public async inspectContainer(nameOrId: string): Promise<InspectContainersItem | undefined> {
         try {
-            const runner = this.makeRunner([]);
+            // Don't echo stdout: it carries the container env (PASSWORD=…), and callers often have no secret to mask it with.
+            const runner = this.makeRunner([], undefined, false);
             const items = await runner(this.client.inspectContainers({ containers: [nameOrId] }));
             return items?.[0];
         } catch {

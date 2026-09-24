@@ -517,6 +517,101 @@ describe('DockerReadinessService', () => {
         });
     });
 
+    it('logs a docker info summary instead of piping its JSON to the channel', async () => {
+        const appendDiagnostic = jest.fn();
+        const stdOutPipe = new Writable({ write: (_chunk, _encoding, callback): void => callback() });
+        const pipedProbes: string[] = [];
+        const runProbe = jest.fn(async (options: RunDockerProbeOptions): Promise<DockerProbeEvidence> => {
+            if (options.stdOutPipe) {
+                pipedProbes.push(options.probe);
+            }
+            if (options.probe === 'info') {
+                return evidence('info', {
+                    stdout: JSON.stringify({
+                        OSType: 'linux',
+                        OperatingSystem: 'Docker Desktop',
+                        Architecture: 'x86_64',
+                        ServerVersion: '29.8.0',
+                        ServerErrors: [],
+                    }),
+                });
+            }
+            return evidence(options.probe, { stdout: 'Docker version 28.1.1' });
+        });
+        const service = new DockerReadinessService({
+            client: createClient(),
+            shellProvider: new Bash(),
+            platform: 'linux',
+            environmentVariables: {},
+            runProbe,
+            createProbeOutput: () => ({ stdOutPipe, appendDiagnostic }),
+        });
+
+        await expect(service.getReadiness()).resolves.toMatchObject({ outcome: 'ready' });
+        expect(pipedProbes).toEqual(['cliVersion']);
+        expect(appendDiagnostic.mock.calls).toEqual([
+            ['[readiness] docker server=29.8.0 os=linux (Docker Desktop) arch=x86_64'],
+        ]);
+    });
+
+    it.each([
+        [
+            'missing docker info fields fall back to unknown',
+            false,
+            ['[readiness] docker server=unknown os=unknown arch=unknown'],
+        ],
+        ['a suppressed poll logs no summary', true, []],
+    ])('%s', async (_name, suppressCommandEcho, expected) => {
+        const appendDiagnostic = jest.fn();
+        const runProbe = jest.fn(
+            async (options: RunDockerProbeOptions): Promise<DockerProbeEvidence> =>
+                options.probe === 'info'
+                    ? evidence('info', { stdout: JSON.stringify({ ServerErrors: [] }) })
+                    : evidence(options.probe, { stdout: 'Docker version 28.1.1' }),
+        );
+        const service = new DockerReadinessService({
+            client: createClient(),
+            shellProvider: new Bash(),
+            platform: 'linux',
+            environmentVariables: {},
+            runProbe,
+            createProbeOutput: () => ({ appendDiagnostic }),
+        });
+
+        await service.getReadiness({ suppressCommandEcho });
+
+        expect(appendDiagnostic.mock.calls).toEqual(expected.map((line) => [line]));
+    });
+
+    it('logs docker info server errors as diagnostics on failure', async () => {
+        const appendDiagnostic = jest.fn();
+        const runProbe = jest.fn(async (options: RunDockerProbeOptions): Promise<DockerProbeEvidence> => {
+            if (options.probe === 'info') {
+                return evidence('info', {
+                    exitCode: 1,
+                    stdout: JSON.stringify({ ServerErrors: ['Cannot connect to the Docker daemon'] }),
+                });
+            }
+            if (options.probe === 'contexts') {
+                return evidence('contexts', { stdout: '[]' });
+            }
+            return evidence('cliVersion', { stdout: 'Docker version 28.1.1' });
+        });
+        const service = new DockerReadinessService({
+            client: createClient(),
+            shellProvider: new Bash(),
+            platform: 'linux',
+            environmentVariables: {},
+            runProbe,
+            probeEndpoint: async (endpoint) => ({ kind: endpoint.kind, source: endpoint.source }),
+            createProbeOutput: () => ({ appendDiagnostic }),
+        });
+
+        await service.getReadiness();
+
+        expect(appendDiagnostic).toHaveBeenCalledWith('[readiness] server error: Cannot connect to the Docker daemon');
+    });
+
     it('diagnoses a reachable Windows-container daemon', async () => {
         const runProbe = jest.fn(async (options: RunDockerProbeOptions): Promise<DockerProbeEvidence> => {
             if (options.probe === 'info') {
@@ -799,7 +894,7 @@ describe('DockerReadinessService', () => {
         expect(writeProviderMemory).toHaveBeenCalledWith(undefined);
     });
 
-    it('suppresses successful poll transcripts and retains a failing probe transcript', async () => {
+    it('suppresses successful poll transcripts and retains failing probe transcripts', async () => {
         const onCommand = jest.fn();
         const stdout: string[] = [];
         const stderr: string[] = [];
@@ -809,7 +904,7 @@ describe('DockerReadinessService', () => {
                 return evidence('info', { exitCode: 1, stdout: 'failed stdout', stderr: 'failed stderr' });
             }
             if (options.probe === 'contexts') {
-                return evidence('contexts', { stdout: '[]' });
+                return evidence('contexts', { exitCode: 1, stdout: 'contexts stdout', stderr: 'contexts stderr' });
             }
             return evidence('cliVersion', { stdout: 'Docker version 28.1.1' });
         });
@@ -839,10 +934,10 @@ describe('DockerReadinessService', () => {
 
         await service.getReadiness({ suppressCommandEcho: true });
 
-        expect(onCommand).toHaveBeenCalledTimes(1);
-        expect(onCommand).toHaveBeenCalledWith('docker info');
-        expect(stdout).toEqual(['failed stdout']);
-        expect(stderr).toEqual(['failed stderr']);
+        expect(onCommand.mock.calls).toEqual([['docker info'], ['docker contexts']]);
+        // `docker info` stdout is dropped (summarized elsewhere); other failing probes keep theirs.
+        expect(stdout).toEqual(['contexts stdout']);
+        expect(stderr).toEqual(['failed stderr', 'contexts stderr']);
     });
 });
 
