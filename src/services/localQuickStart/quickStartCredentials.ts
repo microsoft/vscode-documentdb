@@ -8,9 +8,10 @@
  * No `vscode` dependency, so it is unit-testable in isolation.
  */
 
+import saslprep from '@mongodb-js/saslprep';
 import * as crypto from 'crypto';
 import { DocumentDBConnectionString } from '../../documentdb/utils/DocumentDBConnectionString';
-import { QUICK_START_PORT } from './quickStartTypes';
+import { type PasswordEncodingProblem, QUICK_START_PORT } from './quickStartTypes';
 
 /** URL-safe alphabet: never emits a character with meaning in a URI (design §8.1). */
 const SAFE_ALPHABET = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
@@ -61,6 +62,24 @@ export function composeConnectionString(username: string, password: string, port
     cs.username = username;
     cs.password = password;
     return cs.toString();
+}
+
+/**
+ * Run the same SASLprep the driver applies to SCRAM passwords. It throws on characters it can't
+ * map (e.g. emoji), and the driver does so before connecting, so setup would only time out.
+ */
+export function getPasswordEncodingProblem(password: string): PasswordEncodingProblem | undefined {
+    if (!password) {
+        return undefined;
+    }
+    try {
+        saslprep(password);
+        return undefined;
+    } catch (error) {
+        // Both bidirectional rules name RandALCat. Anything else, including a password SASLprep maps
+        // to nothing (it throws a TypeError), is a character it can't use.
+        return error instanceof Error && error.message.includes('RandALCat') ? 'rightToLeft' : 'unsupportedCharacter';
+    }
 }
 
 /**

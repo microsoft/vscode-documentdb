@@ -335,13 +335,13 @@ export type QuickStartConnectionPreflightResult =
 
 /**
  * Resolve the credentials for a fresh provision: honor custom Advanced credentials
- * when BOTH a username and password are supplied (whitespace-only is treated as not
- * supplied), otherwise auto-generate. (Callers only use this on a non-reusing provision;
- * a Missing-recreate reuses stored creds.)
+ * when BOTH a username and password are supplied, otherwise auto-generate. They are used
+ * exactly as validated: trimming would store a password other than the one the user typed.
+ * (Callers only use this on a non-reusing provision; a Missing-recreate reuses stored creds.)
  */
 function resolveProvisionCredentials(options?: AdvancedQuickStartOptions): GeneratedCredentials {
-    const username = options?.username?.trim();
-    const password = options?.password?.trim();
+    const username = options?.username;
+    const password = options?.password;
     if (username && password) {
         return { username, password };
     }
@@ -723,7 +723,7 @@ export class QuickStartServiceImpl {
         // different (especially older) image version could leave the on-disk cluster unusable.
         // The original image is reused — from in-memory metadata, falling back to the stored record
         // (survives a window reload), then the default if neither is known.
-        const usedCustomCreds = !reusing && !!(options?.username?.trim() && options?.password?.trim());
+        const usedCustomCreds = !reusing && !!(options?.username && options?.password);
         const imageRef = reusing
             ? (this.stateFor(alias).metadata?.imageRef ?? (await getInstance(alias))?.imageRef ?? QUICK_START_IMAGE)
             : resolveQuickStartImage(options?.imageTag);

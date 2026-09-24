@@ -77,6 +77,14 @@ import {
 import { useTrpcClient } from '../../_integration/useTrpcClient';
 import { Announcer } from '../../components/accessibility/Announcer';
 import { MessageBlock } from '../../components/MessageBlock';
+import { buildAdvancedOptions, getEffectivePort } from './advancedOptions';
+import {
+    describePasswordEncodingProblem,
+    getCredentialValidation,
+    getPasswordEncodingState,
+    needsPasswordEncodingCheck,
+    type PasswordEncodingCheck,
+} from './credentialValidation';
 import { pollDockerReadiness } from './dockerReadinessPolling';
 import {
     type DockerDetailFailureKey,
@@ -838,6 +846,10 @@ export const LocalQuickStart = (): JSX.Element => {
     const [portStatus, setPortStatus] = useState<PortAvailability | 'checking' | undefined>(undefined);
     const [advUser, setAdvUser] = useState('');
     const [advPass, setAdvPass] = useState('');
+    // The host's SASLprep verdict on the last non-ASCII custom password it checked.
+    const [passwordCheck, setPasswordCheck] = useState<PasswordEncodingCheck>();
+    // The password as of the last pause in typing.
+    const [settledPassword, setSettledPassword] = useState('');
     const [advTag, setAdvTag] = useState(QUICK_START_DEFAULT_TAG);
     const [advLoadSampleData, setAdvLoadSampleData] = useState(true);
     const [editingPort, setEditingPort] = useState(false);
@@ -854,6 +866,11 @@ export const LocalQuickStart = (): JSX.Element => {
     const startFresh = forcedFresh || (canReuseExistingData && dataChoice === 'fresh');
     const isRecreate = canReuseExistingData && !startFresh;
     const useCustomCredentials = customCredentials && !isRecreate;
+    const passwordEncoding = getPasswordEncodingState({
+        useCustomCredentials,
+        password: advPass,
+        lastCheck: passwordCheck,
+    });
 
     /**
      * Which existing-instance guard the Configure step shows, if any. See
@@ -897,10 +914,8 @@ export const LocalQuickStart = (): JSX.Element => {
     // dead-ends on a server rejection. Returns the offending field (for a per-field error state,
     // a11y §3.3.1) plus the message. Credential/image checks are skipped while reusing an existing
     // instance, since those inputs are hidden and their values are ignored.
-    // eslint-disable-next-line no-control-regex
-    const credForbidden = /[\u0000-\u001f\u007f]/;
     const advValidation = (():
-        | { field: 'port' | 'credentials' | 'username' | 'password' | 'tag'; message: string }
+        | { field: 'port' | 'credentials' | 'username' | 'password' | 'tag'; message: string; transient?: boolean }
         | undefined => {
         const port = advPort.trim();
         if (port && (!/^\d+$/.test(port) || Number(port) < 1024 || Number(port) > 65535)) {
@@ -909,37 +924,32 @@ export const LocalQuickStart = (): JSX.Element => {
         if (portStatus === 'inUse') {
             return {
                 field: 'port',
-                message: l10n.t('Port {0} is already in use. Pick a different one.', port),
+                message: l10n.t(
+                    'Port {0} is already in use. Pick a different one.',
+                    getEffectivePort(advPort, suggestedPort),
+                ),
             };
         }
         if (portStatus === 'takenByAnotherInstance') {
             return {
                 field: 'port',
-                message: l10n.t('Port {0} belongs to another DocumentDB Local instance. Pick a different one.', port),
+                message: l10n.t(
+                    'Port {0} belongs to another DocumentDB Local instance. Pick a different one.',
+                    getEffectivePort(advPort, suggestedPort),
+                ),
             };
         }
         if (!isRecreate) {
-            const user = advUser.trim();
-            const pass = advPass.trim();
-            const hasUser = user.length > 0;
-            const hasPass = pass.length > 0;
-            if (useCustomCredentials && hasUser !== hasPass) {
-                return {
-                    field: 'credentials',
-                    message: l10n.t('Enter both a username and a password, or leave both blank to auto-generate.'),
-                };
+            const credentialError = getCredentialValidation({
+                useCustomCredentials,
+                username: advUser,
+                password: advPass,
+            });
+            if (credentialError) {
+                return credentialError;
             }
-            if (user.length > 128) {
-                return { field: 'username', message: l10n.t('Username must be 128 characters or fewer.') };
-            }
-            if (pass.length > 256) {
-                return { field: 'password', message: l10n.t('Password must be 256 characters or fewer.') };
-            }
-            if (hasUser && credForbidden.test(user)) {
-                return { field: 'username', message: l10n.t('Username must not contain control characters.') };
-            }
-            if (hasPass && credForbidden.test(pass)) {
-                return { field: 'password', message: l10n.t('Password must not contain control characters.') };
+            if (passwordEncoding !== 'ok' && passwordEncoding !== 'checking') {
+                return describePasswordEncodingProblem(passwordEncoding);
             }
             const tag = advTag.trim();
             if (tag && (tag.length > 128 || !/^[\w][\w.-]*$/.test(tag))) {
@@ -952,35 +962,38 @@ export const LocalQuickStart = (): JSX.Element => {
         return undefined;
     })();
     const advError = advValidation?.message;
+    // What the fields show. A transient error blocks Start at once but only appears once typing
+    // pauses, so a passphrase isn't flagged (and announced) at every space between words.
+    const shownValidation = advValidation?.transient && advPass !== settledPassword ? undefined : advValidation;
 
     useEffect(() => {
         // Sync the settings into a ref (repo stale-closure pattern) so the provisioning
         // subscription reads current values. Skip building options while invalid.
-        if (advError) {
-            advancedRef.current = undefined;
-            return;
-        }
-        const opts: AdvancedQuickStartOptions = {};
-        // The port is ALWAYS sent (review L3): the field already holds the port the user was shown
-        // and validated against, and the service binds exactly that one rather than relocating on
-        // a conflict. Comparing against the default here used to make an explicitly-typed 10260
-        // silently mean "pick something for me".
-        if (advPort.trim()) opts.port = Number(advPort.trim());
-        // Credentials and image tag are ignored by the service when reusing an existing
-        // instance, so don't send them (the fields are hidden in that case anyway). Send the
-        // trimmed credentials so what we transmit is exactly what the service stores/encodes.
-        if (!isRecreate) {
-            if (useCustomCredentials && advUser.trim()) opts.username = advUser.trim();
-            if (useCustomCredentials && advPass.trim()) opts.password = advPass.trim();
-            if (advTag.trim() && advTag.trim() !== QUICK_START_DEFAULT_TAG) opts.imageTag = advTag.trim();
-        }
-        if (!advLoadSampleData) opts.loadSampleData = false;
-        // The recreate-vs-fresh decision is sent EXPLICITLY (review M4): the service no longer
-        // infers it from the presence of stored credentials, so nothing can go stale between the
-        // choice the user was shown and the volume the provision drops.
-        if (startFresh) opts.startFresh = true;
-        advancedRef.current = Object.keys(opts).length > 0 ? opts : undefined;
-    }, [advPort, advUser, advPass, advTag, advLoadSampleData, advError, isRecreate, useCustomCredentials, startFresh]);
+        advancedRef.current = advError
+            ? undefined
+            : buildAdvancedOptions({
+                  port: advPort,
+                  suggestedPort,
+                  username: advUser,
+                  password: advPass,
+                  imageTag: advTag,
+                  loadSampleData: advLoadSampleData,
+                  isRecreate,
+                  useCustomCredentials,
+                  startFresh,
+              });
+    }, [
+        advPort,
+        suggestedPort,
+        advUser,
+        advPass,
+        advTag,
+        advLoadSampleData,
+        advError,
+        isRecreate,
+        useCustomCredentials,
+        startFresh,
+    ]);
 
     // Built during render, after `l10n.config()` has run, so these ARE translated. Memoized because
     // the maps are rebuilt on every call by design (see the note on the lookup functions above).
@@ -1366,7 +1379,8 @@ export const LocalQuickStart = (): JSX.Element => {
     // setup fail on a Docker bind error minutes later (review L3). Debounced so typing a port digit
     // by digit doesn't issue a probe per keystroke.
     useEffect(() => {
-        const port = advPort.trim();
+        // An empty field means the suggested port, so that is the one to check.
+        const port = getEffectivePort(advPort, suggestedPort);
         if (!/^\d+$/.test(port) || Number(port) < 1024 || Number(port) > 65535) {
             setPortStatus(undefined);
             return;
@@ -1388,7 +1402,37 @@ export const LocalQuickStart = (): JSX.Element => {
             cancelled = true;
             clearTimeout(handle);
         };
-    }, [advPort, trpcClient]);
+    }, [advPort, suggestedPort, trpcClient]);
+
+    useEffect(() => {
+        const handle = setTimeout(() => setSettledPassword(advPass), 800);
+        return () => clearTimeout(handle);
+    }, [advPass]);
+
+    // SASLprep a custom password on the host while the user can still fix it. Without this, a
+    // password the driver rejects (an emoji, say) only fails as a readiness timeout. Printable ASCII
+    // always passes, so most passwords never leave the webview before Start.
+    useEffect(() => {
+        if (!useCustomCredentials || !needsPasswordEncodingCheck(advPass)) {
+            return;
+        }
+        let cancelled = false;
+        const handle = setTimeout(() => {
+            void trpcClient.localQuickStart.checkPassword
+                .query({ password: advPass })
+                .then((result) => {
+                    if (!cancelled) setPasswordCheck({ password: advPass, result });
+                })
+                .catch(() => {
+                    // Never block the wizard on a failed check; the router runs it again at Start.
+                    if (!cancelled) setPasswordCheck({ password: advPass, result: 'ok' });
+                });
+        }, 300);
+        return () => {
+            cancelled = true;
+            clearTimeout(handle);
+        };
+    }, [advPass, useCustomCredentials, trpcClient]);
 
     // "Wait longer" (§9.1): re-probe the container the service kept running after a readiness
     // timeout, keeping the already-completed stages visible. Optimistically flip the waiting row
@@ -1571,7 +1615,8 @@ export const LocalQuickStart = (): JSX.Element => {
     const activeStage = PROVISION_STAGES.find((stage) => stageStatus[stage] === 'active');
     const provisioningStatusMessage = activeStage && !failedStage ? l10n.t('{0}…', stageLabelsMap[activeStage]) : '';
 
-    const effectivePort = advPort.trim() && advValidation?.field !== 'port' ? advPort.trim() : String(suggestedPort);
+    const effectivePort =
+        advValidation?.field === 'port' ? String(suggestedPort) : getEffectivePort(advPort, suggestedPort);
     const effectiveImage =
         !isRecreate && advTag.trim() && advValidation?.field !== 'tag'
             ? `${QUICK_START_IMAGE_REPOSITORY}:${advTag.trim()}`
@@ -1659,12 +1704,13 @@ export const LocalQuickStart = (): JSX.Element => {
                     hint={l10n.t(
                         'The host is always localhost. This exact port is used. Setup checks it here and never picks a different one later.',
                     )}
-                    validationState={advValidation?.field === 'port' ? 'error' : 'none'}
-                    validationMessage={advValidation?.field === 'port' ? advValidation.message : undefined}
+                    validationState={shownValidation?.field === 'port' ? 'error' : 'none'}
+                    validationMessage={shownValidation?.field === 'port' ? shownValidation.message : undefined}
                 >
                     <Input
                         type="number"
                         value={advPort}
+                        placeholder={String(suggestedPort)}
                         onChange={(_event, data) => {
                             portTouchedRef.current = true;
                             setAdvPort(data.value);
@@ -1697,8 +1743,8 @@ export const LocalQuickStart = (): JSX.Element => {
                 <Field
                     label={l10n.t('Image tag')}
                     hint={l10n.t('The official image repository is fixed.')}
-                    validationState={advValidation?.field === 'tag' ? 'error' : 'none'}
-                    validationMessage={advValidation?.field === 'tag' ? advValidation.message : undefined}
+                    validationState={shownValidation?.field === 'tag' ? 'error' : 'none'}
+                    validationMessage={shownValidation?.field === 'tag' ? shownValidation.message : undefined}
                 >
                     <Input
                         value={advTag}
@@ -1731,38 +1777,40 @@ export const LocalQuickStart = (): JSX.Element => {
                 <div className={styles.credentialFields}>
                     <Field
                         label={l10n.t('Username')}
-                        validationState={advValidation?.field === 'username' ? 'error' : 'none'}
-                        validationMessage={advValidation?.field === 'username' ? advValidation.message : undefined}
+                        hint={l10n.t(
+                            'Up to 63 ASCII characters; fewer for non-ASCII text. No spaces. Names starting with pg, citus, documentdb, or internal_role are reserved.',
+                        )}
+                        validationState={shownValidation?.field === 'username' ? 'error' : 'none'}
+                        validationMessage={shownValidation?.field === 'username' ? shownValidation.message : undefined}
                     >
                         <Input
                             value={advUser}
                             maxLength={128}
                             placeholder={l10n.t('Enter a username')}
-                            aria-invalid={advValidation?.field === 'credentials' || undefined}
+                            aria-invalid={shownValidation?.field === 'credentials' || undefined}
                             aria-describedby={
-                                advValidation?.field === 'credentials' ? 'quickstart-credentials-error' : undefined
+                                shownValidation?.field === 'credentials' ? 'quickstart-credentials-error' : undefined
                             }
                             onChange={(_event, data) => setAdvUser(data.value)}
                         />
                     </Field>
                     <Field
                         label={l10n.t('Password')}
-                        validationState={advValidation?.field === 'password' ? 'error' : 'none'}
-                        validationMessage={advValidation?.field === 'password' ? advValidation.message : undefined}
+                        validationState={shownValidation?.field === 'password' ? 'error' : 'none'}
+                        validationMessage={shownValidation?.field === 'password' ? shownValidation.message : undefined}
                     >
                         <Input
                             type="password"
                             value={advPass}
-                            maxLength={256}
                             placeholder={l10n.t('Enter a password')}
-                            aria-invalid={advValidation?.field === 'credentials' || undefined}
+                            aria-invalid={shownValidation?.field === 'credentials' || undefined}
                             aria-describedby={
-                                advValidation?.field === 'credentials' ? 'quickstart-credentials-error' : undefined
+                                shownValidation?.field === 'credentials' ? 'quickstart-credentials-error' : undefined
                             }
                             onChange={(_event, data) => setAdvPass(data.value)}
                         />
                     </Field>
-                    {advValidation?.field === 'credentials' && (
+                    {shownValidation?.field === 'credentials' && (
                         <Text
                             id="quickstart-credentials-error"
                             role="alert"
@@ -1770,7 +1818,7 @@ export const LocalQuickStart = (): JSX.Element => {
                             className={styles.credentialsValidation}
                         >
                             <ErrorCircleFilled aria-hidden />
-                            {advValidation.message}
+                            {shownValidation.message}
                         </Text>
                     )}
                 </div>
@@ -2247,7 +2295,7 @@ export const LocalQuickStart = (): JSX.Element => {
             // machine is changed" is true only for a genuinely fresh install and must not render for
             // either recreate path (review M4 / §10.6).
             primaryLabel = forcedFresh ? l10n.t('Start fresh') : l10n.t('Start DocumentDB Local');
-            primaryDisabled = advError !== undefined || startBlockedByGuard;
+            primaryDisabled = advError !== undefined || passwordEncoding === 'checking' || startBlockedByGuard;
             primaryIcon = <RocketRegular />;
             onPrimary = handleStart;
             footerNote = isRecreate

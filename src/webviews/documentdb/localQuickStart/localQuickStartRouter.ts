@@ -24,11 +24,13 @@ import * as vscode from 'vscode';
 import { z } from 'zod';
 import { getQuickStartOutputChannel, startDockerProvider } from '../../../services/localQuickStart/ContainerRuntime';
 import { getDockerRecoveryCommandById } from '../../../services/localQuickStart/dockerRecoveryCommands';
+import { getPasswordEncodingProblem } from '../../../services/localQuickStart/quickStartCredentials';
 import { QuickStartService } from '../../../services/localQuickStart/QuickStartService';
 import {
     type AdvancedQuickStartOptions,
     type DockerStatusResult,
     type InstanceStatusUpdate,
+    type PasswordEncodingProblem,
     type PortAvailability,
     type QuickStartStatus,
     type StageEvent,
@@ -36,41 +38,39 @@ import {
 import { revealQuickStartInstance } from '../../../tree/connections-view/LocalQuickStart/revealQuickStartInstance';
 import { type BaseRouterContext } from '../../_integration/appRouter';
 import { publicProcedure, publicProcedureWithTelemetry, router, type WithTelemetry } from '../../_integration/trpc';
+import {
+    type CredentialValidation,
+    describePasswordEncodingProblem,
+    getCredentialValidation,
+} from './credentialValidation';
 import { getDockerReadinessTelemetryProperties } from './dockerReadinessTelemetry';
+
+/**
+ * The Configure step's credential rules plus the driver's SASLprep, which only the host can run.
+ * Credentials reach the container through a line-based `--env-file` (KEY=VALUE), which is why
+ * control characters are among the rules.
+ */
+function getCustomCredentialProblem(username = '', password = ''): CredentialValidation | undefined {
+    const problem = getCredentialValidation({ useCustomCredentials: true, username, password });
+    if (problem) {
+        return problem;
+    }
+    const encodingProblem = getPasswordEncodingProblem(password);
+    return encodingProblem && describePasswordEncodingProblem(encodingProblem);
+}
 
 /**
  * Advanced provisioning overrides (P1-4). All optional; the webview only sends the
  * fields the user filled in. `port` is validated to a sane TCP range and credentials
- * are length-bounded — the service applies the host-gating / reuse rules.
+ * must pass the same rules the webview shows — the service applies the host-gating / reuse rules.
  */
 const advancedOptionsSchema = z
     .object({
         port: z.number().int().min(1024).max(65535).optional(),
-        // Disallow control characters (newlines/tabs/NUL): credentials are written to a
-        // line-based docker `--env-file` (KEY=VALUE), where a newline would inject extra
-        // environment variables. Other printable specials (including `%`, for strong
-        // passwords) are safe: creds reach the container only via the env-file and the
-        // percent-encoded connection string, never the host shell argv (sample-data
-        // seeding references `$USERNAME`/`$PASSWORD` from the container's own environment).
-        // `.trim()` normalizes surrounding whitespace identically to the service, so a
-        // whitespace-only value collapses to empty (rejected here / auto-generated there)
-        // and the webview's "Custom" indication can never disagree with what is applied.
-        username: z
-            .string()
-            .trim()
-            .min(1)
-            .max(128)
-            // eslint-disable-next-line no-control-regex
-            .regex(/^[^\u0000-\u001f\u007f]+$/, 'Username must not contain control characters')
-            .optional(),
-        password: z
-            .string()
-            .trim()
-            .min(1)
-            .max(256)
-            // eslint-disable-next-line no-control-regex
-            .regex(/^[^\u0000-\u001f\u007f]+$/, 'Password must not contain control characters')
-            .optional(),
+        // Not trimmed: the credentials are stored exactly as sent, so surrounding whitespace is
+        // rejected rather than silently removed.
+        username: z.string().min(1).optional(),
+        password: z.string().min(1).optional(),
         imageTag: z
             .string()
             .min(1)
@@ -84,12 +84,21 @@ const advancedOptionsSchema = z
         startFresh: z.boolean().optional(),
         continueAnyway: z.boolean().optional(),
     })
-    // Mirror the webview's both-or-neither rule server-side: a username without a password
-    // (or vice versa) is rejected rather than silently auto-generating, so a direct tRPC
+    // Mirror the webview's rules server-side, including both-or-neither: a username without a
+    // password (or vice versa) is rejected rather than silently auto-generating, so a direct tRPC
     // caller gets the same contract the UI enforces.
-    .refine((v) => (v.username === undefined) === (v.password === undefined), {
-        message: 'Provide both a username and a password, or neither.',
-        path: ['password'],
+    .superRefine((options, ctx) => {
+        if (options.username === undefined && options.password === undefined) {
+            return;
+        }
+        const problem = getCustomCredentialProblem(options.username, options.password);
+        if (problem) {
+            ctx.addIssue({
+                code: 'custom',
+                path: [problem.field === 'username' ? 'username' : 'password'],
+                message: problem.message,
+            });
+        }
     })
     .optional();
 
@@ -165,6 +174,15 @@ export const localQuickStartRouter = router({
     checkPort: publicProcedure
         .input(z.object({ port: z.number().int().min(1024).max(65535) }))
         .query(({ input }): Promise<PortAvailability> => QuickStartService.checkPort(input.port)),
+
+    /**
+     * Run the driver's SASLprep on a custom password while the user is still in Configure. The
+     * webview can't run it, and a password it rejects otherwise only surfaces as a readiness
+     * timeout. No telemetry: the input is a password.
+     */
+    checkPassword: publicProcedure
+        .input(z.object({ password: z.string().max(256) }))
+        .query(({ input }): PasswordEncodingProblem | 'ok' => getPasswordEncodingProblem(input.password) ?? 'ok'),
 
     /** Lightweight status poll (no docker call). */
     getStatus: publicProcedure.query((): QuickStartStatus => toWebviewStatus(QuickStartService.getStatus())),
