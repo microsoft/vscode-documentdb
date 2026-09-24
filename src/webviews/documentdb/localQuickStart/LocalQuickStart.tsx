@@ -1952,7 +1952,7 @@ export const LocalQuickStart = (): JSX.Element => {
     const dataRemovedNotice = instanceDataRemoved && !existingInstanceGuard && (
         <MessageBlock intent="info">
             {l10n.t(
-                'The DocumentDB Local container and its data are no longer in Docker, so setup creates a new, empty instance. If you switched Docker to a different engine or context, switch back and refresh the Connections view instead.',
+                'The DocumentDB Local container and its data are no longer in Docker, so setup creates a new, empty instance. If you switched Docker to a different engine or context, switch back and refresh DocumentDB Local in the Connections view instead.',
             )}
         </MessageBlock>
     );

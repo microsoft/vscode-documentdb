@@ -382,11 +382,13 @@ Generated credentials are kept in SecretStorage so a retry reuses them.
 Badges (overlay any state):
 
 - **`Missing`** — extension has metadata but Docker has no matching
-  container. Shows `Missing · click to recreate`. Available actions on a
+  container, and its data volume still exists. Shows
+  `Missing · click to recreate`. Available actions on a
   `Missing` instance: **Quick Start** (recreate the container, reusing the
   stored credentials and data volume if present) and
   **Delete Container...** (clear the stale metadata). No other lifecycle
-  actions apply.
+  actions apply. With the volume gone too, the instance shows as not set
+  up (NotInstalled) instead, and setup creates a new one.
 - **`UpdateAvailable`** _(v1.2)_ — newer image detected. Shows
   `Running · localhost:10260 · update available`.
 
@@ -666,15 +668,15 @@ collision is resolved as follows.
 
 ## 11. Lifecycle vocabulary
 
-| Verb                         | Container       | Data volume | Credentials | Tree row                 |
-| ---------------------------- | --------------- | ----------- | ----------- | ------------------------ |
-| **Start**                    | Starts existing | Unchanged   | Unchanged   | → Running                |
-| **Stop**                     | Stops           | Unchanged   | Unchanged   | → Stopped                |
-| **Restart**                  | Stop + start    | Unchanged   | Unchanged   | → Running                |
-| **Delete Container...**      | Removed         | Kept        | Kept        | → NotInstalled (Missing) |
-| **Update Image...** _(v1.2)_ | Recreated       | Kept        | Kept        | → Running                |
-| **Move Port...** _(v1.2)_    | Recreated       | Kept        | Kept        | → Running                |
-| **Reset...** _(v1.2)_        | Removed         | **Dropped** | **Dropped** | → NotInstalled           |
+| Verb                         | Container       | Data volume | Credentials | Tree row       |
+| ---------------------------- | --------------- | ----------- | ----------- | -------------- |
+| **Start**                    | Starts existing | Unchanged   | Unchanged   | → Running      |
+| **Stop**                     | Stops           | Unchanged   | Unchanged   | → Stopped      |
+| **Restart**                  | Stop + start    | Unchanged   | Unchanged   | → Running      |
+| **Delete Container...**      | Removed         | **Dropped** | **Dropped** | → NotInstalled |
+| **Update Image...** _(v1.2)_ | Recreated       | Kept        | Kept        | → Running      |
+| **Move Port...** _(v1.2)_    | Recreated       | Kept        | Kept        | → Running      |
+| **Reset...** _(v1.2)_        | Removed         | **Dropped** | **Dropped** | → NotInstalled |
 
 Confirmations:
 

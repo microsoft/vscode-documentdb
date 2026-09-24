@@ -53,8 +53,8 @@ Configure explains why. Docker pointed at another engine or context looks exactl
 deleting on refresh would lock the user out of their data once they switched back.
 
 Setup then treats it as new. It keeps the stored credentials unless the user sets custom ones, so
-the original engine's instance still opens after a switch back. It drops the old record only when
-this run uses different credentials.
+the original engine's instance still opens after a switch back. Even with custom ones, the old record
+and credentials stay until setup succeeds, so a cancelled or failed run loses nothing.
 
 | Option                                               | Verdict                                                                             |
 | ---------------------------------------------------- | ----------------------------------------------------------------------------------- |
@@ -80,8 +80,9 @@ reload adopts.
 Moving the write earlier had two consequences the PR also handles:
 
 - The loser of a two-window create race now reaches the restore. `rollBackAttempt` puts back the
-  previous credentials and releases the lease only while the stored value is still this run's own,
-  so it cannot erase what the winner stored.
+  previous credentials and releases the lease only while the stored value is still this run's own.
+  A recreate reuses the stored credentials, so an equal value is no proof of that: when another
+  window has replaced the kept container, Start over skips the rollback and adopts that container.
 - `reconcile()` skips an alias with an operation running in this window. Otherwise a reconcile
   mid-provision adopts the run's own half-made container.
 
@@ -104,7 +105,8 @@ Two additions:
   Wait longer still has something to wait for, and says so. Dropping the credentials there would
   leave a container nothing can open once Docker answers.
 - A failed removal counts as "already gone" only when a lookup succeeds and finds no container with
-  that id or name. A replacement another window created does not count.
+  that id or name. A replacement another window created is adopted instead, and its volume and
+  credentials are left alone.
 
 ## STATE-4 — Start reported Running on a port another process held
 
@@ -178,12 +180,22 @@ agree.
   `packages/vscode-ext-webview-fluentui`, a jsdom failure in a package this PR does not touch.
 - Each STATE item has a unit test driving `provision()` or the lifecycle methods through a fake
   runtime.
+- The local review (Claude, R1–R5) drove the service against Docker Desktop 29.8 on macOS, stubbing
+  only the image pull and the Docker readiness check. A setup abandoned right after `docker run` is
+  adopted as Running by the next reconcile (STATE-2). Start with the port held leaves the container
+  stopped and names the port (STATE-4). A removed container with its volume kept shows Missing; with
+  the volume gone too it shows as not set up, record and credentials kept (STATE-1, STATE-6). With
+  the daemon unreachable, refresh and reconcile change nothing. Once the container and volume are
+  back, the DocumentDB Local node's Refresh adopts them again. The port was free within 1 ms of
+  `docker stop` there, so the retry was not needed.
 
 **Not verified.**
 
-- End-to-end re-runs of the issue's repros against a Docker daemon are not recorded. _TODO (author):
-  list the ones re-run, or say none were._ STATE-4 in particular depends on WSL + Docker Desktop port
-  behaviour that the fake runtime cannot show.
+- STATE-4 on WSL + Docker Desktop. That the port frees late there, which the retry allows for, is
+  the author's account.
+- A real second Docker engine or context. The switch back was simulated by recreating the container
+  and volume on one daemon.
+- The open wizard leaving its timed-out view after Delete (STATE-5). Traced in code only.
 - Windows.
 
 **Left open.**

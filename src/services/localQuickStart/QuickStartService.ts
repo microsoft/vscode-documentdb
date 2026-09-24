@@ -834,12 +834,8 @@ export class QuickStartServiceImpl {
                 const volumeAtGate = await this.runtime.volumeExists(volumeName(alias));
                 if (!existing && !volumeAtGate && hasReadyRecord) {
                     // Its container and data volume were both removed outside VS Code, so the record
-                    // protects nothing: set up from scratch instead of refusing for good. Credentials
-                    // this run keeps are only replaced by its own write, which a failure rolls back.
-                    if (credentials !== stored) {
-                        await removeInstance(alias);
-                        hasReadyRecord = false;
-                    }
+                    // protects nothing: set up from scratch instead of refusing for good. The record and
+                    // credentials stay until success replaces them; a failed run restores any it overwrote.
                 } else if (existing || hasReadyRecord || volumeAtGate) {
                     const credentialsUnavailable: QuickStartMessage = { key: 'credentialsUnavailable' };
                     this.setStatus(alias, InstanceState.CredentialsMissing, undefined, credentialsUnavailable);
@@ -1419,13 +1415,20 @@ export class QuickStartServiceImpl {
             await this.runtime
                 .stopContainer(pending.containerId)
                 .catch(() => meterQuickStartSilentCatch('discardTimedOut_stopContainer'));
+            let replaced = false;
             const removed = await this.runtime.removeContainer(pending.containerId).then(
                 () => true,
                 // Already gone counts as removed, but only a lookup that succeeded can say so. Another
                 // window's replacement container is not the one this attempt kept.
                 () =>
                     this.findManagedContainers(alias, { propagateErrors: true }).then(
-                        (left) => !left.some((container) => isSameContainer(container, pending.containerId)),
+                        (left) => {
+                            if (left.some((container) => isSameContainer(container, pending.containerId))) {
+                                return false;
+                            }
+                            replaced = left.length > 0;
+                            return true;
+                        },
                         () => false,
                     ),
             );
@@ -1442,20 +1445,29 @@ export class QuickStartServiceImpl {
                 );
                 return false;
             }
-            if (!pending.reusing) {
-                await this.runtime
-                    .removeVolume(volumeName(pending.alias))
-                    .catch(() => meterQuickStartSilentCatch('discardTimedOut_removeVolume'));
+            // Another window's replacement may use these same credentials, so a matching secret proves
+            // nothing: leave its volume and credentials alone and let the resync adopt it.
+            if (!replaced) {
+                if (!pending.reusing) {
+                    await this.runtime.removeVolume(volumeName(pending.alias)).catch(() => {
+                        meterQuickStartSilentCatch('discardTimedOut_removeVolume');
+                        void vscode.window.showWarningMessage(
+                            l10n.t(
+                                'Start over removed the DocumentDB Local container but could not remove its data volume. The next setup will ask you to start fresh, or you can remove the volume with Docker.',
+                            ),
+                        );
+                    });
+                }
+                // The same rollback a failed attempt gets. Left behind, its secret and lease made a reload
+                // show "Provisioning…" and the next setup offer to keep data that no longer exists.
+                await this.rollBackAttempt(alias, {
+                    storedConnectionString: pending.storedConnectionString,
+                    previousConnectionString: pending.previousConnectionString,
+                    operationId: pending.operationId,
+                    leaseHeld: pending.leaseHeld,
+                    port: pending.boundPort,
+                });
             }
-            // The same rollback a failed attempt gets. Left behind, its secret and lease made a reload
-            // show "Provisioning…" and the next setup offer to keep data that no longer exists.
-            await this.rollBackAttempt(alias, {
-                storedConnectionString: pending.storedConnectionString,
-                previousConnectionString: pending.previousConnectionString,
-                operationId: pending.operationId,
-                leaseHeld: pending.leaseHeld,
-                port: pending.boundPort,
-            });
             await this.resync(alias).catch(() => {
                 meterQuickStartSilentCatch('discardTimedOut_resync');
                 this.setStatus(alias, InstanceState.NotInstalled);

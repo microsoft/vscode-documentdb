@@ -988,6 +988,20 @@ describe('QuickStartService — WP-3 provisioning durability and port model', ()
             expect(await readConnectionString(DEFAULT_ALIAS)).toBe(stale);
         });
 
+        it('keeps the stored credentials when a setup with custom ones is cancelled', async () => {
+            const controller = new AbortController();
+            const runtime = runtimeFor({ volumeExists: false });
+            (runtime.pullImage as jest.Mock).mockImplementation(() => {
+                controller.abort();
+                return Promise.reject(new Error('aborted'));
+            });
+            const service = await seedRemovedInstance(runtime);
+
+            await collect(service.provision(controller.signal, { username: 'me', password: 'secret-pw' }));
+
+            expect(await readConnectionString(DEFAULT_ALIAS)).toBe(stale);
+        });
+
         it('uses custom credentials when the user sets them', async () => {
             const service = await seedRemovedInstance(runtimeFor({ volumeExists: false }));
 
@@ -1036,6 +1050,20 @@ describe('QuickStartService — WP-3 provisioning durability and port model', ()
             expect(await listInstances()).toHaveLength(0);
             expect(await service.canReuseExistingData()).toBe(false);
             expect(service.getStatus()).toMatchObject({ state: InstanceState.NotInstalled, canResumeReadiness: false });
+        });
+
+        it('Start over warns when it cannot remove the fresh attempt data volume', async () => {
+            const removeVolume = jest.fn().mockRejectedValue(new Error('volume is in use'));
+            const service = new QuickStartServiceImpl(runtimeFor({ overrides: { removeVolume } }));
+            await provisionUntilTimeout(service);
+            const warning = jest.spyOn(vscode.window, 'showWarningMessage').mockResolvedValue(undefined);
+
+            expect(await service.discardTimedOutInstance()).toBe(true);
+
+            expect(warning).toHaveBeenCalledWith(expect.stringContaining('could not remove its data volume'));
+            expect(await readConnectionString(DEFAULT_ALIAS)).toBeUndefined();
+            expect(await listInstances()).toHaveLength(0);
+            warning.mockRestore();
         });
 
         it('Start over on a recreate keeps the data and its credentials, and settles as Missing', async () => {
@@ -1134,6 +1162,62 @@ describe('QuickStartService — WP-3 provisioning durability and port model', ()
 
             expect(service.getStatus().canResumeReadiness).toBe(false);
             expect(await readConnectionString(DEFAULT_ALIAS)).toBe(other);
+        });
+
+        // Its recreate reuses the stored credentials, so the stored value alone cannot tell the attempts apart.
+        it('Start over adopts a replacement another window set up on the same credentials', async () => {
+            const labels = { [QUICK_START_LABEL_KEY]: '1', [QUICK_START_ALIAS_LABEL_KEY]: DEFAULT_ALIAS };
+            let liveId: string | undefined;
+            let hasVolume = false;
+            let created = 0;
+            const removeVolume = jest.fn(async () => {
+                if (liveId) throw new Error('volume is in use');
+                hasVolume = false;
+            });
+            const runtime = runtimeFor({
+                overrides: {
+                    listByLabel: jest
+                        .fn()
+                        .mockImplementation(async () => (liveId ? [{ id: liveId, name: DEFAULT_ALIAS, labels }] : [])),
+                    volumeExists: jest.fn(async () => hasVolume),
+                    createAndRunContainer: jest.fn(async () => {
+                        liveId = `c${++created}`;
+                        hasVolume = true;
+                        return liveId;
+                    }),
+                    inspectContainer: jest.fn().mockImplementation(async (id: string) =>
+                        liveId && (id === liveId || id === DEFAULT_ALIAS)
+                            ? {
+                                  id: liveId,
+                                  status: 'running',
+                                  ports: [{ containerPort: QUICK_START_PORT, hostPort: QUICK_START_PORT }],
+                                  labels,
+                              }
+                            : undefined,
+                    ),
+                    removeContainer: jest.fn(async (id: string) => {
+                        if (id !== liveId) throw new Error(`No such container: ${id}`);
+                        liveId = undefined;
+                    }),
+                    removeVolume,
+                },
+            });
+            const first = new QuickStartServiceImpl(runtime);
+            const second = new QuickStartServiceImpl(runtime);
+            await first.ensureHydrated();
+            await second.ensureHydrated();
+            await provisionUntilTimeout(first);
+            const original = await readConnectionString(DEFAULT_ALIAS);
+            onProbe = () => undefined;
+            await collect(second.provision(new AbortController().signal));
+            expect(liveId).toBe('c2');
+            expect(await readConnectionString(DEFAULT_ALIAS)).toBe(original);
+
+            expect(await first.discardTimedOutInstance()).toBe(true);
+
+            expect(removeVolume).not.toHaveBeenCalled();
+            expect(await readConnectionString(DEFAULT_ALIAS)).toBe(original);
+            expect(first.getStatus().state).toBe(InstanceState.Running);
         });
 
         it('Start over with nothing left to discard just returns to setup', async () => {

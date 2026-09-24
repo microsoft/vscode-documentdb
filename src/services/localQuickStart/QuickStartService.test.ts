@@ -1988,7 +1988,8 @@ describe('QuickStartService — WI-2e-1 provision RR4 volume-wipe gate', () => {
         }
 
         expect(events.at(-1)?.message?.key).toBe('portInUse');
-        expect(await listInstances()).toHaveLength(0);
+        // Only a successful setup replaces the record.
+        expect(await listInstances()).toHaveLength(1);
     });
 
     it('proceeds for a truly-fresh alias and removes the volume its failed create left behind', async () => {
