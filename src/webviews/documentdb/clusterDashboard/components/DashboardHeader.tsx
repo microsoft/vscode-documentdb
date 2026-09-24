@@ -251,31 +251,34 @@ export const DashboardHeader = ({
                                 <span className="dashboardFact">
                                     {Array.isArray(fact.value) ? (
                                         fact.value.map((version, versionIndex) => (
-                                            <Tooltip
-                                                key={version.label}
-                                                content={version.tooltip}
-                                                relationship="description"
-                                            >
-                                                <span
-                                                    className="dashboardFact"
-                                                    role="group"
-                                                    tabIndex={0}
-                                                    aria-labelledby={`${versionId}-${versionIndex}-label ${versionId}-${versionIndex}-value`}
-                                                >
-                                                    <span
-                                                        className="dashboardFactLabel"
-                                                        id={`${versionId}-${versionIndex}-label`}
-                                                    >
-                                                        {version.label}
+                                            <Fragment key={version.label}>
+                                                {versionIndex > 0 && (
+                                                    <span className="dashboardFactSeparator" aria-hidden="true">
+                                                        |
                                                     </span>
+                                                )}
+                                                <Tooltip content={version.tooltip} relationship="description">
                                                     <span
-                                                        className="dashboardFactValue"
-                                                        id={`${versionId}-${versionIndex}-value`}
+                                                        className="dashboardFact"
+                                                        role="group"
+                                                        tabIndex={0}
+                                                        aria-labelledby={`${versionId}-${versionIndex}-label ${versionId}-${versionIndex}-value`}
                                                     >
-                                                        {version.value}
+                                                        <span
+                                                            className="dashboardFactLabel"
+                                                            id={`${versionId}-${versionIndex}-label`}
+                                                        >
+                                                            {version.label}
+                                                        </span>
+                                                        <span
+                                                            className="dashboardFactValue"
+                                                            id={`${versionId}-${versionIndex}-value`}
+                                                        >
+                                                            {version.value}
+                                                        </span>
                                                     </span>
-                                                </span>
-                                            </Tooltip>
+                                                </Tooltip>
+                                            </Fragment>
                                         ))
                                     ) : (
                                         <>

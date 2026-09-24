@@ -31,7 +31,8 @@ The layout lab and alternate-header toggle are not part of the feature.
 
 **Version display (2026-09-24):** The existing Version fact renders independently available
 engine and API versions as separate JSX tags: `DocumentDB <engine>` and `API <api>`, without
-an extra Version label, a dot separator or a combined string. Each tag has an explanatory
+an extra Version label, a dot separator or a combined string. The shared `|` separator appears
+between the tags only when both are present. Each tag has an explanatory
 tooltip available on hover and keyboard focus; the Server disclosure lists them separately.
 Missing, malformed or ambiguous values are omitted, not shown as unknown and not inferred
 from the other version.

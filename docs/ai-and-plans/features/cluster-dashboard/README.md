@@ -54,7 +54,8 @@ None yet. A user-manual page is due before this ships.
   widths, and its mounted Fluent `Collapse` handles opening and closing without a layout toggle.
 - **Engine and API versions are independent facts.** A server reporting DocumentDB version
   metadata gets separate `DocumentDB <engine>` and `API <api>` tags in the first fact group,
-  with no extra Version label or separator. Tooltips explain each version. There are separate
+  with no extra Version label and the shared `|` separator only when both are present.
+  Tooltips explain each version. There are separate
   Engine version and API version rows in Server details. Either part is omitted when unclear;
   neither gets an unknown placeholder. The known extension/binary pair uses the binary version,
   while a single recognizable version is displayed as reported. Unrecognized multi-entry shapes

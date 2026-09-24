@@ -137,6 +137,9 @@ describe('Dashboard versions', () => {
         expect(html.match(/class="dashboardFact" role="group" tabindex="0" aria-labelledby=/g) ?? []).toHaveLength(
             tagCount,
         );
+        expect(html.match(/class="dashboardFactSeparator" aria-hidden="true">\|<\/span>/g)).toHaveLength(
+            3 + versionGroupCount + Math.max(0, tagCount - 1),
+        );
         expect(html).not.toContain('DocumentDB 0.117.0 · API 7.0.0');
         const groups = buildDetailGroups(clusterInfo, undefined);
         expect(groups).toEqual(
