@@ -3,8 +3,8 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import * as vscode from 'vscode';
 import { EJSON } from 'bson';
+import * as vscode from 'vscode';
 import { HelpProvider } from '../../../packages/documentdb-js-shell-runtime/src/HelpProvider';
 import { ShellOutputFormatter } from './ShellOutputFormatter';
 import {

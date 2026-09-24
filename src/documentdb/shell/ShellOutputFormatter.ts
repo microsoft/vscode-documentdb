@@ -3,12 +3,12 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import * as l10n from '@vscode/l10n';
 import {
     type ShellHelpDocument,
     type ShellHelpDocumentLine,
     type ShellHelpTextSpan,
 } from '@documentdb-js/shell-runtime';
+import * as l10n from '@vscode/l10n';
 import { EJSON } from 'bson';
 import * as vscode from 'vscode';
 import { settingsKeys } from '../../settingsKeys';

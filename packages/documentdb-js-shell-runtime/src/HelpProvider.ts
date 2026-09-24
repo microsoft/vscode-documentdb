@@ -313,10 +313,7 @@ export class HelpProvider {
 
             header('Settings'),
             link('⚙ [shellSettings]', 'Configure paste behavior, colors, inline hints, and autocompletion.'),
-            tip(
-                'Manual access: search Settings for @ext:ms-azuretools.vscode-documentdb documentDB.shell',
-                'ghost',
-            ),
+            tip('Manual access: search Settings for @ext:ms-azuretools.vscode-documentdb documentDB.shell', 'ghost'),
             blank,
 
             header('Tips'),

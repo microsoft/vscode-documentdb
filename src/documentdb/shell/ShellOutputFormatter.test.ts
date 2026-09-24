@@ -3,9 +3,9 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+import { type ShellHelpDocument, type ShellHelpDocumentLine } from '@documentdb-js/shell-runtime';
 import { EJSON } from 'bson';
 import * as vscode from 'vscode';
-import { type ShellHelpDocument, type ShellHelpDocumentLine } from '@documentdb-js/shell-runtime';
 import { HelpProvider } from '../../../packages/documentdb-js-shell-runtime/src/HelpProvider';
 import { type SerializableExecutionResult } from '../playground/workerTypes';
 import { ShellOutputFormatter } from './ShellOutputFormatter';
@@ -372,9 +372,7 @@ describe('ShellOutputFormatter', () => {
             const output = formatter.formatResult(result);
 
             expect(output).toContain(`${shellStyles.emphasis}DocumentDB Shell: Quick Reference${shellAnsi.reset}`);
-            expect(output).toContain(
-                `${shellStyles.completion.action}db.<coll>.find({})${shellAnsi.reset}`,
-            );
+            expect(output).toContain(`${shellStyles.completion.action}db.<coll>.find({})${shellAnsi.reset}`);
             expect(output).toContain(`${shellAnsi.underline}⚙ [shellSettings]${shellAnsi.noUnderline}`);
             expect(output).not.toContain('# Query');
         });
