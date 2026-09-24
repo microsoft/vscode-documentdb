@@ -3,7 +3,7 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { HelpProvider } from './HelpProvider';
+import { HelpProvider, SHELL_HELP_DOCUMENT_KIND, type ShellHelpDocument } from './HelpProvider';
 
 describe('HelpProvider', () => {
     describe('playground surface (default)', () => {
@@ -211,10 +211,22 @@ describe('HelpProvider', () => {
             expect(result.durationMs).toBe(0);
         });
 
-        it('returns result with help text as printable value', () => {
+        it('returns structured shell help as the printable value', () => {
             const provider = new HelpProvider('shell');
             const result = provider.getHelpResult();
-            expect(result.printable).toBe(provider.getHelpText());
+            expect(result.printable).toMatchObject({ kind: SHELL_HELP_DOCUMENT_KIND });
+            expect((result.printable as ShellHelpDocument).lines).toEqual(
+                expect.arrayContaining([
+                    { kind: 'header', text: 'DocumentDB Shell: Quick Reference' },
+                    { kind: 'blank' },
+                    { kind: 'header', text: 'Query' },
+                    expect.objectContaining({
+                        kind: 'entry',
+                        command: 'db.<coll>.find({})',
+                        description: 'Find documents',
+                    }),
+                ]),
+            );
         });
     });
 });
