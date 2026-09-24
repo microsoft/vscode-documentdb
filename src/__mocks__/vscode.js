@@ -36,4 +36,14 @@ vsCodeMock.CancellationTokenSource = class CancellationTokenSource {
     dispose() {}
 };
 
+// azext-utils' parseError checks `instanceof vscode.CancellationError` (not provided by jest-mock-vscode)
+if (!vsCodeMock.CancellationError) {
+    vsCodeMock.CancellationError = class CancellationError extends Error {
+        constructor() {
+            super('Canceled');
+            this.name = 'Canceled';
+        }
+    };
+}
+
 module.exports = vsCodeMock;
