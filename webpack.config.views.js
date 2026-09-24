@@ -33,7 +33,8 @@ module.exports = (env, { mode }) => {
                   type: 'filesystem',
                   cacheDirectory: path.resolve(process.env.WEBPACK_CACHE_DIR),
                   name: `${path.basename(__filename, '.js')}-${mode}`,
-                  buildDependencies: { config: [__filename] },
+                  // swc-loader reads .swcrc, which isn't part of the module graph.
+                  buildDependencies: { config: [__filename, path.resolve(__dirname, '.swcrc')] },
               }
             : false,
         experiments: {

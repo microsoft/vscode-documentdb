@@ -18,14 +18,15 @@ runs:
           uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
           with:
               path: node_modules
-              key: node-modules-${{ runner.os }}-${{ steps.node.outputs.node-version }}-${{ hashFiles('**/package-lock.json') }}
+              # package.json is in the key so a manifest out of sync with the lockfile still reaches npm ci and fails.
+              key: node-modules-${{ runner.os }}-${{ steps.node.outputs.node-version }}-${{ hashFiles('package-lock.json', 'package.json', 'packages/*/package.json') }}
 
         - name: Restore npm cache
           if: steps.modules.outputs.cache-hit != 'true'
           uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
           with:
               path: ~/.npm
-              key: npm-${{ runner.os }}-${{ hashFiles('**/package-lock.json') }}
+              key: npm-${{ runner.os }}-${{ hashFiles('package-lock.json') }}
               restore-keys: npm-${{ runner.os }}-
 
         - name: Install Dependencies (npm ci)

@@ -141,8 +141,8 @@ jobs:
               uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
               with:
                   path: ${{ runner.temp }}/webpack-cache
-                  key: webpack-${{ runner.os }}-${{ hashFiles('**/package-lock.json', 'webpack.config.*.js') }}-${{ github.sha }}
-                  restore-keys: webpack-${{ runner.os }}-${{ hashFiles('**/package-lock.json', 'webpack.config.*.js') }}-
+                  key: webpack-${{ runner.os }}-${{ hashFiles('package-lock.json', 'webpack.config.*.js', '.swcrc') }}-${{ github.sha }}
+                  restore-keys: webpack-${{ runner.os }}-${{ hashFiles('package-lock.json', 'webpack.config.*.js', '.swcrc') }}-
 
             - name: Package Distributables (vsix/tgz)
               run: npm run package
