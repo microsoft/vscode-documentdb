@@ -202,8 +202,7 @@ jobs:
                         const diff = pr - base;
                         const pct  = base > 0 ? ((diff / base) * 100).toFixed(1) : '∞';
                         const sign = diff > 0 ? '+' : '';
-                        const icon = diff > 0 ? '⬆️' : diff < 0 ? '⬇️' : '✅';
-                        return `${icon} ${sign}${fmt(diff)} (${sign}${pct}%)`;
+                        return `${sign}${fmt(diff)} (${sign}${pct}%)`;
                       };
 
                       let baseSizes = null;
@@ -218,7 +217,7 @@ jobs:
                       if (baseSizes) {
                         body = [
                           marker,
-                          '## 📦 Build Size Report',
+                          '## Build Size Report',
                           '',
                           '| Metric | Base (`${{ github.event.pull_request.base.ref }}`) | PR | Delta |',
                           '|--------|------|-----|-------|',
@@ -230,14 +229,14 @@ jobs:
                       } else {
                         body = [
                           marker,
-                          '## 📦 Build Size Report',
+                          '## Build Size Report',
                           '',
                           '| Metric | Size |',
                           '|--------|------|',
                           `| VSIX (\`${vsixFile}\`) | ${fmt(prVsix)} |`,
                           `| Webview bundle (\`views.js\`) | ${fmt(prWebview)} |`,
                           '',
-                          `> ⚠️ No baseline cached for \`${{ github.event.pull_request.base.ref }}\` yet — delta will appear after the next push to that branch.`,
+                          `> No baseline cached for \`${{ github.event.pull_request.base.ref }}\` yet — delta will appear after the next push to that branch.`,
                           '',
                           `_[Download artifact](${runUrl}) · updated automatically on each push._`,
                         ].join('\n');
@@ -299,14 +298,14 @@ jobs:
                       const failed = Object.keys(results).filter(k => results[k] === 'failure');
                       const rows = Object.keys(results).map(k => {
                         const ok = results[k] === 'success';
-                        const status = ok ? '✅ Passed' : '❌ Failed';
+                        const status = ok ? 'Passed' : 'Failed';
                         const hint = ok ? '' : hints[k];
                         return `| ${labels[k]} | ${status} | ${hint} |`;
                       }).join('\n');
 
                       const title = failed.length === 0
-                        ? '## ✅ Code Quality Checks'
-                        : '## ⚠️ Code Quality Issues';
+                        ? '## Code Quality Checks'
+                        : '## Code Quality Issues';
 
                       const body = [
                         marker,
