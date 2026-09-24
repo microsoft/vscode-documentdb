@@ -3,24 +3,16 @@ name: CI
 # This workflow handles the following scenarios:
 #
 # 1. Push to `main`:
-#    - Runs all jobs: code checks, tests, packaging, and caches build sizes
-#      for PR comparisons
+#    - Runs all jobs and caches build sizes for PR comparisons
 #
 # 2. Pull Requests to `main`, `release/**`, or `feature/**`:
-#    - Runs all jobs: code checks, tests, and packaging
+#    - Runs all jobs
 #    - Posts PR comments with code quality report and build size comparison
 #
-# 3. Manual run via `workflow_dispatch`:
-#    - Optional `enforce_full_run` input forces packaging on any branch
+# 3. Manual run via `workflow_dispatch`
 
 on:
     workflow_dispatch:
-        inputs:
-            enforce_full_run:
-                description: 'Run the packaging job on manual dispatch'
-                required: false
-                type: boolean
-                default: false
 
     push:
         branches:
@@ -110,21 +102,12 @@ jobs:
             - name: Run Unit Tests (Jest)
               run: npm run jesttest -- --maxWorkers=4
 
-    # Run on push to `main`/`release/**` (for cache seeding) and for PRs to main/release/**
     build-and-package:
         name: Package
         runs-on: ubuntu-latest
         permissions:
             contents: read
             pull-requests: write
-        if: |
-            (github.event_name == 'workflow_dispatch' && inputs.enforce_full_run) ||
-            github.ref == 'refs/heads/main' ||
-            startsWith(github.ref, 'refs/heads/release/') ||
-            (startsWith(github.ref, 'refs/pull/') && (
-              github.base_ref == 'main' ||
-              startsWith(github.base_ref, 'release/')
-            ))
         defaults:
             run:
                 working-directory: '.'
@@ -281,13 +264,89 @@ jobs:
                         body,
                       });
 
+            - name: Read minimum VS Code version
+              id: vscode
+              run: echo "version=$(node -p "require('./package.json').engines.vscode.replace(/^\\^/, '')")" >> $GITHUB_OUTPUT
+
+            - name: Restore VS Code
+              id: vscode-cache
+              uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+              with:
+                  path: .vscode-test
+                  key: vscode-${{ runner.os }}-${{ steps.vscode.outputs.version }}
+
+            # Installs the VSIX into that VS Code and checks it activates and registers every command it declares.
+            - name: Smoke Test (packaged VSIX)
+              timeout-minutes: 5
+              run: xvfb-run -a npm run test:smoke
+
+            # Also after a failed smoke test, so fixing it doesn't re-download; never a cancelled, partial download.
+            - name: Save VS Code
+              if: ${{ !cancelled() && steps.vscode-cache.outputs.cache-hit != 'true' && hashFiles('.vscode-test/*/code') != '' }}
+              uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+              with:
+                  path: .vscode-test
+                  key: ${{ steps.vscode-cache.outputs.cache-primary-key }}
+
+    # The same client code the extension uses, against a real DocumentDB instead of mocks.
+    db-integration:
+        name: Database Integration Tests
+        runs-on: ubuntu-latest
+        services:
+            documentdb:
+                # What Quick Start's default `latest` tag points to, pinned so a new image can't fail unrelated PRs.
+                image: ghcr.io/documentdb/documentdb/documentdb-local:pg17-1.0.0
+                env:
+                    USERNAME: ciuser
+                    PASSWORD: ci-${{ github.run_id }}
+                ports:
+                    - 10260:10260
+        steps:
+            - name: Checkout Repository
+              uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+            - name: Setup Node.js and Dependencies
+              uses: ./.github/actions/setup
+
+            - name: Run Integration Tests (Jest)
+              run: npm run test:integration
+              env:
+                  DOCUMENTDB_INTEGRATION_USERNAME: ciuser
+                  DOCUMENTDB_INTEGRATION_PASSWORD: ci-${{ github.run_id }}
+
+    api-typings:
+        name: Extract API Typings
+        runs-on: ubuntu-latest
+        defaults:
+            run:
+                working-directory: api
+        steps:
+            - name: Checkout Repository
+              uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+            - name: Setup Node.js Environment
+              uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+              with:
+                  node-version-file: .nvmrc
+                  cache: npm
+                  cache-dependency-path: api/package-lock.json
+
+            - name: Install Dependencies (npm ci)
+              run: npm ci --prefer-offline --no-audit --no-fund --progress=false
+
+            # `api-extractor --local` rewrites the committed report instead of failing, so compare it after.
+            - name: Run API Extractor
+              run: |
+                  npm run api-extractor
+                  git diff --exit-code -- etc || { echo "::error::The public API changed. Run 'npm run api-extractor' in api/ and commit api/etc."; exit 1; }
+
     # Branch protection requires a check named "Build & Package", so this gate keeps that name
     # and fails if any job above failed.
     ci-gate:
         name: Build & Package
         runs-on: ubuntu-latest
         if: always()
-        needs: [localization, lint, formatting, type-check, unit-tests, build-and-package]
+        needs: [localization, lint, formatting, type-check, unit-tests, build-and-package, db-integration, api-typings]
         permissions:
             pull-requests: write
         steps:
