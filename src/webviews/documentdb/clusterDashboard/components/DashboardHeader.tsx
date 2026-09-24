@@ -261,6 +261,7 @@ export const DashboardHeader = ({
                                                     <span
                                                         className="dashboardFact"
                                                         role="group"
+                                                        // eslint-disable-next-line jsx-a11y/no-noninteractive-tabindex -- keyboard focus exposes the version tooltip
                                                         tabIndex={0}
                                                         aria-labelledby={`${versionId}-${versionIndex}-label ${versionId}-${versionIndex}-value`}
                                                     >

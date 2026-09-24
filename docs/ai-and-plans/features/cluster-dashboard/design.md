@@ -44,7 +44,7 @@ does not introduce new commands or refresh semantics.
 The [upstream gateway query](https://github.com/documentdb/documentdb/blob/648db982aed5a9c307fec434b113bc5cadf27a6e/pg_documentdb_gw/documentdb_gateway_core/src/postgres/query_catalog.rs#L635)
 reports the installed extension version followed by the binary version. Azure diagnostics
 provided by the operator also contain three entries: `1.117-3`, `2.0.0`, `12.1-1`.
-The operator chose to retain all reported versions, joined with ` · `, instead of choosing
+The operator chose to retain all reported versions, joined with `·`, instead of choosing
 one entry or inferring the identity of each component. This supersedes the initial proposal
 to select a dotted version and the first implementation's single-version/two-entry restriction.
 Both the DocumentDB tag and Server details show `1.117-3 · 2.0.0 · 12.1-1` for that response;

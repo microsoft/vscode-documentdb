@@ -58,7 +58,7 @@ None yet. A user-manual page is due before this ships.
   Tooltips explain each version. There are separate
   Engine version and API version rows in Server details. Either part is omitted when unclear;
   neither gets an unknown placeholder. All recognizable DocumentDB versions are retained in
-  server order and joined with ` · ` within the DocumentDB tag and its details row, rather
+  server order and joined with `·` within the DocumentDB tag and its details row, rather
   than selecting a presumed engine release from component versions. Malformed entries cause
   the DocumentDB version information to be omitted. Without DocumentDB metadata, the existing
   server-version wording is retained. The header still has at most four fact groups in versions,

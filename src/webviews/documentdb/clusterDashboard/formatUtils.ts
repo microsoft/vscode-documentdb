@@ -31,7 +31,10 @@ export function parseDocumentDbEngineVersion(raw: string | undefined): string | 
             .map((entry) => entry.trim())
             .filter((entry) => entry !== '') ?? [];
     const extensionVersion = /^\d+\.\d+-\d+$/;
-    if (versions.length === 0 || versions.some((version) => valid(version) === null && !extensionVersion.test(version))) {
+    if (
+        versions.length === 0 ||
+        versions.some((version) => valid(version) === null && !extensionVersion.test(version))
+    ) {
         return undefined;
     }
     return versions.join(' · ');

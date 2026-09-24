@@ -143,7 +143,8 @@ describe('Dashboard versions', () => {
             return row.label === 'API version' ? 'API' : 'Version';
         });
         expect(labels).toEqual([...versionLabels, 'Region', 'Compute', 'Uptime']);
-        const tagCount = metadata['topology_hello_internal_documentdb_versions'] === undefined ? 0 : headerVersions.length;
+        const tagCount =
+            metadata['topology_hello_internal_documentdb_versions'] === undefined ? 0 : headerVersions.length;
         const versionGroupCount = headerVersions.length === 0 ? 0 : 1;
         expect(html.match(/class="dashboardFact"/g)).toHaveLength(3 + versionGroupCount + tagCount);
         const values = Array.from(
@@ -161,9 +162,7 @@ describe('Dashboard versions', () => {
         expect(html).not.toContain('DocumentDB 0.117.0 · API 7.0.0');
         const groups = buildDetailGroups(clusterInfo, undefined);
         expect(groups).toEqual(
-            rows.length === 0
-                ? []
-                : [{ title: 'Server', details: rows.map((row) => ({ ...row, copyable: false })) }],
+            rows.length === 0 ? [] : [{ title: 'Server', details: rows.map((row) => ({ ...row, copyable: false })) }],
         );
     });
 
