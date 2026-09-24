@@ -5,10 +5,10 @@ status: active
 prs: [653, 798, 876]
 verified: 2026-08-14
 code:
-    - src/commands/localQuickStart/**
-    - src/services/localQuickStart/**
-    - src/tree/connections-view/LocalQuickStart/**
-    - src/webviews/documentdb/localQuickStart/**
+  - src/commands/localQuickStart/**
+  - src/services/localQuickStart/**
+  - src/tree/connections-view/LocalQuickStart/**
+  - src/webviews/documentdb/localQuickStart/**
 ---
 
 # Local Quick Start
@@ -76,6 +76,7 @@ regular new-connection wizard instead ([0001](./decisions.md#0001--single-manage
 | 2026-08-02 | —    | Provider-neutral Docker readiness                            | [iterations/04-ui-redesign/](./iterations/04-ui-redesign/)                               |
 | 2026-08-04 | #798 | UI redesign shipped (Concept F)                              | [iterations/04-ui-redesign/](./iterations/04-ui-redesign/)                               |
 | 2026-08-09 | #876 | State sync + infrastructure error translation                | [iterations/05-error-translation.md](./iterations/05-error-translation.md)               |
+| 2026-09-23 | #958 | Setup never wipes a data volume before it can succeed (#946) | [iterations/06-data-volume-protection/](./iterations/06-data-volume-protection/)         |
 
 ## Decisions
 
