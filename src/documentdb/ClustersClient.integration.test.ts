@@ -60,13 +60,25 @@ beforeAll(async () => {
 }, READY_TIMEOUT_MS + 10_000);
 
 afterAll(async () => {
-    await client?.dropDatabase(databaseName);
-    await ClustersClient.deleteClient(clusterId);
+    try {
+        await client?.dropDatabase(databaseName);
+    } finally {
+        // An open client keeps Jest from exiting, which would hang the job instead of failing it.
+        await ClustersClient.deleteClient(clusterId);
+    }
 });
 
 describe('ClustersClient against DocumentDB Local', () => {
-    it('creates a collection and queries the documents inserted into it', async () => {
+    it('creates an empty collection', async () => {
         await client.createCollection(databaseName, collectionName);
+
+        expect((await client.listCollections(databaseName)).map((collection) => collection.name)).toContain(
+            collectionName,
+        );
+        expect((await client.listDatabases()).map((database) => database.name)).toContain(databaseName);
+    });
+
+    it('queries the documents inserted into it', async () => {
         const inserted = await client.insertDocuments(databaseName, collectionName, [
             { _id: 'a', n: 1 },
             { _id: 'b', n: 2 },
@@ -80,13 +92,6 @@ describe('ClustersClient against DocumentDB Local', () => {
         });
         expect(found.map((document) => document._id)).toEqual(['c', 'b']);
         expect(await client.countDocuments(databaseName, collectionName, '{ n: { $lt: 3 } }')).toBe(2);
-    });
-
-    it('lists the database and collection it created', async () => {
-        expect((await client.listDatabases()).map((database) => database.name)).toContain(databaseName);
-        expect((await client.listCollections(databaseName)).map((collection) => collection.name)).toContain(
-            collectionName,
-        );
     });
 
     it('updates and deletes a document by the serialized id the UI passes', async () => {

@@ -282,7 +282,7 @@ jobs:
 
             # Also after a failed smoke test, so fixing it doesn't re-download; never a cancelled, partial download.
             - name: Save VS Code
-              if: ${{ !cancelled() && steps.vscode-cache.outputs.cache-hit != 'true' && hashFiles('.vscode-test/*/code') != '' }}
+              if: ${{ !cancelled() && steps.vscode-cache.outputs.cache-hit != 'true' && hashFiles('.vscode-test/*/is-complete') != '' }}
               uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
               with:
                   path: .vscode-test
@@ -292,6 +292,7 @@ jobs:
     db-integration:
         name: Database Integration Tests
         runs-on: ubuntu-latest
+        timeout-minutes: 10
         services:
             documentdb:
                 # What Quick Start's default `latest` tag points to, pinned so a new image can't fail unrelated PRs.
@@ -338,7 +339,12 @@ jobs:
             - name: Run API Extractor
               run: |
                   npm run api-extractor
-                  git diff --exit-code -- etc || { echo "::error::The public API changed. Run 'npm run api-extractor' in api/ and commit api/etc."; exit 1; }
+                  if [ -n "$(git status --porcelain -- etc)" ]; then
+                      git status --short -- etc
+                      git diff -- etc
+                      echo "::error::The public API changed. Run 'npm run api-extractor' in api/ and commit api/etc."
+                      exit 1
+                  fi
 
     # Branch protection requires a check named "Build & Package", so this gate keeps that name
     # and fails if any job above failed.

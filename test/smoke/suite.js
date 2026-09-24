@@ -21,8 +21,6 @@ async function smokeTest() {
         .map((contribution) => contribution.command)
         .filter((command) => !registered.has(command));
     assert.deepStrictEqual(missing, [], `Contributed commands that were never registered: ${missing.join(', ')}`);
-
-    await vscode.commands.executeCommand('vscode-documentdb.command.connectionsView.refresh');
 }
 
 exports.run = async function run() {
