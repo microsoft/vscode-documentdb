@@ -206,6 +206,19 @@ const PROBE_SERVER_SELECTION_TIMEOUT_MS = 3_000;
  */
 const SAMPLE_DATA_INIT_SCRIPT = '/home/documentdb/gateway/scripts/init_documentdb_data.sh';
 const SAMPLE_DATA_DIR = '/home/documentdb/gateway/sample-data';
+
+/** The `sh -c` script that seeds sample data; see {@link QuickStartServiceImpl.seedSampleData}. */
+export function buildSampleDataSeedScript(): string {
+    const initCommand = `${SAMPLE_DATA_INIT_SCRIPT} -H localhost -P ${QUICK_START_PORT} -u "$USERNAME" -d ${SAMPLE_DATA_DIR}`;
+    return (
+        `init_help="$(${SAMPLE_DATA_INIT_SCRIPT} --help)" || exit $?; ` +
+        `case "$init_help" in ` +
+        `*DOCUMENTDB_PASSWORD*) DOCUMENTDB_PASSWORD="$PASSWORD" ${initCommand} ;; ` +
+        `*) ${initCommand} -p "$PASSWORD" ;; ` +
+        `esac`
+    );
+}
+
 /**
  * After a `docker start`, a container that re-runs a failing entrypoint reports
  * "running" for a moment before exiting, so a single immediate inspect can be a
@@ -1575,14 +1588,7 @@ export class QuickStartServiceImpl {
         token: vscode.CancellationToken,
     ): Promise<void> {
         try {
-            const initCommand = `${SAMPLE_DATA_INIT_SCRIPT} -H localhost -P ${QUICK_START_PORT} -u "$USERNAME" -d ${SAMPLE_DATA_DIR}`;
-            const script =
-                `init_help="$(${SAMPLE_DATA_INIT_SCRIPT} --help)" || exit $?; ` +
-                `case "$init_help" in ` +
-                `*DOCUMENTDB_PASSWORD*) DOCUMENTDB_PASSWORD="$PASSWORD" ${initCommand} ;; ` +
-                `*) ${initCommand} -p "$PASSWORD" ;; ` +
-                `esac`;
-            await this.runtime.execShellInContainer(containerId, script, secrets, token);
+            await this.runtime.execShellInContainer(containerId, buildSampleDataSeedScript(), secrets, token);
         } catch (error) {
             getQuickStartOutputChannel().appendLine(`Sample data load skipped: ${errMessage(error)}`);
         }
