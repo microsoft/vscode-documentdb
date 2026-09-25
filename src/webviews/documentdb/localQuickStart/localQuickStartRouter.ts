@@ -119,6 +119,7 @@ function toWebviewStatus(status: QuickStartStatus): QuickStartStatus {
         state: status.state,
         error: status.error,
         missing: status.missing,
+        dataRemoved: status.dataRemoved,
         canResumeReadiness: status.canResumeReadiness,
     };
 }

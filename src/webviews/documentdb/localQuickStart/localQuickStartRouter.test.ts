@@ -275,6 +275,21 @@ describe('localQuickStartRouter', () => {
             });
         });
 
+        // The wizard's "no longer in Docker" notice reads it from both.
+        it('passes dataRemoved through the status query and the subscription', async () => {
+            mockGetStatus.mockReturnValue({ state: 'NotInstalled', dataRemoved: true });
+            mockCanReuseExistingData.mockResolvedValue(false);
+            const caller = createCallerFactory(localQuickStartRouter)(createContext());
+
+            expect(await caller.getStatus()).toMatchObject({ state: 'NotInstalled', dataRemoved: true });
+            const [first] = await drain(1);
+
+            expect(first).toEqual({
+                status: expect.objectContaining({ dataRemoved: true }),
+                canReuseExistingData: false,
+            });
+        });
+
         it('pushes the new status when the instance changes', async () => {
             mockGetStatus.mockReturnValueOnce({ state: 'Stopped', missing: false });
             mockGetStatus.mockReturnValue({ state: 'Stopped', missing: true });
