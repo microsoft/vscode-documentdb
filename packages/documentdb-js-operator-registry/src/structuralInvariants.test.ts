@@ -228,7 +228,7 @@ describe('meta tag coverage', () => {
             countByPrefix[prefix] = (countByPrefix[prefix] || 0) + 1;
         }
 
-        expect(countByPrefix['query']).toBe(43);
+        expect(countByPrefix['query']).toBe(44);
         expect(countByPrefix['update']).toBe(22);
         expect(countByPrefix['stage']).toBe(35);
         expect(countByPrefix['accumulator']).toBe(21);

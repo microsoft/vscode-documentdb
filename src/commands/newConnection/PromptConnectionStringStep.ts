@@ -6,15 +6,21 @@
 import { AzureWizardPromptStep, parseError } from '@microsoft/vscode-azext-utils';
 import * as l10n from '@vscode/l10n';
 import { AuthMethodId } from '../../documentdb/auth/AuthMethod';
+import {
+    getConnectionStringAuthFacts,
+    stripManagedIdentityMarkers,
+} from '../../documentdb/auth/managedIdentityConnectionString';
 import { AzureDomains, hasDomainSuffix } from '../../documentdb/utils/connectionStringHelpers';
 import { DocumentDBConnectionString } from '../../documentdb/utils/DocumentDBConnectionString';
+import { canonicalizeTlsException } from '../../documentdb/utils/tlsException';
+import { traceAuthFlow } from '../../utils/authTrace';
 import { type NewConnectionWizardContext } from './NewConnectionWizardContext';
 
 export class PromptConnectionStringStep extends AzureWizardPromptStep<NewConnectionWizardContext> {
     public hideStepCount: boolean = true;
 
     public async prompt(context: NewConnectionWizardContext): Promise<void> {
-        const prompt: string = l10n.t('Enter the connection string of your MongoDB cluster.');
+        const prompt: string = l10n.t('Enter the connection string of your DocumentDB cluster.');
         const newConnectionString = await context.ui.showInputBox({
             prompt: prompt,
             ignoreFocusOut: true,
@@ -27,8 +33,11 @@ export class PromptConnectionStringStep extends AzureWizardPromptStep<NewConnect
         // 1. Parse the connection string and extract credentials
         const parsedConnectionString = new DocumentDBConnectionString(trimmedConnectionString);
 
+        const authFacts = getConnectionStringAuthFacts(parsedConnectionString);
+        context.connectionStringAuthFacts = authFacts;
+
         // Extract credentials to structured nativeAuthConfig
-        if (parsedConnectionString.username || parsedConnectionString.password) {
+        if (!authFacts.usesOidc && (parsedConnectionString.username || parsedConnectionString.password)) {
             context.nativeAuthConfig = {
                 connectionUser: parsedConnectionString.username || '',
                 connectionPassword: parsedConnectionString.password || '',
@@ -44,7 +53,52 @@ export class PromptConnectionStringStep extends AzureWizardPromptStep<NewConnect
             parsedConnectionString.searchParams.delete('authMechanism');
         }
 
+        if (authFacts.usesOidc) {
+            context.selectedAuthenticationMethod = AuthMethodId.MicrosoftEntraID;
+            context.nativeAuthConfig = undefined;
+
+            if (authFacts.username) {
+                context.valuesToMask.push(authFacts.username);
+            }
+        }
+
+        // A managed identity declaration needs the OIDC mechanism, the Azure environment marker,
+        // and either no username (system assigned) or a GUID username (user assigned).
+        const hasUsableManagedIdentity =
+            authFacts.usesOidc &&
+            authFacts.declaresAzureMachineWorkflow &&
+            (!authFacts.username || authFacts.usernameIsGuid);
+
+        if (authFacts.usesOidc && authFacts.declaresAzureMachineWorkflow) {
+            // The mechanism markers were inputs to a decision, not state: keeping them in the stored
+            // string risks the driver preferring the URL form and taking its own IMDS path (D1).
+            stripManagedIdentityMarkers(parsedConnectionString);
+        }
+
+        if (hasUsableManagedIdentity) {
+            context.selectedAuthenticationMethod = AuthMethodId.ManagedIdentity;
+            context.managedIdentityAuthConfig = authFacts.username ? { clientId: authFacts.username } : {};
+            context.telemetry.properties.managedIdentityKind = authFacts.username ? 'user' : 'system';
+            context.telemetry.properties.managedIdentityClientIdSource = authFacts.username
+                ? 'connectionString'
+                : 'none';
+        } else if (authFacts.usesOidc && authFacts.usernameIsGuid) {
+            context.managedIdentityAuthConfig = { clientId: authFacts.username };
+        }
+
         context.connectionString = parsedConnectionString.toString();
+
+        // TLS exception (§7): for an all-local/private host, fold any TLS-bypass URL param into the
+        // single source of truth (`context.disableEmulatorSecurity`) and strip it from the stored
+        // connection string. RESET the decision on every entry (so changing the connection string via
+        // Back-navigation re-evaluates it) — set true only for an all-local/private host that requested
+        // the bypass, otherwise clear it so the gated TLS step decides (or a public host validates).
+        // A public/mixed host keeps its string verbatim: the stored flag is host-gated and would never
+        // be honored there, so stripping would delete the user's only way to express the exception.
+        const canonicalTls = canonicalizeTlsException(context.connectionString);
+        context.connectionString = canonicalTls.connectionString;
+        context.disableEmulatorSecurity = canonicalTls.disableEmulatorSecurity ? true : undefined;
+
         context.valuesToMask.push(context.connectionString);
 
         // 3. Detect and/or guess available authentication methods
@@ -52,9 +106,30 @@ export class PromptConnectionStringStep extends AzureWizardPromptStep<NewConnect
 
         if (hasDomainSuffix(AzureDomains.vCore, ...parsedConnectionString.hosts)) {
             supportedAuthMethods.push(AuthMethodId.MicrosoftEntraID);
+            // Managed identity is Entra ID on the wire; wherever one is offered, so is the other.
+            supportedAuthMethods.push(AuthMethodId.ManagedIdentity);
         }
 
+        if (authFacts.usesOidc && !supportedAuthMethods.includes(AuthMethodId.ManagedIdentity)) {
+            // An explicit or suggestive driver-native string remains internally consistent even when
+            // a private endpoint or CNAME prevents host-based vCore classification.
+            supportedAuthMethods.push(AuthMethodId.ManagedIdentity);
+        }
+
+        // Anonymous ("no authentication") connections are always offered.
+        supportedAuthMethods.push(AuthMethodId.NoAuth);
+
         context.availableAuthenticationMethods = supportedAuthMethods;
+        traceAuthFlow('newConnection.connectionStringAuthInference', {
+            usesOidc: authFacts.usesOidc,
+            declaresMachineWorkflow: authFacts.declaresAzureMachineWorkflow,
+            suppliedIdentityPresent: !!authFacts.username,
+            suppliedIdentityIsGuid: authFacts.usernameIsGuid,
+            usableManagedIdentity: hasUsableManagedIdentity,
+            selectedMethod: context.selectedAuthenticationMethod ?? 'none',
+            supportedMethods: supportedAuthMethods.join(','),
+            entraHostRecognized: hasDomainSuffix(AzureDomains.vCore, ...parsedConnectionString.hosts),
+        });
     }
 
     //eslint-disable-next-line @typescript-eslint/require-await

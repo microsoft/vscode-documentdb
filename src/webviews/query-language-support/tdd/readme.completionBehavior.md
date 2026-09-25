@@ -17,16 +17,16 @@ their sort order, and how snippets are wrapped at each position.
 Completions are grouped by category (shown as the `description` field in the
 completion item label). The categories come from the operator's `meta` tag:
 
-| Category | Source | Example operators |
-|----------|--------|-------------------|
-| `logical` | `query:logical` | `$and`, `$or`, `$nor` |
-| `comparison` | `query:comparison` | `$eq`, `$gt`, `$in` |
-| `array` | `query:array` | `$all`, `$elemMatch`, `$size` |
-| `evaluation` | `query:evaluation` | `$regex`, `$mod` |
-| `element` | `query:element` | `$exists`, `$type` |
-| `bson` | `bson` | `ObjectId`, `UUID`, `ISODate` |
-| `JS global` | (hardcoded) | `Date`, `Math`, `RegExp` |
-| (field type) | field data | `String`, `Number`, etc. |
+| Category     | Source             | Example operators             |
+| ------------ | ------------------ | ----------------------------- |
+| `logical`    | `query:logical`    | `$and`, `$or`, `$nor`         |
+| `comparison` | `query:comparison` | `$eq`, `$gt`, `$in`           |
+| `array`      | `query:array`      | `$all`, `$elemMatch`, `$size` |
+| `evaluation` | `query:evaluation` | `$regex`, `$mod`              |
+| `element`    | `query:element`    | `$exists`, `$type`            |
+| `bson`       | `bson`             | `ObjectId`, `UUID`, `ISODate` |
+| `JS global`  | (hardcoded)        | `Date`, `Math`, `RegExp`      |
+| (field type) | field data         | `String`, `Number`, etc.      |
 
 ### Position: EMPTY (no braces in editor)
 
@@ -125,11 +125,11 @@ Shown: everything — logical, comparison, array, evaluation, element, bson, JS 
 Each position has a defined sort prefix hierarchy. Items with lower prefixes
 appear higher in the completion list.
 
-| Position | Sort hierarchy |
-|----------|---------------|
-| EMPTY | `0_` fields → `1_` key operators |
-| KEY | `0_` fields → `1_` key operators |
-| VALUE | `00_` type suggestions → `0_`–`2_` operators → `3_` BSON → `4_` JS globals |
-| OPERATOR | `0_` type-relevant → `1a_` comparison → `1b_` universal → `2_` non-matching |
-| ARRAY-ELEMENT | same as KEY |
-| UNKNOWN | no enforced sort (Monaco default) |
+| Position      | Sort hierarchy                                                              |
+| ------------- | --------------------------------------------------------------------------- |
+| EMPTY         | `0_` fields → `1_` key operators                                            |
+| KEY           | `0_` fields → `1_` key operators                                            |
+| VALUE         | `00_` type suggestions → `0_`–`2_` operators → `3_` BSON → `4_` JS globals  |
+| OPERATOR      | `0_` type-relevant → `1a_` comparison → `1b_` universal → `2_` non-matching |
+| ARRAY-ELEMENT | same as KEY                                                                 |
+| UNKNOWN       | no enforced sort (Monaco default)                                           |

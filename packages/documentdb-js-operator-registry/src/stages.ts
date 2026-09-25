@@ -32,7 +32,7 @@ const aggregationPipelineStages: readonly OperatorEntry[] = [
     {
         value: '$bucket',
         meta: META_STAGE,
-        description: 'Groups input documents into buckets based on specified boundaries.',
+        description: 'The $bucket operator groups input documents into buckets based on specified boundaries.',
         snippet: '{ $bucket: { groupBy: "${1:\\$field}", boundaries: [${2:values}], default: "${3:Other}" } }',
         link: getDocLink('$bucket', META_STAGE),
     },
@@ -64,12 +64,13 @@ const aggregationPipelineStages: readonly OperatorEntry[] = [
         description:
             'The `$count` operator is used to count the number of documents that match a query filtering criteria.',
         snippet: '{ $count: "${1:countField}" }',
-        link: 'https://learn.microsoft.com/en-us/azure/documentdb/operators/accumulators/$count', // inferred from another category
+        link: 'https://learn.microsoft.com/en-us/documentdb/query/operators/accumulators/$count', // inferred from another category
     },
     {
         value: '$densify',
         meta: META_STAGE,
-        description: 'Adds missing data points in a sequence of values within an array or collection.',
+        description:
+            'The $densify operator adds missing data points in a sequence of values within an array or collection.',
         snippet: '{ $densify: { field: "${1:field}", range: { step: ${2:1}, bounds: "full" } } }',
         link: getDocLink('$densify', META_STAGE),
     },
@@ -176,7 +177,7 @@ const aggregationPipelineStages: readonly OperatorEntry[] = [
     {
         value: '$redact',
         meta: META_STAGE,
-        description: 'Filters the content of the documents based on access rights.',
+        description: 'The $redact operator filters the content of the documents based on access rights.',
         snippet:
             '{ $redact: { \\$cond: { if: { ${1:expression} }, then: "${2:\\$\\$DESCEND}", else: "${3:\\$\\$PRUNE}" } } }',
         link: getDocLink('$redact', META_STAGE),
@@ -191,14 +192,14 @@ const aggregationPipelineStages: readonly OperatorEntry[] = [
         value: '$replaceWith',
         meta: META_STAGE,
         description:
-            'The $replaceWith operator in Azure DocumentDB returns a document after replacing a document with the specified document',
+            'The $replaceWith operator in DocumentDB returns a document after replacing a document with the specified document',
         snippet: '{ $replaceWith: "${1:\\$field}" }',
         link: getDocLink('$replaceWith', META_STAGE),
     },
     {
         value: '$sample',
         meta: META_STAGE,
-        description: 'The $sample operator in Azure DocumentDB returns a randomly selected number of documents',
+        description: 'The $sample operator in DocumentDB returns a randomly selected number of documents',
         snippet: '{ $sample: { size: ${1:number} } }',
         link: getDocLink('$sample', META_STAGE),
     },
@@ -217,7 +218,7 @@ const aggregationPipelineStages: readonly OperatorEntry[] = [
     {
         value: '$set',
         meta: META_STAGE,
-        description: 'The $set operator in Azure DocumentDB updates or creates a new field with a specified value',
+        description: 'The $set operator in DocumentDB updates or creates a new field with a specified value',
         snippet: '{ $set: { ${1:field}: ${2:expression} } }',
         link: getDocLink('$set', META_STAGE),
     },

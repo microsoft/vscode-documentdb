@@ -157,8 +157,9 @@ describe('ConnectionStorageService - Cleanup Functions', () => {
     beforeEach(async () => {
         mockStorage.clear();
         jest.clearAllMocks();
-        // Reset the private static storage service instance
+        // Reset the private static storage service instance and bootstrap promise
         (ConnectionStorageService as any)._storageService = undefined;
+        (ConnectionStorageService as any)._bootstrap = undefined;
     });
 
     describe('cleanupDuplicateConnectionStringParameters', () => {
@@ -187,6 +188,7 @@ describe('ConnectionStorageService - Cleanup Functions', () => {
             // Trigger storage service initialization (which runs cleanup)
             // Reset the static instance to force re-initialization
             (ConnectionStorageService as any)._storageService = undefined;
+            (ConnectionStorageService as any)._bootstrap = undefined;
             await ConnectionStorageService.getAllItems(ConnectionType.Clusters);
 
             // Wait for the fire-and-forget cleanupOrphanedItems() to complete
@@ -327,6 +329,7 @@ describe('ConnectionStorageService - Cleanup Functions', () => {
 
             // Trigger initialization - reset storage to force re-initialization
             (ConnectionStorageService as any)._storageService = undefined;
+            (ConnectionStorageService as any)._bootstrap = undefined;
             await ConnectionStorageService.getAllItems(ConnectionType.Clusters);
             await new Promise((resolve) => setTimeout(resolve, 500));
 

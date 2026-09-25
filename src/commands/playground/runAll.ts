@@ -6,9 +6,8 @@
 import { type IActionContext } from '@microsoft/vscode-azext-utils';
 import * as l10n from '@vscode/l10n';
 import * as vscode from 'vscode';
-import { PlaygroundService } from '../../documentdb/playground/PlaygroundService';
 import { PLAYGROUND_LANGUAGE_ID } from '../../documentdb/playground/constants';
-import { ext } from '../../extensionVariables';
+import { settingsKeys } from '../../settingsKeys';
 import { executePlaygroundCode } from './executePlaygroundCode';
 
 /**
@@ -20,23 +19,13 @@ export async function runAll(_context: IActionContext): Promise<void> {
         return;
     }
 
-    const service = PlaygroundService.getInstance();
-    if (!service.isConnected(editor.document.uri)) {
-        void vscode.window.showWarningMessage(
-            l10n.t('This playground has no connection. Create a new playground from the DocumentDB panel.'),
-        );
-        return;
-    }
-
     const code = editor.document.getText();
     if (!code.trim()) {
         void vscode.window.showInformationMessage(l10n.t('The playground file is empty. Add some code to run.'));
         return;
     }
 
-    const confirmRunAll = vscode.workspace
-        .getConfiguration()
-        .get<boolean>(ext.settingsKeys.playgroundConfirmRunAll, true);
+    const confirmRunAll = vscode.workspace.getConfiguration().get<boolean>(settingsKeys.playgroundConfirmRunAll, true);
 
     if (confirmRunAll) {
         const confirmed = await vscode.window.showWarningMessage(
@@ -48,7 +37,7 @@ export async function runAll(_context: IActionContext): Promise<void> {
                     '\n\n' +
                     l10n.t(
                         'You can disable this confirmation by setting "{0}" to false.',
-                        ext.settingsKeys.playgroundConfirmRunAll,
+                        settingsKeys.playgroundConfirmRunAll,
                     ),
             },
             l10n.t('Run All'),

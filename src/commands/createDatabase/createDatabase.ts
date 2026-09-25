@@ -5,10 +5,12 @@
 
 import { AzureWizard, type IActionContext } from '@microsoft/vscode-azext-utils';
 import * as l10n from '@vscode/l10n';
+import { AtlasExperience } from '../../DocumentDBExperiences';
 import { CredentialCache } from '../../documentdb/CredentialCache';
 import { type ClusterItemBase } from '../../tree/documentdb/ClusterItemBase';
 import { showConfirmationAsInSettings } from '../../utils/dialogs/showConfirmation';
 import { nonNullValue } from '../../utils/nonNull';
+import { InitialCollectionNameStep } from '../createCollection/InitialCollectionNameStep';
 import { type CreateDatabaseWizardContext } from './CreateDatabaseWizardContext';
 import { DatabaseNameStep } from './DatabaseNameStep';
 import { ExecuteStep } from './ExecuteStep';
@@ -31,7 +33,7 @@ async function createMongoDatabase(context: IActionContext, node: ClusterItemBas
     if (!CredentialCache.hasCredentials(node.cluster.clusterId)) {
         throw new Error(
             l10n.t(
-                'You are not signed in to the MongoDB Cluster. Please sign in (by expanding the node "{0}") and try again.',
+                'You are not signed in to the DocumentDB cluster. Please sign in (by expanding the node "{0}") and try again.',
                 node.cluster.name,
             ),
         );
@@ -42,11 +44,12 @@ async function createMongoDatabase(context: IActionContext, node: ClusterItemBas
         credentialsId: node.cluster.clusterId,
         clusterName: node.cluster.name,
         nodeId: node.id,
+        requiresInitialCollection: node.experience.api === AtlasExperience.api,
     };
 
     const wizard = new AzureWizard(wizardContext, {
         title: l10n.t('Create database'),
-        promptSteps: [new DatabaseNameStep()],
+        promptSteps: [new DatabaseNameStep(), new InitialCollectionNameStep()],
         executeSteps: [new ExecuteStep()],
         showLoadingPrompt: true,
     });

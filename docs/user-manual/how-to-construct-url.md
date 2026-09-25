@@ -2,7 +2,7 @@
 
 ---
 
-# How to Construct a URL That Opens a Connection in the Extension
+# How to Construct a URL That Opens the Extension
 
 **DocumentDB for VS Code** supports activation through custom URLs, enabling you to integrate the extension seamlessly with your development environment and build deep links directly to your DocumentDB and MongoDB clusters. This powerful feature allows you to create shortcuts that can open specific connections, navigate to particular databases, or even jump directly to a collection view within the extension.
 
@@ -21,21 +21,50 @@ The prefix for URLs handled by this extension is:
 vscode://ms-azuretools.vscode-documentdb
 ```
 
+A link names **what it wants** in the path, and supplies **arguments for it** in the query:
+
+```
+vscode://ms-azuretools.vscode-documentdb/<action>?<parameters>
+```
+
+### Supported Actions
+
+| Action             | What it does                                                   | Parameters                                   |
+| ------------------ | -------------------------------------------------------------- | -------------------------------------------- |
+| `connect`          | Opens a connection to a cluster, optionally navigating into it | `connectionString`, `database`, `collection` |
+| `local`            | Opens the **DocumentDB Local** setup wizard                    | none                                         |
+| `local/documentdb` | Opens the **DocumentDB Local** setup wizard                    | none                                         |
+
+Only the actions in this table are recognized. A link naming anything else is refused with an
+explanatory message — the extension never treats the path as a command name, so a link cannot
+reach extension functionality that is not listed here.
+
+> **Links written before actions existed keep working.** A URL with no action, such as
+> `vscode://ms-azuretools.vscode-documentdb?connectionString=...`, means `connect`. You do not
+> need to update existing links.
+
+`local` accepts an optional local resource type. Currently, `documentdb` is the only supported
+type, and omitting it defaults to `documentdb`, so `/local` and `/local/documentdb` are equivalent.
+Unsupported resource types and additional path segments are refused rather than silently opening a
+different setup experience.
+
 ### Supported Parameters
+
+These apply to the `connect` action.
 
 The following table lists all supported URL parameters:
 
-| Parameter          | Required | Description                                                    | Example Value               |
-| ------------------ | -------- | -------------------------------------------------------------- | --------------------------- |
-| `connectionString` | Yes      | The MongoDB/DocumentDB connection string (double URL-encoded)  | `mongodb%253A%252F%252F...` |
-| `database`         | No       | Name of the database to open after connection                  | `myDatabase`                |
-| `collection`       | No       | Name of the collection to open (requires `database` parameter) | `myCollection`              |
+| Parameter          | Required | Description                                                   | Example Value               |
+| ------------------ | -------- | ------------------------------------------------------------- | --------------------------- |
+| `connectionString` | Yes      | The MongoDB/DocumentDB connection string (double URL-encoded) | `mongodb%253A%252F%252F...` |
+| `database`         | No       | Name of the database to open after connection                 | `myDatabase`                |
+| `collection`       | No       | Collection to open (requires a database parameter or path)    | `myCollection`              |
 
 ### Parameter Details
 
 - **`connectionString`**: The core parameter that defines the database connection. Must be a valid DocumentDB or MongoDB connection string that has been double URL-encoded (see encoding section below). Note: While it's possible to include a database name in the connection string, it's recommended to use the separate `database` parameter instead to keep the API simple and consistent.
 - **`database`**: When provided, the extension will automatically navigate to the specified database after establishing the connection.
-- **`collection`**: When provided along with `database`, the extension will open the Collection View for the specified collection within that database.
+- **`collection`**: The extension opens the Collection View for this collection. A database must be supplied either through the `database` parameter or in the connection-string path; otherwise the link is rejected before a connection is added or opened.
 
 ## Double Encoding
 
@@ -106,17 +135,38 @@ vscode://ms-azuretools.vscode-documentdb?connectionString=mongodb%253A%252F%252F
 
 This URL will connect to the database, navigate to the `ecommerce` database, and open the Collection View for the `orders` collection.
 
+### Example 4: Open the DocumentDB Local Setup Wizard
+
+Use this to take someone from a web page to a running local DocumentDB without asking them to find
+anything in the UI. It carries no parameters, because there is no connection yet — that is what the
+wizard is for.
+
+```
+vscode://ms-azuretools.vscode-documentdb/local
+```
+
+The explicit resource-type form is equivalent:
+
+```
+vscode://ms-azuretools.vscode-documentdb/local/documentdb
+```
+
+When URL handling confirmations are enabled in the extension settings, either form shows one
+confirmation before opening the setup wizard.
+
 ## How It Works
 
 When you click a DocumentDB for VS Code URL, the following process occurs:
 
 1. **Activation**: The `vscode://` prefix tells the operating system to activate VS Code. The `ms-azuretools.vscode-documentdb` segment activates the **DocumentDB for VS Code** extension.
 
-2. **Connection Handling**:
+2. **Action routing**: The extension reads the action from the path. An unrecognized action is refused rather than guessed at, so a mistyped link never acts on parameters you did not intend for it.
+
+3. **Connection Handling** (for `connect`):
    - The extension parses the `connectionString` parameter and creates a new connection in the Connections View.
    - If a connection with the same host and username already exists, the existing connection will be selected instead of creating a duplicate.
 
-3. **Navigation** (if additional parameters are provided):
+4. **Navigation** (if additional parameters are provided):
    - If the `database` parameter is provided, the extension navigates to that database.
    - If both `database` and `collection` parameters are provided, the extension opens the Collection View for the specified collection.
 
@@ -125,3 +175,4 @@ When you click a DocumentDB for VS Code URL, the following process occurs:
 - Ensure the `connectionString` is valid and properly double-encoded to avoid connection errors.
 - The extension will handle authentication and connection establishment automatically.
 - Invalid or malformed URLs will display appropriate error messages to help with troubleshooting.
+- A link is untrusted input: the set of actions it can reach is fixed by the extension, not derived from its command list. Adding a new action is a deliberate decision that the action is safe to trigger from someone else's web page.

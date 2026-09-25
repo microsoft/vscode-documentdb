@@ -7,10 +7,10 @@
  * URL generation helpers for DocumentDB documentation pages.
  *
  * Each operator has a documentation page at:
- *   https://learn.microsoft.com/en-us/azure/documentdb/operators/{category}/{operatorName}
+ *   https://learn.microsoft.com/en-us/documentdb/query/operators/{category}/{operatorName}
  */
 
-const DOC_BASE = 'https://learn.microsoft.com/en-us/azure/documentdb/operators';
+const DOC_BASE = 'https://learn.microsoft.com/en-us/documentdb/query/operators';
 
 /**
  * Maps meta tag prefixes to the docs directory name used in the
@@ -41,7 +41,7 @@ const META_TO_DOC_DIR: Record<string, string> = {
     'expr:set': 'set-expression',
     'expr:string': 'string-expression',
     'expr:trig': 'trigonometry-expression',
-    'expr:type': 'aggregation/type-expression',
+    'expr:type': 'aggregation',
     'expr:datasize': 'data-size',
     'expr:timestamp': 'timestamp-expression',
     'expr:bitwise': 'bitwise',

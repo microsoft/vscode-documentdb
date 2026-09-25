@@ -15,6 +15,7 @@ import * as l10n from '@vscode/l10n';
 import { type QuickPickItem } from 'vscode';
 import { askToConfigureCredentials } from '../askToConfigureCredentials';
 import { type AzureSubscriptionProviderWithFilters } from '../AzureSubscriptionProviderWithFilters';
+import { tenantSignInLimiter } from '../tenantSignInLimiter';
 import { type FilteringWizardContext } from './FilteringWizardContext';
 import { FilterSubscriptionSubStep } from './FilterSubscriptionSubStep';
 import { FilterTenantSubStep } from './FilterTenantSubStep';
@@ -63,13 +64,15 @@ export class InitializeFilteringStep extends AzureWizardPromptStep<FilteringWiza
         const allTenants = await azureSubscriptionProvider.getTenants();
 
         // Filter to only show authenticated tenants
-        // Check sign-in status for all tenants in parallel
+        // Check sign-in status for all tenants with bounded parallelism
         const tenantsWithSignInStatus = await Promise.all(
             allTenants.map(async (tenant) => {
                 if (!tenant.tenantId) {
                     return { tenant, isSignedIn: false };
                 }
-                const isSignedIn = await azureSubscriptionProvider.isSignedIn(tenant.tenantId, tenant.account);
+                const isSignedIn = await tenantSignInLimiter(() =>
+                    azureSubscriptionProvider.isSignedIn(tenant.tenantId, tenant.account),
+                );
                 return { tenant, isSignedIn };
             }),
         );

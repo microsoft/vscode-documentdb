@@ -3,9 +3,13 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+import { EJSON } from 'bson';
 import * as vscode from 'vscode';
+import { HelpProvider } from '../../../packages/documentdb-js-shell-runtime/src/HelpProvider';
+import { ShellOutputFormatter } from './ShellOutputFormatter';
 import {
     ACTION_LINE_PREFIX,
+    HELP_SETTINGS_QUERIES,
     PLAYGROUND_ACTION_PREFIX,
     registerShellTerminal,
     SETTINGS_ACTION_PREFIX,
@@ -254,7 +258,7 @@ describe('ShellTerminalLinkProvider', () => {
         it('should detect settings action line and return a settings link', () => {
             registerShellTerminal(mockTerminal, () => mockShellInfo('test-id'));
 
-            const actionLine = `${SETTINGS_ACTION_PREFIX}[documentDB.shell.initTimeout]`;
+            const actionLine = `${SETTINGS_ACTION_PREFIX}[documentDB.connectionTimeout]`;
             const context = {
                 terminal: mockTerminal,
                 line: actionLine,
@@ -264,14 +268,69 @@ describe('ShellTerminalLinkProvider', () => {
             expect(links).toHaveLength(1);
             expect(links[0]).toMatchObject({
                 linkType: 'settings',
-                settingKey: 'documentDB.shell.initTimeout',
+                settingsQuery: 'documentDB.connectionTimeout',
             });
+        });
+
+        it('should resolve every generated help marker to a Settings query', () => {
+            registerShellTerminal(mockTerminal, () => mockShellInfo('test-id'));
+            const helpText = new HelpProvider('shell').getHelpText();
+            const markers = [...helpText.matchAll(/⚙ \[([^\]]+)\]/gu)].map((match) => match[1]);
+
+            expect(markers).toEqual(['shellSettings']);
+            for (const marker of markers) {
+                const settingsQuery = HELP_SETTINGS_QUERIES[marker];
+                expect(settingsQuery).toBe('@ext:ms-azuretools.vscode-documentdb documentDB.shell');
+
+                const context = {
+                    terminal: mockTerminal,
+                    line: `  ${SETTINGS_ACTION_PREFIX}[${marker}] Toggle this setting`,
+                } as vscode.TerminalLinkContext;
+                expect(provider.provideTerminalLinks(context)).toEqual([
+                    expect.objectContaining({ linkType: 'settings', settingsQuery }),
+                ]);
+            }
+        });
+
+        it('should detect the settings marker in formatted structured help', () => {
+            registerShellTerminal(mockTerminal, () => mockShellInfo('test-id'));
+            const helpResult = new HelpProvider('shell').getHelpResult(120);
+            const formattedHelp = new ShellOutputFormatter().formatResult({
+                type: helpResult.type,
+                printable: EJSON.stringify(helpResult.printable, { relaxed: false }),
+                durationMs: helpResult.durationMs,
+            });
+            const settingsLine = formattedHelp.split('\r\n').find((line) => line.includes('[shellSettings]'));
+            expect(settingsLine).toBeDefined();
+
+            const context = {
+                terminal: mockTerminal,
+                line: settingsLine,
+            } as vscode.TerminalLinkContext;
+
+            expect(provider.provideTerminalLinks(context)).toEqual([
+                expect.objectContaining({
+                    linkType: 'settings',
+                    settingsQuery: '@ext:ms-azuretools.vscode-documentdb documentDB.shell',
+                }),
+            ]);
+        });
+
+        it('should leave an unknown compact marker as plain text', () => {
+            registerShellTerminal(mockTerminal, () => mockShellInfo('test-id'));
+
+            const context = {
+                terminal: mockTerminal,
+                line: `  ${SETTINGS_ACTION_PREFIX}[unknownSetting] Unknown setting`,
+            } as vscode.TerminalLinkContext;
+
+            expect(provider.provideTerminalLinks(context)).toEqual([]);
         });
 
         it('should handle ANSI-wrapped settings action line', () => {
             registerShellTerminal(mockTerminal, () => mockShellInfo('test-id'));
 
-            const actionLine = `\x1b[90m${SETTINGS_ACTION_PREFIX}[documentDB.shell.initTimeout]\x1b[0m`;
+            const actionLine = `\x1b[90m${SETTINGS_ACTION_PREFIX}[documentDB.connectionTimeout]\x1b[0m`;
             const context = {
                 terminal: mockTerminal,
                 line: actionLine,
@@ -281,14 +340,14 @@ describe('ShellTerminalLinkProvider', () => {
             expect(links).toHaveLength(1);
             expect(links[0]).toMatchObject({
                 linkType: 'settings',
-                settingKey: 'documentDB.shell.initTimeout',
+                settingsQuery: 'documentDB.connectionTimeout',
             });
         });
 
         it('should handle underline-wrapped settings action line', () => {
             registerShellTerminal(mockTerminal, () => mockShellInfo('test-id'));
 
-            const actionLine = `\x1b[90m\x1b[4m${SETTINGS_ACTION_PREFIX}[documentDB.shell.initTimeout]\x1b[24m\x1b[0m`;
+            const actionLine = `\x1b[90m\x1b[4m${SETTINGS_ACTION_PREFIX}[documentDB.connectionTimeout]\x1b[24m\x1b[0m`;
             const context = {
                 terminal: mockTerminal,
                 line: actionLine,
@@ -300,14 +359,14 @@ describe('ShellTerminalLinkProvider', () => {
                 linkType: 'settings',
                 startIndex: 0,
                 length: actionLine.length,
-                settingKey: 'documentDB.shell.initTimeout',
+                settingsQuery: 'documentDB.connectionTimeout',
             });
         });
 
         it('should not match settings line for non-shell terminals', () => {
             const context = {
                 terminal: { name: 'bash' } as unknown as vscode.Terminal,
-                line: `${SETTINGS_ACTION_PREFIX}[documentDB.shell.initTimeout]`,
+                line: `${SETTINGS_ACTION_PREFIX}[documentDB.connectionTimeout]`,
             } as vscode.TerminalLinkContext;
 
             const links = provider.provideTerminalLinks(context);
@@ -321,14 +380,17 @@ describe('ShellTerminalLinkProvider', () => {
                 linkType: 'settings' as const,
                 startIndex: 0,
                 length: 40,
-                settingKey: 'documentDB.shell.initTimeout',
+                settingsQuery: '@ext:ms-azuretools.vscode-documentdb documentDB.shell',
             };
 
             provider.handleTerminalLink(link as Parameters<typeof provider.handleTerminalLink>[0]);
 
             return new Promise<void>((resolve) => {
                 setTimeout(() => {
-                    expect(spy).toHaveBeenCalledWith('workbench.action.openSettings', 'documentDB.shell.initTimeout');
+                    expect(spy).toHaveBeenCalledWith(
+                        'workbench.action.openSettings',
+                        '@ext:ms-azuretools.vscode-documentdb documentDB.shell',
+                    );
                     spy.mockRestore();
                     resolve();
                 }, 50);

@@ -17,7 +17,6 @@ import {
 } from '@microsoft/vscode-azext-utils';
 import { ParseMode, parse as parseShellBSON } from '@mongodb-js/shell-bson-parser';
 import * as l10n from '@vscode/l10n';
-import { EJSON } from 'bson';
 import { randomUUID } from 'crypto';
 import {
     MongoBulkWriteError,
@@ -37,12 +36,14 @@ import {
 } from 'mongodb';
 import { Links } from '../constants';
 import { ext } from '../extensionVariables';
-import { meterSilentCatch } from '../utils/callWithAccumulatingTelemetry';
+import { meterSilentCatch } from '../utils/accumulatingTelemetry';
 import { type EmulatorConfiguration } from '../utils/emulatorConfiguration';
 import { type AuthHandler } from './auth/AuthHandler';
 import { AuthMethodId } from './auth/AuthMethod';
+import { ManagedIdentityAuthHandler } from './auth/ManagedIdentityAuthHandler';
 import { MicrosoftEntraIDAuthHandler } from './auth/MicrosoftEntraIDAuthHandler';
 import { NativeAuthHandler } from './auth/NativeAuthHandler';
+import { NoAuthHandler } from './auth/NoAuthHandler';
 import { QueryInsightsApis, type ExplainVerbosity } from './client/QueryInsightsApis';
 import { CredentialCache, type CachedClusterCredentials } from './CredentialCache';
 import { QueryError } from './errors/QueryError';
@@ -60,6 +61,8 @@ import { SchemaStore } from './SchemaStore';
 import { getHostsFromConnectionString, hasAzureDomain } from './utils/connectionStringHelpers';
 import { fixupDocumentDbExplain } from './utils/fixupDocumentDbExplain';
 import { getClusterMetadata, type ClusterMetadata } from './utils/getClusterMetadata';
+import { parseDocumentId } from './utils/parseDocumentId';
+import { resolveAllowInvalidCertificates } from './utils/tlsException';
 import { toFilterQueryObj } from './utils/toFilterQuery';
 
 export interface DatabaseItemModel {
@@ -112,7 +115,7 @@ export interface FindQueryParams {
 
 export interface IndexItemModel {
     name: string;
-    type: 'traditional' | 'search';
+    type: 'traditional' | 'search' | 'vectorSearch';
     key?: {
         [key: string]: number | string;
     };
@@ -123,10 +126,21 @@ export interface IndexItemModel {
     hidden?: boolean;
     expireAfterSeconds?: number;
     partialFilterExpression?: Document;
+    cosmosSearchOptions?: Document;
     status?: string;
     queryable?: boolean;
     fields?: unknown[];
     [key: string]: unknown; // Allow additional index properties
+}
+
+export type IndexExclusionReason = 'builtInId' | 'notCopyable';
+
+export function getIndexExclusionReason(index: IndexItemModel): IndexExclusionReason | undefined {
+    if (index.key && Object.keys(index.key).length === 1 && Object.prototype.hasOwnProperty.call(index.key, '_id')) {
+        return 'builtInId';
+    }
+
+    return index.key === undefined ? 'notCopyable' : undefined;
 }
 
 export function isBulkWriteError(error: unknown): error is MongoBulkWriteError {
@@ -232,6 +246,12 @@ export class ClustersClient {
             case AuthMethodId.MicrosoftEntraID:
                 authHandler = new MicrosoftEntraIDAuthHandler(credentials);
                 break;
+            case AuthMethodId.ManagedIdentity:
+                authHandler = new ManagedIdentityAuthHandler(credentials);
+                break;
+            case AuthMethodId.NoAuth:
+                authHandler = new NoAuthHandler(credentials);
+                break;
             default:
                 throw new Error(l10n.t('Unsupported authentication method: {0}', authMethod));
         }
@@ -295,8 +315,21 @@ export class ClustersClient {
             throw new UserCancelledError('abortConnection');
         }
 
+        // Track whether connect() has resolved so the abort handler can avoid
+        // closing an already-connected client during the micro window between
+        // connect() resolving and removeEventListener firing. This window exists
+        // because abort events are dispatched synchronously when abort() is
+        // called: if abort() fires during the synchronous continuation after
+        // connect() resolves but before the listener is removed, the handler
+        // would close the now-connected client without this guard.
+        let connected = false;
+
         // Wire up abort: closing the client causes the pending connect() to reject
         const onAbort = (): void => {
+            if (connected) {
+                // connect() already resolved — do not close the connected client.
+                return;
+            }
             ext.outputChannel.debug('AbortSignal fired — closing MongoClient to interrupt connection handshake.');
             void this._mongoClient.close().catch(() => {
                 // Ignore close errors during abort cleanup
@@ -306,10 +339,13 @@ export class ClustersClient {
 
         try {
             await this._mongoClient.connect();
+            connected = true;
 
-            // Remove the abort listener immediately after connect() resolves so that
-            // a late cancellation during synchronous API init below cannot close an
-            // already-connected client while the method continues as "successful".
+            // Remove the abort listener immediately after connect() resolves so
+            // that a late cancellation during synchronous API init below cannot
+            // close an already-connected client while the method continues as
+            // "successful". The connected flag above serves as a belt-and-suspenders
+            // guard in case abort fires between the assignment and this removal.
             abortSignal?.removeEventListener('abort', onAbort);
 
             this._llmEnhancedFeatureApis = new llmEnhancedFeatureApis(this._mongoClient);
@@ -321,13 +357,20 @@ export class ClustersClient {
             }
 
             const message = parseError(error).message;
-            if (emulatorConfiguration?.isEmulator && message.includes('ECONNREFUSED')) {
+            // Surface the friendly local-connection tips only for a genuinely local-ish connection
+            // (emulator, OR a local connection that opted into the TLS exception — host-gated the
+            // same way as the TLS option). An orphaned flag on a PUBLIC host must NOT make a public
+            // ECONNREFUSED/self-signed failure show "local instance" troubleshooting copy.
+            const isLocalish =
+                !!emulatorConfiguration?.isEmulator ||
+                !!resolveAllowInvalidCertificates(emulatorConfiguration?.disableEmulatorSecurity, connectionString);
+            if (isLocalish && message.includes('ECONNREFUSED')) {
                 // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
                 error.message = l10n.t(
                     'Unable to connect to the local instance. Make sure it is started correctly. See {link} for tips.',
                     { link: Links.LocalConnectionDebuggingTips },
                 );
-            } else if (emulatorConfiguration?.isEmulator && message.includes('self-signed certificate')) {
+            } else if (isLocalish && message.includes('self-signed certificate')) {
                 // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
                 error.message = l10n.t(
                     'The local instance is using a self-signed certificate. To connect, you must import the appropriate TLS/SSL certificate. See {link} for tips.',
@@ -336,7 +379,12 @@ export class ClustersClient {
             }
             throw error;
         } finally {
-            abortSignal?.removeEventListener('abort', onAbort);
+            // Clean up the abort listener if we didn't already remove it in the
+            // success path (i.e., connect() failed). In the success path the
+            // listener was already removed above.
+            if (abortSignal && !connected) {
+                abortSignal.removeEventListener('abort', onAbort);
+            }
         }
     }
 
@@ -560,6 +608,10 @@ export class ClustersClient {
             return this._databasesCache;
         }
 
+        // Note: we intentionally do NOT pass `{ nameOnly: true }` here. The empty-`admin`
+        // filter below relies on the `empty` field, which `nameOnly` omits (along with
+        // `sizeOnDisk`). Keeping the full listing ensures an empty `admin` database stays
+        // hidden while a non-empty `admin` (user-managed roles/collections) remains visible.
         const rawDatabases: ListDatabasesResult = await this._mongoClient.db().admin().listDatabases();
         const databases: DatabaseItemModel[] = rawDatabases.databases.filter(
             // Filter out the 'admin' database if it's empty
@@ -618,6 +670,35 @@ export class ClustersClient {
     }
 
     /**
+     * Counts collections in a database using a cursor with `nameOnly: true`.
+     * Fetches at most `limit + 1` items and closes the cursor early.
+     *
+     * @returns An object with `count` (capped at `limit`) and `hasMore`
+     *          (`true` when the database has more than `limit` collections).
+     */
+    async countCollections(databaseName: string, limit: number): Promise<{ count: number; hasMore: boolean }> {
+        const cursor = this._mongoClient
+            .db(databaseName)
+            .listCollections({}, { nameOnly: true })
+            .batchSize(limit + 1);
+
+        try {
+            let count = 0;
+            while (count <= limit && (await cursor.hasNext())) {
+                await cursor.next();
+                count++;
+            }
+
+            if (count > limit) {
+                return { count: limit, hasMore: true };
+            }
+            return { count, hasMore: false };
+        } finally {
+            await cursor.close();
+        }
+    }
+
+    /**
      * Returns cached collection names for the given database, if available.
      * Does NOT trigger a network request. Returns `undefined` if no cache exists.
      */
@@ -633,9 +714,11 @@ export class ClustersClient {
         return this._databasesCache ?? undefined;
     }
 
-    async listIndexes(databaseName: string, collectionName: string): Promise<IndexItemModel[]> {
+    async listIndexes(databaseName: string, collectionName: string, signal?: AbortSignal): Promise<IndexItemModel[]> {
+        signal?.throwIfAborted();
         const collection = this._mongoClient.db(databaseName).collection(collectionName);
         const indexes = await collection.indexes();
+        signal?.throwIfAborted();
 
         let i = 0;
         return indexes.map((index) => {
@@ -649,18 +732,25 @@ export class ClustersClient {
         });
     }
 
-    async listSearchIndexesForAtlas(databaseName: string, collectionName: string): Promise<IndexItemModel[]> {
+    async listSearchIndexesForAtlas(
+        databaseName: string,
+        collectionName: string,
+        signal?: AbortSignal,
+    ): Promise<IndexItemModel[]> {
         try {
             const collection = this._mongoClient.db(databaseName).collection(collectionName);
-            const searchIndexes = await collection.aggregate([{ $listSearchIndexes: {} }]).toArray();
+            const searchIndexes = await collection.aggregate([{ $listSearchIndexes: {} }], { signal }).toArray();
             let i = 0; // backup for indexes with no names
             return searchIndexes.map((index: Document) => ({
                 ...index,
                 name: (index.name as string | undefined) ?? 'search_idx_' + (i++).toString(),
-                type: ((index.type as string | undefined) ?? 'search') as 'traditional' | 'search',
+                type: index.type === 'vectorSearch' ? 'vectorSearch' : 'search',
                 fields: index.fields as unknown[] | undefined,
             }));
         } catch {
+            if (signal?.aborted) {
+                throw signal.reason instanceof Error ? signal.reason : new Error('Operation aborted');
+            }
             meterSilentCatch('ClustersClient_listSearchIndexes');
             // $listSearchIndexes not supported on this platform (e.g., non-Atlas deployments)
             // Return empty array silently
@@ -920,49 +1010,24 @@ export class ClustersClient {
     // TODO: revisit, maybe we can work on BSON here for the documentIds, and the conversion from string etc.,
     // will remain in the ClusterSession class
     async deleteDocuments(databaseName: string, collectionName: string, documentIds: string[]): Promise<boolean> {
-        // Convert input data to BSON types
-        const parsedDocumentIds = documentIds.map((id) => {
-            let parsedId;
-            try {
-                // eslint-disable-next-line
-                parsedId = EJSON.parse(id);
-            } catch {
-                if (ObjectId.isValid(id)) {
-                    parsedId = new ObjectId(id);
-                } else {
-                    throw new Error(l10n.t('Invalid document ID: {0}', id));
-                }
-            }
-            // eslint-disable-next-line @typescript-eslint/no-unsafe-return
-            return parsedId;
-        });
+        const parsedDocumentIds = documentIds.map((id) => parseDocumentId(id));
 
         // Connect and execute
         const collection = this._mongoClient.db(databaseName).collection(collectionName);
-        const deleteResult: DeleteResult = await collection.deleteMany({ _id: { $in: parsedDocumentIds } });
+        const deleteResult: DeleteResult = await collection.deleteMany({
+            _id: { $in: parsedDocumentIds },
+        } as Filter<Document>);
 
         return deleteResult.acknowledged;
     }
 
     async pointRead(databaseName: string, collectionName: string, documentId: string) {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        let parsedDocumentId: any;
-        try {
-            // eslint-disable-next-line
-            parsedDocumentId = EJSON.parse(documentId);
-        } catch (error) {
-            if (ObjectId.isValid(documentId)) {
-                parsedDocumentId = new ObjectId(documentId);
-            } else {
-                throw error;
-            }
-        }
+        const parsedDocumentId = parseDocumentId(documentId);
 
         // connect and execute
         const collection = this._mongoClient.db(databaseName).collection(collectionName);
 
-        // eslint-disable-next-line
-        const documentContent = await collection.findOne({ _id: parsedDocumentId });
+        const documentContent = await collection.findOne({ _id: parsedDocumentId } as Filter<Document>);
 
         return documentContent;
     }
@@ -979,17 +1044,10 @@ export class ClustersClient {
         let parsedId: any;
 
         if (documentId === '') {
-            // TODO: do not rely in empty string, use null or undefined
+            // TODO: do not rely on empty string, use null or undefined
             parsedId = new ObjectId();
         } else {
-            try {
-                // eslint-disable-next-line
-                parsedId = EJSON.parse(documentId);
-            } catch {
-                if (ObjectId.isValid(documentId)) {
-                    parsedId = new ObjectId(documentId);
-                }
-            }
+            parsedId = parseDocumentId(documentId);
         }
 
         // connect and execute
@@ -1033,12 +1091,17 @@ export class ClustersClient {
         return result;
     }
 
-    async createDatabase(databaseName: string): Promise<void> {
+    async createDatabase(databaseName: string, collectionName?: string): Promise<void> {
         // TODO: add logging of failures to the telemetry somewhere in the call chain
-        const newCollection = await this._mongoClient
-            .db(databaseName)
-            .createCollection('_dummy_collection_creation_forces_db_creation');
-        await newCollection.drop({ writeConcern: { w: 'majority', wtimeoutMS: 5000 } });
+        // In MongoDB, databases are created implicitly when their first collection is created.
+        if (collectionName) {
+            await this._mongoClient.db(databaseName).createCollection(collectionName);
+        } else {
+            const newCollection = await this._mongoClient
+                .db(databaseName)
+                .createCollection('_dummy_collection_creation_forces_db_creation');
+            await newCollection.drop({ writeConcern: { w: 'majority', wtimeoutMS: 5000 } });
+        }
         this._databasesCache = null;
     }
 

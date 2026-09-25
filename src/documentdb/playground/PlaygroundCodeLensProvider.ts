@@ -99,9 +99,9 @@ export class PlaygroundCodeLensProvider implements vscode.CodeLensProvider, vsco
         } else {
             lenses.push(
                 new vscode.CodeLens(topRange, {
-                    title: `$(warning) ${l10n.t('Not connected')}`,
-                    command: PlaygroundCommandIds.showConnectionInfo,
-                    tooltip: l10n.t('This playground has no connection'),
+                    title: `$(plug) ${l10n.t('Connect')}`,
+                    command: PlaygroundCommandIds.connect,
+                    tooltip: l10n.t('Connect this playground to a database'),
                 }),
             );
         }

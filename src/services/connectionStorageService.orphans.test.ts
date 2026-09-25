@@ -221,9 +221,11 @@ describe('ConnectionStorageService - Orphan Cleanup', () => {
         jest.clearAllMocks();
         mockAppendLog.mockClear();
 
-        // Reset the internal storage service cache
+        // Reset the internal storage service cache and bootstrap promise
         // @ts-expect-error - accessing private static member for testing
         ConnectionStorageService._storageService = undefined;
+        // @ts-expect-error - accessing private static member for testing
+        ConnectionStorageService._bootstrap = undefined;
     });
 
     describe('cleanupOrphanedItems', () => {
@@ -253,7 +255,7 @@ describe('ConnectionStorageService - Orphan Cleanup', () => {
             // Access cleanupOrphanedItems indirectly via getAllItems (which triggers storage init)
             // We need to manually trigger cleanup since _storageService is already set
             // @ts-expect-error - accessing private static method for testing
-            await ConnectionStorageService.cleanupOrphanedItems();
+            await ConnectionStorageService.cleanupOrphanedItems(mockStorage);
 
             // Verify orphan was deleted
             const remaining = await ConnectionStorageService.getAllItems(ConnectionType.Clusters);
@@ -284,7 +286,7 @@ describe('ConnectionStorageService - Orphan Cleanup', () => {
             ConnectionStorageService._storageService = mockStorage;
 
             // @ts-expect-error - accessing private static method for testing
-            await ConnectionStorageService.cleanupOrphanedItems();
+            await ConnectionStorageService.cleanupOrphanedItems(mockStorage);
 
             const remaining = await ConnectionStorageService.getAllItems(ConnectionType.Clusters);
             expect(remaining).toHaveLength(1);
@@ -326,7 +328,7 @@ describe('ConnectionStorageService - Orphan Cleanup', () => {
             ConnectionStorageService._storageService = mockStorage;
 
             // @ts-expect-error - accessing private static method for testing
-            await ConnectionStorageService.cleanupOrphanedItems();
+            await ConnectionStorageService.cleanupOrphanedItems(mockStorage);
 
             // All items should be deleted due to cascading orphans
             const remaining = await ConnectionStorageService.getAllItems(ConnectionType.Clusters);
@@ -361,7 +363,7 @@ describe('ConnectionStorageService - Orphan Cleanup', () => {
             ConnectionStorageService._storageService = mockStorage;
 
             // @ts-expect-error - accessing private static method for testing
-            await ConnectionStorageService.cleanupOrphanedItems();
+            await ConnectionStorageService.cleanupOrphanedItems(mockStorage);
 
             const clusters = await ConnectionStorageService.getAllItems(ConnectionType.Clusters);
             const emulators = await ConnectionStorageService.getAllItems(ConnectionType.Emulators);
@@ -402,7 +404,7 @@ describe('ConnectionStorageService - Orphan Cleanup', () => {
             ConnectionStorageService._storageService = mockStorage;
 
             // @ts-expect-error - accessing private static method for testing
-            await ConnectionStorageService.cleanupOrphanedItems();
+            await ConnectionStorageService.cleanupOrphanedItems(mockStorage);
 
             // All items should remain (no orphans)
             const remaining = await ConnectionStorageService.getAllItems(ConnectionType.Clusters);
@@ -429,7 +431,7 @@ describe('ConnectionStorageService - Orphan Cleanup', () => {
             ConnectionStorageService._storageService = mockStorage;
 
             // @ts-expect-error - accessing private static method for testing
-            await ConnectionStorageService.cleanupOrphanedItems();
+            await ConnectionStorageService.cleanupOrphanedItems(mockStorage);
 
             // Verify logging occurred
             expect(mockAppendLog).toHaveBeenCalled();
@@ -458,7 +460,7 @@ describe('ConnectionStorageService - Orphan Cleanup', () => {
             ConnectionStorageService._storageService = mockStorage;
 
             // @ts-expect-error - accessing private static method for testing
-            await ConnectionStorageService.cleanupOrphanedItems();
+            await ConnectionStorageService.cleanupOrphanedItems(mockStorage);
 
             // All items should remain
             const remaining = await ConnectionStorageService.getAllItems(ConnectionType.Clusters);
@@ -471,7 +473,7 @@ describe('ConnectionStorageService - Orphan Cleanup', () => {
 
             // Should not throw
             // @ts-expect-error - accessing private static method for testing
-            await expect(ConnectionStorageService.cleanupOrphanedItems()).resolves.not.toThrow();
+            await expect(ConnectionStorageService.cleanupOrphanedItems(mockStorage)).resolves.not.toThrow();
 
             const remaining = await ConnectionStorageService.getAllItems(ConnectionType.Clusters);
             expect(remaining).toHaveLength(0);
@@ -498,7 +500,7 @@ describe('ConnectionStorageService - Orphan Cleanup', () => {
             ConnectionStorageService._storageService = mockStorage;
 
             // @ts-expect-error - accessing private static method for testing
-            await ConnectionStorageService.cleanupOrphanedItems();
+            await ConnectionStorageService.cleanupOrphanedItems(mockStorage);
 
             // With maxIterations = 20, the cleanup should terminate
             // and may leave some items (depending on order of processing)
@@ -529,7 +531,7 @@ describe('ConnectionStorageService - Orphan Cleanup', () => {
             ConnectionStorageService._storageService = mockStorage;
 
             // @ts-expect-error - accessing private static method for testing
-            await ConnectionStorageService.cleanupOrphanedItems();
+            await ConnectionStorageService.cleanupOrphanedItems(mockStorage);
 
             // The important thing is that cleanup terminates
             // With just one orphan, it should complete in one iteration

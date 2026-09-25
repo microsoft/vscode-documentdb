@@ -3,19 +3,28 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { AzureWizard, type AzureWizardPromptStep, type IActionContext } from '@microsoft/vscode-azext-utils';
+import {
+    AzureWizard,
+    UserCancelledError,
+    type AzureWizardPromptStep,
+    type IActionContext,
+} from '@microsoft/vscode-azext-utils';
 import * as l10n from '@vscode/l10n';
+import { randomUUID } from 'crypto';
 import * as vscode from 'vscode';
 import { ClustersClient } from '../../documentdb/ClustersClient';
 import { ext } from '../../extensionVariables';
 import { ConflictResolutionStrategy } from '../../services/taskService/tasks/copy-and-paste/copyPasteConfig';
+import { settingsKeys } from '../../settingsKeys';
 import { CollectionItem } from '../../tree/documentdb/CollectionItem';
 import { DatabaseItem } from '../../tree/documentdb/DatabaseItem';
 import { ConfirmOperationStep } from './ConfirmOperationStep';
+import { CountSourceIndexesStep } from './CountSourceIndexesStep';
 import { ExecuteStep } from './ExecuteStep';
 import { LargeCollectionWarningStep } from './LargeCollectionWarningStep';
 import { type PasteCollectionWizardContext } from './PasteCollectionWizardContext';
 import { PromptConflictResolutionStep } from './PromptConflictResolutionStep';
+import { PromptIndexConfigurationStep } from './PromptIndexConfigurationStep';
 import { PromptNewCollectionNameStep } from './PromptNewCollectionNameStep';
 
 export async function pasteCollection(
@@ -24,6 +33,8 @@ export async function pasteCollection(
 ): Promise<void> {
     // Record telemetry for wizard start
     context.telemetry.properties.wizardStarted = 'true';
+    const copyOperationCorrelationId = randomUUID();
+    context.telemetry.properties.copyOperationCorrelationId = copyOperationCorrelationId;
 
     if (!targetNode) {
         throw new Error(l10n.t('No target node selected.'));
@@ -92,9 +103,11 @@ export async function pasteCollection(
 
     let sourceCollectionSize: number | undefined = undefined;
     try {
-        sourceCollectionSize = await (
-            await ClustersClient.getClient(sourceNode.cluster.clusterId)
-        ).estimateDocumentCount(sourceNode.databaseInfo.name, sourceNode.collectionInfo.name);
+        const sourceClient = await ClustersClient.getClient(sourceNode.cluster.clusterId);
+        sourceCollectionSize = await sourceClient.estimateDocumentCount(
+            sourceNode.databaseInfo.name,
+            sourceNode.collectionInfo.name,
+        );
         context.telemetry.measurements.sourceCollectionSize = sourceCollectionSize;
     } catch (error) {
         context.telemetry.properties.sourceCollectionSizeError = String(error);
@@ -103,6 +116,7 @@ export async function pasteCollection(
     // Create wizard context
     const wizardContext: PasteCollectionWizardContext = {
         ...context,
+        copyOperationCorrelationId,
         sourceCollectionName: sourceNode.collectionInfo.name,
         sourceDatabaseName: sourceNode.databaseInfo.name,
         sourceConnectionId: sourceNode.cluster.clusterId,
@@ -114,6 +128,10 @@ export async function pasteCollection(
         targetDatabaseName: targetNode.databaseInfo.name,
         targetCollectionName,
         isTargetExistingCollection,
+        copyIndexes: false,
+        sourceUniqueIndexNames: [],
+        sourceTtlIndexNames: [],
+        largeCollectionWarningShown: false,
     };
 
     // Check for circular dependency when pasting into the same collection
@@ -140,17 +158,18 @@ export async function pasteCollection(
     // Read large collection warning settings
     const showLargeCollectionWarning = vscode.workspace
         .getConfiguration()
-        .get<boolean>(ext.settingsKeys.showLargeCollectionWarning, true);
+        .get<boolean>(settingsKeys.showLargeCollectionWarning, true);
 
     // Add warning step for large collections as the first step
     if (showLargeCollectionWarning) {
         const largeCollectionThreshold = vscode.workspace
             .getConfiguration()
-            .get<number>(ext.settingsKeys.largeCollectionWarningThreshold, 100000);
+            .get<number>(settingsKeys.largeCollectionWarningThreshold, 100000);
 
         if (sourceCollectionSize !== undefined && sourceCollectionSize > largeCollectionThreshold) {
             promptSteps.push(new LargeCollectionWarningStep());
 
+            wizardContext.largeCollectionWarningShown = true;
             context.telemetry.properties.largeCollectionWarningShown = 'true';
             context.telemetry.measurements.sourceCollectionSizeForWarning = sourceCollectionSize;
             context.telemetry.measurements.largeCollectionThresholdUsed = largeCollectionThreshold;
@@ -171,9 +190,9 @@ export async function pasteCollection(
         wizardContext.conflictResolutionStrategy = ConflictResolutionStrategy.Abort;
     }
 
-    // TODO: We don't support copying indexes yet, so skip this step for now,
-    // but keep this here to speed up development once we get to that point
-    // --> promptSteps.push(new PromptIndexConfigurationStep());
+    promptSteps.push(new PromptIndexConfigurationStep());
+
+    promptSteps.push(new CountSourceIndexesStep());
 
     promptSteps.push(new ConfirmOperationStep());
 
@@ -204,9 +223,9 @@ export async function pasteCollection(
         // Record failure telemetry
         context.telemetry.properties.wizardCompletedSuccessfully = 'false';
 
-        if (error instanceof Error && error.message.includes('cancelled')) {
+        if (error instanceof UserCancelledError || (error instanceof Error && error.message.includes('cancelled'))) {
             // User cancelled the wizard, don't show error
-            context.telemetry.properties.wizardFailureReason = 'userCancelled';
+            context.telemetry.properties.wizardFailureReason ??= 'userCancelled';
             context.telemetry.properties.wizardCancelledByUser = 'true';
             return;
         }

@@ -5,8 +5,6 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-/* eslint-env node */
-
 const path = require('path');
 const webpack = require('webpack');
 const ReactRefreshWebpackPlugin = require('@pmmmwh/react-refresh-webpack-plugin');
@@ -96,7 +94,22 @@ module.exports = (env, { mode }) => {
             hot: true,
             host: '127.0.0.1',
             client: {
-                overlay: true,
+                overlay: {
+                    // Keep the compile error/warning overlays, but disable the
+                    // *runtime-error* overlay. We cannot use a `runtimeErrors`
+                    // FUNCTION to filter only the benign "ResizeObserver loop …"
+                    // warning: the webview's Content Security Policy forbids
+                    // `unsafe-eval`, and webpack-dev-server ships any function
+                    // filter to its client and rebuilds it with `new Function(...)`
+                    // — which the CSP blocks, crashing the dev client and the whole
+                    // webview render. A boolean is serialized as-is (no eval).
+                    //
+                    // Runtime errors (including that benign, self-resolving
+                    // ResizeObserver warning from Fluent's popup positioning) still
+                    // print to the devtools console, and a *sustained* loop is
+                    // flagged by installResizeObserverLoopDetector().
+                    runtimeErrors: false,
+                },
             },
             compress: true,
             port: 18080,

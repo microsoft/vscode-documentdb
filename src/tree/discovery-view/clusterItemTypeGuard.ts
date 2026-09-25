@@ -3,15 +3,9 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { type TreeElement } from '../TreeElement';
+import { CLUSTER_ITEM_CONTEXT_VALUE } from '../documentdb/ClusterItemBase';
 import { type BaseClusterModel, type TreeCluster } from '../models/BaseClusterModel';
-
-/**
- * Context value prefix that identifies cluster items (ClusterItemBase and its subclasses).
- * This distinguishes actual cluster tree items from descendant items (databases, collections)
- * that merely reference the cluster.
- */
-const CLUSTER_ITEM_CONTEXT_VALUE = 'treeItem_documentdbcluster';
+import { type TreeElement } from '../TreeElement';
 
 /**
  * Interface for tree elements that ARE cluster items (not just elements that reference a cluster).

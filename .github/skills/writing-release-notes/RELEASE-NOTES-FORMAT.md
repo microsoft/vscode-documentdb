@@ -163,6 +163,12 @@ We've resolved [issue type] that affected [who/what]. Previously, [problem descr
 [Optional: For a complete guide, see our documentation on [Topic](link).]
 ```
 
+## Writing Conventions
+
+- **No em dashes (—).** Use commas, colons, semicolons, or restructure the sentence. En dashes for numeric ranges (e.g. `10–12 s`) are acceptable.
+- **No internal implementation labels.** Do not use internal procedure names, pipeline phase labels (e.g. "Stage 3", "Phase 2"), or internal transport and library names in user-facing copy. Describe what the user sees and gains, not how it is implemented.
+- **Link to user manual pages** for complex features. End each major feature section with a sentence that links to the relevant user manual page. Always use the **absolute URL** form: `https://microsoft.github.io/vscode-documentdb/user-manual/{page-name}` (no `.md` extension). Do not use relative paths (`../user-manual/…`) in release notes.
+
 ## Emojis Usage
 
 | Emoji    | Usage                                               |

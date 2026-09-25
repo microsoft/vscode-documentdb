@@ -11,9 +11,11 @@ import { CredentialCache } from '../../documentdb/CredentialCache';
 import { AzureDomains, hasDomainSuffix } from '../../documentdb/utils/connectionStringHelpers';
 import { DocumentDBConnectionString } from '../../documentdb/utils/DocumentDBConnectionString';
 import { Views } from '../../documentdb/Views';
+import { SelectEntraTokenSourceStep } from '../../documentdb/wizards/authenticate/SelectEntraTokenSourceStep';
 import { ext } from '../../extensionVariables';
-import { ConnectionStorageService, ConnectionType, isConnection } from '../../services/connectionStorageService';
+import { ConnectionStorageService, isConnection } from '../../services/connectionStorageService';
 import { type DocumentDBClusterItem } from '../../tree/connections-view/DocumentDBClusterItem';
+import { resolveStorageZone } from '../../tree/connections-view/models/ConnectionClusterModel';
 import { refreshView } from '../refreshView/refreshView';
 import { PromptAuthMethodStep } from '../updateCredentials/PromptAuthMethodStep';
 import { ExecuteStep } from './ExecuteStep';
@@ -30,7 +32,8 @@ import { type UpdateCredentialsWizardContext } from './UpdateCredentialsWizardCo
  * 1. Loads stored credentials and determines available authentication methods
  * 2. Runs wizard to collect new credentials from user:
  *    - PromptAuthMethodStep: Select authentication method
- *    - PromptTenantStep: Enter tenant ID (if needed)
+ *    - SelectEntraTokenSourceStep: Select account sign-in or a managed identity (if needed)
+ *    - PromptTenantStep: Enter tenant ID for account sign-in (if needed)
  *    - PromptUserNameStep: Enter username (if needed)
  *    - PromptPasswordStep: Enter password (if needed)
  *    - PromptReconnectStepForErrorNodes: Ask to reconnect (only for error nodes)
@@ -41,6 +44,7 @@ import { type UpdateCredentialsWizardContext } from './UpdateCredentialsWizardCo
  * not to reconnect, the error state is preserved and the node remains as an error node.
  */
 export async function updateCredentials(context: IActionContext, node: DocumentDBClusterItem): Promise<void> {
+    context.telemetry.properties.authFlowOrigin = 'updateCredentials';
     if (!node) {
         throw new Error(l10n.t('No node selected.'));
     }
@@ -50,9 +54,7 @@ export async function updateCredentials(context: IActionContext, node: DocumentD
     // Note to future maintainers: the node.cluster might be out of date
     // as the object is cached in the tree view, and in the 'retry/error' nodes
     // that's why we need to get the fresh one each time.
-    const resourceType = node.cluster.emulatorConfiguration?.isEmulator
-        ? ConnectionType.Emulators
-        : ConnectionType.Clusters;
+    const resourceType = resolveStorageZone(node.cluster);
 
     const storedItem = await ConnectionStorageService.get(node.storageId, resourceType);
     // Type guard ensures we have connection properties (not a folder)
@@ -67,6 +69,9 @@ export async function updateCredentials(context: IActionContext, node: DocumentD
         if (!supportedAuthMethods.includes(AuthMethodId.MicrosoftEntraID)) {
             supportedAuthMethods.push(AuthMethodId.MicrosoftEntraID);
         }
+        if (!supportedAuthMethods.includes(AuthMethodId.ManagedIdentity)) {
+            supportedAuthMethods.push(AuthMethodId.ManagedIdentity);
+        }
         if (!supportedAuthMethods.includes(AuthMethodId.NativeAuth)) {
             supportedAuthMethods.push(AuthMethodId.NativeAuth);
         }
@@ -80,9 +85,11 @@ export async function updateCredentials(context: IActionContext, node: DocumentD
         ...context,
         nativeAuthConfig: connectionCredentials?.secrets.nativeAuthConfig,
         entraIdAuthConfig: connectionCredentials?.secrets.entraIdAuthConfig,
+        managedIdentityAuthConfig: connectionCredentials?.secrets.managedIdentityAuthConfig,
         availableAuthenticationMethods: authMethodsFromString(supportedAuthMethods),
         selectedAuthenticationMethod: authMethodFromString(connectionCredentials?.properties.selectedAuthMethod),
         isEmulator: Boolean(node.cluster.emulatorConfiguration?.isEmulator),
+        storageZone: resolveStorageZone(node.cluster),
         storageId: node.storageId,
         isErrorState,
         reconnectAfterError: false,
@@ -92,6 +99,12 @@ export async function updateCredentials(context: IActionContext, node: DocumentD
         title: l10n.t('Update cluster credentials'),
         promptSteps: [
             new PromptAuthMethodStep(),
+            new SelectEntraTokenSourceStep<UpdateCredentialsWizardContext>(
+                (wizardContext) => wizardContext.selectedAuthenticationMethod,
+                (wizardContext, method) => {
+                    wizardContext.selectedAuthenticationMethod = method;
+                },
+            ),
             new PromptTenantStep(),
             new PromptUserNameStep(),
             new PromptPasswordStep(),

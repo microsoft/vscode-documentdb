@@ -23,12 +23,14 @@ import { PlaygroundDiagnostics } from './documentdb/playground/PlaygroundDiagnos
 import { PLAYGROUND_RESULT_SCHEME, PlaygroundResultProvider } from './documentdb/playground/PlaygroundResultProvider';
 import { SchemaStore } from './documentdb/SchemaStore';
 import { ext } from './extensionVariables';
-import { flushAccumulatingTelemetry } from './utils/callWithAccumulatingTelemetry';
+import { flushAccumulatedTelemetry } from './utils/accumulatingTelemetry';
+import { registerReadOnlyJsonDocumentProvider } from './utils/readOnlyJsonDocumentProvider';
 import { globalUriHandler } from './vscodeUriHandler';
 // Import the DocumentDB Extension API interfaces
 import { type AzureResourcesExtensionApi } from '@microsoft/vscode-azureresources-api';
 import { type DocumentDBExtensionApi, type DocumentDBExtensionApiV030 } from '../api/src';
 import { MigrationService } from './services/migrationServices';
+import { settingsKeys } from './settingsKeys';
 
 export async function activateInternal(
     context: vscode.ExtensionContext,
@@ -54,6 +56,7 @@ export async function activateInternal(
         ext.playgroundResultProvider,
         vscode.workspace.registerTextDocumentContentProvider(PLAYGROUND_RESULT_SCHEME, ext.playgroundResultProvider),
         new PlaygroundDiagnostics(),
+        registerReadOnlyJsonDocumentProvider(),
     );
 
     registerUIExtensionVariables(ext);
@@ -95,7 +98,7 @@ export async function activateInternal(
 
         const enableAIQueryGeneration = vscode.workspace
             .getConfiguration()
-            .get<boolean>(ext.settingsKeys.enableAIQueryGeneration, false);
+            .get<boolean>(settingsKeys.enableAIQueryGeneration, false);
 
         telemetryContext.telemetry.properties.enableAIQueryGeneration = enableAIQueryGeneration ? 'true' : 'false';
     });
@@ -148,8 +151,8 @@ export async function activateInternal(
 // this method is called when your extension is deactivated
 export function deactivateInternal(_context: vscode.ExtensionContext): void {
     // Flush any pending accumulated telemetry (high-frequency events batched via
-    // callWithAccumulatingTelemetry) so the last partial batch is not lost.
-    flushAccumulatingTelemetry();
+    // accumulateTelemetry) so the last partial batch is not lost.
+    flushAccumulatedTelemetry();
 }
 
 /**

@@ -44,6 +44,7 @@ export async function deleteDatabase(context: IActionContext, node: DatabaseItem
             '\n' +
             l10n.t('This cannot be undone.'),
         databaseId,
+        { fallbackWord: 'delete' },
     );
 
     if (!confirmed) {

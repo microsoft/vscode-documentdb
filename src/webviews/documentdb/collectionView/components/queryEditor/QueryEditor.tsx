@@ -5,7 +5,7 @@
 
 import { Button, Input, Label, ToggleButton, Tooltip } from '@fluentui/react-components';
 import { Collapse } from '@fluentui/react-motion-components-preview';
-import { useConfiguration } from '@microsoft/vscode-ext-react-webview';
+import { useConfiguration } from '@microsoft/vscode-ext-webview/react';
 import * as l10n from '@vscode/l10n';
 import type * as monacoEditor from 'monaco-editor/esm/vs/editor/editor.api'; // eslint-disable-line import/no-internal-modules
 import { useContext, useEffect, useRef, useState, type JSX } from 'react';
@@ -61,7 +61,7 @@ interface QueryEditorProps {
 }
 
 export const QueryEditor = ({ onExecuteRequest }: QueryEditorProps): JSX.Element => {
-    const { trpcClient } = useTrpcClient();
+    const trpcClient = useTrpcClient();
     const configuration = useConfiguration<CollectionViewWebviewConfigurationType>();
     const [currentContext, setCurrentContext] = useContext(CollectionViewContext);
     const [isEnhancedQueryMode, setIsEnhancedQueryMode] = useState(false);

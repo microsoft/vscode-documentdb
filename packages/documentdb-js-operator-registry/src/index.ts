@@ -11,7 +11,7 @@
  */
 
 // -- Core types --
-export type { CompletionFilter, MetaTag, OperatorEntry } from './types';
+export type { CompletionFilter, IndexReferenceEntry, MetaTag, OperatorEntry } from './types';
 
 // -- Meta tag constants and presets --
 export {
@@ -69,6 +69,9 @@ export { getAllCompletions, getFilteredCompletions } from './getFilteredCompleti
 
 // -- Documentation URL helpers --
 export { getDocBase, getDocLink } from './docLinks';
+
+// -- Index types & properties (scraped from the compatibility page) --
+export { INDEX_PROPERTIES, INDEX_TYPES } from './indexReference';
 
 // -- Operator data modules --
 import { loadAccumulators } from './accumulators';

@@ -6,10 +6,28 @@
 import { AzureWizardExecuteStep } from '@microsoft/vscode-azext-utils';
 import * as l10n from '@vscode/l10n';
 import { AuthMethodId } from '../../documentdb/auth/AuthMethod';
+import { getConnectionAuthIdentity } from '../../documentdb/auth/connectionAuthIdentity';
 import { redactCredentialsFromConnectionString } from '../../documentdb/utils/connectionStringHelpers';
 import { DocumentDBConnectionString } from '../../documentdb/utils/DocumentDBConnectionString';
+import { areAllHostsLocal, canonicalizeTlsException } from '../../documentdb/utils/tlsException';
 import { API } from '../../DocumentDBExperiences';
 import { ext } from '../../extensionVariables';
+// FIXME (discovery plugin API coupling): this generic command imports directly from the
+// `service-kubernetes` plugin so that duplicate-connection detection can compare two
+// port-forwarded targets by their tunnel identity instead of host + username (two tunnels can
+// share localhost:<port> yet point at different services). This leaks plugin-specific knowledge
+// into core. The discovery plugin API is still experimental and has no source-agnostic way for a
+// provider to declare what makes two of its connections "the same".
+//
+// Potential workaround / target design: have the plugin write a generic `connectionIdentity`
+// string into the source-agnostic `context.connectionProperties` bag when it builds a connection.
+// The dedup logic below would compare `connectionIdentity` whenever both sides have one and fall
+// back to host + username otherwise, keeping this command plugin-agnostic. Tracked in the discovery
+// API issue: https://github.com/microsoft/vscode-documentdb/issues/739 (milestone 0.12.0).
+import {
+    getKubernetesPortForwardIdentity,
+    getKubernetesPortForwardMetadata,
+} from '../../plugins/service-kubernetes/portForwardMetadata';
 
 import {
     type ConnectionItem,
@@ -37,19 +55,59 @@ export class ExecuteStep extends AzureWizardExecuteStep<NewConnectionWizardConte
             const api = context.experience?.api ?? API.DocumentDB;
             const parentId = context.parentId;
 
-            const newConnectionString = context.connectionString!.trim();
-
-            const newPassword = context.nativeAuthConfig?.connectionPassword;
-            const newUsername = context.nativeAuthConfig?.connectionUser;
+            // Canonicalize the TLS exception once more at save time (defense-in-depth) and make it
+            // AUTHORITATIVE: allow-invalid is honored only when EVERY host in the final connection
+            // string is local/private, so a stale wizard choice (e.g. picked for a local host, then
+            // the connection string changed to public via Back-navigation) can never disable
+            // certificate validation for a public host.
+            const canonicalTls = canonicalizeTlsException(context.connectionString!.trim());
+            const newConnectionString = canonicalTls.connectionString;
+            const allowInvalidCertificates =
+                areAllHostsLocal(newConnectionString) &&
+                (canonicalTls.disableEmulatorSecurity || !!context.disableEmulatorSecurity);
 
             const newAuthenticationMethod = context.selectedAuthenticationMethod;
+
+            // Native credentials only apply to the Native authentication method. When a user
+            // pastes a connection string that embeds a username/password but then selects a
+            // credential-free method (No Authentication or Microsoft Entra ID), those parsed
+            // credentials must be ignored. Otherwise duplicate detection compares against a stale
+            // username (incorrectly blocking creation) and the credentials would leak into the
+            // stored secrets of a connection that is supposed to be credential-free.
+            const usesNativeCredentials = newAuthenticationMethod === AuthMethodId.NativeAuth;
+
+            // Entra ID configuration only applies to the Microsoft Entra ID method. If the user
+            // backtracked through the wizard and changed the method (e.g. Entra -> No Authentication
+            // or Entra -> Native), stale Entra config could otherwise be persisted onto a connection
+            // that is supposed to be credential-free or native. Mirror the native-credential gate.
+            const usesEntraId = newAuthenticationMethod === AuthMethodId.MicrosoftEntraID;
+
+            // Same gate for managed identity. Note that an EMPTY config is meaningful here: it means
+            // the system-assigned identity, so it must be persisted rather than collapsed to
+            // undefined, or the method becomes un-inferable after a reload.
+            const usesManagedIdentity = newAuthenticationMethod === AuthMethodId.ManagedIdentity;
+            const newManagedIdentityAuthConfig = usesManagedIdentity
+                ? (context.managedIdentityAuthConfig ?? {})
+                : undefined;
+
             const newAvailableAuthenticationMethods =
                 context.availableAuthenticationMethods ?? (newAuthenticationMethod ? [newAuthenticationMethod] : []);
 
             const newParsedCS = new DocumentDBConnectionString(newConnectionString);
             const newJoinedHosts = [...newParsedCS.hosts].sort().join(',');
+            const newPortForwardMetadata = getKubernetesPortForwardMetadata(context.connectionProperties);
 
-            //  Sanity Check 1/2: is there a connection with the same username + host in there?
+            // Two connections are the same only when they reach the same host AS THE SAME IDENTITY.
+            // Comparing the native username alone made every managed identity on a host collide,
+            // because none of them has one.
+            const newAuthIdentity = getConnectionAuthIdentity({
+                authMethod: newAuthenticationMethod,
+                nativeAuthConfig: usesNativeCredentials ? context.nativeAuthConfig : undefined,
+                entraIdAuthConfig: usesEntraId ? context.entraIdAuthConfig : undefined,
+                managedIdentityAuthConfig: newManagedIdentityAuthConfig,
+            });
+
+            //  Sanity Check 1/2: is there a connection with the same identity + host in there?
             const existingConnections = await ConnectionStorageService.getAll(ConnectionType.Clusters);
 
             const existingDuplicateConnection = existingConnections.find((existingConnection) => {
@@ -64,10 +122,25 @@ export class ExecuteStep extends AzureWizardExecuteStep<NewConnectionWizardConte
                 try {
                     const existingCS = new DocumentDBConnectionString(secret);
                     const existingHostsJoined = [...existingCS.hosts].sort().join(',');
-                    // Use nativeAuthConfig for comparison
-                    const existingUsername = existingConnection.secrets.nativeAuthConfig?.connectionUser;
+                    const existingAuthIdentity = getConnectionAuthIdentity({
+                        authMethod: existingConnection.properties?.selectedAuthMethod,
+                        nativeAuthConfig: existingConnection.secrets.nativeAuthConfig,
+                        entraIdAuthConfig: existingConnection.secrets.entraIdAuthConfig,
+                        managedIdentityAuthConfig: existingConnection.secrets.managedIdentityAuthConfig,
+                    });
+                    const existingPortForwardMetadata = getKubernetesPortForwardMetadata(existingConnection.properties);
 
-                    return existingUsername === newUsername && existingHostsJoined === newJoinedHosts;
+                    if (newPortForwardMetadata || existingPortForwardMetadata) {
+                        return (
+                            existingAuthIdentity === newAuthIdentity &&
+                            !!newPortForwardMetadata &&
+                            !!existingPortForwardMetadata &&
+                            getKubernetesPortForwardIdentity(existingPortForwardMetadata) ===
+                                getKubernetesPortForwardIdentity(newPortForwardMetadata)
+                        );
+                    }
+
+                    return existingAuthIdentity === newAuthIdentity && existingHostsJoined === newJoinedHosts;
                 } catch (error) {
                     // An existing stored connection has an invalid/corrupt connection string.
                     // Log it but don't block the user from creating a new connection.
@@ -91,12 +164,15 @@ export class ExecuteStep extends AzureWizardExecuteStep<NewConnectionWizardConte
                     expand: false, // Don't expand to avoid login prompts
                 });
 
-                throw new UserFacingError(l10n.t('A connection with the same username and host already exists.'), {
-                    details: l10n.t(
-                        'The existing connection has been selected in the Connections View.\n\nSelected connection name:\n"{0}"',
-                        existingDuplicateConnection.name,
-                    ),
-                });
+                throw new UserFacingError(
+                    l10n.t('A connection to the same host with the same authentication settings already exists.'),
+                    {
+                        details: l10n.t(
+                            'The existing connection has been selected in the Connections View.\n\nSelected connection name:\n"{0}"',
+                            existingDuplicateConnection.name,
+                        ),
+                    },
+                );
             }
 
             // remove obsolete authMechanism entry
@@ -106,8 +182,10 @@ export class ExecuteStep extends AzureWizardExecuteStep<NewConnectionWizardConte
             newParsedCS.username = '';
             newParsedCS.password = '';
 
-            let newConnectionLabel =
-                newUsername && newUsername.length > 0 ? `${newUsername}@${newJoinedHosts}` : newJoinedHosts;
+            // The connection label is derived from the host(s) only. We intentionally do not
+            // prefix it with the username so that all new connections share a consistent,
+            // credential-free naming scheme.
+            let newConnectionLabel = newJoinedHosts;
 
             // Sanity Check 2/2: is there a connection with the same 'label' in there?
             // If so, append a number to the label.
@@ -148,23 +226,29 @@ export class ExecuteStep extends AzureWizardExecuteStep<NewConnectionWizardConte
                 id: storageId,
                 name: newConnectionLabel,
                 properties: {
+                    ...context.connectionProperties,
                     type: ItemType.Connection,
                     api: api,
                     parentId: parentId ? parentId : undefined, // Set parent folder ID if in a subfolder
                     availableAuthMethods: newAvailableAuthenticationMethods,
                     selectedAuthMethod: newAuthenticationMethod,
+                    // TLS exception (§7): when the user opted to allow invalid certificates for a
+                    // local/private host, persist it as a non-emulator emulatorConfiguration so the
+                    // connection accepts a self-signed certificate (TLS is keyed off
+                    // disableEmulatorSecurity alone) without being treated as an emulator.
+                    emulatorConfiguration: allowInvalidCertificates
+                        ? { isEmulator: false, disableEmulatorSecurity: true }
+                        : undefined,
                 },
                 secrets: {
                     connectionString: newParsedCS.toString(),
-                    nativeAuthConfig:
-                        context.nativeAuthConfig ??
-                        (newAuthenticationMethod === AuthMethodId.NativeAuth && (newUsername || newPassword)
-                            ? {
-                                  connectionUser: newUsername ?? '',
-                                  connectionPassword: newPassword,
-                              }
-                            : undefined),
-                    entraIdAuthConfig: context.entraIdAuthConfig,
+                    // Persist native credentials only for the Native authentication method.
+                    // No Authentication and Microsoft Entra ID are credential-free.
+                    nativeAuthConfig: usesNativeCredentials ? context.nativeAuthConfig : undefined,
+                    // Persist Entra ID config only for the Microsoft Entra ID method, so a
+                    // credential-free or native connection never carries stale Entra metadata.
+                    entraIdAuthConfig: usesEntraId ? context.entraIdAuthConfig : undefined,
+                    managedIdentityAuthConfig: newManagedIdentityAuthConfig,
                 },
             };
 

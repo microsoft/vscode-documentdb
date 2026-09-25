@@ -3,7 +3,7 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { getResourceGroupFromId, uiUtils } from '@microsoft/vscode-azext-azureutils';
+import { getResourceGroupFromId, parseAzureResourceId, uiUtils } from '@microsoft/vscode-azext-azureutils';
 import { callWithTelemetryAndErrorHandling, type IActionContext } from '@microsoft/vscode-azext-utils';
 import { type AzureResource, type BranchDataProvider } from '@microsoft/vscode-azureresources-api';
 import { DocumentDBExperience } from '../../../DocumentDBExperiences';
@@ -63,7 +63,7 @@ export class VCoreBranchDataProvider
 
                 const cluster: TreeCluster<AzureClusterModel> = {
                     // Core cluster data
-                    name: documentDbAccount.name!,
+                    name: documentDbAccount.name ?? parseAzureResourceId(resourceId).resourceName,
                     connectionString: undefined, // Loaded lazily when connecting
                     dbExperience: DocumentDBExperience,
                     clusterId: sanitizedId, // Sanitized - no '/' characters
@@ -84,12 +84,9 @@ export class VCoreBranchDataProvider
                     viewId: Views.AzureResourcesView,
                 };
 
-                ext.outputChannel.trace(
-                    `[AzureResourcesView/vCore/cache] Created cluster model: name="${cluster.name}", clusterId="${cluster.clusterId}", treeId="${cluster.treeId}"`,
-                );
-
                 cache.set(resourceId, cluster);
             });
+            ext.outputChannel.trace(`[AzureResourcesView/vCore] Cached metadata for ${accounts.length} cluster(s).`);
             return cache;
         },
         updateItem: (item, metadata) => {
@@ -145,13 +142,14 @@ export class VCoreBranchDataProvider
 
             let clusterInfo: TreeCluster<AzureClusterModel> = {
                 // Core cluster data
-                name: resource.name ?? 'Unknown',
+                // Required for connecting, so it must not depend on the asynchronous metadata load.
+                name: resource.name ?? parseAzureResourceId(resource.id).resourceName,
                 connectionString: undefined, // Loaded lazily
                 dbExperience: DocumentDBExperience,
                 clusterId: sanitizedId, // Sanitized - no '/' characters
                 // Azure-specific data
                 azureResourceId: resource.id, // Keep original Azure Resource ID for ARM API correlation
-                resourceGroup: getResourceGroupFromId(resource.id), // Extract from resource ID, needed even if other metadata is missing or cache lookup fails
+                resourceGroup: getResourceGroupFromId(resource.id),
                 // Tree context (clusterId === treeId after sanitization)
                 treeId: sanitizedId,
                 viewId: Views.AzureResourcesView,
@@ -161,10 +159,6 @@ export class VCoreBranchDataProvider
             if (cachedMetadata) {
                 clusterInfo = { ...clusterInfo, ...cachedMetadata };
             }
-
-            ext.outputChannel.trace(
-                `[AzureResourcesView/vCore] Created cluster model: name="${clusterInfo.name}", clusterId="${clusterInfo.clusterId}", treeId="${clusterInfo.treeId}", hasCachedMetadata=${!!cachedMetadata}`,
-            );
 
             const clusterItem = new VCoreResourceItem(resource.subscription, clusterInfo);
             ext.state.wrapItemInStateHandling(clusterItem, () => this.refresh(clusterItem));

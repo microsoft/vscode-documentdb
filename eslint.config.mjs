@@ -28,6 +28,7 @@ export default ts.config(
             '**/__mocks__/**/*',
             '**/*.d.ts',
             '**/jest.config.js',
+            '**/jest.config.cjs',
             '**/main.js',
         ],
     },
@@ -272,6 +273,66 @@ export default ts.config(
             'mocha/no-identical-title': 'off',
             'mocha/no-exports': 'off',
             'mocha/no-async-suite': 'off',
+        },
+    },
+    // The fluentui package keeps its hooks in .ts files — they contain no JSX — so the repo's
+    // react-hooks scope, which is keyed on .tsx, does not reach them. Restore it here rather than
+    // leave a hooks file unlinted.
+    {
+        files: ['packages/vscode-ext-webview-fluentui/src/**/*.ts'],
+
+        extends: [reactHooks.configs.flat['recommended-latest']],
+    },
+    // Invariant I1 of @microsoft/vscode-ext-webview-fluentui: a component must not require the
+    // package's own theming. Components style themselves from Fluent `tokens.*`, which resolve
+    // against whatever FluentProvider is above them, so a consumer can adopt one component
+    // without adopting a visual philosophy. See the package's decisions 0004 and 0010.
+    {
+        files: ['packages/vscode-ext-webview-fluentui/src/components/**/*.{ts,tsx}'],
+
+        rules: {
+            'no-restricted-imports': [
+                'error',
+                {
+                    patterns: [
+                        {
+                            group: ['**/theme', '**/theme/**', '**/styles', '**/styles/**'],
+                            message:
+                                'Invariant I1: components/ must not import theme/ or styles/. Style components from Fluent `tokens.*` instead.',
+                        },
+                    ],
+                },
+            ],
+        },
+    },
+    // The `./monaco` entry shares the VS Code colour source, not the Fluent adaptation. It must
+    // reach `vscode/` and nothing above it, so that importing it injects no stylesheet and pulls
+    // in no Fluent. See the package's decision 0032.
+    {
+        files: ['packages/vscode-ext-webview-fluentui/src/monaco/**/*.{ts,tsx}'],
+
+        rules: {
+            'no-restricted-imports': [
+                'error',
+                {
+                    patterns: [
+                        {
+                            group: [
+                                '**/theme',
+                                '**/theme/**',
+                                '**/styles',
+                                '**/styles/**',
+                                '**/components',
+                                '**/components/**',
+                                'monaco-editor',
+                                'monaco-editor/**',
+                            ],
+                            message:
+                                'monaco/ must import only vscode/. It takes no dependency on monaco-editor: the theme data is structurally typed, and type-tests/monacoContract.ts proves it.',
+                        },
+                    ],
+                },
+            ],
         },
     },
 );

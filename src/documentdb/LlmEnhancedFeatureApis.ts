@@ -47,6 +47,10 @@ export interface IndexSpecification {
     expireAfterSeconds?: number;
     // Partial index filter expression
     partialFilterExpression?: Document;
+    // Wildcard index field inclusion/exclusion document
+    wildcardProjection?: Document;
+    // DocumentDB vector index options (used with a `cosmosSearch` key value)
+    cosmosSearchOptions?: Document;
     // Additional index options
     [key: string]: unknown;
 }
@@ -111,6 +115,11 @@ export interface IndexStats {
     key: Record<string, number | string>;
     // Host information
     host: string;
+
+    // Whether the index is currently being built. `$indexStats` only includes
+    // this field (as `true`) while a build is in progress, so it is absent for
+    // ready indexes.
+    building?: boolean;
 
     // Access statistics
     accesses:
@@ -197,6 +206,7 @@ export class llmEnhancedFeatureApis {
                 name: stat.name as string,
                 key: stat.key as Record<string, number | string>,
                 host: stat.host as string,
+                building: stat.building === true ? true : undefined,
                 accesses: {
                     ops: accesses?.ops ?? 0,
                     since: accesses?.since ?? new Date(),

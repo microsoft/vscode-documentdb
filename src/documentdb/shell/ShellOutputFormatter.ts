@@ -3,27 +3,18 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+import {
+    type ShellHelpDocument,
+    type ShellHelpDocumentLine,
+    type ShellHelpTextSpan,
+} from '@documentdb-js/shell-runtime';
 import * as l10n from '@vscode/l10n';
 import { EJSON } from 'bson';
 import * as vscode from 'vscode';
-import { meterSilentCatch } from '../../utils/callWithAccumulatingTelemetry';
+import { settingsKeys } from '../../settingsKeys';
+import { meterSilentCatch } from '../../utils/accumulatingTelemetry';
 import { type SerializableExecutionResult } from '../playground/workerTypes';
-
-/**
- * ANSI color codes for terminal output.
- */
-const ANSI = {
-    reset: '\x1b[0m',
-    bold: '\x1b[1m',
-    underline: '\x1b[4m',
-    noUnderline: '\x1b[24m',
-    red: '\x1b[31m',
-    green: '\x1b[32m',
-    yellow: '\x1b[33m',
-    magenta: '\x1b[35m',
-    cyan: '\x1b[36m',
-    gray: '\x1b[90m',
-} as const;
+import { shellAnsi, shellStyles } from './shellStyles';
 
 /**
  * Matches a technical error code prefix at the start of an error message.
@@ -31,6 +22,8 @@ const ANSI = {
  * Examples: `[PREFIX-12345]`, `[ERR-90001]`, `[API-100]`
  */
 const ERROR_CODE_PREFIX_RE = /^\[([A-Z]+-\d+)\]\s*/;
+
+const SHELL_HELP_DOCUMENT_KIND = 'documentdb.shellHelp';
 
 /**
  * Result of extracting a technical error code from an error message.
@@ -103,7 +96,7 @@ export class ShellOutputFormatter {
         // Add cursor "more" indicator
         if (result.cursorHasMore) {
             const moreText = l10n.t('Type "it" for more');
-            output += '\r\n' + (colorEnabled ? `${ANSI.gray}${moreText}${ANSI.reset}` : moreText);
+            output += '\r\n' + (colorEnabled ? `${shellStyles.muted}${moreText}${shellAnsi.reset}` : moreText);
         }
 
         return output;
@@ -118,7 +111,7 @@ export class ShellOutputFormatter {
     formatError(error: string): string {
         const colorEnabled = this.isColorEnabled();
         if (colorEnabled) {
-            return `${ANSI.red}${error}${ANSI.reset}`;
+            return `${shellStyles.error}${error}${shellAnsi.reset}`;
         }
         return error;
     }
@@ -129,9 +122,49 @@ export class ShellOutputFormatter {
     formatSystemMessage(message: string): string {
         const colorEnabled = this.isColorEnabled();
         if (colorEnabled) {
-            return `${ANSI.gray}${message}${ANSI.reset}`;
+            return `${shellStyles.muted}${message}${shellAnsi.reset}`;
         }
         return message;
+    }
+
+    /**
+     * Format the shell title as the strongest line in the startup banner.
+     */
+    formatShellTitle(message: string): string {
+        if (!this.isColorEnabled()) {
+            return message;
+        }
+        return `${shellStyles.emphasis}${message}${shellAnsi.reset}`;
+    }
+
+    /**
+     * Format the startup logo using only theme-inherited intensity.
+     */
+    formatShellLogo(): string {
+        if (!this.isColorEnabled()) {
+            const logoLine1 = '╭────╮';
+            const logoLine2 = '│ >_ │ DocumentDB Shell';
+            const logoLine3 = '╰────╯';
+
+            return [logoLine1, logoLine2, logoLine3].join('\n');
+        }
+
+        const logoLine1 = `${shellStyles.ghostText}╭────╮${shellAnsi.reset}`;
+        const logoLine2 = `${shellStyles.ghostText}│ ${shellAnsi.reset}${shellStyles.emphasis}>_${shellAnsi.reset}${shellStyles.ghostText} │${shellAnsi.reset} ${shellStyles.emphasis}DocumentDB Shell${shellAnsi.reset}`;
+        const logoLine3 = `${shellStyles.ghostText}╰────╯${shellAnsi.reset}`;
+
+        return [logoLine1, logoLine2, logoLine3].join('\n');
+    }
+
+    /**
+     * Format a value embedded in the gray connection-details line.
+     * The trailing gray code restores the surrounding system-message style.
+     */
+    formatConnectionValue(value: string): string {
+        if (!this.isColorEnabled()) {
+            return value;
+        }
+        return `${shellStyles.value}${value}${shellAnsi.reset}${shellStyles.muted}`;
     }
 
     // ─── Private: Value formatting ───────────────────────────────────────────
@@ -141,16 +174,16 @@ export class ShellOutputFormatter {
             return '';
         }
         if (value === null) {
-            return colorEnabled ? `${ANSI.magenta}null${ANSI.reset}` : 'null';
+            return colorEnabled ? `${shellStyles.result.boolean}null${shellAnsi.reset}` : 'null';
         }
         if (typeof value === 'string') {
             return value;
         }
         if (typeof value === 'number') {
-            return colorEnabled ? `${ANSI.yellow}${String(value)}${ANSI.reset}` : String(value);
+            return colorEnabled ? `${shellStyles.result.number}${String(value)}${shellAnsi.reset}` : String(value);
         }
         if (typeof value === 'boolean') {
-            return colorEnabled ? `${ANSI.magenta}${String(value)}${ANSI.reset}` : String(value);
+            return colorEnabled ? `${shellStyles.result.boolean}${String(value)}${shellAnsi.reset}` : String(value);
         }
 
         // Objects and arrays — pretty-print as EJSON
@@ -238,8 +271,9 @@ export class ShellOutputFormatter {
         return line.replace(
             /^(\s*)"([^"]+)"(\s*:\s*)(.*)/,
             (_match: string, indent: string, key: string, colon: string, rest: string) => {
-                const keyColor = key === '_id' ? `${ANSI.bold}${ANSI.cyan}` : ANSI.cyan;
-                const coloredKey = `${indent}${keyColor}"${key}"${ANSI.reset}${colon}`;
+                const keyColor =
+                    key === '_id' ? `${shellStyles.emphasis}${shellStyles.result.key}` : shellStyles.result.key;
+                const coloredKey = `${indent}${keyColor}"${key}"${shellAnsi.reset}${colon}`;
                 return coloredKey + this.colorizeValue(rest);
             },
         );
@@ -250,18 +284,24 @@ export class ShellOutputFormatter {
 
         // String value: "..."
         if (trimmed.startsWith('"')) {
-            return value.replace(/"(?:[^"\\]|\\.)*"/, (match) => `${ANSI.green}${match}${ANSI.reset}`);
+            return value.replace(
+                /"(?:[^"\\]|\\.)*"/,
+                (match) => `${shellStyles.result.string}${match}${shellAnsi.reset}`,
+            );
         }
 
         // Boolean or null
         const boolOrNull = trimmed.replace(/[,\s]/g, '');
         if (boolOrNull === 'true' || boolOrNull === 'false' || boolOrNull === 'null') {
-            return value.replace(/(true|false|null)/, (match) => `${ANSI.magenta}${match}${ANSI.reset}`);
+            return value.replace(
+                /(true|false|null)/,
+                (match) => `${shellStyles.result.boolean}${match}${shellAnsi.reset}`,
+            );
         }
 
         // Number
         if (/^-?\d+(\.\d+)?[,\s]*$/.test(trimmed)) {
-            return value.replace(/-?\d+(\.\d+)?/, (match) => `${ANSI.yellow}${match}${ANSI.reset}`);
+            return value.replace(/-?\d+(\.\d+)?/, (match) => `${shellStyles.result.number}${match}${shellAnsi.reset}`);
         }
 
         return value;
@@ -272,83 +312,74 @@ export class ShellOutputFormatter {
     /**
      * Format help text for terminal display.
      *
-     * Shell help uses a structured format:
-     * - Lines starting with `# ` are section headers → rendered bold (+ cyan when color enabled)
-     * - Lines starting with `  ` contain a padded command/description pair → command in yellow
-     * - Other lines (tips, blanks) are rendered as-is in gray
-     *
      * ANSI colors are theme-aware in VS Code terminals: the basic 16 ANSI colors
      * map to `terminal.ansiRed`, `terminal.ansiGreen`, etc. from the active color theme.
      * This means we get automatic light/dark adaptation and users can customize.
      */
     private formatHelpText(printable: unknown): string {
-        let text: string;
+        if (this.isShellHelpDocument(printable)) {
+            return printable.lines.map((line) => this.formatShellHelpLine(line)).join('\r\n');
+        }
+
         if (typeof printable === 'string') {
-            text = printable;
-        } else if (typeof printable === 'object' && printable !== null && 'help' in printable) {
-            // @mongosh Help results have a .help property with the help text
-            text = String((printable as { help: unknown }).help);
-        } else {
-            return this.toEjsonString(printable);
+            return printable;
         }
-
-        if (!this.isColorEnabled()) {
-            return text;
+        if (typeof printable === 'object' && printable !== null && 'help' in printable) {
+            return String((printable as { help: unknown }).help);
         }
-
-        return this.colorizeHelpText(text);
+        return this.toEjsonString(printable);
     }
 
-    /**
-     * Apply theme-aware ANSI coloring to structured help text.
-     */
-    private colorizeHelpText(text: string): string {
-        return text
-            .split('\n')
-            .map((line) => {
-                // Section headers: "# Title"
-                if (line.startsWith('# ')) {
-                    return `${ANSI.bold}${ANSI.cyan}${line.slice(2)}${ANSI.reset}`;
-                }
-
-                // Command entries: "  command(padded)     description"
-                // The command column may itself contain internal double-spaces (e.g. ".limit(n)  .skip(n)"),
-                // so we use a greedy match for the command and non-greedy for the gap so the split
-                // happens at the LAST run of 2+ spaces before the description, not the first.
-                const entryMatch = /^( {2})(\S.*\S)( {2,})(\S.+)$/.exec(line);
-                if (entryMatch) {
-                    const [, indent, command, gap, description] = entryMatch;
-                    return `${indent}${ANSI.yellow}${command}${ANSI.reset}${gap}${ANSI.gray}${description}${ANSI.reset}`;
-                }
-
-                // Tip lines (indented text without two-column structure)
-                if (line.startsWith('  ') && line.trim().length > 0) {
-                    return `${ANSI.gray}${line}${ANSI.reset}`;
-                }
-
-                return line;
-            })
-            .join('\r\n');
+    private isShellHelpDocument(value: unknown): value is ShellHelpDocument {
+        return (
+            typeof value === 'object' &&
+            value !== null &&
+            'kind' in value &&
+            value.kind === SHELL_HELP_DOCUMENT_KIND &&
+            'lines' in value &&
+            Array.isArray(value.lines)
+        );
     }
 
-    /**
-     * Wrap text with ANSI underline codes to visually indicate a clickable link.
-     *
-     * Uses `\x1b[4m` (underline on) and `\x1b[24m` (underline off) instead of
-     * a full reset, so that surrounding styles (e.g., gray from {@link formatSystemMessage})
-     * are preserved.
-     *
-     * Underline is applied regardless of the `colorSupport` setting because it
-     * communicates clickability, not decoration.
-     */
+    private formatShellHelpLine(line: ShellHelpDocumentLine): string {
+        const colorEnabled = this.isColorEnabled();
+        switch (line.kind) {
+            case 'header':
+                return colorEnabled ? `${shellStyles.emphasis}${line.text}${shellAnsi.reset}` : line.text;
+            case 'blank':
+                return '';
+            case 'entry': {
+                const command = colorEnabled
+                    ? `${shellStyles.completion.action}${line.command}${shellAnsi.reset}`
+                    : line.command;
+                const description = colorEnabled
+                    ? `${shellStyles.muted}${line.description}${shellAnsi.reset}`
+                    : line.description;
+                return line.indent + command + line.gap + description;
+            }
+            case 'text':
+                return line.spans.map((span) => this.formatShellHelpSpan(span, colorEnabled)).join('');
+        }
+    }
+
+    private formatShellHelpSpan(span: ShellHelpTextSpan, colorEnabled: boolean): string {
+        let tone = '';
+        if (colorEnabled) {
+            tone = span.tone === 'ghost' ? shellStyles.ghostText : shellStyles.muted;
+        }
+        const text = span.link ? this.formatLinkSentinel(span.text) : span.text;
+        return tone ? `${tone}${text}${shellAnsi.reset}` : text;
+    }
+
+    /** Underline a known terminal action sentinel without changing its surrounding color. */
     formatLinkSentinel(text: string): string {
-        return `${ANSI.underline}${text}${ANSI.noUnderline}`;
+        return `${shellAnsi.underline}${text}${shellAnsi.noUnderline}`;
     }
 
     // ─── Private: Settings ───────────────────────────────────────────────────
 
     private isColorEnabled(): boolean {
         const config = vscode.workspace.getConfiguration();
-        return config.get<boolean>('documentDB.shell.display.colorSupport', true);
+        return config.get<boolean>(settingsKeys.shellColorSupport, true);
     }
 }

@@ -83,7 +83,7 @@ describe('toFieldCompletionItems', () => {
         expect(result[2].insertText).toBe('$type');
     });
 
-    it('adds $ prefix to referenceText', () => {
+    it('adds $ prefix to referenceText for safe field names', () => {
         const fields: FieldEntry[] = [
             { path: 'age', type: 'number', bsonType: 'int32' },
             { path: 'address.city', type: 'string', bsonType: 'string' },
@@ -93,6 +93,104 @@ describe('toFieldCompletionItems', () => {
 
         expect(result[0].referenceText).toBe('$age');
         expect(result[1].referenceText).toBe('$address.city');
+    });
+
+    it('uses $getField for unsafe field names in referenceText', () => {
+        const fields: FieldEntry[] = [
+            { path: 'order-items', type: 'string', bsonType: 'string' },
+            { path: 'my field', type: 'string', bsonType: 'string' },
+        ];
+
+        const result = toFieldCompletionItems(fields);
+
+        expect(result[0].referenceText).toBe('{ $getField: "order-items" }');
+        expect(result[1].referenceText).toBe('{ $getField: "my field" }');
+    });
+
+    it('escapes embedded double quotes in $getField referenceText', () => {
+        const fields: FieldEntry[] = [{ path: 'say"hi"', type: 'string', bsonType: 'string' }];
+        const result = toFieldCompletionItems(fields);
+        expect(result[0].referenceText).toBe('{ $getField: "say\\"hi\\"" }');
+    });
+
+    // Multi-segment paths with an unsafe segment: a flat
+    // `{ $getField: "a.order-items" }` would look up a *top-level* field
+    // literally named "a.order-items", which is the wrong document. The
+    // correct reference walks into the parent via `{ field, input }`.
+    it('uses { field, input } for an unsafe leaf in a nested path', () => {
+        const fields: FieldEntry[] = [{ path: 'a.order-items', type: 'string', bsonType: 'string' }];
+
+        const result = toFieldCompletionItems(fields);
+
+        expect(result[0].referenceText).toBe('{ $getField: { field: "order-items", input: "$a" } }');
+    });
+
+    it('collapses a multi-segment safe prefix into a single $a.b input', () => {
+        const fields: FieldEntry[] = [{ path: 'a.b.c-d', type: 'string', bsonType: 'string' }];
+
+        const result = toFieldCompletionItems(fields);
+
+        expect(result[0].referenceText).toBe('{ $getField: { field: "c-d", input: "$a.b" } }');
+    });
+
+    it('nests $getField when an unsafe segment is followed by safe segments', () => {
+        const fields: FieldEntry[] = [{ path: 'order-items.city', type: 'string', bsonType: 'string' }];
+
+        const result = toFieldCompletionItems(fields);
+
+        expect(result[0].referenceText).toBe('{ $getField: { field: "city", input: { $getField: "order-items" } } }');
+    });
+
+    it('escapes embedded quotes in nested $getField segments', () => {
+        const fields: FieldEntry[] = [{ path: 'a.say"hi"', type: 'string', bsonType: 'string' }];
+
+        const result = toFieldCompletionItems(fields);
+
+        expect(result[0].referenceText).toBe('{ $getField: { field: "say\\"hi\\"", input: "$a" } }');
+    });
+
+    // Case 3: a field name beginning with `$` is NOT a valid `$`-prefix
+    // reference (it would be read as a variable, e.g. `$$price`). It must
+    // fall back to `$getField`, where the name is an opaque literal.
+    it('uses $getField for field names containing a $ (would be misread as a variable)', () => {
+        const fields: FieldEntry[] = [
+            { path: '$price', type: 'number', bsonType: 'int32' },
+            { path: 'a$b', type: 'string', bsonType: 'string' },
+            { path: 'a.$inner', type: 'string', bsonType: 'string' },
+        ];
+
+        const result = toFieldCompletionItems(fields);
+
+        expect(result[0].referenceText).toBe('{ $getField: "$price" }');
+        expect(result[1].referenceText).toBe('{ $getField: "a$b" }');
+        expect(result[2].referenceText).toBe('{ $getField: { field: "$inner", input: "$a" } }');
+    });
+
+    // Case 4: with a flattened `path` string there is no way to tell a field
+    // literally named "a.b" from a nested `{ a: { b } }`. Dots are always
+    // treated as nesting, so a safe dotted path keeps the compact form.
+    it('treats a dotted path with safe segments as nested (literal-dot ambiguity)', () => {
+        const fields: FieldEntry[] = [{ path: 'a.b', type: 'string', bsonType: 'string' }];
+
+        const result = toFieldCompletionItems(fields);
+
+        expect(result[0].referenceText).toBe('$a.b');
+    });
+
+    // Case 5 (defensive): getKnownFields never emits empty segments, but the
+    // builder must not produce a broken bare `$` reference if it ever does.
+    it('does not emit a bare $ reference for empty or degenerate segments', () => {
+        const fields: FieldEntry[] = [
+            { path: '', type: 'string', bsonType: 'string' },
+            { path: 'a..b', type: 'string', bsonType: 'string' },
+        ];
+
+        const result = toFieldCompletionItems(fields);
+
+        expect(result[0].referenceText).toBe('{ $getField: "" }');
+        expect(result[1].referenceText).toBe(
+            '{ $getField: { field: "b", input: { $getField: { field: "", input: "$a" } } } }',
+        );
     });
 
     it('preserves isSparse', () => {

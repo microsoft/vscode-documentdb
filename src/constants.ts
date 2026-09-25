@@ -23,3 +23,17 @@ export const isEmulatorSupported = isWindows || isLinux || (isMacOS && process.a
 
 // https://docs.mongodb.com/manual/mongo/#working-with-the-mongo-shell
 export const testDb: string = 'test';
+
+/**
+ * Visual prefix shown before item counts in the tree view (e.g. "·· 12").
+ * Two middle dots (U+2027) followed by a regular space.
+ * Controlled by the `documentDB.accessibility.hideCountPrefix` setting.
+ */
+export const COUNT_PREFIX = '\u2027\u2027 ';
+
+/**
+ * Maximum number of collections to count via cursor before showing "N+".
+ * The cursor fetches `COLLECTION_COUNT_LIMIT + 1` items; if it gets more
+ * than the limit the description shows e.g. "5+".
+ */
+export const COLLECTION_COUNT_LIMIT = 50;

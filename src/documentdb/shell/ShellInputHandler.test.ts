@@ -805,5 +805,142 @@ describe('ShellInputHandler', () => {
             handler.handleInput('X'); // Insert in middle
             expect(handler.getBuffer()).toBe('a'.repeat(50) + 'X' + 'a'.repeat(50));
         });
+
+        it('should track the cursor row across a narrowing resize', () => {
+            // prompt=5, cols=80, 10 chars → absolute column 15, still row 0.
+            handler.setColumns(80);
+            handler.setPromptWidth(5);
+            handler.handleInput('a'.repeat(10));
+
+            // Narrow to 10 columns: xterm.js reflows and column 15 is now row 1.
+            handler.setColumns(10);
+            written = '';
+            handler.handleInput('b');
+
+            // Step 1 must climb back to the prompt row. Assuming row 0 would
+            // repaint one row too high and orphan everything above it.
+            expect(extractMoveUp(written)).toBe(1);
+        });
+
+        it('should track the cursor row across a widening resize', () => {
+            // prompt=5, cols=10, 10 chars → absolute column 15, row 1.
+            handler.setColumns(10);
+            handler.setPromptWidth(5);
+            handler.handleInput('a'.repeat(10));
+
+            // Widen to 80 columns: the line no longer wraps, so the cursor is
+            // back on the prompt row and there is nothing to climb.
+            handler.setColumns(80);
+            written = '';
+            handler.handleInput('b');
+
+            expect(extractMoveUp(written)).toBe(0);
+        });
+    });
+
+    describe('cursorColumn', () => {
+        it('should report the prompt width for an empty buffer', () => {
+            handler.setPromptWidth(8);
+            expect(handler.cursorColumn).toBe(8);
+        });
+
+        it('should include the prompt and the text before the cursor', () => {
+            handler.setPromptWidth(8);
+            handler.handleInput('db.coll.find(');
+            expect(handler.cursorColumn).toBe(8 + 13);
+        });
+
+        it('should follow the cursor rather than the buffer end', () => {
+            handler.setPromptWidth(8);
+            handler.handleInput('abcdef');
+            handler.handleInput('\x1b[D');
+            handler.handleInput('\x1b[D');
+            expect(handler.cursorColumn).toBe(8 + 4);
+        });
+
+        it('should count display width, not code units, for surrogate pairs', () => {
+            handler.setPromptWidth(0);
+            handler.handleInput('🛈x'); // 3 code units, 2 display columns
+            expect(handler.cursorColumn).toBe(2);
+        });
+
+        it('should report no available columns at a deferred-wrap boundary', () => {
+            handler.setColumns(80);
+            handler.setPromptWidth(5);
+            handler.handleInput('a'.repeat(75));
+
+            expect(handler.availableColumnsAfterCursor()).toBe(0);
+        });
+
+        it('should keep available columns within the current row across widths and character classes', () => {
+            const samples = ['ascii'.repeat(50), '日本語'.repeat(50), '📦'.repeat(100), 'é'.repeat(100)];
+
+            for (let columns = 20; columns <= 200; columns++) {
+                for (const sample of samples) {
+                    handler.resetLine();
+                    handler.setPromptWidth(5);
+                    handler.setColumns(columns);
+                    handler.handleInput(sample);
+
+                    const available = handler.availableColumnsAfterCursor();
+                    expect(available).toBeGreaterThanOrEqual(0);
+                    expect(available).toBeLessThan(columns);
+                    if (available > 0) {
+                        expect((handler.cursorColumn + available) % columns).toBe(columns - 1);
+                    } else {
+                        expect([0, columns - 1]).toContain(handler.cursorColumn % columns);
+                    }
+                }
+            }
+        });
+    });
+
+    describe('findHistorySuggestion', () => {
+        /** Submit a command so it lands in history, then start a fresh line. */
+        function run(command: string): void {
+            handler.handleInput(command);
+            handler.handleInput('\r');
+            handler.resetLine();
+        }
+
+        it('should return the most recent matching command', () => {
+            run('db.users.find({})');
+            run('db.users.countDocuments({})');
+
+            expect(handler.findHistorySuggestion('db.users.')).toBe('db.users.countDocuments({})');
+        });
+
+        it('should return undefined for an empty prefix', () => {
+            run('db.users.find({})');
+
+            expect(handler.findHistorySuggestion('')).toBeUndefined();
+        });
+
+        it('should not suggest an entry equal to the prefix', () => {
+            run('show dbs');
+
+            expect(handler.findHistorySuggestion('show dbs')).toBeUndefined();
+        });
+
+        it('should skip multi-line entries, whose newlines cannot be inserted', () => {
+            handler.handleInput('db.users.find({');
+            handler.handleInput('\r'); // incomplete — starts multi-line accumulation
+            handler.handleInput('})');
+            handler.handleInput('\r');
+            handler.resetLine();
+            run('db.users.drop()');
+
+            expect(handler.findHistorySuggestion('db.users.f')).toBeUndefined();
+        });
+
+        it('should not look further back than the search cap', () => {
+            run('db.ancient.find({})');
+            for (let i = 0; i < 100; i++) {
+                run(`db.filler${String(i)}.find({})`);
+            }
+
+            expect(handler.findHistorySuggestion('db.ancient.')).toBeUndefined();
+            expect(handler.findHistorySuggestion('db.filler99.')).toBe('db.filler99.find({})');
+        });
     });
 });

@@ -35,7 +35,7 @@ export interface AnnouncerProps {
  *
  * @example
  * ```tsx
- * <Announcer when={isLoading} message={l10n.t('AI is analyzing...')} />
+ * <Announcer when={isLoading} message={l10n.t('AI is analyzing…')} />
  * ```
  */
 export function Announcer({ when, message, politeness = 'polite' }: AnnouncerProps): React.ReactElement {

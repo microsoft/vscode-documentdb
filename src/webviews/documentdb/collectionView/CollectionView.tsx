@@ -4,7 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { Badge, ProgressBar, Tab, TabList } from '@fluentui/react-components';
-import { useConfiguration } from '@microsoft/vscode-ext-react-webview';
+import { useConfiguration } from '@microsoft/vscode-ext-webview/react';
 import * as l10n from '@vscode/l10n';
 import { type JSX, useEffect, useRef, useState } from 'react';
 import { type TableDataEntry } from '../../../documentdb/ClusterSession';
@@ -22,15 +22,17 @@ import {
 } from './collectionViewContext';
 import { type CollectionViewWebviewConfigurationType } from './collectionViewController';
 import { QueryEditor } from './components/queryEditor/QueryEditor';
-import { QueryInsightsMain } from './components/queryInsightsTab/QueryInsightsTab';
 import { DataViewPanelJSON } from './components/resultsTab/DataViewPanelJSON';
 import { DataViewPanelTable } from './components/resultsTab/DataViewPanelTable';
 import { DataViewPanelTree } from './components/resultsTab/DataViewPanelTree';
+import { CollectionQueryActionBar } from './components/toolbar/CollectionQueryActionBar';
 import { ToolbarDocumentManipulation } from './components/toolbar/ToolbarDocumentManipulation';
-import { ToolbarMainView } from './components/toolbar/ToolbarMainView';
 import { ToolbarTableNavigation } from './components/toolbar/ToolbarTableNavigation';
 import { ToolbarViewNavigation } from './components/toolbar/ToolbarViewNavigation';
 import { ViewSwitcher } from './components/toolbar/ViewSwitcher';
+import { IndexesTab } from './indexesTab/IndexesTab';
+import { stage1Failed, stage1Succeeded, startStage1Load } from './queryInsightsReducer';
+import { QueryInsightsMain } from './queryInsightsTab/QueryInsightsTab';
 import { extractErrorCode } from './utils/errorCodeExtractor';
 
 interface QueryResults {
@@ -56,7 +58,7 @@ export const CollectionView = (): JSX.Element => {
     /**
      * Use the `useTrpcClient` hook to get the tRPC client
      */
-    const { trpcClient } = useTrpcClient();
+    const trpcClient = useTrpcClient();
 
     /**
      * Please note: using the context and states inside of closures can lead to stale data.
@@ -122,8 +124,22 @@ export const CollectionView = (): JSX.Element => {
     // TODO: it's a potential data duplication in the end, consider moving it into the global context of the view
     const [currentQueryResults, setCurrentQueryResults] = useState<QueryResults>();
 
-    // Track which tab is currently active
-    const [selectedTab, setSelectedTab] = useState<'tab_result' | 'tab_queryInsights'>('tab_result');
+    // Track which tab is currently active. Honors `configuration.initialTab`
+    // so an external caller (e.g. the "Indexes" tree node) can open the view
+    // pre-pinned to the Index Management tab.
+    const [selectedTab, setSelectedTab] = useState<'tab_result' | 'tab_indexes' | 'tab_queryInsights'>(
+        () => configuration.initialTab ?? 'tab_result',
+    );
+    const selectedTabId = {
+        tab_result: 'tab.results',
+        tab_indexes: 'tab.indexes',
+        tab_queryInsights: 'tab.queryInsights',
+    }[selectedTab];
+    const selectedTabPanelId = {
+        tab_result: 'tabpanel.results',
+        tab_indexes: 'tabpanel.indexes',
+        tab_queryInsights: 'tabpanel.queryInsights',
+    }[selectedTab];
 
     // keep Refs updated with the current state
     const currentQueryResultsRef = useRef(currentQueryResults);
@@ -145,7 +161,7 @@ export const CollectionView = (): JSX.Element => {
         // Only reset on actual query changes, not pagination
         if (intent === 'initial' || intent === 'refresh') {
             console.trace('[CollectionView] Query changed (intent: {0}), resetting Query Insights', intent);
-            // eslint-disable-next-line react-hooks/set-state-in-effect -- Resetting derived state on query intent change
+
             setCurrentContext((prev) => ({
                 ...prev,
                 queryInsights: DefaultCollectionViewContext.queryInsights,
@@ -155,61 +171,84 @@ export const CollectionView = (): JSX.Element => {
     }, [currentContext.activeQuery]);
 
     /**
-     * Non-blocking Stage 1 prefetch after query execution
-     * Populates ClusterSession cache so data is ready when user switches to Query Insights tab
-     * Uses promise tracking to prevent duplicate requests
+     * Non-blocking Stage 1 prefetch after query execution. Populates the
+     * ClusterSession cache so data is ready when the user switches to the
+     * Query Insights tab. Called only for a fresh query (`initial`/`refresh`)
+     * — see the intent gate at the call site.
+     *
+     * Dedupe contract (shared with the fallback fetch in
+     * QueryInsightsTab.tsx): the claim below flips the pipeline to
+     * `s1Loading`, so whichever of the two paths gets there first "claims"
+     * the load and the other observes `kind === 's1Loading'` and bails. See
+     * `startStage1Load` in `queryInsightsReducer.ts`.
      */
     const prefetchQueryInsights = (): void => {
-        // Check if already loaded or in-flight promise
-        // Don't check status === 'loading' because we just reset to that state before calling this
-        if (currentContext.queryInsights.stage1Data || currentContext.queryInsights.stage1Promise) {
-            return; // Already handled
-        }
+        // Claim the Stage 1 load from inside the functional updater so the
+        // gate reads React's latest queued state via `prev`, never the render
+        // closure or a ref. The reset effect's `queryInsights → idle` is
+        // queued synchronously in the same effect phase, strictly before this
+        // promise microtask, so it is already composed into `prev`: on a fresh
+        // query `prev.queryInsights` is `idle` here. This is what makes the
+        // stale pre-reset read (F2) structurally impossible rather than merely
+        // unlikely — a closure read saw the previous run's terminal state and
+        // a ref lags by one commit. If the tab fallback already claimed the
+        // load, `prev` is `s1Loading`/later and we leave it untouched.
+        setCurrentContext((prev) => {
+            if (prev.queryInsights.kind !== 'idle') {
+                return prev;
+            }
+            return { ...prev, queryInsights: startStage1Load(prev.queryInsights) };
+        });
 
+        // Fire the warm-up request. In the rare both-paths race the fallback
+        // fetches too; the F8 guards below drop whichever result lands second,
+        // and `getQueryInsightsStage1` is an idempotent cache read.
         // Query parameters are now retrieved from ClusterSession - no need to pass them
-        const promise = trpcClient.mongoClusters.collectionView.getQueryInsightsStage1.query();
-
-        // Track the promise immediately
-        setCurrentContext((prev) => ({
-            ...prev,
-            queryInsights: {
-                ...prev.queryInsights,
-                stage1Promise: promise,
-            },
-        }));
-
-        // Handle completion
-        void promise
+        void trpcClient.mongoClusters.collectionView.queryInsights.getQueryInsightsStage1
+            .query()
             .then((stage1Data) => {
-                // Update state with data and mark stage as successful
-                // This prevents redundant fetch when user switches to Query Insights tab
-                setCurrentContext((prev) => ({
-                    ...prev,
-                    queryInsights: {
-                        ...prev.queryInsights,
-                        currentStage: { phase: 1, status: 'success' },
-                        stage1Data: stage1Data,
-                        stage1Promise: null,
-                    },
-                }));
+                // The reducer auto-chains `s1Loading → s2Loading` so the
+                // Stage 2 fetch effect in QueryInsightsTab picks up
+                // immediately when the user lands on the tab.
+                setCurrentContext((prev) => {
+                    // F8 guard (mirror of the .catch guard below): if the
+                    // pipeline has moved past `s1Loading` (typically because
+                    // the user kicked off a newer query / reset), the
+                    // resolved payload is stale — drop it rather than
+                    // clobber the live state.
+                    if (prev.queryInsights.kind !== 's1Loading') {
+                        return prev;
+                    }
+                    return {
+                        ...prev,
+                        queryInsights: stage1Succeeded(prev.queryInsights, stage1Data),
+                    };
+                });
                 console.debug('Stage 1 data prefetched:', stage1Data);
             })
             .catch((error) => {
-                // Extract error code by traversing the cause chain using the helper function
                 const errorCode = extractErrorCode(error);
-
-                // Mark stage as failed to prevent redundant fetch on tab switch
-                // Store both error message and code for UI pattern matching
-                setCurrentContext((prev) => ({
-                    ...prev,
-                    queryInsights: {
-                        ...prev.queryInsights,
-                        currentStage: { phase: 1, status: 'error' },
-                        stage1ErrorMessage: error instanceof Error ? error.message : String(error),
-                        stage1ErrorCode: errorCode,
-                        stage1Promise: null,
-                    },
-                }));
+                const message = error instanceof Error ? error.message : String(error);
+                setCurrentContext((prev) => {
+                    // F8: only fold the failure into the state machine if
+                    // the current pipeline is still the one we kicked off.
+                    // Stage 1 is short-lived and the only way to leave
+                    // `s1Loading` is for our `.then`/`.catch` to fire or
+                    // for a query reset/new run to start a fresh pipeline —
+                    // in the latter case the stale failure must not
+                    // overwrite the new state. Note: doesn't fully cover a
+                    // second `s1Loading` racing the first (would need a
+                    // requestKey, like Stage 3); accepted as Low risk
+                    // because Stage 1 typically completes in well under
+                    // the time it takes a user to retrigger.
+                    if (prev.queryInsights.kind !== 's1Loading') {
+                        return prev;
+                    }
+                    return {
+                        ...prev,
+                        queryInsights: stage1Failed(prev.queryInsights, message, errorCode),
+                    };
+                });
                 console.warn('Stage 1 prefetch failed:', error);
             });
     };
@@ -321,7 +360,6 @@ export const CollectionView = (): JSX.Element => {
     }
 
     useEffect(() => {
-        // eslint-disable-next-line react-hooks/set-state-in-effect -- Setting loading state before async query execution
         setCurrentContext((prev) => ({ ...prev, isLoading: true }));
 
         // 1. Run the query, this operation only acknowledges the request.
@@ -350,17 +388,26 @@ export const CollectionView = (): JSX.Element => {
                 // 3. Load the data for the current view
                 getDataForView(currentContext.currentView);
 
-                // 4. Non-blocking Stage 1 prefetch to populate cache
-                //    This runs in background and doesn't block results display
-                prefetchQueryInsights();
+                // 4. Non-blocking Stage 1 prefetch to populate cache. Only on a
+                //    fresh query (initial/refresh): pagination keeps the same
+                //    query, so the existing Query Insights pipeline (and any
+                //    Stage 1+ data) stays valid and must not be reset. This
+                //    mirrors the reset effect's own intent gate, so the prefetch
+                //    fires exactly when the pipeline is being reset to `idle`.
+                const prefetchIntent = currentContext.activeQuery.executionIntent;
+                if (prefetchIntent === 'initial' || prefetchIntent === 'refresh') {
+                    prefetchQueryInsights();
+                }
 
                 setCurrentContext((prev) => ({ ...prev, isLoading: false, isFirstTimeLoad: false }));
             })
-            .catch((error) => {
+            .catch(async (error) => {
+                const cause = error instanceof Error ? error.message : String(error);
+                const explained = await trpcClient.common.explainOperationFailure.query({ message: cause });
                 void trpcClient.common.displayErrorMessage.mutate({
-                    message: l10n.t('Error while running the query'),
+                    message: explained ?? l10n.t('Error while running the query'),
                     modal: true,
-                    cause: error instanceof Error ? error.message : String(error),
+                    cause,
                 });
             })
             .finally(() => {
@@ -565,56 +612,12 @@ export const CollectionView = (): JSX.Element => {
                     }
                 />
 
-                <div className="toolbarMainView">
-                    <ToolbarMainView />
-                </div>
-
-                <QueryEditor
-                    onExecuteRequest={() => {
-                        // Get all query values from the editor at once
-                        const query = currentContext.queryEditor?.getCurrentQuery() ?? {
-                            filter: '{  }',
-                            project: '{  }',
-                            sort: '{  }',
-                            skip: 0,
-                            limit: 0,
-                        };
-
-                        setCurrentContext((prev) => ({
-                            ...prev,
-                            activeQuery: {
-                                ...prev.activeQuery,
-                                queryText: query.filter, // deprecated: kept in sync with filter
-                                filter: query.filter,
-                                project: query.project,
-                                sort: query.sort,
-                                skip: query.skip,
-                                limit: query.limit,
-                                pageNumber: 1,
-                                executionIntent: 'initial',
-                            },
-                        }));
-
-                        trpcClient.common.reportEvent
-                            .mutate({
-                                eventName: 'executeQuery',
-                                properties: {
-                                    ui: 'shortcut',
-                                },
-                                measurements: {
-                                    queryLenth: query.filter.length,
-                                },
-                            })
-                            .catch((error) => {
-                                console.debug('Failed to report an event:', error);
-                            });
-                    }}
-                />
-
                 <TabList
+                    aria-label={l10n.t('Collection views')}
+                    className="collectionTabList"
                     selectedValue={selectedTab}
                     onTabSelect={(_event, data) => {
-                        const newTab = data.value as 'tab_result' | 'tab_queryInsights';
+                        const newTab = data.value as 'tab_result' | 'tab_indexes' | 'tab_queryInsights';
 
                         // Report tab switching telemetry
                         trpcClient.common.reportEvent
@@ -631,66 +634,133 @@ export const CollectionView = (): JSX.Element => {
 
                         setSelectedTab(newTab);
                     }}
-                    style={{ marginTop: '-10px' }}
                 >
-                    <Tab id="tab.results" value="tab_result">
-                        Results
+                    <Tab id="tab.results" value="tab_result" aria-controls="tabpanel.results">
+                        {l10n.t('Documents')}
                     </Tab>
-                    <Tab id="tab.queryInsights" value="tab_queryInsights">
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                            Query Insights
+                    <Tab id="tab.indexes" value="tab_indexes" aria-controls="tabpanel.indexes">
+                        {l10n.t('Indexes')}
+                    </Tab>
+                    <Tab id="tab.queryInsights" value="tab_queryInsights" aria-controls="tabpanel.queryInsights">
+                        <span className="queryInsightsTabLabel">
+                            {l10n.t('Query Insights')}
                             <Badge
                                 appearance="tint"
                                 size="small"
                                 shape="rounded"
                                 color="brand"
-                                aria-label={l10n.t('Query Insights feature is in preview')}
+                                aria-label={l10n.t('PREVIEW feature')}
                             >
-                                PREVIEW
+                                <span aria-hidden={true}>{l10n.t('PREVIEW')}</span>
                             </Badge>
-                        </div>
+                        </span>
                     </Tab>
                 </TabList>
 
-                {selectedTab === 'tab_result' && (
-                    <>
-                        <div className="resultsActionBar">
-                            <ToolbarViewNavigation />
-                            <ToolbarDocumentManipulation
-                                onDeleteClick={handleDeleteDocumentRequest}
-                                onEditClick={handleEditDocumentRequest}
-                                onViewClick={handleViewDocumentRequest}
-                                onAddClick={handleAddDocumentRequest}
+                <div
+                    id={selectedTabPanelId}
+                    className="collectionTabPanel"
+                    role="tabpanel"
+                    aria-labelledby={selectedTabId}
+                >
+                    {selectedTab !== 'tab_indexes' && (
+                        <div className="primaryActionBar collectionQueryActionBar">
+                            <CollectionQueryActionBar
+                                variant={selectedTab === 'tab_result' ? 'documents' : 'queryInsights'}
                             />
-                            <ViewSwitcher onViewChanged={handleViewChanged} />
                         </div>
+                    )}
 
-                        <div className="resultsDisplayArea" id="resultsDisplayAreaId">
-                            {
-                                {
-                                    'Table View': (
-                                        <DataViewPanelTable
-                                            liveHeaders={currentQueryResults?.tableHeaders ?? []}
-                                            liveData={currentQueryResults?.tableData ?? []}
-                                            handleStepIn={handleStepInRequest}
-                                        />
-                                    ),
-                                    'Tree View': <DataViewPanelTree liveData={currentQueryResults?.treeData ?? []} />,
-                                    'JSON View': <DataViewPanelJSON value={currentQueryResults?.jsonDocuments ?? []} />,
-                                    default: <div>error &apos;{currentContext.currentView}&apos;</div>,
-                                }[currentContext.currentView] // switch-statement
-                            }
-                        </div>
+                    {selectedTab !== 'tab_indexes' && (
+                        <QueryEditor
+                            onExecuteRequest={() => {
+                                // Get all query values from the editor at once
+                                const query = currentContext.queryEditor?.getCurrentQuery() ?? {
+                                    filter: '{  }',
+                                    project: '{  }',
+                                    sort: '{  }',
+                                    skip: 0,
+                                    limit: 0,
+                                };
 
-                        {currentContext.currentView === Views.TABLE && (
-                            <div className="toolbarTableNavigation">
-                                <ToolbarTableNavigation />
+                                setCurrentContext((prev) => ({
+                                    ...prev,
+                                    activeQuery: {
+                                        ...prev.activeQuery,
+                                        queryText: query.filter, // deprecated: kept in sync with filter
+                                        filter: query.filter,
+                                        project: query.project,
+                                        sort: query.sort,
+                                        skip: query.skip,
+                                        limit: query.limit,
+                                        pageNumber: 1,
+                                        executionIntent: 'initial',
+                                    },
+                                }));
+
+                                trpcClient.common.reportEvent
+                                    .mutate({
+                                        eventName: 'executeQuery',
+                                        properties: {
+                                            ui: 'shortcut',
+                                        },
+                                        measurements: {
+                                            queryLenth: query.filter.length,
+                                        },
+                                    })
+                                    .catch((error) => {
+                                        console.debug('Failed to report an event:', error);
+                                    });
+                            }}
+                        />
+                    )}
+
+                    {selectedTab === 'tab_result' && (
+                        <>
+                            <div className="resultsActionBar">
+                                <ToolbarViewNavigation />
+                                <ToolbarDocumentManipulation
+                                    onDeleteClick={handleDeleteDocumentRequest}
+                                    onEditClick={handleEditDocumentRequest}
+                                    onViewClick={handleViewDocumentRequest}
+                                    onAddClick={handleAddDocumentRequest}
+                                />
+                                <ViewSwitcher onViewChanged={handleViewChanged} />
                             </div>
-                        )}
-                    </>
-                )}
 
-                {selectedTab === 'tab_queryInsights' && <QueryInsightsMain />}
+                            <div className="resultsDisplayArea" id="resultsDisplayAreaId">
+                                {
+                                    {
+                                        'Table View': (
+                                            <DataViewPanelTable
+                                                liveHeaders={currentQueryResults?.tableHeaders ?? []}
+                                                liveData={currentQueryResults?.tableData ?? []}
+                                                handleStepIn={handleStepInRequest}
+                                            />
+                                        ),
+                                        'Tree View': (
+                                            <DataViewPanelTree liveData={currentQueryResults?.treeData ?? []} />
+                                        ),
+                                        'JSON View': (
+                                            <DataViewPanelJSON value={currentQueryResults?.jsonDocuments ?? []} />
+                                        ),
+                                        default: <div>error &apos;{currentContext.currentView}&apos;</div>,
+                                    }[currentContext.currentView] // switch-statement
+                                }
+                            </div>
+
+                            {currentContext.currentView === Views.TABLE && (
+                                <div className="toolbarTableNavigation">
+                                    <ToolbarTableNavigation />
+                                </div>
+                            )}
+                        </>
+                    )}
+
+                    {selectedTab === 'tab_indexes' && <IndexesTab />}
+
+                    {selectedTab === 'tab_queryInsights' && <QueryInsightsMain />}
+                </div>
             </div>
         </CollectionViewContext.Provider>
     );

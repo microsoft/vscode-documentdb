@@ -1,0 +1,41 @@
+/*---------------------------------------------------------------------------------------------
+ *  Copyright (c) Microsoft Corporation. All rights reserved.
+ *  Licensed under the MIT License. See License.txt in the project root for license information.
+ *--------------------------------------------------------------------------------------------*/
+
+@use '../../queryInsights.scss' as *;
+
+.summaryCard {
+    flex-shrink: 0;
+}
+
+.summaryGrid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 16px;
+}
+
+// Single-span cells are `MetricCard appearance="subtle" size="small"` and carry no rules here.
+// What remains is the full-span cell, which is a different layout: it hosts a block of its own,
+// so it has no fixed-height value slot and its label sits on its own line.
+.summaryCell.cellSpanFull {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    grid-column: span 2;
+    margin-top: 4px;
+    align-items: stretch;
+
+    .cellLabel {
+        @extend .baseDataHeader;
+
+        display: block;
+        margin-bottom: 8px;
+    }
+}
+
+// Styling for null value placeholders (N/A, Not Available, etc.)
+.nullValue {
+    opacity: 0.5;
+    color: var(--vscode-disabledForeground);
+}

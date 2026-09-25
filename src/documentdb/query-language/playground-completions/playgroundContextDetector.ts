@@ -272,25 +272,29 @@ function scanMemberChain(text: string, offset: number): MemberChain | null {
 /**
  * Detects if the cursor is inside a method argument: `db.users.find({ | })`
  * This is a simpler check — looks for an unmatched `(` before the cursor.
+ *
+ * Before counting parentheses we mask out strings and comments (see
+ * `maskNonCodeRegions`) so that punctuation such as `)` inside a string,
+ * a `//` line comment, or a `/* *\/` block comment cannot be mistaken for
+ * real code and throw off the paren-depth count.
  */
 export function detectMethodArgContext(text: string, offset: number): MethodCallInfo | null {
+    // Mask strings and comments so their punctuation does not affect the scan.
+    // Indexes are preserved, so positions found here map back onto `text`.
+    const scan = maskNonCodeRegions(text);
+
     let pos = offset - 1;
     let depth = 0;
 
     // Scan backward looking for unmatched `(`
     while (pos >= 0) {
-        const ch = text[pos];
-
-        // Skip string literals
-        if (ch === '"' || ch === "'") {
-            pos = skipStringBackward(text, pos);
-            continue;
-        }
+        const ch = scan[pos];
 
         if (ch === ')') depth++;
         else if (ch === '(') {
             if (depth === 0) {
-                // Found the unmatched `(` — now read the method name before it
+                // Found the unmatched `(` — now read the method name before it.
+                // Names live in real code, so we read them from the original text.
                 let methodPos = pos - 1;
                 while (methodPos >= 0 && isWhitespace(text[methodPos])) {
                     methodPos--;
@@ -383,6 +387,89 @@ function isIdentChar(ch: string): boolean {
 
 function isWhitespace(ch: string): boolean {
     return ch === ' ' || ch === '\t' || ch === '\n' || ch === '\r';
+}
+
+/**
+ * Returns a copy of `text` with the contents of string literals, line comments
+ * (`// ...`) and block comments (`/* ... *\/`) replaced by spaces. Length and
+ * newlines are preserved, so positions in the result map directly onto `text`.
+ *
+ * This lets the backward paren scan ignore punctuation that lives inside
+ * strings or comments (for example a `)` in a comment) which would otherwise
+ * corrupt the parenthesis-depth count.
+ */
+function maskNonCodeRegions(text: string): string {
+    const out = text.split('');
+    const n = text.length;
+    let i = 0;
+    type State = 'code' | 'line' | 'block' | 'string';
+    let state: State = 'code';
+    let quote = '';
+
+    while (i < n) {
+        const ch = text[i];
+        const next = i + 1 < n ? text[i + 1] : '';
+
+        switch (state) {
+            case 'code':
+                if (ch === '/' && next === '/') {
+                    state = 'line';
+                    out[i] = ' ';
+                    out[i + 1] = ' ';
+                    i += 2;
+                } else if (ch === '/' && next === '*') {
+                    state = 'block';
+                    out[i] = ' ';
+                    out[i + 1] = ' ';
+                    i += 2;
+                } else if (ch === '"' || ch === "'" || ch === '`') {
+                    state = 'string';
+                    quote = ch;
+                    i++;
+                } else {
+                    i++;
+                }
+                break;
+
+            case 'line':
+                if (ch === '\n') {
+                    state = 'code';
+                } else {
+                    out[i] = ' ';
+                }
+                i++;
+                break;
+
+            case 'block':
+                if (ch === '*' && next === '/') {
+                    out[i] = ' ';
+                    out[i + 1] = ' ';
+                    state = 'code';
+                    i += 2;
+                } else {
+                    if (ch !== '\n') out[i] = ' ';
+                    i++;
+                }
+                break;
+
+            case 'string':
+                if (ch === '\\') {
+                    // Escaped character: mask both the backslash and what it escapes.
+                    out[i] = ' ';
+                    if (i + 1 < n) out[i + 1] = ' ';
+                    i += 2;
+                } else if (ch === quote) {
+                    state = 'code';
+                    i++;
+                } else {
+                    if (ch !== '\n') out[i] = ' ';
+                    i++;
+                }
+                break;
+        }
+    }
+
+    return out.join('');
 }
 
 function isCursorMethod(name: string): boolean {

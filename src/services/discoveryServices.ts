@@ -39,12 +39,22 @@ export interface ProviderDescription {
  */
 export interface DiscoveryProvider extends ProviderDescription {
     /**
+     * Whether provider-specific credential/setup configuration should run immediately
+     * after the provider is activated from the "Add Service Provider" flow.
+     */
+    readonly configureCredentialsOnActivation?: boolean;
+
+    /**
      * Retrieves wizard options for discovering new connections.
      *
      * @param context - The wizard context used during the discovery process.
-     * @returns Wizard options configured for the discovery process.
+     * @returns Wizard options configured for the discovery process. Providers may return the
+     *          options synchronously or asynchronously (e.g. when they need to resolve a session
+     *          or prompt for authentication before the wizard steps run).
      */
-    getDiscoveryWizard(context: NewConnectionWizardContext): IWizardOptions<NewConnectionWizardContext>;
+    getDiscoveryWizard(
+        context: NewConnectionWizardContext,
+    ): IWizardOptions<NewConnectionWizardContext> | Promise<IWizardOptions<NewConnectionWizardContext>>;
 
     /**
      * Retrieves the root tree item for the discovery tree view.
@@ -64,6 +74,13 @@ export interface DiscoveryProvider extends ProviderDescription {
      *               When undefined, refreshes the entire discovery tree (wizard context).
      */
     configureCredentials?(context: IActionContext, node?: TreeElement): Promise<void>;
+
+    /**
+     * Cleans up provider-specific state when the provider is removed from the Discovery view.
+     *
+     * @param context - The action context
+     */
+    deactivate?(context: IActionContext): Promise<void> | void;
 }
 
 /**

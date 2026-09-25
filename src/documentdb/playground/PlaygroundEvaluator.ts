@@ -5,12 +5,18 @@
 
 import { callWithTelemetryAndErrorHandling } from '@microsoft/vscode-azext-utils';
 import * as l10n from '@vscode/l10n';
+// Must stay a static import. `await import('bson')` resolves the package's ESM entry and
+// loads a second copy, whose classes fail every `instanceof` check against the driver's —
+// silently corrupting schema inference. Re-verify during the ESM migration (#687).
+import { EJSON } from 'bson';
 import { randomUUID } from 'crypto';
 import type * as vscode from 'vscode';
 import { ext } from '../../extensionVariables';
-import { meterSilentCatch } from '../../utils/callWithAccumulatingTelemetry';
-import { getBatchSizeSetting } from '../../utils/workspacUtils';
+import { meterSilentCatch } from '../../utils/accumulatingTelemetry';
+import { getBatchSizeSetting, getConnectionTimeoutMs } from '../../utils/workspacUtils';
+import { AuthMethodId } from '../auth/AuthMethod';
 import { CredentialCache } from '../CredentialCache';
+import { resolveAllowInvalidCertificates } from '../utils/tlsException';
 import { type ExecutionResult, type PlaygroundConnection } from './types';
 import { WorkerSessionManager } from './WorkerSessionManager';
 import { type MainToWorkerMessage, type SerializableMongoClientOptions, type WorkerToMainMessage } from './workerTypes';
@@ -28,6 +34,34 @@ import { type MainToWorkerMessage, type SerializableMongoClientOptions, type Wor
  *
  * The public API is unchanged from the in-process evaluator:
  * `evaluate(connection, code) → Promise<ExecutionResult>`
+ *
+ * ## Lifecycle
+ *
+ * The evaluator instance and the worker thread have **independent lifecycles**:
+ *
+ * ```
+ * Evaluator instance        Worker thread
+ * ─────────────────         ─────────────
+ * new PlaygroundEvaluator()
+ *   └─ evaluate() ────────► spawn + connect
+ *   └─ evaluate() ────────► reuse (no re-auth)
+ *   └─ killWorker() ──────► terminate
+ *   └─ evaluate() ────────► re-spawn + re-connect
+ *   └─ shutdown() ────────► graceful close
+ * ```
+ *
+ * After `killWorker()` (called on user cancellation), the evaluator instance
+ * stays registered in the per-cluster evaluator pool (`evaluators` Map in
+ * `executePlaygroundCode.ts`). The next `evaluate()` call detects that the
+ * worker is dead and transparently spawns a new one. Session telemetry
+ * (`_sessionId`, `_sessionEvalCount`) resets on each worker spawn, so a
+ * killed-and-respawned worker behaves like a fresh evaluator session.
+ *
+ * The evaluator is only removed from the pool by `shutdownEvaluator()` (when
+ * all playground documents for the cluster close) or by `disposeEvaluators()`
+ * (on extension deactivation). `shutdownEvaluator()` calls `shutdown()`, while
+ * `disposeEvaluators()` calls `dispose()`. Both paths gracefully close the
+ * worker before removing the evaluator.
  */
 export class PlaygroundEvaluator implements vscode.Disposable {
     private readonly _workerManager: WorkerSessionManager;
@@ -158,7 +192,7 @@ export class PlaygroundEvaluator implements vscode.Disposable {
             context.errorHandling.rethrow = true;
             context.telemetry.properties.authMethod = initMsg.authMechanism;
             context.telemetry.properties.needsSpawn = needsSpawn ? 'true' : 'false';
-            await this._workerManager.ensureWorker(connection.clusterId, initMsg);
+            await this._workerManager.ensureWorker(connection.clusterId, initMsg, getConnectionTimeoutMs());
         });
         this._lastInitDurationMs = needsSpawn ? Date.now() - initStartTime : 0;
 
@@ -217,25 +251,36 @@ export class PlaygroundEvaluator implements vscode.Disposable {
             throw new Error(l10n.t('No credentials found for cluster "{0}"', connection.clusterDisplayName));
         }
 
-        const authMechanism = credentials.authMechanism ?? 'NativeAuth';
+        const authMechanism = credentials.authMechanism ?? AuthMethodId.NativeAuth;
 
         // Build connection string
         let connectionString: string;
-        if (authMechanism === 'NativeAuth') {
+        if (authMechanism === AuthMethodId.NativeAuth) {
             connectionString = CredentialCache.getConnectionStringWithPassword(connection.clusterId);
         } else {
-            // Entra ID: use connection string without embedded credentials
+            // Entra ID and NoAuth: use connection string without embedded credentials
             connectionString = credentials.connectionString;
         }
 
         // Build serializable MongoClientOptions
         const clientOptions: SerializableMongoClientOptions = {
-            serverSelectionTimeoutMS: credentials.emulatorConfiguration?.isEmulator ? 4000 : undefined,
-            tlsAllowInvalidCertificates:
-                credentials.emulatorConfiguration?.isEmulator &&
-                credentials.emulatorConfiguration?.disableEmulatorSecurity
-                    ? true
+            // Fail-fast 4s timeout for emulators / local TLS-exception connections — host-gated the
+            // same way as the TLS option so an orphaned flag on a public host doesn't trigger it.
+            serverSelectionTimeoutMS:
+                credentials.emulatorConfiguration?.isEmulator ||
+                resolveAllowInvalidCertificates(
+                    credentials.emulatorConfiguration?.disableEmulatorSecurity,
+                    connectionString,
+                )
+                    ? 4000
                     : undefined,
+            // TLS-allow-invalid is keyed off `disableEmulatorSecurity` (design §7), honored ONLY for
+            // local/private hosts ("hybrid" runtime policy): an orphaned flag on a public host is not
+            // activated; an explicit URL param is still honored by the driver (we never force `false`).
+            tlsAllowInvalidCertificates: resolveAllowInvalidCertificates(
+                credentials.emulatorConfiguration?.disableEmulatorSecurity,
+                connectionString,
+            ),
         };
 
         return {
@@ -244,8 +289,12 @@ export class PlaygroundEvaluator implements vscode.Disposable {
             connectionString,
             clientOptions,
             databaseName: connection.databaseName,
-            authMechanism: authMechanism as 'NativeAuth' | 'MicrosoftEntraID',
-            tenantId: credentials.entraIdConfig?.tenantId,
+            authMechanism: authMechanism as 'NativeAuth' | 'MicrosoftEntraID' | 'ManagedIdentity' | 'NoAuth',
+            tenantId:
+                authMechanism === AuthMethodId.ManagedIdentity
+                    ? credentials.managedIdentityConfig?.tenantId
+                    : credentials.entraIdConfig?.tenantId,
+            managedIdentityClientId: credentials.managedIdentityConfig?.clientId,
         };
     }
 
@@ -256,16 +305,15 @@ export class PlaygroundEvaluator implements vscode.Disposable {
      * Canonical EJSON preserves all BSON types (ObjectId, Date, Decimal128, Int32,
      * Long, Double, etc.) so that SchemaAnalyzer correctly identifies field types.
      */
-    private async deserializeResult(serResult: {
+    private deserializeResult(serResult: {
         type: string | null;
         printable: string;
         durationMs: number;
         cursorHasMore?: boolean;
         source?: { namespace?: { db: string; collection: string } };
-    }): Promise<ExecutionResult> {
+    }): ExecutionResult {
         let printable: unknown;
         try {
-            const { EJSON } = await import('bson');
             printable = EJSON.parse(serResult.printable, { relaxed: false });
         } catch {
             meterSilentCatch('PlaygroundEvaluator_ejson');
@@ -291,27 +339,46 @@ export class PlaygroundEvaluator implements vscode.Disposable {
 
     /**
      * Handle a token request from the worker (Entra ID OIDC).
-     * Calls VS Code's auth API on the main thread and sends the token back.
+     * Token acquisition stays on the main thread so there is one credential and one cache per window.
      */
     private async handleTokenRequest(
         msg: Extract<WorkerToMainMessage, { type: 'tokenRequest' }>,
         postResponse: (response: MainToWorkerMessage) => void,
     ): Promise<void> {
         try {
-            const { getSessionFromVSCode } = await import(
-                // eslint-disable-next-line import/no-internal-modules
-                '@microsoft/vscode-azext-azureauth/out/src/getSessionFromVSCode'
-            );
-            const session = await getSessionFromVSCode(msg.scopes as string[], msg.tenantId, { createIfNone: true });
+            let accessToken: string;
 
-            if (!session) {
-                throw new Error('Failed to obtain Entra ID session');
+            if (msg.source === 'managedIdentity') {
+                const { getManagedIdentityAccessToken } = await import('../auth/managedIdentityTokenProvider');
+                this._sessionId ??= randomUUID();
+                accessToken = (
+                    await getManagedIdentityAccessToken(
+                        msg.scopes as string[],
+                        msg.clientId,
+                        msg.tenantId,
+                        this._sessionId,
+                    )
+                ).accessToken;
+            } else {
+                const { getSessionFromVSCode } = await import(
+                    // eslint-disable-next-line import/no-internal-modules
+                    '@microsoft/vscode-azext-azureauth/out/src/getSessionFromVSCode'
+                );
+                const session = await getSessionFromVSCode(msg.scopes as string[], msg.tenantId, {
+                    createIfNone: true,
+                });
+
+                if (!session) {
+                    throw new Error(l10n.t('Failed to obtain Entra ID token.'));
+                }
+
+                accessToken = session.accessToken;
             }
 
             postResponse({
                 type: 'tokenResponse',
                 requestId: msg.requestId,
-                accessToken: session.accessToken,
+                accessToken,
             });
         } catch (error: unknown) {
             const errorMessage = error instanceof Error ? error.message : String(error);

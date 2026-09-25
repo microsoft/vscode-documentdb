@@ -5,8 +5,9 @@
 
 import { DocumentDBExperience } from '../../../DocumentDBExperiences';
 import { Views } from '../../../documentdb/Views';
+import { StorageZone } from '../../../services/connectionStorageService';
 import { type TreeCluster } from '../../models/BaseClusterModel';
-import { type ConnectionClusterModel } from './ConnectionClusterModel';
+import { type ConnectionClusterModel, resolveStorageZone } from './ConnectionClusterModel';
 
 describe('ConnectionClusterModel', () => {
     describe('ConnectionClusterModel interface', () => {
@@ -170,6 +171,43 @@ describe('ConnectionClusterModel', () => {
             const extractedViewId = treeId.split('/')[0];
 
             expect(extractedViewId).toBe('connectionsView');
+        });
+    });
+
+    describe('resolveStorageZone', () => {
+        it('prefers the explicit storageZone over isEmulator inference', () => {
+            // A migrated emulator connection lives in the Clusters zone but keeps
+            // isEmulator=true for TLS — the explicit zone must win.
+            expect(
+                resolveStorageZone({
+                    storageZone: StorageZone.Clusters,
+                    emulatorConfiguration: { isEmulator: true, disableEmulatorSecurity: true },
+                }),
+            ).toBe(StorageZone.Clusters);
+
+            expect(
+                resolveStorageZone({
+                    storageZone: StorageZone.Emulators,
+                    emulatorConfiguration: { isEmulator: false, disableEmulatorSecurity: false },
+                }),
+            ).toBe(StorageZone.Emulators);
+        });
+
+        it('falls back to Emulators when no storageZone and isEmulator is true', () => {
+            expect(
+                resolveStorageZone({
+                    emulatorConfiguration: { isEmulator: true, disableEmulatorSecurity: false },
+                }),
+            ).toBe(StorageZone.Emulators);
+        });
+
+        it('falls back to Clusters when no storageZone and not an emulator', () => {
+            expect(resolveStorageZone({ emulatorConfiguration: undefined })).toBe(StorageZone.Clusters);
+            expect(
+                resolveStorageZone({
+                    emulatorConfiguration: { isEmulator: false, disableEmulatorSecurity: false },
+                }),
+            ).toBe(StorageZone.Clusters);
         });
     });
 });

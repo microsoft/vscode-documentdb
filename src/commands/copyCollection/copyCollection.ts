@@ -19,8 +19,8 @@ export async function copyCollection(context: IActionContext, node: CollectionIt
     const collectionName = node.collectionInfo.name;
     const databaseName = node.databaseInfo.name;
 
-    const undoCommand = l10n.t('Undo');
-    const learnMoreCommand = l10n.t('Learn more');
+    const cancelCopyCommand = l10n.t('Cancel Copy');
+    const learnMoreCommand = l10n.t('Learn More');
 
     const selectedCommand = await window.showInformationMessage(
         l10n.t(
@@ -29,11 +29,11 @@ export async function copyCollection(context: IActionContext, node: CollectionIt
             databaseName,
         ),
         l10n.t('OK'),
-        undoCommand,
+        cancelCopyCommand,
         learnMoreCommand,
     );
 
-    if (selectedCommand === undoCommand) {
+    if (selectedCommand === cancelCopyCommand) {
         ext.copiedCollectionNode = undefined;
         context.telemetry.properties.copiedCollectionUndone = 'true';
         void window.showInformationMessage(l10n.t('Copy operation cancelled.'));

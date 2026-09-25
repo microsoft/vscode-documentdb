@@ -58,9 +58,11 @@ module.exports = (env, { mode }) => {
                 '@aws-sdk/credential-providers': 'commonjs @aws-sdk/credential-providers',
                 'gcp-metadata': 'commonjs gcp-metadata',
                 snappy: 'commonjs snappy',
-                socks: 'commonjs socks',
                 aws4: 'commonjs aws4',
                 'mongodb-client-encryption': 'commonjs mongodb-client-encryption',
+                /* Kubernetes client-node optional dependencies */
+                bufferutil: 'commonjs bufferutil',
+                'utf-8-validate': 'commonjs utf-8-validate',
                 /* @mongosh transitive optional dependencies */
                 electron: 'commonjs electron',
                 'os-dns-native': 'commonjs os-dns-native',
@@ -94,6 +96,8 @@ module.exports = (env, { mode }) => {
                         options: {
                             module: {
                                 type: 'commonjs',
+                                // Preserve dynamic import() so webpack can split lazy runtime dependencies.
+                                ignoreDynamic: true,
                             },
                             isModule: true,
                             sourceMaps: isDev,

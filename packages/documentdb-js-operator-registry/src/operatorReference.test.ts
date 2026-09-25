@@ -41,6 +41,7 @@ const CATEGORY_TO_META: Record<string, string> = {
     'Bitwise Query Operators': 'query:bitwise',
     'Projection Operators': 'query:projection',
     'Miscellaneous Query Operators': 'query:misc',
+    'Text Expression Operator': 'query:projection',
     'Field Update Operators': 'update:field',
     'Array Update Operators': 'update:array',
     'Bitwise Update Operators': 'update:bitwise',

@@ -1,4 +1,4 @@
-> **User Manual** &mdash; [Back to User Manual](../index#user-manual)
+> **User Manual** - [Back to User Manual](../index#user-manual)
 
 ---
 
@@ -37,11 +37,17 @@ There are several ways to open an Interactive Shell session:
 
 The three inline icons next to each collection node are (from left to right): Open Collection View, New Query Playground, and **Open Interactive Shell**.
 
-When the shell opens, it displays a connection banner with the host, authentication method, and username. The prompt shows your current database name:
+When the shell opens, it displays a compact logo followed by the saved connection name, host,
+identity when available, authentication method, and active database. The prompt shows your current
+database name:
 
 ```
-Connected to: mycluster.example.com
-Auth: SCRAM-SHA-256 (user: admin)
+╭────╮
+│ >_ │ DocumentDB Shell
+╰────╯
+Connected to: Local development (mycluster.example.com)
+Identity: admin | Authentication: Username and Password (SCRAM) | Database: myDatabase
+Type "help" for available commands.
 
 myDatabase>
 ```
@@ -110,7 +116,10 @@ Press **Tab** to trigger completion suggestions based on your current input:
 | After `db.`            | Collection names in the current database                        |
 | After `db.collection.` | Collection methods: `find()`, `aggregate()`, `insertOne()`, ... |
 
-When there are multiple matches, the shell inserts the common prefix and displays all options in a multi-column list (similar to bash/zsh). Press Tab again to cycle through them.
+When there are multiple matches, the shell inserts the common prefix and displays all options in a
+multi-column list (similar to bash/zsh). Continue typing to narrow the list; Tab cycling is not
+currently supported. Collection names are loaded in the background after connecting and after
+`use <database>`, so they are normally ready for the first completion request.
 
 ### Ghost Text (Inline Suggestions)
 
@@ -124,7 +133,9 @@ The shell also suggests **closing brackets** automatically. When your input has 
 - Type `db.col.find({ _id: { $exists: true ` and see `}})` as ghost text
 - Type `db.col.aggregate([ { $match: { status: "active" ` and see `} } ])` as ghost text
 
-Press **Right Arrow** or **Tab** to accept the suggestion, or keep typing to ignore it.
+Press **Right Arrow** to accept an insertable suggestion. **Tab** checks completion candidates first
+and accepts the visible suggestion only when no completion candidate applies. Keep typing to ignore
+either kind of suggestion.
 
 ## Syntax Highlighting
 
@@ -206,15 +217,25 @@ For more details on the Query Playground, see the [Query Playground](./query-pla
 
 ## Settings
 
-The following settings control shell behavior:
+Open VS Code Settings and expand **Extensions** > **DocumentDB for VS Code**. The display and paste
+options are under **Interactive Shell**. The shared connection timeout is under **Connections & Discovery**,
+and the shared batch size is under **Queries & Results**. You can also search for a setting ID from the table.
 
 | Setting                                   | Default | Description                                                                                                        |
 | ----------------------------------------- | ------- | ------------------------------------------------------------------------------------------------------------------ |
-| `documentDB.shell.initTimeout`            | `60`    | Maximum time (in seconds) to wait for the shell to connect during initialization                                   |
+| `documentDB.connectionTimeout`            | `30`    | Maximum time (in seconds) to wait for the shell to connect and authenticate (shared with Query Playground)         |
 | `documentDB.shell.display.colorSupport`   | `true`  | Enable ANSI color support for syntax highlighting and formatted output. Disable for screen readers or piped output |
-| `documentDB.shell.display.autocompletion` | `true`  | Enable autocompletion in the Interactive Shell                                                                     |
+| `documentDB.shell.display.autocompletion` | `true`  | Tab completion, the candidate list, and the dim inline suggestions at the cursor                                   |
+| `documentDB.shell.display.inlineHints`    | `true`  | The informational hints marked with 🛈, which are never inserted into your input                                    |
 | `documentDB.shell.multiLinePasteBehavior` | `ask`   | Controls how multi-line text is handled when pasted into the shell                                                 |
 | `documentDB.batchSize`                    | `50`    | Number of documents to display per cursor iteration (shared with Query Playground)                                 |
+
+The connection timeout applies when connecting and authenticating, not while running queries. Queries
+have no extension-side time limit. Press **Ctrl+C** to cancel, or use `.maxTimeMS()` on a supported query
+to set a server-side limit.
+
+Run `help` in the shell for a single clickable shortcut that opens the Interactive Shell settings group.
+The help output also prints the full Settings search query for manual access.
 
 ## Tips and Best Practices
 

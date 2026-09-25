@@ -44,6 +44,12 @@ export interface CompletionCandidate {
     readonly kind: 'command' | 'database' | 'collection' | 'method' | 'field' | 'operator' | 'bson';
     /** Optional description shown alongside the label. */
     readonly detail?: string;
+    /**
+     * Extra characters to delete *before* the typed prefix when this candidate is
+     * accepted. Bracket-notation collections use `1` to consume the `db.` dot,
+     * turning `db.sto` into `db['stores (10)']` rather than `db.['stores (10)']`.
+     */
+    readonly replaceCharsBefore?: number;
 }
 
 /**
@@ -153,6 +159,31 @@ function needsBracketNotation(name: string): boolean {
 export class ShellCompletionProvider {
     /** Tracks background fetches already triggered to avoid duplicate network requests. */
     private readonly _backgroundFetchTriggered = new Set<string>();
+
+    /**
+     * Warm the collection cache for a database without blocking shell input.
+     */
+    async prewarmCollections(context: ShellCompletionContext): Promise<void> {
+        const fetchKey = `colls:${context.clusterId}:${context.databaseName}`;
+        if (this._backgroundFetchTriggered.has(fetchKey)) {
+            return;
+        }
+
+        const client = ClustersClient.getExistingClient(context.clusterId);
+        if (!client) {
+            return;
+        }
+
+        this._backgroundFetchTriggered.add(fetchKey);
+        try {
+            // Refresh on session entry even when the shared cache already contains collection names.
+            await client.listCollections(context.databaseName);
+        } catch {
+            // Non-critical — completions degrade gracefully when discovery fails
+        } finally {
+            this._backgroundFetchTriggered.delete(fetchKey);
+        }
+    }
 
     /**
      * Get completion candidates for the current input buffer and cursor position.
@@ -342,6 +373,33 @@ export class ShellCompletionProvider {
 
         for (let i = text.length - 1; i >= 0; i--) {
             const ch = text[i];
+
+            // Skip string literals: when we see a quote that closes a string,
+            // jump backward past the matching opening quote.
+            if (ch === '"' || ch === "'") {
+                const newPos = this.skipStringBackward(text, i);
+                if (newPos >= 0) {
+                    i = newPos;
+                }
+                continue;
+            }
+
+            // Skip regex literals: when '/' is encountered in a context where
+            // it is a regex delimiter (not a division operator), jump backward
+            // past the matching opening '/'. This is a lightweight heuristic;
+            // in ambiguous cases (for example division with nearby whitespace),
+            // we prefer occasional missed completions over miscounting parens.
+            if (ch === '/' && i > 0) {
+                const prev = text[i - 1];
+                if (/[\s(,:=[\]!&|{}?;^~]/.test(prev)) {
+                    const newPos = this.skipRegexBackward(text, i);
+                    if (newPos >= 0) {
+                        i = newPos;
+                    }
+                    continue;
+                }
+            }
+
             if (ch === ')') {
                 depth++;
             } else if (ch === '(') {
@@ -398,6 +456,48 @@ export class ShellCompletionProvider {
             argumentText,
             cursorOffsetInArg,
         };
+    }
+
+    /**
+     * Skip backward past a string literal starting from a quote position.
+     * Returns the index before the matching opening quote, or -1 if not found.
+     */
+    private skipStringBackward(text: string, quotePos: number): number {
+        const quote = text[quotePos];
+        let pos = quotePos - 1;
+        while (pos >= 0) {
+            if (text[pos] === quote) {
+                let backslashes = 0;
+                let checkPos = pos - 1;
+                while (checkPos >= 0 && text[checkPos] === '\\') {
+                    backslashes++;
+                    checkPos--;
+                }
+                if (backslashes % 2 === 0) {
+                    return pos - 1; // Position before the opening quote
+                }
+            }
+            pos--;
+        }
+        return -1;
+    }
+
+    /**
+     * Skip backward past a regex literal starting from the closing `/`.
+     * Returns the index before the opening `/`, or -1 if not found.
+     */
+    private skipRegexBackward(text: string, closePos: number): number {
+        let pos = closePos - 1;
+        while (pos >= 0) {
+            if (text[pos] === '/' && (pos === 0 || text[pos - 1] !== '\\')) {
+                return pos - 1; // Position before the opening '/'
+            }
+            if (text[pos] === '\\') {
+                pos--; // Skip escaped character
+            }
+            pos--;
+        }
+        return -1;
     }
 
     /**
@@ -563,18 +663,7 @@ export class ShellCompletionProvider {
                 }
             } else {
                 // Trigger background fetch
-                const fetchKey = `colls:${context.clusterId}:${context.databaseName}`;
-                if (!this._backgroundFetchTriggered.has(fetchKey)) {
-                    this._backgroundFetchTriggered.add(fetchKey);
-                    void client
-                        .listCollections(context.databaseName)
-                        .catch(() => {
-                            // Non-critical
-                        })
-                        .finally(() => {
-                            this._backgroundFetchTriggered.delete(fetchKey);
-                        });
-                }
+                void this.prewarmCollections(context);
             }
         }
 
@@ -648,18 +737,7 @@ export class ShellCompletionProvider {
                 }
             } else {
                 // Trigger background fetch
-                const fetchKey = `colls:${context.clusterId}:${context.databaseName}`;
-                if (!this._backgroundFetchTriggered.has(fetchKey)) {
-                    this._backgroundFetchTriggered.add(fetchKey);
-                    void client
-                        .listCollections(context.databaseName)
-                        .catch(() => {
-                            // Non-critical
-                        })
-                        .finally(() => {
-                            this._backgroundFetchTriggered.delete(fetchKey);
-                        });
-                }
+                void this.prewarmCollections(context);
             }
         }
 
@@ -865,6 +943,8 @@ export class ShellCompletionProvider {
                 label: name,
                 insertText: `['${escaped}']`,
                 kind: 'collection',
+                // The `.` of `db.` must go away — `db.['x']` is not valid JavaScript.
+                replaceCharsBefore: 1,
             };
         }
         return {

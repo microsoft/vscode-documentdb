@@ -81,7 +81,7 @@ export type FetchOverheadKind = 'noMatches' | 'covered' | 'collectionScan' | 'mu
  * - Top-level `examinedToReturnedRatio: number` - Raw ratio for calculations (e.g., 50.5)
  *
  * Efficiency analysis metrics:
- * - `efficiencyAnalysis.selectivity: string | null` - Percentage of collection returned
+ * - `efficiencyAnalysis.selectivity: number | null` - Percentage of collection returned
  * - `efficiencyAnalysis.fetchOverhead: string` - Localized display label for fetch state
  * - `efficiencyAnalysis.fetchOverheadKind: FetchOverheadKind` - Stable key for UI branching
  */
@@ -102,8 +102,8 @@ export interface QueryInsightsStage2Response {
     /** Top-level query warnings (collection scan, in-memory sort, etc.) */
     concerns: string[];
     efficiencyAnalysis: {
-        /** Selectivity: percentage of collection returned (e.g., "33.2%"), or null if unknown */
-        selectivity: string | null;
+        /** Selectivity: raw percentage of collection returned (e.g., 33.2375), or null if unknown */
+        selectivity: number | null;
         indexUsed: string | null;
         /** Fetch overhead state label (e.g., "Direct fetch", "Covered query", "Collection scan") */
         fetchOverhead: string;
@@ -285,6 +285,43 @@ export interface QueryInsightsStage3Response {
         showTipsDuringLoading: boolean;
     };
     metadata?: OptimizationMetadata;
+    /**
+     * Stable opaque id of the language model that produced the response
+     * (`LanguageModelChat.id`, e.g., `copilot-gpt-4o`). Surfaced to telemetry
+     * via the `aiModelDisclosed` property. Never rendered in UI directly —
+     * use {@link modelDisplayName} for display.
+     */
+    modelId?: string;
+    /**
+     * Well-known family of the model (`LanguageModelChat.family`, e.g.,
+     * `gpt-4o`). Reserved for future client-side checks; not currently
+     * rendered.
+     */
+    modelFamily?: string;
+    /**
+     * Human-readable display name (`LanguageModelChat.name`, e.g., `GPT-4o`).
+     * Rendered in the panel as a small "Powered by…" byline so users can see
+     * which model actually answered. Optional for forward compatibility.
+     */
+    modelDisplayName?: string;
+    /**
+     * Best-effort token usage measurements for the underlying Copilot
+     * request. NOT rendered in the UI: these values are intentionally kept
+     * out of the post-response byline (which shows only the model name) to
+     * avoid suggesting a per-request cost surface in a place that does not
+     * have access to GitHub's actual billing data. They are forwarded
+     * through the Stage 3 contract solely so the extension host can mirror
+     * them onto telemetry alongside Stage-3-specific properties without
+     * needing a second event. Fields may be missing if `countTokens` failed
+     * or the request was cancelled.
+     */
+    usage?: {
+        promptTokens?: number;
+        responseTokens?: number;
+        totalTokens?: number;
+        maxInputTokens?: number;
+        promptUtilizationPct?: number;
+    };
 }
 
 /**

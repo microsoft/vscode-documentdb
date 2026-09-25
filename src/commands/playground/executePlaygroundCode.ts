@@ -3,7 +3,11 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { UserCancelledError, callWithTelemetryAndErrorHandling } from '@microsoft/vscode-azext-utils';
+import {
+    UserCancelledError,
+    callWithTelemetryAndErrorHandling,
+    type IActionContext,
+} from '@microsoft/vscode-azext-utils';
 import * as l10n from '@vscode/l10n';
 import * as vscode from 'vscode';
 import { ClustersClient } from '../../documentdb/ClustersClient';
@@ -17,7 +21,9 @@ import { extractErrorCode } from '../../documentdb/shell/ShellOutputFormatter';
 import { getHostsFromConnectionString } from '../../documentdb/utils/connectionStringHelpers';
 import { addDomainInfoToProperties } from '../../documentdb/utils/getClusterMetadata';
 import { ext } from '../../extensionVariables';
+import { ConnectionDiagnosticsService } from '../../services/connectionDiagnosticsService';
 import { classifyCodeBlock } from '../../utils/classifyCommand';
+import { promptAndConnectPlayground } from './connectDatabase';
 
 /** Per-cluster evaluator pool — one worker per cluster, lazily created. */
 const evaluators = new Map<string, PlaygroundEvaluator>();
@@ -90,12 +96,22 @@ export async function executePlaygroundCode(
     documentUri: vscode.Uri,
 ): Promise<void> {
     const service = PlaygroundService.getInstance();
-    const connection = service.getConnection(documentUri);
+    let connection = service.getConnection(documentUri);
     if (!connection) {
-        void vscode.window.showInformationMessage(
-            l10n.t('This playground has no connection. Create a new playground from the DocumentDB panel.'),
+        // The playground isn't bound to a database (e.g. a saved file reopened in a
+        // fresh session). Instead of dead-ending, launch the connection picker; if
+        // the user picks a database we continue the run, otherwise we bail quietly.
+        connection = await callWithTelemetryAndErrorHandling(
+            'playground.connectOnRun',
+            async (context: IActionContext) => {
+                context.errorHandling.suppressDisplay = true;
+                context.telemetry.properties.runMode = runMode;
+                return promptAndConnectPlayground(context, documentUri, 'playground.connectOnRun');
+            },
         );
-        return;
+        if (!connection) {
+            return; // user cancelled the connection picker
+        }
     }
 
     // Prevent concurrent runs on the same cluster — no queuing
@@ -169,6 +185,9 @@ export async function executePlaygroundCode(
 
                 token.onCancellationRequested(() => {
                     cancelled = true;
+                    // killWorker() terminates the worker thread but the evaluator
+                    // instance stays in the pool. The next evaluate() call will
+                    // detect the dead worker and transparently spawn a new one.
                     evaluator?.killWorker();
                 });
 
@@ -226,7 +245,14 @@ export async function executePlaygroundCode(
                         await ext.playgroundResultProvider.showResult(sourceUri, formattedOutput);
                     }
 
-                    void vscode.window.showErrorMessage(l10n.t('Query playground execution failed: {0}', errorMessage));
+                    const diagnosis = await ConnectionDiagnosticsService.explain({
+                        clusterId: connection.clusterId,
+                        error,
+                    });
+
+                    void vscode.window.showErrorMessage(
+                        diagnosis?.message ?? l10n.t('Query playground execution failed: {0}', errorMessage),
+                    );
 
                     // Re-throw so framework automatically captures result: 'Failed',
                     // error, and errorMessage in telemetry

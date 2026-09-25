@@ -4,10 +4,12 @@
  *--------------------------------------------------------------------------------------------*/
 
 import * as l10n from '@vscode/l10n';
-import * as vscode from 'vscode';
+import { randomUUID } from 'crypto';
+import type * as vscode from 'vscode';
 import { ext } from '../../extensionVariables';
-import { getBatchSizeSetting } from '../../utils/workspacUtils';
+import { getBatchSizeSetting, getConnectionTimeoutMs } from '../../utils/workspacUtils';
 import { CredentialCache } from '../CredentialCache';
+import { AuthMethodId } from '../auth/AuthMethod';
 import { WorkerSessionManager, type WorkerSessionCallbacks } from '../playground/WorkerSessionManager';
 import {
     type MainToWorkerMessage,
@@ -15,6 +17,8 @@ import {
     type SerializableMongoClientOptions,
     type WorkerToMainMessage,
 } from '../playground/workerTypes';
+import { getHostsFromConnectionString } from '../utils/connectionStringHelpers';
+import { resolveAllowInvalidCertificates } from '../utils/tlsException';
 
 /**
  * Connection parameters for a shell session.
@@ -33,14 +37,18 @@ export interface ShellConnectionInfo {
  * Used by the PTY to display connection summary in the terminal.
  */
 export interface ShellConnectionMetadata {
-    /** Host extracted from the connection string (without credentials). */
+    /** First host extracted from the connection string (without credentials). */
     readonly host: string;
+    /** Number of hosts omitted from the connection summary. */
+    readonly additionalHostCount: number;
     /** Authentication method used for the connection. */
-    readonly authMechanism: 'NativeAuth' | 'MicrosoftEntraID';
+    readonly authMechanism: 'NativeAuth' | 'MicrosoftEntraID' | 'ManagedIdentity' | 'NoAuth';
     /** Whether this is an emulator connection. */
     readonly isEmulator: boolean;
     /** Username for SCRAM auth (undefined for Entra ID). */
     readonly username: string | undefined;
+    /** Optional human-readable name of the authenticated identity. */
+    readonly displayName?: string;
 }
 
 /**
@@ -71,13 +79,16 @@ export class ShellSessionManager implements vscode.Disposable {
     private readonly _workerManager: WorkerSessionManager;
     private readonly _connectionInfo: ShellConnectionInfo;
     private readonly _callbacks: ShellSessionCallbacks | undefined;
+    private readonly _managedIdentityTokenCorrelationId = randomUUID();
     private _initialized = false;
     /** Cached initialization promise to prevent concurrent init calls. */
     private _initPromise: Promise<ShellConnectionMetadata> | undefined;
     /** Tracks the active database, surviving worker restarts. Updated on `use <db>`. */
     private _activeDatabase: string;
     /** Auth mechanism used for the current session (set after init). */
-    private _authMethod: 'NativeAuth' | 'MicrosoftEntraID' | undefined;
+    private _authMethod: 'NativeAuth' | 'MicrosoftEntraID' | 'ManagedIdentity' | 'NoAuth' | undefined;
+    /** Human-readable identity name resolved during authentication, when available. */
+    private _displayName: string | undefined;
 
     constructor(connectionInfo: ShellConnectionInfo, callbacks?: ShellSessionCallbacks) {
         this._connectionInfo = connectionInfo;
@@ -145,7 +156,7 @@ export class ShellSessionManager implements vscode.Disposable {
     /**
      * Authentication method used for the current session.
      */
-    get authMethod(): 'NativeAuth' | 'MicrosoftEntraID' | undefined {
+    get authMethod(): 'NativeAuth' | 'MicrosoftEntraID' | 'ManagedIdentity' | 'NoAuth' | undefined {
         return this._authMethod;
     }
 
@@ -159,7 +170,7 @@ export class ShellSessionManager implements vscode.Disposable {
     async initialize(): Promise<ShellConnectionMetadata> {
         const initMsg = this.buildInitMessage();
 
-        const timeoutMs = this.getInitTimeoutMs();
+        const timeoutMs = getConnectionTimeoutMs();
         await this._workerManager.ensureWorker(this._connectionInfo.clusterId, initMsg, timeoutMs);
         this._initialized = true;
         this._authMethod = initMsg.authMechanism;
@@ -168,12 +179,22 @@ export class ShellSessionManager implements vscode.Disposable {
             initMsg.authMechanism === 'NativeAuth'
                 ? CredentialCache.getConnectionUser(this._connectionInfo.clusterId)
                 : undefined;
+        const hosts = this.extractHosts(initMsg.connectionString);
 
         return {
-            host: this.extractHost(initMsg.connectionString),
+            host: hosts[0],
+            additionalHostCount: hosts.length - 1,
             authMechanism: initMsg.authMechanism,
-            isEmulator: initMsg.clientOptions.serverSelectionTimeoutMS === 4000,
+            // Derive emulator-ness from the authoritative credential flag, NOT from the
+            // fail-fast `serverSelectionTimeoutMS === 4000` proxy: that timeout now also fires
+            // for a regular local connection that opted into the TLS exception
+            // (`disableEmulatorSecurity` without `isEmulator`, design §7), which must not be
+            // mislabeled "(Emulator)" in the banner or inflate the emulator telemetry metric.
+            isEmulator:
+                CredentialCache.getCredentials(this._connectionInfo.clusterId)?.emulatorConfiguration?.isEmulator ??
+                false,
             username,
+            displayName: this._displayName,
         };
     }
 
@@ -185,9 +206,10 @@ export class ShellSessionManager implements vscode.Disposable {
      * and `it` are handled by @mongosh within the persistent context.
      *
      * @param code - JavaScript code or shell command to evaluate.
+     * @param terminalColumns - current terminal width, for width-aware output such as `help`.
      * @returns The serializable execution result from the worker.
      */
-    async evaluate(code: string): Promise<SerializableExecutionResult> {
+    async evaluate(code: string, terminalColumns?: number): Promise<SerializableExecutionResult> {
         // Reconnect if the worker is not alive — handles all cases:
         // timeout kills, Ctrl+C cancellation, unexpected worker crashes.
         if (!this._initialized || !this._workerManager.isAlive) {
@@ -208,6 +230,7 @@ export class ShellSessionManager implements vscode.Disposable {
             code,
             databaseName: this._activeDatabase,
             displayBatchSize: getBatchSizeSetting(),
+            terminalColumns,
         };
 
         const workerResult = await this._workerManager.sendEval(evalMsg);
@@ -243,22 +266,34 @@ export class ShellSessionManager implements vscode.Disposable {
             throw new Error(l10n.t('No credentials found for cluster {0}', this._connectionInfo.clusterId));
         }
 
-        const authMechanism = credentials.authMechanism ?? 'NativeAuth';
+        const authMechanism = credentials.authMechanism ?? AuthMethodId.NativeAuth;
 
         let connectionString: string;
-        if (authMechanism === 'NativeAuth') {
+        if (authMechanism === AuthMethodId.NativeAuth) {
             connectionString = CredentialCache.getConnectionStringWithPassword(this._connectionInfo.clusterId);
         } else {
+            // Entra ID and NoAuth use the connection string without embedded credentials.
             connectionString = credentials.connectionString;
         }
 
         const clientOptions: SerializableMongoClientOptions = {
-            serverSelectionTimeoutMS: credentials.emulatorConfiguration?.isEmulator ? 4000 : undefined,
-            tlsAllowInvalidCertificates:
-                credentials.emulatorConfiguration?.isEmulator &&
-                credentials.emulatorConfiguration?.disableEmulatorSecurity
-                    ? true
+            // Fail-fast 4s timeout for emulators / local TLS-exception connections — host-gated the
+            // same way as the TLS option so an orphaned flag on a public host doesn't trigger it.
+            serverSelectionTimeoutMS:
+                credentials.emulatorConfiguration?.isEmulator ||
+                resolveAllowInvalidCertificates(
+                    credentials.emulatorConfiguration?.disableEmulatorSecurity,
+                    connectionString,
+                )
+                    ? 4000
                     : undefined,
+            // TLS-allow-invalid is keyed off `disableEmulatorSecurity` (design §7), honored ONLY for
+            // local/private hosts ("hybrid" runtime policy): an orphaned flag on a public host is not
+            // activated; an explicit URL param is still honored by the driver (we never force `false`).
+            tlsAllowInvalidCertificates: resolveAllowInvalidCertificates(
+                credentials.emulatorConfiguration?.disableEmulatorSecurity,
+                connectionString,
+            ),
         };
 
         return {
@@ -267,32 +302,30 @@ export class ShellSessionManager implements vscode.Disposable {
             connectionString,
             clientOptions,
             databaseName: this._activeDatabase,
-            authMechanism: authMechanism as 'NativeAuth' | 'MicrosoftEntraID',
-            tenantId: credentials.entraIdConfig?.tenantId,
+            authMechanism: authMechanism as 'NativeAuth' | 'MicrosoftEntraID' | 'ManagedIdentity' | 'NoAuth',
+            tenantId:
+                authMechanism === AuthMethodId.ManagedIdentity
+                    ? credentials.managedIdentityConfig?.tenantId
+                    : credentials.entraIdConfig?.tenantId,
+            managedIdentityClientId: credentials.managedIdentityConfig?.clientId,
             persistent: true,
         };
     }
 
     // ─── Private: Token handling ─────────────────────────────────────────────
 
-    private getInitTimeoutMs(): number {
-        const config = vscode.workspace.getConfiguration();
-        const timeoutSec = config.get<number>(ext.settingsKeys.shellInitTimeout, 60);
-        return timeoutSec * 1000;
-    }
-
     /**
      * Extract the host portion from a connection string, stripping credentials.
      * Returns just the hostname:port for safe display.
      */
-    private extractHost(connectionString: string): string {
+    private extractHosts(connectionString: string): readonly string[] {
         try {
-            const url = new URL(connectionString);
-            return url.host || url.hostname || 'unknown';
+            const hosts = getHostsFromConnectionString(connectionString);
+            return hosts.length > 0 ? hosts : ['unknown'];
         } catch {
-            // Fallback: try to extract host from mongodb:// or mongodb+srv:// pattern
+            // Fallback for a connection string accepted by the driver but not by the shared parser.
             const match = /mongodb(?:\+srv)?:\/\/(?:[^@]+@)?([^/?]+)/.exec(connectionString);
-            return match?.[1] ?? 'unknown';
+            return match?.[1].split(',') ?? ['unknown'];
         }
     }
 
@@ -301,20 +334,39 @@ export class ShellSessionManager implements vscode.Disposable {
         postResponse: (response: MainToWorkerMessage) => void,
     ): Promise<void> {
         try {
-            const { getSessionFromVSCode } = await import(
-                // eslint-disable-next-line import/no-internal-modules
-                '@microsoft/vscode-azext-azureauth/out/src/getSessionFromVSCode'
-            );
-            const session = await getSessionFromVSCode(msg.scopes as string[], msg.tenantId, { createIfNone: true });
+            let accessToken: string;
 
-            if (!session) {
-                throw new Error('Failed to obtain Entra ID session');
+            if (msg.source === 'managedIdentity') {
+                const { getManagedIdentityAccessToken } = await import('../auth/managedIdentityTokenProvider');
+                accessToken = (
+                    await getManagedIdentityAccessToken(
+                        msg.scopes as string[],
+                        msg.clientId,
+                        msg.tenantId,
+                        this._managedIdentityTokenCorrelationId,
+                    )
+                ).accessToken;
+            } else {
+                const { getSessionFromVSCode } = await import(
+                    // eslint-disable-next-line import/no-internal-modules
+                    '@microsoft/vscode-azext-azureauth/out/src/getSessionFromVSCode'
+                );
+                const session = await getSessionFromVSCode(msg.scopes as string[], msg.tenantId, {
+                    createIfNone: true,
+                });
+
+                if (!session) {
+                    throw new Error(l10n.t('Failed to obtain Entra ID token.'));
+                }
+
+                accessToken = session.accessToken;
+                this._displayName = session.account.label || undefined;
             }
 
             postResponse({
                 type: 'tokenResponse',
                 requestId: msg.requestId,
-                accessToken: session.accessToken,
+                accessToken,
             });
         } catch (error: unknown) {
             const errorMessage = error instanceof Error ? error.message : String(error);

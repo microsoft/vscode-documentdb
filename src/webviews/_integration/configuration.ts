@@ -39,6 +39,13 @@ export const WEBVIEW_CONFIG = {
          * `${webviewErrorPrefix}.${webviewName}`.
          */
         webviewErrorPrefix: `${TELEMETRY_NAMESPACE}.webview.error`,
+        /**
+         * Event name for the batched webview RPC concurrency gauge (R766-S04).
+         * Emitted through `accumulateTelemetry`, so it surfaces as
+         * `dist_concurrentRpcOps_min/max/sum/count` (the concurrency gauge) plus a
+         * summed `dispatch` count and the free `dist_auto_duration_ms_*` latency.
+         */
+        rpcConcurrencyEvent: `${TELEMETRY_NAMESPACE}.webview.rpcConcurrency`,
     },
     /**
      * Layout describing where the extension's webview JavaScript lives on

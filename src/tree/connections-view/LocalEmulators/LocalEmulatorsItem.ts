@@ -65,6 +65,7 @@ export class LocalEmulatorsItem implements TreeElement, TreeElementWithContextVa
                 // Connection cluster data
                 clusterId: connection.id, // Stable storageId for cache lookups
                 storageId: connection.id,
+                storageZone: ConnectionType.Emulators,
                 name: connection.name,
                 dbExperience: DocumentDBExperience,
                 connectionString: connection.secrets.connectionString,
@@ -72,10 +73,6 @@ export class LocalEmulatorsItem implements TreeElement, TreeElementWithContextVa
                 selectedAuthMethod: connection.properties.selectedAuthMethod,
                 connectionUser: connection.secrets.nativeAuthConfig?.connectionUser,
             };
-
-            ext.outputChannel.trace(
-                `[ConnectionsView/Emulators] Created cluster model: name="${model.name}", clusterId="${model.clusterId}", treeId="${model.treeId}"`,
-            );
 
             return new DocumentDBClusterItem(model);
         });
@@ -85,6 +82,10 @@ export class LocalEmulatorsItem implements TreeElement, TreeElementWithContextVa
 
         // Sort connections alphabetically by name
         connectionItems.sort((a, b) => a.cluster.name.localeCompare(b.cluster.name, undefined, { numeric: true }));
+
+        ext.outputChannel.trace(
+            `[ConnectionsView/Emulators] Loaded root items: ${folderItems.length} folder(s), ${connectionItems.length} connection(s).`,
+        );
 
         // Show "New Local Connection" only if there are no folders or connections
         const hasItems = folderItems.length > 0 || connectionItems.length > 0;

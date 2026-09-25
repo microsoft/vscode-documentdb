@@ -210,13 +210,13 @@ describe('feedResultToSchemaStore', () => {
 });
 
 describe('deserializeResultForSchema', () => {
-    it('should deserialize EJSON string to raw objects', async () => {
+    it('should deserialize EJSON string to raw objects', () => {
         const serResult = {
             type: 'Cursor' as const,
             printable: '[{"_id":{"$oid":"507f1f77bcf86cd799439011"},"name":"Alice"}]',
             source: { namespace: { db: 'testdb', collection: 'users' } },
         };
-        const deserialized = await deserializeResultForSchema(serResult);
+        const deserialized = deserializeResultForSchema(serResult);
         expect(deserialized.type).toBe('Cursor');
         expect(Array.isArray(deserialized.printable)).toBe(true);
         const docs = deserialized.printable as unknown[];
@@ -224,34 +224,34 @@ describe('deserializeResultForSchema', () => {
         expect((docs[0] as Record<string, unknown>).name).toBe('Alice');
     });
 
-    it('should preserve source namespace', async () => {
+    it('should preserve source namespace', () => {
         const serResult = {
             type: 'Document' as const,
             printable: '{"_id":{"$oid":"507f1f77bcf86cd799439011"}}',
             source: { namespace: { db: 'mydb', collection: 'orders' } },
         };
-        const deserialized = await deserializeResultForSchema(serResult);
+        const deserialized = deserializeResultForSchema(serResult);
         expect(deserialized.source?.namespace?.db).toBe('mydb');
         expect(deserialized.source?.namespace?.collection).toBe('orders');
     });
 
-    it('should fall back to JSON.parse if EJSON fails', async () => {
+    it('should fall back to JSON.parse if EJSON fails', () => {
         const serResult = {
             type: 'Cursor' as const,
             printable: '[{"_id":"simple","name":"Bob"}]',
             source: { namespace: { db: 'testdb', collection: 'users' } },
         };
-        const deserialized = await deserializeResultForSchema(serResult);
+        const deserialized = deserializeResultForSchema(serResult);
         expect(Array.isArray(deserialized.printable)).toBe(true);
     });
 
-    it('should fall back to raw string if all parsing fails', async () => {
+    it('should fall back to raw string if all parsing fails', () => {
         const serResult = {
             type: 'string' as const,
             printable: 'not valid json at all {{{',
             source: { namespace: { db: 'testdb', collection: 'users' } },
         };
-        const deserialized = await deserializeResultForSchema(serResult);
+        const deserialized = deserializeResultForSchema(serResult);
         expect(deserialized.printable).toBe('not valid json at all {{{');
     });
 });

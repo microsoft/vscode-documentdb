@@ -13,13 +13,7 @@ import * as l10n from '@vscode/l10n';
 import * as vscode from 'vscode';
 import { nonNullProp } from '../../utils/nonNull';
 
-import {
-    authMethodFromString,
-    AuthMethodId,
-    authMethodsFromString,
-    getAuthMethod,
-    isSupportedAuthMethod,
-} from '../../documentdb/auth/AuthMethod';
+import { authMethodFromString, AuthMethodId, authMethodsFromString } from '../../documentdb/auth/AuthMethod';
 import { showConnectionFailedAndMaybeOfferDecodedRetry } from '../../documentdb/auth/urlEncodedPassword';
 import { ClustersClient } from '../../documentdb/ClustersClient';
 import { CredentialCache } from '../../documentdb/CredentialCache';
@@ -30,20 +24,16 @@ import { ChooseAuthMethodStep } from '../../documentdb/wizards/authenticate/Choo
 import { ProvidePasswordStep } from '../../documentdb/wizards/authenticate/ProvidePasswordStep';
 import { ProvideUserNameStep } from '../../documentdb/wizards/authenticate/ProvideUsernameStep';
 import { SaveCredentialsStep } from '../../documentdb/wizards/authenticate/SaveCredentialsStep';
+import { SelectEntraTokenSourceStep } from '../../documentdb/wizards/authenticate/SelectEntraTokenSourceStep';
 import { ext } from '../../extensionVariables';
+import { ConnectionReachabilityService } from '../../services/connectionReachabilityService';
 import { ConnectionStorageService, ConnectionType, isConnection } from '../../services/connectionStorageService';
 import { ClusterItemBase, type EphemeralClusterCredentials } from '../documentdb/ClusterItemBase';
 import { type TreeCluster } from '../models/BaseClusterModel';
 import { type TreeElementWithStorageId } from '../TreeElementWithStorageId';
-import { type ConnectionClusterModel } from './models/ConnectionClusterModel';
-
-/**
- * Escapes markdown special characters so user-provided text is always rendered
- * as plain text rather than being interpreted as markdown formatting or links.
- */
-function escapeMarkdown(text: string): string {
-    return text.replace(/[\\`*_{}[\]()#+\-.!|~]/g, '\\$&');
-}
+import { buildClusterTreeItem } from './clusterItemPresentation';
+import { resolveStorageZone, type ConnectionClusterModel } from './models/ConnectionClusterModel';
+import { buildSavedConnectionSecrets } from './savedConnectionSecrets';
 
 export class DocumentDBClusterItem extends ClusterItemBase<ConnectionClusterModel> implements TreeElementWithStorageId {
     public override readonly cluster: TreeCluster<ConnectionClusterModel>;
@@ -58,19 +48,20 @@ export class DocumentDBClusterItem extends ClusterItemBase<ConnectionClusterMode
     }
 
     public async getCredentials(): Promise<EphemeralClusterCredentials | undefined> {
-        const connectionType = this.cluster.emulatorConfiguration?.isEmulator
-            ? ConnectionType.Emulators
-            : ConnectionType.Clusters;
+        const connectionType = resolveStorageZone(this.cluster);
         const connectionCredentials = await ConnectionStorageService.get(this.storageId, connectionType);
 
         if (!connectionCredentials || !isConnection(connectionCredentials)) {
             return undefined;
         }
 
+        await this.ensureConnectionReachable(connectionCredentials.properties, this.cluster.clusterId);
+
         return {
             connectionString: connectionCredentials.secrets.connectionString,
             availableAuthMethods: authMethodsFromString(connectionCredentials.properties.availableAuthMethods),
             selectedAuthMethod: authMethodFromString(connectionCredentials.properties.selectedAuthMethod),
+            connectionProperties: connectionCredentials.properties,
 
             // Structured auth configurations
             nativeAuthConfig: connectionCredentials.secrets.nativeAuthConfig,
@@ -79,6 +70,7 @@ export class DocumentDBClusterItem extends ClusterItemBase<ConnectionClusterMode
                       tenantId: connectionCredentials.secrets.entraIdAuthConfig.tenantId,
                   }
                 : undefined,
+            managedIdentityAuthConfig: connectionCredentials.secrets.managedIdentityAuthConfig,
         };
     }
 
@@ -98,9 +90,7 @@ export class DocumentDBClusterItem extends ClusterItemBase<ConnectionClusterMode
                 }),
             );
 
-            const connectionType = this.cluster.emulatorConfiguration?.isEmulator
-                ? ConnectionType.Emulators
-                : ConnectionType.Clusters;
+            const connectionType = resolveStorageZone(this.cluster);
 
             context.telemetry.properties.connectionType = connectionType;
 
@@ -110,6 +100,8 @@ export class DocumentDBClusterItem extends ClusterItemBase<ConnectionClusterMode
                 return null;
             }
 
+            await this.ensureConnectionReachable(connectionCredentials.properties, this.cluster.clusterId);
+
             const connectionString = new DocumentDBConnectionString(connectionCredentials.secrets.connectionString);
 
             // Use nativeAuthConfig for credentials
@@ -118,16 +110,20 @@ export class DocumentDBClusterItem extends ClusterItemBase<ConnectionClusterMode
             let authMethod: AuthMethodId | undefined = authMethodFromString(
                 connectionCredentials.properties.selectedAuthMethod,
             );
+            let managedIdentityAuthConfig = connectionCredentials.secrets.managedIdentityAuthConfig;
 
             /**
              * Prompt for credentials if no auth method selected or
-             * native auth but no username/password set
+             * native auth but no username/password set.
+             *
+             * NoAuth connections are intentionally anonymous: they have a defined auth
+             * method and need no credentials, so they must skip the authenticate wizard.
              */
-            if (
-                !authMethod ||
-                (authMethod === AuthMethodId.NativeAuth &&
-                    (!username || username.length === 0 || !password || password.length === 0))
-            ) {
+            const needsNativeCredentials =
+                authMethod === AuthMethodId.NativeAuth &&
+                (!username || username.length === 0 || !password || password.length === 0);
+
+            if (!authMethod || needsNativeCredentials) {
                 const wizardContext: AuthenticateWizardContext = {
                     ...context,
                     availableAuthMethods: authMethodsFromString(connectionCredentials.properties.availableAuthMethods),
@@ -137,6 +133,8 @@ export class DocumentDBClusterItem extends ClusterItemBase<ConnectionClusterMode
                     adminUserName: username,
                     password: password,
                     resourceName: this.cluster.name,
+
+                    managedIdentityAuthConfig: managedIdentityAuthConfig,
 
                     // enforce the user to confirm theusername
                     selectedUserName: undefined,
@@ -162,6 +160,11 @@ export class DocumentDBClusterItem extends ClusterItemBase<ConnectionClusterMode
                     'wizardContext.selectedAuthMethod',
                     'DocumentDBClusterItem.ts',
                 );
+                // An empty config is meaningful: it selects the system-assigned identity.
+                managedIdentityAuthConfig =
+                    authMethod === AuthMethodId.ManagedIdentity
+                        ? (wizardContext.managedIdentityAuthConfig ?? {})
+                        : undefined;
 
                 if (wizardContext.saveCredentials) {
                     ext.outputChannel.append(
@@ -170,24 +173,19 @@ export class DocumentDBClusterItem extends ClusterItemBase<ConnectionClusterMode
                         }),
                     );
 
-                    const connectionType = this.cluster.emulatorConfiguration?.isEmulator
-                        ? ConnectionType.Emulators
-                        : ConnectionType.Clusters;
+                    const connectionType = resolveStorageZone(this.cluster);
 
                     const connection = await ConnectionStorageService.get(this.storageId, connectionType);
                     if (connection && isConnection(connection)) {
                         connection.properties.selectedAuthMethod = authMethod;
-                        connection.secrets = {
+                        connection.secrets = buildSavedConnectionSecrets({
                             connectionString: connectionString.toString(),
-                            // Populate nativeAuthConfig configuration
-                            nativeAuthConfig:
-                                authMethod === AuthMethodId.NativeAuth && (username || password)
-                                    ? {
-                                          connectionUser: username ?? '',
-                                          connectionPassword: password ?? '',
-                                      }
-                                    : undefined,
-                        };
+                            authMethod,
+                            username,
+                            password,
+                            entraIdAuthConfig: connectionCredentials.secrets.entraIdAuthConfig,
+                            managedIdentityAuthConfig,
+                        });
                         try {
                             await ConnectionStorageService.save(connectionType, connection, true);
                         } catch (pushError) {
@@ -211,7 +209,10 @@ export class DocumentDBClusterItem extends ClusterItemBase<ConnectionClusterMode
 
             switch (authMethod) {
                 case AuthMethodId.MicrosoftEntraID:
-                    ext.outputChannel.append(l10n.t('Connecting to the cluster using Entra ID…'));
+                    ext.outputChannel.append(l10n.t('Connecting to the cluster using a Microsoft Entra account…'));
+                    break;
+                case AuthMethodId.ManagedIdentity:
+                    ext.outputChannel.append(l10n.t('Connecting to the cluster using a managed identity…'));
                     break;
                 default:
                     ext.outputChannel.append(
@@ -234,6 +235,7 @@ export class DocumentDBClusterItem extends ClusterItemBase<ConnectionClusterMode
                     : undefined,
                 this.cluster.emulatorConfiguration, // workspace items can potentially be connecting to an emulator, so we always pass it
                 connectionCredentials.secrets.entraIdAuthConfig,
+                managedIdentityAuthConfig,
             );
 
             let clustersClient: ClustersClient;
@@ -359,15 +361,53 @@ export class DocumentDBClusterItem extends ClusterItemBase<ConnectionClusterMode
         return result ?? null;
     }
 
+    protected override async beforeCachedClientConnect(): Promise<void> {
+        const connectionType = this.cluster.emulatorConfiguration?.isEmulator
+            ? ConnectionType.Emulators
+            : ConnectionType.Clusters;
+        const connectionCredentials = await ConnectionStorageService.get(this.storageId, connectionType);
+
+        if (connectionCredentials && isConnection(connectionCredentials)) {
+            await this.ensureConnectionReachable(connectionCredentials.properties, this.cluster.clusterId);
+        }
+    }
+
+    /**
+     * Some saved connections are not directly reachable and need a source-specific preparation step
+     * before we connect (e.g. a Kubernetes ClusterIP target whose `127.0.0.1:<localPort>` string only
+     * works while a port-forward tunnel is active). Rather than hard-code any one source here, this
+     * generic cluster node delegates to {@link ConnectionReachabilityService}: each source registers a
+     * {@link import('../../services/connectionReachabilityService').ConnectionReachabilityProvider} at
+     * activation, and we simply ask it to make the connection reachable based on the stored properties.
+     * The call is cheap and a no-op when no provider applies (the common case). Failures propagate to
+     * the connect flow's telemetry/error handling.
+     *
+     * @see docs/ai-and-plans/features/kubernetes-discovery/connection-reachability-providers.md
+     */
+    private async ensureConnectionReachable(
+        connectionProperties: Record<string, unknown> | undefined,
+        clusterId?: string,
+    ): Promise<void> {
+        await ConnectionReachabilityService.ensureReachable(connectionProperties, clusterId);
+    }
+
     /**
      * Prompts the user for credentials using a wizard.
      * @param wizardContext The wizard context.
      * @returns True if the wizard completed successfully; false if the user canceled or an error occurred.
      */
     private async promptForCredentials(wizardContext: AuthenticateWizardContext): Promise<boolean> {
+        wizardContext.telemetry.properties.authFlowOrigin = 'savedConnection';
         const wizard = new AzureWizard(wizardContext, {
             promptSteps: [
                 new ChooseAuthMethodStep(),
+                new SelectEntraTokenSourceStep<AuthenticateWizardContext>(
+                    (context) => context.selectedAuthMethod,
+                    (context, method) => {
+                        context.selectedAuthMethod = method;
+                        context.isAuthMethodUpdated = true;
+                    },
+                ),
                 new ProvideUserNameStep(),
                 new ProvidePasswordStep(),
                 new SaveCredentialsStep(),
@@ -400,83 +440,6 @@ export class DocumentDBClusterItem extends ClusterItemBase<ConnectionClusterMode
      * @returns The TreeItem object.
      */
     getTreeItem(): vscode.TreeItem {
-        let description: string | undefined = undefined;
-        if (
-            this.cluster.emulatorConfiguration?.isEmulator &&
-            this.cluster.emulatorConfiguration?.disableEmulatorSecurity
-        ) {
-            description = l10n.t('⚠ TLS/SSL Disabled');
-        }
-
-        return {
-            id: this.id,
-            contextValue: this.contextValue,
-            label: this.cluster.name,
-            description: description,
-            iconPath: this.cluster.emulatorConfiguration?.isEmulator
-                ? new vscode.ThemeIcon('plug')
-                : new vscode.ThemeIcon('server-environment'),
-            collapsibleState: vscode.TreeItemCollapsibleState.Collapsed,
-            tooltip: this.buildTooltip(),
-        };
-    }
-
-    /**
-     * Builds a markdown tooltip showing the connection name, host, auth method,
-     * username (SCRAM only), and emulator security status.
-     *
-     * The cluster name is escaped so it always renders as plain text regardless
-     * of characters that might otherwise be interpreted as markdown links or formatting.
-     */
-    private buildTooltip(): vscode.MarkdownString {
-        const md = new vscode.MarkdownString();
-        md.isTrusted = false;
-
-        md.appendMarkdown(`### ${escapeMarkdown(this.cluster.name)}\n\n`);
-
-        // Host(s) from the connection string
-        const hosts = this.getHosts();
-        if (hosts.length > 0) {
-            const escapedHosts = hosts.map((host) => escapeMarkdown(host));
-            md.appendMarkdown(`**${l10n.t('Host')}:** ${escapedHosts.join(', ')}\n\n`);
-        }
-
-        // Auth method
-        const authMethodId = this.cluster.selectedAuthMethod;
-        if (authMethodId) {
-            const isSupported = isSupportedAuthMethod(authMethodId);
-            const authLabel = isSupported ? getAuthMethod(authMethodId).label : authMethodId;
-            md.appendMarkdown(`**${l10n.t('Auth')}:** ${escapeMarkdown(authLabel)}\n\n`);
-
-            if (isSupported && authMethodId === AuthMethodId.NativeAuth && this.cluster.connectionUser) {
-                md.appendMarkdown(`**${l10n.t('User')}:** ${escapeMarkdown(this.cluster.connectionUser)}\n\n`);
-            }
-        }
-
-        // Emulator security notice
-        if (this.cluster.emulatorConfiguration?.isEmulator) {
-            if (this.cluster.emulatorConfiguration.disableEmulatorSecurity) {
-                md.appendMarkdown(`⚠️ **${l10n.t('Security')}:** ${l10n.t('TLS/SSL Disabled')}\n\n`);
-            } else {
-                md.appendMarkdown(`✅ **${l10n.t('Security')}:** ${l10n.t('TLS/SSL Enabled')}\n\n`);
-            }
-        }
-
-        return md;
-    }
-
-    /**
-     * Extracts the host(s) from the connection string for display in the tooltip.
-     * Returns an empty array if the connection string is unavailable or unparseable.
-     */
-    private getHosts(): string[] {
-        if (!this.cluster.connectionString) {
-            return [];
-        }
-        try {
-            return new DocumentDBConnectionString(this.cluster.connectionString).hosts ?? [];
-        } catch {
-            return [];
-        }
+        return buildClusterTreeItem({ id: this.id, contextValue: this.contextValue, cluster: this.cluster });
     }
 }

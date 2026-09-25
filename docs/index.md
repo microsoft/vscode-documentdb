@@ -48,19 +48,26 @@ The User Manual provides guidance on using DocumentDB for VS Code. It contains d
 ### Connecting to Databases
 
 - [Connecting with a URL](./user-manual/how-to-construct-url)
+- [Connect with a Managed Identity](./user-manual/connect-with-managed-identity)
 - [Service Discovery](./user-manual/service-discovery)
   - [Azure DocumentDB](./user-manual/service-discovery-azure-cosmosdb-for-mongodb-vcore)
   - [Azure Cosmos DB for MongoDB (RU)](./user-manual/service-discovery-azure-cosmosdb-for-mongodb-ru)
   - [Azure VMs (DocumentDB)](./user-manual/service-discovery-azure-vms)
+  - [Kubernetes](./user-manual/service-discovery-kubernetes)
+    - [Kubernetes getting started and test lab](./user-manual/service-discovery-kubernetes-getting-started)
+  - [MongoDB Atlas](./user-manual/service-discovery-mongodb-atlas)
   - [Managing Azure Subscriptions](./user-manual/managing-azure-discovery)
 - [Connecting to Local Instances](./user-manual/local-connection)
+  - [Set up DocumentDB Local](./user-manual/local-quick-start)
   - [Azure Cosmos DB for MongoDB (RU) Emulator](./user-manual/local-connection-mongodb-ru)
   - [DocumentDB Local](./user-manual/local-connection-documentdb-local)
 
 ### Data Management
 
+- [Manage Indexes in Collection View](./user-manual/collection-view-index-management)
 - [Data Migrations (Experimental)](./user-manual/data-migrations)
 - [Copy and Paste Collections](./user-manual/copy-and-paste.md)
+- [Copy Connection String](./user-manual/copy-connection-string)
 
 ### Querying
 
@@ -69,11 +76,17 @@ The User Manual provides guidance on using DocumentDB for VS Code. It contains d
 - [Interactive Shell](./user-manual/interactive-shell)
 - [How It Works Behind the Scenes](./user-manual/query-runtime)
 
+### AI Features
+
+- [AI Performance Insights: Model and Billing](./user-manual/ai-utility-model)
+
 ## Release Notes
 
 Explore the history of updates and improvements to the DocumentDB for VS Code extension. Each release brings new features, enhancements, and fixes to improve your experience.
 
-- [0.8](./release-notes/0.8)
+- [0.10](./release-notes/0.10), [0.10.1](./release-notes/0.10#patch-release-v0101), [0.10.2](./release-notes/0.10#patch-release-v0102)
+- [0.9](./release-notes/0.9), [0.9.1](./release-notes/0.9#patch-release-v091), [0.9.2](./release-notes/0.9#patch-release-v092)
+- [0.8](./release-notes/0.8), [0.8.1](./release-notes/0.8#patch-release-v081)
 - [0.7](./release-notes/0.7), [0.7.2](./release-notes/0.7#patch-release-v072), [0.7.3](./release-notes/0.7#patch-release-v073), [0.7.4](./release-notes/0.7#patch-release-v074)
 - [0.6](./release-notes/0.6), [0.6.1](./release-notes/0.6#patch-release-v061), [0.6.2](./release-notes/0.6#patch-release-v062), [0.6.3](./release-notes/0.6#patch-release-v063)
 - [0.5](./release-notes/0.5), [0.5.1](./release-notes/0.5#patch-release-v051), [0.5.2](./release-notes/0.5#patch-release-v052)

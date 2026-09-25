@@ -45,6 +45,7 @@ export async function deleteCollection(context: IActionContext, node: Collection
         l10n.t('Delete "{nodeName}"?', { nodeName: node.collectionInfo.name }),
         message + '\n' + l10n.t('This cannot be undone.'),
         node.collectionInfo.name,
+        { fallbackWord: 'delete' },
     );
 
     if (!confirmed) {

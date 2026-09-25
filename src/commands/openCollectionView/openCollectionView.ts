@@ -11,7 +11,7 @@ import { ClusterSession } from '../../documentdb/ClusterSession';
 import { inferViewIdFromTreeId } from '../../documentdb/Views';
 import { type CollectionItem } from '../../tree/documentdb/CollectionItem';
 import { trackJourneyCorrelationId } from '../../utils/commandTelemetry';
-import { CollectionViewController } from '../../webviews/documentdb/collectionView/collectionViewController';
+import { openCollectionWebview } from '../../webviews/documentdb/collectionView/collectionViewController';
 
 export async function openCollectionView(context: IActionContext, node: CollectionItem) {
     // added manually here as this function can by called bypassing our general command registration
@@ -51,6 +51,12 @@ export async function openCollectionViewInternal(
             skip?: number;
             limit?: number;
         };
+        /**
+         * Optional tab to land on when the view opens. When invoked from the
+         * "Indexes" tree node we pass `'tab_indexes'` so the user lands
+         * directly on the Index Management tab instead of Documents.
+         */
+        initialTab?: 'tab_result' | 'tab_indexes' | 'tab_queryInsights';
     },
 ): Promise<void> {
     /**
@@ -70,7 +76,7 @@ export async function openCollectionViewInternal(
         feedbackSignalsEnabled = false;
     }
 
-    const view = new CollectionViewController({
+    const view = openCollectionWebview({
         sessionId: sessionId,
         clusterId: props.clusterId,
         clusterDisplayName: props.clusterDisplayName,
@@ -79,6 +85,7 @@ export async function openCollectionViewInternal(
         collectionName: props.collectionName,
         feedbackSignalsEnabled: feedbackSignalsEnabled,
         initialQuery: props.initialQuery,
+        initialTab: props.initialTab,
     });
 
     // Clean up the ClusterSession when the tab is closed

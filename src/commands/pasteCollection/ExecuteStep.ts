@@ -14,6 +14,7 @@ import { type CopyPasteConfig } from '../../services/taskService/tasks/copy-and-
 import { isTerminalState, TaskService, TaskState, type Task } from '../../services/taskService/taskService';
 import { DatabaseItem } from '../../tree/documentdb/DatabaseItem';
 import { nonNullValue } from '../../utils/nonNull';
+import { createIndexCopier } from './createIndexCopier';
 import { type PasteCollectionWizardContext } from './PasteCollectionWizardContext';
 
 export class ExecuteStep extends AzureWizardExecuteStep<PasteCollectionWizardContext> {
@@ -60,15 +61,18 @@ export class ExecuteStep extends AzureWizardExecuteStep<PasteCollectionWizardCon
                 collectionName: finalTargetCollectionName,
             },
             onConflict: conflictResolutionStrategy,
+            copyIndexes: context.copyIndexes,
+            copyOperationCorrelationId: context.copyOperationCorrelationId,
         };
 
         // Create the document reader and writer instances
         const reader = new DocumentDbDocumentReader(sourceConnectionId, sourceDatabaseName, sourceCollectionName);
         const targetClient = await ClustersClient.getClient(targetConnectionId);
         const writer = new DocumentDbStreamingWriter(targetClient, targetDatabaseName, finalTargetCollectionName);
+        const indexCopier = context.copyIndexes ? createIndexCopier(context) : undefined;
 
         // Create the copy-paste task
-        const task = new CopyPasteCollectionTask(config, reader, writer);
+        const task = new CopyPasteCollectionTask(config, reader, writer, indexCopier);
 
         // Register task with the task service
         TaskService.registerTask(task);

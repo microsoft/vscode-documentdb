@@ -39,7 +39,8 @@ export class PromptNewConnectionNameStep extends AzureWizardPromptStep<RenameCon
         }
 
         try {
-            const connectionType = context.isEmulator ? ConnectionType.Emulators : ConnectionType.Clusters;
+            const connectionType =
+                context.storageZone ?? (context.isEmulator ? ConnectionType.Emulators : ConnectionType.Clusters);
 
             // Get the connection's current data to find its parentId
             const connectionData = await ConnectionStorageService.get(context.storageId, connectionType);

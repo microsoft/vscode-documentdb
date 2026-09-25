@@ -15,9 +15,16 @@
  */
 
 import { DocumentDBShellRuntime } from '@documentdb-js/shell-runtime';
+// Must stay a static import. `await import('bson')` resolves the package's ESM entry and
+// loads a second copy, whose classes fail every `instanceof` check against the driver's —
+// silently corrupting schema inference. Re-verify during the ESM migration (#687).
+import { EJSON } from 'bson';
 import { randomUUID } from 'crypto';
 import { type MongoClientOptions, type MongoClient as MongoClientType } from 'mongodb';
 import { parentPort } from 'worker_threads';
+import { DOCUMENTDB_ENTRA_SCOPE } from '../auth/entraScopes';
+import { getOidcAllowedHosts } from '../auth/oidcAllowedHosts';
+import { expiresInSecondsFromTimestamp } from '../auth/tokenExpiry';
 import { type MainToWorkerMessage, type WorkerToMainMessage } from './workerTypes';
 
 if (!parentPort) {
@@ -106,7 +113,8 @@ parentPort.on('message', (msg: MainToWorkerMessage) => {
 async function handleInit(msg: Extract<MainToWorkerMessage, { type: 'init' }>): Promise<void> {
     log('debug', `Initializing worker (auth: ${msg.authMechanism}, db: ${msg.databaseName})`);
 
-    // Lazy-import the MongoDB API driver
+    // Lazy-import the MongoDB API driver. Safe only while `mongodb` publishes no `exports`
+    // map — it re-exports the bson classes, so an ESM entry would duplicate them here.
     const { MongoClient } = await import('mongodb');
 
     // Build client options from the serializable subset
@@ -114,12 +122,15 @@ async function handleInit(msg: Extract<MainToWorkerMessage, { type: 'init' }>): 
         ...msg.clientOptions,
     };
 
-    // For Entra ID, configure OIDC callback that requests tokens via IPC
-    if (msg.authMechanism === 'MicrosoftEntraID') {
+    // Entra ID and managed identity are the same OIDC mechanism on the wire; only the token source
+    // differs, and both are resolved on the main thread so there is one credential and one cache
+    // per window, and so the worker never needs @azure/identity.
+    if (msg.authMechanism === 'MicrosoftEntraID' || msg.authMechanism === 'ManagedIdentity') {
+        const usesManagedIdentity = msg.authMechanism === 'ManagedIdentity';
         options.authMechanism = 'MONGODB-OIDC';
         options.tls = true;
         options.authMechanismProperties = {
-            ALLOWED_HOSTS: ['*.azure.com'],
+            ALLOWED_HOSTS: getOidcAllowedHosts(msg.connectionString),
             OIDC_CALLBACK: async (): Promise<{ accessToken: string; expiresInSeconds: number }> => {
                 const requestId = randomUUID();
                 const tokenPromise = new Promise<string>((resolve, reject) => {
@@ -128,8 +139,10 @@ async function handleInit(msg: Extract<MainToWorkerMessage, { type: 'init' }>): 
                 const tokenRequest: WorkerToMainMessage = {
                     type: 'tokenRequest',
                     requestId,
-                    scopes: ['https://ossrdbms-aad.database.windows.net/.default'],
+                    scopes: [DOCUMENTDB_ENTRA_SCOPE],
                     tenantId: msg.tenantId,
+                    source: usesManagedIdentity ? 'managedIdentity' : 'vscode',
+                    clientId: usesManagedIdentity ? msg.managedIdentityClientId : undefined,
                 };
                 parentPort!.postMessage(tokenRequest);
                 const accessToken = await tokenPromise;
@@ -141,11 +154,11 @@ async function handleInit(msg: Extract<MainToWorkerMessage, { type: 'init' }>): 
                 try {
                     const payload = accessToken.split('.')[1];
                     if (payload) {
-                        const decoded = JSON.parse(Buffer.from(payload, 'base64').toString()) as {
+                        const decoded = JSON.parse(Buffer.from(payload, 'base64url').toString()) as {
                             exp?: number;
                         };
                         if (typeof decoded.exp === 'number') {
-                            expiresInSeconds = Math.max(0, decoded.exp - Math.floor(Date.now() / 1000));
+                            expiresInSeconds = expiresInSecondsFromTimestamp(decoded.exp * 1000);
                         }
                     }
                 } catch {
@@ -200,6 +213,7 @@ async function handleEval(msg: Extract<MainToWorkerMessage, { type: 'eval' }>): 
     // Evaluate via shell-runtime (handles @mongosh setup, command interception, result transformation)
     const result = await shellRuntime.evaluate(msg.code, msg.databaseName, {
         displayBatchSize: msg.displayBatchSize,
+        terminalColumns: msg.terminalColumns,
     });
 
     // Proactively extract cursorHasMore before serialization.
@@ -226,7 +240,6 @@ async function handleEval(msg: Extract<MainToWorkerMessage, { type: 'eval' }>): 
     // serialization to EJSON is the worker's IPC concern)
     let printableStr: string;
     try {
-        const { EJSON } = await import('bson');
         printableStr = EJSON.stringify(result.printable, { relaxed: false });
     } catch {
         try {

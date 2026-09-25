@@ -231,7 +231,7 @@ function updateSchemaWithDocumentInternal(schema: JSONSchema, document: WithId<D
                     const mongoDatatype = BSONTypes.inferType(value);
 
                     // Ensure the field exists in the schema
-                    if (!item.propertySchema.properties[name]) {
+                    if (!Object.prototype.hasOwnProperty.call(item.propertySchema.properties, name)) {
                         // Initialize the property schema if it doesn't exist
                         item.propertySchema.properties[name] = {
                             anyOf: [],

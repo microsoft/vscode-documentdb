@@ -3,10 +3,13 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+import { type ShellHelpDocument, type ShellHelpDocumentLine } from '@documentdb-js/shell-runtime';
 import { EJSON } from 'bson';
 import * as vscode from 'vscode';
+import { HelpProvider } from '../../../packages/documentdb-js-shell-runtime/src/HelpProvider';
 import { type SerializableExecutionResult } from '../playground/workerTypes';
 import { ShellOutputFormatter } from './ShellOutputFormatter';
+import { shellAnsi, shellStyles } from './shellStyles';
 
 describe('ShellOutputFormatter', () => {
     let formatter: ShellOutputFormatter;
@@ -36,6 +39,17 @@ describe('ShellOutputFormatter', () => {
             durationMs: 0,
             ...overrides,
         };
+    }
+
+    function makeHelpResult(lines: readonly ShellHelpDocumentLine[]): SerializableExecutionResult {
+        const document: ShellHelpDocument = {
+            kind: 'documentdb.shellHelp',
+            lines,
+        };
+        return makeResult({
+            type: 'Help',
+            printable: EJSON.stringify(document, { relaxed: false }),
+        });
     }
 
     describe('formatResult', () => {
@@ -238,36 +252,79 @@ describe('ShellOutputFormatter', () => {
         });
     });
 
-    describe('Help result formatting', () => {
-        it('should format help text directly from string', () => {
-            const result = makeResult({
-                type: 'Help',
-                printable: EJSON.stringify('Available commands:\n  help', { relaxed: false }),
-            });
-            const output = formatter.formatResult(result);
-            expect(output).toContain('Available commands');
+    describe('connection banner formatting', () => {
+        it('should dim the frame and emphasize the prompt and wordmark', () => {
+            expect(formatter.formatShellLogo()).toBe(
+                [
+                    `${shellStyles.ghostText}╭────╮${shellAnsi.reset}`,
+                    `${shellStyles.ghostText}│ ${shellAnsi.reset}${shellStyles.emphasis}>_${shellAnsi.reset}${shellStyles.ghostText} │${shellAnsi.reset} ${shellStyles.emphasis}DocumentDB Shell${shellAnsi.reset}`,
+                    `${shellStyles.ghostText}╰────╯${shellAnsi.reset}`,
+                ].join('\n'),
+            );
         });
 
-        it('should colorize section headers with bold cyan when color enabled', () => {
-            const helpText = '# Query\n  db.find({})                             Find documents';
+        it('should use neutral emphasis for the title and values', () => {
+            expect(formatter.formatShellTitle('DocumentDB Shell: Demo')).toBe('\x1b[1mDocumentDB Shell: Demo\x1b[0m');
+            expect(formatter.formatConnectionValue('value')).toBe('\x1b[1m\x1b[39mvalue\x1b[0m\x1b[90m');
+        });
+
+        it('should preserve plain text when color support is disabled', () => {
+            jest.spyOn(vscode.workspace, 'getConfiguration').mockReturnValue({
+                get: jest.fn(() => false),
+            } as unknown as vscode.WorkspaceConfiguration);
+
+            expect(formatter.formatShellTitle('DocumentDB Shell: Demo')).toBe('DocumentDB Shell: Demo');
+            expect(formatter.formatShellLogo()).toBe('╭────╮\n│ >_ │ DocumentDB Shell\n╰────╯');
+            expect(formatter.formatShellLogo()).not.toContain('\x1b[');
+            expect(formatter.formatConnectionValue('alex@contoso.com')).toBe('alex@contoso.com');
+        });
+    });
+
+    describe('Help result formatting', () => {
+        it('should leave unstructured help text unchanged', () => {
             const result = makeResult({
                 type: 'Help',
-                printable: EJSON.stringify(helpText, { relaxed: false }),
+                printable: EJSON.stringify('# Available commands:\n  help', { relaxed: false }),
             });
             const output = formatter.formatResult(result);
-            // Header should be bold+cyan
-            expect(output).toContain('\x1b[1m\x1b[36mQuery\x1b[0m');
+            expect(output).toBe('# Available commands:\n  help');
+            expect(output).not.toContain('\x1b[');
+        });
+
+        it('should emphasize section headers with bold default text when color enabled', () => {
+            const result = makeHelpResult([{ kind: 'header', text: 'Query' }]);
+            const output = formatter.formatResult(result);
+            expect(output).toContain('\x1b[1mQuery\x1b[0m');
+            expect(output).not.toContain('\x1b[36mQuery');
         });
 
         it('should colorize command entries with yellow command and gray description', () => {
-            const helpText = '  db.find({})                             Find documents';
-            const result = makeResult({
-                type: 'Help',
-                printable: EJSON.stringify(helpText, { relaxed: false }),
-            });
+            const result = makeHelpResult([
+                {
+                    kind: 'entry',
+                    indent: '  ',
+                    command: 'db.find({})',
+                    gap: '  ',
+                    description: 'Find documents',
+                },
+            ]);
             const output = formatter.formatResult(result);
             expect(output).toContain('\x1b[33mdb.find({})');
             expect(output).toContain('\x1b[90mFind documents');
+        });
+
+        it('should render manual settings access details with the ghost text style', () => {
+            const result = makeHelpResult([
+                {
+                    kind: 'text',
+                    spans: [{ text: '  This text has no magic prefix', tone: 'ghost' }],
+                },
+            ]);
+
+            const output = formatter.formatResult(result);
+
+            expect(output).toBe(`${shellStyles.ghostText}  This text has no magic prefix${shellAnsi.reset}`);
+            expect(output).not.toContain(shellStyles.muted);
         });
 
         it('should not colorize help text when color is disabled', () => {
@@ -275,13 +332,49 @@ describe('ShellOutputFormatter', () => {
                 get: jest.fn(() => false),
             } as unknown as vscode.WorkspaceConfiguration);
 
-            const helpText = '# Query\n  db.find({})                             Find documents';
-            const result = makeResult({
-                type: 'Help',
-                printable: EJSON.stringify(helpText, { relaxed: false }),
-            });
+            const result = makeHelpResult([
+                { kind: 'header', text: 'Query' },
+                {
+                    kind: 'entry',
+                    indent: '  ',
+                    command: 'db.find({})',
+                    gap: '  ',
+                    description: 'Find documents',
+                },
+            ]);
             const output = formatter.formatResult(result);
             expect(output).not.toContain('\x1b[');
+        });
+
+        it('should underline compact settings markers as clickable links', () => {
+            const result = makeHelpResult([
+                {
+                    kind: 'text',
+                    spans: [
+                        { text: '  ', tone: 'muted' },
+                        { text: '⚙ [shellSettings]', tone: 'muted', link: true },
+                        { text: ' Configure settings.', tone: 'muted' },
+                    ],
+                },
+            ]);
+
+            const output = formatter.formatResult(result);
+            expect(output).toContain('\x1b[4m⚙ [shellSettings]\x1b[24m');
+        });
+
+        it('should format the generated shell help document after EJSON serialization', () => {
+            const helpResult = new HelpProvider('shell').getHelpResult(120);
+            const result = makeResult({
+                type: helpResult.type,
+                printable: EJSON.stringify(helpResult.printable, { relaxed: false }),
+            });
+
+            const output = formatter.formatResult(result);
+
+            expect(output).toContain(`${shellStyles.emphasis}DocumentDB Shell: Quick Reference${shellAnsi.reset}`);
+            expect(output).toContain(`${shellStyles.completion.action}db.<coll>.find({})${shellAnsi.reset}`);
+            expect(output).toContain(`${shellAnsi.underline}⚙ [shellSettings]${shellAnsi.noUnderline}`);
+            expect(output).not.toContain('# Query');
         });
     });
 });

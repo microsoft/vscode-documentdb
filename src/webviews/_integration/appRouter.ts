@@ -8,12 +8,12 @@
  * with a shared `commonRouter` exposing cross-webview procedures (telemetry
  * helpers, dialog helpers, survey hooks).
  *
- * The tRPC primitives (`publicProcedureWithTelemetry`, `WithTelemetry`, and
- * the re-exports of `publicProcedure` / `router`) live in `./trpc.ts`, a
- * leaf module that this file and every per-view router import from. Keeping
- * them in a separate module avoids a circular import: `appRouter.ts`
- * imports the per-view routers, so the per-view routers must not import
- * value bindings back from `appRouter.ts`.
+ * The tRPC primitives (`publicProcedureWithTelemetry` and the re-exports of
+ * `publicProcedure` / `router`) live in `./trpc.ts`, a leaf module that this
+ * file and every per-view router import from. Keeping them in a separate
+ * module avoids a circular import: `appRouter.ts` imports the per-view
+ * routers, so the per-view routers must not import value bindings back from
+ * `appRouter.ts`.
  *
  * This file also defines the DocumentDB-flavoured `BaseRouterContext` used
  * across procedures.
@@ -23,26 +23,32 @@
  */
 
 import { callWithTelemetryAndErrorHandling } from '@microsoft/vscode-azext-utils';
-import { type BaseRouterContext as FrameworkBaseRouterContext } from '@microsoft/vscode-ext-react-webview/server';
+import { type BaseRouterContext as FrameworkBaseRouterContext } from '@microsoft/vscode-ext-webview';
 import * as vscode from 'vscode';
 import { z } from 'zod';
 import { type API } from '../../DocumentDBExperiences';
-import { openUrl } from '../../utils/openUrl';
+import { ext } from '../../extensionVariables';
+import { ConnectionDiagnosticsService } from '../../services/connectionDiagnosticsService';
+import { showConfirmationAsInSettings } from '../../utils/dialogs/showConfirmation';
+import { formatUrlForLogging, isSupportedExternalUrl, openUrl } from '../../utils/openUrl';
 import { openSurvey, promptAfterActionEventually } from '../../utils/survey';
 import { UsageImpact } from '../../utils/surveyTypes';
+import { atlasCredentialsRouter } from '../documentdb/atlasCredentials/atlasCredentialsRouter';
 import { collectionsViewRouter as collectionViewRouter } from '../documentdb/collectionView/collectionViewRouter';
+import { indexViewRouter } from '../documentdb/collectionView/indexesTab/indexViewRouter';
 import { documentsViewRouter as documentViewRouter } from '../documentdb/documentView/documentsViewRouter';
+import { localQuickStartRouter } from '../documentdb/localQuickStart/localQuickStartRouter';
 import { WEBVIEW_CONFIG } from './configuration';
-import { publicProcedure, publicProcedureWithTelemetry, router, type WithTelemetry } from './trpc';
+import { publicProcedure, publicProcedureWithTelemetry, router } from './trpc';
 
 // Re-export tRPC primitives for backward compatibility with existing imports.
 // Prefer importing directly from `./trpc` in new code.
+export type { WithTelemetry } from './trpc';
 export { publicProcedure, publicProcedureWithTelemetry, router };
-export type { WithTelemetry };
 
 /**
  * DocumentDB-flavoured router context. Extends the framework's
- * `BaseRouterContext` (from `@microsoft/vscode-ext-react-webview`, which
+ * `BaseRouterContext` (from `@microsoft/vscode-ext-webview`, which
  * already declares `telemetry?` and `signal?`) with the DocumentDB-specific
  * fields every procedure needs. Inheriting `telemetry?` / `signal?` keeps
  * the context shape in lock step with the framework: if the framework adds
@@ -57,7 +63,7 @@ export type { WithTelemetry };
  *
  * ```ts
  * .query(async ({ ctx }) => {
- *     const myCtx = ctx as WithTelemetry<RouterContext>;
+ *     const myCtx = ctx as RouterContext;
  *     // Option 1: pass to APIs that accept AbortSignal (e.g. MongoDB driver)
  *     const cursor = collection.find(filter, { signal: myCtx.signal });
  *     // Option 2: check manually
@@ -72,7 +78,8 @@ export type BaseRouterContext = FrameworkBaseRouterContext & {
      * (combined with `WEBVIEW_CONFIG.telemetry.webviewEventPrefix` to form
      * the final event name, e.g. `documentDB.webview.event.${webviewName}.${eventName}`).
      *
-     * This is **not** the same as the registry key passed to the `WebviewControllerBase` constructor.
+     * This is **not** the same as the registry key (`viewType`) passed to the
+     * `openAppWebview` factory / framework `openWebview` options.
      */
     webviewName: string;
 };
@@ -135,24 +142,86 @@ const commonRouter = router({
                 },
             );
         }),
+    /**
+     * Asks whether a failed operation has a better explanation than the raw driver error, for
+     * example a DocumentDB Local container that is not running or a port-forward tunnel that is no
+     * longer up. Returns `null` when nothing applies, which means "show your own message".
+     *
+     * Named after the caller's situation (an operation failed) rather than a cause: the providers
+     * behind it explain container, tunnel and transport problems today, and are free to explain
+     * other infrastructure later without the name becoming a lie.
+     *
+     * Only the error MESSAGE crosses the webview boundary, because that is all tRPC preserves.
+     * A provider that needs an error's class or `code` cannot be served from a webview.
+     *
+     * @see .github/skills/error-translation/SKILL.md
+     */
+    explainOperationFailure: publicProcedure.input(z.object({ message: z.string() })).query(async ({ input, ctx }) => {
+        // Concrete webview contexts carry a clusterId; the shared base type does not.
+        const clusterId = (ctx as { clusterId?: string }).clusterId;
+        if (!clusterId) {
+            return null;
+        }
+
+        const diagnosis = await ConnectionDiagnosticsService.explain({ clusterId, error: input.message });
+        return diagnosis?.message ?? null;
+    }),
     displayErrorMessage: publicProcedure
         .input(
             z.object({
                 message: z.string(),
                 modal: z.boolean(),
                 cause: z.string(),
+                /**
+                 * Optional action button labels shown on the message. The label
+                 * the user picks is returned as `{ action }` (or `undefined` if
+                 * the message was dismissed) so the caller can react — e.g. an
+                 * "Edit and retry" button that re-opens a form.
+                 */
+                actions: z.array(z.string()).optional(),
             }),
         )
-        .mutation(({ input }) => {
+        .mutation(async ({ input }) => {
             let message = input.message;
             if (input.cause && !input.modal) {
                 message += ` (${input.cause})`;
             }
 
-            void vscode.window.showErrorMessage(message, {
-                modal: input.modal,
-                detail: input.modal ? input.cause : undefined, // The content of the 'detail' field is only shown when modal is true
-            });
+            const action = await vscode.window.showErrorMessage(
+                message,
+                {
+                    modal: input.modal,
+                    detail: input.modal ? input.cause : undefined, // The content of the 'detail' field is only shown when modal is true
+                },
+                ...(input.actions ?? []),
+            );
+            return { action };
+        }),
+    /**
+     * Unconditional information toast. Use for messages the user must always
+     * see; completion notices belong in `displayOperationSummary` instead.
+     */
+    displayInformationMessage: publicProcedure
+        .input(
+            z.object({
+                message: z.string(),
+            }),
+        )
+        .mutation(({ input }) => {
+            void vscode.window.showInformationMessage(input.message);
+        }),
+    /**
+     * Completion toast gated by the `documentDB.userInterface.showOperationSummaries`
+     * setting, so webviews honour the same user preference as the tree-view commands.
+     */
+    displayOperationSummary: publicProcedure
+        .input(
+            z.object({
+                message: z.string(),
+            }),
+        )
+        .mutation(({ input }) => {
+            showConfirmationAsInSettings(input.message);
         }),
     surveyPing: publicProcedure
         .input(
@@ -175,20 +244,39 @@ const commonRouter = router({
     openUrl: publicProcedure
         .input(
             z.object({
-                url: z.string(), // URL string to open in default browser
+                url: z.string().refine(isSupportedExternalUrl, {
+                    message: vscode.l10n.t('Only HTTP(S) URLs are supported.'),
+                }),
             }),
         )
         .mutation(async ({ input }) => {
-            await openUrl(input.url);
+            // The trace call constructs `new URL(input.url)` unguarded, so it must stay after the
+            // zod `isSupportedExternalUrl` refine has validated the input.
+            ext.outputChannel.trace(`[openUrl] Opening external URL: ${formatUrlForLogging(input.url)}`);
+            try {
+                const opened = await openUrl(input.url);
+                if (!opened) {
+                    void vscode.window.showErrorMessage(vscode.l10n.t("We couldn't open this link."));
+                }
+                return opened;
+            } catch (error) {
+                const message = error instanceof Error ? error.message : String(error);
+                ext.outputChannel.error(`[openUrl] Failed to open ${formatUrlForLogging(input.url)}: ${message}`);
+                void vscode.window.showErrorMessage(vscode.l10n.t("We couldn't open this link."));
+                return false;
+            }
         }),
 });
 
 export const appRouter = router({
     common: commonRouter,
+    atlasCredentials: atlasCredentialsRouter,
     mongoClusters: {
         documentView: documentViewRouter,
         collectionView: collectionViewRouter,
+        indexView: indexViewRouter,
     },
+    localQuickStart: localQuickStartRouter,
 });
 
 // Export type router type signature, this is used by the client.

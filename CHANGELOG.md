@@ -1,5 +1,163 @@
 # Change Log
 
+## Unreleased
+
+### Improvements
+
+- **Authentication Method Persistence**: Explicitly saved authentication methods now take precedence over inference from stored credential fields. This keeps managed identity connections on the selected method after reload; existing Native and Microsoft Entra ID connections remain compatible. [#886](https://github.com/microsoft/vscode-documentdb/pull/886)
+- **Settings Organization**: Settings are now grouped into expandable sections (General, Connections & Discovery, Queries & Results, Copy & Paste, Query Playground, Interactive Shell, AI Assistant, Accessibility). Several settings were renamed; previous values under the old names are ignored and must be set again: `confirmations.confirmationStyle` → `confirmations.style`, `experimental.enableAIQueryGeneration` → `aiAssistant.enableQueryGeneration`, `userInterface.ShowOperationSummaries` → `userInterface.showOperationSummaries`, `shell.initTimeout` → `connectionTimeout`, and the five `aiAssistant.*PromptPath` settings → `aiAssistant.indexAdvisor{Find,Aggregate,Count}PromptPath` and `aiAssistant.queryGeneration{CrossCollection,SingleCollection}PromptPath` (all prefixed with `documentDB.`). `documentDB.local.port` and the Kubernetes port-forward settings no longer read local User values in remote windows. [#957](https://github.com/microsoft/vscode-documentdb/pull/957)
+
+### Fixes
+
+- **Query Playground Connection Timeout**: The Query Playground now honors the connection timeout setting instead of a fixed 30 seconds, and its timeout message links to the setting that applies. The single `documentDB.connectionTimeout` setting (default 30 seconds) covers both the Query Playground and the Interactive Shell, whose previous default was 60 seconds. [#957](https://github.com/microsoft/vscode-documentdb/pull/957)
+- **DocumentDB Local Custom Credentials and Port**: The Configure step now rejects usernames and passwords that DocumentDB Local can't use, such as reserved or over-long usernames and passwords the driver can't encode, instead of failing minutes later. Values are no longer trimmed silently, and an empty port field uses the suggested port shown in the summary. [#953](https://github.com/microsoft/vscode-documentdb/pull/953)
+- **DocumentDB Local State Recovery**: Quick Start now recovers when its container or data was removed outside VS Code, when VS Code closed during setup, or after Start over on a timed-out setup, instead of refusing to set up or showing an instance that no longer exists. Start and Restart no longer report Running while another process holds the port, and Wait longer is no longer offered after Delete. [#955](https://github.com/microsoft/vscode-documentdb/pull/955)
+
+### Security
+
+- **DocumentDB Local Credentials**: Quick Start no longer writes the instance password to the "DocumentDB Local Setup" output channel, and removes its temporary credentials file right after the container is created (or on the next activation after a crash). [#951](https://github.com/microsoft/vscode-documentdb/pull/951)
+
+## 0.10.2
+
+### Fixes
+
+- **DocumentDB Local Demo Data**: Restores sample-data loading in DocumentDB Local Quick Start for DocumentDB 0.116 and later, while retaining compatibility with earlier images that use the legacy initialization password argument. [#913](https://github.com/microsoft/vscode-documentdb/pull/913)
+
+### Security
+
+- **Dependency Security Updates**: Updates `fast-uri` in the extension and API package to 3.1.7, `postcss-selector-parser` to 7.1.6, and `fflate` to 0.8.3, addressing URI, selector parsing, and archive handling vulnerabilities. [#903](https://github.com/microsoft/vscode-documentdb/pull/903), [#902](https://github.com/microsoft/vscode-documentdb/pull/902), [#900](https://github.com/microsoft/vscode-documentdb/pull/900), [#906](https://github.com/microsoft/vscode-documentdb/pull/906)
+
+## 0.10.1
+
+### Improvements
+
+- **Deep Links to DocumentDB Local Setup**: `vscode://` links can now open the DocumentDB Local setup wizard directly instead of only carrying a connection string, with clearer connection confirmations and actionable errors for malformed links. [#898](https://github.com/microsoft/vscode-documentdb/pull/898)
+- **Development Workflow**: Restructures the AI-assisted feature documentation into per-feature folders, rewrites the release process guidance, and adds a `prepare-pull-request` skill for contributors readying a PR for review. [#892](https://github.com/microsoft/vscode-documentdb/pull/892)
+
+### Security
+
+- **Dependency Updates**: Updates `brace-expansion` to 1.1.18 and `JamesIves/github-pages-deploy-action` from 4.8.0 to 4.9.0. [#896](https://github.com/microsoft/vscode-documentdb/pull/896), [#893](https://github.com/microsoft/vscode-documentdb/pull/893)
+
+## 0.10.0
+
+### New Features
+
+- **DocumentDB Local**: Adds a guided setup that provisions and manages the official DocumentDB Local container from the Connections view, with Docker readiness diagnostics, generated credentials, optional sample data, and start, stop, restart, and delete actions. [#798](https://github.com/microsoft/vscode-documentdb/pull/798)
+  - Pre-release refinements: [#841](https://github.com/microsoft/vscode-documentdb/pull/841), [#849](https://github.com/microsoft/vscode-documentdb/pull/849), [#851](https://github.com/microsoft/vscode-documentdb/issues/851), [#852](https://github.com/microsoft/vscode-documentdb/issues/852), [#855](https://github.com/microsoft/vscode-documentdb/issues/855), [#856](https://github.com/microsoft/vscode-documentdb/issues/856), [#857](https://github.com/microsoft/vscode-documentdb/issues/857), [#858](https://github.com/microsoft/vscode-documentdb/issues/858), [#865](https://github.com/microsoft/vscode-documentdb/issues/865), [#866](https://github.com/microsoft/vscode-documentdb/pull/866), [#873](https://github.com/microsoft/vscode-documentdb/issues/873), [#876](https://github.com/microsoft/vscode-documentdb/pull/876), [#879](https://github.com/microsoft/vscode-documentdb/pull/879), [#883](https://github.com/microsoft/vscode-documentdb/pull/883)
+- **MongoDB Atlas Service Discovery**: Adds an Atlas discovery provider that browses organizations, projects, and clusters and saves any of them as a connection. Supports Atlas API Keys and Service Accounts, multiple credentials side by side, and tree or list views. [#259](https://github.com/microsoft/vscode-documentdb/issues/259), [#261](https://github.com/microsoft/vscode-documentdb/issues/261), [#765](https://github.com/microsoft/vscode-documentdb/pull/765)
+  - Pre-release refinements: [#799](https://github.com/microsoft/vscode-documentdb/pull/799), [#813](https://github.com/microsoft/vscode-documentdb/pull/813), [#834](https://github.com/microsoft/vscode-documentdb/pull/834), [#842](https://github.com/microsoft/vscode-documentdb/pull/842), [#850](https://github.com/microsoft/vscode-documentdb/pull/850), [#883](https://github.com/microsoft/vscode-documentdb/pull/883)
+- **Index Management in Collection View**: Adds an Indexes tab with index metrics, filtering, sorting, and per-index details. Creates Standard, Wildcard, and Vector indexes through a guided drawer with JSON preview, and hides, unhides, or deletes existing indexes. [#732](https://github.com/microsoft/vscode-documentdb/pull/732)
+  - Pre-release refinements: [#836](https://github.com/microsoft/vscode-documentdb/pull/836), [#837](https://github.com/microsoft/vscode-documentdb/pull/837)
+
+### Improvements
+
+- **Connection Failures Are Explained by the Component That Caused Them**: Failures caused by a stopped DocumentDB Local container, a broken Kubernetes port forward, or an Atlas TLS rejection are now explained in plain language instead of surfacing as raw driver errors. [#873](https://github.com/microsoft/vscode-documentdb/issues/873), [#876](https://github.com/microsoft/vscode-documentdb/pull/876)
+- **Shell Terminal Survives a Failed Connect**: The interactive shell no longer closes itself when the initial connection fails. It keeps a prompt open so the next command retries, and reports the failure through a notification and the output channel. [#876](https://github.com/microsoft/vscode-documentdb/pull/876)
+- **Improved Theme Support in Webviews**: Maps the remaining Fluent UI surfaces, interaction and disabled states, fields, and progress indicators to semantic VS Code theme colors, and corrects index-table zebra, hover, pressed, header, and badge styling across tinted themes. [#838](https://github.com/microsoft/vscode-documentdb/pull/838)
+
+### Fixes
+
+- **Collection View Import and Export**: Fixes import and export resolution for Atlas Discovery and DocumentDB Local collections, reports resolution failures with a Show Output action, and replaces the destructive credentials-missing tree action with a guided review step. [#871](https://github.com/microsoft/vscode-documentdb/pull/871)
+- **Single-Click Collection View**: Based on user requests, restores opening the Collection View with one click on the Documents tree item. [#889](https://github.com/microsoft/vscode-documentdb/pull/889)
+- **Document View Stuck on Loading**: Fixes a race condition where the Document View editor could stay on its loading placeholder forever if the document finished loading before Monaco mounted, most noticeable against fast local backends. Also disables Save and Reload while a document is loading, saving, or refreshing. [#891](https://github.com/microsoft/vscode-documentdb/pull/891)
+
+### Security
+
+- **Dependency Updates**: Updates `fast-uri` from 3.1.4 to 3.1.5 and `postcss` from 8.5.10 to 8.5.26. [#844](https://github.com/microsoft/vscode-documentdb/pull/844), [#845](https://github.com/microsoft/vscode-documentdb/pull/845)
+
+## 0.9.2
+
+### Improvements
+
+- **Query Insights Reliability and Precision**: Caps query-plan explain operations at 30 seconds to prevent indefinite waits, and displays non-zero selectivity below 0.1% accurately instead of rounding it to 0%. [#335](https://github.com/microsoft/vscode-documentdb/issues/335), [#762](https://github.com/microsoft/vscode-documentdb/issues/762), [#763](https://github.com/microsoft/vscode-documentdb/pull/763), [#833](https://github.com/microsoft/vscode-documentdb/pull/833)
+- **Kubernetes Discovery Reliability**: Adds bounded API requests, retryable per-namespace errors, reliable ClusterIP shell startup, and correct direct-connection strings without assuming replica set `rs0`. Also adds WSL scripts for local Kubernetes testing. [#735](https://github.com/microsoft/vscode-documentdb/issues/735), [#741](https://github.com/microsoft/vscode-documentdb/issues/741), [#742](https://github.com/microsoft/vscode-documentdb/issues/742), [#752](https://github.com/microsoft/vscode-documentdb/pull/752), [#803](https://github.com/microsoft/vscode-documentdb/pull/803), [#835](https://github.com/microsoft/vscode-documentdb/pull/835)
+- **Reusable Webview Package**: Redesigns and migrates the extension to `@microsoft/vscode-ext-webview`, simplifies its telemetry integration, improves package documentation, and adds validated ESRP build and npm publishing pipelines through package version 0.10.1. [#563](https://github.com/microsoft/vscode-documentdb/pull/563), [#736](https://github.com/microsoft/vscode-documentdb/pull/736), [#766](https://github.com/microsoft/vscode-documentdb/pull/766), [#779](https://github.com/microsoft/vscode-documentdb/pull/779), [#795](https://github.com/microsoft/vscode-documentdb/pull/795), [#828](https://github.com/microsoft/vscode-documentdb/pull/828)
+- **Development Workflow**: Adds a reusable skill and supporting templates for agent-assisted UX pull request reviews. [#800](https://github.com/microsoft/vscode-documentdb/pull/800)
+- **Discovery State Cleanup**: Removes the obsolete `activeDiscoveryProviderIds` state key while preserving the opt-out provider visibility behavior introduced in 0.9.0. [#832](https://github.com/microsoft/vscode-documentdb/pull/832)
+
+### Fixes
+
+- **Service Discovery Activation Crash**: Prevents the `isNullOrUndefined is not a function` runtime failure by resolving conflicting Application Insights dependency versions in the extension bundle. [#830](https://github.com/microsoft/vscode-documentdb/pull/830)
+
+### Security
+
+- **Archive and WebSocket Security**: Updates `@xhmikosr/decompress` from 11.1.2 to 11.1.3 to prevent crafted archives escaping the extraction directory, and `websocket-driver` from 0.7.4 to 0.7.5. [#788](https://github.com/microsoft/vscode-documentdb/pull/788), [#797](https://github.com/microsoft/vscode-documentdb/pull/797)
+- **Request and Link Parsing Security**: Updates `body-parser` from 2.2.2 to 2.3.0 and its legacy path from 1.20.5 to 1.20.6, `shell-quote` from 1.8.4 to 1.10.0, and `linkify-it` from 5.0.0 to 5.0.2. [#805](https://github.com/microsoft/vscode-documentdb/pull/805), [#806](https://github.com/microsoft/vscode-documentdb/pull/806), [#807](https://github.com/microsoft/vscode-documentdb/pull/807)
+- **URI and Collection Security**: Updates `fast-uri` from 3.1.2 to 3.1.4 in both the extension and API package, and `immutable` from 5.1.5 to 5.1.9 to address URI validation, oversized-list, and hash-collision issues. [#808](https://github.com/microsoft/vscode-documentdb/pull/808), [#809](https://github.com/microsoft/vscode-documentdb/pull/809), [#812](https://github.com/microsoft/vscode-documentdb/pull/812)
+- **Development Server Security**: Updates `webpack-dev-server` from 5.2.5 to 5.2.6, including improved request and header handling. [#810](https://github.com/microsoft/vscode-documentdb/pull/810)
+- **GitHub Actions Supply Chain Hardening**: Pins third-party Actions to full commit SHAs and adds a seven-day Dependabot cooldown, reducing exposure to mutable tags and newly compromised releases. [#791](https://github.com/microsoft/vscode-documentdb/pull/791)
+- **GitHub Actions Updates**: Updates `actions/checkout` from 6.0.3 through 7.0.1, `actions/setup-node` from 5.0.0 through 7.0.0, `actions/cache` from 5.1.0 to 6.1.0, `JS-DevTools/npm-publish` from 1.4.3 to 4.1.5, `peter-evans/create-pull-request` from 4.2.4 to 8.1.1, `actions/github-script` from 8.0.0 to 9.0.0, and `actions/upload-artifact` from 6.0.0 to 7.0.1. [#792](https://github.com/microsoft/vscode-documentdb/pull/792), [#801](https://github.com/microsoft/vscode-documentdb/pull/801), [#821](https://github.com/microsoft/vscode-documentdb/pull/821)
+
+## 0.9.1
+
+### New Features
+
+- **"No Authentication" Connection Mode**: Adds a credential-free authentication option for DocumentDB clusters that require no username, password, or Entra ID. Works across the connection wizard, tree, integrated shell, and query playground. Switching an existing connection to this method automatically clears any previously stored credentials. [#755](https://github.com/microsoft/vscode-documentdb/pull/755)
+- **Query Playground: Connect to Database**: Adds a `Connect to Database` command and CodeLens to (re)connect a playground to a cluster and database on demand. Running an unconnected playground opens the picker automatically. Also fixes connections lost on save (untitled-to-file, Save As) and within-session reopen. [#740](https://github.com/microsoft/vscode-documentdb/issues/740), [#758](https://github.com/microsoft/vscode-documentdb/pull/758)
+
+### Fixes
+
+- **Non-ObjectId `_id` Support**: Documents with string, numeric, UUID, or embedded-document `_id` values can now be deleted, read, and upserted correctly. Previously they threw "Invalid document ID" errors due to a hardcoded `ObjectId` assumption. Community contribution by [@hanhan761](https://github.com/hanhan761). [#217](https://github.com/microsoft/vscode-documentdb/issues/217), [#719](https://github.com/microsoft/vscode-documentdb/pull/719)
+- **Shell Completions in Strings, Regex, and Comments**: Field-name completions now appear correctly when a query contains parentheses inside string literals, regex literals, or line and block comments. Community contribution by [@hanhan761](https://github.com/hanhan761). [#710](https://github.com/microsoft/vscode-documentdb/issues/710), [#712](https://github.com/microsoft/vscode-documentdb/pull/712)
+- **Entra ID OIDC Host Allowlist**: The OIDC `ALLOWED_HOSTS` list for Entra ID authentication is now derived from the connection string hostname rather than hardcoded to `*.azure.com`, removing a restriction that could block token delivery for non-public-cloud Azure endpoints. Community contribution by [@hanhan761](https://github.com/hanhan761). [#639](https://github.com/microsoft/vscode-documentdb/issues/639), [#721](https://github.com/microsoft/vscode-documentdb/pull/721)
+- **TypeScript Plugin Warning on Read-Only Installs**: When the TS plugin fails to bootstrap on a read-only extension install, the extension now shows a status bar warning with a click-to-retry action instead of failing silently. Community contribution by [@hanhan761](https://github.com/hanhan761). [#637](https://github.com/microsoft/vscode-documentdb/issues/637), [#720](https://github.com/microsoft/vscode-documentdb/pull/720)
+- **Multi-Select Context Menu**: Single-item context menu commands in the Connections view are now hidden when multiple items are selected, preventing commands from silently acting on only the first item. Community contribution by [@hanhan761](https://github.com/hanhan761). [#668](https://github.com/microsoft/vscode-documentdb/issues/668), [#693](https://github.com/microsoft/vscode-documentdb/pull/693)
+- **Aggregation Reference Text for Special Field Names**: Fields with special characters (e.g., `order-items`, `my field`) now emit valid MQL reference text in completions using `$getField` form instead of invalid `$`-prefix syntax. Community contribution by [@Jacquelinezhong](https://github.com/Jacquelinezhong). [#709](https://github.com/microsoft/vscode-documentdb/issues/709), [#713](https://github.com/microsoft/vscode-documentdb/pull/713)
+- **URI Handler Diagnostics**: Failures in the VS Code URI handler now surface a user-visible warning and emit diagnostic telemetry instead of failing silently. Community contribution by [@hanhan761](https://github.com/hanhan761). [#655](https://github.com/microsoft/vscode-documentdb/issues/655), [#723](https://github.com/microsoft/vscode-documentdb/pull/723)
+- **Query Insights Prompt Framing**: Aligned the AI prompt role and task strings with the resource-file framing convention. Community contribution by [@hanhan761](https://github.com/hanhan761). [#619](https://github.com/microsoft/vscode-documentdb/issues/619), [#728](https://github.com/microsoft/vscode-documentdb/pull/728)
+
+### Improvements
+
+- **Performance: Azure Tenant Sign-In Throttling**: Throttles parallel Azure tenant sign-in checks to 5 concurrent requests, preventing unbounded Entra API fan-outs for users with many tenants. Community contribution by [@hanhan761](https://github.com/hanhan761). [#688](https://github.com/microsoft/vscode-documentdb/issues/688), [#694](https://github.com/microsoft/vscode-documentdb/pull/694)
+- **Performance: SchemaStore Memory Ceiling**: SchemaStore now enforces an LRU-based entry limit, preventing unbounded memory growth during long sessions with many collections. Community contribution by [@hanhan761](https://github.com/hanhan761). [#604](https://github.com/microsoft/vscode-documentdb/issues/604), [#724](https://github.com/microsoft/vscode-documentdb/pull/724)
+
+### Security
+
+- **Dependency Security Update**: Updated `undici` from 7.25.0 to 7.28.0 to address security vulnerabilities. [#754](https://github.com/microsoft/vscode-documentdb/pull/754)
+
+## 0.9.0
+
+### New Features
+
+- **Kubernetes Service Discovery**: Adds Kubernetes service discovery in the Discovery view. Register kubeconfig sources and connect to discovered DocumentDB targets, with operator-managed cluster awareness and automatic port-forwarding for ClusterIP services. [#621](https://github.com/microsoft/vscode-documentdb/pull/621)
+- **Streaming Query Insights**: Query Insights AI recommendations now stream progressively to the webview instead of appearing all at once after a ~15 s wait. Summary and educational content render line by line; each recommendation card appears as soon as the model completes it rather than all at once at the end. [#711](https://github.com/microsoft/vscode-documentdb/pull/711)
+
+### Security
+
+- **`ws` DoS Vulnerability Fix**: Upgraded `ws` from 8.20.0 to 8.21.0, fixing a remote memory exhaustion denial-of-service vulnerability (high-volume tiny WebSocket fragments). [#744](https://github.com/microsoft/vscode-documentdb/pull/744)
+- **`form-data` Encoding Fix**: Upgraded `form-data` from 4.0.5 to 4.0.6, fixing improper escaping of CR, LF, and `"` characters in multipart field names and filenames. [#745](https://github.com/microsoft/vscode-documentdb/pull/745)
+
+### Dependencies
+
+- **Dependency Update**: Upgraded `launch-editor` from 2.13.2 to 2.14.1 (fixes UNC path handling). [#747](https://github.com/microsoft/vscode-documentdb/pull/747)
+
+## 0.8.1
+
+### New Features
+
+- **Item Counts on Tree Nodes**: Database nodes now display a live collection count, and the Indexes folder shows an index count. Counts load asynchronously without blocking tree expansion. A new `documentDB.accessibility.hideCountPrefix` setting hides the `··` visual separator for accessibility or aesthetic preference. [#714](https://github.com/microsoft/vscode-documentdb/pull/714), [#658](https://github.com/microsoft/vscode-documentdb/issues/658), [#659](https://github.com/microsoft/vscode-documentdb/issues/659)
+- **AI Model Transparency in Query Insights**: Query Insights now discloses which model processed the request and confirms upfront that the utility model does not count against the GitHub Copilot premium request quota. A model attribution byline ("Powered by {model} via GitHub Copilot") appears after each successful analysis. [#690](https://github.com/microsoft/vscode-documentdb/pull/690)
+- **Batch Connection Deletion**: Multi-select connections in the Connections View and delete them all in one command. The confirmation message adapts to the count, deletion continues on individual failures, and a summary is reported on completion. [#667](https://github.com/microsoft/vscode-documentdb/pull/667)
+
+### Improvements
+
+- **Performance: Faster Connection Load and Startup**: Significant startup speedup, especially on Remote-WSL and large connection lists. Connections now load concurrently; a short-lived cache coalesces redundant reads; startup cleanup is gated to run once per version, not every launch. Also removes the legacy one-time Azure Databases extension connection import. **Note:** users who had un-imported connections in `ms-azuretools.vscode-cosmosdb` will need to re-add them manually. [#726](https://github.com/microsoft/vscode-documentdb/pull/726)
+- **Performance: Throttled Background Document-Count Fetches**: A per-cluster concurrency limiter now caps simultaneous background count requests at 5 with a 250 ms inter-task delay, preventing connection pool saturation when expanding databases with many collections. [#685](https://github.com/microsoft/vscode-documentdb/pull/685)
+- **Shard Key in Collection Tooltip**: Sharded collections now show their shard key in the hover tooltip. Extracted from the existing `listCollections()` response at no extra cost. [#670](https://github.com/microsoft/vscode-documentdb/pull/670), [#661](https://github.com/microsoft/vscode-documentdb/issues/661)
+- **Contextual Query Playground Filenames**: New playground files opened from the tree now use context-derived names (e.g., `cluster_collection.documentdb.js`) with invalid-character sanitization and numeric suffixes for duplicates. [#664](https://github.com/microsoft/vscode-documentdb/pull/664), [#660](https://github.com/microsoft/vscode-documentdb/issues/660)
+- **`_id_` Index Sorted First**: The `_id_` index now always appears at the top of the Indexes list regardless of other index names and locale sort order. [#662](https://github.com/microsoft/vscode-documentdb/pull/662), [#657](https://github.com/microsoft/vscode-documentdb/issues/657)
+- **`credentialId` → `clusterId` Parameter Rename**: Renamed the `credentialId` parameter to `clusterId` in `ClustersClient` and `ClusterSession` for naming consistency. Community contribution by [@CalvinMagezi](https://github.com/CalvinMagezi), [@Jah-yee](https://github.com/Jah-yee), and [@Enocko](https://github.com/Enocko). [#652](https://github.com/microsoft/vscode-documentdb/pull/652), [#567](https://github.com/microsoft/vscode-documentdb/issues/567)
+- **Hidden Index Tree Item**: Hidden indexes now show a `hidden` description label and only the appropriate context menu action (Hide or Unhide, not both). The `_id_` index shows neither action. [#674](https://github.com/microsoft/vscode-documentdb/pull/674), [#656](https://github.com/microsoft/vscode-documentdb/issues/656)
+- **Removed Obsolete Notification Migration Code**: Cleaned up pre-0.7.0 transitional release-notes logic and leftover `0.8.0-bugbash` migration paths. [#622](https://github.com/microsoft/vscode-documentdb/pull/622), [#611](https://github.com/microsoft/vscode-documentdb/issues/611)
+
+### Fixes
+
+- **Node 24 Compatibility**: VS Code 1.123 (released June 3, 2026) ships with Node 24, which broke extension loading. Updated `@microsoft/vscode-azext-utils` (~3.3.1 → ~4.1.0) and `@microsoft/vscode-azext-azureutils` (~3.4.5 → ~4.2.0) to restore compatibility. [#699](https://github.com/microsoft/vscode-documentdb/pull/699)
+
+### Dependencies
+
+- **Dependency Updates**: Updated `webpack-dev-server` (5.2.3 → 5.2.4, CORP security header fix), `@nevware21/ts-utils` (0.13.0 → 0.14.0 in root and `/api`), and `qs`/`express` to their latest versions. [#654](https://github.com/microsoft/vscode-documentdb/pull/654), [#672](https://github.com/microsoft/vscode-documentdb/pull/672), [#673](https://github.com/microsoft/vscode-documentdb/pull/673), [#678](https://github.com/microsoft/vscode-documentdb/pull/678)
+
 ## 0.8.0
 
 ### New Features
