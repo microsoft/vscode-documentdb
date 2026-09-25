@@ -23,11 +23,17 @@ best-effort sums of reported values. The operator declined additional completene
 row warning icons for this iteration; see [decision 0021](./decisions.md#0021--unavailable-table-values-are-enough-for-best-effort-summaries).
 The earlier proposal below is historical context, not a requirement to restore removed surfaces.
 
-**Settled header (2026-09-10):** The header uses one wrapping layout, not selectable variants.
-Connection state and fixed-width RTT precede the responsive facts. Host addresses and extended
-server/resource facts sit in the animated details disclosure, which also offers raw diagnostics.
-See [the current architecture](./README.md#architecture-intent--code-is-authoritative-for-behavior).
-The layout lab and alternate-header toggle are not part of the feature.
+**Settled header (2026-09-25):** The header uses CSS wrapping, without a status overflow menu,
+custom width measurement, or layout toggle. The identity and status strip share a row when space
+allows; otherwise the status strip moves below. CSS flex wrapping keeps the details disclosure at
+its natural width at the top right while status items wrap beside it, or onto the full following
+line when badges no longer fit alongside it. Connection state, fixed-width RTT, and resilience
+badges precede the responsive facts. Version tags wrap
+independently; separators stay attached to the badge or fact that follows them. An individual
+fact may wrap internally when it exceeds the available width, but badges remain on one line.
+Host addresses and extended server/resource facts sit in the animated details disclosure, which also offers raw
+diagnostics. See
+[the current architecture](./README.md#architecture-intent--code-is-authoritative-for-behavior).
 
 **Version display (2026-09-24):** The existing Version fact renders independently available
 engine and API versions as separate JSX tags: `DocumentDB <versions>` and `API <api>`, without

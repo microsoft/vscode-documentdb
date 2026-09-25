@@ -142,23 +142,31 @@ describe('Dashboard versions', () => {
             }
             return row.label === 'API version' ? 'API' : 'Version';
         });
-        expect(labels).toEqual([...versionLabels, 'Region', 'Compute', 'Uptime']);
+        const expectedLabels = [...versionLabels, 'Region', 'Compute', 'Uptime'];
+        expect(labels).toEqual(expectedLabels);
         const tagCount =
             metadata['topology_hello_internal_documentdb_versions'] === undefined ? 0 : headerVersions.length;
-        const versionGroupCount = headerVersions.length === 0 ? 0 : 1;
-        expect(html.match(/class="dashboardFact"/g)).toHaveLength(3 + versionGroupCount + tagCount);
+        expect(html.match(/class="dashboardFact" role="group"/g) ?? []).toHaveLength(tagCount);
+        expect(html.match(/class="dashboardFactSegment(?: dashboardVersion)?"/g)).toHaveLength(
+            3 + headerVersions.length,
+        );
         const values = Array.from(
             html.matchAll(/class="dashboardFactValue"(?: (?:title|id)="[^"]*")?>([^<]*)</g),
             (match) => match[1],
         );
-        expect(values.slice(0, headerVersions.length)).toEqual(rows.map((row) => row.value));
-        expect(values).toHaveLength(3 + headerVersions.length);
+        const expectedValues = [...rows.map((row) => row.value), 'West US 2 (westus2)', 'M10', '1h 0m'];
+        expect(values).toEqual(expectedValues);
         expect(html.match(/class="dashboardFact" role="group" tabindex="0" aria-labelledby=/g) ?? []).toHaveLength(
             tagCount,
         );
         expect(html.match(/class="dashboardFactSeparator" aria-hidden="true">\|<\/span>/g)).toHaveLength(
-            3 + versionGroupCount + Math.max(0, tagCount - 1),
+            3 + headerVersions.length,
         );
+        if (tagCount > 0) {
+            expect(html.match(/class="dashboardFactSegment dashboardVersion"><span class="dashboardFactSeparator"/g)).toHaveLength(
+                tagCount,
+            );
+        }
         expect(html).not.toContain('DocumentDB 0.117.0 · API 7.0.0');
         const groups = buildDetailGroups(clusterInfo, undefined);
         expect(groups).toEqual(
@@ -177,5 +185,42 @@ describe('Dashboard versions', () => {
         );
         expect(html).not.toContain('dashboardFactLabel');
         expect(buildDetailGroups(null, undefined)).toEqual([]);
+    });
+
+    it('renders one wrapping status strip with separators attached to warnings and facts', () => {
+        const html = renderToStaticMarkup(
+            createElement(
+                SSRProvider,
+                null,
+                createElement(DashboardHeader, {
+                    clusterDisplayName: 'Test cluster',
+                    clusterInfo: {
+                        clusterDisplayName: 'Test cluster',
+                        metadata: {
+                            topology_hello_internal_documentdb_versions: '0.117.0',
+                            serverInfo_version: '7.0.0',
+                            topology_readOnly: 'true',
+                        },
+                        hosts: [],
+                    },
+                    connectionState: 'connected',
+                    latestSample: { uptimeSeconds: 3600, pingLatencyMs: 3, errors: [] },
+                    azure: { location: 'westus2', sku: 'M10', enableHa: false },
+                }),
+            ),
+        );
+
+        expect(html.match(/class="dashboardHeaderStatus"/g)).toHaveLength(1);
+        expect(html).not.toContain('dashboardHeaderStatusNarrow');
+        expect(html).not.toContain('dashboardHeaderOverflow');
+        expect(html).toContain('dashboardResilienceWarning');
+        expect(html).toContain('No high availability');
+        expect(html.indexOf('dashboardHeaderLatency')).toBeLessThan(html.indexOf('dashboardResilienceWarning'));
+        expect(html.indexOf('dashboardResilienceWarning')).toBeLessThan(html.indexOf('class="dashboardFact"'));
+        expect(html.match(/class="dashboardFactSegment dashboardWarning"><span class="dashboardFactSeparator" aria-hidden="true">\|<\/span>/g)).toHaveLength(
+            2,
+        );
+        expect(html).toContain('dashboardFactName');
+        expect(html.match(/\bdashboardDisclosure\b/g)).toHaveLength(1);
     });
 });

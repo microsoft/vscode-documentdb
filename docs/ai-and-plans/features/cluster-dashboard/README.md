@@ -46,12 +46,17 @@ None yet. A user-manual page is due before this ships.
 - **The page is a place, not a feed.** The storage inventory refreshes when the dashboard opens
   and on demand; lightweight health polling pauses while the panel is hidden. There is no
   Operations tab and no observed-operation history.
-- **One responsive header replaces the layout experiments.** The cluster identity and trailing
-  status block share a row when they fit; the status block wraps as a unit otherwise. Connection
-  state and a stable-width RTT slot lead the facts. Lower-priority facts disappear as space
-  contracts. Host addresses live in the disclosed Server details, alongside an optional Azure
-  resource group of facts and the raw diagnostics action. The disclosure retains both label
-  widths, and its mounted Fluent `Collapse` handles opening and closing without a layout toggle.
+- **The header wraps with CSS.** The identity and status strip share a line when space allows;
+  otherwise the status strip moves to a second line. Status items wrap beside the details disclosure
+  at the top right; when even a badge cannot fit beside it, the disclosure stays at the top right
+  and the items use the full following line. Connection state and a stable-width RTT slot lead the
+  resilience badges and facts. Each version tag wraps independently, and every separator stays
+  with the following badge or fact. A fact may wrap internally if it exceeds the available width,
+  but badges remain on one line. There is no status overflow menu, layout toggle, or custom layout
+  measurement. Host addresses live in the disclosed Server details,
+  alongside an optional Azure resource group of facts and the raw diagnostics action. The
+  disclosure retains both label widths, and its mounted Fluent `Collapse` handles opening and
+  closing.
 - **Engine and API versions are independent facts.** A server reporting DocumentDB version
   metadata gets separate `DocumentDB <engine>` and `API <api>` tags in the first fact group,
   with no extra Version label and the shared `|` separator only when both are present.

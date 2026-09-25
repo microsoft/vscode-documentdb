@@ -89,13 +89,8 @@ $content-gutter: var(--spacingHorizontalMNudge); // 10px
 
     // ---- Identity row ------------------------------------------------------
 
-    // Two flex items — identity (icon and name), then the status block — on a wrapping line.
-    //
-    // This is the whole responsive mechanism. When both fit, the header is one row. When they do
-    // not, the status block takes a row of its own and the header becomes the two-row layout. It
-    // is content-driven: `flex-wrap` breaks when the content actually does not fit, where a
-    // container query would have to guess a width — and the content here varies by hundreds of
-    // pixels between a short cluster name with no Azure facts and a long one with four.
+    // The identity and status block first use their intrinsic widths on one wrapping flex line.
+    // When that no longer fits, the status block moves as a unit to its original second row.
     .dashboardHeader {
         display: flex;
         flex-wrap: wrap;
@@ -119,8 +114,7 @@ $content-gutter: var(--spacingHorizontalMNudge); // 10px
         font-size: 20px;
     }
 
-    // The icon belongs to the cluster identity, so it must not separate from the name when the
-    // status block moves to its own row.
+    // The icon and name stay together while the status strip moves below them.
     .dashboardHeaderIdentityGroup {
         display: flex;
         align-items: center;
@@ -129,14 +123,6 @@ $content-gutter: var(--spacingHorizontalMNudge); // 10px
         flex: 1000 1 auto;
     }
 
-    // Absorbs the free space on the first row, which is what right-aligns the status block while
-    // the two share a row. A very large grow factor rather than a spacer element: free space is
-    // split by grow ratio, so the identity group leaves the status block its content width and
-    // hands the rest to the cluster name. The status block still grows to fill a row of its own
-    // once it wraps, because there it is the only item on the line.
-    //
-    // The flex *basis* stays `auto`, so this element contributes only the name's width when the
-    // browser decides where to break — growing is a distribution rule, not a size claim.
     .dashboardHeaderText {
         display: flex;
         align-items: center;
@@ -166,34 +152,88 @@ $content-gutter: var(--spacingHorizontalMNudge); // 10px
         text-overflow: ellipsis;
     }
 
-    // Grows to the panel's right edge so the disclosure lands there in both states. Its own
-    // children never wrap: the fact list sheds pairs instead (see the container queries below).
+    // The strip moves to a second header line when needed. The disclosure stays at the
+    // inline end; when the badges and disclosure no longer fit side by side, the status items
+    // get the full following line rather than shrinking the badges.
     .dashboardHeaderStatus {
         display: flex;
-        align-items: center;
-        flex: 1 1 auto;
-        flex-wrap: nowrap;
+        flex-direction: row-reverse;
+        flex-wrap: wrap;
+        align-items: start;
+        flex: 1 0 max-content;
+        max-width: 100%;
         min-width: 0;
+        gap: 8px 12px;
+    }
+
+    .dashboardHeaderItems {
+        display: flex;
+        align-items: center;
+        justify-content: flex-start;
+        flex-wrap: wrap;
+        flex: 1 1 0;
+        min-width: min-content;
         gap: 8px;
     }
 
-    // Pinned right whichever row it lands on — the one thing that stays put across the switch.
-    .dashboardHeaderStatus .dashboardDisclosure {
-        margin-inline-start: auto;
-    }
-
-    // Connection state is the primary status in every header layout. It must keep its intrinsic
-    // width while lower-priority facts are hidden by the container queries below.
-    .dashboardConnectionStatus {
+    .dashboardConnectionStatus,
+    .dashboardResilienceWarning {
         flex: 0 0 auto;
         white-space: nowrap;
     }
 
     @media (max-width: 400px) {
-        .dashboardHeader,
-        .dashboardHeaderStatus {
+        .dashboardHeader {
             gap: var(--spacingHorizontalXS);
         }
+
+        .dashboardHeaderStatus {
+            row-gap: var(--spacingHorizontalXS);
+            column-gap: 8px;
+        }
+    }
+
+    // At very narrow widths, a single fact may exceed the available column and must wrap
+    // internally rather than clip.
+    .dashboardFact {
+        flex-wrap: wrap;
+        max-width: 100%;
+        white-space: normal;
+        overflow-wrap: anywhere;
+    }
+
+    .dashboardFactSegment {
+        min-width: 0;
+        max-width: 100%;
+        flex-wrap: wrap;
+    }
+
+    .dashboardVersion {
+        flex-wrap: nowrap;
+
+        .dashboardFact {
+            min-width: 0;
+            flex: 0 1 auto;
+        }
+    }
+
+    .dashboardWarning {
+        flex-wrap: nowrap;
+
+        .dashboardResilienceWarning {
+            flex: 0 0 auto;
+        }
+    }
+
+    .dashboardFactName {
+        min-width: 0;
+        max-width: 100%;
+    }
+
+    .dashboardFactLabel,
+    .dashboardFactValue {
+        min-width: 0;
+        overflow-wrap: anywhere;
     }
 
     // A fixed slot, right-aligned and tabular: the figure is rewritten every five seconds and
@@ -224,22 +264,31 @@ $content-gutter: var(--spacingHorizontalMNudge); // 10px
         font-size: 14px;
     }
 
-    .dashboardFactList {
-        display: flex;
-        align-items: center;
-        gap: var(--spacingHorizontalSNudge);
-        min-width: 0;
-        overflow: hidden;
-    }
-
     .dashboardFact {
         display: inline-flex;
         align-items: baseline;
         gap: var(--spacingHorizontalSNudge);
-        min-width: 0;
+        flex: 0 0 auto;
         font-size: var(--fontSizeBase200);
         line-height: var(--lineHeightBase300);
         white-space: nowrap;
+    }
+
+    .dashboardFactSegment,
+    .dashboardFactName {
+        display: inline-flex;
+        align-items: baseline;
+        gap: var(--spacingHorizontalSNudge);
+    }
+
+    .dashboardFactSegment {
+        font-size: var(--fontSizeBase200);
+        line-height: var(--lineHeightBase300);
+    }
+
+    .dashboardFactSegment,
+    .dashboardFactSeparator {
+        flex: 0 0 auto;
     }
 
     .dashboardFactLabel {
@@ -249,8 +298,6 @@ $content-gutter: var(--spacingHorizontalMNudge); // 10px
     .dashboardFactValue {
         color: var(--colorNeutralForeground1);
         font-weight: var(--fontWeightSemibold);
-        overflow: hidden;
-        text-overflow: ellipsis;
     }
 
     .dashboardFactSeparator {
@@ -259,9 +306,13 @@ $content-gutter: var(--spacingHorizontalMNudge); // 10px
     }
 
     .dashboardDisclosure {
+        flex: 0 0 auto;
+        order: -1;
+        margin-inline-start: auto;
         white-space: nowrap;
         font-size: var(--fontSizeBase200);
         font-weight: var(--fontWeightSemibold);
+        transform: translateY(-2px);
     }
 
     // Both labels occupy the same grid cell, so the button is as wide as the longer of the two and
@@ -280,45 +331,10 @@ $content-gutter: var(--spacingHorizontalMNudge); // 10px
         }
     }
 
-    // Pairs are shed from the right in a fixed order: Uptime, then Compute, then Region.
-    //
-    // Ordering matters here, and it is subtle. The width at which the strip stops fitting inline
-    // *depends on how many pairs it carries*, so a shed step can hand back exactly enough room for
-    // the strip to jump back onto the first row — dragging a panel narrower then went two rows,
-    // one row, two rows again, once per threshold. Each threshold therefore sits below the width
-    // at which the reduced set would fit inline again, which means shedding only ever happens once
-    // the strip already has a row of its own. All four pairs survive until that row runs out.
-    @container dashboardBand (max-width: 700px) {
-        .dashboardFactList > *:nth-child(n + 6) {
-            display: none;
-        }
-    }
-
-    @container dashboardBand (max-width: 560px) {
-        .dashboardFactList > *:nth-child(n + 4) {
-            display: none;
-        }
-    }
-
-    @container dashboardBand (max-width: 440px) {
-        .dashboardFactList > *:nth-child(n + 2) {
-            display: none;
-        }
-    }
-
-    // Freed while the strip is already wrapped, so it cannot un-wrap the header.
+    // At narrow widths the title receives the icon's space before the overflow trigger or
+    // disclosure can be squeezed.
     @container dashboardBand (max-width: 400px) {
         .dashboardHeaderIcon {
-            display: none;
-        }
-    }
-
-    // Narrower than any real editor group. The remaining pair would clip rather than ellipsise,
-    // and the connection state is the only thing at this width worth the room. The separator that
-    // divides state from facts goes with them, or it is left dividing nothing.
-    @container dashboardBand (max-width: 300px) {
-        .dashboardFactList,
-        .dashboardHeaderStatus > .dashboardFactSeparator {
             display: none;
         }
     }

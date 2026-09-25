@@ -5,7 +5,7 @@
 
 import { Badge, Tooltip } from '@fluentui/react-components';
 import * as l10n from '@vscode/l10n';
-import { Fragment, useId, useState, type JSX } from 'react';
+import { useId, useState, type JSX } from 'react';
 
 import { DataBarVerticalAscendingRegular, NetworkCheckRegular } from '@fluentui/react-icons';
 import { type ClusterHealthSample } from '../../../../documentdb/utils/getClusterHealth';
@@ -23,6 +23,109 @@ interface VersionTag {
     value: string;
     tooltip: string;
 }
+
+interface KeyFact {
+    label: string;
+    value: string | VersionTag[];
+}
+
+interface HeaderStatusItemsProps {
+    connectionLabel: string;
+    connectionAppearance: 'success' | 'danger' | 'warning';
+    connectionState: ConnectionState;
+    latencyLabel: string;
+    latencyText: string;
+    keyFacts: KeyFact[];
+    resilienceWarnings: string[];
+    versionId: string;
+}
+
+const HeaderStatusItems = ({
+    connectionLabel,
+    connectionAppearance,
+    connectionState,
+    latencyLabel,
+    latencyText,
+    keyFacts,
+    resilienceWarnings,
+    versionId,
+}: HeaderStatusItemsProps): JSX.Element => (
+    <>
+        <Badge
+            className="dashboardConnectionStatus"
+            appearance="tint"
+            shape="rounded"
+            color={connectionAppearance}
+            aria-label={connectionLabel}
+        >
+            {connectionLabel}
+        </Badge>
+        {connectionState === 'connected' && (
+            <Tooltip
+                content={l10n.t(
+                    'Round-trip time of the most recent ping to this cluster. It measures the network path and the server’s responsiveness, not the speed of your queries.',
+                )}
+                relationship="description"
+                withArrow
+            >
+                {/* eslint-disable-next-line jsx-a11y/no-noninteractive-tabindex -- keyboard focus exposes the latency tooltip */}
+                <span className="dashboardHeaderLatency" tabIndex={0} aria-label={latencyLabel}>
+                    <NetworkCheckRegular className="dashboardHeaderLatencyIcon" aria-hidden={true} />
+                    <span aria-hidden={true}>{latencyText}</span>
+                </span>
+            </Tooltip>
+        )}
+        {resilienceWarnings.map((warning) => (
+            <span className="dashboardFactSegment dashboardWarning" key={warning}>
+                <span className="dashboardFactSeparator" aria-hidden="true">
+                    |
+                </span>
+                <Badge className="dashboardResilienceWarning" appearance="outline" shape="rounded" color="warning">
+                    {warning}
+                </Badge>
+            </span>
+        ))}
+        {keyFacts.map((fact) =>
+            Array.isArray(fact.value) ? (
+                fact.value.map((version, versionIndex) => (
+                    <span className="dashboardFactSegment dashboardVersion" key={`${fact.label}-${version.label}`}>
+                        <span className="dashboardFactSeparator" aria-hidden="true">
+                            |
+                        </span>
+                        <Tooltip content={version.tooltip} relationship="description">
+                            <span
+                                className="dashboardFact"
+                                role="group"
+                                // eslint-disable-next-line jsx-a11y/no-noninteractive-tabindex -- keyboard focus exposes the version tooltip
+                                tabIndex={0}
+                                aria-labelledby={`${versionId}-${versionIndex}-label ${versionId}-${versionIndex}-value`}
+                            >
+                                <span className="dashboardFactLabel" id={`${versionId}-${versionIndex}-label`}>
+                                    {version.label}
+                                </span>
+                                <span className="dashboardFactValue" id={`${versionId}-${versionIndex}-value`}>
+                                    {version.value}
+                                </span>
+                            </span>
+                        </Tooltip>
+                    </span>
+                ))
+            ) : (
+                <span className="dashboardFactSegment" key={fact.label}>
+                    <span className="dashboardFactName">
+                        <span className="dashboardFactSeparator" aria-hidden="true">
+                            |
+                        </span>
+                        <span className="dashboardFactLabel">{fact.label}</span>
+                    </span>
+                    <span className="dashboardFactValue" title={fact.value}>
+                        {fact.value}
+                    </span>
+                </span>
+            ),
+        )}
+    </>
+);
 
 /**
  * Summarises the provisioned compute as one line, e.g. `M10 · 1 node · 128 GB`.
@@ -86,7 +189,8 @@ export interface DashboardHeaderProps {
 
 /**
  * The full-width identity band: icon and cluster name, followed by its facts, connection state
- * and latency. The trailing details wrap together when the panel cannot hold them on one line.
+ * and latency. Status items wrap when space is limited, while the details disclosure stays
+ * at the top right.
  *
  * Liveness stays here too: the connection badge and the ping figure sit next to the name
  * they describe, so nothing below the band has to animate.
@@ -117,7 +221,7 @@ export const DashboardHeader = ({
 
     // Four at most, in the order a reader asks them: what version, where, how big, how long
     // has it been up.
-    const keyFacts: Array<{ label: string; value: string | VersionTag[] }> = [];
+    const keyFacts: KeyFact[] = [];
 
     if (clusterInfo !== null) {
         const versions = getClusterVersions(clusterInfo.metadata);
@@ -182,126 +286,24 @@ export const DashboardHeader = ({
                     </div>
                 </div>
 
-                {/*
-                 * One block, so it wraps as a unit. When it fits it sits inline after the name;
-                 * when it does not, it takes a row of its own — which is the two-row layout,
-                 * reached without a component swap or a guessed width. See `.dashboardHeader`.
-                 */}
                 <div className="dashboardHeaderStatus">
-                    {/*
-                     * Rounded and tinted, like every other badge in the extension — a filled pill
-                     * read as a different family of object from the index and property badges the
-                     * reader has already met.
-                     *
-                     * First in the block, because it is the one thing here that changes on its own
-                     * and the one a reader glances back at. The facts behind it are static.
-                     */}
-                    <Badge
-                        className="dashboardConnectionStatus"
-                        appearance="tint"
-                        shape="rounded"
-                        color={connectionAppearance}
-                        aria-label={connectionLabel}
-                    >
-                        {connectionLabel}
-                    </Badge>
-                    {/*
-                     * Liveness lives here, next to the badge that already asserts it — not as a
-                     * chart. A number is the honest representation of a ping; the metric row
-                     * below is reserved for what the cluster contains.
-                     *
-                     * Rendered whenever connected, empty while a sample is missing, and given a
-                     * fixed width: a bare figure that appears, disappears and changes digit count
-                     * moved the badges beside it on every poll.
-                     */}
-                    {connectionState === 'connected' && (
-                        <Tooltip
-                            content={l10n.t(
-                                'Round-trip time of the most recent ping to this cluster. It measures the network path and the server’s responsiveness, not the speed of your queries.',
-                            )}
-                            relationship="description"
-                            withArrow
-                        >
-                            {/*
-                             * Focusable so the explanation is reachable without a pointer, which
-                             * WCAG 1.4.13 requires of a tooltip carrying information not stated
-                             * elsewhere. The same pattern the index list uses for its truncated
-                             * property badges.
-                             */}
-                            {/* eslint-disable-next-line jsx-a11y/no-noninteractive-tabindex */}
-                            <span className="dashboardHeaderLatency" tabIndex={0} aria-label={latencyLabel}>
-                                <NetworkCheckRegular className="dashboardHeaderLatencyIcon" aria-hidden={true} />
-                                <span aria-hidden={true}>{latencyText}</span>
-                            </span>
-                        </Tooltip>
-                    )}
-                    {keyFacts.length > 0 && (
-                        <span className="dashboardFactSeparator" aria-hidden="true">
-                            |
-                        </span>
-                    )}
-                    <div className="dashboardFactList">
-                        {keyFacts.map((fact, index) => (
-                            <Fragment key={fact.label}>
-                                {index > 0 && (
-                                    <span className="dashboardFactSeparator" aria-hidden="true">
-                                        |
-                                    </span>
-                                )}
-                                <span className="dashboardFact">
-                                    {Array.isArray(fact.value) ? (
-                                        fact.value.map((version, versionIndex) => (
-                                            <Fragment key={version.label}>
-                                                {versionIndex > 0 && (
-                                                    <span className="dashboardFactSeparator" aria-hidden="true">
-                                                        |
-                                                    </span>
-                                                )}
-                                                <Tooltip content={version.tooltip} relationship="description">
-                                                    <span
-                                                        className="dashboardFact"
-                                                        role="group"
-                                                        // eslint-disable-next-line jsx-a11y/no-noninteractive-tabindex -- keyboard focus exposes the version tooltip
-                                                        tabIndex={0}
-                                                        aria-labelledby={`${versionId}-${versionIndex}-label ${versionId}-${versionIndex}-value`}
-                                                    >
-                                                        <span
-                                                            className="dashboardFactLabel"
-                                                            id={`${versionId}-${versionIndex}-label`}
-                                                        >
-                                                            {version.label}
-                                                        </span>
-                                                        <span
-                                                            className="dashboardFactValue"
-                                                            id={`${versionId}-${versionIndex}-value`}
-                                                        >
-                                                            {version.value}
-                                                        </span>
-                                                    </span>
-                                                </Tooltip>
-                                            </Fragment>
-                                        ))
-                                    ) : (
-                                        <>
-                                            <span className="dashboardFactLabel">{fact.label}</span>
-                                            <span className="dashboardFactValue" title={fact.value}>
-                                                {fact.value}
-                                            </span>
-                                        </>
-                                    )}
-                                </span>
-                            </Fragment>
-                        ))}
+                    <div className="dashboardHeaderItems" role="group" aria-label={l10n.t('Cluster status')}>
+                        <HeaderStatusItems
+                            connectionLabel={connectionLabel}
+                            connectionAppearance={connectionAppearance}
+                            connectionState={connectionState}
+                            latencyLabel={latencyLabel}
+                            latencyText={latencyText}
+                            keyFacts={keyFacts}
+                            resilienceWarnings={resilienceWarnings}
+                            versionId={versionId}
+                        />
                     </div>
-                    {resilienceWarnings.map((warning) => (
-                        <Badge key={warning} appearance="outline" shape="rounded" color="warning">
-                            {warning}
-                        </Badge>
-                    ))}
                     {detailGroups.length > 0 && (
                         <DetailsDisclosureButton expanded={expanded} onToggle={() => setExpanded(!expanded)} />
                     )}
                 </div>
+
             </header>
             {/* Kept mounted so the motion has a `visible` change to play — see DashboardDetails. */}
             <DashboardDetailsRegion
