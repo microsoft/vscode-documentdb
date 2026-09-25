@@ -36,8 +36,10 @@ Nothing else. Do **not** run `l10n`, `prettier-fix`, `lint`, or `package` here.
 
 ### Case 2 — handing over
 
-Marking a PR **ready for review** — including when you finish autonomous work and are
-about to mark it ready. If there is no PR, stay on Case 1.
+When asked to **prepare a PR for review** or **mark it ready for review**, run the
+full Case 2 list even if another handoff requirement (such as the AI pre-review)
+is missing. Report all blockers; do not mark the PR ready until the checks pass
+and the other requirements are satisfied. If there is no PR, stay on Case 1.
 
 ```bash
 npm run l10n            # only if a vscode.l10n.t() string was added, changed, or removed
