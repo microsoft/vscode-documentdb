@@ -214,6 +214,8 @@ describe('DocumentDBShellPty', () => {
             expect(written).toContain('testdb> ');
             expect(written).toContain('Connected to: TestCluster (test-host.documents.azure.com:10255)');
             expect(written).toContain('SCRAM');
+            expect(written).toContain('Database: testdb');
+            expect(written).not.toContain('{1}');
         });
 
         it('should not repeat the host when it matches the connection name', async () => {

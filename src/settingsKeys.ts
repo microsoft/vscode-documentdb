@@ -15,6 +15,7 @@ export namespace settingsKeys {
     export const confirmationStyle = 'documentDB.confirmations.style';
     export const showUrlHandlingConfirmations = 'documentDB.confirmations.showUrlHandlingConfirmations';
     export const showOperationSummaries = 'documentDB.userInterface.showOperationSummaries';
+    export const showDashboardOnConnect = 'documentDB.userInterface.showDashboardOnConnect';
 
     // Connections & Discovery
     export const connectionTimeout = 'documentDB.connectionTimeout';

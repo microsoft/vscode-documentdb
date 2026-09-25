@@ -12,7 +12,7 @@ import {
     type InstanceMetadata,
     type QuickStartStatus,
 } from '../../../services/localQuickStart/quickStartTypes';
-import { type ClusterItemBase } from '../../documentdb/ClusterItemBase';
+import { CLUSTER_ITEM_CONTEXT_VALUE, type ClusterItemBase } from '../../documentdb/ClusterItemBase';
 import { LocalQuickStartItem } from './LocalQuickStartItem';
 
 jest.mock('../../../utils/icons', () => ({ getResourcesPath: () => '/resources' }));
@@ -27,12 +27,22 @@ jest.mock('@microsoft/vscode-azext-utils', () => ({
 }));
 
 jest.mock('../../../extensionVariables', () => ({
-    ext: { outputChannel: { appendLine: jest.fn(), debug: jest.fn() } },
+    ext: {
+        outputChannel: { appendLine: jest.fn(), debug: jest.fn() },
+        settingsKeys: { showDashboardOnConnect: 'documentDB.userInterface.showDashboardOnConnect' },
+    },
+}));
+
+jest.mock('../../../services/SettingsService', () => ({
+    SettingsService: { getSetting: jest.fn().mockReturnValue(false) },
 }));
 
 const mockGetClient = jest.fn();
 jest.mock('../../../documentdb/ClustersClient', () => ({
-    ClustersClient: { getClient: (...args: unknown[]) => mockGetClient(...args) },
+    ClustersClient: {
+        exists: jest.fn().mockReturnValue(false),
+        getClient: (...args: unknown[]) => mockGetClient(...args),
+    },
 }));
 
 jest.mock('../../documentdb/DatabaseItem', () => ({
@@ -102,6 +112,14 @@ describe('QuickStartClusterItem — credential source of truth (H5)', () => {
     afterEach(() => {
         jest.restoreAllMocks();
         CredentialCache.deleteCredentials(CLUSTER_ID);
+    });
+
+    it('keeps standard cluster commands behind explicit opt-ins', async () => {
+        const contextValue = (await getClusterItem()).getTreeItem().contextValue;
+
+        expect(contextValue).not.toContain(CLUSTER_ITEM_CONTEXT_VALUE);
+        expect(contextValue).toContain('treeItem_quickStartInstance');
+        expect(contextValue).toContain('state_running');
     });
 
     it('lists databases after the credential cache was emptied (e.g. a window reload)', async () => {

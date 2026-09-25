@@ -89,6 +89,7 @@ jest.mock('@microsoft/vscode-azext-utils', () => ({
 
 jest.mock('../../../../extensionVariables', () => ({
     ext: {
+        settingsKeys: { showDashboardOnConnect: 'documentDB.userInterface.showDashboardOnConnect' },
         outputChannel: {
             append: jest.fn(),
             appendLine: jest.fn(),
@@ -98,6 +99,10 @@ jest.mock('../../../../extensionVariables', () => ({
             notifyChildrenChanged: jest.fn(),
         },
     },
+}));
+
+jest.mock('../../../../services/SettingsService', () => ({
+    SettingsService: { getSetting: jest.fn().mockReturnValue(false) },
 }));
 
 jest.mock('../../../../documentdb/CredentialCache', () => ({
@@ -110,6 +115,7 @@ jest.mock('../../../../documentdb/CredentialCache', () => ({
 
 jest.mock('../../../../documentdb/ClustersClient', () => ({
     ClustersClient: {
+        exists: jest.fn().mockReturnValue(false),
         getClient: (...args: unknown[]) => mockGetClient(...args),
         deleteClient: jest.fn(),
     },

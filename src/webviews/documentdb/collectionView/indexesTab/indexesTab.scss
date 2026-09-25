@@ -75,6 +75,9 @@
     .indexContentContainer {
         flex: 1 1 auto;
         min-height: 0;
+        // IMPORTANT: Fluent draws sortable header focus outlines outside the cells. Without this
+        // inset, the scroller clips the top and outer edges of the focused header.
+        padding: index.$focus-outline-inset;
         overflow: auto;
     }
 
@@ -429,6 +432,10 @@
         display: flex;
         flex-direction: column;
         overflow-y: auto;
+        // IMPORTANT: Keep room for the index-kind tabs' outward focus ring, including when
+        // keyboard focus scrolls the drawer (which would otherwise consume the top padding).
+        padding-top: index.$focus-outline-inset;
+        scroll-padding-top: index.$focus-outline-inset;
         padding-bottom: var(--spacingVerticalL);
     }
 

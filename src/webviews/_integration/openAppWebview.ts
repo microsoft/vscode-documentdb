@@ -56,6 +56,7 @@ export type AppWebviewController<TConfiguration> = WebviewController<AppRouter, 
 export interface OpenAppWebviewOptions<TConfiguration> {
     readonly title: string;
     readonly webviewName: WebviewName;
+    readonly panelViewType?: string;
     readonly config: TConfiguration;
     readonly context: BaseRouterContext;
     readonly viewColumn?: vscode.ViewColumn;
@@ -76,6 +77,7 @@ export function openAppWebview<TConfiguration>(
     return openWebview<AppRouter, TConfiguration, BaseRouterContext>(ext.context, {
         title: options.title,
         viewType: options.webviewName,
+        panelViewType: options.panelViewType,
         router: appRouter,
         trpc,
         context: options.context,
