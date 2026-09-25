@@ -417,4 +417,4 @@ approves.
    button enabled so the server decides. Note `inprog` is not a named action on vCore at
    all, yet `$currentOp {allUsers: true}` still works there.
 4. **Default refresh interval** — 5 s (Compass is ~1 s; 5 s is gentler for cloud clusters);
-   confirm with product.
+   confirm with product. will test it and confirm.
