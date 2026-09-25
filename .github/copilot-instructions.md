@@ -17,6 +17,12 @@ VS Code Extension for Azure Cosmos DB and the MongoDB API. TypeScript (strict mo
 
 There are exactly two cases. Work out which one you are in, then run **only** that list.
 
+For PR-related work, tell the operator which case applies in your handoff. If the PR
+is still a draft, explicitly say that the full checks (including `prettier-fix`)
+were deferred until it is ready for review. When handing a PR over for review,
+report the Case 2 checks that ran and any failures or blockers; never imply the
+full suite passed if it did not run.
+
 ### Case 1 — still working
 
 Any commit, any push, opening or updating a **draft** PR.
