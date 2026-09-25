@@ -201,6 +201,3 @@ half of D1. The largest remaining are S11 (a `listCollections` failure renders a
 database — same class as F6, one level down), S13 (dashboard failures bypass
 `ConnectionDiagnosticsService`), F10 (the history is re-serialized every poll) and F11 (expanded
 collection figures never refresh).
-
-None of them is a correctness bug behind a destructive action or a number presented as a fact the
-code does not have, which is the line these decisions drew.
