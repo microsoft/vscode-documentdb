@@ -4,8 +4,8 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { SSRProvider } from '@fluentui/react-components';
-import { createElement, type ReactNode } from 'react';
 import type * as React from 'react';
+import { createElement, type ReactNode } from 'react';
 // eslint-disable-next-line import/no-internal-modules -- React DOM exposes server rendering through this public subpath.
 import { renderToStaticMarkup } from 'react-dom/server';
 
