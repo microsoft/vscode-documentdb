@@ -177,7 +177,7 @@ $content-gutter: var(--spacingHorizontalMNudge); // 10px
     }
 
     .dashboardConnectionStatus,
-    .dashboardResilienceWarning {
+    .dashboardResilienceBadge {
         flex: 0 0 auto;
         white-space: nowrap;
     }
@@ -217,10 +217,10 @@ $content-gutter: var(--spacingHorizontalMNudge); // 10px
         }
     }
 
-    .dashboardWarning {
+    .dashboardResilience {
         flex-wrap: nowrap;
 
-        .dashboardResilienceWarning {
+        .dashboardResilienceBadge {
             flex: 0 0 auto;
         }
     }
@@ -284,6 +284,12 @@ $content-gutter: var(--spacingHorizontalMNudge); // 10px
     .dashboardFactSegment {
         font-size: var(--fontSizeBase200);
         line-height: var(--lineHeightBase300);
+
+        &:focus-visible {
+            border-radius: var(--borderRadiusSmall);
+            outline: var(--strokeWidthThick) solid var(--colorStrokeFocus2);
+            outline-offset: 1px;
+        }
     }
 
     .dashboardFactSegment,

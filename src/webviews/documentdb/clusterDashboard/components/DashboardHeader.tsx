@@ -3,7 +3,8 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { Badge, Tooltip } from '@fluentui/react-components';
+import { Tooltip } from '@fluentui/react-components';
+import { FocusableBadge } from '@microsoft/vscode-ext-webview-fluentui/components';
 import * as l10n from '@vscode/l10n';
 import { useId, useState, type JSX } from 'react';
 
@@ -24,9 +25,25 @@ interface VersionTag {
     tooltip: string;
 }
 
-interface KeyFact {
+interface TextFact {
     label: string;
-    value: string | VersionTag[];
+    value: string;
+    tooltip: string;
+}
+
+interface VersionFact {
+    label: string;
+    value: VersionTag[];
+}
+
+type KeyFact = TextFact | VersionFact;
+
+const isVersionFact = (fact: KeyFact): fact is VersionFact => Array.isArray(fact.value);
+
+interface ResilienceBadge {
+    label: string;
+    tooltip: string;
+    color: 'warning' | 'success';
 }
 
 interface HeaderStatusItemsProps {
@@ -36,7 +53,7 @@ interface HeaderStatusItemsProps {
     latencyLabel: string;
     latencyText: string;
     keyFacts: KeyFact[];
-    resilienceWarnings: string[];
+    resilienceBadges: ResilienceBadge[];
     versionId: string;
 }
 
@@ -47,59 +64,76 @@ const HeaderStatusItems = ({
     latencyLabel,
     latencyText,
     keyFacts,
-    resilienceWarnings,
+    resilienceBadges,
     versionId,
 }: HeaderStatusItemsProps): JSX.Element => (
     <>
-        <Badge
-            className="dashboardConnectionStatus"
-            appearance="tint"
-            shape="rounded"
-            color={connectionAppearance}
-            aria-label={connectionLabel}
+        <Tooltip
+            content={l10n.t('Connection status based on periodic ping commands to this cluster.')}
+            relationship="description"
+            withArrow
         >
-            {connectionLabel}
-        </Badge>
+            <FocusableBadge
+                className="dashboardConnectionStatus"
+                appearance="tint"
+                shape="rounded"
+                color={connectionAppearance}
+            >
+                {connectionLabel}
+            </FocusableBadge>
+        </Tooltip>
         {connectionState === 'connected' && (
             <Tooltip
                 content={l10n.t(
-                    'Round-trip time of the most recent ping to this cluster. It measures the network path and the server’s responsiveness, not the speed of your queries.',
+                    'Time for the most recent ping command to complete. Includes network and server response time, not query execution time.',
                 )}
                 relationship="description"
                 withArrow
             >
                 {/* eslint-disable-next-line jsx-a11y/no-noninteractive-tabindex -- keyboard focus exposes the latency tooltip */}
-                <span className="dashboardHeaderLatency" tabIndex={0} aria-label={latencyLabel}>
+                <span className="dashboardHeaderLatency" role="group" tabIndex={0} aria-label={latencyLabel}>
                     <NetworkCheckRegular className="dashboardHeaderLatencyIcon" aria-hidden={true} />
                     <span aria-hidden={true}>{latencyText}</span>
                 </span>
             </Tooltip>
         )}
-        {resilienceWarnings.map((warning) => (
-            <span className="dashboardFactSegment dashboardWarning" key={warning}>
+        {resilienceBadges.map((badge) => (
+            <span className="dashboardFactSegment dashboardResilience" key={badge.label}>
                 <span className="dashboardFactSeparator" aria-hidden="true">
                     |
                 </span>
-                <Badge className="dashboardResilienceWarning" appearance="outline" shape="rounded" color="warning">
-                    {warning}
-                </Badge>
+                <Tooltip content={badge.tooltip} relationship="description" withArrow>
+                    <FocusableBadge
+                        className="dashboardResilienceBadge"
+                        appearance="outline"
+                        shape="rounded"
+                        color={badge.color}
+                    >
+                        {badge.label}
+                    </FocusableBadge>
+                </Tooltip>
             </span>
         ))}
-        {keyFacts.map((fact) =>
-            Array.isArray(fact.value) ? (
+        {keyFacts.map((fact, factIndex) =>
+            isVersionFact(fact) ? (
                 fact.value.map((version, versionIndex) => (
-                    <span className="dashboardFactSegment dashboardVersion" key={`${fact.label}-${version.label}`}>
-                        <span className="dashboardFactSeparator" aria-hidden="true">
-                            |
-                        </span>
-                        <Tooltip content={version.tooltip} relationship="description">
-                            <span
-                                className="dashboardFact"
-                                role="group"
-                                // eslint-disable-next-line jsx-a11y/no-noninteractive-tabindex -- keyboard focus exposes the version tooltip
-                                tabIndex={0}
-                                aria-labelledby={`${versionId}-${versionIndex}-label ${versionId}-${versionIndex}-value`}
-                            >
+                    <Tooltip
+                        content={version.tooltip}
+                        relationship="description"
+                        withArrow
+                        key={`${fact.label}-${version.label}`}
+                    >
+                        <span
+                            className="dashboardFactSegment dashboardVersion"
+                            role="group"
+                            // eslint-disable-next-line jsx-a11y/no-noninteractive-tabindex -- keyboard focus exposes the version tooltip
+                            tabIndex={0}
+                            aria-labelledby={`${versionId}-${versionIndex}-label ${versionId}-${versionIndex}-value`}
+                        >
+                            <span className="dashboardFactSeparator" aria-hidden="true">
+                                |
+                            </span>
+                            <span className="dashboardFact">
                                 <span className="dashboardFactLabel" id={`${versionId}-${versionIndex}-label`}>
                                     {version.label}
                                 </span>
@@ -107,21 +141,31 @@ const HeaderStatusItems = ({
                                     {version.value}
                                 </span>
                             </span>
-                        </Tooltip>
-                    </span>
+                        </span>
+                    </Tooltip>
                 ))
             ) : (
-                <span className="dashboardFactSegment" key={fact.label}>
-                    <span className="dashboardFactName">
-                        <span className="dashboardFactSeparator" aria-hidden="true">
-                            |
+                <Tooltip content={fact.tooltip} relationship="description" withArrow key={fact.label}>
+                    <span
+                        className="dashboardFactSegment"
+                        role="group"
+                        // eslint-disable-next-line jsx-a11y/no-noninteractive-tabindex -- keyboard focus exposes the fact tooltip
+                        tabIndex={0}
+                        aria-labelledby={`${versionId}-fact-${factIndex}-label ${versionId}-fact-${factIndex}-value`}
+                    >
+                        <span className="dashboardFactName">
+                            <span className="dashboardFactSeparator" aria-hidden="true">
+                                |
+                            </span>
+                            <span className="dashboardFactLabel" id={`${versionId}-fact-${factIndex}-label`}>
+                                {fact.label}
+                            </span>
                         </span>
-                        <span className="dashboardFactLabel">{fact.label}</span>
+                        <span className="dashboardFactValue" id={`${versionId}-fact-${factIndex}-value`}>
+                            {fact.value}
+                        </span>
                     </span>
-                    <span className="dashboardFactValue" title={fact.value}>
-                        {fact.value}
-                    </span>
-                </span>
+                </Tooltip>
             ),
         )}
     </>
@@ -150,30 +194,46 @@ export function describeCompute(azure: ClusterDashboardAzureInfo | undefined): s
 }
 
 /**
- * Resilience warnings shown as badges beside the connection state.
+ * Resilience state shown as badges beside the connection state.
  *
  * These answer "is this cluster safe?", the question the data inventory does not address.
- * They are deliberately static facts, not metrics: a cluster without high availability is a
- * production-readiness finding, and a read-only connection is something a user needs to know
- * *before* attempting a write.
+ * They are deliberately static facts, not metrics: the Azure resource reports whether in-region
+ * high availability is enabled, while the server can report a read-only connection before a
+ * user attempts a write.
  */
-export function collectResilienceWarnings(
+export function collectResilienceBadges(
     metadata: Record<string, string | undefined> | undefined,
     azure: ClusterDashboardAzureInfo | undefined,
-): string[] {
-    const warnings: string[] = [];
+): ResilienceBadge[] {
+    const badges: ResilienceBadge[] = [];
 
     // `hello.readOnly` is answered by every server, so this warning is not Azure-specific:
     // it also catches a connection pinned to a secondary.
     if (metadata?.['topology_readOnly'] === 'true') {
-        warnings.push(l10n.t('Read-only connection'));
+        badges.push({
+            label: l10n.t('Read-only connection'),
+            tooltip: l10n.t('The connected server reported readOnly: true in its hello response.'),
+            color: 'warning',
+        });
     }
 
-    if (azure?.enableHa === false) {
-        warnings.push(l10n.t('No high availability'));
+    if (azure?.enableHa !== undefined) {
+        badges.push(
+            azure.enableHa
+                ? {
+                      label: l10n.t('High Availability'),
+                      tooltip: l10n.t('The Azure resource reports that in-region high availability is enabled.'),
+                      color: 'success',
+                  }
+                : {
+                      label: l10n.t('No high availability'),
+                      tooltip: l10n.t('The Azure resource reports that in-region high availability is disabled.'),
+                      color: 'warning',
+                  },
+        );
     }
 
-    return warnings;
+    return badges;
 }
 
 export interface DashboardHeaderProps {
@@ -217,7 +277,7 @@ export const DashboardHeader = ({
     const connectionAppearance =
         connectionState === 'connected' ? 'success' : connectionState === 'disconnected' ? 'danger' : 'warning';
 
-    const resilienceWarnings = collectResilienceWarnings(clusterInfo?.metadata, azure);
+    const resilienceBadges = collectResilienceBadges(clusterInfo?.metadata, azure);
 
     // Four at most, in the order a reader asks them: what version, where, how big, how long
     // has it been up.
@@ -230,33 +290,51 @@ export const DashboardHeader = ({
             versionParts.push({
                 label: l10n.t('DocumentDB'),
                 value: versions.engine,
-                tooltip: l10n.t('DocumentDB version information reported by the server: {0}', versions.engine),
+                tooltip: l10n.t('DocumentDB component versions reported by the server’s hello command.'),
             });
         }
         if (versions.api !== undefined) {
             versionParts.push({
                 label: l10n.t('API'),
                 value: versions.api,
-                tooltip: l10n.t('MongoDB API compatibility version reported by the server: {0}', versions.api),
+                tooltip: l10n.t('API compatibility version reported by the server’s buildInfo command.'),
             });
         }
         if (versionParts.length > 0) {
             keyFacts.push({ label: l10n.t('Version'), value: versionParts });
         } else if (versions.server !== undefined) {
-            keyFacts.push({ label: l10n.t('Version'), value: versions.server });
+            keyFacts.push({
+                label: l10n.t('Version'),
+                value: versions.server,
+                tooltip: l10n.t('Server version reported by the buildInfo command.'),
+            });
         }
 
         if (azure?.location !== undefined) {
-            keyFacts.push({ label: l10n.t('Region'), value: regionToDisplayName(azure.location) });
+            keyFacts.push({
+                label: l10n.t('Region'),
+                value: regionToDisplayName(azure.location),
+                tooltip: l10n.t('Azure region reported in the cluster’s resource metadata.'),
+            });
         }
 
         const compute = describeCompute(azure);
         if (compute !== null) {
-            keyFacts.push({ label: l10n.t('Compute'), value: compute });
+            keyFacts.push({
+                label: l10n.t('Compute'),
+                value: compute,
+                tooltip: l10n.t(
+                    'Compute tier, node count, and provisioned disk size reported in the Azure resource metadata.',
+                ),
+            });
         }
 
         if (latestSample?.uptimeSeconds !== null && latestSample?.uptimeSeconds !== undefined) {
-            keyFacts.push({ label: l10n.t('Uptime'), value: formatUptime(latestSample.uptimeSeconds) });
+            keyFacts.push({
+                label: l10n.t('Uptime'),
+                value: formatUptime(latestSample.uptimeSeconds),
+                tooltip: l10n.t('Time since the server started, reported by its serverStatus command.'),
+            });
         }
     }
 
@@ -295,7 +373,7 @@ export const DashboardHeader = ({
                             latencyLabel={latencyLabel}
                             latencyText={latencyText}
                             keyFacts={keyFacts}
-                            resilienceWarnings={resilienceWarnings}
+                            resilienceBadges={resilienceBadges}
                             versionId={versionId}
                         />
                     </div>

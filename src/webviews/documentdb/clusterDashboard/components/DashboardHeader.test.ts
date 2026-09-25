@@ -4,13 +4,21 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { SSRProvider } from '@fluentui/react-components';
-import { createElement } from 'react';
+import { createElement, type ReactNode } from 'react';
 // eslint-disable-next-line import/no-internal-modules -- React DOM exposes server rendering through this public subpath.
 import { renderToStaticMarkup } from 'react-dom/server';
 
 import { type ClusterDashboardInfo } from '../clusterDashboardRouter';
 import { buildDetailGroups } from './DashboardDetails';
-import { DashboardHeader } from './DashboardHeader';
+import { collectResilienceBadges, DashboardHeader } from './DashboardHeader';
+
+jest.mock('@microsoft/vscode-ext-webview-fluentui/components', () => {
+    const react = jest.requireActual<typeof import('react')>('react');
+    return {
+        FocusableBadge: ({ children, ...props }: { children: ReactNode; className?: string }): ReactNode =>
+            react.createElement('span', { ...props, role: 'group', tabIndex: 0 }, children),
+    };
+});
 
 jest.mock('@vscode/l10n', () => ({
     t: (message: string, ...args: unknown[]): string => {
@@ -146,7 +154,6 @@ describe('Dashboard versions', () => {
         expect(labels).toEqual(expectedLabels);
         const tagCount =
             metadata['topology_hello_internal_documentdb_versions'] === undefined ? 0 : headerVersions.length;
-        expect(html.match(/class="dashboardFact" role="group"/g) ?? []).toHaveLength(tagCount);
         expect(html.match(/class="dashboardFactSegment(?: dashboardVersion)?"/g)).toHaveLength(
             3 + headerVersions.length,
         );
@@ -156,14 +163,14 @@ describe('Dashboard versions', () => {
         );
         const expectedValues = [...rows.map((row) => row.value), 'West US 2 (westus2)', 'M10', '1h 0m'];
         expect(values).toEqual(expectedValues);
-        expect(html.match(/class="dashboardFact" role="group" tabindex="0" aria-labelledby=/g) ?? []).toHaveLength(
-            tagCount,
+        expect(html.match(/class="dashboardFactSegment(?: dashboardVersion)?" role="group" tabindex="0" aria-labelledby=/g)).toHaveLength(
+            3 + headerVersions.length,
         );
         expect(html.match(/class="dashboardFactSeparator" aria-hidden="true">\|<\/span>/g)).toHaveLength(
             3 + headerVersions.length,
         );
         if (tagCount > 0) {
-            expect(html.match(/class="dashboardFactSegment dashboardVersion"><span class="dashboardFactSeparator"/g)).toHaveLength(
+            expect(html.match(/class="dashboardFactSegment dashboardVersion" role="group" tabindex="0" aria-labelledby=[^>]+><span class="dashboardFactSeparator"/g)).toHaveLength(
                 tagCount,
             );
         }
@@ -176,12 +183,16 @@ describe('Dashboard versions', () => {
 
     it('omits version facts before cluster metadata arrives', () => {
         const html = renderToStaticMarkup(
-            createElement(DashboardHeader, {
-                clusterDisplayName: 'Test cluster',
-                clusterInfo: null,
-                connectionState: 'connecting',
-                latestSample: null,
-            }),
+            createElement(
+                SSRProvider,
+                null,
+                createElement(DashboardHeader, {
+                    clusterDisplayName: 'Test cluster',
+                    clusterInfo: null,
+                    connectionState: 'connecting',
+                    latestSample: null,
+                }),
+            ),
         );
         expect(html).not.toContain('dashboardFactLabel');
         expect(buildDetailGroups(null, undefined)).toEqual([]);
@@ -213,14 +224,62 @@ describe('Dashboard versions', () => {
         expect(html.match(/class="dashboardHeaderStatus"/g)).toHaveLength(1);
         expect(html).not.toContain('dashboardHeaderStatusNarrow');
         expect(html).not.toContain('dashboardHeaderOverflow');
-        expect(html).toContain('dashboardResilienceWarning');
+        expect(html).toContain('dashboardResilienceBadge');
         expect(html).toContain('No high availability');
-        expect(html.indexOf('dashboardHeaderLatency')).toBeLessThan(html.indexOf('dashboardResilienceWarning'));
-        expect(html.indexOf('dashboardResilienceWarning')).toBeLessThan(html.indexOf('class="dashboardFact"'));
-        expect(html.match(/class="dashboardFactSegment dashboardWarning"><span class="dashboardFactSeparator" aria-hidden="true">\|<\/span>/g)).toHaveLength(
+        expect(html.indexOf('dashboardHeaderLatency')).toBeLessThan(html.indexOf('dashboardResilienceBadge'));
+        expect(html.indexOf('dashboardResilienceBadge')).toBeLessThan(html.indexOf('class="dashboardFact"'));
+        expect(html.match(/class="dashboardFactSegment dashboardResilience"><span class="dashboardFactSeparator" aria-hidden="true">\|<\/span>/g)).toHaveLength(
             2,
         );
         expect(html).toContain('dashboardFactName');
         expect(html.match(/\bdashboardDisclosure\b/g)).toHaveLength(1);
+    });
+
+    it('shows an Azure HA badge only when its setting is known', () => {
+        expect(collectResilienceBadges({}, { enableHa: true })).toEqual([
+            {
+                label: 'High Availability',
+                tooltip: 'The Azure resource reports that in-region high availability is enabled.',
+                color: 'success',
+            },
+        ]);
+        expect(collectResilienceBadges({}, { enableHa: false })).toEqual([
+            {
+                label: 'No high availability',
+                tooltip: 'The Azure resource reports that in-region high availability is disabled.',
+                color: 'warning',
+            },
+        ]);
+        expect(collectResilienceBadges({}, {})).toEqual([]);
+        expect(collectResilienceBadges({ topology_readOnly: 'true' }, { enableHa: true })).toEqual([
+            {
+                label: 'Read-only connection',
+                tooltip: 'The connected server reported readOnly: true in its hello response.',
+                color: 'warning',
+            },
+            {
+                label: 'High Availability',
+                tooltip: 'The Azure resource reports that in-region high availability is enabled.',
+                color: 'success',
+            },
+        ]);
+
+        const html = renderToStaticMarkup(
+            createElement(
+                SSRProvider,
+                null,
+                createElement(DashboardHeader, {
+                    clusterDisplayName: 'Test cluster',
+                    clusterInfo: { clusterDisplayName: 'Test cluster', metadata: {}, hosts: [] },
+                    connectionState: 'connected',
+                    latestSample: null,
+                    azure: { enableHa: true },
+                }),
+            ),
+        );
+        expect(html).toContain('class="dashboardResilienceBadge"');
+        expect(html).toContain('color="success"');
+        expect(html).toContain('High Availability');
+        expect(html).not.toContain('No high availability');
     });
 });

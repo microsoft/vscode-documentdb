@@ -31,6 +31,9 @@ line when badges no longer fit alongside it. Connection state, fixed-width RTT, 
 badges precede the responsive facts. Version tags wrap
 independently; separators stay attached to the badge or fact that follows them. An individual
 fact may wrap internally when it exceeds the available width, but badges remain on one line.
+All header items explain their data source in localized tooltips reachable by keyboard, without
+repeating their visible values. The Azure HA fact shows a green success badge when enabled, a
+warning badge when disabled, and no badge when unknown.
 Host addresses and extended server/resource facts sit in the animated details disclosure, which also offers raw
 diagnostics. See
 [the current architecture](./README.md#architecture-intent--code-is-authoritative-for-behavior).
@@ -38,8 +41,8 @@ diagnostics. See
 **Version display (2026-09-24):** The existing Version fact renders independently available
 engine and API versions as separate JSX tags: `DocumentDB <versions>` and `API <api>`, without
 an extra Version label or a combined engine/API string. The shared `|` separator appears
-between the tags only when both are present. Each tag has an explanatory
-tooltip available on hover and keyboard focus; the Server disclosure lists them separately.
+between the tags only when both are present. Each tag has a source-focused tooltip
+available on hover and keyboard focus; the Server disclosure lists them separately.
 Missing, malformed or ambiguous values are omitted, not shown as unknown and not inferred
 from the other version.
 The optional `hello.internal.documentdb_versions` metadata establishes the DocumentDB-specific

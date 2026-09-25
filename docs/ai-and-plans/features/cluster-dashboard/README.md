@@ -53,21 +53,24 @@ None yet. A user-manual page is due before this ships.
   resilience badges and facts. Each version tag wraps independently, and every separator stays
   with the following badge or fact. A fact may wrap internally if it exceeds the available width,
   but badges remain on one line. There is no status overflow menu, layout toggle, or custom layout
-  measurement. Host addresses live in the disclosed Server details,
+  measurement. All displayed header items have keyboard-accessible, localized source explanations
+  in their tooltips; the visible text remains their accessible name. A reported Azure high
+  availability setting has a success badge when enabled or a warning badge when disabled; no
+  setting reported means no HA badge. Host addresses live in the disclosed Server details,
   alongside an optional Azure resource group of facts and the raw diagnostics action. The
   disclosure retains both label widths, and its mounted Fluent `Collapse` handles opening and
   closing.
 - **Engine and API versions are independent facts.** A server reporting DocumentDB version
   metadata gets separate `DocumentDB <engine>` and `API <api>` tags in the first fact group,
   with no extra Version label and the shared `|` separator only when both are present.
-  Tooltips explain each version. There are separate
+  Tooltips explain the source of each version and fact without repeating its value. There are separate
   Engine version and API version rows in Server details. Either part is omitted when unclear;
   neither gets an unknown placeholder. All recognizable DocumentDB versions are retained in
   server order and joined with `·` within the DocumentDB tag and its details row, rather
   than selecting a presumed engine release from component versions. Malformed entries cause
   the DocumentDB version information to be omitted. Without DocumentDB metadata, the existing
   server-version wording is retained. The header still has at most four fact groups in versions,
-  Region, Compute, Uptime order. Version tooltips are available on hover and keyboard focus.
+  Region, Compute, Uptime order. Header tooltips are available on hover and keyboard focus.
 - **The cluster toolbar groups connection tools separately from page utilities.** Open Shell and
   Copy Connection String sit together on the left; Refresh, More actions and feedback sit on the
   right. Fluent overflow moves Copy, then Shell, into More actions as space contracts. Refresh
