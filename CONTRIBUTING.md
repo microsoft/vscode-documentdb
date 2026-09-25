@@ -91,6 +91,8 @@ Shared branches are collaboration surfaces, so an uncoordinated force push can d
 - **`feature/*`** and **`release/*`** (collaboration branches): force pushes are **discouraged but not blocked**. There are legitimate cases where a force push is needed to clean up history. When one is necessary, it MUST be coordinated with everyone working on that branch first.
 - **`main`**: protected. No force pushes. PRs only.
 
+**After a PR receives human review, do not force-push its head branch for routine rebasing, squashing, or history cleanup**, regardless of branch type. Add follow-up commits instead so reviewers can see what is new without re-reviewing work they have already checked. If a force-push is genuinely necessary, coordinate with the reviewers first. Afterward, leave a brief PR comment identifying what previously reviewed changes stayed unchanged, what changed while resolving conflicts, and what is new since the review.
+
 The relaxed protection on `feature/*` and `release/*` is a deliberate escape hatch, not an invitation.
 
 ## 2. Machine Setup

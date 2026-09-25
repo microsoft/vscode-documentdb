@@ -149,13 +149,15 @@ Confirm both:
   `docs/ai-and-plans/features/<feature>/iterations/`.
 - The author's decisions on the findings are recorded in it (§6.2), not just the findings.
 
-If either is missing, **stop and tell the operator §6 is outstanding.** Do not mark the PR
-ready to "unblock" it, and do not write the author's decisions on their behalf — §6.2 is
-the part that only the author can do.
+If either is missing, record §6 as a blocker and tell the operator. Continue with the
+Case 2 verification suite in §2.4 so the operator has a complete readiness report.
+Do not mark the PR ready to "unblock" it, and do not write the author's decisions on
+their behalf — §6.2 is the part that only the author can do.
 
 ## 2.4 Hand-over
 
-**Now** run Case 2 from `.github/copilot-instructions.md`. Once, here, not earlier.
+**Now** run Case 2 from `.github/copilot-instructions.md`, even if another hand-over
+requirement is outstanding. Run the suite once, here, not earlier.
 Then report:
 
 - What is done and what remains.
