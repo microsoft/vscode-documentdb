@@ -386,6 +386,8 @@ export interface QuickStartStatus {
      * no matching container (e.g. the user removed it outside the extension).
      */
     readonly missing?: boolean;
+    /** The container and its data volume were both found gone, so setup starts a new instance. */
+    readonly dataRemoved?: boolean;
     /**
      * The host port this instance is (or is about to be) bound to. Known even while provisioning,
      * because the port is decided in the Configure step rather than picked mid-run (review L1/L3).

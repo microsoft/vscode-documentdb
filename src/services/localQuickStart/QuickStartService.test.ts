@@ -285,6 +285,7 @@ describe('QuickStartService — WI-2d registry-driven reconcile (multi-instance)
         isDockerReady?: jest.Mock;
         removeContainer?: jest.Mock;
         removeVolume?: jest.Mock;
+        volumeExists?: boolean;
     }): IContainerRuntime {
         const inspect = opts.inspect ?? {};
         return mockRuntime({
@@ -301,6 +302,8 @@ describe('QuickStartService — WI-2d registry-driven reconcile (multi-instance)
             ...(opts.isDockerReady ? { isDockerReady: opts.isDockerReady } : {}),
             removeContainer: opts.removeContainer ?? jest.fn().mockResolvedValue(undefined),
             removeVolume: opts.removeVolume ?? jest.fn().mockResolvedValue(undefined),
+            // Unlike the provision helpers: a recorded instance normally still has its data volume.
+            volumeExists: jest.fn().mockResolvedValue(opts.volumeExists ?? true),
         });
     }
 
@@ -393,6 +396,210 @@ describe('QuickStartService — WI-2d registry-driven reconcile (multi-instance)
         expect((await listInstances()).some((record) => record.alias === ALIAS_2)).toBe(true);
     });
 
+    // Without metadata the tree fell through to "Set up DocumentDB Local" and never offered Delete.
+    it('rebuilds the metadata of a Missing instance from its record, so the tree offers Recreate/Delete', async () => {
+        ext.secretStorage = fakeSecretStorage({});
+        ext.context = fakeContext(fakeMemento());
+        await seedInstance(DEFAULT_ALIAS, CONN_1);
+        const service = new QuickStartServiceImpl(reconcileRuntime({ containers: [] }));
+
+        await service.reconcile();
+
+        const status = service.getStatus();
+        expect(status.missing).toBe(true);
+        expect(status.metadata).toMatchObject({ containerId: DEFAULT_ALIAS, boundPort: 10260, username: 'u1' });
+        expect(await service.canReuseExistingData()).toBe(true);
+    });
+
+    it('treats a ready record whose container AND volume are gone as not set up', async () => {
+        ext.secretStorage = fakeSecretStorage({});
+        ext.context = fakeContext(fakeMemento());
+        await seedInstance(DEFAULT_ALIAS, CONN_1);
+        const service = new QuickStartServiceImpl(reconcileRuntime({ containers: [], volumeExists: false }));
+
+        await service.reconcile();
+
+        const status = service.getStatus();
+        expect(status.state).toBe(InstanceState.NotInstalled);
+        expect(status.missing).toBe(false);
+        expect(status.dataRemoved).toBe(true);
+        expect(status.metadata).toBeUndefined();
+        // Nothing to keep, so setup must not offer "Keep the existing data"...
+        expect(await service.canReuseExistingData()).toBe(false);
+        // ...but a passive refresh never deletes credentials: Docker may just point at another engine.
+        expect((await listInstances()).some((record) => record.alias === DEFAULT_ALIAS)).toBe(true);
+    });
+
+    it('refreshLiveState() notices the volume of an already Missing instance going too', async () => {
+        ext.secretStorage = fakeSecretStorage({});
+        ext.context = fakeContext(fakeMemento());
+        await seedInstance(DEFAULT_ALIAS, CONN_1);
+        const volumeExists = jest.fn().mockResolvedValue(true);
+        const service = new QuickStartServiceImpl(mockRuntime({ volumeExists }));
+        await service.reconcile();
+        expect(service.getStatus().missing).toBe(true);
+
+        volumeExists.mockResolvedValue(false);
+        await service.refreshLiveState();
+
+        expect(service.getStatus().state).toBe(InstanceState.NotInstalled);
+        expect(await service.canReuseExistingData()).toBe(false);
+    });
+
+    it('refreshLiveState() clears CredentialsMissing once its container and volume are both gone', async () => {
+        ext.secretStorage = fakeSecretStorage({});
+        ext.context = fakeContext(fakeMemento());
+        const listByLabel = jest
+            .fn()
+            .mockResolvedValue([{ id: 'c1', labels: { [QUICK_START_ALIAS_LABEL_KEY]: DEFAULT_ALIAS } }]);
+        const volumeExists = jest.fn().mockResolvedValue(true);
+        const service = new QuickStartServiceImpl(mockRuntime({ listByLabel, volumeExists }));
+        await service.reconcile();
+        expect(service.getStatus().state).toBe(InstanceState.CredentialsMissing);
+
+        await service.refreshLiveState();
+        expect(service.getStatus().state).toBe(InstanceState.CredentialsMissing);
+
+        listByLabel.mockResolvedValue([]);
+        volumeExists.mockResolvedValue(false);
+        await service.refreshLiveState();
+
+        expect(service.getStatus().state).toBe(InstanceState.NotInstalled);
+    });
+
+    it('surfaces a credential-less ready record as CredentialsMissing while its volume still exists', async () => {
+        ext.secretStorage = fakeSecretStorage({});
+        ext.context = fakeContext(fakeMemento());
+        await upsertInstance({ alias: DEFAULT_ALIAS, displayName: 'DocumentDB Local', port: 10260, phase: 'ready' });
+        const service = new QuickStartServiceImpl(reconcileRuntime({ containers: [] }));
+
+        await service.reconcile();
+
+        expect(service.getStatus().state).toBe(InstanceState.CredentialsMissing);
+    });
+
+    it('treats a credential-less ready record as not set up once its volume is gone too', async () => {
+        ext.secretStorage = fakeSecretStorage({});
+        ext.context = fakeContext(fakeMemento());
+        await upsertInstance({ alias: DEFAULT_ALIAS, displayName: 'DocumentDB Local', port: 10260, phase: 'ready' });
+        const service = new QuickStartServiceImpl(reconcileRuntime({ containers: [], volumeExists: false }));
+
+        await service.reconcile();
+
+        expect(service.getStatus().state).toBe(InstanceState.NotInstalled);
+    });
+
+    it('start() says the data is gone, not preserved, when the volume was removed with the container', async () => {
+        ext.secretStorage = fakeSecretStorage({});
+        ext.context = fakeContext(fakeMemento());
+        await seedInstance(DEFAULT_ALIAS, CONN_1);
+        const inspect: Record<string, unknown> = {
+            c1: inspectItem('c1', { running: false, port: 10260, image: 'img:1' }),
+        };
+        const volumeExists = jest.fn().mockResolvedValue(true);
+        const startContainer = jest.fn().mockResolvedValue(undefined);
+        const service = new QuickStartServiceImpl(
+            mockRuntime({
+                listByLabel: jest
+                    .fn()
+                    .mockResolvedValue([{ id: 'c1', labels: { [QUICK_START_ALIAS_LABEL_KEY]: DEFAULT_ALIAS } }]),
+                inspectContainer: jest.fn((id: string) =>
+                    Promise.resolve(inspect[id]),
+                ) as unknown as IContainerRuntime['inspectContainer'],
+                volumeExists,
+                startContainer,
+            }),
+        );
+        await service.reconcile();
+
+        delete inspect.c1;
+        volumeExists.mockResolvedValue(false);
+        const info = jest.spyOn(vscode.window, 'showInformationMessage').mockResolvedValue(undefined);
+
+        await service.start();
+
+        expect(startContainer).not.toHaveBeenCalled();
+        expect(String(info.mock.calls[0]?.[0])).toContain('and its data were removed');
+        expect(String(info.mock.calls[0]?.[0])).not.toContain('preserved');
+        expect(service.getStatus().state).toBe(InstanceState.NotInstalled);
+        expect(service.getStatus().metadata).toBeUndefined();
+        expect(await service.canReuseExistingData()).toBe(false);
+        info.mockRestore();
+    });
+
+    it('start() leaves a stopped instance stopped when another process holds its port', async () => {
+        ext.secretStorage = fakeSecretStorage({});
+        ext.context = fakeContext(fakeMemento());
+        await seedInstance(DEFAULT_ALIAS, CONN_1);
+        const startContainer = jest.fn().mockResolvedValue(undefined);
+        const service = new QuickStartServiceImpl(
+            mockRuntime({
+                listByLabel: jest
+                    .fn()
+                    .mockResolvedValue([{ id: 'c1', labels: { [QUICK_START_ALIAS_LABEL_KEY]: DEFAULT_ALIAS } }]),
+                inspectContainer: jest.fn().mockResolvedValue({
+                    id: 'c1',
+                    status: 'exited',
+                    ports: [],
+                    labels: { [QUICK_START_LABEL_KEY]: '1', [QUICK_START_ALIAS_LABEL_KEY]: DEFAULT_ALIAS },
+                }),
+                isPortFree: jest.fn().mockResolvedValue(false),
+                startContainer,
+            }),
+        );
+        await service.reconcile();
+        const error = jest.spyOn(vscode.window, 'showErrorMessage').mockResolvedValue(undefined);
+
+        await service.start();
+
+        expect(startContainer).not.toHaveBeenCalled();
+        expect(String(error.mock.calls[0]?.[0])).toContain('port 10260 is already in use');
+        expect(service.getStatus().state).toBe(InstanceState.Stopped);
+        error.mockRestore();
+    });
+
+    it('restart() checks the port only after the container released it', async () => {
+        ext.secretStorage = fakeSecretStorage({});
+        ext.context = fakeContext(fakeMemento());
+        await seedInstance(DEFAULT_ALIAS, CONN_1);
+        const calls: string[] = [];
+        const service = new QuickStartServiceImpl(
+            mockRuntime({
+                listByLabel: jest
+                    .fn()
+                    .mockResolvedValue([{ id: 'c1', labels: { [QUICK_START_ALIAS_LABEL_KEY]: DEFAULT_ALIAS } }]),
+                inspectContainer: jest.fn().mockResolvedValue({
+                    id: 'c1',
+                    status: 'running',
+                    ports: [{ containerPort: QUICK_START_PORT, hostPort: 10260 }],
+                    labels: { [QUICK_START_LABEL_KEY]: '1', [QUICK_START_ALIAS_LABEL_KEY]: DEFAULT_ALIAS },
+                }),
+                stopContainer: jest.fn(() => {
+                    calls.push('stop');
+                    return Promise.resolve();
+                }),
+                isPortFree: jest.fn(() => {
+                    calls.push('portCheck');
+                    return Promise.resolve(false);
+                }),
+                startContainer: jest.fn(() => {
+                    calls.push('start');
+                    return Promise.resolve();
+                }),
+            }),
+        );
+        await service.reconcile();
+        const error = jest.spyOn(vscode.window, 'showErrorMessage').mockResolvedValue(undefined);
+
+        await service.restart();
+
+        // Rechecked a few times first: Docker Desktop frees a stopped container's port a moment later.
+        expect(calls).toEqual(['stop', 'portCheck', 'portCheck', 'portCheck', 'portCheck']);
+        expect(error).toHaveBeenCalled();
+        expect(service.getStatus().state).toBe(InstanceState.Stopped);
+        error.mockRestore();
+    });
+
     it('start() after an external container delete surfaces Missing instead of a silent no-op (#2)', async () => {
         ext.secretStorage = fakeSecretStorage({});
         ext.context = fakeContext(fakeMemento());
@@ -406,6 +613,7 @@ describe('QuickStartService — WI-2d registry-driven reconcile (multi-instance)
         };
         const service = new QuickStartServiceImpl(
             mockRuntime({
+                volumeExists: jest.fn().mockResolvedValue(true),
                 listByLabel: jest
                     .fn()
                     .mockResolvedValue([{ id: 'c1', labels: { [QUICK_START_ALIAS_LABEL_KEY]: DEFAULT_ALIAS } }]),
@@ -443,6 +651,7 @@ describe('QuickStartService — WI-2d registry-driven reconcile (multi-instance)
         };
         const service = new QuickStartServiceImpl(
             mockRuntime({
+                volumeExists: jest.fn().mockResolvedValue(true),
                 listByLabel: jest
                     .fn()
                     .mockResolvedValue([{ id: 'c1', labels: { [QUICK_START_ALIAS_LABEL_KEY]: DEFAULT_ALIAS } }]),
@@ -726,6 +935,7 @@ describe('QuickStartService — WI-2d registry-driven reconcile (multi-instance)
         let phase: 'ours' | 'gone' | 'foreign' = 'ours';
         const service = new QuickStartServiceImpl(
             mockRuntime({
+                volumeExists: jest.fn().mockResolvedValue(true),
                 listByLabel: jest
                     .fn()
                     .mockResolvedValue([{ id: 'c1', labels: { [QUICK_START_ALIAS_LABEL_KEY]: DEFAULT_ALIAS } }]),
@@ -787,6 +997,7 @@ describe('QuickStartService — WI-2d registry-driven reconcile (multi-instance)
         let running = false;
         const service = new QuickStartServiceImpl(
             mockRuntime({
+                volumeExists: jest.fn().mockResolvedValue(true),
                 listByLabel: jest
                     .fn()
                     .mockResolvedValue([{ id: 'c1', labels: { [QUICK_START_ALIAS_LABEL_KEY]: DEFAULT_ALIAS } }]),
@@ -869,6 +1080,7 @@ describe('QuickStartService — WI-2d registry-driven reconcile (multi-instance)
         let running = true;
         const service = new QuickStartServiceImpl(
             mockRuntime({
+                volumeExists: jest.fn().mockResolvedValue(true),
                 listByLabel: jest
                     .fn()
                     .mockResolvedValue([{ id: 'c1', labels: { [QUICK_START_ALIAS_LABEL_KEY]: DEFAULT_ALIAS } }]),
@@ -964,6 +1176,7 @@ describe('QuickStartService — WI-2d registry-driven reconcile (multi-instance)
         let present = true;
         const service = new QuickStartServiceImpl(
             mockRuntime({
+                volumeExists: jest.fn().mockResolvedValue(true),
                 listByLabel: jest
                     .fn()
                     .mockResolvedValue([{ id: 'c1', labels: { [QUICK_START_ALIAS_LABEL_KEY]: DEFAULT_ALIAS } }]),
@@ -1750,12 +1963,33 @@ describe('QuickStartService — WI-2e-1 provision RR4 volume-wipe gate', () => {
             phase: 'ready',
         });
         const removeVolume = jest.fn().mockResolvedValue(undefined);
-        const service = new QuickStartServiceImpl(provisionRuntime({ containers: [], removeVolume }));
+        const service = new QuickStartServiceImpl(
+            provisionRuntime({ containers: [], removeVolume, volumeExists: true }),
+        );
 
         await drain(service.provision(new AbortController().signal));
 
         expect(removeVolume).not.toHaveBeenCalled();
         expect(service.getStatus().state).toBe(InstanceState.CredentialsMissing);
+    });
+
+    it('sets up from scratch when a credential-less ready record has lost its container AND volume', async () => {
+        ext.secretStorage = fakeSecretStorage({});
+        ext.context = fakeContext(fakeMemento());
+        await upsertInstance({ alias: DEFAULT_ALIAS, displayName: 'DocumentDB Local', port: 10260, phase: 'ready' });
+        // The busy port stops the run right after the gate, which is all this needs to observe.
+        const service = new QuickStartServiceImpl(
+            provisionRuntime({ containers: [], portFree: false, volumeExists: false }),
+        );
+        const events: StageEvent[] = [];
+
+        for await (const event of service.provision(new AbortController().signal)) {
+            events.push(event);
+        }
+
+        expect(events.at(-1)?.message?.key).toBe('portInUse');
+        // Only a successful setup replaces the record.
+        expect(await listInstances()).toHaveLength(1);
     });
 
     it('proceeds for a truly-fresh alias and removes the volume its failed create left behind', async () => {
