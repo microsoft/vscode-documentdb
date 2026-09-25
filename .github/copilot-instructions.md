@@ -79,6 +79,13 @@ by hand is slower and produces a bundle that does not match the source.
 - **On conflict, the code wins for behavior; active docs win for intent.** If they disagree, do not silently pick one — name the doc and the code, and offer to correct the doc.
 - Never treat `status: historical` or `status: superseded` as current.
 
+When a significant design choice, new constraint, rejected alternative, or deviation from
+the agreed plan arises, ask the operator whether to record it in the feature's
+`decisions.md` while the reasoning is fresh. Briefly explain the choice and why its
+rationale may matter later. If the operator agrees, append the decision with their
+reasoning and any rejected alternatives; do not invent their rationale or wait until
+PR handoff to reconstruct it. Minor implementation choices do not need this check.
+
 ## Project Structure
 
 | Folder          | Purpose                                    |
