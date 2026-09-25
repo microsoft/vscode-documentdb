@@ -21,8 +21,8 @@ import {
     type DatabaseCollectionsResult,
     type RawCommandDiagnostic,
 } from '../../../documentdb/utils/getClusterHealth';
-import { ext } from '../../../extensionVariables';
 import { SettingsService } from '../../../services/SettingsService';
+import { settingsKeys } from '../../../settingsKeys';
 import { readOnlyJsonDocumentProvider } from '../../../utils/readOnlyJsonDocumentProvider';
 import { type BaseRouterContext } from '../../_integration/appRouter';
 import { publicProcedureWithTelemetry, router, type WithTelemetry } from '../../_integration/trpc';
@@ -163,7 +163,7 @@ export const clusterDashboardRouter = router({
             const myCtx = dashboardContext(ctx);
             myCtx.actionContext.telemetry.properties.showDashboardOnConnect = input ? 'true' : 'false';
 
-            await SettingsService.updateGlobalSetting(ext.settingsKeys.showDashboardOnConnect, input);
+            await SettingsService.updateGlobalSetting(settingsKeys.showDashboardOnConnect, input);
         }),
 
     /**

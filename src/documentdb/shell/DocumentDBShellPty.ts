@@ -10,6 +10,7 @@ import * as vscode from 'vscode';
 import { ext } from '../../extensionVariables';
 import { ConnectionDiagnosticsService } from '../../services/connectionDiagnosticsService';
 import { maskSecrets } from '../../services/localQuickStart/outputMasking';
+import { settingsKeys } from '../../settingsKeys';
 import { type CompletionCategory } from '../../telemetry/completionCategories';
 import { accumulateTelemetry } from '../../utils/accumulatingTelemetry';
 import { classifyCommand, extractRunCommandName } from '../../utils/classifyCommand';
@@ -328,8 +329,8 @@ export class DocumentDBShellPty implements vscode.Pseudoterminal {
         }
 
         const behavior = vscode.workspace
-            .getConfiguration('documentDB.shell')
-            .get<string>('multiLinePasteBehavior', 'ask');
+            .getConfiguration()
+            .get<string>(settingsKeys.shellMultiLinePasteBehavior, 'ask');
 
         if (behavior === 'executeAsOne') {
             this.processInputDirectly(this.joinPastedLines(lines) + '\r');
@@ -1507,19 +1508,19 @@ export class DocumentDBShellPty implements vscode.Pseudoterminal {
 
     private isColorEnabled(): boolean {
         const config = vscode.workspace.getConfiguration();
-        return config.get<boolean>('documentDB.shell.display.colorSupport', true);
+        return config.get<boolean>(settingsKeys.shellColorSupport, true);
     }
 
     /** Governs Tab completion, the candidate list, and every unmarked ghost. */
     private isAutocompletionEnabled(): boolean {
         const config = vscode.workspace.getConfiguration();
-        return config.get<boolean>('documentDB.shell.display.autocompletion', true);
+        return config.get<boolean>(settingsKeys.shellAutocompletion, true);
     }
 
     /** Governs everything rendered with the `🛈` marker. */
     private areInlineHintsEnabled(): boolean {
         const config = vscode.workspace.getConfiguration();
-        return config.get<boolean>('documentDB.shell.display.inlineHints', true);
+        return config.get<boolean>(settingsKeys.shellInlineHints, true);
     }
 
     // ─── Private: Telemetry helpers ──────────────────────────────────────────

@@ -29,12 +29,51 @@ const MIN_DESCRIPTION_WIDTH = 12;
 /** Assumed terminal width when the caller does not supply one. */
 const DEFAULT_HELP_COLUMNS = 80;
 
-/** One line of the shell help document, before it is laid out for a width. */
-type ShellHelpLine =
+/** Identifies the structured Interactive Shell help payload across the worker boundary. */
+export const SHELL_HELP_DOCUMENT_KIND = 'documentdb.shellHelp' as const;
+
+export type ShellHelpTextTone = 'muted' | 'ghost';
+
+export interface ShellHelpTextSpan {
+    readonly text: string;
+    readonly tone: ShellHelpTextTone;
+    readonly link?: boolean;
+}
+
+export type ShellHelpDocumentLine =
+    | { readonly kind: 'header'; readonly text: string }
+    | { readonly kind: 'blank' }
+    | {
+          readonly kind: 'entry';
+          readonly indent: string;
+          readonly command: string;
+          readonly gap: string;
+          readonly description: string;
+      }
+    | { readonly kind: 'text'; readonly spans: readonly ShellHelpTextSpan[] };
+
+export interface ShellHelpDocument {
+    readonly kind: typeof SHELL_HELP_DOCUMENT_KIND;
+    readonly lines: readonly ShellHelpDocumentLine[];
+}
+
+/** One semantic line of shell help, before it is laid out for a width. */
+type ShellHelpSourceLine =
     | { readonly kind: 'header'; readonly text: string }
     | { readonly kind: 'blank' }
     | { readonly kind: 'entry'; readonly command: string; readonly description: string }
-    | { readonly kind: 'tip'; readonly text: string; readonly indent: string };
+    | {
+          readonly kind: 'tip';
+          readonly text: string;
+          readonly indent: string;
+          readonly tone: ShellHelpTextTone;
+      }
+    | {
+          readonly kind: 'link';
+          readonly marker: string;
+          readonly description: string;
+          readonly indent: string;
+      };
 
 /**
  * Greedy word wrap. Words longer than `width` are left intact rather than split,
@@ -86,7 +125,7 @@ export class HelpProvider {
      */
     getHelpText(columns?: number): string {
         if (this._surface === 'shell') {
-            return this.buildShellHelp(columns);
+            return this.renderShellHelpText(this.buildShellHelp(columns));
         }
         return this.buildPlaygroundHelp();
     }
@@ -99,7 +138,7 @@ export class HelpProvider {
     getHelpResult(columns?: number): ShellEvaluationResult {
         return {
             type: 'Help',
-            printable: this.getHelpText(columns),
+            printable: this._surface === 'shell' ? this.buildShellHelp(columns) : this.getHelpText(columns),
             durationMs: 0,
         };
     }
@@ -220,28 +259,30 @@ export class HelpProvider {
      * When there is not enough room for a usable description column, entries are
      * stacked instead — command on one line, description indented beneath it.
      *
-     * The output uses a line-prefix convention that {@link ShellOutputFormatter.colorizeHelpText}
-     * uses to apply theme-aware ANSI colors:
-     *
-     * - Lines starting with `# ` → section header (bold cyan). The `# ` prefix is stripped from display.
-     * - Lines starting with two spaces and matching `  <command><2+ spaces><description>` → two-column
-     *   entry. The command column is colored yellow, description gray. The regex uses a greedy match on
-     *   the command so entries with internal double-spaces (e.g. `.limit(n)  .skip(n)`) split correctly
-     *   at the last gap, not the first.
-     * - Other indented lines → treated as plain tip text (gray).
-     * - Blank lines → passed through as-is.
+     * Semantic line and span kinds survive layout so the extension host can apply
+     * theme-aware ANSI styles without inferring meaning from the rendered text.
      */
-    private buildShellHelp(columns: number = DEFAULT_HELP_COLUMNS): string {
-        const header = (text: string): ShellHelpLine => ({ kind: 'header', text });
-        const blank: ShellHelpLine = { kind: 'blank' };
-        const entry = (command: string, description: string): ShellHelpLine => ({
+    private buildShellHelp(columns: number = DEFAULT_HELP_COLUMNS): ShellHelpDocument {
+        const header = (text: string): ShellHelpSourceLine => ({ kind: 'header', text });
+        const blank: ShellHelpSourceLine = { kind: 'blank' };
+        const entry = (command: string, description: string): ShellHelpSourceLine => ({
             kind: 'entry',
             command,
             description,
         });
-        const tip = (text: string, indent: string = ENTRY_INDENT): ShellHelpLine => ({ kind: 'tip', text, indent });
+        const tip = (
+            text: string,
+            tone: ShellHelpTextTone = 'muted',
+            indent: string = ENTRY_INDENT,
+        ): ShellHelpSourceLine => ({ kind: 'tip', text, indent, tone });
+        const link = (marker: string, description: string): ShellHelpSourceLine => ({
+            kind: 'link',
+            marker,
+            description,
+            indent: ENTRY_INDENT,
+        });
 
-        const document: ShellHelpLine[] = [
+        const document: ShellHelpSourceLine[] = [
             header('DocumentDB Shell: Quick Reference'),
             blank,
 
@@ -271,40 +312,38 @@ export class HelpProvider {
             blank,
 
             header('Settings'),
-            tip('Select an option to open it in VS Code Settings:'),
-            tip('1. ⚙ [colorSupport] Toggle syntax and output colors.'),
-            tip('Manual access: search Settings for documentDB.shell.display.colorSupport', '     '),
-            tip('2. ⚙ [inlineHints] Toggle 🛈 descriptions, counts, and previews.'),
-            tip('Manual access: search Settings for documentDB.shell.display.inlineHints', '     '),
-            tip('3. ⚙ [autocompletion] Toggle Tab completion and inline suggestions.'),
-            tip('Manual access: search Settings for documentDB.shell.display.autocompletion', '     '),
+            link('⚙ [shellSettings]', 'Configure paste behavior, colors, inline hints, and autocompletion.'),
+            tip('Manual access: search Settings for @ext:ms-azuretools.vscode-documentdb documentDB.shell', 'ghost'),
             blank,
 
             header('Tips'),
             tip('Variables persist across commands. console.log() output appears inline.'),
         ];
 
-        return this.layoutShellHelp(document, columns).join('\n');
+        return {
+            kind: SHELL_HELP_DOCUMENT_KIND,
+            lines: this.layoutShellHelp(document, columns),
+        };
     }
 
     /**
      * Lay the shell help document out for a given terminal width.
      */
-    private layoutShellHelp(document: readonly ShellHelpLine[], columns: number): string[] {
+    private layoutShellHelp(document: readonly ShellHelpSourceLine[], columns: number): ShellHelpDocumentLine[] {
         const commandWidth = Math.max(
             ...document.filter((line) => line.kind === 'entry').map((line) => line.command.length),
         );
 
         const descriptionWidth = columns - ENTRY_INDENT.length - commandWidth - COLUMN_GAP;
         const stacked = descriptionWidth < MIN_DESCRIPTION_WIDTH;
-        const output: string[] = [];
+        const output: ShellHelpDocumentLine[] = [];
         for (const line of document) {
             switch (line.kind) {
                 case 'header':
-                    output.push(`# ${line.text}`);
+                    output.push(line);
                     break;
                 case 'blank':
-                    output.push('');
+                    output.push(line);
                     break;
                 case 'tip':
                     for (const wrapped of wrapText(line.text, Math.max(1, columns - line.indent.length))) {
@@ -312,23 +351,62 @@ export class HelpProvider {
                             line.indent.length + wrapped.length <= columns
                                 ? line.indent
                                 : ENTRY_INDENT.slice(0, Math.max(0, columns - wrapped.length));
-                        output.push(indent + wrapped);
+                        output.push({
+                            kind: 'text',
+                            spans: [{ text: indent + wrapped, tone: line.tone }],
+                        });
                     }
                     break;
+                case 'link': {
+                    const unbreakableMarker = line.marker.replaceAll(' ', '\u00a0');
+                    const wrappedLines = wrapText(
+                        `${unbreakableMarker} ${line.description}`,
+                        Math.max(1, columns - line.indent.length),
+                    ).map((wrapped) => wrapped.replaceAll('\u00a0', ' '));
+                    const [firstLine, ...continuations] = wrappedLines;
+                    output.push({
+                        kind: 'text',
+                        spans: [
+                            { text: line.indent, tone: 'muted' },
+                            { text: line.marker, tone: 'muted', link: true },
+                            { text: firstLine.slice(line.marker.length), tone: 'muted' },
+                        ],
+                    });
+                    for (const continuation of continuations) {
+                        output.push({
+                            kind: 'text',
+                            spans: [{ text: line.indent + continuation, tone: 'muted' }],
+                        });
+                    }
+                    break;
+                }
                 case 'entry':
                     if (stacked) {
-                        output.push(ENTRY_INDENT + line.command);
+                        output.push({
+                            kind: 'text',
+                            spans: [{ text: ENTRY_INDENT + line.command, tone: 'muted' }],
+                        });
                         for (const wrapped of wrapText(line.description, Math.max(1, columns - 4))) {
-                            output.push('    ' + wrapped);
+                            output.push({
+                                kind: 'text',
+                                spans: [{ text: '    ' + wrapped, tone: 'muted' }],
+                            });
                         }
                     } else {
                         const wrapped = wrapText(line.description, descriptionWidth);
                         const hangingIndent = ' '.repeat(ENTRY_INDENT.length + commandWidth + COLUMN_GAP);
-                        output.push(
-                            ENTRY_INDENT + line.command.padEnd(commandWidth) + ' '.repeat(COLUMN_GAP) + wrapped[0],
-                        );
+                        output.push({
+                            kind: 'entry',
+                            indent: ENTRY_INDENT,
+                            command: line.command,
+                            gap: ' '.repeat(commandWidth - line.command.length + COLUMN_GAP),
+                            description: wrapped[0],
+                        });
                         for (const continuation of wrapped.slice(1)) {
-                            output.push(hangingIndent + continuation);
+                            output.push({
+                                kind: 'text',
+                                spans: [{ text: hangingIndent + continuation, tone: 'muted' }],
+                            });
                         }
                     }
                     break;
@@ -336,5 +414,22 @@ export class HelpProvider {
         }
 
         return output;
+    }
+
+    private renderShellHelpText(document: ShellHelpDocument): string {
+        return document.lines
+            .map((line) => {
+                switch (line.kind) {
+                    case 'header':
+                        return `# ${line.text}`;
+                    case 'blank':
+                        return '';
+                    case 'entry':
+                        return line.indent + line.command + line.gap + line.description;
+                    case 'text':
+                        return line.spans.map((span) => span.text).join('');
+                }
+            })
+            .join('\n');
     }
 }

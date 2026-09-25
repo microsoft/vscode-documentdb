@@ -25,6 +25,7 @@ import { ShellCommandIds } from '../../documentdb/shell/constants';
 import { ext } from '../../extensionVariables';
 import { SettingsService } from '../../services/SettingsService';
 import { ConnectionDiagnosticsService } from '../../services/connectionDiagnosticsService';
+import { settingsKeys } from '../../settingsKeys';
 import { regionToDisplayName } from '../../utils/regionToDisplayName';
 import { withDelayedProgress } from '../../utils/withProgress';
 import { type TreeElement } from '../TreeElement';
@@ -387,7 +388,7 @@ export abstract class ClusterItemBase<T extends BaseClusterModel = BaseClusterMo
             return this.createErrorRecoveryChildren(true);
         }
 
-        if (!wasConnected && (SettingsService.getSetting<boolean>(ext.settingsKeys.showDashboardOnConnect) ?? true)) {
+        if (!wasConnected && (SettingsService.getSetting<boolean>(settingsKeys.showDashboardOnConnect) ?? true)) {
             await vscode.commands.executeCommand('vscode-documentdb.command.clusterDashboard.open', this, null, {
                 activationSource: 'autoOpenOnConnect',
             });

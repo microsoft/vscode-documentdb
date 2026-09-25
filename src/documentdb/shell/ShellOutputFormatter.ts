@@ -3,9 +3,15 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+import {
+    type ShellHelpDocument,
+    type ShellHelpDocumentLine,
+    type ShellHelpTextSpan,
+} from '@documentdb-js/shell-runtime';
 import * as l10n from '@vscode/l10n';
 import { EJSON } from 'bson';
 import * as vscode from 'vscode';
+import { settingsKeys } from '../../settingsKeys';
 import { meterSilentCatch } from '../../utils/accumulatingTelemetry';
 import { type SerializableExecutionResult } from '../playground/workerTypes';
 import { shellAnsi, shellStyles } from './shellStyles';
@@ -17,9 +23,7 @@ import { shellAnsi, shellStyles } from './shellStyles';
  */
 const ERROR_CODE_PREFIX_RE = /^\[([A-Z]+-\d+)\]\s*/;
 
-/** Compact settings markers embedded in shell help and handled by the terminal link provider. */
-const HELP_SETTINGS_LINK_RE = /\u{2699} \[[^\]]+\]/gu;
-const HELP_MANUAL_ACCESS_PREFIX = 'Manual access:';
+const SHELL_HELP_DOCUMENT_KIND = 'documentdb.shellHelp';
 
 /**
  * Result of extracting a technical error code from an error message.
@@ -308,76 +312,66 @@ export class ShellOutputFormatter {
     /**
      * Format help text for terminal display.
      *
-     * Shell help uses a structured format:
-     * - Lines starting with `# ` are section headers → rendered bold
-     * - Lines starting with `  ` contain a padded command/description pair → command in yellow
-     * - Other lines (tips, blanks) are rendered as-is in gray
-     *
      * ANSI colors are theme-aware in VS Code terminals: the basic 16 ANSI colors
      * map to `terminal.ansiRed`, `terminal.ansiGreen`, etc. from the active color theme.
      * This means we get automatic light/dark adaptation and users can customize.
      */
     private formatHelpText(printable: unknown): string {
-        let text: string;
-        if (typeof printable === 'string') {
-            text = printable;
-        } else if (typeof printable === 'object' && printable !== null && 'help' in printable) {
-            // @mongosh Help results have a .help property with the help text
-            text = String((printable as { help: unknown }).help);
-        } else {
-            return this.toEjsonString(printable);
+        if (this.isShellHelpDocument(printable)) {
+            return printable.lines.map((line) => this.formatShellHelpLine(line)).join('\r\n');
         }
 
-        const formatted = this.isColorEnabled() ? this.colorizeHelpText(text) : text;
-        return formatted.replace(HELP_SETTINGS_LINK_RE, (link) => this.formatLinkSentinel(link));
+        if (typeof printable === 'string') {
+            return printable;
+        }
+        if (typeof printable === 'object' && printable !== null && 'help' in printable) {
+            return String((printable as { help: unknown }).help);
+        }
+        return this.toEjsonString(printable);
     }
 
-    /**
-     * Apply theme-aware ANSI coloring to structured help text.
-     */
-    private colorizeHelpText(text: string): string {
-        return text
-            .split('\n')
-            .map((line) => {
-                // Section headers: "# Title"
-                if (line.startsWith('# ')) {
-                    return `${shellStyles.emphasis}${line.slice(2)}${shellAnsi.reset}`;
-                }
-
-                // Command entries: "  command(padded)     description"
-                // The command column may itself contain internal double-spaces (e.g. ".limit(n)  .skip(n)"),
-                // so we use a greedy match for the command and non-greedy for the gap so the split
-                // happens at the LAST run of 2+ spaces before the description, not the first.
-                const entryMatch = /^( {2})(\S.*\S)( {2,})(\S.+)$/.exec(line);
-                if (entryMatch) {
-                    const [, indent, command, gap, description] = entryMatch;
-                    return `${indent}${shellStyles.completion.action}${command}${shellAnsi.reset}${gap}${shellStyles.muted}${description}${shellAnsi.reset}`;
-                }
-
-                if (line.trimStart().startsWith(HELP_MANUAL_ACCESS_PREFIX)) {
-                    return `${shellStyles.ghostText}${line}${shellAnsi.reset}`;
-                }
-
-                // Tip lines (indented text without two-column structure)
-                if (line.startsWith('  ') && line.trim().length > 0) {
-                    return `${shellStyles.muted}${line}${shellAnsi.reset}`;
-                }
-
-                return line;
-            })
-            .join('\r\n');
+    private isShellHelpDocument(value: unknown): value is ShellHelpDocument {
+        return (
+            typeof value === 'object' &&
+            value !== null &&
+            'kind' in value &&
+            value.kind === SHELL_HELP_DOCUMENT_KIND &&
+            'lines' in value &&
+            Array.isArray(value.lines)
+        );
     }
 
-    /**
-     * Wrap text with ANSI underline codes to visually indicate a clickable link.
-     *
-     * Uses `\x1b[4m` (underline on) and `\x1b[24m` (underline off) instead of
-     * a full reset, so that surrounding styles (e.g., gray from {@link formatSystemMessage})
-     * are preserved.
-     *
-     * Underline is applied regardless of the `colorSupport` setting because it
-     * communicates clickability, not decoration.
-     */
+    private formatShellHelpLine(line: ShellHelpDocumentLine): string {
+        const colorEnabled = this.isColorEnabled();
+        switch (line.kind) {
+            case 'header':
+                return colorEnabled ? `${shellStyles.emphasis}${line.text}${shellAnsi.reset}` : line.text;
+            case 'blank':
+                return '';
+            case 'entry': {
+                const command = colorEnabled
+                    ? `${shellStyles.completion.action}${line.command}${shellAnsi.reset}`
+                    : line.command;
+                const description = colorEnabled
+                    ? `${shellStyles.muted}${line.description}${shellAnsi.reset}`
+                    : line.description;
+                return line.indent + command + line.gap + description;
+            }
+            case 'text':
+                return line.spans.map((span) => this.formatShellHelpSpan(span, colorEnabled)).join('');
+        }
+    }
+
+    private formatShellHelpSpan(span: ShellHelpTextSpan, colorEnabled: boolean): string {
+        let tone = '';
+        if (colorEnabled) {
+            tone = span.tone === 'ghost' ? shellStyles.ghostText : shellStyles.muted;
+        }
+        const text = span.link ? this.formatLinkSentinel(span.text) : span.text;
+        return tone ? `${tone}${text}${shellAnsi.reset}` : text;
+    }
+
+    /** Underline a known terminal action sentinel without changing its surrounding color. */
     formatLinkSentinel(text: string): string {
         return `${shellAnsi.underline}${text}${shellAnsi.noUnderline}`;
     }
@@ -386,6 +380,6 @@ export class ShellOutputFormatter {
 
     private isColorEnabled(): boolean {
         const config = vscode.workspace.getConfiguration();
-        return config.get<boolean>('documentDB.shell.display.colorSupport', true);
+        return config.get<boolean>(settingsKeys.shellColorSupport, true);
     }
 }

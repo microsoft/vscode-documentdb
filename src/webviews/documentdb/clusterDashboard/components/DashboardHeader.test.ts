@@ -5,6 +5,7 @@
 
 import { SSRProvider } from '@fluentui/react-components';
 import { createElement, type ReactNode } from 'react';
+import type * as React from 'react';
 // eslint-disable-next-line import/no-internal-modules -- React DOM exposes server rendering through this public subpath.
 import { renderToStaticMarkup } from 'react-dom/server';
 
@@ -13,7 +14,7 @@ import { buildDetailGroups } from './DashboardDetails';
 import { collectResilienceBadges, DashboardHeader } from './DashboardHeader';
 
 jest.mock('@microsoft/vscode-ext-webview-fluentui/components', () => {
-    const react = jest.requireActual<typeof import('react')>('react');
+    const react = jest.requireActual<typeof React>('react');
     return {
         FocusableBadge: ({ children, ...props }: { children: ReactNode; className?: string }): ReactNode =>
             react.createElement('span', { ...props, role: 'group', tabIndex: 0 }, children),
@@ -163,16 +164,20 @@ describe('Dashboard versions', () => {
         );
         const expectedValues = [...rows.map((row) => row.value), 'West US 2 (westus2)', 'M10', '1h 0m'];
         expect(values).toEqual(expectedValues);
-        expect(html.match(/class="dashboardFactSegment(?: dashboardVersion)?" role="group" tabindex="0" aria-labelledby=/g)).toHaveLength(
-            3 + headerVersions.length,
-        );
+        expect(
+            html.match(
+                /class="dashboardFactSegment(?: dashboardVersion)?" role="group" tabindex="0" aria-labelledby=/g,
+            ),
+        ).toHaveLength(3 + headerVersions.length);
         expect(html.match(/class="dashboardFactSeparator" aria-hidden="true">\|<\/span>/g)).toHaveLength(
             3 + headerVersions.length,
         );
         if (tagCount > 0) {
-            expect(html.match(/class="dashboardFactSegment dashboardVersion" role="group" tabindex="0" aria-labelledby=[^>]+><span class="dashboardFactSeparator"/g)).toHaveLength(
-                tagCount,
-            );
+            expect(
+                html.match(
+                    /class="dashboardFactSegment dashboardVersion" role="group" tabindex="0" aria-labelledby=[^>]+><span class="dashboardFactSeparator"/g,
+                ),
+            ).toHaveLength(tagCount);
         }
         expect(html).not.toContain('DocumentDB 0.117.0 · API 7.0.0');
         const groups = buildDetailGroups(clusterInfo, undefined);
@@ -228,9 +233,11 @@ describe('Dashboard versions', () => {
         expect(html).toContain('No high availability');
         expect(html.indexOf('dashboardHeaderLatency')).toBeLessThan(html.indexOf('dashboardResilienceBadge'));
         expect(html.indexOf('dashboardResilienceBadge')).toBeLessThan(html.indexOf('class="dashboardFact"'));
-        expect(html.match(/class="dashboardFactSegment dashboardResilience"><span class="dashboardFactSeparator" aria-hidden="true">\|<\/span>/g)).toHaveLength(
-            2,
-        );
+        expect(
+            html.match(
+                /class="dashboardFactSegment dashboardResilience"><span class="dashboardFactSeparator" aria-hidden="true">\|<\/span>/g,
+            ),
+        ).toHaveLength(2);
         expect(html).toContain('dashboardFactName');
         expect(html.match(/\bdashboardDisclosure\b/g)).toHaveLength(1);
     });

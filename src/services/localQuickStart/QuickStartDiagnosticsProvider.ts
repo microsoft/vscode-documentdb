@@ -41,7 +41,7 @@ export class QuickStartDiagnosticsProvider implements ConnectionDiagnosticsProvi
                 );
             case 'missing':
                 return l10n.t(
-                    'We cannot find the DocumentDB Local container. It was very likely removed outside VS Code. You can recreate it from the Connections view, which reuses the existing data volume.',
+                    'We cannot find the DocumentDB Local container. It was very likely removed outside VS Code. You can create it again from the Connections view.',
                 );
             case 'foreign':
                 return l10n.t(

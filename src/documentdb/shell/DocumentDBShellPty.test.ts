@@ -125,9 +125,9 @@ describe('DocumentDBShellPty', () => {
                         if (_key === 'documentDB.shell.display.colorSupport') {
                             return false; // Disable colors for easier test assertions
                         }
-                    }
-                    if (section === 'documentDB.shell' && _key === 'multiLinePasteBehavior') {
-                        return 'runLineByLine'; // Default to line-by-line in tests for backward compat
+                        if (_key === 'documentDB.shell.multiLinePasteBehavior') {
+                            return 'runLineByLine'; // Default to line-by-line in tests for backward compat
+                        }
                     }
                     return defaultValue;
                 }),
@@ -1487,13 +1487,13 @@ describe('DocumentDBShellPty', () => {
             jest.spyOn(vscode.workspace, 'getConfiguration').mockImplementation((section?: string) => {
                 return {
                     get: jest.fn((_key: string, defaultValue?: unknown) => {
-                        if (section === 'documentDB.shell' && _key === 'multiLinePasteBehavior') {
-                            return behavior;
-                        }
                         if (section === 'terminal.integrated' && _key === 'enableMultiLinePasteWarning') {
                             return vscodePasteWarning;
                         }
                         if (section === undefined || section === '') {
+                            if (_key === 'documentDB.shell.multiLinePasteBehavior') {
+                                return behavior;
+                            }
                             if (_key === 'documentDB.shell.display.colorSupport') {
                                 return false;
                             }

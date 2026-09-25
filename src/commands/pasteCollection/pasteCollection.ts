@@ -15,6 +15,7 @@ import * as vscode from 'vscode';
 import { ClustersClient } from '../../documentdb/ClustersClient';
 import { ext } from '../../extensionVariables';
 import { ConflictResolutionStrategy } from '../../services/taskService/tasks/copy-and-paste/copyPasteConfig';
+import { settingsKeys } from '../../settingsKeys';
 import { CollectionItem } from '../../tree/documentdb/CollectionItem';
 import { DatabaseItem } from '../../tree/documentdb/DatabaseItem';
 import { ConfirmOperationStep } from './ConfirmOperationStep';
@@ -157,13 +158,13 @@ export async function pasteCollection(
     // Read large collection warning settings
     const showLargeCollectionWarning = vscode.workspace
         .getConfiguration()
-        .get<boolean>(ext.settingsKeys.showLargeCollectionWarning, true);
+        .get<boolean>(settingsKeys.showLargeCollectionWarning, true);
 
     // Add warning step for large collections as the first step
     if (showLargeCollectionWarning) {
         const largeCollectionThreshold = vscode.workspace
             .getConfiguration()
-            .get<number>(ext.settingsKeys.largeCollectionWarningThreshold, 100000);
+            .get<number>(settingsKeys.largeCollectionWarningThreshold, 100000);
 
         if (sourceCollectionSize !== undefined && sourceCollectionSize > largeCollectionThreshold) {
             promptSteps.push(new LargeCollectionWarningStep());

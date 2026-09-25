@@ -12,6 +12,7 @@ const mockGetStatus = jest.fn();
 const mockRefreshLiveState = jest.fn();
 const mockCanReuseExistingData = jest.fn();
 const mockSuggestPort = jest.fn();
+const mockProvision = jest.fn();
 
 /** Drives `QuickStartService.onDidChangeStatus` so a test can push status changes at the router. */
 const statusListeners = new Set<() => void>();
@@ -34,7 +35,7 @@ jest.mock('../../../services/localQuickStart/QuickStartService', () => ({
         checkDockerReadiness: (...args: unknown[]) => mockIsDockerReady(...args) as unknown,
         getStatus: (...args: unknown[]) => mockGetStatus(...args) as unknown,
         isBusy: false,
-        provision: jest.fn(),
+        provision: (...args: unknown[]) => mockProvision(...args) as unknown,
         refreshLiveState: (...args: unknown[]) => mockRefreshLiveState(...args) as unknown,
         canReuseExistingData: (...args: unknown[]) => mockCanReuseExistingData(...args) as unknown,
         suggestPort: (...args: unknown[]) => mockSuggestPort(...args) as unknown,
@@ -167,6 +168,67 @@ describe('localQuickStartRouter', () => {
         expect(context.actionContext.telemetry.properties.dockerLaunchResult).toBe('failed');
     });
 
+    // Each of these used to reach Docker and fail there: a readiness timeout, a container that
+    // exited at once, or an instance reported as running whose writes all failed.
+    describe('startQuickStart credentials', () => {
+        it.each([
+            ['a username over 63 bytes', { username: 'é'.repeat(32), password: 'Passw0rd' }],
+            ['a password SASLprep rejects', { username: 'devuser', password: 'pass😀word' }],
+            ['a reserved username', { username: 'documentdb', password: 'Passw0rd' }],
+            ['a username with a space', { username: 'my user', password: 'Passw0rd' }],
+            ['a password with surrounding spaces', { username: 'devuser', password: '  abc  ' }],
+            ['a password with a line separator', { username: 'devuser', password: 'ab\u2028cd' }],
+            ['a password with a next-line character', { username: 'devuser', password: 'ab\u0085cd' }],
+            ['a username with a lone surrogate', { username: 'dev\ud800', password: 'Passw0rd' }],
+            ['a username without a password', { username: 'devuser' }],
+        ])('rejects %s', async (_label, input) => {
+            const caller = createCallerFactory(localQuickStartRouter)(createContext());
+
+            await expect(caller.startQuickStart(input)).rejects.toMatchObject({ code: 'BAD_REQUEST' });
+            expect(mockProvision).not.toHaveBeenCalled();
+        });
+
+        it('says which field is wrong, in the wording the webview shows', async () => {
+            const caller = createCallerFactory(localQuickStartRouter)(createContext());
+
+            await expect(caller.startQuickStart({ username: 'devuser', password: 'pass😀word' })).rejects.toThrow(
+                /"path": \[\s*"password"\s*\][\s\S]*such as an emoji/,
+            );
+        });
+
+        it('passes valid credentials through to provisioning', async () => {
+            mockProvision.mockReturnValue((async function* () {})());
+            const caller = createCallerFactory(localQuickStartRouter)(createContext());
+
+            const stream = (await caller.startQuickStart({
+                username: 'devuser',
+                password: 'correct horse',
+            })) as AsyncIterable<unknown>;
+            const events = stream[Symbol.asyncIterator]();
+            while (!(await events.next()).done) {
+                // drain
+            }
+
+            expect(mockProvision).toHaveBeenCalledWith(
+                expect.anything(),
+                expect.objectContaining({ username: 'devuser', password: 'correct horse' }),
+                undefined,
+                expect.any(String),
+            );
+        });
+
+        afterEach(() => mockProvision.mockReset());
+    });
+
+    describe('checkPassword', () => {
+        it('reports what SASLprep rejects so Configure can show it', async () => {
+            const caller = createCallerFactory(localQuickStartRouter)(createContext());
+
+            await expect(caller.checkPassword({ password: 'pass😀word' })).resolves.toBe('unsupportedCharacter');
+            await expect(caller.checkPassword({ password: 'pässwörd' })).resolves.toBe('ok');
+        });
+    });
+
     // Review N1: the panel used to read the instance's status once on open, so a container removed
     // in a terminal (or a tree action, or another window) left its guard describing an instance
     // that no longer existed.
@@ -210,6 +272,21 @@ describe('localQuickStartRouter', () => {
             expect(first).toEqual({
                 status: expect.objectContaining({ state: 'Stopped', missing: true }),
                 canReuseExistingData: true,
+            });
+        });
+
+        // The wizard's "no longer in Docker" notice reads it from both.
+        it('passes dataRemoved through the status query and the subscription', async () => {
+            mockGetStatus.mockReturnValue({ state: 'NotInstalled', dataRemoved: true });
+            mockCanReuseExistingData.mockResolvedValue(false);
+            const caller = createCallerFactory(localQuickStartRouter)(createContext());
+
+            expect(await caller.getStatus()).toMatchObject({ state: 'NotInstalled', dataRemoved: true });
+            const [first] = await drain(1);
+
+            expect(first).toEqual({
+                status: expect.objectContaining({ dataRemoved: true }),
+                canReuseExistingData: false,
             });
         });
 

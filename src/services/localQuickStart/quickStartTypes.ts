@@ -58,6 +58,12 @@ export interface AdvancedQuickStartOptions {
     continueAnyway?: boolean;
 }
 
+/**
+ * Why SASLprep rejects a custom password. The driver runs SASLprep before authenticating, and only
+ * the extension host can run it: its Unicode tables don't bundle into the webview.
+ */
+export type PasswordEncodingProblem = 'unsupportedCharacter' | 'rightToLeft';
+
 /** Fixed container name for the single managed instance (POC). */
 export const QUICK_START_CONTAINER_NAME = 'vscode-documentdb-local';
 
@@ -158,6 +164,12 @@ export type QuickStartMessageKey =
     | 'dockerCliMissing'
     | 'dockerDaemonUnreachable'
     | 'dockerUnavailableDuringSetup'
+    | 'imageNotFound'
+    | 'createTimedOut'
+    | 'containerExited'
+    | 'credentialsRejected'
+    | 'savedCredentialsRejected'
+    | 'passwordNotSupported'
     | 'readinessTimeout'
     | 'instanceRunning'
     | 'nothingToResume'
@@ -176,6 +188,10 @@ export interface QuickStartMessage {
     readonly port?: number;
     /** Host environment, for `readinessTimeout`, whose guidance differs per platform. */
     readonly environment?: DockerHostEnvironment;
+    /** Image reference, for `imageNotFound`. */
+    readonly image?: string;
+    /** The container's exit code, for `containerExited`. */
+    readonly exitCode?: number;
     /** Raw daemon / driver text, rendered verbatim beside the localized copy. */
     readonly detail?: string;
 }
@@ -370,6 +386,8 @@ export interface QuickStartStatus {
      * no matching container (e.g. the user removed it outside the extension).
      */
     readonly missing?: boolean;
+    /** The container and its data volume were both found gone, so setup starts a new instance. */
+    readonly dataRemoved?: boolean;
     /**
      * The host port this instance is (or is about to be) bound to. Known even while provisioning,
      * because the port is decided in the Configure step rather than picked mid-run (review L1/L3).

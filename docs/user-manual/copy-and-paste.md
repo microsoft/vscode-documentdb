@@ -95,7 +95,8 @@ The copy-and-paste operation is **not an atomic snapshot**. It is a live data tr
 
 Because this feature streams data through your local machine, it can be slow and resource-intensive for very large collections. To prevent accidental performance issues, the extension will show a warning for collections that exceed a certain size.
 
-You can customize this behavior in the settings:
+Open VS Code Settings and expand **Extensions** > **DocumentDB for VS Code** > **Copy & Paste** to
+customize this behavior. You can also search for either setting ID:
 
 - **`documentDB.copyPaste.showLargeCollectionWarning`**: (Default: `true`) Set to `false` to disable the warning entirely.
 - **`documentDB.copyPaste.largeCollectionWarningThreshold`**: (Default: `100000`) Adjust the number of documents that triggers the warning.

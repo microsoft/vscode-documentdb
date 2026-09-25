@@ -10,8 +10,8 @@ import * as vscode from 'vscode';
 import { ClustersClient } from '../../documentdb/ClustersClient';
 import { CredentialCache } from '../../documentdb/CredentialCache';
 import { inferViewIdFromTreeId } from '../../documentdb/Views';
-import { ext } from '../../extensionVariables';
 import { SettingsService } from '../../services/SettingsService';
+import { settingsKeys } from '../../settingsKeys';
 import { type AzureClusterModel } from '../../tree/azure-views/models/AzureClusterModel';
 import { type ClusterItemBase } from '../../tree/documentdb/ClusterItemBase';
 import { DatabaseItem } from '../../tree/documentdb/DatabaseItem';
@@ -142,7 +142,7 @@ export async function openClusterDashboard(
     const viewId = node.cluster.viewId ?? inferViewIdFromTreeId(node.cluster.treeId);
     const azure = extractAzureInfo(node.cluster);
     const selectedDatabaseName = node instanceof DatabaseItem ? node.databaseInfo.name : undefined;
-    const showDashboardOnConnect = SettingsService.getSetting<boolean>(ext.settingsKeys.showDashboardOnConnect) ?? true;
+    const showDashboardOnConnect = SettingsService.getSetting<boolean>(settingsKeys.showDashboardOnConnect) ?? true;
 
     // Read before opening: afterwards every call looks like a reuse. A reveal of an already
     // open panel is not a new dashboard session and must not be counted as one.

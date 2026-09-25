@@ -115,8 +115,8 @@ describe('WorkerSessionManager', () => {
 
             await expect(initPromise).rejects.toMatchObject({
                 message: 'Operation timed out after 1 seconds.',
-                settingKey: 'documentDB.shell.initTimeout',
-                settingsHint: 'The shell did not finish connecting. You can increase the timeout in Settings:',
+                settingKey: 'documentDB.connectionTimeout',
+                settingsHint: 'The connection did not finish in time. You can increase the timeout in Settings:',
             });
             jest.useRealTimers();
         });

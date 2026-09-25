@@ -62,23 +62,4 @@ export namespace ext {
     export let discoveryTreeView: vscode.TreeView<TreeElement>;
 
     export let helpAndFeedbackBranchDataProvider: HelpAndFeedbackBranchDataProvider;
-
-    export namespace settingsKeys {
-        export const batchSize = 'documentDB.batchSize';
-        export const shellInitTimeout = 'documentDB.shell.initTimeout';
-        export const confirmationStyle = 'documentDB.confirmations.confirmationStyle';
-        export const showOperationSummaries = 'documentDB.userInterface.ShowOperationSummaries';
-        export const showUrlHandlingConfirmations = 'documentDB.confirmations.showUrlHandlingConfirmations';
-        export const showLargeCollectionWarning = 'documentDB.copyPaste.showLargeCollectionWarning';
-        export const largeCollectionWarningThreshold = 'documentDB.copyPaste.largeCollectionWarningThreshold';
-        export const localPort = 'documentDB.local.port';
-        export const collectionViewDefaultPageSize = 'documentDB.collectionView.defaultPageSize';
-        export const playgroundConfirmRunAll = 'documentDB.playground.confirmRunAll';
-        export const enableAIQueryGeneration = 'documentDB.experimental.enableAIQueryGeneration';
-        export const showDashboardOnConnect = 'documentDB.userInterface.showDashboardOnConnect';
-
-        export namespace vsCode {
-            export const proxyStrictSSL = 'http.proxyStrictSSL';
-        }
-    }
 }

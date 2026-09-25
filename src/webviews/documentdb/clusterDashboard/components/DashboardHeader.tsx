@@ -381,7 +381,6 @@ export const DashboardHeader = ({
                         <DetailsDisclosureButton expanded={expanded} onToggle={() => setExpanded(!expanded)} />
                     )}
                 </div>
-
             </header>
             {/* Kept mounted so the motion has a `visible` change to play — see DashboardDetails. */}
             <DashboardDetailsRegion
