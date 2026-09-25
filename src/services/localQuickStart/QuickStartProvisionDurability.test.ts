@@ -819,6 +819,446 @@ describe('QuickStartService — WP-3 provisioning durability and port model', ()
         });
     });
 
+    // A host killed after `docker run` but before the old post-start write left a labelled container
+    // nothing could open, "Provisioning…" for the lease TTL, and a setup that refused to run.
+    it('stores the credentials before `docker run`, so a crash mid-create leaves an adoptable container', async () => {
+        let secretAtCreate: string | undefined;
+        const createAndRunContainer = jest.fn(async () => {
+            secretAtCreate = await readConnectionString(DEFAULT_ALIAS);
+            return 'c1';
+        });
+        const service = new QuickStartServiceImpl(runtimeFor({ createAndRunContainer }));
+
+        await collect(service.provision(new AbortController().signal));
+
+        expect(secretAtCreate).toContain(`localhost:${QUICK_START_PORT}`);
+    });
+
+    // With the write now ahead of `docker run`, the loser of a two-window create race reaches the
+    // restore too; it must not erase the credentials the winner stored meanwhile.
+    it('leaves another window credentials alone when its own create fails', async () => {
+        const winner = `mongodb://winner:pw@localhost:${QUICK_START_PORT}/?tls=true&tlsAllowInvalidCertificates=true`;
+        const service = new QuickStartServiceImpl(
+            runtimeFor({
+                createAndRunContainer: jest.fn(async () => {
+                    // The winner renews the lease as its own, then stores its credentials.
+                    await upsertInstance({
+                        alias: DEFAULT_ALIAS,
+                        displayName: 'DocumentDB Local',
+                        port: QUICK_START_PORT,
+                        phase: 'provisioning',
+                        operationId: 'other-window',
+                        leaseAt: Date.now(),
+                    });
+                    await writeConnectionString(DEFAULT_ALIAS, winner, {
+                        displayName: 'DocumentDB Local',
+                        port: QUICK_START_PORT,
+                    });
+                    throw new Error('The container name "/vscode-documentdb-local" is already in use');
+                }),
+            }),
+        );
+
+        await collect(service.provision(new AbortController().signal));
+
+        expect(await readConnectionString(DEFAULT_ALIAS)).toBe(winner);
+    });
+
+    // Same race, but the winner stored its credentials on a record that still names this run's lease.
+    it('keeps the lease record when another window stored its credentials on it', async () => {
+        const winner = `mongodb://winner:pw@localhost:${QUICK_START_PORT}/?tls=true&tlsAllowInvalidCertificates=true`;
+        const service = new QuickStartServiceImpl(
+            runtimeFor({
+                createAndRunContainer: jest.fn(async () => {
+                    await writeConnectionString(DEFAULT_ALIAS, winner, {
+                        displayName: 'DocumentDB Local',
+                        port: QUICK_START_PORT,
+                    });
+                    throw new Error('The container name "/vscode-documentdb-local" is already in use');
+                }),
+            }),
+        );
+
+        await collect(service.provision(new AbortController().signal));
+
+        expect(await readConnectionString(DEFAULT_ALIAS)).toBe(winner);
+    });
+
+    // Start fresh wipes the old volume before anything else can fail; restoring the old record and
+    // credentials afterwards would describe data that no longer exists.
+    it('leaves nothing of the replaced instance when Start fresh fails after the wipe', async () => {
+        await upsertInstance({ alias: DEFAULT_ALIAS, displayName: 'DocumentDB Local', port: 10260, phase: 'ready' });
+        await writeConnectionString(
+            DEFAULT_ALIAS,
+            `mongodb://old:old@localhost:${QUICK_START_PORT}/?tls=true&tlsAllowInvalidCertificates=true`,
+            { displayName: 'DocumentDB Local', port: QUICK_START_PORT },
+        );
+        const service = new QuickStartServiceImpl(
+            runtimeFor({
+                volumeExists: true,
+                createAndRunContainer: jest.fn().mockRejectedValue(new Error('create blew up')),
+            }),
+        );
+
+        await collect(service.provision(new AbortController().signal, { startFresh: true }));
+
+        expect(await listInstances()).toHaveLength(0);
+        expect(await service.canReuseExistingData()).toBe(false);
+    });
+
+    it('replaces the old instance when Start fresh succeeds', async () => {
+        const old = `mongodb://old:old@localhost:${QUICK_START_PORT}/?tls=true&tlsAllowInvalidCertificates=true`;
+        await upsertInstance({ alias: DEFAULT_ALIAS, displayName: 'DocumentDB Local', port: 10260, phase: 'ready' });
+        await writeConnectionString(DEFAULT_ALIAS, old, { displayName: 'DocumentDB Local', port: QUICK_START_PORT });
+        const service = new QuickStartServiceImpl(runtimeFor({ volumeExists: true }));
+
+        await collect(service.provision(new AbortController().signal, { startFresh: true }));
+
+        expect(service.getStatus().state).toBe(InstanceState.Running);
+        expect((await getInstance(DEFAULT_ALIAS))?.phase).toBe('ready');
+        const stored = await readConnectionString(DEFAULT_ALIAS);
+        expect(stored).toBeDefined();
+        expect(stored).not.toBe(old);
+    });
+
+    it('does not adopt its own in-flight container when a reconcile runs mid-provision', async () => {
+        const live: Array<{ id: string; labels: Record<string, string> }> = [];
+        let phaseAfterReconcile: string | undefined;
+        const service = new QuickStartServiceImpl(
+            runtimeFor({
+                listByLabel: jest.fn(() => Promise.resolve(live)),
+                createAndRunContainer: jest.fn(() => {
+                    live.push({ id: 'c1', labels: { [QUICK_START_ALIAS_LABEL_KEY]: DEFAULT_ALIAS } });
+                    return Promise.resolve('c1');
+                }),
+            }),
+        );
+        onProbe = async () => {
+            if (phaseAfterReconcile === undefined) {
+                await service.reconcile();
+                phaseAfterReconcile = (await getInstance(DEFAULT_ALIAS))?.phase;
+            }
+        };
+
+        await collect(service.provision(new AbortController().signal));
+
+        expect(phaseAfterReconcile).toBe('provisioning');
+        expect(service.getStatus().state).toBe(InstanceState.Running);
+    });
+
+    describe('once the old container and its data are gone', () => {
+        const stale = `mongodb://u1:p1@localhost:${QUICK_START_PORT}/?tls=true&tlsAllowInvalidCertificates=true`;
+
+        async function seedRemovedInstance(runtime: IContainerRuntime): Promise<QuickStartServiceImpl> {
+            await upsertInstance({
+                alias: DEFAULT_ALIAS,
+                displayName: 'DocumentDB Local',
+                port: 10260,
+                phase: 'ready',
+            });
+            await writeConnectionString(DEFAULT_ALIAS, stale, { displayName: 'DocumentDB Local', port: 10260 });
+            const service = new QuickStartServiceImpl(runtime);
+            await service.reconcile();
+            expect(await service.canReuseExistingData()).toBe(false);
+            return service;
+        }
+
+        // A Docker pointed back at the original engine must still open the original instance.
+        it('sets up a new instance on the stored credentials', async () => {
+            const service = await seedRemovedInstance(runtimeFor({ volumeExists: false }));
+
+            await collect(service.provision(new AbortController().signal, { imageTag: '0.117.0' }));
+
+            expect(await readConnectionString(DEFAULT_ALIAS)).toBe(stale);
+            expect(service.getStatus().metadata?.imageRef).toContain(':0.117.0');
+            expect(service.getStatus().state).toBe(InstanceState.Running);
+        });
+
+        it('keeps the stored credentials when that setup is cancelled', async () => {
+            const controller = new AbortController();
+            const runtime = runtimeFor({ volumeExists: false });
+            (runtime.pullImage as jest.Mock).mockImplementation(() => {
+                controller.abort();
+                return Promise.reject(new Error('aborted'));
+            });
+            const service = await seedRemovedInstance(runtime);
+
+            await collect(service.provision(controller.signal));
+
+            expect(await readConnectionString(DEFAULT_ALIAS)).toBe(stale);
+        });
+
+        it('keeps the stored credentials when a setup with custom ones is cancelled', async () => {
+            const controller = new AbortController();
+            const runtime = runtimeFor({ volumeExists: false });
+            (runtime.pullImage as jest.Mock).mockImplementation(() => {
+                controller.abort();
+                return Promise.reject(new Error('aborted'));
+            });
+            const service = await seedRemovedInstance(runtime);
+
+            await collect(service.provision(controller.signal, { username: 'me', password: 'secret-pw' }));
+
+            expect(await readConnectionString(DEFAULT_ALIAS)).toBe(stale);
+        });
+
+        it('uses custom credentials when the user sets them', async () => {
+            const service = await seedRemovedInstance(runtimeFor({ volumeExists: false }));
+
+            await collect(service.provision(new AbortController().signal, { username: 'me', password: 'secret-pw' }));
+
+            expect(await readConnectionString(DEFAULT_ALIAS)).toContain('me:secret-pw@');
+        });
+    });
+
+    describe('after a readiness timeout', () => {
+        let nowSpy: jest.SpyInstance<number, []>;
+
+        beforeEach(() => {
+            // Every probe fails and jumps the clock past the readiness deadline, so the wait times
+            // out after one backoff instead of three minutes.
+            const realNow = Date.now.bind(Date);
+            let offset = 0;
+            nowSpy = jest.spyOn(Date, 'now').mockImplementation(() => realNow() + offset);
+            onProbe = () => {
+                offset += 200_000;
+                throw new Error('connect ECONNREFUSED');
+            };
+        });
+
+        afterEach(() => {
+            nowSpy.mockRestore();
+        });
+
+        async function provisionUntilTimeout(service: QuickStartServiceImpl, port?: number): Promise<void> {
+            const events = await collect(
+                service.provision(new AbortController().signal, port === undefined ? undefined : { port }),
+            );
+            expect(events.at(-1)).toMatchObject({ stage: 'waiting', status: 'error', timedOut: true });
+            expect(service.getStatus().canResumeReadiness).toBe(true);
+        }
+
+        it('Start over drops a fresh attempt entirely: credentials, lease and data', async () => {
+            const removeVolume = jest.fn().mockResolvedValue(undefined);
+            const service = new QuickStartServiceImpl(runtimeFor({ overrides: { removeVolume } }));
+            await provisionUntilTimeout(service);
+
+            expect(await service.discardTimedOutInstance()).toBe(true);
+
+            expect(removeVolume).toHaveBeenCalled();
+            expect(await readConnectionString(DEFAULT_ALIAS)).toBeUndefined();
+            expect(await listInstances()).toHaveLength(0);
+            expect(await service.canReuseExistingData()).toBe(false);
+            expect(service.getStatus()).toMatchObject({ state: InstanceState.NotInstalled, canResumeReadiness: false });
+        });
+
+        it('Start over warns when it cannot remove the fresh attempt data volume', async () => {
+            const removeVolume = jest.fn().mockRejectedValue(new Error('volume is in use'));
+            const service = new QuickStartServiceImpl(runtimeFor({ overrides: { removeVolume } }));
+            await provisionUntilTimeout(service);
+            const warning = jest.spyOn(vscode.window, 'showWarningMessage').mockResolvedValue(undefined);
+
+            expect(await service.discardTimedOutInstance()).toBe(true);
+
+            expect(warning).toHaveBeenCalledWith(expect.stringContaining('could not remove its data volume'));
+            expect(await readConnectionString(DEFAULT_ALIAS)).toBeUndefined();
+            expect(await listInstances()).toHaveLength(0);
+            warning.mockRestore();
+        });
+
+        it('Start over on a recreate keeps the data and its credentials, and settles as Missing', async () => {
+            const previous = `mongodb://old:old@localhost:${QUICK_START_PORT}/?tls=true&tlsAllowInvalidCertificates=true`;
+            await upsertInstance({
+                alias: DEFAULT_ALIAS,
+                displayName: 'DocumentDB Local',
+                port: QUICK_START_PORT,
+                phase: 'ready',
+            });
+            await writeConnectionString(DEFAULT_ALIAS, previous, {
+                displayName: 'DocumentDB Local',
+                port: QUICK_START_PORT,
+            });
+            const removeVolume = jest.fn().mockResolvedValue(undefined);
+            const service = new QuickStartServiceImpl(runtimeFor({ volumeExists: true, overrides: { removeVolume } }));
+            // A different port, so the attempt's own connection string differs from the stored one.
+            await provisionUntilTimeout(service, 10333);
+
+            expect(await service.discardTimedOutInstance()).toBe(true);
+
+            expect(removeVolume).not.toHaveBeenCalled();
+            expect(await readConnectionString(DEFAULT_ALIAS)).toBe(previous);
+            expect((await getInstance(DEFAULT_ALIAS))?.phase).toBe('ready');
+            expect(service.getStatus()).toMatchObject({ missing: true, canResumeReadiness: false });
+            expect(await service.canReuseExistingData()).toBe(true);
+        });
+
+        it('Start over keeps everything when Docker cannot remove the container', async () => {
+            const runtime = runtimeFor();
+            const service = new QuickStartServiceImpl(runtime);
+            await provisionUntilTimeout(service);
+            const stored = await readConnectionString(DEFAULT_ALIAS);
+            (runtime.removeContainer as jest.Mock).mockRejectedValue(new Error('daemon unreachable'));
+            // A failed lookup is no proof the container is gone, even if Docker answers again later.
+            (runtime.listByLabel as jest.Mock).mockRejectedValue(new Error('daemon unreachable'));
+
+            const error = jest.spyOn(vscode.window, 'showErrorMessage').mockResolvedValue(undefined);
+
+            expect(await service.discardTimedOutInstance()).toBe(false);
+
+            expect(await readConnectionString(DEFAULT_ALIAS)).toBe(stored);
+            expect(service.getStatus().canResumeReadiness).toBe(true);
+            // Started again, so Wait longer still has something to wait for, and the user is told.
+            expect(runtime.startContainer).toHaveBeenCalled();
+            expect(error).toHaveBeenCalled();
+            error.mockRestore();
+        });
+
+        it('Start over still completes when the container was already removed outside VS Code', async () => {
+            const runtime = runtimeFor();
+            const service = new QuickStartServiceImpl(runtime);
+            await provisionUntilTimeout(service);
+            (runtime.removeContainer as jest.Mock).mockRejectedValue(new Error('No such container'));
+
+            expect(await service.discardTimedOutInstance()).toBe(true);
+
+            expect(await readConnectionString(DEFAULT_ALIAS)).toBeUndefined();
+        });
+
+        it('Start over leaves an instance another window set up since alone', async () => {
+            const other = `mongodb://other:pw@localhost:${QUICK_START_PORT}/?tls=true&tlsAllowInvalidCertificates=true`;
+            const service = new QuickStartServiceImpl(runtimeFor());
+            await provisionUntilTimeout(service);
+            await upsertInstance({
+                alias: DEFAULT_ALIAS,
+                displayName: 'DocumentDB Local',
+                port: QUICK_START_PORT,
+                phase: 'ready',
+            });
+            await writeConnectionString(DEFAULT_ALIAS, other, {
+                displayName: 'DocumentDB Local',
+                port: QUICK_START_PORT,
+            });
+
+            expect(await service.discardTimedOutInstance()).toBe(true);
+
+            expect(await readConnectionString(DEFAULT_ALIAS)).toBe(other);
+        });
+
+        it('Start over completes when another window replaced the kept container with its own', async () => {
+            const other = `mongodb://other:pw@localhost:${QUICK_START_PORT}/?tls=true&tlsAllowInvalidCertificates=true`;
+            const runtime = runtimeFor();
+            const service = new QuickStartServiceImpl(runtime);
+            await provisionUntilTimeout(service);
+            (runtime.removeContainer as jest.Mock).mockRejectedValue(new Error('No such container: c1'));
+            (runtime.listByLabel as jest.Mock).mockResolvedValue([
+                { id: 'c2', name: DEFAULT_ALIAS, labels: { [QUICK_START_ALIAS_LABEL_KEY]: DEFAULT_ALIAS } },
+            ]);
+            await writeConnectionString(DEFAULT_ALIAS, other, {
+                displayName: 'DocumentDB Local',
+                port: QUICK_START_PORT,
+            });
+
+            expect(await service.discardTimedOutInstance()).toBe(true);
+
+            expect(service.getStatus().canResumeReadiness).toBe(false);
+            expect(await readConnectionString(DEFAULT_ALIAS)).toBe(other);
+        });
+
+        // Its recreate reuses the stored credentials, so the stored value alone cannot tell the attempts apart.
+        it('Start over adopts a replacement another window set up on the same credentials', async () => {
+            const labels = { [QUICK_START_LABEL_KEY]: '1', [QUICK_START_ALIAS_LABEL_KEY]: DEFAULT_ALIAS };
+            let liveId: string | undefined;
+            let hasVolume = false;
+            let created = 0;
+            const removeVolume = jest.fn(async () => {
+                if (liveId) throw new Error('volume is in use');
+                hasVolume = false;
+            });
+            const runtime = runtimeFor({
+                overrides: {
+                    listByLabel: jest
+                        .fn()
+                        .mockImplementation(async () => (liveId ? [{ id: liveId, name: DEFAULT_ALIAS, labels }] : [])),
+                    volumeExists: jest.fn(async () => hasVolume),
+                    createAndRunContainer: jest.fn(async () => {
+                        liveId = `c${++created}`;
+                        hasVolume = true;
+                        return liveId;
+                    }),
+                    inspectContainer: jest.fn().mockImplementation(async (id: string) =>
+                        liveId && (id === liveId || id === DEFAULT_ALIAS)
+                            ? {
+                                  id: liveId,
+                                  status: 'running',
+                                  ports: [{ containerPort: QUICK_START_PORT, hostPort: QUICK_START_PORT }],
+                                  labels,
+                              }
+                            : undefined,
+                    ),
+                    removeContainer: jest.fn(async (id: string) => {
+                        if (id !== liveId) throw new Error(`No such container: ${id}`);
+                        liveId = undefined;
+                    }),
+                    removeVolume,
+                },
+            });
+            const first = new QuickStartServiceImpl(runtime);
+            const second = new QuickStartServiceImpl(runtime);
+            await first.ensureHydrated();
+            await second.ensureHydrated();
+            await provisionUntilTimeout(first);
+            const original = await readConnectionString(DEFAULT_ALIAS);
+            onProbe = () => undefined;
+            await collect(second.provision(new AbortController().signal));
+            expect(liveId).toBe('c2');
+            expect(await readConnectionString(DEFAULT_ALIAS)).toBe(original);
+
+            expect(await first.discardTimedOutInstance()).toBe(true);
+
+            expect(removeVolume).not.toHaveBeenCalled();
+            expect(await readConnectionString(DEFAULT_ALIAS)).toBe(original);
+            expect(first.getStatus().state).toBe(InstanceState.Running);
+        });
+
+        it('Start over with nothing left to discard just returns to setup', async () => {
+            const service = new QuickStartServiceImpl(runtimeFor());
+            await provisionUntilTimeout(service);
+            await service.deleteContainer();
+
+            expect(await service.discardTimedOutInstance()).toBe(true);
+        });
+
+        it('a timed-out recreate is not reported Running while Wait longer still owns it', async () => {
+            await upsertInstance({
+                alias: DEFAULT_ALIAS,
+                displayName: 'DocumentDB Local',
+                port: QUICK_START_PORT,
+                phase: 'ready',
+            });
+            await writeConnectionString(
+                DEFAULT_ALIAS,
+                `mongodb://old:old@localhost:${QUICK_START_PORT}/?tls=true&tlsAllowInvalidCertificates=true`,
+                { displayName: 'DocumentDB Local', port: QUICK_START_PORT },
+            );
+            const service = new QuickStartServiceImpl(runtimeFor({ volumeExists: true }));
+            await service.reconcile();
+            await provisionUntilTimeout(service);
+
+            await service.refreshLiveState();
+
+            expect(service.getStatus().state).toBe(InstanceState.Error);
+        });
+
+        it('Delete stops offering "Wait longer"', async () => {
+            const service = new QuickStartServiceImpl(runtimeFor());
+            await provisionUntilTimeout(service);
+
+            expect(await service.deleteContainer()).toBe('deleted');
+
+            expect(service.getStatus().canResumeReadiness).toBe(false);
+        });
+    });
+
     describe('suggestPort / checkPort (Configure-step validation, L3)', () => {
         it('suggests the canonical port when it is free', async () => {
             const service = new QuickStartServiceImpl(runtimeFor());
