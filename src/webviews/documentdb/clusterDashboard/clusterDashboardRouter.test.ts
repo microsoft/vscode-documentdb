@@ -129,7 +129,7 @@ describe('clusterDashboardRouter create actions', () => {
     it('opens the shell with the default database', async () => {
         const caller = createCallerFactory(clusterDashboardRouter)(createContext());
 
-        await caller.openShell();
+        await caller.openShell({ databaseName: 'test' });
 
         expect(vscode.commands.executeCommand).toHaveBeenCalledWith('vscode-documentdb.command.shell.open.withInput', {
             clusterId: 'cluster-id',
@@ -138,15 +138,27 @@ describe('clusterDashboardRouter create actions', () => {
         });
     });
 
-    it('opens the shell on the selected database for a database dashboard', async () => {
-        const caller = createCallerFactory(clusterDashboardRouter)(createContext(undefined, 'catalog'));
+    it('opens the shell on the database currently shown, even from a cluster dashboard', async () => {
+        const caller = createCallerFactory(clusterDashboardRouter)(createContext());
 
-        await caller.openShell();
+        await caller.openShell({ databaseName: 'catalog' });
 
         expect(vscode.commands.executeCommand).toHaveBeenCalledWith('vscode-documentdb.command.shell.open.withInput', {
             clusterId: 'cluster-id',
             clusterDisplayName: 'Test cluster',
             databaseName: 'catalog',
+        });
+    });
+
+    it('uses the cluster-level database after navigating back from a database dashboard', async () => {
+        const caller = createCallerFactory(clusterDashboardRouter)(createContext(undefined, 'catalog'));
+
+        await caller.openShell({ databaseName: 'test' });
+
+        expect(vscode.commands.executeCommand).toHaveBeenCalledWith('vscode-documentdb.command.shell.open.withInput', {
+            clusterId: 'cluster-id',
+            clusterDisplayName: 'Test cluster',
+            databaseName: 'test',
         });
     });
 
