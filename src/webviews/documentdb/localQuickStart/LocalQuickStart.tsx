@@ -1524,7 +1524,10 @@ export const LocalQuickStart = (): JSX.Element => {
         setErrorMessage(undefined);
         setTimedOut(false);
         setPhase('configure');
-    }, [stopDockerWait]);
+        // The failed run rolls back its credentials after the Error status was pushed, so the pushed
+        // reuse flag can still describe data that was never created.
+        void syncDockerStatus();
+    }, [stopDockerWait, syncDockerStatus]);
 
     const handleViewOutput = useCallback((): void => {
         void trpcClient.localQuickStart.showOutput.mutate().catch(() => undefined);
