@@ -49,7 +49,7 @@ The P2 lint findings block required checks, not execution of the dashboard.
 | R1 | Medium/P2 | Two new files omit the required license header | `DashboardBreadcrumb.tsx:1`; `NamespaceTable.test.tsx:1`; CI `license-header/header` errors | Fixed in `3322fa5b` at operator request |
 | R2 | Medium/P2 | The metric test mock uses a forbidden inline import type | `StatusStrip.test.tsx:17`; CI `@typescript-eslint/consistent-type-imports` error | Fixed in `df0a647f` at operator request |
 | R3 | Low/P3 | The feature overview incorrectly calls the adopted scope proposal unimplemented | `README.md:45`, contradicted by the proposal status and shipped JSX | Resolved in `c48109fa` by operator decision 0023 |
-| R4 | Low/P3 | The new shell tests do not exercise the navigation-dependent client behavior | `clusterDashboardRouter.test.ts:129`; `ClusterDashboard.tsx:319` | Operator confirmed manual testing; no automated test added |
+| R4 | Low/P3 | The new shell tests do not exercise the navigation-dependent client behavior | `clusterDashboardRouter.test.ts:129`; `ClusterDashboard.tsx:319` | Manual validation recorded in `0429bda1`; no automated test added |
 
 ### R1 - Restore license headers in both new files
 
@@ -208,6 +208,13 @@ unchanged for this follow-up. The operator did not specify the individual scenar
 environment, so no additional coverage is claimed. This does not turn the existing router
 tests into a navigation regression test; the automation gap remains documented.
 
+**Commit:** [0429bda1](https://github.com/microsoft/vscode-documentdb/commit/0429bda1e3f39acabca014a5edf7e85f8f9c2ba1)
+persists the review and the operator's manual-validation response, leaving automated
+coverage unchanged because the operator confirmed manual testing rather than requesting
+the proposed test. It also records the preceding R1-R3 commits and their rationale.
+This reference is added in a documentation-only follow-up because the report's own
+commit hash was not available until that commit was created.
+
 ## Other CI blockers, not introduced by this PR
 
 The same CI job reports two additional **Medium/P2 validation blockers**:
@@ -309,7 +316,7 @@ The severity-ranked report and operator responses are recorded here and linked f
 feature overview. R1 and R2 have source/test hygiene fixes; R3 is resolved through an
 explicit decision approving the implementation and clarifying the proposals' authority;
 R4 records operator-reported manual testing without additional automated tests.
-Runtime behavior and PR state are unchanged. R1, R2, and R3 were committed separately;
-their references and rationale are recorded inline. This report records R4's manual
-validation separately from those implementation and design changes.
+Runtime behavior and PR state are unchanged. R1, R2, R3, and the R4 review/manual-validation
+record were committed separately; their references and rationale are recorded inline.
+A documentation-only follow-up adds the R4 commit reference.
 Commits are local only; nothing has been pushed or posted as a GitHub review.
