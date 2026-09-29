@@ -4,6 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { SSRProvider } from '@fluentui/react-components';
+import type * as ReactModule from 'react';
 import { act, useState, type JSX, type ReactNode } from 'react';
 import { createRoot } from 'react-dom/client'; // eslint-disable-line import/no-internal-modules
 
@@ -14,7 +15,7 @@ import { StatusStrip } from './StatusStrip';
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
 jest.mock('@microsoft/vscode-ext-webview-fluentui/components', () => {
-    const react = jest.requireActual<typeof import('react')>('react');
+    const react = jest.requireActual<typeof ReactModule>('react');
     return {
         MetricGrid: ({ children, className }: { children: ReactNode; className: string }): ReactNode =>
             react.createElement('div', { className }, children),
