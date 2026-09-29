@@ -118,10 +118,10 @@ radio group, so the operator can compare these options without editing or reload
 
 - `Breadcrumb above tabs`: the first stacked preview.
 - `Breadcrumb beside tabs`: the default experiment, with the breadcrumb at the left of the
-	tab row. Breadcrumb navigation and tab selection remain separate accessible controls.
+  tab row. Breadcrumb navigation and tab selection remain separate accessible controls.
 - `Breadcrumb in toolbar`: the breadcrumb occupies the left of the row below the identity
-	band; Open Shell, Copy Connection String, Refresh and the remaining actions form one
-	right-aligned group. Feature tabs get their own full-width row below it.
+  band; Open Shell, Copy Connection String, Refresh and the remaining actions form one
+  right-aligned group. Feature tabs get their own full-width row below it.
 
 Both compact arrangements stack at narrow widths. The divider remains below the feature
 navigation in all three. Operations, Recommendations and Metrics are provisionally

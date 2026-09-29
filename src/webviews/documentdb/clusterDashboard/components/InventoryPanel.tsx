@@ -158,7 +158,7 @@ export const InventoryPanel = ({
     /**
      * Leaves the collections of a database for the cluster's database list.
      *
-    * Reached from the breadcrumb above the table, the labelled footer button or the mouse Back button.
+     * Reached from the breadcrumb above the table, the labelled footer button or the mouse Back button.
      */
     const goBack = useCallback(
         (control: InventoryBackControl): void => {
@@ -426,7 +426,10 @@ export const InventoryPanel = ({
     return (
         <div className="inventoryPanel">
             <Toolbar className="inventoryToolbar" size="small" aria-label={l10n.t('Inventory controls')}>
-                <DashboardBreadcrumb currentDatabase={currentDatabase} onNavigateToCluster={() => goBack('breadcrumb')} />
+                <DashboardBreadcrumb
+                    currentDatabase={currentDatabase}
+                    onNavigateToCluster={() => goBack('breadcrumb')}
+                />
                 <ToolbarDivider />
                 {canCreateNamespace && (
                     <ToolbarButton

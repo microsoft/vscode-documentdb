@@ -220,10 +220,8 @@ export const StatusStrip = ({
     return (
         <div className="statusStrip">
             <div className="metricsScopeLine">
-                <span className="metricsScopeLabel">{l10n.t('Scope:')}{' '}</span>
-                {currentDatabase !== null && (
-                    <span className="metricsScopeType">{l10n.t('Database')}{' '}</span>
-                )}
+                <span className="metricsScopeLabel">{l10n.t('Scope:')} </span>
+                {currentDatabase !== null && <span className="metricsScopeType">{l10n.t('Database')} </span>}
                 <span className="metricsScopeValue">{scopeValue}</span>
             </div>
             <MetricGrid className="metricsRow">
