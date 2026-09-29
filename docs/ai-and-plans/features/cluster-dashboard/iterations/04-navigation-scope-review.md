@@ -44,12 +44,12 @@ The P2 lint findings block required checks, not execution of the dashboard.
 
 ## Findings
 
-| ID | Severity | Finding | Evidence | Status |
-| --- | --- | --- | --- | --- |
-| R1 | Medium/P2 | Two new files omit the required license header | `DashboardBreadcrumb.tsx:1`; `NamespaceTable.test.tsx:1`; CI `license-header/header` errors | Fixed in `3322fa5b` at operator request |
-| R2 | Medium/P2 | The metric test mock uses a forbidden inline import type | `StatusStrip.test.tsx:17`; CI `@typescript-eslint/consistent-type-imports` error | Fixed in `df0a647f` at operator request |
-| R3 | Low/P3 | The feature overview incorrectly calls the adopted scope proposal unimplemented | `README.md:45`, contradicted by the proposal status and shipped JSX | Resolved in `c48109fa` by operator decision 0023 |
-| R4 | Low/P3 | The new shell tests do not exercise the navigation-dependent client behavior | `clusterDashboardRouter.test.ts:129`; `ClusterDashboard.tsx:319` | Manual validation recorded in `0429bda1`; no automated test added |
+| ID  | Severity  | Finding                                                                         | Evidence                                                                                    | Status                                                            |
+| --- | --------- | ------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------- | ----------------------------------------------------------------- |
+| R1  | Medium/P2 | Two new files omit the required license header                                  | `DashboardBreadcrumb.tsx:1`; `NamespaceTable.test.tsx:1`; CI `license-header/header` errors | Fixed in `3322fa5b` at operator request                           |
+| R2  | Medium/P2 | The metric test mock uses a forbidden inline import type                        | `StatusStrip.test.tsx:17`; CI `@typescript-eslint/consistent-type-imports` error            | Fixed in `df0a647f` at operator request                           |
+| R3  | Low/P3    | The feature overview incorrectly calls the adopted scope proposal unimplemented | `README.md:45`, contradicted by the proposal status and shipped JSX                         | Resolved in `c48109fa` by operator decision 0023                  |
+| R4  | Low/P3    | The new shell tests do not exercise the navigation-dependent client behavior    | `clusterDashboardRouter.test.ts:129`; `ClusterDashboard.tsx:319`                            | Manual validation recorded in `0429bda1`; no automated test added |
 
 ### R1 - Restore license headers in both new files
 
@@ -219,10 +219,10 @@ commit hash was not available until that commit was created.
 
 The same CI job reports two additional **Medium/P2 validation blockers**:
 
-| Location in CI's tested revision | Rule | Attribution |
-| --- | --- | --- |
-| [ClustersClient.test.ts](../../../../../src/documentdb/ClustersClient.test.ts), line 6 | `no-restricted-imports` on the `@microsoft/vscode-azext-utils` namespace type import | Change on newer `main`; absent from this PR's diff |
-| [WorkerSessionManager.test.ts](../../../../../src/documentdb/playground/WorkerSessionManager.test.ts), line 6 | Same restricted namespace type import | Change on newer `main`; absent from this PR's diff |
+| Location in CI's tested revision                                                                              | Rule                                                                                 | Attribution                                        |
+| ------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------ | -------------------------------------------------- |
+| [ClustersClient.test.ts](../../../../../src/documentdb/ClustersClient.test.ts), line 6                        | `no-restricted-imports` on the `@microsoft/vscode-azext-utils` namespace type import | Change on newer `main`; absent from this PR's diff |
+| [WorkerSessionManager.test.ts](../../../../../src/documentdb/playground/WorkerSessionManager.test.ts), line 6 | Same restricted namespace type import                                                | Change on newer `main`; absent from this PR's diff |
 
 The diff from the PR merge base to its head changes neither test nor the ESLint
 configuration. The diff from that merge base to GitHub's current base adds the namespace
@@ -259,14 +259,14 @@ does not establish that the current PR CI job will pass.
 The following results are from the initial review of `eb454539`, before the operator's
 requested fixes:
 
-| Check | Result |
-| --- | --- |
-| Local `npm run build` | Passed, including workspace package builds |
-| Local focused Jest run | Passed: 4 suites, 36 tests |
-| Existing GitHub review comments | No inline review comments or submitted reviews were returned; no Copilot comments to merge at review time |
-| Existing CI quality job | Failed: five lint errors, split into three PR-introduced errors under R1/R2 and two newer-base errors above |
-| Existing CI full Jest run | Passed: 289 suites, 4,533 tests, 4 snapshots; this is CI evidence, not a local full-suite run |
-| Existing CI Build & Package job | Skipped; packaging is not verified |
+| Check                           | Result                                                                                                      |
+| ------------------------------- | ----------------------------------------------------------------------------------------------------------- |
+| Local `npm run build`           | Passed, including workspace package builds                                                                  |
+| Local focused Jest run          | Passed: 4 suites, 36 tests                                                                                  |
+| Existing GitHub review comments | No inline review comments or submitted reviews were returned; no Copilot comments to merge at review time   |
+| Existing CI quality job         | Failed: five lint errors, split into three PR-introduced errors under R1/R2 and two newer-base errors above |
+| Existing CI full Jest run       | Passed: 289 suites, 4,533 tests, 4 snapshots; this is CI evidence, not a local full-suite run               |
+| Existing CI Build & Package job | Skipped; packaging is not verified                                                                          |
 
 Focused command:
 

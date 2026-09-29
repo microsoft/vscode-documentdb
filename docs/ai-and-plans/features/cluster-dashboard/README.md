@@ -148,7 +148,7 @@ only; the elevated breadcrumb and feature-tab experiments were rejected. See
 | 2026-09-07 | Feature set reduced to the inventory; the leftovers of the removed panels swept up | [0015](./decisions.md#0015--storage-refresh-is-explicit-after-initial-load)–[0017](./decisions.md#0017--diagnostics-carry-raw-replies-not-a-second-reading-of-them) |
 | 2026-09-08 | `currentOp` dropped from the iteration, taking the last application data with it   | [0019](./decisions.md#0019--currentop-is-out-of-scope-for-this-iteration)                                                                                           |
 | 2026-09-10 | Action labels and navigation icons aligned across related entry points             | [0022](./decisions.md#0022-labels-name-content-icons-communicate-navigation)                                                                                        |
-| 2026-09-29 | Navigation and metric-scope follow-up reviewed for PR #980                          | [Severity-ranked review](./iterations/04-navigation-scope-review.md)                                                                                               |
+| 2026-09-29 | Navigation and metric-scope follow-up reviewed for PR #980                         | [Severity-ranked review](./iterations/04-navigation-scope-review.md)                                                                                                |
 
 ## Decisions
 
