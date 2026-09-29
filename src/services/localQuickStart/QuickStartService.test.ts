@@ -3,6 +3,7 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+import { type IActionContext, type ITelemetryContext } from '@microsoft/vscode-azext-utils';
 import * as crypto from 'crypto';
 import * as fs from 'fs/promises';
 import * as os from 'os';
@@ -33,6 +34,36 @@ import {
 // `reusing=true` so the data volume is never wiped. The injectable runtime (WI-0) makes this testable.
 
 const STORED_CONN = 'mongodb://u1:p1@localhost:10273/?tls=true&tlsAllowInvalidCertificates=true';
+
+const mockTelemetryEvents: Array<{ readonly eventName: string; readonly telemetry: ITelemetryContext }> = [];
+
+// Pass-through, so the service behaves as with the real wrapper while its events can be inspected.
+jest.mock('@microsoft/vscode-azext-utils', () => ({
+    ...jest.requireActual<Record<string, unknown>>('@microsoft/vscode-azext-utils'),
+    callWithTelemetryAndErrorHandling: jest.fn(
+        async (eventName: string, callback: (context: IActionContext) => unknown): Promise<unknown> => {
+            const context = {
+                telemetry: { properties: {}, measurements: {} },
+                errorHandling: { issueProperties: {} },
+                valuesToMask: [],
+            } as unknown as IActionContext;
+            mockTelemetryEvents.push({ eventName, telemetry: context.telemetry });
+            try {
+                return await callback(context);
+            } catch (error) {
+                if (context.errorHandling.rethrow) {
+                    throw error;
+                }
+                return undefined;
+            }
+        },
+    ),
+}));
+
+function lastReconcileTelemetry(): ITelemetryContext | undefined {
+    return mockTelemetryEvents.filter((event) => event.eventName === 'documentDB.quickstart.reconcile').at(-1)
+        ?.telemetry;
+}
 
 function fakeMemento(): vscode.Memento {
     const store = new Map<string, unknown>();
@@ -381,6 +412,11 @@ describe('QuickStartService — WI-2d registry-driven reconcile (multi-instance)
         expect(service.getStatus(ALIAS_2).state).toBe(InstanceState.CredentialsMissing);
         expect(removeContainer).not.toHaveBeenCalled();
         expect(removeVolume).not.toHaveBeenCalled();
+        expect(lastReconcileTelemetry()?.measurements).toMatchObject({
+            outcome_credentialsMissing: 1,
+            restoreFailed_noCredentials: 1,
+            outcome_notInstalled: 1,
+        });
     });
 
     // Another VS Code profile or install created it: the container's env still holds the credentials.
@@ -407,6 +443,11 @@ describe('QuickStartService — WI-2d registry-driven reconcile (multi-instance)
         const stored = new DocumentDBConnectionString((await service.readStoredConnectionString()) ?? '');
         expect([stored.username, stored.password, stored.hosts[0]]).toEqual(['u9', 'p9', 'localhost:10261']);
         expect((await listInstances()).find((record) => record.alias === DEFAULT_ALIAS)?.phase).toBe('ready');
+        expect(service.wereCredentialsRestored()).toBe(true);
+        expect(lastReconcileTelemetry()).toMatchObject({
+            properties: { trigger: 'refresh', reconcileResult: 'completed' },
+            measurements: { outcome_restored: 1, managedContainerCount: 1 },
+        });
     });
 
     it('restores credentials from a stopped container using the port it was published on', async () => {
@@ -456,6 +497,10 @@ describe('QuickStartService — WI-2d registry-driven reconcile (multi-instance)
         await service.reconcile();
 
         expect(service.getStatus().state).toBe(InstanceState.CredentialsMissing);
+        expect(lastReconcileTelemetry()?.measurements).toMatchObject({
+            outcome_credentialsMissing: 1,
+            restoreFailed_storeFailed: 1,
+        });
     });
 
     it('marks a ready record whose container vanished as Missing, keeping the record (recoverable)', async () => {
@@ -2026,6 +2071,15 @@ describe('QuickStartService — WI-2e-1 provision RR4 volume-wipe gate', () => {
         expect(removeVolume).not.toHaveBeenCalled();
         expect(removeContainer).not.toHaveBeenCalled();
         expect(service.getStatus().state).toBe(InstanceState.CredentialsMissing);
+        const provisionEvent = mockTelemetryEvents
+            .filter((event) => event.eventName === 'documentDB.quickstart.provision')
+            .at(-1);
+        expect(provisionEvent?.telemetry.properties).toMatchObject({
+            provisionResult: 'error',
+            priorState: InstanceState.NotInstalled,
+            startFresh: 'false',
+            refusedCredentialsUnavailable: 'true',
+        });
     });
 
     it('aborts (never wipes) when a durable ready record exists but no secret (container already gone)', async () => {

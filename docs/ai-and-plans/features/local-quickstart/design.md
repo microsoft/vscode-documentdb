@@ -756,6 +756,23 @@ ports, credentials, or image digests. The **resolved semantic version**
 identifier — it is needed to correlate "version X has a bug" reports and is
 not user-identifying, unlike a raw tag string or digest.
 
+**Wizard journey, as implemented (#979).** The names above are the original plan. Each wizard panel
+gets a `quickStartSessionId` from the open command, and every event the panel produces carries it:
+
+- The `localQuickStart.open` command: `activationSource` (the tree row, notification, deep link,
+  or `commandPalette` that opened it), `instanceState`, `initialStep`.
+- `documentDB.quickstart.wizard.step`, one per phase change: `fromStep`, `toStep`, `trigger`
+  (`next`, `back`, `stepper`, `startSetup`, `continueAnyway`, `cancel`, `waitLonger`, `startOver`,
+  or `auto` for a setup result), `instanceState`; measurements `timeOnFromStepMs`, `stepChangeIndex`.
+- `documentDB.quickstart.wizard.close`, where the journey ended: `initialStep`, `lastStep`,
+  `closeReason` (`closeButton` or `panelClosed`), `setupSucceeded`, `instanceState`; measurements
+  `sessionDurationMs`, `timeOnLastStepMs`, `stepChangeCount`, `setupAttemptCount`, `waitLongerCount`.
+- The panel's `documentDB.rpc.*` procedure events carry `wizardStep` as well. `startQuickStart` also
+  carries the per-run `provisionCorrelationId` that links it to `documentDB.quickstart.provision` and
+  its stage events.
+- Credential recovery (`documentDB.quickstart.reconcile` and related properties): see
+  [decision 0005](./decisions.md#0005---restore-missing-credentials-from-the-managed-container).
+
 ---
 
 ## 15. Scope split

@@ -6,15 +6,19 @@
 import * as vscode from 'vscode';
 import { API } from '../../../DocumentDBExperiences';
 import { ext } from '../../../extensionVariables';
-import { type InstanceState } from '../../../services/localQuickStart/quickStartTypes';
+import { type InstanceState, type QuickStartWizardPhase } from '../../../services/localQuickStart/quickStartTypes';
 import { type AppWebviewController, openAppWebview } from '../../_integration/openAppWebview';
 import { type RouterContext } from './localQuickStartRouter';
+import { createWizardSession, reportWizardClosed } from './wizardTelemetry';
 
 export type LocalQuickStartConfigurationType = {
     id: string;
     /** Instance status at open time, so the first render already knows which step and guard to show. */
     initialInstanceState?: InstanceState;
     initialInstanceMissing?: boolean;
+    initialPhase?: QuickStartWizardPhase;
+    /** Correlates every event of this panel, from open to close. */
+    quickStartSessionId?: string;
 };
 
 /**
@@ -30,10 +34,12 @@ export function openLocalQuickStartWebview(
     // exists after openAppWebview returns. The closure is only invoked at
     // runtime (in response to a tRPC call), well after the handle is assigned.
     const handle: { controller?: AppWebviewController<LocalQuickStartConfigurationType> } = {};
+    const wizardSession = createWizardSession(initialData.quickStartSessionId, initialData.initialPhase);
 
     const trpcContext: RouterContext = {
         dbExperience: API.DocumentDB,
         webviewName: 'localQuickStart',
+        wizardSession,
         // Success auto-close: dispose the PANEL (not the controller). The
         // framework deliberately does not close the panel from `dispose()`
         // (circular-chain guard); disposing the panel fires
@@ -67,6 +73,7 @@ export function openLocalQuickStartWebview(
     });
 
     handle.controller = controller;
+    controller.onDisposed(() => reportWizardClosed(wizardSession));
 
     return controller;
 }

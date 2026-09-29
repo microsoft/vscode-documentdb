@@ -152,6 +152,42 @@ export const PROVISION_STAGES: readonly ProvisionStage[] = [
     'waiting',
 ] as const;
 
+/** Setup wizard phases. `provisioning` and `failed` both render the Set up step. */
+export const QUICK_START_WIZARD_PHASES = ['introduction', 'configure', 'provisioning', 'failed', 'success'] as const;
+export type QuickStartWizardPhase = (typeof QUICK_START_WIZARD_PHASES)[number];
+
+/** What moved the wizard to another phase. `auto` is the wizard reacting to a setup result or status change. */
+export const QUICK_START_WIZARD_STEP_TRIGGERS = [
+    'next',
+    'back',
+    'stepper',
+    'startSetup',
+    'continueAnyway',
+    'cancel',
+    'waitLonger',
+    'startOver',
+    'auto',
+] as const;
+export type QuickStartWizardStepTrigger = (typeof QUICK_START_WIZARD_STEP_TRIGGERS)[number];
+
+/** Where the setup wizard was opened from, recorded as `activationSource` on the open command. */
+export type QuickStartActivationSource =
+    | 'commandPalette'
+    | 'deepLink'
+    | 'notSetUpNotification'
+    | 'dataRemovedNotification'
+    | 'treeSetUpRow'
+    | 'treeReviewSetupRow'
+    | 'treeRecreateRow'
+    | 'treeRetryNode'
+    | 'treePreflightRecreateRow'
+    | 'treePreflightReviewDockerRow'
+    | 'treePreflightReviewSetupRow';
+
+export interface OpenLocalQuickStartOptions {
+    readonly activationSource?: QuickStartActivationSource;
+}
+
 /**
  * What a Quick Start message says, without saying it. The service reports the situation; the
  * surfaces that render it own the wording — the same split the Docker guidance keys already use.

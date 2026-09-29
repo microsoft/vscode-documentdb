@@ -85,13 +85,15 @@ regular new-connection wizard instead ([0001](./decisions.md#0001--single-manage
 | 2026-09-24 | #953 | Reject credentials and ports setup can't honor (#949)        | [iterations/08-input-validation.md](./iterations/08-input-validation.md)                          |
 | 2026-09-24 | #955 | Tree and wizard stop showing a stale instance (#950)         | [iterations/09-state-recovery.md](./iterations/09-state-recovery.md)                              |
 | 2026-09-29 | #979 | Restore missing credentials from the container               | [decisions.md#0005](./decisions.md#0005---restore-missing-credentials-from-the-managed-container) |
+| 2026-09-29 | #979 | Wizard journey telemetry and correlation ids                 | [decisions.md#0006](./decisions.md#0006---wizard-journey-telemetry-and-correlation-ids)           |
 
 ## Decisions
 
-See [decisions.md](./decisions.md). Five entries: the single-instance model (0001, superseded), its
+See [decisions.md](./decisions.md). Six entries: the single-instance model (0001, superseded), its
 reversal to multi-instance (0002), the Concept F wizard information architecture (0003), the
-managed-node cluster-command context boundary plus its deferred replacement (0004), and restoring
-missing credentials from the managed container (0005).
+managed-node cluster-command context boundary plus its deferred replacement (0004), restoring
+missing credentials from the managed container (0005), and the wizard journey telemetry and its
+correlation ids (0006).
 
 ## Open gaps
 

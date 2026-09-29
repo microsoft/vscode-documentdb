@@ -73,6 +73,8 @@ import {
     QUICK_START_IMAGE,
     QUICK_START_IMAGE_REPOSITORY,
     QUICK_START_PORT,
+    type QuickStartWizardPhase,
+    type QuickStartWizardStepTrigger,
     type StageEvent,
 } from '../../../services/localQuickStart/quickStartTypes';
 import { useTrpcClient } from '../../_integration/useTrpcClient';
@@ -108,7 +110,7 @@ import { type LocalQuickStartConfigurationType } from './localQuickStartControll
  * problems included — is reported in place, beside the stage that failed, rather than on a screen
  * of its own.
  */
-type Phase = 'introduction' | 'configure' | 'provisioning' | 'failed' | 'success';
+type Phase = QuickStartWizardPhase;
 type WizardStepId = 'introduction' | 'configure' | 'setup' | 'done';
 /** The subset of `StatusListItemStatus` this flow raises; it never reports a `warning`. */
 type StageStatus = Extract<StatusListItemStatus, 'pending' | 'active' | 'done' | 'error'>;
@@ -796,10 +798,26 @@ export const LocalQuickStart = (): JSX.Element => {
     const trpcClient = useTrpcClient();
     const configuration = useConfiguration<LocalQuickStartConfigurationType>();
 
-    // Credentials missing: the explanation and the only way forward are on Configure, so start there.
-    const [phase, setPhase] = useState<Phase>(() =>
-        configuration.initialInstanceState === InstanceState.CredentialsMissing ? 'configure' : 'introduction',
-    );
+    const [phase, setPhase] = useState<Phase>(configuration.initialPhase ?? 'introduction');
+    // Mirrors the committed phase, so a step change is reported once with what caused it.
+    const reportedPhaseRef = useRef<Phase>(phase);
+    const stepTriggerRef = useRef<QuickStartWizardStepTrigger | undefined>(undefined);
+    /** A user-initiated phase change; anything that calls `setPhase` directly is reported as `auto`. */
+    const navigate = useCallback((to: Phase, trigger: QuickStartWizardStepTrigger): void => {
+        if (reportedPhaseRef.current !== to) {
+            stepTriggerRef.current = trigger;
+        }
+        setPhase(to);
+    }, []);
+    useEffect(() => {
+        if (reportedPhaseRef.current === phase) {
+            return;
+        }
+        reportedPhaseRef.current = phase;
+        const trigger = stepTriggerRef.current ?? 'auto';
+        stepTriggerRef.current = undefined;
+        void trpcClient.localQuickStart.reportStepChange.mutate({ to: phase, trigger }).catch(() => undefined);
+    }, [phase, trpcClient]);
     /**
      * Readiness backing the `Checking Docker` stage: its detail line in both directions, and its
      * remediation when that stage failed. Loaded in the background while the user reads the
@@ -1120,7 +1138,7 @@ export const LocalQuickStart = (): JSX.Element => {
                 onError: (error: unknown) => void;
                 onComplete: () => void;
             }) => { unsubscribe: () => void },
-            options?: { resetStages?: boolean },
+            options?: { resetStages?: boolean; trigger?: QuickStartWizardStepTrigger },
         ): void => {
             // Cancel any prior in-flight subscription so a fast double-click can't leak
             // an uncancellable stream (mirrors the Query Insights pattern).
@@ -1148,7 +1166,7 @@ export const LocalQuickStart = (): JSX.Element => {
             setDockerRecoveredKey(0);
             setTimedOut(false);
             setElapsedMs(0);
-            setPhase('provisioning');
+            navigate('provisioning', options?.trigger ?? 'startSetup');
 
             const startedAt = Date.now();
             timerRef.current = setInterval(() => setElapsedMs(Date.now() - startedAt), 250);
@@ -1233,7 +1251,7 @@ export const LocalQuickStart = (): JSX.Element => {
             });
             subscriptionRef.current = subscription;
         },
-        [stopTimer, syncDockerStatus],
+        [navigate, stopTimer, syncDockerStatus],
     );
 
     const startProvisioning = useCallback(
@@ -1242,7 +1260,9 @@ export const LocalQuickStart = (): JSX.Element => {
             const options = continueAnyway
                 ? { ...(advancedRef.current ?? {}), continueAnyway: true }
                 : advancedRef.current;
-            runStream((handlers) => trpcClient.localQuickStart.startQuickStart.subscribe(options, handlers));
+            runStream((handlers) => trpcClient.localQuickStart.startQuickStart.subscribe(options, handlers), {
+                trigger: continueAnyway ? 'continueAnyway' : 'startSetup',
+            });
         },
         [trpcClient, runStream],
     );
@@ -1473,6 +1493,7 @@ export const LocalQuickStart = (): JSX.Element => {
         setStageStatus((prev) => ({ ...prev, waiting: 'active' }));
         runStream((handlers) => trpcClient.localQuickStart.waitLonger.subscribe(undefined, handlers), {
             resetStages: false,
+            trigger: 'waitLonger',
         });
     }, [trpcClient, runStream]);
 
@@ -1492,7 +1513,7 @@ export const LocalQuickStart = (): JSX.Element => {
                     setTimedOut(false);
                     setErrorMessage(undefined);
                     setStageStatus(emptyStageStatus());
-                    setPhase('configure');
+                    navigate('configure', 'startOver');
                 } else {
                     setTimedOut(true);
                     setPhase('failed');
@@ -1502,7 +1523,7 @@ export const LocalQuickStart = (): JSX.Element => {
                 setTimedOut(true);
                 setPhase('failed');
             });
-    }, [trpcClient, stopTimer]);
+    }, [navigate, trpcClient, stopTimer]);
 
     const handleClose = useCallback((): void => {
         void trpcClient.localQuickStart.closePanel.mutate().catch(() => undefined);
@@ -1518,12 +1539,12 @@ export const LocalQuickStart = (): JSX.Element => {
             // timed-out actions (Wait longer / Start over) rather than the settings page.
             isWaitLongerRef.current = false;
             setTimedOut(true);
-            setPhase('failed');
+            navigate('failed', 'cancel');
         } else {
             setTimedOut(false);
-            setPhase('configure');
+            navigate('configure', 'cancel');
         }
-    }, [stopTimer]);
+    }, [navigate, stopTimer]);
 
     // From a failure, return to the settings page (field state is preserved) so the user can
     // correct a bad option (e.g. a busy explicit port) and retry — design feedback.
@@ -1532,8 +1553,8 @@ export const LocalQuickStart = (): JSX.Element => {
         stopDockerWait();
         setErrorMessage(undefined);
         setTimedOut(false);
-        setPhase('configure');
-    }, [stopDockerWait]);
+        navigate('configure', 'back');
+    }, [navigate, stopDockerWait]);
 
     const handleViewOutput = useCallback((): void => {
         void trpcClient.localQuickStart.showOutput.mutate().catch(() => undefined);
@@ -1573,15 +1594,18 @@ export const LocalQuickStart = (): JSX.Element => {
             .catch(() => undefined);
     }, [syncDockerStatus, trpcClient]);
 
-    const goToStep = useCallback((id: string): void => {
-        if (id === 'introduction') {
-            setErrorMessage(undefined);
-            setPhase('introduction');
-        } else if (id === 'configure') {
-            setErrorMessage(undefined);
-            setPhase('configure');
-        }
-    }, []);
+    const goToStep = useCallback(
+        (id: string): void => {
+            if (id === 'introduction') {
+                setErrorMessage(undefined);
+                navigate('introduction', 'stepper');
+            } else if (id === 'configure') {
+                setErrorMessage(undefined);
+                navigate('configure', 'stepper');
+            }
+        },
+        [navigate],
+    );
 
     // ---- derived setup state --------------------------------------------------------------
 
@@ -2322,7 +2346,7 @@ export const LocalQuickStart = (): JSX.Element => {
     switch (phase) {
         case 'introduction': {
             primaryLabel = l10n.t('Continue');
-            onPrimary = () => setPhase('configure');
+            onPrimary = () => navigate('configure', 'next');
             footerNote = l10n.t(
                 'Nothing is downloaded or created on your machine until you choose to start in the Configure step.',
             );
@@ -2356,7 +2380,7 @@ export const LocalQuickStart = (): JSX.Element => {
                         QUICK_START_CONTAINER_NAME,
                     );
             secondaryActions = (
-                <Button appearance="secondary" onClick={() => setPhase('introduction')}>
+                <Button appearance="secondary" onClick={() => navigate('introduction', 'back')}>
                     {l10n.t('Back')}
                 </Button>
             );

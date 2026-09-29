@@ -16,6 +16,7 @@ verified: 2026-08-14
 | 0003 | Concept F — Docker verified as the first setup stage   | Accepted (modified) | Dedicated readiness page dropped entirely | 2026-08-03 | #798 |
 | 0004 | Explicit cluster-command opt-ins for managed nodes     | Accepted            | Capability split deferred                 | 2026-08-09 | #876 |
 | 0005 | Restore missing credentials from the managed container | Accepted            | Error-node tree flow deferred             | 2026-09-29 | #979 |
+| 0006 | Wizard journey telemetry and correlation ids           | Accepted            | Quick Start lineage id not added          | 2026-09-29 | #979 |
 
 > Entries below are **semantically** immutable: append new entries rather than
 > rewriting old ones, and record reversals as a new entry plus a status change
@@ -337,3 +338,71 @@ An interrupted setup is not a cause: the secret is written before `docker run`.
 - Still `CredentialsMissing` after this: the container was removed but the data volume or record is
   left, so there is nothing to inspect. A covers that case.
 - Revisit F if telemetry shows users still reach `CredentialsMissing` regularly.
+- Telemetry for these paths:
+  - `documentDB.quickstart.reconcile`, one event per deep reconcile (`trigger` is `hydration` or
+    `refresh`), counts each outcome as `outcome_<name>`: `adopted`, `restored`, `credentialsMissing`,
+    `credentialsMissingNoContainer`, `missing`, `dataRemoved`, `scavenged`, `provisioning`,
+    `notInstalled`. A failed restore adds `restoreFailed_noCredentials` or
+    `restoreFailed_storeFailed`.
+  - `connect` for the managed instance carries `credentialsRestored`, so the result shows whether
+    restored credentials actually work.
+  - The wizard open command carries `instanceState`. `documentDB.quickstart.provision` carries
+    `priorState`, `startFresh` and `refusedCredentialsUnavailable`. The Delete command carries
+    `priorState`. Together they show what users choose once an instance is `CredentialsMissing`.
+
+---
+
+## 0006 - Wizard journey telemetry and correlation ids
+
+**Status:** Accepted · **Date:** 2026-09-29 · **PR:** #979 · **Raised by:** the operator while
+reviewing the recovery telemetry in #979
+**Evidence:** `wizardTelemetry.ts`, `localQuickStartRouter.ts`, `openLocalQuickStart.ts`;
+[design.md](./design.md) §14; [telemetry-correlation-ids.md](../../telemetry-correlation-ids.md)
+
+### Question
+
+Telemetry showed how often the wizard was opened and how each setup run ended, but not how people
+move through the wizard, where they leave it, or where they opened it from. Which events and which
+ids should record that?
+
+### Decision
+
+1. **One `quickStartSessionId` per wizard panel.** The open command creates it, the controller keeps
+   a session for the panel on the extension host, and every event the panel produces carries it:
+   the open command, the tRPC procedure events, `documentDB.quickstart.wizard.step` for each phase
+   change (with its `trigger`), and `documentDB.quickstart.wizard.close` when the panel is disposed.
+   This follows the Cluster Dashboard's `dashboardSessionId`.
+2. **The per-run id is `provisionCorrelationId`.** It was named `journeyCorrelationId` but identified
+   one setup run. Renamed outright, with no transition period sending both names, because no
+   telemetry analysis relies on it yet.
+3. **`activationSource` on the open command** names the tree row, notification, deep link, or
+   `commandPalette` that opened the wizard. The name is the one most commands already use.
+4. **Outcomes never depend on `wizard.close`.** Setup results come from
+   `documentDB.quickstart.provision`, sent when a run ends. The close event is a summary
+   (`lastStep`, `closeReason`, totals) and may be missing when VS Code is closed or killed with the
+   panel open; the last `wizard.step` of the session still says where the user stopped.
+5. **No Quick Start `journeyCorrelationId`.** The repo uses that name for lineage created at a tree
+   root, and Quick Start does not create one.
+
+### Alternatives considered
+
+- **Call the wizard session `journeyCorrelationId`.** Rejected: elsewhere that name means tree
+  lineage that spans commands, and the copy-paste feature already rejected reusing it for a single
+  operation. One journey can also open the wizard more than once.
+- **Use the session id as the journey id only when no lineage exists.** Rejected: the same property
+  would mean lineage in some events and one panel in others.
+- **Send both the old and new name for the per-run id.** Rejected: nothing queries it yet.
+- **Have the Quick Start tree node create a lineage id.** Not done: the questions it would answer
+  (did setup lead to use, where was the wizard opened from) are answered by the `provision` and
+  `connect` events in the same VS Code session and by `activationSource`. The tree rebuilds that
+  node on refresh, so the id would change often, and the action rows would need extra arguments.
+- **Let the webview send the close event.** Rejected: a webview that is being closed cannot
+  reliably send anything, so the extension host keeps the session and reports the close.
+
+### Consequences
+
+- A session with an open event but no close event means the window went away with the panel open.
+- A phase change made just before the tab closes can be lost in transit, so `lastStep` may show the
+  step before it.
+- The ids used across the extension, and a draft rule for choosing one, are collected in
+  [telemetry-correlation-ids.md](../../telemetry-correlation-ids.md) for a later pass.

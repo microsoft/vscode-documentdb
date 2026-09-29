@@ -32,6 +32,8 @@ import {
     type InstanceStatusUpdate,
     type PasswordEncodingProblem,
     type PortAvailability,
+    QUICK_START_WIZARD_PHASES,
+    QUICK_START_WIZARD_STEP_TRIGGERS,
     type QuickStartStatus,
     type StageEvent,
 } from '../../../services/localQuickStart/quickStartTypes';
@@ -44,6 +46,7 @@ import {
     getCredentialValidation,
 } from './credentialValidation';
 import { getDockerReadinessTelemetryProperties } from './dockerReadinessTelemetry';
+import { type QuickStartWizardSession, reportWizardStep } from './wizardTelemetry';
 
 /**
  * The Configure step's credential rules plus the driver's SASLprep, which only the host can run.
@@ -105,7 +108,26 @@ const advancedOptionsSchema = z
 export type RouterContext = BaseRouterContext & {
     /** Disposes the webview panel (explicit Close button). Wired by the controller. */
     closePanel: () => void;
+    /** The panel's journey. Set by the controller; absent only in tests. */
+    wizardSession?: QuickStartWizardSession;
 };
+
+/** Narrow the context and stamp the panel's session, so no procedure drops out of the journey. */
+function sessionContext(ctx: unknown): WithTelemetry<RouterContext> {
+    const myCtx = ctx as WithTelemetry<RouterContext>;
+    const session = myCtx.wizardSession;
+    if (session) {
+        myCtx.actionContext.telemetry.properties.quickStartSessionId = session.id;
+        myCtx.actionContext.telemetry.properties.wizardStep = session.phase;
+    }
+    return myCtx;
+}
+
+function recordSetupResult(session: QuickStartWizardSession | undefined, event: StageEvent): void {
+    if (session && event.stage === 'done' && event.status === 'done') {
+        session.setupSucceeded = true;
+    }
+}
 
 /**
  * Strip the credential-bearing {@link QuickStartStatus.metadata} before returning status to the
@@ -138,7 +160,7 @@ export const localQuickStartRouter = router({
                 .optional(),
         )
         .query(async ({ ctx, input }): Promise<DockerStatusResult> => {
-            const tctx = ctx as WithTelemetry<RouterContext>;
+            const tctx = sessionContext(ctx);
             if (input?.polled) {
                 tctx.actionContext.telemetry.suppressAll = true;
             }
@@ -189,14 +211,37 @@ export const localQuickStartRouter = router({
     getStatus: publicProcedure.query((): QuickStartStatus => toWebviewStatus(QuickStartService.getStatus())),
 
     /** Disposes the panel when the user explicitly clicks Close. */
-    closePanel: publicProcedure.mutation(({ ctx }) => {
-        (ctx as RouterContext).closePanel();
+    closePanel: publicProcedureWithTelemetry.mutation(({ ctx }) => {
+        const myCtx = sessionContext(ctx);
+        if (myCtx.wizardSession) {
+            myCtx.wizardSession.closeReason = 'closeButton';
+        }
+        myCtx.closePanel();
     }),
 
     /** Reveal the OutputChannel with the captured Docker command output. */
-    showOutput: publicProcedure.mutation(() => {
+    showOutput: publicProcedureWithTelemetry.mutation(({ ctx }) => {
+        sessionContext(ctx);
         getQuickStartOutputChannel().show(true);
     }),
+
+    /**
+     * The webview moved to another phase. Navigation that stays inside the webview reaches the host
+     * only through this, and the session keeps the last phase for the close event.
+     */
+    reportStepChange: publicProcedure
+        .input(
+            z.object({
+                to: z.enum(QUICK_START_WIZARD_PHASES),
+                trigger: z.enum(QUICK_START_WIZARD_STEP_TRIGGERS),
+            }),
+        )
+        .mutation(({ ctx, input }) => {
+            const session = (ctx as RouterContext).wizardSession;
+            if (session) {
+                reportWizardStep(session, input.to, input.trigger);
+            }
+        }),
 
     /** Copy one fixed, never-executed recovery command selected by the extension host. */
     copyRecoveryCommand: publicProcedureWithTelemetry
@@ -204,14 +249,14 @@ export const localQuickStartRouter = router({
         .mutation(async ({ input, ctx }): Promise<void> => {
             const command = getDockerRecoveryCommandById(input);
             await vscode.env.clipboard.writeText(command.commandLine);
-            const tctx = ctx as WithTelemetry<RouterContext>;
+            const tctx = sessionContext(ctx);
             tctx.actionContext.telemetry.properties.recoveryCommandId = command.id;
         }),
 
     /** Revalidate and launch the provider action selected by the extension host. */
     startDockerProvider: publicProcedureWithTelemetry.mutation(async ({ ctx }) => {
+        const tctx = sessionContext(ctx);
         const result = await startDockerProvider();
-        const tctx = ctx as WithTelemetry<RouterContext>;
         tctx.actionContext.telemetry.properties.dockerLaunchResult = result;
         return result;
     }),
@@ -225,7 +270,7 @@ export const localQuickStartRouter = router({
      * selects, and expands the instance row, so the databases load.
      */
     openConnection: publicProcedureWithTelemetry.mutation(async ({ ctx }) => {
-        const tctx = ctx as WithTelemetry<RouterContext>;
+        const tctx = sessionContext(ctx);
         await revealQuickStartInstance(tctx.actionContext);
     }),
 
@@ -234,14 +279,22 @@ export const localQuickStartRouter = router({
      * stopped instance the user reached the wizard for must never be silently recreated when all
      * they wanted was to start it.
      */
-    startInstance: publicProcedure.mutation(() => QuickStartService.start()),
+    startInstance: publicProcedureWithTelemetry.mutation(({ ctx }) => {
+        sessionContext(ctx);
+        return QuickStartService.start();
+    }),
 
     /**
      * "Start over" from a readiness timeout (§9.1): remove the container retained by the
      * timeout (and wipe a fresh attempt's half-initialized volume) so the user can run setup
      * again from a clean slate.
      */
-    discardTimedOut: publicProcedure.mutation(() => QuickStartService.discardTimedOutInstance()),
+    discardTimedOut: publicProcedureWithTelemetry.mutation(async ({ ctx }) => {
+        const tctx = sessionContext(ctx);
+        const discarded = await QuickStartService.discardTimedOutInstance();
+        tctx.actionContext.telemetry.properties.discarded = discarded ? 'true' : 'false';
+        return discarded;
+    }),
 
     /**
      * Push the managed instance's status to the panel whenever it changes (review N1).
@@ -302,7 +355,12 @@ export const localQuickStartRouter = router({
         ctx,
         input,
     }): AsyncGenerator<StageEvent, void, void> {
-        const myCtx = ctx as WithTelemetry<RouterContext>;
+        const myCtx = sessionContext(ctx);
+        const session = myCtx.wizardSession;
+        if (session) {
+            session.setupAttemptCount++;
+            myCtx.actionContext.telemetry.measurements.setupAttempt = session.setupAttemptCount;
+        }
 
         // Mirror the subscription's abort signal so cancelling the subscription
         // (Cancel button / panel close) cancels the in-flight provisioning and
@@ -317,15 +375,16 @@ export const localQuickStartRouter = router({
 
         try {
             const advanced: AdvancedQuickStartOptions | undefined = input ?? undefined;
-            const journeyCorrelationId = randomUUID();
-            myCtx.actionContext.telemetry.properties.journeyCorrelationId = journeyCorrelationId;
+            const provisionCorrelationId = randomUUID();
+            myCtx.actionContext.telemetry.properties.provisionCorrelationId = provisionCorrelationId;
             myCtx.actionContext.telemetry.properties.continueAnyway = String(advanced?.continueAnyway === true);
             for await (const event of QuickStartService.provision(
                 abortController.signal,
                 advanced,
                 undefined,
-                journeyCorrelationId,
+                provisionCorrelationId,
             )) {
+                recordSetupResult(session, event);
                 yield event;
             }
         } finally {
@@ -340,8 +399,14 @@ export const localQuickStartRouter = router({
      * the same stage events. Cancelling the subscription (its Cancel button / panel close) aborts
      * the probe but leaves the container running so the user can retry or Start over.
      */
-    waitLonger: publicProcedure.subscription(async function* ({ ctx }): AsyncGenerator<StageEvent, void, void> {
-        const myCtx = ctx as BaseRouterContext;
+    waitLonger: publicProcedureWithTelemetry.subscription(async function* ({
+        ctx,
+    }): AsyncGenerator<StageEvent, void, void> {
+        const myCtx = sessionContext(ctx);
+        const session = myCtx.wizardSession;
+        if (session) {
+            session.waitLongerCount++;
+        }
         const abortController = new AbortController();
         const onCtxAbort = (): void => abortController.abort();
         if (myCtx.signal?.aborted) {
@@ -352,6 +417,7 @@ export const localQuickStartRouter = router({
 
         try {
             for await (const event of QuickStartService.resumeReadiness(abortController.signal)) {
+                recordSetupResult(session, event);
                 yield event;
             }
         } finally {

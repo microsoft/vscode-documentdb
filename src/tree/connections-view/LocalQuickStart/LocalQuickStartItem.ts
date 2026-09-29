@@ -27,6 +27,8 @@ import {
 import {
     InstanceState,
     type DockerReadiness,
+    type OpenLocalQuickStartOptions,
+    type QuickStartActivationSource,
     type QuickStartStatus,
 } from '../../../services/localQuickStart/quickStartTypes';
 import { getResourcesPath } from '../../../utils/icons';
@@ -50,6 +52,7 @@ function createQuickStartAction(
     label: string,
     iconId: string,
     commandId: string,
+    activationSource?: QuickStartActivationSource,
 ): TreeElement {
     return createGenericElementWithContext({
         id: `${parentId}/${idSuffix}`,
@@ -57,7 +60,13 @@ function createQuickStartAction(
         label,
         iconPath: new vscode.ThemeIcon(iconId),
         commandId,
+        commandArgs: activationSource ? openWizardArgs(undefined, activationSource) : undefined,
     });
+}
+
+/** Arguments for `localQuickStart.open`, which reads its options from the second position. */
+function openWizardArgs(target: unknown, activationSource: QuickStartActivationSource): unknown[] {
+    return [target, { activationSource } satisfies OpenLocalQuickStartOptions];
 }
 
 function createQuickStartRetryAction(parentId: string, retryTarget: unknown): TreeElement {
@@ -67,7 +76,7 @@ function createQuickStartRetryAction(parentId: string, retryTarget: unknown): Tr
         label: l10n.t('Retry setup'),
         iconPath: new vscode.ThemeIcon('refresh'),
         commandId: 'vscode-documentdb.command.localQuickStart.open',
-        commandArgs: [retryTarget],
+        commandArgs: openWizardArgs(retryTarget, 'treeRetryNode'),
     });
 }
 
@@ -93,7 +102,14 @@ function buildPreflightChildren(parentId: string, verdict: QuickStartConnectionP
             ];
         case 'missing':
             return [
-                createQuickStartAction(parentId, 'preflight/recreate', l10n.t('Recreate container'), 'refresh', open),
+                createQuickStartAction(
+                    parentId,
+                    'preflight/recreate',
+                    l10n.t('Recreate container'),
+                    'refresh',
+                    open,
+                    'treePreflightRecreateRow',
+                ),
             ];
         case 'dockerUnreachable':
             return [
@@ -103,6 +119,7 @@ function buildPreflightChildren(parentId: string, verdict: QuickStartConnectionP
                     l10n.t('Review Docker setup'),
                     'tools',
                     open,
+                    'treePreflightReviewDockerRow',
                 ),
                 createQuickStartAction(parentId, 'preflight/viewLogs', l10n.t('View setup log'), 'output', viewLogs),
             ];
@@ -111,7 +128,14 @@ function buildPreflightChildren(parentId: string, verdict: QuickStartConnectionP
             return [];
         default:
             return [
-                createQuickStartAction(parentId, 'preflight/reviewSetup', l10n.t('Review setup'), 'tools', open),
+                createQuickStartAction(
+                    parentId,
+                    'preflight/reviewSetup',
+                    l10n.t('Review setup'),
+                    'tools',
+                    open,
+                    'treePreflightReviewSetupRow',
+                ),
                 createQuickStartAction(parentId, 'preflight/viewLogs', l10n.t('View setup log'), 'output', viewLogs),
             ];
     }
@@ -319,6 +343,9 @@ class QuickStartClusterItem extends ClusterItemBase<ConnectionClusterModel> {
             context.telemetry.properties.view = Views.ConnectionsView;
             context.telemetry.properties.connectionInitiatedFrom = Views.ConnectionsView;
             context.telemetry.properties.connectionType = 'localQuickStart';
+            context.telemetry.properties.credentialsRestored = QuickStartService.wereCredentialsRestored(this.alias)
+                ? 'true'
+                : 'false';
 
             const connectionString = await QuickStartService.readStoredConnectionString(this.alias);
             if (!connectionString) {
@@ -436,6 +463,7 @@ export class LocalQuickStartItem implements TreeElement, TreeElementWithContextV
                     l10n.t('Recreate container'),
                     'refresh',
                     'vscode-documentdb.command.localQuickStart.open',
+                    'treeRecreateRow',
                 ),
                 createQuickStartAction(
                     this.id,
@@ -524,6 +552,7 @@ export class LocalQuickStartItem implements TreeElement, TreeElementWithContextV
                     l10n.t('Review setup'),
                     'tools',
                     'vscode-documentdb.command.localQuickStart.open',
+                    'treeReviewSetupRow',
                 ),
             ];
         }
@@ -555,6 +584,7 @@ export class LocalQuickStartItem implements TreeElement, TreeElementWithContextV
                 l10n.t('Set up DocumentDB Local'),
                 'rocket',
                 'vscode-documentdb.command.localQuickStart.open',
+                'treeSetUpRow',
             ),
         ];
     }
