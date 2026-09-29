@@ -3,8 +3,8 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { type IActionContext, type ITelemetryContext } from '@microsoft/vscode-azext-utils';
 import type * as AzExtUtils from '@microsoft/vscode-azext-utils';
+import { type IActionContext, type ITelemetryContext } from '@microsoft/vscode-azext-utils';
 import { Worker } from 'worker_threads';
 import { ext } from '../../extensionVariables';
 import {

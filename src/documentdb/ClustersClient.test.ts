@@ -3,8 +3,8 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { type IActionContext, type ITelemetryContext, UserCancelledError } from '@microsoft/vscode-azext-utils';
 import type * as AzExtUtils from '@microsoft/vscode-azext-utils';
+import { type IActionContext, type ITelemetryContext, UserCancelledError } from '@microsoft/vscode-azext-utils';
 import type * as Mongodb from 'mongodb';
 import { MongoClient } from 'mongodb';
 import { ext } from '../extensionVariables';
