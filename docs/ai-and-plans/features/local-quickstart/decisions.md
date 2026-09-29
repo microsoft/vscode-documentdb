@@ -9,12 +9,13 @@ verified: 2026-08-14
 
 > The decisions that shaped Local Quick Start, and what was rejected on the way.
 
-| #    | Decision                                             | Status              | Changed from the proposal?                | Date       | PR   |
-| ---- | ---------------------------------------------------- | ------------------- | ----------------------------------------- | ---------- | ---- |
-| 0001 | Single managed instance, ownership-bounded           | Superseded by 0002  | Accepted as proposed                      | 2026-06-25 | —    |
-| 0002 | Multiple managed instances in v1                     | Accepted            | Reverses 0001 after owner review          | 2026-07-06 | —    |
-| 0003 | Concept F — Docker verified as the first setup stage | Accepted (modified) | Dedicated readiness page dropped entirely | 2026-08-03 | #798 |
-| 0004 | Explicit cluster-command opt-ins for managed nodes   | Accepted            | Capability split deferred                 | 2026-08-09 | #876 |
+| #    | Decision                                               | Status              | Changed from the proposal?                | Date       | PR   |
+| ---- | ------------------------------------------------------ | ------------------- | ----------------------------------------- | ---------- | ---- |
+| 0001 | Single managed instance, ownership-bounded             | Superseded by 0002  | Accepted as proposed                      | 2026-06-25 | —    |
+| 0002 | Multiple managed instances in v1                       | Accepted            | Reverses 0001 after owner review          | 2026-07-06 | —    |
+| 0003 | Concept F — Docker verified as the first setup stage   | Accepted (modified) | Dedicated readiness page dropped entirely | 2026-08-03 | #798 |
+| 0004 | Explicit cluster-command opt-ins for managed nodes     | Accepted            | Capability split deferred                 | 2026-08-09 | #876 |
+| 0005 | Restore missing credentials from the managed container | Accepted            | Error-node tree flow deferred             | 2026-09-29 | #979 |
 
 > Entries below are **semantically** immutable: append new entries rather than
 > rewriting old ones, and record reversals as a new entry plus a status change
@@ -259,3 +260,80 @@ entries for compatible cluster commands.
   contributions, and retain explicit state gating only where non-running lifecycle rows require it.
 - That replacement must audit Copy Connection String separately: the generic cluster command can
   serve the running node, while the Quick Start command must remain available on a stopped row.
+
+---
+
+## 0005 - Restore missing credentials from the managed container
+
+**Status:** Accepted · **Date:** 2026-09-29 · **PR:** #979 · **Raised by:** the operator while
+testing #979
+**Evidence:** `QuickStartService.reconcileAlias` and `recoverCredentialsFromContainer`;
+`openLocalQuickStart` and the initial phase in `LocalQuickStart.tsx`
+
+### Question
+
+A managed container can exist while this VS Code has no saved credentials for it. The tree then
+shows "Review setup", the wizard opened on Introduction without saying why, and the only way forward
+was Start fresh, which erases the data. How should this state be handled?
+
+### How it happens
+
+Docker is shared by everything on the machine. The Quick Start record and its secret live in VS Code
+extension storage, which is separate for each profile and each installation. Any second VS Code that
+talks to the same Docker daemon finds a labelled container it has no password for:
+
+- The F5 development host runs with `--profile=noExtensionsProfile`, while the installed extension
+  runs in the default profile. This is the most common case for contributors.
+- Stable and Insiders, other VS Code based editors, portable mode, `--user-data-dir`, or a reinstall
+  that wiped user data.
+- An OS keyring change on Linux or WSL. The secret can no longer be decrypted, but the
+  `globalState` record survives.
+
+An interrupted setup is not a cause: the secret is written before `docker run`.
+
+### Options considered
+
+| Option                                                                                                                                  | Effort          | For the user                                                                        | Outcome               |
+| --------------------------------------------------------------------------------------------------------------------------------------- | --------------- | ----------------------------------------------------------------------------------- | --------------------- |
+| **A.** Open the wizard on Configure, where the warning and Start fresh are                                                              | Small           | No longer lands on an unrelated page                                                | **Accepted**          |
+| **B.** Repeat the warning on Introduction                                                                                               | Small           | Duplicated text                                                                     | Rejected, A covers it |
+| **C.** Explain the state in the tree row (description, tooltip)                                                                         | Small           | Clearer row, same dead end                                                          | Not done              |
+| **D.** Read the credentials back from the container's environment (`docker inspect`) and adopt it                                       | Small           | Zero clicks, data kept                                                              | **Accepted**          |
+| **E.** Let the user type the username and password on Configure                                                                         | Medium          | Rarely usable, see below                                                            | Rejected              |
+| **F.** Show the cluster node with error nodes "Update credentials" (reusing the update-credentials wizard, starting empty) and "Delete" | Small to medium | Consistent with saved connections, but Update credentials has the same problem as E | Deferred              |
+
+### Decision
+
+1. **D.** When reconcile finds a labelled container with no stored secret and no fresh provisioning
+   lease, it reads `USERNAME` and `PASSWORD` from the container's environment, builds the connection
+   string, stores it, and adopts the container through the normal path. Only when that fails does the
+   instance become `CredentialsMissing`.
+2. **A.** For whatever is still `CredentialsMissing`, the wizard opens on Configure. The host passes
+   the hydrated instance status at open time, so the warning is visible on first paint. This changes
+   the premise of I2-3 in iteration 04, which placed the warning on Configure because the tree did not
+   link to the wizard in this state. The "Review setup" row now does.
+
+### Why
+
+- **The credentials are generated.** Most users never saw them, so any option that asks for them
+  (E, and Update credentials in F) mostly ends in Delete, which erases the data.
+- **Reading them back grants no new access.** Setup passes them with `--env-file`, which keeps them
+  off the command line but not out of `docker inspect` (design review R35). Anyone who can reach the
+  daemon can already read them. `inspectContainer` does not echo its output, and the recovered values
+  are never logged.
+- **It fixes the cause, not the symptom,** with no new UI, commands, or menus.
+
+### Consequences
+
+- Recovery runs only during reconcile (lazy hydration and an explicit refresh), never in the
+  per-render live refresh, and never while a provisioning lease is fresh.
+- The port comes from the bound port of a running container, then the published port in
+  `HostConfig.PortBindings` for a stopped one, then the stored record, then the default.
+- The credentials are not verified before adoption. If someone changed the password inside the
+  database, connecting fails and the normal connection error handling applies.
+- If storing the secret fails (a broken keyring), the instance stays `CredentialsMissing`.
+- Two profiles can now share one instance. A Delete in one leaves the other with a record whose
+  container is gone, which the existing Missing and data-removed states already cover.
+- Still `CredentialsMissing` after this: the container was removed but the data volume or record is
+  left, so there is nothing to inspect. A covers that case.
+- Revisit F if telemetry shows users still reach `CredentialsMissing` regularly.

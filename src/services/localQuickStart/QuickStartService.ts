@@ -37,6 +37,7 @@ import {
     ContainerRuntime,
     getBoundHostPort,
     getExitCode,
+    getPublishedHostPort,
     getQuickStartOutputChannel,
     hasExited,
     type IContainerRuntime,
@@ -2572,6 +2573,11 @@ export class QuickStartServiceImpl {
                 this.setStatus(alias, InstanceState.Provisioning);
                 return {};
             }
+            const recovered = await this.recoverCredentialsFromContainer(alias, winner.id);
+            if (recovered) {
+                await this.adoptContainer(alias, await getInstance(alias), winner.id, recovered);
+                return {};
+            }
             // Case 4: labelled container + no recoverable secret + no fresh lease ⇒ surface as
             // credential-unavailable. NEVER remove it and NEVER touch its volume (R2).
             getQuickStartOutputChannel().appendLine(
@@ -2631,6 +2637,39 @@ export class QuickStartServiceImpl {
      * port is authoritative for a stopped instance (`docker ps -a` omits its binding); a running one
      * writes its live bound port.
      */
+    /**
+     * Rebuild and store the connection string from the container's own environment, where setup
+     * passed the credentials. Covers a container created by another VS Code profile or install, or a
+     * secret the OS keyring can no longer read. See decision 0005.
+     */
+    private async recoverCredentialsFromContainer(alias: string, containerId: string): Promise<string | undefined> {
+        const inspected = await this.runtime.inspectContainer(containerId);
+        const username = inspected?.environmentVariables?.['USERNAME'];
+        const password = inspected?.environmentVariables?.['PASSWORD'];
+        if (!inspected || !username || !password) {
+            return undefined;
+        }
+        const port =
+            getBoundHostPort(inspected) ??
+            getPublishedHostPort(inspected) ??
+            (await getInstance(alias))?.port ??
+            QUICK_START_PORT;
+        const connectionString = composeConnectionString(username, password, port);
+        try {
+            await writeConnectionString(alias, connectionString, {
+                displayName: alias === DEFAULT_ALIAS ? DEFAULT_INSTANCE_DISPLAY_NAME : alias,
+                port,
+            });
+        } catch {
+            // SecretStorage itself may be what failed, so stay on the credential-unavailable path.
+            return meterQuickStartSilentCatch('reconcile_storeRecoveredCredentials');
+        }
+        getQuickStartOutputChannel().appendLine(
+            `DocumentDB Local instance "${alias}" had no stored credentials; restored them from its container.`,
+        );
+        return connectionString;
+    }
+
     private async adoptContainer(
         alias: string,
         record: QuickStartInstanceRecord | undefined,

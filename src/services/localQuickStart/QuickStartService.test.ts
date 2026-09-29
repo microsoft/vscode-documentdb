@@ -8,6 +8,7 @@ import * as fs from 'fs/promises';
 import * as os from 'os';
 import * as path from 'path';
 import * as vscode from 'vscode';
+import { DocumentDBConnectionString } from '../../documentdb/utils/DocumentDBConnectionString';
 import { ext } from '../../extensionVariables';
 import { StorageService } from '../storageService';
 import { disposeQuickStartOutputChannel, type IContainerRuntime } from './ContainerRuntime';
@@ -380,6 +381,81 @@ describe('QuickStartService — WI-2d registry-driven reconcile (multi-instance)
         expect(service.getStatus(ALIAS_2).state).toBe(InstanceState.CredentialsMissing);
         expect(removeContainer).not.toHaveBeenCalled();
         expect(removeVolume).not.toHaveBeenCalled();
+    });
+
+    // Another VS Code profile or install created it: the container's env still holds the credentials.
+    it('restores missing credentials from a running container and adopts it', async () => {
+        ext.secretStorage = fakeSecretStorage({});
+        ext.context = fakeContext(fakeMemento());
+        const service = new QuickStartServiceImpl(
+            reconcileRuntime({
+                containers: [{ id: 'c1', alias: DEFAULT_ALIAS }],
+                inspect: {
+                    c1: {
+                        ...(inspectItem('c1', { running: true, port: 10261 }) as object),
+                        environmentVariables: { USERNAME: 'u9', PASSWORD: 'p9' },
+                    },
+                },
+            }),
+        );
+
+        await service.reconcile();
+
+        const status = service.getStatus();
+        expect(status.state).toBe(InstanceState.Running);
+        expect(status.metadata).toMatchObject({ containerId: 'c1', boundPort: 10261, username: 'u9' });
+        const stored = new DocumentDBConnectionString((await service.readStoredConnectionString()) ?? '');
+        expect([stored.username, stored.password, stored.hosts[0]]).toEqual(['u9', 'p9', 'localhost:10261']);
+        expect((await listInstances()).find((record) => record.alias === DEFAULT_ALIAS)?.phase).toBe('ready');
+    });
+
+    it('restores credentials from a stopped container using the port it was published on', async () => {
+        ext.secretStorage = fakeSecretStorage({});
+        ext.context = fakeContext(fakeMemento());
+        const service = new QuickStartServiceImpl(
+            reconcileRuntime({
+                containers: [{ id: 'c1', alias: DEFAULT_ALIAS }],
+                inspect: {
+                    c1: {
+                        ...(inspectItem('c1', { running: false }) as object),
+                        environmentVariables: { USERNAME: 'u9', PASSWORD: 'p9' },
+                        raw: JSON.stringify({ HostConfig: { PortBindings: { '10260/tcp': [{ HostPort: '10262' }] } } }),
+                    },
+                },
+            }),
+        );
+
+        await service.reconcile();
+
+        const status = service.getStatus();
+        expect(status.state).toBe(InstanceState.Stopped);
+        expect(status.metadata?.boundPort).toBe(10262);
+        expect(new DocumentDBConnectionString((await service.readStoredConnectionString()) ?? '').hosts).toEqual([
+            'localhost:10262',
+        ]);
+    });
+
+    it('stays CredentialsMissing when the restored credentials cannot be stored', async () => {
+        ext.secretStorage = {
+            ...fakeSecretStorage({}),
+            store: () => Promise.reject(new Error('keyring unavailable')),
+        } as unknown as vscode.SecretStorage;
+        ext.context = fakeContext(fakeMemento());
+        const service = new QuickStartServiceImpl(
+            reconcileRuntime({
+                containers: [{ id: 'c1', alias: DEFAULT_ALIAS }],
+                inspect: {
+                    c1: {
+                        ...(inspectItem('c1', { running: true, port: 10261 }) as object),
+                        environmentVariables: { USERNAME: 'u9', PASSWORD: 'p9' },
+                    },
+                },
+            }),
+        );
+
+        await service.reconcile();
+
+        expect(service.getStatus().state).toBe(InstanceState.CredentialsMissing);
     });
 
     it('marks a ready record whose container vanished as Missing, keeping the record (recoverable)', async () => {
