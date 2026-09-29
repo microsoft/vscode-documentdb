@@ -739,9 +739,7 @@ $content-gutter: var(--spacingHorizontalMNudge); // 10px
         background-color: var(--colorNeutralBackground1Hover);
     }
 
-    // A database row is a destination — the whole row steps in, with the trailing chevron as
-    // the visible, keyboard-reachable affordance for the same thing. A collection row is not:
-    // opening one leaves for another editor tab, so only its trailing button does that.
+    // Both levels are destinations; the trailing button remains the keyboard-reachable action.
     .namespaceRowClickable {
         cursor: pointer;
     }
