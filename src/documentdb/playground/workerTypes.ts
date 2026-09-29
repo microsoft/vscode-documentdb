@@ -107,7 +107,20 @@ export type MainToWorkerMessage =
 
 // ─── Worker → Main messages ─────────────────────────────────────────────────
 
+export type WorkerStartupStage =
+    | 'startingWorker'
+    | 'loadingDriver'
+    | 'connecting'
+    | 'acquiringToken'
+    | 'authenticating'
+    | 'initializingRuntime';
+
 export type WorkerToMainMessage =
+    | {
+          readonly type: 'initProgress';
+          readonly requestId: string;
+          readonly stage: WorkerStartupStage;
+      }
     | {
           readonly type: 'initResult';
           readonly requestId: string;

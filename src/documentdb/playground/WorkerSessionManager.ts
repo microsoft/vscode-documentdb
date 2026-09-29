@@ -12,10 +12,22 @@ import { Worker } from 'worker_threads';
 import { ext } from '../../extensionVariables';
 import { settingsKeys } from '../../settingsKeys';
 import { SettingsHintError } from '../shell/SettingsHintError';
-import { type MainToWorkerMessage, type SerializableExecutionResult, type WorkerToMainMessage } from './workerTypes';
+import {
+    type MainToWorkerMessage,
+    type SerializableExecutionResult,
+    type WorkerStartupStage,
+    type WorkerToMainMessage,
+} from './workerTypes';
 
 /** Worker lifecycle states */
 export type WorkerState = 'idle' | 'spawning' | 'ready' | 'executing';
+
+interface WorkerStartup {
+    readonly requestId: string;
+    readonly startedAt: number;
+    stage: WorkerStartupStage;
+    stageStartedAt: number;
+}
 
 /**
  * Callbacks for worker events. The caller provides these to route
@@ -58,6 +70,7 @@ export class WorkerSessionManager implements vscode.Disposable {
     private _workerClusterId: string | undefined;
     /** Set before intentional worker termination to suppress the onWorkerExit callback. */
     private _terminatingIntentionally = false;
+    private _startup: WorkerStartup | undefined;
 
     // ─── Telemetry tracking ──────────────────────────────────────────────────
     /** Number of workers spawned during this manager's lifetime. */
@@ -228,10 +241,47 @@ export class WorkerSessionManager implements vscode.Disposable {
         // the worker so the next call can respawn cleanly.
         try {
             await this.sendRequest<void>(initMsg, initTimeoutMs, settingsKeys.connectionTimeout);
+            this.finishStartup('succeeded');
             this._workerState = 'ready';
         } catch (error) {
+            this.finishStartup('failed');
             this.terminateWorker('intentional');
             throw error;
+        }
+    }
+
+    private logStartup(event: string, level: 'trace' | 'error' = 'trace'): void {
+        if (!this._startup) {
+            return;
+        }
+
+        const { requestId, stage, startedAt, stageStartedAt } = this._startup;
+        const now = Date.now();
+        ext.outputChannel?.[level](
+            `[WorkerSessionManager] startup=${requestId} ${event} stage=${stage} elapsedMs=${String(now - startedAt)} stageElapsedMs=${String(now - stageStartedAt)}`,
+        );
+    }
+
+    private finishStartup(outcome: 'succeeded' | 'failed' | 'timedOut' | 'terminated' | 'exited'): void {
+        const level = outcome === 'failed' || outcome === 'timedOut' || outcome === 'exited' ? 'error' : 'trace';
+        this.logStartup(outcome, level);
+        this._startup = undefined;
+    }
+
+    private getStartupStageLabel(stage: WorkerStartupStage): string {
+        switch (stage) {
+            case 'startingWorker':
+                return l10n.t('Starting worker');
+            case 'loadingDriver':
+                return l10n.t('Loading database driver');
+            case 'connecting':
+                return l10n.t('Connecting to cluster');
+            case 'acquiringToken':
+                return l10n.t('Waiting for authentication token');
+            case 'authenticating':
+                return l10n.t('Authenticating with cluster');
+            case 'initializingRuntime':
+                return l10n.t('Initializing shell runtime');
         }
     }
 
@@ -258,6 +308,18 @@ export class WorkerSessionManager implements vscode.Disposable {
         const requestId = randomUUID();
         const msgWithId = { ...msg, requestId };
 
+        if (msg.type === 'init') {
+            this._startup = {
+                requestId,
+                startedAt: this._lastSpawnTime,
+                stage: 'startingWorker',
+                stageStartedAt: this._lastSpawnTime,
+            };
+            this.logStartup(
+                `started surface=${msg.persistent ? 'shell' : 'playground'} auth=${msg.authMechanism} timeoutMs=${String(timeoutMs)}`,
+            );
+        }
+
         return new Promise<T>((resolve, reject) => {
             this._pendingRequests.set(requestId, {
                 resolve: resolve as (value: unknown) => void,
@@ -271,11 +333,21 @@ export class WorkerSessionManager implements vscode.Disposable {
                     const pending = this._pendingRequests.get(requestId);
                     if (pending) {
                         this._pendingRequests.delete(requestId);
-                        this.killWorker();
-                        const message = l10n.t(
+                        let message = l10n.t(
                             'Operation timed out after {0} seconds.',
                             String(Math.round(timeoutMs / 1000)),
                         );
+                        if (this._startup?.requestId === requestId) {
+                            message +=
+                                ' ' +
+                                l10n.t(
+                                    'Last startup stage: {0} ({1} seconds in this stage).',
+                                    this.getStartupStageLabel(this._startup.stage),
+                                    ((Date.now() - this._startup.stageStartedAt) / 1000).toFixed(1),
+                                );
+                            this.finishStartup('timedOut');
+                        }
+                        this.killWorker();
                         pending.reject(
                             timeoutSettingKey
                                 ? new SettingsHintError(
@@ -313,6 +385,16 @@ export class WorkerSessionManager implements vscode.Disposable {
      */
     private handleWorkerMessage(msg: WorkerToMainMessage): void {
         switch (msg.type) {
+            case 'initProgress': {
+                if (this._startup?.requestId === msg.requestId) {
+                    this.logStartup(`stageCompleted nextStage=${msg.stage}`);
+                    this._startup.stage = msg.stage;
+                    this._startup.stageStartedAt = Date.now();
+                    this.logStartup('stageStarted');
+                }
+                break;
+            }
+
             case 'initResult': {
                 const pending = this._pendingRequests.get(msg.requestId);
                 if (pending) {
@@ -384,6 +466,7 @@ export class WorkerSessionManager implements vscode.Disposable {
     // ─── Private: Worker cleanup ─────────────────────────────────────────────
 
     private terminateWorker(reason: 'intentional' | 'forced'): void {
+        this.finishStartup('terminated');
         const wasAlive = !!this._worker;
 
         if (this._worker) {
@@ -415,6 +498,7 @@ export class WorkerSessionManager implements vscode.Disposable {
     }
 
     private handleWorkerExit(): void {
+        this.finishStartup('exited');
         // Only emit unexpected exit when the worker was NOT intentionally terminated.
         // Intentional exits (dispose, shutdown, cluster switch) are tracked by worker.terminated.
         if (!this._terminatingIntentionally) {

@@ -48,6 +48,15 @@ program-level narrative, and the sibling areas
   survivable and keeps clients isolated. The user-visible consequences are documented in the
   user manual; the reasoning for the shell/playground split is in
   [query-playground/multi-connection-behavior.md](../query-playground/multi-connection-behavior.md).
+- **Startup diagnostics are shared with Query Playground.** `ext.outputChannel` records worker
+  startup, driver loading, connection setup, token acquisition, authentication, and runtime
+  initialization at Trace level, with a random attempt ID and total/per-stage elapsed milliseconds.
+  Startup failures, timeouts, and unexpected exits emit their stage summary at Error level;
+  successful startup and intentional cancellation remain Trace. Timeout errors also name the last
+  stage and its elapsed time. These tracking messages contain no connection strings, tokens,
+  account details, database names, or raw errors. Connection setup is one stage, not a separate
+  measurement of DNS, TCP, and TLS. The existing startup deadline and authentication behavior are
+  unchanged.
 - **The connection summary keeps multi-host seed lists compact.** A single host is shown unchanged;
   when the connection string contains several hosts, the summary shows the first seed followed by
   `+N more`. This display rule is independent of terminal width and does not imply that the first

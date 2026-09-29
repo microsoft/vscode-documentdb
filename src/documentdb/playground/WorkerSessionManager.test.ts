@@ -3,8 +3,20 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+import { Worker } from 'worker_threads';
+import { ext } from '../../extensionVariables';
 import { WorkerSessionManager, type WorkerSessionCallbacks } from './WorkerSessionManager';
 import { type MainToWorkerMessage } from './workerTypes';
+
+jest.mock('../../extensionVariables', () => ({
+    ext: {
+        outputChannel: {
+            trace: jest.fn(),
+            warn: jest.fn(),
+            error: jest.fn(),
+        },
+    },
+}));
 
 // Mock worker_threads — the WorkerSessionManager creates Worker instances
 jest.mock('worker_threads', () => {
@@ -114,11 +126,131 @@ describe('WorkerSessionManager', () => {
             jest.advanceTimersByTime(1000);
 
             await expect(initPromise).rejects.toMatchObject({
-                message: 'Operation timed out after 1 seconds.',
+                message:
+                    'Operation timed out after 1 seconds. Last startup stage: Starting worker (1.0 seconds in this stage).',
                 settingKey: 'documentDB.connectionTimeout',
                 settingsHint: 'The connection did not finish in time. You can increase the timeout in Settings:',
             });
             jest.useRealTimers();
+        });
+    });
+
+    describe('startup tracking', () => {
+        let trace: jest.SpyInstance;
+
+        beforeEach(() => {
+            jest.useFakeTimers();
+            trace = jest.spyOn(ext.outputChannel, 'trace');
+        });
+
+        afterEach(() => {
+            trace.mockRestore();
+            jest.useRealTimers();
+        });
+
+        function startWorker(): {
+            manager: WorkerSessionManager;
+            initPromise: Promise<void>;
+            requestId: string;
+            worker: { _emit: (event: string, ...args: unknown[]) => void };
+        } {
+            const manager = new WorkerSessionManager(callbacks);
+            const initPromise = manager.ensureWorker(
+                'test-cluster',
+                {
+                    type: 'init',
+                    requestId: '',
+                    connectionString: 'mongodb://private-user:private-password@private-host:27017',
+                    clientOptions: {},
+                    databaseName: 'private-database',
+                    authMechanism: 'MicrosoftEntraID',
+                    tenantId: 'private-tenant',
+                    persistent: true,
+                },
+                1000,
+            );
+            const worker = jest.mocked(Worker).mock.results.at(-1)?.value as {
+                postMessage: jest.Mock;
+                _emit: (event: string, ...args: unknown[]) => void;
+            };
+            const initMessage = worker.postMessage.mock.calls.at(-1)?.[0] as MainToWorkerMessage;
+            return { manager, initPromise, requestId: initMessage.requestId, worker };
+        }
+
+        it('reports a stalled token request with total and stage timings without connection details', async () => {
+            const { initPromise, requestId, worker } = startWorker();
+            jest.advanceTimersByTime(200);
+            worker._emit('message', { type: 'initProgress', requestId, stage: 'acquiringToken' });
+            jest.advanceTimersByTime(800);
+
+            await expect(initPromise).rejects.toMatchObject({
+                message:
+                    'Operation timed out after 1 seconds. Last startup stage: Waiting for authentication token (0.8 seconds in this stage).',
+                settingKey: 'documentDB.connectionTimeout',
+            });
+            expect(ext.outputChannel.error).toHaveBeenCalledWith(
+                `[WorkerSessionManager] startup=${requestId} timedOut stage=acquiringToken elapsedMs=1000 stageElapsedMs=800`,
+            );
+            expect(trace.mock.calls.map((call) => String(call[0])).join('\n')).not.toMatch(/private-/);
+            expect(jest.mocked(ext.outputChannel.error).mock.calls.flat().join('\n')).not.toMatch(/private-/);
+        });
+
+        it('traces token acquisition completion and successful startup, ignoring stale progress', async () => {
+            const { manager, initPromise, requestId, worker } = startWorker();
+            worker._emit('message', { type: 'initProgress', requestId, stage: 'acquiringToken' });
+            jest.advanceTimersByTime(150);
+            worker._emit('message', { type: 'initProgress', requestId, stage: 'authenticating' });
+            expect(trace).toHaveBeenCalledWith(
+                `[WorkerSessionManager] startup=${requestId} stageCompleted nextStage=authenticating stage=acquiringToken elapsedMs=150 stageElapsedMs=150`,
+            );
+            worker._emit('message', { type: 'initProgress', requestId: 'stale-request', stage: 'loadingDriver' });
+            jest.advanceTimersByTime(50);
+            worker._emit('message', { type: 'initResult', requestId, success: true });
+            await initPromise;
+            expect(trace).toHaveBeenCalledWith(
+                `[WorkerSessionManager] startup=${requestId} succeeded stage=authenticating elapsedMs=200 stageElapsedMs=50`,
+            );
+            expect(ext.outputChannel.error).not.toHaveBeenCalled();
+
+            trace.mockClear();
+            worker._emit('message', { type: 'initProgress', requestId, stage: 'acquiringToken' });
+            expect(trace).not.toHaveBeenCalled();
+            manager.dispose();
+        });
+
+        it('logs the failed stage at error level without changing or logging the authentication error', async () => {
+            const { initPromise, requestId, worker } = startWorker();
+            worker._emit('message', { type: 'initProgress', requestId, stage: 'acquiringToken' });
+            worker._emit('message', { type: 'initResult', requestId, success: false, error: 'private-error' });
+
+            await expect(initPromise).rejects.toThrow('private-error');
+            expect(ext.outputChannel.error).toHaveBeenCalledWith(
+                `[WorkerSessionManager] startup=${requestId} failed stage=acquiringToken elapsedMs=0 stageElapsedMs=0`,
+            );
+            expect(trace.mock.calls.map((call) => String(call[0])).join('\n')).not.toMatch(/private-/);
+            expect(jest.mocked(ext.outputChannel.error).mock.calls.flat().join('\n')).not.toMatch(/private-/);
+        });
+
+        it('logs an unexpected startup exit at error level', async () => {
+            const { initPromise, requestId, worker } = startWorker();
+            jest.advanceTimersByTime(100);
+            worker._emit('exit', 1);
+
+            await expect(initPromise).rejects.toThrow('Worker exited unexpectedly');
+            expect(ext.outputChannel.error).toHaveBeenCalledWith(
+                `[WorkerSessionManager] startup=${requestId} exited stage=startingWorker elapsedMs=100 stageElapsedMs=100`,
+            );
+        });
+
+        it('keeps intentional startup cancellation at trace level', async () => {
+            const { manager, initPromise, requestId } = startWorker();
+            manager.dispose();
+
+            await expect(initPromise).rejects.toThrow('Worker terminated');
+            expect(trace).toHaveBeenCalledWith(
+                `[WorkerSessionManager] startup=${requestId} terminated stage=startingWorker elapsedMs=0 stageElapsedMs=0`,
+            );
+            expect(ext.outputChannel.error).not.toHaveBeenCalled();
         });
     });
 

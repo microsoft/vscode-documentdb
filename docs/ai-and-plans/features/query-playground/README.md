@@ -44,6 +44,9 @@ sibling areas [interactive-shell](../interactive-shell/README.md) and
 - **Evaluation runs in a persistent worker thread**, not `vm.runInContext()`. The worker owns its
   own database client, which buys infinite-loop safety, client isolation, and no re-authentication
   after the first run.
+- **Worker startup diagnostics share the shell's stage tracking**, including Trace-level timings,
+  Error-level failure summaries, and the last known stage in timeout errors. See
+  [Interactive Shell architecture](../interactive-shell/README.md#architecture-intent--code-is-authoritative-for-behavior).
 - **Connection metadata is keyed by document URI** and is independent of the worker lifecycle. A
   worker crash, timeout, or network error does not drop the connection; only closing the document
   does.
