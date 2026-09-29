@@ -131,6 +131,37 @@ describe('Local Quick Start cluster-command opt-in (UX review item 20)', () => {
         expect(entries[0].when).toContain('state_running');
     });
 
+    it('offers the Cluster Dashboard inline and in the context menu on the running instance', () => {
+        // Two ids for one feature: the inline button and the context-menu entry run the same
+        // handler and are only separable in telemetry because they are registered apart.
+        const entries = instanceEntries.filter((entry) =>
+            entry.command?.startsWith('vscode-documentdb.command.clusterDashboard.open'),
+        );
+
+        expect(entries.map((entry) => [entry.command, entry.group])).toEqual([
+            ['vscode-documentdb.command.clusterDashboard.open.inline', 'inline@5'],
+            ['vscode-documentdb.command.clusterDashboard.open', '1@2'],
+        ]);
+        for (const entry of entries) {
+            expect(entry.when).toContain('state_running');
+        }
+    });
+
+    it('keeps Stop as the final inline action on the running instance', () => {
+        const runningInlineEntries = instanceEntries.filter(
+            (entry) => entry.group?.startsWith('inline@') && entry.when?.includes('state_running'),
+        );
+        const stopEntry = runningInlineEntries.find(
+            (entry) => entry.command === 'vscode-documentdb.command.localQuickStart.stop',
+        );
+        const stopPriority = Number(stopEntry?.group?.split('@')[1]);
+
+        expect(stopPriority).toBe(99);
+        for (const entry of runningInlineEntries.filter((entry) => entry !== stopEntry)) {
+            expect(Number(entry.group?.split('@')[1])).toBeLessThan(stopPriority);
+        }
+    });
+
     // Each of these resolves the node through connection storage, which has no record for a
     // service-owned instance.
     it.each([

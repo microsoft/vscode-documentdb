@@ -10,13 +10,18 @@ import { ext } from '../../extensionVariables';
 import { getBatchSizeSetting, getConnectionTimeoutMs } from '../../utils/workspacUtils';
 import { CredentialCache } from '../CredentialCache';
 import { AuthMethodId } from '../auth/AuthMethod';
-import { WorkerSessionManager, type WorkerSessionCallbacks } from '../playground/WorkerSessionManager';
+import {
+    WorkerSessionManager,
+    type WorkerSessionCallbacks,
+    type WorkerStartupTelemetryContext,
+} from '../playground/WorkerSessionManager';
 import {
     type MainToWorkerMessage,
     type SerializableExecutionResult,
     type SerializableMongoClientOptions,
     type WorkerToMainMessage,
 } from '../playground/workerTypes';
+import { withTokenAcquisitionTiming, type ConnectionStartupTimings } from '../utils/ConnectionStartupTimings';
 import { getHostsFromConnectionString } from '../utils/connectionStringHelpers';
 import { resolveAllowInvalidCertificates } from '../utils/tlsException';
 
@@ -90,7 +95,11 @@ export class ShellSessionManager implements vscode.Disposable {
     /** Human-readable identity name resolved during authentication, when available. */
     private _displayName: string | undefined;
 
-    constructor(connectionInfo: ShellConnectionInfo, callbacks?: ShellSessionCallbacks) {
+    constructor(
+        connectionInfo: ShellConnectionInfo,
+        callbacks?: ShellSessionCallbacks,
+        private readonly _telemetryContext: WorkerStartupTelemetryContext = {},
+    ) {
         this._connectionInfo = connectionInfo;
         this._activeDatabase = connectionInfo.databaseName;
         this._callbacks = callbacks;
@@ -118,7 +127,8 @@ export class ShellSessionManager implements vscode.Disposable {
             onTokenRequest: (
                 msg: Extract<WorkerToMainMessage, { type: 'tokenRequest' }>,
                 postResponse: (response: MainToWorkerMessage) => void,
-            ) => this.handleTokenRequest(msg, postResponse),
+                timings?: ConnectionStartupTimings,
+            ) => this.handleTokenRequest(msg, postResponse, timings),
             onWorkerExit: callbacks?.onWorkerExit,
         };
 
@@ -171,7 +181,12 @@ export class ShellSessionManager implements vscode.Disposable {
         const initMsg = this.buildInitMessage();
 
         const timeoutMs = getConnectionTimeoutMs();
-        await this._workerManager.ensureWorker(this._connectionInfo.clusterId, initMsg, timeoutMs);
+        await this._workerManager.ensureWorker(
+            this._connectionInfo.clusterId,
+            initMsg,
+            timeoutMs,
+            this._telemetryContext,
+        );
         this._initialized = true;
         this._authMethod = initMsg.authMechanism;
 
@@ -332,6 +347,7 @@ export class ShellSessionManager implements vscode.Disposable {
     private async handleTokenRequest(
         msg: Extract<WorkerToMainMessage, { type: 'tokenRequest' }>,
         postResponse: (response: MainToWorkerMessage) => void,
+        timings?: ConnectionStartupTimings,
     ): Promise<void> {
         try {
             let accessToken: string;
@@ -339,11 +355,13 @@ export class ShellSessionManager implements vscode.Disposable {
             if (msg.source === 'managedIdentity') {
                 const { getManagedIdentityAccessToken } = await import('../auth/managedIdentityTokenProvider');
                 accessToken = (
-                    await getManagedIdentityAccessToken(
-                        msg.scopes as string[],
-                        msg.clientId,
-                        msg.tenantId,
-                        this._managedIdentityTokenCorrelationId,
+                    await withTokenAcquisitionTiming(timings, () =>
+                        getManagedIdentityAccessToken(
+                            msg.scopes as string[],
+                            msg.clientId,
+                            msg.tenantId,
+                            this._managedIdentityTokenCorrelationId,
+                        ),
                     )
                 ).accessToken;
             } else {
@@ -351,9 +369,9 @@ export class ShellSessionManager implements vscode.Disposable {
                     // eslint-disable-next-line import/no-internal-modules
                     '@microsoft/vscode-azext-azureauth/out/src/getSessionFromVSCode'
                 );
-                const session = await getSessionFromVSCode(msg.scopes as string[], msg.tenantId, {
-                    createIfNone: true,
-                });
+                const session = await withTokenAcquisitionTiming(timings, () =>
+                    getSessionFromVSCode(msg.scopes as string[], msg.tenantId, { createIfNone: true }),
+                );
 
                 if (!session) {
                     throw new Error(l10n.t('Failed to obtain Entra ID token.'));

@@ -61,6 +61,7 @@ export function openDocumentWebview(
     const controller = openAppWebview({
         title,
         webviewName: 'documentView',
+        panelViewType: 'vscode-documentdb-document-view',
         config: initialData,
         context: trpcContext,
         viewColumn: vscode.ViewColumn.Active,

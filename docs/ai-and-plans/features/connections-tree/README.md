@@ -8,6 +8,7 @@ code:
     - src/tree/connections-view/**
     - src/services/connectionStorageService.ts
     - src/services/storageService.ts
+    - src/documentdb/ClustersClient.ts
 ---
 
 # Connections Tree
@@ -24,6 +25,7 @@ its nodes display and how the connection list is loaded from storage.
 - `src/tree/connections-view/**` — the view, its items, and per-node decorations
 - `src/services/connectionStorageService.ts`, `src/services/storageService.ts` — persistence and the
   in-memory wrapping around it
+- `src/documentdb/ClustersClient.ts` — shared extension client initialization and startup diagnostics
 
 ## Related skills
 
@@ -43,6 +45,52 @@ specific behaviors:
 - **Connection load is not a storage read per node.** The storage-load work separates what is
   wrapped in memory from what is read on demand, and says so explicitly, because the previous shape
   made the cost invisible.
+
+## Connection startup diagnostics
+
+Each fresh `ClustersClient` initialization produces one `connect.startup` telemetry event and one
+`ext.outputChannel` timing summary. This is the regular extension client used by trees and webviews,
+not the dedicated Shell/Playground worker. Cached-client reuse emits neither; a fresh retry gets a
+new `connectionCorrelationId`. The ID is assigned before auth setup, so early failures can be
+identified, and is shared with the existing connection metadata events.
+
+Reported names have stable numbers so sorting preserves their order:
+
+1. `stage01PreparingCredentials`: cached credential lookup and auth-handler selection.
+2. `stage02ConfiguringAuth`: configuring connection options, including Entra user-token acquisition.
+3. `stage03PreparingClient`: host/options preparation and driver-client construction.
+4. `stage04ConnectingAndAuthenticating`: the driver's `connect()`, including network setup and
+   authentication. Managed identity acquires its token here via the driver's OIDC callback.
+5. `stage05InitializingApis`: extension client API setup after connecting.
+
+Only visited stages are reported. Timings do not separately measure DNS, TCP, TLS, or server-side
+authentication. Metadata collection remains asynchronous and is not awaited as part of startup.
+Existing authentication, connection timeout, cancellation, and caching behavior is unchanged.
+
+The event carries `surface=extension`, `authMethod` when known, `connectionCorrelationId`, `lastStage`,
+and `startupOutcome` (`succeeded`, `failed`, or `canceled`). The framework supplies `result` and
+`duration` in seconds. `<stage>DurationMs` and `lastStageDurationMs` are milliseconds. The log's
+`stageDurationsMs` contains those same stage timings, with a total `elapsedMs`. Success and cancellation
+summaries use Trace; failures use Error. No per-stage log or telemetry events are added.
+
+The same event also carries `tokenAcquireDurationMs` for the actual provider call and
+`databaseConnectDurationMs` for driver connection work excluding overlapping token acquisition.
+Both appear in the log's `costTimingsMs`. Entra user tokens are usually acquired before connecting,
+so their time is not subtracted from the later database duration; managed-identity tokens acquired
+inside the OIDC callback are subtracted. Overlapping provider requests count once, failures retain
+elapsed timing, and late token completion cannot alter a finished startup snapshot. Native/no-auth
+connections have no token-acquisition measurement. No extra event or log line is emitted.
+
+Provider time includes cache lookup, refresh, SDK initialization, and any interactive wait, not just
+Entra HTTP latency. Database time includes server selection, network setup, and database-side
+authentication; it is not a pure network-latency measurement. The cost measurements are an alternative
+breakdown, not additional time to sum with the numbered stages. Worker connections additionally
+report token relay/scheduling overhead; see the
+[shared worker diagnostics](../interactive-shell/README.md#architecture-intent--code-is-authoritative-for-behavior).
+
+Summary logs exclude connection strings, hostnames, tokens, account details, and raw errors. The new
+telemetry event receives a fixed failure without the original stack, with error fields masked, while
+callers retain the original error. Existing connection and metadata telemetry remains separate.
 
 ## Timeline
 

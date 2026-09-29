@@ -17,6 +17,12 @@ VS Code Extension for Azure Cosmos DB and the MongoDB API. TypeScript (strict mo
 
 There are exactly two cases. Work out which one you are in, then run **only** that list.
 
+For PR-related work, tell the operator which case applies in your handoff. If the PR
+is still a draft, explicitly say that the full checks (including `prettier-fix`)
+were deferred until it is ready for review. When handing a PR over for review,
+report the Case 2 checks that ran and any failures or blockers; never imply the
+full suite passed if it did not run.
+
 ### Case 1 — still working
 
 Any commit, any push, opening or updating a **draft** PR.
@@ -30,8 +36,10 @@ Nothing else. Do **not** run `l10n`, `prettier-fix`, `lint`, or `package` here.
 
 ### Case 2 — handing over
 
-Marking a PR **ready for review** — including when you finish autonomous work and are
-about to mark it ready. If there is no PR, stay on Case 1.
+When asked to **prepare a PR for review** or **mark it ready for review**, run the
+full Case 2 list even if another handoff requirement (such as the AI pre-review)
+is missing. Report all blockers; do not mark the PR ready until the checks pass
+and the other requirements are satisfied. If there is no PR, stay on Case 1.
 
 ```bash
 npm run l10n            # only if a vscode.l10n.t() string was added, changed, or removed
@@ -72,6 +80,13 @@ by hand is slower and produces a bundle that does not match the source.
 - `features/<name>/iterations/**` is **history**. Read only the specific iteration needed to resolve provenance, rationale, or a regression. Never bulk-load it. Plans and reviews there are evidence of past reasoning, not a description of the product today.
 - **On conflict, the code wins for behavior; active docs win for intent.** If they disagree, do not silently pick one — name the doc and the code, and offer to correct the doc.
 - Never treat `status: historical` or `status: superseded` as current.
+
+When a significant design choice, new constraint, rejected alternative, or deviation from
+the agreed plan arises, ask the operator whether to record it in the feature's
+`decisions.md` while the reasoning is fresh. Briefly explain the choice and why its
+rationale may matter later. If the operator agrees, append the decision with their
+reasoning and any rejected alternatives; do not invent their rationale or wait until
+PR handoff to reconstruct it. Minor implementation choices do not need this check.
 
 ## Project Structure
 

@@ -78,6 +78,7 @@ export function openCollectionWebview(
     return openAppWebview({
         title,
         webviewName: 'collectionView',
+        panelViewType: 'vscode-documentdb-collection-view',
         config: fullInitialData,
         context: trpcContext,
         viewColumn: vscode.ViewColumn.One,

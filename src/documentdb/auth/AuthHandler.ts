@@ -4,6 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { type MongoClientOptions } from 'mongodb';
+import { type ConnectionStartupTimings } from '../utils/ConnectionStartupTimings';
 
 /**
  * Interface for authentication handlers that configure MongoDB client options
@@ -17,7 +18,7 @@ export interface AuthHandler {
      * @param connectionString The base connection string without authentication
      * @returns Connection string and MongoDB client options
      */
-    configureAuth(): Promise<AuthHandlerResponse>;
+    configureAuth(timings?: ConnectionStartupTimings): Promise<AuthHandlerResponse>;
 }
 
 export interface AuthHandlerResponse {

@@ -14,6 +14,7 @@ verified: 2026-08-14
 | 0001 | Single managed instance, ownership-bounded           | Superseded by 0002  | Accepted as proposed                      | 2026-06-25 | —    |
 | 0002 | Multiple managed instances in v1                     | Accepted            | Reverses 0001 after owner review          | 2026-07-06 | —    |
 | 0003 | Concept F — Docker verified as the first setup stage | Accepted (modified) | Dedicated readiness page dropped entirely | 2026-08-03 | #798 |
+| 0004 | Explicit cluster-command opt-ins for managed nodes   | Accepted            | Capability split deferred                 | 2026-08-09 | #876 |
 
 > Entries below are **semantically** immutable: append new entries rather than
 > rewriting old ones, and record reversals as a new entry plus a status change
@@ -188,3 +189,73 @@ F optimizes the common case and accepts a longer path in the uncommon one.
   record.
 - A and C remain the reference points for anyone who later argues that readiness needs a stable,
   addressable location or must stay visible across pages.
+
+---
+
+## 0004 — Explicit cluster-command opt-ins for managed nodes _(reconstructed)_
+
+**Status:** Accepted · **Date:** 2026-08-09 · **PR:** #876
+**Evidence:** commit `d971af0e` and
+[iterations/04-ui-redesign/code-review-2026-08-04.md](./iterations/04-ui-redesign/code-review-2026-08-04.md)
+§9.1 and §8
+
+### Question
+
+Should the running Local Quick Start instance inherit the standard
+`treeItem_documentdbcluster` context value and therefore receive every cluster command, or should
+compatible commands be contributed explicitly?
+
+### Options considered
+
+1. **Inherit `treeItem_documentdbcluster`.** This removes duplicate menu contributions, but the
+   context currently also enables commands that resolve their target through
+   `ConnectionStorageService`.
+2. **Opt in compatible commands individually.** This duplicates contribution entries, but a new
+   generic cluster command cannot reach the managed node without an explicit compatibility
+   decision.
+3. **Separate cluster capability from storage ownership.** Keep `treeItem_documentdbcluster` for
+   browsable cluster behavior and introduce a distinct context value for commands that require a
+   persisted connection record.
+
+### Decision
+
+Use **explicit command opt-ins** until the menu contexts distinguish cluster capability from
+connection-storage ownership.
+
+The running row is a real `ClusterItemBase` implementation and may opt into commands that consume
+that contract, including Create Database, Cluster Dashboard, Open Interactive Shell, and Refresh.
+Every opt-in must also require `state_running`; stopped and transitional rows are lifecycle rows
+without a cluster model to dereference.
+
+Do not give the managed node `treeItem_documentdbcluster` under the current menu taxonomy. Local
+Quick Start owns its credentials and lifecycle state through `QuickStartService`; it has no record
+in `ConnectionStorageService`. The broad context value would also expose rename, move, remove,
+credential editing, connection-string editing, and Data Migration paths whose storage assumptions
+do not hold for this node.
+
+### Why
+
+The implementation difference is **ownership**, not database behavior. Once running, the node can
+connect and browse through the shared cluster abstraction. What differs is where its durable state
+and credentials live, and the fact that non-running states are not cluster nodes at all.
+
+The standard context value currently combines two capabilities that are not equivalent:
+
+- "this is a browsable cluster"; and
+- "this is a persisted Connections-view record."
+
+Failing closed is safer while those meanings remain combined. It prevents future storage-backed
+commands from silently appearing on a service-owned node, at the accepted cost of duplicate menu
+entries for compatible cluster commands.
+
+### Consequences and deferred replacement
+
+- `package.json` is the explicit compatibility list. Its Local Quick Start contribution tests must
+  pin both commands that are enabled and storage-backed commands that remain excluded.
+- Lifecycle commands, including copying credentials while stopped, remain Quick Start-specific.
+- **Deferred future work:** split the overloaded context contract. Add a positive context value for
+  persisted connection records and require it for storage-backed commands. Then preserve
+  `treeItem_documentdbcluster` on the running managed node, remove the duplicated compatible-command
+  contributions, and retain explicit state gating only where non-running lifecycle rows require it.
+- That replacement must audit Copy Connection String separately: the generic cluster command can
+  serve the running node, while the Quick Start command must remain available on a stopped row.

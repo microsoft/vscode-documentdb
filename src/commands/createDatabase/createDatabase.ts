@@ -15,22 +15,49 @@ import { type CreateDatabaseWizardContext } from './CreateDatabaseWizardContext'
 import { DatabaseNameStep } from './DatabaseNameStep';
 import { ExecuteStep } from './ExecuteStep';
 
-export async function createAzureDatabase(context: IActionContext, node: ClusterItemBase): Promise<void> {
+interface CreateDatabaseCommandOptions {
+    /**
+     * Which affordance asked for the database, e.g. `treeContextMenu`, `treeEmptyPlaceholder`,
+     * `clusterDashboard:inventoryToolbar`. Defaults to `treeContextMenu` — the only caller that
+     * cannot say is a menu entry.
+     */
+    readonly activationSource?: string;
+    readonly onNameResolved?: (databaseName: string) => Promise<void>;
+}
+
+export async function createAzureDatabase(
+    context: IActionContext,
+    node: ClusterItemBase,
+    nodes?: ClusterItemBase[],
+    options?: CreateDatabaseCommandOptions,
+): Promise<void> {
     if (!node) {
         throw new Error(l10n.t('No node selected.'));
     }
 
-    return createDatabase(context, node);
+    await createDatabase(context, node, nodes, options);
 }
 
-export async function createDatabase(context: IActionContext, node: ClusterItemBase): Promise<void> {
-    await createMongoDatabase(context, node);
+export async function createDatabase(
+    context: IActionContext,
+    node: ClusterItemBase,
+    _nodes?: ClusterItemBase[],
+    options?: CreateDatabaseCommandOptions,
+): Promise<void> {
+    await createMongoDatabase(context, node, options);
 }
 
-async function createMongoDatabase(context: IActionContext, node: ClusterItemBase): Promise<void> {
+async function createMongoDatabase(
+    context: IActionContext,
+    node: ClusterItemBase,
+    options?: CreateDatabaseCommandOptions,
+): Promise<void> {
     context.telemetry.properties.experience = node.experience.api;
+    context.telemetry.properties.activationSource = options?.activationSource ?? 'treeContextMenu';
+    context.telemetry.properties.viewId = node.cluster.viewId ?? 'unknown';
 
     if (!CredentialCache.hasCredentials(node.cluster.clusterId)) {
+        context.telemetry.properties.failureReason = 'notSignedIn';
         throw new Error(
             l10n.t(
                 'You are not signed in to the DocumentDB cluster. Please sign in (by expanding the node "{0}") and try again.',
@@ -55,8 +82,9 @@ async function createMongoDatabase(context: IActionContext, node: ClusterItemBas
     });
 
     await wizard.prompt();
+    const newDatabaseName = nonNullValue(wizardContext.databaseName, 'wizardContext.databaseName', 'createDatabase.ts');
+    await options?.onNameResolved?.(newDatabaseName);
     await wizard.execute();
 
-    const newDatabaseName = nonNullValue(wizardContext.databaseName, 'wizardContext.databaseName', 'createDatabase.ts');
     showConfirmationAsInSettings(l10n.t('The "{name}" database has been created.', { name: newDatabaseName }));
 }

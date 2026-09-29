@@ -102,6 +102,7 @@ export function openAtlasCredentialsWebview(options: OpenAtlasCredentialsOptions
         state.controller = openAppWebview<AtlasCredentialsWebviewConfig>({
             title,
             webviewName: 'atlasCredentials',
+            panelViewType: 'vscode-documentdb-atlas-credentials',
             config: {
                 authMethod: options.authMethod,
                 mode,

@@ -38,6 +38,7 @@ treat `status: historical` or `status: superseded` as current.
 | [no-auth](./features/no-auth/README.md)                                   | Credential-free connections and connection-string TLS handling                                 | shipped           |
 | [managed-identities](./features/managed-identities/README.md)             | Explicit managed identity authentication from Azure VMs                                        | PR #886           |
 | [copy-paste-collections](./features/copy-paste-collections/README.md)     | Collection copy/paste tasks, document streaming, conflict handling, and optional index copying | active            |
+| [cluster-dashboard](./features/cluster-dashboard/README.md)               | Cluster-wide inventory and resilience facts                                                    | POC, unmerged     |
 | [settings](./features/settings/README.md)                                 | Settings editor grouping, setting ID naming, and how a setting is renamed safely               | active            |
 
 Everything else is a single file at this root, such as:

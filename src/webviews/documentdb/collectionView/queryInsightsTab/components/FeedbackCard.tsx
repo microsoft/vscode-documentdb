@@ -6,24 +6,29 @@
 import { Button, Card, Text } from '@fluentui/react-components';
 import { ThumbDislikeRegular, ThumbLikeRegular } from '@fluentui/react-icons';
 import * as l10n from '@vscode/l10n';
-import { type JSX } from 'react';
+import { useId, type JSX } from 'react';
 
 export interface FeedbackCardProps {
     /** Callback when feedback button is clicked */
     onFeedback: (sentiment: 'positive' | 'negative') => void;
+
+    /**
+     * Heading of the card. Defaults to the Query Insights wording, so existing call sites
+     * are unchanged; other views (e.g. the Cluster Dashboard) name themselves instead.
+     */
+    title?: string;
 }
 
-export const FeedbackCard = ({ onFeedback }: FeedbackCardProps): JSX.Element => {
+export const FeedbackCard = ({ onFeedback, title }: FeedbackCardProps): JSX.Element => {
+    // Generated rather than a fixed string: two cards on one page would otherwise share an
+    // id, and `aria-labelledby` would resolve to whichever mounted first.
+    const labelId = useId();
+
     return (
         <Card>
-            <div role="group" aria-labelledby="query-insights-rating-label">
-                <Text
-                    id="query-insights-rating-label"
-                    size={400}
-                    weight="semibold"
-                    style={{ display: 'block', marginBottom: '12px' }}
-                >
-                    {l10n.t('How would you rate Query Insights?')}
+            <div role="group" aria-labelledby={labelId}>
+                <Text id={labelId} size={400} weight="semibold" style={{ display: 'block', marginBottom: '12px' }}>
+                    {title ?? l10n.t('How would you rate Query Insights?')}
                 </Text>
                 <div style={{ display: 'flex', gap: '8px' }}>
                     <Button
