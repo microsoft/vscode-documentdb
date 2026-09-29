@@ -310,6 +310,41 @@ On 2026-09-29, after applying the requested fixes and again before committing th
   The original CI results above predate these fixes and are not evidence of a new
   passing CI run. The unrelated newer-base lint blockers remain outside this follow-up.
 
+### Case 2 handoff checks (2026-09-29)
+
+The operator subsequently requested the full ready-for-review checks. All six local
+commands passed against the source at `a39a26fd`; subsequent edits are documentation only:
+
+- `npm run l10n`: passed; no localization diff.
+- `npm run prettier-fix`: passed; formatted this report and the feature overview.
+- `npm run lint`: passed.
+- `npx jest --no-coverage`: passed, **288 suites, 4,495 tests, 4 snapshots**.
+- `npm run build`: passed, including workspace package builds.
+- `npm run package`: passed; produced `vscode-documentdb-0.10.2.vsix`
+  (124 files, 9.16 MB). Webpack reported bundle-size/performance warnings.
+
+Formatting was committed separately in
+[b2fff4b2](https://github.com/microsoft/vscode-documentdb/commit/b2fff4b2edd5d0001239494394591bb3f9700d53)
+to resolve the two documentation-formatting failures in CI without changing behavior.
+The feature's code-map paths resolve to tracked files. Milestone **0.11.0** was assigned,
+matching the original dashboard PR #823.
+
+**Readiness remains blocked despite the passing local checks:**
+
+1. The initial review and operator decisions are committed, but the different-vendor
+   validation gate in CONTRIBUTING section 6.1 has not been recorded as completed.
+2. The latest inspected
+   [GitHub Code Quality & Tests job](https://github.com/microsoft/vscode-documentdb/actions/runs/36593239620/job/109491475695)
+   still reports the two newer-base `no-restricted-imports` errors documented above.
+   The PR's license-header and inline-import errors are absent from this run. Its two
+   formatting failures are addressed by `b2fff4b2`, but that does not establish a new
+   passing CI run. Its full suite passed 289 suites and 4,533 tests; the different totals
+   reflect testing with newer base-branch changes, not the local branch alone.
+
+No unrelated base-branch code was changed, and the PR was not marked ready. Existing
+operator-reported manual validation remains the only manual-testing claim; these checks
+do not establish live-cluster, browser, or screen-reader validation by the agent.
+
 ## Outcome
 
 The severity-ranked report and operator responses are recorded here and linked from the
@@ -319,4 +354,6 @@ R4 records operator-reported manual testing without additional automated tests.
 Runtime behavior and PR state are unchanged. R1, R2, R3, and the R4 review/manual-validation
 record were committed separately; their references and rationale are recorded inline.
 A documentation-only follow-up adds the R4 commit reference.
-Commits are local only; nothing has been pushed or posted as a GitHub review.
+The full local Case 2 checks have now passed and the formatting output is committed.
+The PR remains a draft because of the outstanding review-validation gate and newer-base
+CI blockers described above; this is not a claim that all handoff requirements have passed.
