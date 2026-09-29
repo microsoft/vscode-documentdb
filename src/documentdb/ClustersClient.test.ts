@@ -95,11 +95,7 @@ describe('regular connection startup diagnostics', () => {
         jest.useFakeTimers();
         mockTelemetryEvents.length = 0;
         ClustersClient._clients.clear();
-        CredentialCache.setAuthCredentials(
-            clusterId,
-            AuthMethodId.MicrosoftEntraID,
-            'mongodb://private-host:27017',
-        );
+        CredentialCache.setAuthCredentials(clusterId, AuthMethodId.MicrosoftEntraID, 'mongodb://private-host:27017');
         mockConnect.mockImplementation(async (): Promise<void> => {
             jest.advanceTimersByTime(30);
         });
@@ -107,7 +103,12 @@ describe('regular connection startup diagnostics', () => {
         jest.mocked(MongoClient).mockImplementation(
             () => ({ connect: mockConnect, close: mockClose }) as unknown as MongoClient,
         );
-        for (const handler of [MicrosoftEntraIDAuthHandler, ManagedIdentityAuthHandler, NativeAuthHandler, NoAuthHandler]) {
+        for (const handler of [
+            MicrosoftEntraIDAuthHandler,
+            ManagedIdentityAuthHandler,
+            NativeAuthHandler,
+            NoAuthHandler,
+        ]) {
             jest.spyOn(handler.prototype, 'configureAuth').mockImplementation(async () => {
                 jest.advanceTimersByTime(20);
                 return { connectionString: 'mongodb://private-host:27017', options: {} };
@@ -159,19 +160,24 @@ describe('regular connection startup diagnostics', () => {
         });
         expect(ext.outputChannel.trace).toHaveBeenCalledTimes(1);
         expect(ext.outputChannel.trace).toHaveBeenCalledWith(
-            expect.stringContaining('stageDurationsMs={"stage01PreparingCredentials":0,"stage02ConfiguringAuth":20,"stage03PreparingClient":0,"stage04ConnectingAndAuthenticating":30,"stage05InitializingApis":0}'),
+            expect.stringContaining(
+                'stageDurationsMs={"stage01PreparingCredentials":0,"stage02ConfiguringAuth":20,"stage03PreparingClient":0,"stage04ConnectingAndAuthenticating":30,"stage05InitializingApis":0}',
+            ),
         );
         expect(ext.outputChannel.error).not.toHaveBeenCalled();
         expect(JSON.stringify(startupEvent())).not.toContain('private-');
         expect(jest.mocked(ext.outputChannel.trace).mock.calls.flat().join('\n')).not.toContain('private-');
-        expect(Object.keys(startupEvent().telemetry.measurements).filter((name) => name.startsWith('stage')).sort())
-            .toEqual([
-                'stage01PreparingCredentialsDurationMs',
-                'stage02ConfiguringAuthDurationMs',
-                'stage03PreparingClientDurationMs',
-                'stage04ConnectingAndAuthenticatingDurationMs',
-                'stage05InitializingApisDurationMs',
-            ]);
+        expect(
+            Object.keys(startupEvent().telemetry.measurements)
+                .filter((name) => name.startsWith('stage'))
+                .sort(),
+        ).toEqual([
+            'stage01PreparingCredentialsDurationMs',
+            'stage02ConfiguringAuthDurationMs',
+            'stage03PreparingClientDurationMs',
+            'stage04ConnectingAndAuthenticatingDurationMs',
+            'stage05InitializingApisDurationMs',
+        ]);
 
         await expect(ClustersClient.getClient(clusterId)).resolves.toBe(client);
         startupEvent();
@@ -208,7 +214,10 @@ describe('regular connection startup diagnostics', () => {
             return { connectionString: 'mongodb://private-host:27017', options: {} };
         });
         await ClustersClient.getClient(clusterId);
-        expect(startupEvent().telemetry.measurements).toMatchObject({ tokenAcquireDurationMs: 20, databaseConnectDurationMs: 30 });
+        expect(startupEvent().telemetry.measurements).toMatchObject({
+            tokenAcquireDurationMs: 20,
+            databaseConnectDurationMs: 30,
+        });
         expect(startupEvent().telemetry.measurements.tokenRelayDurationMs).toBeUndefined();
         expect(ext.outputChannel.trace).toHaveBeenCalledTimes(1);
     });
@@ -226,7 +235,10 @@ describe('regular connection startup diagnostics', () => {
             return { connectionString: 'mongodb://private-host:27017', options: {} };
         });
         await ClustersClient.getClient(clusterId);
-        expect(startupEvent().telemetry.measurements).toMatchObject({ tokenAcquireDurationMs: 20, databaseConnectDurationMs: 20 });
+        expect(startupEvent().telemetry.measurements).toMatchObject({
+            tokenAcquireDurationMs: 20,
+            databaseConnectDurationMs: 20,
+        });
         expect(ext.outputChannel.trace).toHaveBeenCalledTimes(1);
     });
 

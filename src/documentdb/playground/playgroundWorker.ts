@@ -112,13 +112,15 @@ parentPort.on('message', (msg: MainToWorkerMessage) => {
 
 async function handleInit(msg: Extract<MainToWorkerMessage, { type: 'init' }>): Promise<void> {
     let connecting = true;
-    const reportTiming = (
-        activity: 'databaseConnect' | 'tokenWait',
-        activityId: string,
-        started: boolean,
-    ): void => {
+    const reportTiming = (activity: 'databaseConnect' | 'tokenWait', activityId: string, started: boolean): void => {
         if (connecting) {
-            const timing: WorkerToMainMessage = { type: 'initTiming', requestId: msg.requestId, activity, activityId, started };
+            const timing: WorkerToMainMessage = {
+                type: 'initTiming',
+                requestId: msg.requestId,
+                activity,
+                activityId,
+                started,
+            };
             parentPort!.postMessage(timing);
         }
     };

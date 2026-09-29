@@ -125,9 +125,10 @@ describe('ShellSessionManager', () => {
     ] as const)('measures provider time for %s using %s', async (surface, source) => {
         let now = 0;
         const timings = new ConnectionStartupTimings(() => now);
-        const manager = surface === 'shell'
-            ? new ShellSessionManager({ clusterId, clusterDisplayName: 'Test Cluster', databaseName: 'test' })
-            : new PlaygroundEvaluator();
+        const manager =
+            surface === 'shell'
+                ? new ShellSessionManager({ clusterId, clusterDisplayName: 'Test Cluster', databaseName: 'test' })
+                : new PlaygroundEvaluator();
         const provider = source === 'vscode' ? mockGetSessionFromVSCode : mockGetManagedIdentityAccessToken;
         provider.mockImplementationOnce(async () => {
             now = 40;
@@ -148,8 +149,16 @@ describe('ShellSessionManager', () => {
         now = 60;
         stopDatabase();
 
-        expect(postResponse).toHaveBeenCalledWith({ type: 'tokenResponse', requestId: 'token-request', accessToken: 'private-token' });
-        expect(timings.finish()).toEqual({ databaseConnectDurationMs: 25, tokenAcquireDurationMs: 25, tokenRelayDurationMs: 10 });
+        expect(postResponse).toHaveBeenCalledWith({
+            type: 'tokenResponse',
+            requestId: 'token-request',
+            accessToken: 'private-token',
+        });
+        expect(timings.finish()).toEqual({
+            databaseConnectDurationMs: 25,
+            tokenAcquireDurationMs: 25,
+            tokenRelayDurationMs: 10,
+        });
         manager.dispose();
     });
 });

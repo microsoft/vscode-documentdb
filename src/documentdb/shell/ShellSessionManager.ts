@@ -21,8 +21,8 @@ import {
     type SerializableMongoClientOptions,
     type WorkerToMainMessage,
 } from '../playground/workerTypes';
-import { getHostsFromConnectionString } from '../utils/connectionStringHelpers';
 import { withTokenAcquisitionTiming, type ConnectionStartupTimings } from '../utils/ConnectionStartupTimings';
+import { getHostsFromConnectionString } from '../utils/connectionStringHelpers';
 import { resolveAllowInvalidCertificates } from '../utils/tlsException';
 
 /**

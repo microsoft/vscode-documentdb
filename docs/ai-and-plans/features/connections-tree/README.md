@@ -60,7 +60,7 @@ Reported names have stable numbers so sorting preserves their order:
 2. `stage02ConfiguringAuth`: configuring connection options, including Entra user-token acquisition.
 3. `stage03PreparingClient`: host/options preparation and driver-client construction.
 4. `stage04ConnectingAndAuthenticating`: the driver's `connect()`, including network setup and
-  authentication. Managed identity acquires its token here via the driver's OIDC callback.
+   authentication. Managed identity acquires its token here via the driver's OIDC callback.
 5. `stage05InitializingApis`: extension client API setup after connecting.
 
 Only visited stages are reported. Timings do not separately measure DNS, TCP, TLS, or server-side

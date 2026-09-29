@@ -348,7 +348,10 @@ describe('WorkerSessionManager', () => {
                 `[WorkerSessionManager] startup=${requestId} terminated surface=shell auth=MicrosoftEntraID lastStage=stage01StartingWorker elapsedMs=0 timeoutMs=1000 stageDurationsMs={"stage01StartingWorker":0} costTimingsMs={}`,
             );
             expect(ext.outputChannel.error).not.toHaveBeenCalled();
-            expect(startupEvent().telemetry.properties).toMatchObject({ startupOutcome: 'canceled', result: 'Canceled' });
+            expect(startupEvent().telemetry.properties).toMatchObject({
+                startupOutcome: 'canceled',
+                result: 'Canceled',
+            });
         });
 
         it('accumulates repeated stages and keeps the last visit duration separately', async () => {
@@ -369,28 +372,39 @@ describe('WorkerSessionManager', () => {
                 lastStageDurationMs: 600,
             });
             expect(ext.outputChannel.error).toHaveBeenCalledWith(
-                expect.stringContaining('stageDurationsMs={"stage01StartingWorker":100,"stage04AcquiringToken":800,"stage05Authenticating":100}'),
+                expect.stringContaining(
+                    'stageDurationsMs={"stage01StartingWorker":100,"stage04AcquiringToken":800,"stage05Authenticating":100}',
+                ),
             );
         });
 
         it('keeps all reported stage names in execution order when sorted', async () => {
             const { manager, initPromise, requestId, worker } = startWorker();
-            for (const stage of ['loadingDriver', 'connecting', 'acquiringToken', 'authenticating', 'initializingRuntime']) {
+            for (const stage of [
+                'loadingDriver',
+                'connecting',
+                'acquiringToken',
+                'authenticating',
+                'initializingRuntime',
+            ]) {
                 jest.advanceTimersByTime(10);
                 worker._emit('message', { type: 'initProgress', requestId, stage });
             }
             worker._emit('message', { type: 'initResult', requestId, success: true });
             await initPromise;
 
-            expect(Object.keys(startupEvent().telemetry.measurements).filter((name) => name.startsWith('stage')).sort())
-                .toEqual([
-                    'stage01StartingWorkerDurationMs',
-                    'stage02LoadingDriverDurationMs',
-                    'stage03ConnectingDurationMs',
-                    'stage04AcquiringTokenDurationMs',
-                    'stage05AuthenticatingDurationMs',
-                    'stage06InitializingRuntimeDurationMs',
-                ]);
+            expect(
+                Object.keys(startupEvent().telemetry.measurements)
+                    .filter((name) => name.startsWith('stage'))
+                    .sort(),
+            ).toEqual([
+                'stage01StartingWorkerDurationMs',
+                'stage02LoadingDriverDurationMs',
+                'stage03ConnectingDurationMs',
+                'stage04AcquiringTokenDurationMs',
+                'stage05AuthenticatingDurationMs',
+                'stage06InitializingRuntimeDurationMs',
+            ]);
             manager.dispose();
         });
 
@@ -425,7 +439,9 @@ describe('WorkerSessionManager', () => {
             });
             expect(trace).toHaveBeenCalledTimes(1);
             expect(trace).toHaveBeenCalledWith(
-                expect.stringContaining('costTimingsMs={"databaseConnectDurationMs":20,"tokenRelayDurationMs":10,"tokenAcquireDurationMs":20}'),
+                expect.stringContaining(
+                    'costTimingsMs={"databaseConnectDurationMs":20,"tokenRelayDurationMs":10,"tokenAcquireDurationMs":20}',
+                ),
             );
             expect(JSON.stringify(startupEvent())).not.toContain('private-');
             manager.dispose();
@@ -438,15 +454,31 @@ describe('WorkerSessionManager', () => {
                 return new Promise<void>((resolve) => {
                     finishProvider = (): void => {
                         stop?.();
-                        postResponse({ type: 'tokenResponse', requestId: message.requestId, accessToken: 'private-token' });
+                        postResponse({
+                            type: 'tokenResponse',
+                            requestId: message.requestId,
+                            accessToken: 'private-token',
+                        });
                         resolve();
                     };
                 });
             });
             const { initPromise, requestId, worker } = startWorker();
-            worker._emit('message', { type: 'initTiming', requestId, activity: 'databaseConnect', activityId: requestId, started: true });
+            worker._emit('message', {
+                type: 'initTiming',
+                requestId,
+                activity: 'databaseConnect',
+                activityId: requestId,
+                started: true,
+            });
             jest.advanceTimersByTime(100);
-            worker._emit('message', { type: 'initTiming', requestId, activity: 'tokenWait', activityId: 'token-request', started: true });
+            worker._emit('message', {
+                type: 'initTiming',
+                requestId,
+                activity: 'tokenWait',
+                activityId: 'token-request',
+                started: true,
+            });
             jest.advanceTimersByTime(50);
             worker._emit('message', { type: 'tokenRequest', requestId: 'token-request', scopes: ['private-scope'] });
             jest.advanceTimersByTime(850);
@@ -461,17 +493,41 @@ describe('WorkerSessionManager', () => {
             const snapshot = JSON.stringify(event);
             jest.advanceTimersByTime(1000);
             finishProvider?.();
-            worker._emit('message', { type: 'initTiming', requestId, activity: 'tokenWait', activityId: 'token-request', started: false });
+            worker._emit('message', {
+                type: 'initTiming',
+                requestId,
+                activity: 'tokenWait',
+                activityId: 'token-request',
+                started: false,
+            });
             expect(JSON.stringify(startupEvent())).toBe(snapshot);
             expect(ext.outputChannel.error).toHaveBeenCalledTimes(1);
         });
 
         it('records database-only worker timing without token measurements', async () => {
             const { manager, initPromise, requestId, worker } = startWorker(false);
-            worker._emit('message', { type: 'initTiming', requestId: 'stale', activity: 'tokenWait', activityId: 'stale-token', started: true });
-            worker._emit('message', { type: 'initTiming', requestId, activity: 'databaseConnect', activityId: requestId, started: true });
+            worker._emit('message', {
+                type: 'initTiming',
+                requestId: 'stale',
+                activity: 'tokenWait',
+                activityId: 'stale-token',
+                started: true,
+            });
+            worker._emit('message', {
+                type: 'initTiming',
+                requestId,
+                activity: 'databaseConnect',
+                activityId: requestId,
+                started: true,
+            });
             jest.advanceTimersByTime(40);
-            worker._emit('message', { type: 'initTiming', requestId, activity: 'databaseConnect', activityId: requestId, started: false });
+            worker._emit('message', {
+                type: 'initTiming',
+                requestId,
+                activity: 'databaseConnect',
+                activityId: requestId,
+                started: false,
+            });
             worker._emit('message', { type: 'initResult', requestId, success: true });
             await initPromise;
 
@@ -524,7 +580,12 @@ describe('WorkerSessionManager', () => {
 
         it('emits another event for a retry, but none for a connected worker reuse', async () => {
             const first = startWorker();
-            first.worker._emit('message', { type: 'initResult', requestId: first.requestId, success: false, error: 'failure' });
+            first.worker._emit('message', {
+                type: 'initResult',
+                requestId: first.requestId,
+                success: false,
+                error: 'failure',
+            });
             await expect(first.initPromise).rejects.toThrow('failure');
 
             const retry = startWorker(true, {}, first.manager);

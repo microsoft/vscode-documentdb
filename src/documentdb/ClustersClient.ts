@@ -59,8 +59,8 @@ import {
     type IndexStats,
 } from './LlmEnhancedFeatureApis';
 import { SchemaStore } from './SchemaStore';
-import { getHostsFromConnectionString, hasAzureDomain } from './utils/connectionStringHelpers';
 import { ConnectionStartupTimings } from './utils/ConnectionStartupTimings';
+import { getHostsFromConnectionString, hasAzureDomain } from './utils/connectionStringHelpers';
 import { fixupDocumentDbExplain } from './utils/fixupDocumentDbExplain';
 import { getClusterMetadata, type ClusterMetadata } from './utils/getClusterMetadata';
 import { parseDocumentId } from './utils/parseDocumentId';
