@@ -9,6 +9,7 @@ import * as l10n from '@vscode/l10n';
 import { type MongoClientOptions, type OIDCCallbackParams, type OIDCResponse } from 'mongodb';
 import { traceAuthFlow, traceAuthOperation } from '../../utils/authTrace';
 import { type CachedClusterCredentials } from '../CredentialCache';
+import { withTokenAcquisitionTiming, type ConnectionStartupTimings } from '../utils/ConnectionStartupTimings';
 import { DocumentDBConnectionString } from '../utils/DocumentDBConnectionString';
 import { resolveAllowInvalidCertificates } from '../utils/tlsException';
 import { type AuthHandler, type AuthHandlerResponse } from './AuthHandler';
@@ -21,14 +22,16 @@ import { getOidcAllowedHosts } from './oidcAllowedHosts';
 export class MicrosoftEntraIDAuthHandler implements AuthHandler {
     constructor(private readonly clusterCredentials: CachedClusterCredentials) {}
 
-    public async configureAuth(): Promise<AuthHandlerResponse> {
+    public async configureAuth(timings?: ConnectionStartupTimings): Promise<AuthHandlerResponse> {
         // Get Microsoft Entra ID token
         const session = await traceAuthOperation(
             'interactiveEntra.getSession',
             () =>
-                getSessionFromVSCode([DOCUMENTDB_ENTRA_SCOPE], this.clusterCredentials.entraIdConfig?.tenantId, {
-                    createIfNone: true,
-                }),
+                withTokenAcquisitionTiming(timings, () =>
+                    getSessionFromVSCode([DOCUMENTDB_ENTRA_SCOPE], this.clusterCredentials.entraIdConfig?.tenantId, {
+                        createIfNone: true,
+                    }),
+                ),
             { tenantSpecified: !!this.clusterCredentials.entraIdConfig?.tenantId, createIfNone: true },
         );
 

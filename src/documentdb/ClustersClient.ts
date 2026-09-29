@@ -14,6 +14,7 @@ import {
     appendExtensionUserAgent,
     callWithTelemetryAndErrorHandling,
     parseError,
+    type ITelemetryContext,
 } from '@microsoft/vscode-azext-utils';
 import { ParseMode, parse as parseShellBSON } from '@mongodb-js/shell-bson-parser';
 import * as l10n from '@vscode/l10n';
@@ -58,6 +59,7 @@ import {
     type IndexStats,
 } from './LlmEnhancedFeatureApis';
 import { SchemaStore } from './SchemaStore';
+import { ConnectionStartupTimings } from './utils/ConnectionStartupTimings';
 import { getHostsFromConnectionString, hasAzureDomain } from './utils/connectionStringHelpers';
 import { fixupDocumentDbExplain } from './utils/fixupDocumentDbExplain';
 import { getClusterMetadata, type ClusterMetadata } from './utils/getClusterMetadata';
@@ -147,6 +149,22 @@ export function isBulkWriteError(error: unknown): error is MongoBulkWriteError {
     return error instanceof MongoBulkWriteError;
 }
 
+type ClientStartupStage =
+    | 'stage01PreparingCredentials'
+    | 'stage02ConfiguringAuth'
+    | 'stage03PreparingClient'
+    | 'stage04ConnectingAndAuthenticating'
+    | 'stage05InitializingApis';
+
+interface ClientStartup {
+    readonly startedAt: number;
+    readonly costTimings: ConnectionStartupTimings;
+    readonly telemetry: ITelemetryContext;
+    readonly stageDurationsMs: Partial<Record<ClientStartupStage, number>>;
+    stage: ClientStartupStage;
+    stageStartedAt: number;
+}
+
 /**
  * Validates that a parsed BSON value is a plain object (not a scalar, array, or null).
  * Throws a QueryError if the value is not a plain object.
@@ -229,6 +247,77 @@ export class ClustersClient {
     // }
 
     private async initClient(abortSignal?: AbortSignal): Promise<void> {
+        this.connectionCorrelationId = randomUUID();
+        let originalFailure: { error: unknown } | undefined;
+
+        try {
+            await callWithTelemetryAndErrorHandling('connect.startup', async (context) => {
+                context.errorHandling.suppressDisplay = true;
+                context.errorHandling.rethrow = true;
+                context.telemetry.maskEntireErrorMessage = true;
+                context.telemetry.properties.connectionCorrelationId = this.connectionCorrelationId;
+                context.telemetry.properties.surface = 'extension';
+                const startedAt = Date.now();
+                const startup: ClientStartup = {
+                    startedAt,
+                    costTimings: new ConnectionStartupTimings(),
+                    telemetry: context.telemetry,
+                    stageDurationsMs: {},
+                    stage: 'stage01PreparingCredentials',
+                    stageStartedAt: startedAt,
+                };
+
+                try {
+                    await this.initializeClient(startup, abortSignal);
+                    this.finishClientStartup(startup, 'succeeded');
+                } catch (error) {
+                    const canceled = error instanceof UserCancelledError;
+                    this.finishClientStartup(startup, canceled ? 'canceled' : 'failed');
+                    originalFailure = { error };
+                    if (canceled) {
+                        throw new UserCancelledError('connectionStartup');
+                    }
+                    const telemetryError = new Error('Connection startup failed');
+                    telemetryError.stack = undefined;
+                    throw telemetryError;
+                }
+            });
+        } catch (error) {
+            throw originalFailure ? originalFailure.error : error;
+        }
+
+        if (originalFailure) {
+            throw originalFailure.error;
+        }
+    }
+
+    private recordClientStartupStage(startup: ClientStartup): number {
+        const durationMs = Date.now() - startup.stageStartedAt;
+        const accumulatedDurationMs = (startup.stageDurationsMs[startup.stage] ?? 0) + durationMs;
+        startup.stageDurationsMs[startup.stage] = accumulatedDurationMs;
+        startup.telemetry.measurements[`${startup.stage}DurationMs`] = accumulatedDurationMs;
+        return durationMs;
+    }
+
+    private advanceClientStartup(startup: ClientStartup, stage: ClientStartupStage): void {
+        this.recordClientStartupStage(startup);
+        startup.stage = stage;
+        startup.stageStartedAt = Date.now();
+    }
+
+    private finishClientStartup(startup: ClientStartup, outcome: 'succeeded' | 'failed' | 'canceled'): void {
+        startup.telemetry.properties.startupOutcome = outcome;
+        startup.telemetry.properties.lastStage = startup.stage;
+        startup.telemetry.measurements.lastStageDurationMs = this.recordClientStartupStage(startup);
+        const costTimingsMs = startup.costTimings.finish();
+        Object.assign(startup.telemetry.measurements, costTimingsMs);
+        const level = outcome === 'failed' ? 'error' : 'trace';
+        ext.outputChannel?.[level](
+            `[ClustersClient] startup=${this.connectionCorrelationId} ${outcome} surface=extension auth=${startup.telemetry.properties.authMethod ?? 'unknown'} lastStage=${startup.stage} elapsedMs=${String(Date.now() - startup.startedAt)} stageDurationsMs=${JSON.stringify(startup.stageDurationsMs)} costTimingsMs=${JSON.stringify(costTimingsMs)}`,
+        );
+    }
+
+    private async initializeClient(startup: ClientStartup, abortSignal?: AbortSignal): Promise<void> {
         const credentials = CredentialCache.getCredentials(this.clusterId);
         if (!credentials) {
             throw new Error(l10n.t('No credentials found for id {clusterId}', { clusterId: this.clusterId }));
@@ -236,6 +325,7 @@ export class ClustersClient {
 
         // default to NativeAuth if nothing is configured
         const authMethod = credentials?.authMechanism ?? AuthMethodId.NativeAuth;
+        startup.telemetry.properties.authMethod = authMethod;
 
         // TODO: add a proper factory pattern here when more methods are added
         let authHandler: AuthHandler;
@@ -257,16 +347,15 @@ export class ClustersClient {
         }
 
         // Configure auth and get connection options
-        const { connectionString, options } = await authHandler.configureAuth();
+        this.advanceClientStartup(startup, 'stage02ConfiguringAuth');
+        const { connectionString, options } = await authHandler.configureAuth(startup.costTimings);
 
+        this.advanceClientStartup(startup, 'stage03PreparingClient');
         const hosts = getHostsFromConnectionString(connectionString);
         const userAgentString = hasAzureDomain(...hosts) ? appendExtensionUserAgent() : undefined;
         if (userAgentString) {
             options.appName = userAgentString;
         }
-
-        // Generate a correlation ID to link connect + connect.getmetadata telemetry
-        this.connectionCorrelationId = randomUUID();
 
         // Emit static metadata (domain info) BEFORE the connection attempt.
         // This ensures destination telemetry is available even when connections fail.
@@ -282,7 +371,7 @@ export class ClustersClient {
         });
 
         // Connect with the configured options
-        await this.connect(connectionString, options, credentials.emulatorConfiguration, abortSignal);
+        await this.connect(startup, connectionString, options, credentials.emulatorConfiguration, abortSignal);
 
         // Start metadata collection and store the promise
         this._clusterMetadataPromise = getClusterMetadata(this._mongoClient, hosts);
@@ -300,6 +389,7 @@ export class ClustersClient {
     }
 
     private async connect(
+        startup: ClientStartup,
         connectionString: string,
         options: MongoClientOptions,
         emulatorConfiguration?: EmulatorConfiguration,
@@ -338,7 +428,13 @@ export class ClustersClient {
         abortSignal?.addEventListener('abort', onAbort, { once: true });
 
         try {
-            await this._mongoClient.connect();
+            this.advanceClientStartup(startup, 'stage04ConnectingAndAuthenticating');
+            const stopDatabaseConnect = startup.costTimings.startDatabaseConnect();
+            try {
+                await this._mongoClient.connect();
+            } finally {
+                stopDatabaseConnect();
+            }
             connected = true;
 
             // Remove the abort listener immediately after connect() resolves so
@@ -348,6 +444,7 @@ export class ClustersClient {
             // guard in case abort fires between the assignment and this removal.
             abortSignal?.removeEventListener('abort', onAbort);
 
+            this.advanceClientStartup(startup, 'stage05InitializingApis');
             this._llmEnhancedFeatureApis = new llmEnhancedFeatureApis(this._mongoClient);
             this._queryInsightsApis = new QueryInsightsApis(this._mongoClient);
         } catch (error) {
