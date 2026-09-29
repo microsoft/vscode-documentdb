@@ -45,8 +45,11 @@ None yet. A user-manual page is due before this ships.
 
 [Dashboard proposals from the vscode-cosmosdb prototypes](./cosmos-dashboard-proposals.md)
 records eight candidate inventory and insights enhancements, including the transferable
-implementation patterns from the sibling prototype. They are not accepted decisions or
-part of the current implementation.
+implementation patterns from the sibling prototype. These are ideas, not a specification.
+The operator approved the metric-scope idea as implemented: a compact informational line
+above the cards with the breadcrumb beside the inventory. Proposals 2-8 remain discussion
+only; the elevated breadcrumb and feature-tab experiments were rejected. See
+[decision 0023](./decisions.md#0023-dashboard-proposals-are-ideas-not-a-specification).
 
 ## Architecture (intent — code is authoritative for behavior)
 
@@ -145,6 +148,7 @@ part of the current implementation.
 | 2026-09-07 | Feature set reduced to the inventory; the leftovers of the removed panels swept up | [0015](./decisions.md#0015--storage-refresh-is-explicit-after-initial-load)–[0017](./decisions.md#0017--diagnostics-carry-raw-replies-not-a-second-reading-of-them) |
 | 2026-09-08 | `currentOp` dropped from the iteration, taking the last application data with it   | [0019](./decisions.md#0019--currentop-is-out-of-scope-for-this-iteration)                                                                                           |
 | 2026-09-10 | Action labels and navigation icons aligned across related entry points             | [0022](./decisions.md#0022-labels-name-content-icons-communicate-navigation)                                                                                        |
+| 2026-09-29 | Navigation and metric-scope follow-up reviewed for PR #980                          | [Severity-ranked review](./iterations/04-navigation-scope-review.md)                                                                                               |
 
 ## Decisions
 

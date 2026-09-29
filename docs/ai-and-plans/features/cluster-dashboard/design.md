@@ -26,6 +26,10 @@ It describes the metrics, not another navigation control. The preview
 selector and alternate label treatments are removed. See
 [the current architecture](./README.md#architecture-intent--code-is-authoritative-for-behavior).
 
+**Operator confirmation (2026-09-29):** Keep this design as implemented. The dashboard
+proposals were a set of ideas, not a specification requiring literal implementation.
+See [decision 0023](./decisions.md#0023-dashboard-proposals-are-ideas-not-a-specification).
+
 **Rejected feature-tab layout experiment (2026-09-29):** The operator found the elevated
 breadcrumb too distant from the collection list, making it harder to work with. The tab
 placeholders and all three elevated breadcrumb arrangements were removed in favor of the

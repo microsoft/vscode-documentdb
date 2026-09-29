@@ -7,6 +7,11 @@ created: 2026-09-29
 
 # Dashboard proposals from the vscode-cosmosdb prototypes
 
+**Authority:** These proposals are a set of ideas, not a specification. The operator
+approved the metric-scope design as implemented, rather than requiring a literal
+implementation of the earlier suggestions; see
+[decision 0023](./decisions.md#0023-dashboard-proposals-are-ideas-not-a-specification).
+
 **Status: proposal 1 is adopted as a compact, informational scope line above the cards, with
 the breadcrumb beside the inventory.** The elevated breadcrumb and feature-tab experiments
 were rejected after visual inspection. The preview menu and alternate metric-label treatments
