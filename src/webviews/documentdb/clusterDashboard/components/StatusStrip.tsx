@@ -126,6 +126,11 @@ function clusterTiles(stats: ClusterStorageStats | null): Tile[] {
         {
             label: l10n.t('Databases / Collections'),
             value: read((loaded) => {
+                // No rows plus errors means listDatabases failed, not that the cluster is empty.
+                if (loaded.databases.length === 0 && loaded.errors.length > 0) {
+                    return null;
+                }
+
                 const totalCollections = sumAcrossDatabases(loaded, (database) => database.collections);
 
                 return l10n.t('{databases} / {collections}', {

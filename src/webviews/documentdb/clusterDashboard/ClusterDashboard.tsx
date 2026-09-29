@@ -168,7 +168,12 @@ export const ClusterDashboard = (): JSX.Element => {
 
                     // The count is the payload: a reload that returns the same rows is
                     // otherwise indistinguishable from one that never happened.
-                    if (source === 'manual') {
+                    if (stats.databases.length === 0 && stats.errors.length > 0) {
+                        // The collector reports a failed listDatabases as an empty list with errors.
+                        if (source !== 'background') {
+                            announce(l10n.t('Failed to read storage statistics.'), 'assertive');
+                        }
+                    } else if (source === 'manual') {
                         announce(l10n.t('Storage statistics refreshed. {0} databases.', stats.databases.length));
                     } else if (source === 'reconcile') {
                         announce(l10n.t('Inventory updated. {0} databases.', stats.databases.length));
