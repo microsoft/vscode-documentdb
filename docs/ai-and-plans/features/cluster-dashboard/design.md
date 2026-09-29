@@ -17,6 +17,22 @@ indicators for at-a-glance operational insight, opened from a cluster node in an
 
 Status: **design proposal** (no implementation yet).
 
+**Selected metric scope design (2026-09-29):** The inventory-local breadcrumb stays beside
+the collection list. A permanent compact line above the cards reads `Scope: All databases`
+or `Scope: Database <name>`. `Scope:` is muted, `Database` uses regular weight, and the value
+is emphasized. The line retains its height across navigation and truncates long names without
+a tooltip or keyboard tab stop; the inventory breadcrumb still exposes the full name.
+It describes the metrics, not another navigation control. The preview
+selector and alternate label treatments are removed. See
+[the current architecture](./README.md#architecture-intent--code-is-authoritative-for-behavior).
+
+**Rejected feature-tab layout experiment (2026-09-29):** The operator found the elevated
+breadcrumb too distant from the collection list, making it harder to work with. The tab
+placeholders and all three elevated breadcrumb arrangements were removed in favor of the
+original layout. The thin divider remains a preferred reusable treatment, recorded in
+[future design work](./cosmos-dashboard-proposals.md#future-design-work-navigation-divider).
+It does not require restoring those layouts, adding `currentOp`, or introducing a time-series source.
+
 **Current inventory constraint (2026-09-10):** The implemented inventory uses `N/A` for unavailable
 table statistics and retains list-level failure warnings. Summary sums intentionally remain
 best-effort sums of reported values. The operator declined additional completeness badges and

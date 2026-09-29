@@ -248,7 +248,7 @@ export const clusterDashboardRouter = router({
         }),
 
     /**
-        * Opens the interactive shell against the database currently shown in the dashboard.
+     * Opens the interactive shell against the database currently shown in the dashboard.
      *
      * Routed through the existing shell command rather than reimplemented, so the dashboard
      * inherits its terminal wiring, telemetry and connection handling unchanged.

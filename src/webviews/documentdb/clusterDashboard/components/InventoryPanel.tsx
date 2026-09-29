@@ -4,10 +4,6 @@
  *--------------------------------------------------------------------------------------------*/
 
 import {
-    Breadcrumb,
-    BreadcrumbButton,
-    BreadcrumbDivider,
-    BreadcrumbItem,
     Button,
     MessageBar,
     MessageBarActions,
@@ -18,13 +14,7 @@ import {
     ToolbarButton,
     ToolbarDivider,
 } from '@fluentui/react-components';
-import {
-    AddRegular,
-    ArrowLeftRegular,
-    DatabaseMultipleRegular,
-    DatabaseRegular,
-    ErrorCircleFilled,
-} from '@fluentui/react-icons';
+import { AddRegular, ArrowLeftRegular, ErrorCircleFilled } from '@fluentui/react-icons';
 import * as l10n from '@vscode/l10n';
 import { useCallback, useEffect, useMemo, useState, type JSX } from 'react';
 
@@ -32,6 +22,7 @@ import { type ClusterStorageStats } from '../../../../documentdb/utils/getCluste
 import { useTrpcClient } from '../../../_integration/useTrpcClient';
 import { isShowCollectionsMessage } from '../clusterDashboardContextMenu';
 import { useDashboardReporter } from '../useDashboardReporter';
+import { DashboardBreadcrumb } from './DashboardBreadcrumb';
 import {
     arrangeRows,
     defaultDirectionFor,
@@ -167,10 +158,7 @@ export const InventoryPanel = ({
     /**
      * Leaves the collections of a database for the cluster's database list.
      *
-     * Reached from the breadcrumb above the table and from the labelled button below it, which
-     * exist for different readers — one arrived by stepping in, the other opened the dashboard
-     * already inside a database. Which of them is load-bearing is the whole reason the second
-     * one was added, and only telemetry can answer it.
+    * Reached from the breadcrumb above the table, the labelled footer button or the mouse Back button.
      */
     const goBack = useCallback(
         (control: InventoryBackControl): void => {
@@ -437,29 +425,8 @@ export const InventoryPanel = ({
 
     return (
         <div className="inventoryPanel">
-            {/* The breadcrumb is the only control that yields width when the inventory toolbar is constrained. */}
             <Toolbar className="inventoryToolbar" size="small" aria-label={l10n.t('Inventory controls')}>
-                <Breadcrumb aria-label={l10n.t('Inventory level')} size="medium">
-                    <BreadcrumbItem>
-                        <BreadcrumbButton
-                            current={currentDatabase === null}
-                            icon={<DatabaseMultipleRegular />}
-                            onClick={currentDatabase === null ? undefined : () => goBack('breadcrumb')}
-                        >
-                            {l10n.t('Databases')}
-                        </BreadcrumbButton>
-                    </BreadcrumbItem>
-                    {currentDatabase !== null && (
-                        <>
-                            <BreadcrumbDivider />
-                            <BreadcrumbItem>
-                                <BreadcrumbButton current icon={<DatabaseRegular />} title={currentDatabase}>
-                                    {currentDatabase}
-                                </BreadcrumbButton>
-                            </BreadcrumbItem>
-                        </>
-                    )}
-                </Breadcrumb>
+                <DashboardBreadcrumb currentDatabase={currentDatabase} onNavigateToCluster={() => goBack('breadcrumb')} />
                 <ToolbarDivider />
                 {canCreateNamespace && (
                     <ToolbarButton

@@ -53,9 +53,9 @@ describe('NamespaceTable row activation', () => {
             expect(onActivate).toHaveBeenCalledWith(row, 'rowClick');
 
             await act(async () => {
-                host
-                    .querySelector<HTMLButtonElement>('button[aria-label="Open collection"], button[aria-label="Show collections"]')
-                    ?.click();
+                host.querySelector<HTMLButtonElement>(
+                    'button[aria-label="Open collection"], button[aria-label="Show collections"]',
+                )?.click();
             });
             expect(onActivate).toHaveBeenCalledTimes(2);
             expect(onActivate).toHaveBeenLastCalledWith(row, 'rowActionButton');

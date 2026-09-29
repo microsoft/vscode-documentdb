@@ -707,7 +707,6 @@ export const ClusterDashboard = (): JSX.Element => {
                     currentDatabase={inventoryViewState.currentDatabase}
                     isUnavailable={!isRefreshingStorage && storageStats === null && storageError !== null}
                 />
-
                 <InventoryPanel
                     storageStats={storageStats}
                     storageError={storageError}

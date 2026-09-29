@@ -7,8 +7,11 @@ created: 2026-09-29
 
 # Dashboard proposals from the vscode-cosmosdb prototypes
 
-**Status: discussion only.** These are candidate enhancements, not approved work or a change to
-the [current architecture](./README.md#architecture-intent--code-is-authoritative-for-behavior).
+**Status: proposal 1 is adopted as a compact, informational scope line above the cards, with
+the breadcrumb beside the inventory.** The elevated breadcrumb and feature-tab experiments
+were rejected after visual inspection. The preview menu and alternate metric-label treatments
+are removed; proposals 2-8 remain discussion only. The remaining candidates are not approved
+work or a change to the [current architecture](./README.md#architecture-intent--code-is-authoritative-for-behavior).
 The sibling extension's [account dashboard prototype at `af139005`](https://github.com/microsoft/vscode-cosmosdb/tree/af139005802d90ae360d1e24fa12053a6cf823e8/src/webviews/cosmosdb/AccountDashboard)
 tried three layouts using a shaded header, action toolbar, metric cards, tabs and inventory.
 The source branch may disappear; the transferable mechanics are described here without depending
@@ -22,10 +25,43 @@ no `currentOp` ([0019](./decisions.md#0019--currentop-is-out-of-scope-for-this-i
 and `N/A` cells rather than completeness badges ([0021](./decisions.md#0021--unavailable-table-values-are-enough-for-best-effort-summaries)).
 Order below is suggested priority, not an implementation sequence or decision.
 
+## Future design work: navigation divider
+
+**Operator preference (2026-09-29):** Keep the thin horizontal line below the feature-tab
+row as a reusable layout idea, independently of which breadcrumb arrangement is selected.
+The operator explicitly liked this treatment and asked that it be retained for future work.
+
+Use a one-pixel, theme-neutral rule across the content column to separate navigation from
+the active panel. Keep it in place for every tab, including empty or unavailable panels.
+The selected tab's accent underline remains distinct from this neutral structural line.
+For combined breadcrumb-and-tab rows, the line spans the entire navigation row, not just
+the tab labels. Avoid introducing a surrounding card or another shaded band solely to
+establish this boundary. This records a preferred visual treatment, not approval of a
+particular tab hierarchy or an instruction to restyle other views now.
+
 ## 1. Name the metric scope
 
-`StatusStrip` switches from cluster to database cards when the inventory enters a database,
-but only tooltips currently identify that scope. Add one stable line directly above the cards:
+**Selected design (2026-09-29):** The operator chose the compact scope-line style and approved
+`Scope: All databases` at cluster level and `Scope: Database <name>` inside a database.
+`Scope:` is muted, `Database` uses regular weight, and `All databases` or the database name
+is emphasized. The line stays immediately above the metric cards; the breadcrumb remains
+beside the inventory because the operator found elevated navigation too distant from the list.
+
+The line is informational, not a link, selector or dismissible tag. It reserves the same
+height at both levels; long names truncate without a tooltip or keyboard tab stop. The full
+database name remains available through the inventory breadcrumb. The metric values,
+inventory state and navigation behavior are unchanged. The preview menu and unused variants
+have been removed.
+
+The alternatives explored were no scope text, a larger summary heading, and captions below
+every card. The chosen line provides context once, before the values. The consistent `Scope:`
+prefix identifies its purpose at both levels; the database type precedes the name so it remains
+visible during truncation. The proposed `(Cluster)` and `(Database)` suffixes were not retained.
+
+**Earlier tag proposal (not adopted):**
+
+`StatusStrip` switches from cluster to database cards when the inventory enters a database;
+at the time of this proposal only tooltips identified that scope. Add one stable line directly above the cards:
 `Showing  Whole cluster`, or `Showing  [Database orders x]` with a dismissible Fluent tag.
 Dismiss returns to the database list, just like the breadcrumb root or Back to Databases.
 Read the line from the same `inventoryViewState.currentDatabase` as the cards; use `null`
@@ -57,6 +93,42 @@ keeps primary and optional secondary spans on one value row, with a separate opt
 sparkline below. Only the value-row pattern applies here.
 
 ## 3. Put useful tabs between cards and inventory
+
+**Experiment rejected (2026-09-29):** The operator's visual inspection found the breadcrumb
+too distant from the collection list, making navigation harder. The layouts described below
+were removed, along with their tab placeholders. The original inventory-local breadcrumb is
+restored; the metric-scope line was then selected and the preview menu removed. The independently preferred
+divider treatment remains recorded in Future design work above. The experiment descriptions
+below are historical context, not the current interface.
+
+**Layout experiment (2026-09-29):** The operator requested a preview before committing to
+the wider design. This alternative puts `Overview`, `Recommendations`, `Operations` and
+`Metrics` below the shared scope breadcrumb and above feature content. Overview is the
+default and contains the existing cards and inventory. The other tabs are explicitly
+labelled layout placeholders, with no new collectors, fabricated results or `currentOp`
+calls. Scope and inventory state survive tab switches. This differs from the original
+proposal below: inventory is the default destination, not content repeated beneath every
+feature. The recommendation is to keep storage cards within Overview so future activity
+or time-series views can use summaries appropriate to their content. Names and placement
+remain provisional; `Metrics` would require a supported history source, and `Operations`
+would require revisiting the existing scope decision before implementation.
+
+**Arrangement comparison (2026-09-29):** More actions contains a temporary `Layout preview`
+radio group, so the operator can compare these options without editing or reloading:
+
+- `Breadcrumb above tabs`: the first stacked preview.
+- `Breadcrumb beside tabs`: the default experiment, with the breadcrumb at the left of the
+	tab row. Breadcrumb navigation and tab selection remain separate accessible controls.
+- `Breadcrumb in toolbar`: the breadcrumb occupies the left of the row below the identity
+	band; Open Shell, Copy Connection String, Refresh and the remaining actions form one
+	right-aligned group. Feature tabs get their own full-width row below it.
+
+Both compact arrangements stack at narrow widths. The divider remains below the feature
+navigation in all three. Operations, Recommendations and Metrics are provisionally
+cluster-level destinations: a selected inventory database is retained for Overview but is
+not shown as their parent or used as the shell target while those destinations are active.
+`All databases` returns to the inventory root. Whether future capabilities also support
+database-level scope remains open; these placeholders do not settle that API decision.
 
 Show a Fluent `TabList` beneath `StatusStrip` only when at least one tab can be populated.
 Keep `InventoryPanel` visible below it as the landing content, rather than making the

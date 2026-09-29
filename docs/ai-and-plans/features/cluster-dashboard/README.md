@@ -82,7 +82,8 @@ part of the current implementation.
   Copy Connection String sit together on the left; Refresh, More actions and feedback sit on the
   right. Fluent overflow moves Copy, then Shell, into More actions as space contracts. Refresh
   stays visible and re-reads cluster storage and the current inventory; its label remains Refresh.
-  The inventory toolbar keeps its existing layout. Shell opens on the database currently shown
+  The inventory toolbar carries the breadcrumb, creation and filtering beside the list.
+  Shell opens on the database currently shown
   in the inventory, or on `test` when the database list is shown.
 - **Labels name content and icons communicate navigation.** Disclosures use noun labels where the
   control already communicates expansion. Commands that open another editor use action verbs and
@@ -99,6 +100,21 @@ part of the current implementation.
   with the existing list-level warning. Summary sums remain best-effort sums of available values;
   per-metric completeness badges and row warning icons are not required for this iteration
   ([0021](./decisions.md#0021--unavailable-table-values-are-enough-for-best-effort-summaries)).
+- **The breadcrumb stays with the inventory.** It reads `Databases` or `Databases > <database>`
+  in the list toolbar. The operator rejected the elevated breadcrumb experiments because the
+  distance from the collection list made navigation harder. Only the database name truncates,
+  with its full name available on hover and keyboard focus. The existing return-to-list path
+  and `breadcrumb` telemetry are retained, as described in
+  [0018](./decisions.md#0018--the-level-band-is-a-breadcrumb-back-stays-in-the-footer).
+- **A compact line names the metric scope.** It always reads `Scope: All databases` or
+  `Scope: Database <name>` immediately above the cards. `Scope:` is muted, `Database` uses
+  regular weight, and the scope value is emphasized. The row keeps its height at both inventory
+  levels; long names truncate without a tooltip or keyboard tab stop. The inventory breadcrumb
+  still exposes the full database name. The scope line is informational, not navigation.
+  The preview menu, alternate label treatments and tab placeholders are removed. The preferred
+  thin navigation divider is retained as
+  [future design work](./cosmos-dashboard-proposals.md#future-design-work-navigation-divider),
+  not a reason to restore the rejected tab layouts.
 - **Diagnostics are point-in-time and unmodified.** Export re-reads everything on the host and
   reports each command beside exactly what the server answered, or why it did not
   ([0017](./decisions.md#0017--diagnostics-carry-raw-replies-not-a-second-reading-of-them)). It
