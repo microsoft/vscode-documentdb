@@ -18,6 +18,7 @@ jest.mock('@microsoft/vscode-azext-azureauth/out/src/getSessionFromVSCode', () =
 }));
 
 import { type CachedClusterCredentials } from '../CredentialCache';
+import { ConnectionStartupTimings } from '../utils/ConnectionStartupTimings';
 import { AuthMethodId } from './AuthMethod';
 import { MicrosoftEntraIDAuthHandler } from './MicrosoftEntraIDAuthHandler';
 
@@ -64,5 +65,35 @@ describe('MicrosoftEntraIDAuthHandler', () => {
 
         expect(JSON.stringify(mockOutputChannel.error.mock.calls)).toContain('interactiveEntra.getSession');
         expect(JSON.stringify(mockOutputChannel.error.mock.calls)).not.toContain('secret-token');
+    });
+
+    it('measures the actual session request separately from database connection work', async () => {
+        let now = 0;
+        const timings = new ConnectionStartupTimings(() => now);
+        getSessionFromVSCode.mockImplementationOnce(async () => {
+            now = 25;
+            return { accessToken: 'access-token' };
+        });
+        const handler = new MicrosoftEntraIDAuthHandler(buildCredentials('mongodb://localhost:27017/'));
+        await handler.configureAuth(timings);
+        const stopDatabase = timings.startDatabaseConnect();
+        now = 65;
+        stopDatabase();
+
+        expect(timings.finish()).toEqual({ tokenAcquireDurationMs: 25, databaseConnectDurationMs: 40 });
+    });
+
+    it('retains token-acquisition time when the session request fails', async () => {
+        let now = 0;
+        const timings = new ConnectionStartupTimings(() => now);
+        const error = new Error('private-token');
+        getSessionFromVSCode.mockImplementationOnce(async () => {
+            now = 30;
+            throw error;
+        });
+        const handler = new MicrosoftEntraIDAuthHandler(buildCredentials('mongodb://localhost:27017/'));
+
+        await expect(handler.configureAuth(timings)).rejects.toBe(error);
+        expect(timings.finish()).toEqual({ tokenAcquireDurationMs: 30 });
     });
 });

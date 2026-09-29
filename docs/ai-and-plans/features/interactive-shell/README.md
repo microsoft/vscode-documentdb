@@ -48,6 +48,46 @@ program-level narrative, and the sibling areas
   survivable and keeps clients isolated. The user-visible consequences are documented in the
   user manual; the reasoning for the shell/playground split is in
   [query-playground/multi-connection-behavior.md](../query-playground/multi-connection-behavior.md).
+- **Startup diagnostics are shared with Query Playground.** Each startup produces one
+  `ext.outputChannel` timing summary, not a message per stage. It includes a random attempt ID,
+  outcome, surface, auth method, timeout, last stage, total elapsed milliseconds, and
+  `stageDurationsMs` for worker startup, driver loading, connection setup, token acquisition,
+  authentication, and runtime initialization. Only visited stages are included; repeated visits
+  accumulate. Reported stage names sort in execution order: `stage01StartingWorker`,
+  `stage02LoadingDriver`, `stage03Connecting`, `stage04AcquiringToken`, `stage05Authenticating`,
+  and `stage06InitializingRuntime`. Failures, timeouts, and unexpected exits use Error level; success
+  and intentional cancellation use Trace. Timeout errors also name the last stage and its elapsed time. Connection
+  setup is one stage, not a separate measurement of DNS, TCP, and TLS. The existing startup deadline
+  and authentication behavior are unchanged.
+- **One `worker.startup` telemetry event covers each actual startup attempt**, including worker
+  construction failures. Reusing a connected worker emits no new startup event; retrying does.
+  Properties are `startupCorrelationId` (the log/IPC attempt ID), `surface`, `authMethod`,
+  `startupOutcome` (`succeeded`, `failed`, `timedOut`, `exited`, or `canceled`), and `lastStage`.
+  The framework supplies `result` and total `duration` in seconds. Measurements `timeoutMs`,
+  `lastStageDurationMs` (the last visit), and `<stage>DurationMs` (accumulated across visits) are
+  milliseconds. Shell events carry the existing `shellSessionId` and, when already cached at shell
+  creation, the parent `connectionCorrelationId`; Playground carries its existing `sessionId`.
+  Successful events are retained for rate/latency analysis. Tracking summaries contain no connection
+  strings, tokens, hostnames, account details, database names, or raw errors. The telemetry wrapper
+  receives only a fixed failure with no original stack, and masks error fields; the original error
+  is preserved for the caller. Existing worker/session lifecycle events remain separate.
+  Regular extension clients use the related
+  [`connect.startup` diagnostics](../connections-tree/README.md#connection-startup-diagnostics).
+- **Entra and database costs are measured separately in that same event.**
+  `tokenAcquireDurationMs` measures the actual host-side token-provider call, including its cache,
+  refresh, SDK setup, and any interactive wait. `databaseConnectDurationMs` measures the connect
+  window excluding token-provider and token-relay waiting. `tokenRelayDurationMs` measures worker
+  token waiting outside the provider call, including module loading, IPC, and scheduling overhead.
+  These values are also included as `costTimingsMs` in the existing single summary line.
+  The host clocks worker boundaries when their IPC messages arrive, so the worker measurements
+  include delivery/scheduling effects; they are not wire-level network latency or Entra HTTP latency.
+  Server selection, TLS, and server-side token validation remain part of database connection work.
+  Overlapping token requests count once as wall-clock waiting, and only overlap with the connect
+  window is subtracted from database time. Failure/cancellation/timeout snapshots retain partial
+  elapsed time and ignore late completion. Unvisited activities are omitted, so non-Entra paths have
+  database timing but no token timing. These costs are an alternative breakdown, not additional
+  time to sum with the numbered stage timings. Cached reuse and later token refreshes emit no new
+  startup event.
 - **The connection summary keeps multi-host seed lists compact.** A single host is shown unchanged;
   when the connection string contains several hosts, the summary shows the first seed followed by
   `+N more`. This display rule is independent of terminal width and does not imply that the first

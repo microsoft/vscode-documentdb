@@ -3,8 +3,71 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { WorkerSessionManager, type WorkerSessionCallbacks } from './WorkerSessionManager';
+import type * as AzExtUtils from '@microsoft/vscode-azext-utils';
+import { type IActionContext, type ITelemetryContext } from '@microsoft/vscode-azext-utils';
+import { Worker } from 'worker_threads';
+import { ext } from '../../extensionVariables';
+import {
+    WorkerSessionManager,
+    type WorkerSessionCallbacks,
+    type WorkerStartupTelemetryContext,
+} from './WorkerSessionManager';
 import { type MainToWorkerMessage } from './workerTypes';
+
+interface RecordedTelemetry {
+    readonly eventName: string;
+    readonly telemetry: ITelemetryContext;
+    error?: unknown;
+}
+
+const mockTelemetryEvents: RecordedTelemetry[] = [];
+
+jest.mock('@microsoft/vscode-azext-utils', () => {
+    const actual = jest.requireActual<typeof AzExtUtils>('@microsoft/vscode-azext-utils');
+    return {
+        ...actual,
+        callWithTelemetryAndErrorHandling: jest.fn(
+            async (eventName: string, callback: (context: IActionContext) => Promise<unknown>): Promise<unknown> => {
+                const context = {
+                    telemetry: { properties: {}, measurements: {} },
+                    errorHandling: { issueProperties: {} },
+                    valuesToMask: [],
+                } as unknown as IActionContext;
+                const event: RecordedTelemetry = { eventName, telemetry: context.telemetry };
+                const startedAt = Date.now();
+                try {
+                    const result = await callback(context);
+                    context.telemetry.properties.result = 'Succeeded';
+                    return result;
+                } catch (error) {
+                    event.error = error;
+                    if (error instanceof actual.UserCancelledError) {
+                        context.telemetry.properties.result = 'Canceled';
+                        return undefined;
+                    }
+                    context.telemetry.properties.result = 'Failed';
+                    if (context.errorHandling.rethrow) {
+                        throw error;
+                    }
+                    return undefined;
+                } finally {
+                    context.telemetry.measurements.duration = (Date.now() - startedAt) / 1000;
+                    mockTelemetryEvents.push(event);
+                }
+            },
+        ),
+    };
+});
+
+jest.mock('../../extensionVariables', () => ({
+    ext: {
+        outputChannel: {
+            trace: jest.fn(),
+            warn: jest.fn(),
+            error: jest.fn(),
+        },
+    },
+}));
 
 // Mock worker_threads — the WorkerSessionManager creates Worker instances
 jest.mock('worker_threads', () => {
@@ -45,6 +108,7 @@ describe('WorkerSessionManager', () => {
 
     beforeEach(() => {
         jest.clearAllMocks();
+        mockTelemetryEvents.length = 0;
         // Reset listeners between tests
         // eslint-disable-next-line @typescript-eslint/no-require-imports
         const wt = require('worker_threads') as { _resetListeners: () => void };
@@ -114,11 +178,427 @@ describe('WorkerSessionManager', () => {
             jest.advanceTimersByTime(1000);
 
             await expect(initPromise).rejects.toMatchObject({
-                message: 'Operation timed out after 1 seconds.',
+                message:
+                    'Operation timed out after 1 seconds. Last startup stage: Starting worker (1.0 seconds in this stage).',
                 settingKey: 'documentDB.connectionTimeout',
                 settingsHint: 'The connection did not finish in time. You can increase the timeout in Settings:',
             });
             jest.useRealTimers();
+        });
+    });
+
+    describe('startup tracking', () => {
+        let trace: jest.SpyInstance;
+
+        beforeEach(() => {
+            jest.useFakeTimers();
+            trace = jest.spyOn(ext.outputChannel, 'trace');
+        });
+
+        afterEach(() => {
+            trace.mockRestore();
+            jest.useRealTimers();
+        });
+
+        function startupEvent(): RecordedTelemetry {
+            const events = mockTelemetryEvents.filter((event) => event.eventName === 'worker.startup');
+            expect(events).toHaveLength(1);
+            return events[0];
+        }
+
+        function startWorker(
+            persistent: boolean = true,
+            telemetryContext: WorkerStartupTelemetryContext = {},
+            manager: WorkerSessionManager = new WorkerSessionManager(callbacks),
+        ): {
+            manager: WorkerSessionManager;
+            initPromise: Promise<void>;
+            requestId: string;
+            worker: { _emit: (event: string, ...args: unknown[]) => void };
+        } {
+            const initPromise = manager.ensureWorker(
+                'test-cluster',
+                {
+                    type: 'init',
+                    requestId: '',
+                    connectionString: 'mongodb://private-user:private-password@private-host:27017',
+                    clientOptions: {},
+                    databaseName: 'private-database',
+                    authMechanism: 'MicrosoftEntraID',
+                    tenantId: 'private-tenant',
+                    persistent,
+                },
+                1000,
+                telemetryContext,
+            );
+            const worker = jest.mocked(Worker).mock.results.at(-1)?.value as {
+                postMessage: jest.Mock;
+                _emit: (event: string, ...args: unknown[]) => void;
+            };
+            const initMessage = worker.postMessage.mock.calls.at(-1)?.[0] as MainToWorkerMessage;
+            return { manager, initPromise, requestId: initMessage.requestId, worker };
+        }
+
+        it('reports a stalled token request with total and stage timings without connection details', async () => {
+            const { initPromise, requestId, worker } = startWorker();
+            jest.advanceTimersByTime(200);
+            worker._emit('message', { type: 'initProgress', requestId, stage: 'acquiringToken' });
+            jest.advanceTimersByTime(800);
+
+            await expect(initPromise).rejects.toMatchObject({
+                message:
+                    'Operation timed out after 1 seconds. Last startup stage: Waiting for authentication token (0.8 seconds in this stage).',
+                settingKey: 'documentDB.connectionTimeout',
+            });
+            expect(ext.outputChannel.error).toHaveBeenCalledWith(
+                `[WorkerSessionManager] startup=${requestId} timedOut surface=shell auth=MicrosoftEntraID lastStage=stage04AcquiringToken elapsedMs=1000 timeoutMs=1000 stageDurationsMs={"stage01StartingWorker":200,"stage04AcquiringToken":800} costTimingsMs={}`,
+            );
+            expect(ext.outputChannel.error).toHaveBeenCalledTimes(1);
+            expect(trace).not.toHaveBeenCalled();
+            expect(trace.mock.calls.map((call) => String(call[0])).join('\n')).not.toMatch(/private-/);
+            expect(jest.mocked(ext.outputChannel.error).mock.calls.flat().join('\n')).not.toMatch(/private-/);
+            expect(startupEvent().telemetry).toMatchObject({
+                maskEntireErrorMessage: true,
+                properties: {
+                    startupCorrelationId: requestId,
+                    surface: 'shell',
+                    authMethod: 'MicrosoftEntraID',
+                    result: 'Failed',
+                    startupOutcome: 'timedOut',
+                    lastStage: 'stage04AcquiringToken',
+                },
+                measurements: {
+                    timeoutMs: 1000,
+                    stage01StartingWorkerDurationMs: 200,
+                    stage04AcquiringTokenDurationMs: 800,
+                    lastStageDurationMs: 800,
+                    duration: 1,
+                },
+            });
+        });
+
+        it('logs one successful startup summary, ignoring stale progress', async () => {
+            const { manager, initPromise, requestId, worker } = startWorker();
+            worker._emit('message', { type: 'initProgress', requestId, stage: 'acquiringToken' });
+            jest.advanceTimersByTime(150);
+            worker._emit('message', { type: 'initProgress', requestId, stage: 'authenticating' });
+            expect(trace).not.toHaveBeenCalled();
+            worker._emit('message', { type: 'initProgress', requestId: 'stale-request', stage: 'loadingDriver' });
+            jest.advanceTimersByTime(50);
+            worker._emit('message', { type: 'initResult', requestId, success: true });
+            await initPromise;
+            expect(trace).toHaveBeenCalledWith(
+                `[WorkerSessionManager] startup=${requestId} succeeded surface=shell auth=MicrosoftEntraID lastStage=stage05Authenticating elapsedMs=200 timeoutMs=1000 stageDurationsMs={"stage01StartingWorker":0,"stage04AcquiringToken":150,"stage05Authenticating":50} costTimingsMs={}`,
+            );
+            expect(trace).toHaveBeenCalledTimes(1);
+            expect(ext.outputChannel.error).not.toHaveBeenCalled();
+
+            expect(startupEvent().telemetry.properties).toMatchObject({
+                startupOutcome: 'succeeded',
+                result: 'Succeeded',
+                lastStage: 'stage05Authenticating',
+            });
+            expect(startupEvent().telemetry.measurements).toMatchObject({
+                stage04AcquiringTokenDurationMs: 150,
+                stage05AuthenticatingDurationMs: 50,
+                lastStageDurationMs: 50,
+            });
+            expect(startupEvent().telemetry.measurements.stage02LoadingDriverDurationMs).toBeUndefined();
+
+            trace.mockClear();
+            worker._emit('message', { type: 'initProgress', requestId, stage: 'acquiringToken' });
+            expect(trace).not.toHaveBeenCalled();
+            manager.dispose();
+        });
+
+        it('logs the failed stage at error level without changing or logging the authentication error', async () => {
+            const { initPromise, requestId, worker } = startWorker();
+            worker._emit('message', { type: 'initProgress', requestId, stage: 'acquiringToken' });
+            worker._emit('message', { type: 'initResult', requestId, success: false, error: 'private-error' });
+
+            await expect(initPromise).rejects.toThrow('private-error');
+            expect(ext.outputChannel.error).toHaveBeenCalledWith(
+                `[WorkerSessionManager] startup=${requestId} failed surface=shell auth=MicrosoftEntraID lastStage=stage04AcquiringToken elapsedMs=0 timeoutMs=1000 stageDurationsMs={"stage01StartingWorker":0,"stage04AcquiringToken":0} costTimingsMs={}`,
+            );
+            expect(trace.mock.calls.map((call) => String(call[0])).join('\n')).not.toMatch(/private-/);
+            expect(jest.mocked(ext.outputChannel.error).mock.calls.flat().join('\n')).not.toMatch(/private-/);
+            const event = startupEvent();
+            expect(event.telemetry.properties).toMatchObject({ startupOutcome: 'failed', result: 'Failed' });
+            expect(event.error).toMatchObject({ message: 'Worker startup failed', stack: undefined });
+            expect(JSON.stringify(event)).not.toMatch(/private-/);
+        });
+
+        it('logs an unexpected startup exit at error level', async () => {
+            const { initPromise, requestId, worker } = startWorker();
+            jest.advanceTimersByTime(100);
+            worker._emit('exit', 1);
+
+            await expect(initPromise).rejects.toThrow('Worker exited unexpectedly');
+            expect(ext.outputChannel.error).toHaveBeenCalledWith(
+                `[WorkerSessionManager] startup=${requestId} exited surface=shell auth=MicrosoftEntraID lastStage=stage01StartingWorker elapsedMs=100 timeoutMs=1000 stageDurationsMs={"stage01StartingWorker":100} costTimingsMs={}`,
+            );
+            expect(startupEvent().telemetry.properties).toMatchObject({ startupOutcome: 'exited', result: 'Failed' });
+        });
+
+        it('keeps intentional startup cancellation at trace level', async () => {
+            const { manager, initPromise, requestId } = startWorker();
+            manager.dispose();
+
+            await expect(initPromise).rejects.toThrow('Worker terminated');
+            expect(trace).toHaveBeenCalledWith(
+                `[WorkerSessionManager] startup=${requestId} terminated surface=shell auth=MicrosoftEntraID lastStage=stage01StartingWorker elapsedMs=0 timeoutMs=1000 stageDurationsMs={"stage01StartingWorker":0} costTimingsMs={}`,
+            );
+            expect(ext.outputChannel.error).not.toHaveBeenCalled();
+            expect(startupEvent().telemetry.properties).toMatchObject({
+                startupOutcome: 'canceled',
+                result: 'Canceled',
+            });
+        });
+
+        it('accumulates repeated stages and keeps the last visit duration separately', async () => {
+            const { initPromise, requestId, worker } = startWorker();
+            jest.advanceTimersByTime(100);
+            worker._emit('message', { type: 'initProgress', requestId, stage: 'acquiringToken' });
+            jest.advanceTimersByTime(200);
+            worker._emit('message', { type: 'initProgress', requestId, stage: 'authenticating' });
+            jest.advanceTimersByTime(100);
+            worker._emit('message', { type: 'initProgress', requestId, stage: 'acquiringToken' });
+            jest.advanceTimersByTime(600);
+
+            await expect(initPromise).rejects.toThrow('Waiting for authentication token (0.6 seconds in this stage)');
+            expect(startupEvent().telemetry.measurements).toMatchObject({
+                stage01StartingWorkerDurationMs: 100,
+                stage04AcquiringTokenDurationMs: 800,
+                stage05AuthenticatingDurationMs: 100,
+                lastStageDurationMs: 600,
+            });
+            expect(ext.outputChannel.error).toHaveBeenCalledWith(
+                expect.stringContaining(
+                    'stageDurationsMs={"stage01StartingWorker":100,"stage04AcquiringToken":800,"stage05Authenticating":100}',
+                ),
+            );
+        });
+
+        it('keeps all reported stage names in execution order when sorted', async () => {
+            const { manager, initPromise, requestId, worker } = startWorker();
+            for (const stage of [
+                'loadingDriver',
+                'connecting',
+                'acquiringToken',
+                'authenticating',
+                'initializingRuntime',
+            ]) {
+                jest.advanceTimersByTime(10);
+                worker._emit('message', { type: 'initProgress', requestId, stage });
+            }
+            worker._emit('message', { type: 'initResult', requestId, success: true });
+            await initPromise;
+
+            expect(
+                Object.keys(startupEvent().telemetry.measurements)
+                    .filter((name) => name.startsWith('stage'))
+                    .sort(),
+            ).toEqual([
+                'stage01StartingWorkerDurationMs',
+                'stage02LoadingDriverDurationMs',
+                'stage03ConnectingDurationMs',
+                'stage04AcquiringTokenDurationMs',
+                'stage05AuthenticatingDurationMs',
+                'stage06InitializingRuntimeDurationMs',
+            ]);
+            manager.dispose();
+        });
+
+        it('bundles provider, relay, and database cost into the same event and summary', async () => {
+            const { manager, initPromise, requestId, worker } = startWorker();
+            const timing = (activity: 'databaseConnect' | 'tokenWait', activityId: string, started: boolean): void => {
+                worker._emit('message', { type: 'initTiming', requestId, activity, activityId, started });
+            };
+            callbacks.onTokenRequest = jest.fn(async (message, postResponse, timings): Promise<void> => {
+                const stop = timings?.startTokenAcquire();
+                jest.advanceTimersByTime(20);
+                stop?.();
+                postResponse({ type: 'tokenResponse', requestId: message.requestId, accessToken: 'private-token' });
+            });
+            timing('databaseConnect', requestId, true);
+            jest.advanceTimersByTime(10);
+            timing('tokenWait', 'token-request', true);
+            timing('tokenWait', 'token-request', true);
+            jest.advanceTimersByTime(5);
+            worker._emit('message', { type: 'tokenRequest', requestId: 'token-request', scopes: ['private-scope'] });
+            jest.advanceTimersByTime(5);
+            timing('tokenWait', 'token-request', false);
+            jest.advanceTimersByTime(10);
+            timing('databaseConnect', requestId, false);
+            worker._emit('message', { type: 'initResult', requestId, success: true });
+            await initPromise;
+
+            expect(startupEvent().telemetry.measurements).toMatchObject({
+                tokenAcquireDurationMs: 20,
+                databaseConnectDurationMs: 20,
+                tokenRelayDurationMs: 10,
+            });
+            expect(trace).toHaveBeenCalledTimes(1);
+            expect(trace).toHaveBeenCalledWith(
+                expect.stringContaining(
+                    'costTimingsMs={"databaseConnectDurationMs":20,"tokenRelayDurationMs":10,"tokenAcquireDurationMs":20}',
+                ),
+            );
+            expect(JSON.stringify(startupEvent())).not.toContain('private-');
+            manager.dispose();
+        });
+
+        it('freezes partial worker timings on timeout and ignores late provider completion', async () => {
+            let finishProvider: (() => void) | undefined;
+            callbacks.onTokenRequest = jest.fn((message, postResponse, timings): Promise<void> => {
+                const stop = timings?.startTokenAcquire();
+                return new Promise<void>((resolve) => {
+                    finishProvider = (): void => {
+                        stop?.();
+                        postResponse({
+                            type: 'tokenResponse',
+                            requestId: message.requestId,
+                            accessToken: 'private-token',
+                        });
+                        resolve();
+                    };
+                });
+            });
+            const { initPromise, requestId, worker } = startWorker();
+            worker._emit('message', {
+                type: 'initTiming',
+                requestId,
+                activity: 'databaseConnect',
+                activityId: requestId,
+                started: true,
+            });
+            jest.advanceTimersByTime(100);
+            worker._emit('message', {
+                type: 'initTiming',
+                requestId,
+                activity: 'tokenWait',
+                activityId: 'token-request',
+                started: true,
+            });
+            jest.advanceTimersByTime(50);
+            worker._emit('message', { type: 'tokenRequest', requestId: 'token-request', scopes: ['private-scope'] });
+            jest.advanceTimersByTime(850);
+            await expect(initPromise).rejects.toThrow('Operation timed out');
+
+            const event = startupEvent();
+            expect(event.telemetry.measurements).toMatchObject({
+                databaseConnectDurationMs: 100,
+                tokenRelayDurationMs: 50,
+                tokenAcquireDurationMs: 850,
+            });
+            const snapshot = JSON.stringify(event);
+            jest.advanceTimersByTime(1000);
+            finishProvider?.();
+            worker._emit('message', {
+                type: 'initTiming',
+                requestId,
+                activity: 'tokenWait',
+                activityId: 'token-request',
+                started: false,
+            });
+            expect(JSON.stringify(startupEvent())).toBe(snapshot);
+            expect(ext.outputChannel.error).toHaveBeenCalledTimes(1);
+        });
+
+        it('records database-only worker timing without token measurements', async () => {
+            const { manager, initPromise, requestId, worker } = startWorker(false);
+            worker._emit('message', {
+                type: 'initTiming',
+                requestId: 'stale',
+                activity: 'tokenWait',
+                activityId: 'stale-token',
+                started: true,
+            });
+            worker._emit('message', {
+                type: 'initTiming',
+                requestId,
+                activity: 'databaseConnect',
+                activityId: requestId,
+                started: true,
+            });
+            jest.advanceTimersByTime(40);
+            worker._emit('message', {
+                type: 'initTiming',
+                requestId,
+                activity: 'databaseConnect',
+                activityId: requestId,
+                started: false,
+            });
+            worker._emit('message', { type: 'initResult', requestId, success: true });
+            await initPromise;
+
+            expect(startupEvent().telemetry.measurements.databaseConnectDurationMs).toBe(40);
+            expect(startupEvent().telemetry.measurements.tokenAcquireDurationMs).toBeUndefined();
+            expect(startupEvent().telemetry.measurements.tokenRelayDurationMs).toBeUndefined();
+            manager.dispose();
+        });
+
+        it.each([
+            [true, { shellSessionId: 'shell-session', connectionCorrelationId: 'parent-connection' }, 'shell'],
+            [false, { sessionId: 'playground-session' }, 'playground'],
+        ] as const)('correlates startup for persistent=%s', async (persistent, telemetryContext, surface) => {
+            const { manager, initPromise, requestId, worker } = startWorker(persistent, telemetryContext);
+            worker._emit('message', { type: 'initResult', requestId, success: true });
+            await initPromise;
+
+            expect(startupEvent().telemetry.properties).toMatchObject({ ...telemetryContext, surface });
+            expect(startupEvent().telemetry.suppressIfSuccessful).not.toBe(true);
+            expect(startupEvent().telemetry.suppressAll).not.toBe(true);
+            manager.dispose();
+        });
+
+        it('reports worker construction failures while preserving the original error', async () => {
+            const originalError = new Error('private-construction-error');
+            jest.mocked(Worker).mockImplementationOnce(() => {
+                throw originalError;
+            });
+            const manager = new WorkerSessionManager(callbacks);
+
+            await expect(
+                manager.ensureWorker('private-cluster', {
+                    type: 'init',
+                    requestId: '',
+                    connectionString: 'mongodb://private-host:27017',
+                    clientOptions: {},
+                    databaseName: 'private-database',
+                    authMechanism: 'NativeAuth',
+                }),
+            ).rejects.toBe(originalError);
+            expect(manager.workerState).toBe('idle');
+            expect(startupEvent().telemetry.properties).toMatchObject({
+                lastStage: 'stage01StartingWorker',
+                startupOutcome: 'failed',
+                result: 'Failed',
+                authMethod: 'NativeAuth',
+            });
+            expect(JSON.stringify(startupEvent())).not.toMatch(/private-/);
+        });
+
+        it('emits another event for a retry, but none for a connected worker reuse', async () => {
+            const first = startWorker();
+            first.worker._emit('message', {
+                type: 'initResult',
+                requestId: first.requestId,
+                success: false,
+                error: 'failure',
+            });
+            await expect(first.initPromise).rejects.toThrow('failure');
+
+            const retry = startWorker(true, {}, first.manager);
+            retry.worker._emit('message', { type: 'initResult', requestId: retry.requestId, success: true });
+            await retry.initPromise;
+            expect(retry.requestId).not.toBe(first.requestId);
+            await startWorker(true, {}, retry.manager).initPromise;
+
+            const events = mockTelemetryEvents.filter((event) => event.eventName === 'worker.startup');
+            expect(events).toHaveLength(2);
+            expect(events.map((event) => event.telemetry.properties.startupOutcome)).toEqual(['failed', 'succeeded']);
+            retry.manager.dispose();
         });
     });
 
