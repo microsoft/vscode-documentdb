@@ -16,6 +16,7 @@ import { meterSilentCatch } from '../../utils/accumulatingTelemetry';
 import { getBatchSizeSetting, getConnectionTimeoutMs } from '../../utils/workspacUtils';
 import { AuthMethodId } from '../auth/AuthMethod';
 import { CredentialCache } from '../CredentialCache';
+import { withTokenAcquisitionTiming, type ConnectionStartupTimings } from '../utils/ConnectionStartupTimings';
 import { resolveAllowInvalidCertificates } from '../utils/tlsException';
 import { type ExecutionResult, type PlaygroundConnection } from './types';
 import { WorkerSessionManager } from './WorkerSessionManager';
@@ -146,7 +147,8 @@ export class PlaygroundEvaluator implements vscode.Disposable {
             onTokenRequest: (
                 msg: Extract<WorkerToMainMessage, { type: 'tokenRequest' }>,
                 postResponse: (response: MainToWorkerMessage) => void,
-            ) => this.handleTokenRequest(msg, postResponse),
+                timings?: ConnectionStartupTimings,
+            ) => this.handleTokenRequest(msg, postResponse, timings),
             onWorkerExit: (exitCode: number) => {
                 ext.outputChannel.debug(`${logPrefix} Worker exited with code ${String(exitCode)}`);
                 this.resetSession();
@@ -192,7 +194,9 @@ export class PlaygroundEvaluator implements vscode.Disposable {
             context.errorHandling.rethrow = true;
             context.telemetry.properties.authMethod = initMsg.authMechanism;
             context.telemetry.properties.needsSpawn = needsSpawn ? 'true' : 'false';
-            await this._workerManager.ensureWorker(connection.clusterId, initMsg, getConnectionTimeoutMs());
+            await this._workerManager.ensureWorker(connection.clusterId, initMsg, getConnectionTimeoutMs(), {
+                sessionId: this._sessionId,
+            });
         });
         this._lastInitDurationMs = needsSpawn ? Date.now() - initStartTime : 0;
 
@@ -344,6 +348,7 @@ export class PlaygroundEvaluator implements vscode.Disposable {
     private async handleTokenRequest(
         msg: Extract<WorkerToMainMessage, { type: 'tokenRequest' }>,
         postResponse: (response: MainToWorkerMessage) => void,
+        timings?: ConnectionStartupTimings,
     ): Promise<void> {
         try {
             let accessToken: string;
@@ -352,11 +357,13 @@ export class PlaygroundEvaluator implements vscode.Disposable {
                 const { getManagedIdentityAccessToken } = await import('../auth/managedIdentityTokenProvider');
                 this._sessionId ??= randomUUID();
                 accessToken = (
-                    await getManagedIdentityAccessToken(
-                        msg.scopes as string[],
-                        msg.clientId,
-                        msg.tenantId,
-                        this._sessionId,
+                    await withTokenAcquisitionTiming(timings, () =>
+                        getManagedIdentityAccessToken(
+                            msg.scopes as string[],
+                            msg.clientId,
+                            msg.tenantId,
+                            this._sessionId,
+                        ),
                     )
                 ).accessToken;
             } else {
@@ -364,9 +371,9 @@ export class PlaygroundEvaluator implements vscode.Disposable {
                     // eslint-disable-next-line import/no-internal-modules
                     '@microsoft/vscode-azext-azureauth/out/src/getSessionFromVSCode'
                 );
-                const session = await getSessionFromVSCode(msg.scopes as string[], msg.tenantId, {
-                    createIfNone: true,
-                });
+                const session = await withTokenAcquisitionTiming(timings, () =>
+                    getSessionFromVSCode(msg.scopes as string[], msg.tenantId, { createIfNone: true }),
+                );
 
                 if (!session) {
                     throw new Error(l10n.t('Failed to obtain Entra ID token.'));

@@ -6,15 +6,22 @@
 import { type AuthenticationSession } from 'vscode';
 import { AuthMethodId } from '../auth/AuthMethod';
 import { CredentialCache } from '../CredentialCache';
+import { PlaygroundEvaluator } from '../playground/PlaygroundEvaluator';
 import { type WorkerSessionCallbacks } from '../playground/WorkerSessionManager';
 import { type MainToWorkerMessage, type WorkerToMainMessage } from '../playground/workerTypes';
+import { ConnectionStartupTimings } from '../utils/ConnectionStartupTimings';
 import { ShellSessionManager } from './ShellSessionManager';
 
 const mockGetSessionFromVSCode = jest.fn();
+const mockGetManagedIdentityAccessToken = jest.fn();
 let workerCallbacks: WorkerSessionCallbacks;
 
 jest.mock('@microsoft/vscode-azext-azureauth/out/src/getSessionFromVSCode', () => ({
     getSessionFromVSCode: (...args: unknown[]) => mockGetSessionFromVSCode(...args),
+}));
+
+jest.mock('../auth/managedIdentityTokenProvider', () => ({
+    getManagedIdentityAccessToken: (...args: unknown[]) => mockGetManagedIdentityAccessToken(...args),
 }));
 
 jest.mock('../playground/WorkerSessionManager', () => ({
@@ -108,5 +115,41 @@ describe('ShellSessionManager', () => {
 
         expect(metadata.host).toBe('db-a.example.com:27017');
         expect(metadata.additionalHostCount).toBe(3);
+    });
+
+    it.each([
+        ['shell', 'vscode'],
+        ['shell', 'managedIdentity'],
+        ['playground', 'vscode'],
+        ['playground', 'managedIdentity'],
+    ] as const)('measures provider time for %s using %s', async (surface, source) => {
+        let now = 0;
+        const timings = new ConnectionStartupTimings(() => now);
+        const manager = surface === 'shell'
+            ? new ShellSessionManager({ clusterId, clusterDisplayName: 'Test Cluster', databaseName: 'test' })
+            : new PlaygroundEvaluator();
+        const provider = source === 'vscode' ? mockGetSessionFromVSCode : mockGetManagedIdentityAccessToken;
+        provider.mockImplementationOnce(async () => {
+            now = 40;
+            return { accessToken: 'private-token', account: { label: 'private-account' } };
+        });
+        const stopDatabase = timings.startDatabaseConnect();
+        now = 10;
+        const stopWait = timings.startTokenWait();
+        now = 15;
+        const postResponse = jest.fn();
+        await workerCallbacks.onTokenRequest?.(
+            { type: 'tokenRequest', requestId: 'token-request', scopes: ['scope'], source },
+            postResponse,
+            timings,
+        );
+        now = 45;
+        stopWait();
+        now = 60;
+        stopDatabase();
+
+        expect(postResponse).toHaveBeenCalledWith({ type: 'tokenResponse', requestId: 'token-request', accessToken: 'private-token' });
+        expect(timings.finish()).toEqual({ databaseConnectDurationMs: 25, tokenAcquireDurationMs: 25, tokenRelayDurationMs: 10 });
+        manager.dispose();
     });
 });

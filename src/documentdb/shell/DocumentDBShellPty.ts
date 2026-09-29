@@ -164,7 +164,11 @@ export class DocumentDBShellPty implements vscode.Pseudoterminal {
             },
         };
 
-        this._sessionManager = new ShellSessionManager(options.connectionInfo, sessionCallbacks);
+        this._sessionManager = new ShellSessionManager(options.connectionInfo, sessionCallbacks, {
+            shellSessionId: this._shellSessionId,
+            connectionCorrelationId: ClustersClient.getExistingClient(options.connectionInfo.clusterId)
+                ?.connectionCorrelationId,
+        });
 
         this._outputFormatter = new ShellOutputFormatter();
 

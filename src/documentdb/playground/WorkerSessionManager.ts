@@ -3,7 +3,11 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { callWithTelemetryAndErrorHandling } from '@microsoft/vscode-azext-utils';
+import {
+    callWithTelemetryAndErrorHandling,
+    UserCancelledError,
+    type ITelemetryContext,
+} from '@microsoft/vscode-azext-utils';
 import * as l10n from '@vscode/l10n';
 import { randomUUID } from 'crypto';
 import * as path from 'path';
@@ -12,6 +16,7 @@ import { Worker } from 'worker_threads';
 import { ext } from '../../extensionVariables';
 import { settingsKeys } from '../../settingsKeys';
 import { SettingsHintError } from '../shell/SettingsHintError';
+import { ConnectionStartupTimings } from '../utils/ConnectionStartupTimings';
 import {
     type MainToWorkerMessage,
     type SerializableExecutionResult,
@@ -22,11 +27,35 @@ import {
 /** Worker lifecycle states */
 export type WorkerState = 'idle' | 'spawning' | 'ready' | 'executing';
 
+type WorkerStartupOutcome = 'succeeded' | 'failed' | 'timedOut' | 'terminated' | 'exited' | 'canceled';
+
+const workerStartupStageNames = {
+    startingWorker: 'stage01StartingWorker',
+    loadingDriver: 'stage02LoadingDriver',
+    connecting: 'stage03Connecting',
+    acquiringToken: 'stage04AcquiringToken',
+    authenticating: 'stage05Authenticating',
+    initializingRuntime: 'stage06InitializingRuntime',
+} as const satisfies Record<WorkerStartupStage, string>;
+
+type WorkerStartupStageName = (typeof workerStartupStageNames)[WorkerStartupStage];
+
+export interface WorkerStartupTelemetryContext {
+    readonly shellSessionId?: string;
+    readonly sessionId?: string;
+    readonly connectionCorrelationId?: string;
+}
+
 interface WorkerStartup {
     readonly requestId: string;
     readonly startedAt: number;
+    readonly telemetry: ITelemetryContext;
+    readonly costTimings: ConnectionStartupTimings;
+    readonly timingStops: Map<string, () => void>;
+    readonly stageDurationsMs: Partial<Record<WorkerStartupStageName, number>>;
     stage: WorkerStartupStage;
     stageStartedAt: number;
+    outcome?: WorkerStartupOutcome;
 }
 
 /**
@@ -47,6 +76,7 @@ export interface WorkerSessionCallbacks {
     onTokenRequest?: (
         msg: Extract<WorkerToMainMessage, { type: 'tokenRequest' }>,
         postResponse: (response: MainToWorkerMessage) => void,
+        timings?: ConnectionStartupTimings,
     ) => Promise<void>;
     /** Called when the worker exits (crash or termination). */
     onWorkerExit?: (exitCode: number) => void;
@@ -127,6 +157,7 @@ export class WorkerSessionManager implements vscode.Disposable {
         clusterId: string,
         initMsg: MainToWorkerMessage & { type: 'init' },
         initTimeoutMs: number = 30000,
+        telemetryContext: WorkerStartupTelemetryContext = {},
     ): Promise<void> {
         // If worker is alive but connected to a different cluster, shut it down
         if (this._worker && this._workerClusterId !== clusterId) {
@@ -138,8 +169,7 @@ export class WorkerSessionManager implements vscode.Disposable {
 
         // If no worker exists, spawn one
         if (!this._worker || this._workerState === 'idle') {
-            ext.outputChannel?.trace(`[WorkerSessionManager] Spawning worker for cluster=${clusterId}`);
-            await this.spawnWorker(clusterId, initMsg, initTimeoutMs);
+            await this.spawnWorker(clusterId, initMsg, initTimeoutMs, telemetryContext);
         }
     }
 
@@ -200,6 +230,64 @@ export class WorkerSessionManager implements vscode.Disposable {
         clusterId: string,
         initMsg: MainToWorkerMessage & { type: 'init' },
         initTimeoutMs: number,
+        telemetryContext: WorkerStartupTelemetryContext,
+    ): Promise<void> {
+        let originalFailure: { error: unknown } | undefined;
+
+        try {
+            await callWithTelemetryAndErrorHandling('worker.startup', async (context) => {
+                context.errorHandling.suppressDisplay = true;
+                context.errorHandling.rethrow = true;
+                context.telemetry.maskEntireErrorMessage = true;
+                const startedAt = Date.now();
+                const startup: WorkerStartup = {
+                    requestId: randomUUID(),
+                    startedAt,
+                    stage: 'startingWorker',
+                    stageStartedAt: startedAt,
+                    telemetry: context.telemetry,
+                    costTimings: new ConnectionStartupTimings(),
+                    timingStops: new Map(),
+                    stageDurationsMs: {},
+                };
+                this._startup = startup;
+                context.telemetry.properties.startupCorrelationId = startup.requestId;
+                context.telemetry.properties.surface = initMsg.persistent ? 'shell' : 'playground';
+                context.telemetry.properties.authMethod = initMsg.authMechanism;
+                context.telemetry.measurements.timeoutMs = initTimeoutMs;
+                for (const key of ['shellSessionId', 'sessionId', 'connectionCorrelationId'] as const) {
+                    if (telemetryContext[key]) {
+                        context.telemetry.properties[key] = telemetryContext[key];
+                    }
+                }
+
+                try {
+                    await this.initializeWorker(clusterId, initMsg, initTimeoutMs);
+                } catch (error) {
+                    this.finishStartup(error instanceof UserCancelledError ? 'canceled' : 'failed');
+                    this.terminateWorker('intentional');
+                    originalFailure = { error };
+                    if (startup.outcome === 'terminated' || startup.outcome === 'canceled') {
+                        throw new UserCancelledError('workerStartup');
+                    }
+                    const telemetryError = new Error('Worker startup failed');
+                    telemetryError.stack = undefined;
+                    throw telemetryError;
+                }
+            });
+        } catch (error) {
+            throw originalFailure ? originalFailure.error : error;
+        }
+
+        if (originalFailure) {
+            throw originalFailure.error;
+        }
+    }
+
+    private async initializeWorker(
+        clusterId: string,
+        initMsg: MainToWorkerMessage & { type: 'init' },
+        initTimeoutMs: number,
     ): Promise<void> {
         this._workerState = 'spawning';
         this._spawnCount++;
@@ -236,35 +324,37 @@ export class WorkerSessionManager implements vscode.Disposable {
             this._pendingRequests.clear();
         });
 
-        // Send init and wait for acknowledgment.
-        // If init fails (bad credentials, unreachable host, etc.), tear down
-        // the worker so the next call can respawn cleanly.
-        try {
-            await this.sendRequest<void>(initMsg, initTimeoutMs, settingsKeys.connectionTimeout);
-            this.finishStartup('succeeded');
-            this._workerState = 'ready';
-        } catch (error) {
-            this.finishStartup('failed');
-            this.terminateWorker('intentional');
-            throw error;
-        }
+        await this.sendRequest<void>(initMsg, initTimeoutMs, settingsKeys.connectionTimeout);
+        this.finishStartup('succeeded');
+        this._workerState = 'ready';
     }
 
-    private logStartup(event: string, level: 'trace' | 'error' = 'trace'): void {
-        if (!this._startup) {
+    private recordStartupStageDuration(startup: WorkerStartup): number {
+        const stageDurationMs = Date.now() - startup.stageStartedAt;
+        const stageName = workerStartupStageNames[startup.stage];
+        const accumulatedDurationMs = (startup.stageDurationsMs[stageName] ?? 0) + stageDurationMs;
+        startup.stageDurationsMs[stageName] = accumulatedDurationMs;
+        startup.telemetry.measurements[`${stageName}DurationMs`] = accumulatedDurationMs;
+        return stageDurationMs;
+    }
+
+    private finishStartup(outcome: WorkerStartupOutcome): void {
+        const startup = this._startup;
+        if (!startup) {
             return;
         }
 
-        const { requestId, stage, startedAt, stageStartedAt } = this._startup;
-        const now = Date.now();
-        ext.outputChannel?.[level](
-            `[WorkerSessionManager] startup=${requestId} ${event} stage=${stage} elapsedMs=${String(now - startedAt)} stageElapsedMs=${String(now - stageStartedAt)}`,
-        );
-    }
-
-    private finishStartup(outcome: 'succeeded' | 'failed' | 'timedOut' | 'terminated' | 'exited'): void {
+        startup.outcome = outcome;
+        startup.telemetry.properties.startupOutcome = outcome === 'terminated' ? 'canceled' : outcome;
+        startup.telemetry.properties.lastStage = workerStartupStageNames[startup.stage];
+        startup.telemetry.measurements.lastStageDurationMs = this.recordStartupStageDuration(startup);
+        const costTimingsMs = startup.costTimings.finish();
+        Object.assign(startup.telemetry.measurements, costTimingsMs);
         const level = outcome === 'failed' || outcome === 'timedOut' || outcome === 'exited' ? 'error' : 'trace';
-        this.logStartup(outcome, level);
+        const { properties, measurements } = startup.telemetry;
+        ext.outputChannel?.[level](
+            `[WorkerSessionManager] startup=${startup.requestId} ${outcome} surface=${properties.surface} auth=${properties.authMethod} lastStage=${properties.lastStage} elapsedMs=${String(Date.now() - startup.startedAt)} timeoutMs=${String(measurements.timeoutMs)} stageDurationsMs=${JSON.stringify(startup.stageDurationsMs)} costTimingsMs=${JSON.stringify(costTimingsMs)}`,
+        );
         this._startup = undefined;
     }
 
@@ -305,20 +395,8 @@ export class WorkerSessionManager implements vscode.Disposable {
             return Promise.reject(new Error(l10n.t('Worker is not running')));
         }
 
-        const requestId = randomUUID();
+        const requestId = msg.type === 'init' ? (this._startup?.requestId ?? randomUUID()) : randomUUID();
         const msgWithId = { ...msg, requestId };
-
-        if (msg.type === 'init') {
-            this._startup = {
-                requestId,
-                startedAt: this._lastSpawnTime,
-                stage: 'startingWorker',
-                stageStartedAt: this._lastSpawnTime,
-            };
-            this.logStartup(
-                `started surface=${msg.persistent ? 'shell' : 'playground'} auth=${msg.authMechanism} timeoutMs=${String(timeoutMs)}`,
-            );
-        }
 
         return new Promise<T>((resolve, reject) => {
             this._pendingRequests.set(requestId, {
@@ -385,12 +463,30 @@ export class WorkerSessionManager implements vscode.Disposable {
      */
     private handleWorkerMessage(msg: WorkerToMainMessage): void {
         switch (msg.type) {
+            case 'initTiming': {
+                const startup = this._startup;
+                if (startup?.requestId === msg.requestId) {
+                    const key = `${msg.activity}:${msg.activityId}`;
+                    if (msg.started && !startup.timingStops.has(key)) {
+                        startup.timingStops.set(
+                            key,
+                            msg.activity === 'databaseConnect'
+                                ? startup.costTimings.startDatabaseConnect()
+                                : startup.costTimings.startTokenWait(),
+                        );
+                    } else if (!msg.started) {
+                        startup.timingStops.get(key)?.();
+                        startup.timingStops.delete(key);
+                    }
+                }
+                break;
+            }
+
             case 'initProgress': {
                 if (this._startup?.requestId === msg.requestId) {
-                    this.logStartup(`stageCompleted nextStage=${msg.stage}`);
+                    this.recordStartupStageDuration(this._startup);
                     this._startup.stage = msg.stage;
                     this._startup.stageStartedAt = Date.now();
-                    this.logStartup('stageStarted');
                 }
                 break;
             }
@@ -444,9 +540,16 @@ export class WorkerSessionManager implements vscode.Disposable {
 
             case 'tokenRequest': {
                 if (this._callbacks.onTokenRequest) {
-                    void this._callbacks.onTokenRequest(msg, (response) => {
-                        this._worker?.postMessage(response);
-                    });
+                    const worker = this._worker;
+                    void this._callbacks.onTokenRequest(
+                        msg,
+                        (response) => {
+                            if (this._worker === worker) {
+                                worker?.postMessage(response);
+                            }
+                        },
+                        this._startup?.costTimings,
+                    );
                 }
                 break;
             }

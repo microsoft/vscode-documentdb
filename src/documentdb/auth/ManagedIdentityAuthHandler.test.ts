@@ -5,6 +5,7 @@
 
 import { type OIDCCallbackParams, type OIDCResponse } from 'mongodb';
 import { type CachedClusterCredentials } from '../CredentialCache';
+import { ConnectionStartupTimings } from '../utils/ConnectionStartupTimings';
 import { AuthMethodId } from './AuthMethod';
 import { ManagedIdentityAuthHandler } from './ManagedIdentityAuthHandler';
 import { expiresInSecondsFromTimestamp } from './tokenExpiry';
@@ -167,5 +168,23 @@ describe('ManagedIdentityAuthHandler', () => {
         const { options } = await handler.configureAuth();
 
         expect(options.tlsAllowInvalidCertificates).toBe(true);
+    });
+
+    it('excludes managed-identity token acquisition from the database duration', async () => {
+        let now = 0;
+        const timings = new ConnectionStartupTimings(() => now);
+        const handler = new ManagedIdentityAuthHandler(buildCredentials());
+        const { options } = await handler.configureAuth(timings);
+        getManagedIdentityAccessToken.mockImplementationOnce(async () => {
+            now = 35;
+            return { accessToken: 'a-token', expiresOnTimestamp: Date.now() + 3600000 };
+        });
+        const stopDatabase = timings.startDatabaseConnect();
+        now = 10;
+        await invokeOidcCallback(options);
+        now = 50;
+        stopDatabase();
+
+        expect(timings.finish()).toEqual({ databaseConnectDurationMs: 25, tokenAcquireDurationMs: 25 });
     });
 });
