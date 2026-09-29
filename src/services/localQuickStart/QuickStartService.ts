@@ -1207,7 +1207,8 @@ export class QuickStartServiceImpl {
         // Emitted only now — after `finally` cleared `provisioning` — so a "Wait longer" / "Start
         // over" / "Retry" click triggered by this event never races the still-running guard.
         if (terminalEvent) {
-            yield terminalEvent;
+            // The Error status went out before the rollback, so its reuse flag may be stale.
+            yield { ...terminalEvent, canReuseExistingData: await this.canReuseExistingData(alias) };
         }
     }
 

@@ -495,6 +495,8 @@ describe('QuickStartService — WP-3 provisioning durability and port model', ()
         expect(events.at(-1)?.message).toEqual({ key: 'portInUse', port: QUICK_START_PORT });
         // The daemon's own wording never rides along: a keyed message has nowhere to put it.
         expect(events.at(-1)?.message?.detail).toBeUndefined();
+        // Read after the rollback: nothing was created, so Configure must not offer to keep data.
+        expect(events.at(-1)?.canReuseExistingData).toBe(false);
     });
 
     // #948 ERR-1: Docker's stderr used to be dropped, so every failure read "Process exited with code N".

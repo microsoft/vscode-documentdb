@@ -214,6 +214,8 @@ export interface StageEvent {
     readonly timedOut?: boolean;
     /** Typed recovery result when Docker became unavailable during pull or run. */
     readonly dockerReadiness?: DockerReadiness;
+    /** Set on a setup's terminal event: whether data can be reused once the failed run rolled back. */
+    readonly canReuseExistingData?: boolean;
 }
 
 /** Metadata describing the currently-managed instance. */
