@@ -168,8 +168,7 @@ export const ClusterDashboard = (): JSX.Element => {
 
                     // The count is the payload: a reload that returns the same rows is
                     // otherwise indistinguishable from one that never happened.
-                    if (stats.databases.length === 0 && stats.errors.length > 0) {
-                        // The collector reports a failed listDatabases as an empty list with errors.
+                    if (stats.databases === null) {
                         if (source !== 'background') {
                             announce(l10n.t('Failed to read storage statistics.'), 'assertive');
                         }
@@ -447,7 +446,7 @@ export const ClusterDashboard = (): JSX.Element => {
                 if (namespace.collectionName === undefined) {
                     return (
                         namespace.phase !== 'settling' &&
-                        !storageStats?.databases.some((database) => database.name === namespace.databaseName)
+                        !storageStats?.databases?.some((database) => database.name === namespace.databaseName)
                     );
                 }
 
@@ -688,7 +687,7 @@ export const ClusterDashboard = (): JSX.Element => {
                     </MessageBar>
                 )}
 
-                {storageError !== null && storageStats !== null && storageStats.databases.length > 0 && (
+                {storageError !== null && (storageStats?.databases?.length ?? 0) > 0 && (
                     <MessageBar intent="error" layout="multiline">
                         <MessageBarBody>
                             {l10n.t('Failed to read storage statistics: {0}', storageError)}

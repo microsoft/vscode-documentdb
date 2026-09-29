@@ -35,13 +35,15 @@ function renderStrip(storageStats: ClusterStorageStats): string {
 describe('StatusStrip', () => {
     it('does not report a failed database listing as an empty cluster', () => {
         const markup = renderStrip({
-            databases: [],
+            databases: null,
             totalSizeBytes: null,
             omittedDatabaseCount: 0,
             errors: ['listDatabases: connect ECONNREFUSED'],
         });
 
         expect(markup).toContain('Databases / Collections=null;');
+        expect(markup).toContain('Documents=null;');
+        expect(markup).toContain('Indexes / Size=null;');
     });
 
     it('reports an empty cluster that was read successfully', () => {
