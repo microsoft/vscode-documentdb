@@ -4,6 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { type IActionContext, type ITelemetryContext } from '@microsoft/vscode-azext-utils';
+import type * as AzExtUtils from '@microsoft/vscode-azext-utils';
 import { Worker } from 'worker_threads';
 import { ext } from '../../extensionVariables';
 import {
@@ -22,7 +23,7 @@ interface RecordedTelemetry {
 const mockTelemetryEvents: RecordedTelemetry[] = [];
 
 jest.mock('@microsoft/vscode-azext-utils', () => {
-    const actual: typeof import('@microsoft/vscode-azext-utils') = jest.requireActual('@microsoft/vscode-azext-utils');
+    const actual = jest.requireActual<typeof AzExtUtils>('@microsoft/vscode-azext-utils');
     return {
         ...actual,
         callWithTelemetryAndErrorHandling: jest.fn(

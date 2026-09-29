@@ -4,6 +4,8 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { type IActionContext, type ITelemetryContext, UserCancelledError } from '@microsoft/vscode-azext-utils';
+import type * as AzExtUtils from '@microsoft/vscode-azext-utils';
+import type * as Mongodb from 'mongodb';
 import { MongoClient } from 'mongodb';
 import { ext } from '../extensionVariables';
 import { AuthMethodId } from './auth/AuthMethod';
@@ -23,7 +25,7 @@ interface RecordedTelemetry {
 const mockTelemetryEvents: RecordedTelemetry[] = [];
 
 jest.mock('@microsoft/vscode-azext-utils', () => {
-    const actual: typeof import('@microsoft/vscode-azext-utils') = jest.requireActual('@microsoft/vscode-azext-utils');
+    const actual = jest.requireActual<typeof AzExtUtils>('@microsoft/vscode-azext-utils');
     return {
         ...actual,
         parseError: (error: unknown): { message: string } => ({
@@ -63,7 +65,7 @@ jest.mock('@microsoft/vscode-azext-utils', () => {
 });
 
 jest.mock('mongodb', () => {
-    const actual: typeof import('mongodb') = jest.requireActual('mongodb');
+    const actual = jest.requireActual<typeof Mongodb>('mongodb');
     return { ...actual, MongoClient: jest.fn() };
 });
 
