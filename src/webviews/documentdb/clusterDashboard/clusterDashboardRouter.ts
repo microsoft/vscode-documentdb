@@ -248,7 +248,7 @@ export const clusterDashboardRouter = router({
         }),
 
     /**
-     * Opens the interactive shell against this cluster.
+     * Opens the interactive shell against the selected database, or `test` at cluster level.
      *
      * Routed through the existing shell command rather than reimplemented, so the dashboard
      * inherits its terminal wiring, telemetry and connection handling unchanged.
@@ -260,7 +260,7 @@ export const clusterDashboardRouter = router({
         await vscode.commands.executeCommand(ShellCommandIds.openWithInput, {
             clusterId: myCtx.clusterId,
             clusterDisplayName: myCtx.clusterDisplayName,
-            databaseName: 'test',
+            databaseName: myCtx.selectedDatabaseName ?? 'test',
         });
     }),
 

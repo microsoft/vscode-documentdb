@@ -75,7 +75,8 @@ None yet. A user-manual page is due before this ships.
   Copy Connection String sit together on the left; Refresh, More actions and feedback sit on the
   right. Fluent overflow moves Copy, then Shell, into More actions as space contracts. Refresh
   stays visible and re-reads cluster storage and the current inventory; its label remains Refresh.
-  The inventory toolbar keeps its existing layout.
+  The inventory toolbar keeps its existing layout. Shell starts on `test` for a cluster dashboard
+  and on the selected database for a dashboard opened from a database node.
 - **Labels name content and icons communicate navigation.** Disclosures use noun labels where the
   control already communicates expansion. Commands that open another editor use action verbs and
   destination-oriented icons. Accessible labels preserve the exact row action

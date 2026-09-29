@@ -61,7 +61,10 @@ import { clusterDashboardRouter, collectRawCommandReplies, type RouterContext } 
 
 // The suite swaps `publicProcedureWithTelemetry` for a plain procedure, so the action context
 // the telemetry middleware would inject has to be supplied here instead.
-function createContext(onNamespaceBusy?: RouterContext['onNamespaceBusy']): WithTelemetry<RouterContext> {
+function createContext(
+    onNamespaceBusy?: RouterContext['onNamespaceBusy'],
+    selectedDatabaseName?: string,
+): WithTelemetry<RouterContext> {
     return {
         dbExperience: API.DocumentDB,
         webviewName: 'clusterDashboard',
@@ -70,6 +73,7 @@ function createContext(onNamespaceBusy?: RouterContext['onNamespaceBusy']): With
         viewId: 'connectionsView',
         dashboardSessionId: 'dashboard-session',
         onNamespaceBusy,
+        selectedDatabaseName,
         actionContext: {
             telemetry: { properties: {}, measurements: {} },
             errorHandling: {},
@@ -131,6 +135,18 @@ describe('clusterDashboardRouter create actions', () => {
             clusterId: 'cluster-id',
             clusterDisplayName: 'Test cluster',
             databaseName: 'test',
+        });
+    });
+
+    it('opens the shell on the selected database for a database dashboard', async () => {
+        const caller = createCallerFactory(clusterDashboardRouter)(createContext(undefined, 'catalog'));
+
+        await caller.openShell();
+
+        expect(vscode.commands.executeCommand).toHaveBeenCalledWith('vscode-documentdb.command.shell.open.withInput', {
+            clusterId: 'cluster-id',
+            clusterDisplayName: 'Test cluster',
+            databaseName: 'catalog',
         });
     });
 
