@@ -15,7 +15,12 @@ import { openLocalQuickStartWebview } from '../../webviews/documentdb/localQuick
 export async function openLocalQuickStart(_context: IActionContext): Promise<void> {
     // Never gate the webview on Docker: diagnosing a missing or stopped Docker is its whole job.
     await QuickStartService.ensureHydrated().catch(() => undefined);
-    const view = openLocalQuickStartWebview({ id: 'localQuickStart' });
+    const status = QuickStartService.getStatus();
+    const view = openLocalQuickStartWebview({
+        id: 'localQuickStart',
+        initialInstanceState: status.state,
+        initialInstanceMissing: status.missing === true,
+    });
     // Reveal in the panel's own column when it already has one (so reopening the create-or-reveal
     // singleton doesn't move a panel the user parked in another group), falling back to the active
     // column instead of the framework default (ViewColumn.One), which would yank the tab to column 1

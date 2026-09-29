@@ -6,11 +6,15 @@
 import * as vscode from 'vscode';
 import { API } from '../../../DocumentDBExperiences';
 import { ext } from '../../../extensionVariables';
+import { type InstanceState } from '../../../services/localQuickStart/quickStartTypes';
 import { type AppWebviewController, openAppWebview } from '../../_integration/openAppWebview';
 import { type RouterContext } from './localQuickStartRouter';
 
 export type LocalQuickStartConfigurationType = {
     id: string;
+    /** Instance status at open time, so the first render already knows which step and guard to show. */
+    initialInstanceState?: InstanceState;
+    initialInstanceMissing?: boolean;
 };
 
 /**

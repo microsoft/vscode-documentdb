@@ -46,6 +46,7 @@ import {
     Wizard,
     WizardStep,
 } from '@microsoft/vscode-ext-webview-fluentui/components';
+import { useConfiguration } from '@microsoft/vscode-ext-webview/react';
 import * as l10n from '@vscode/l10n';
 import { Fragment, type JSX, type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { formatQuickStartMessage } from '../../../services/localQuickStart/quickStartMessages';
@@ -100,6 +101,7 @@ import {
 } from './dockerReadinessPresentation';
 import { getExistingInstanceGuard, guardBlocksSetup } from './existingInstanceGuard';
 import './localQuickStart.scss';
+import { type LocalQuickStartConfigurationType } from './localQuickStartController';
 
 /**
  * Wizard phases. `provisioning` and `failed` are both the "Set up" step: a setup failure — Docker
@@ -792,8 +794,12 @@ function emptyStageStatus(): Record<ProvisionStage, StageStatus> {
 export const LocalQuickStart = (): JSX.Element => {
     const styles = useStyles();
     const trpcClient = useTrpcClient();
+    const configuration = useConfiguration<LocalQuickStartConfigurationType>();
 
-    const [phase, setPhase] = useState<Phase>('introduction');
+    // Credentials missing: the explanation and the only way forward are on Configure, so start there.
+    const [phase, setPhase] = useState<Phase>(() =>
+        configuration.initialInstanceState === InstanceState.CredentialsMissing ? 'configure' : 'introduction',
+    );
     /**
      * Readiness backing the `Checking Docker` stage: its detail line in both directions, and its
      * remediation when that stage failed. Loaded in the background while the user reads the
@@ -809,14 +815,14 @@ export const LocalQuickStart = (): JSX.Element => {
      * not link to it in that state — but the command palette, a stale panel and cross-window races
      * all still get here.
      */
-    const [instanceState, setInstanceState] = useState<InstanceState | undefined>(undefined);
+    const [instanceState, setInstanceState] = useState<InstanceState | undefined>(configuration.initialInstanceState);
     /**
      * True when the container was removed outside VS Code. This is NOT a separate
      * {@link InstanceState}: the service reports such an instance as `Stopped` with `missing` set,
      * so a guard that reads only the state would offer "Start" for a container that no longer
      * exists — a button that cannot do anything.
      */
-    const [instanceMissing, setInstanceMissing] = useState(false);
+    const [instanceMissing, setInstanceMissing] = useState(configuration.initialInstanceMissing === true);
     /** The container and its data were both found gone, so setup creates a new, empty instance. */
     const [instanceDataRemoved, setInstanceDataRemoved] = useState(false);
     /**

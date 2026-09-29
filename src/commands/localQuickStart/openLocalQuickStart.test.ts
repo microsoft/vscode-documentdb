@@ -5,6 +5,7 @@
 
 import { type IActionContext } from '@microsoft/vscode-azext-utils';
 import { QuickStartService } from '../../services/localQuickStart/QuickStartService';
+import { InstanceState, type QuickStartStatus } from '../../services/localQuickStart/quickStartTypes';
 import { openLocalQuickStartWebview } from '../../webviews/documentdb/localQuickStart/localQuickStartController';
 import { openLocalQuickStart } from './openLocalQuickStart';
 
@@ -35,7 +36,7 @@ describe('openLocalQuickStart', () => {
         finishHydration?.();
         await opening;
 
-        expect(openLocalQuickStartWebview).toHaveBeenCalledWith({ id: 'localQuickStart' });
+        expect(openLocalQuickStartWebview).toHaveBeenCalledWith(expect.objectContaining({ id: 'localQuickStart' }));
         expect(revealToForeground).toHaveBeenCalledTimes(1);
     });
 
@@ -49,7 +50,26 @@ describe('openLocalQuickStart', () => {
 
         await expect(openLocalQuickStart({} as IActionContext)).resolves.toBeUndefined();
 
-        expect(openLocalQuickStartWebview).toHaveBeenCalledWith({ id: 'localQuickStart' });
+        expect(openLocalQuickStartWebview).toHaveBeenCalledWith(expect.objectContaining({ id: 'localQuickStart' }));
         expect(revealToForeground).toHaveBeenCalledTimes(1);
+    });
+
+    it('passes the hydrated instance status so the webview can open on the right step', async () => {
+        jest.spyOn(QuickStartService, 'ensureHydrated').mockResolvedValue(undefined);
+        jest.spyOn(QuickStartService, 'getStatus').mockReturnValue({
+            state: InstanceState.CredentialsMissing,
+        } as QuickStartStatus);
+        jest.mocked(openLocalQuickStartWebview).mockReturnValue({
+            panel: { viewColumn: undefined },
+            revealToForeground: jest.fn(),
+        } as never);
+
+        await openLocalQuickStart({} as IActionContext);
+
+        expect(openLocalQuickStartWebview).toHaveBeenCalledWith({
+            id: 'localQuickStart',
+            initialInstanceState: InstanceState.CredentialsMissing,
+            initialInstanceMissing: false,
+        });
     });
 });
