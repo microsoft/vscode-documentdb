@@ -41,6 +41,13 @@ components) from `src/webviews/documentdb/collectionView/queryInsightsTab/compon
 
 None yet. A user-manual page is due before this ships.
 
+## Discussion proposals
+
+[Dashboard proposals from the vscode-cosmosdb prototypes](./cosmos-dashboard-proposals.md)
+records eight candidate inventory and insights enhancements, including the transferable
+implementation patterns from the sibling prototype. They are not accepted decisions or
+part of the current implementation.
+
 ## Architecture (intent — code is authoritative for behavior)
 
 - **The page is a place, not a feed.** The storage inventory refreshes when the dashboard opens
