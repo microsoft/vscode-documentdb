@@ -273,7 +273,7 @@ async function handleLocalQuickStartRequest(context: IActionContext, resourceTyp
 
     switch (resourceType) {
         case 'documentdb':
-            await openLocalQuickStart(context);
+            await openLocalQuickStart(context, undefined, { activationSource: 'deepLink' });
             break;
     }
 }

@@ -186,10 +186,7 @@ export const InventoryPanel = ({
         };
     }, [currentDatabase, goBack]);
 
-    const databaseRows = useMemo(
-        () => (storageStats === null ? [] : storageStats.databases.map(toDatabaseRow)),
-        [storageStats],
-    );
+    const databaseRows = useMemo(() => (storageStats?.databases ?? []).map(toDatabaseRow), [storageStats]);
 
     const collectionRows = useMemo(
         () => (collections.result === null ? [] : collections.result.collections.map(toCollectionRow)),
@@ -351,7 +348,7 @@ export const InventoryPanel = ({
             : currentDatabase === null
               ? storageStats.omittedDatabaseCount
               : (collections.result?.omittedCollectionCount ?? 0);
-    const shownCount = currentDatabase === null ? (storageStats?.databases.length ?? 0) : collectionRows.length;
+    const shownCount = currentDatabase === null ? (storageStats?.databases?.length ?? 0) : collectionRows.length;
     const emptyStateFailureReason =
         allRows.length === 0
             ? currentDatabase === null

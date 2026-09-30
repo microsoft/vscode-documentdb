@@ -3,7 +3,6 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import type * as AzExtUtils from '@microsoft/vscode-azext-utils';
 import { type IActionContext, type ITelemetryContext, UserCancelledError } from '@microsoft/vscode-azext-utils';
 import type * as Mongodb from 'mongodb';
 import { MongoClient } from 'mongodb';
@@ -25,7 +24,9 @@ interface RecordedTelemetry {
 const mockTelemetryEvents: RecordedTelemetry[] = [];
 
 jest.mock('@microsoft/vscode-azext-utils', () => {
-    const actual = jest.requireActual<typeof AzExtUtils>('@microsoft/vscode-azext-utils');
+    const actual = jest.requireActual<{ UserCancelledError: typeof UserCancelledError }>(
+        '@microsoft/vscode-azext-utils',
+    );
     return {
         ...actual,
         parseError: (error: unknown): { message: string } => ({

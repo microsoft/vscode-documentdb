@@ -3,8 +3,7 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import type * as AzExtUtils from '@microsoft/vscode-azext-utils';
-import { type IActionContext, type ITelemetryContext } from '@microsoft/vscode-azext-utils';
+import { type IActionContext, type ITelemetryContext, type UserCancelledError } from '@microsoft/vscode-azext-utils';
 import { Worker } from 'worker_threads';
 import { ext } from '../../extensionVariables';
 import {
@@ -23,7 +22,9 @@ interface RecordedTelemetry {
 const mockTelemetryEvents: RecordedTelemetry[] = [];
 
 jest.mock('@microsoft/vscode-azext-utils', () => {
-    const actual = jest.requireActual<typeof AzExtUtils>('@microsoft/vscode-azext-utils');
+    const actual = jest.requireActual<{ UserCancelledError: typeof UserCancelledError }>(
+        '@microsoft/vscode-azext-utils',
+    );
     return {
         ...actual,
         callWithTelemetryAndErrorHandling: jest.fn(

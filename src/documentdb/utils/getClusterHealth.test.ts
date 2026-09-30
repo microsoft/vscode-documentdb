@@ -209,11 +209,11 @@ describe('getStorageStats', () => {
 
         const stats = await getStorageStats(client, undefined, diagnostics);
 
-        expect(stats.databases.map((database) => database.name)).toEqual(['sales', 'archive']);
-        expect(stats.databases[0].dataSizeBytes).toBe(90);
-        expect(stats.databases[0].indexes).toBe(7);
-        expect(stats.databases[1].dataSizeBytes).toBeNull();
-        expect(stats.databases[1].indexes).toBeNull();
+        expect(stats.databases?.map((database) => database.name)).toEqual(['sales', 'archive']);
+        expect(stats.databases?.[0].dataSizeBytes).toBe(90);
+        expect(stats.databases?.[0].indexes).toBe(7);
+        expect(stats.databases?.[1].dataSizeBytes).toBeNull();
+        expect(stats.databases?.[1].indexes).toBeNull();
         expect(stats.errors).toHaveLength(1);
         expect(stats.errors[0]).toContain('dbStats:archive');
         // The total must reconcile with the rendered rows (100 + 200), NOT with
@@ -269,7 +269,7 @@ describe('getStorageStats', () => {
 
         const stats = await getStorageStats(client);
 
-        expect(stats.databases[0].sizeOnDiskBytes).toBe(0);
+        expect(stats.databases?.[0].sizeOnDiskBytes).toBe(0);
     });
 
     it('keeps a zero the server confirms is empty', async () => {
@@ -281,7 +281,7 @@ describe('getStorageStats', () => {
         const stats = await getStorageStats(client);
 
         // Overwriting this with `storageSize` would report preallocated overhead as data.
-        expect(stats.databases[0].sizeOnDiskBytes).toBe(0);
+        expect(stats.databases?.[0].sizeOnDiskBytes).toBe(0);
     });
 
     it('falls back to storageSize when a non-empty database reports a size of zero', async () => {
@@ -307,20 +307,31 @@ describe('getStorageStats', () => {
 
         const stats = await getStorageStats(client);
 
-        expect(stats.databases.map((database) => database.sizeOnDiskBytes)).toEqual([12984320, 20357120]);
+        expect(stats.databases?.map((database) => database.sizeOnDiskBytes)).toEqual([12984320, 20357120]);
         // The Total must reconcile with the rendered rows, which it could not while every
         // row read zero.
         expect(stats.totalSizeBytes).toBe(33341440);
     });
 
-    it('returns an error marker when listDatabases is unavailable', async () => {
+    it('reports no databases when listDatabases is unavailable', async () => {
         const { client } = createFakeClient({});
 
         const stats = await getStorageStats(client);
 
-        expect(stats.databases).toEqual([]);
+        expect(stats.databases).toBeNull();
         expect(stats.totalSizeBytes).toBeNull();
         expect(stats.errors.map(getFailedCommandName)).toEqual(['listDatabases']);
+    });
+
+    it('reports a cluster with only system databases as empty, not failed', async () => {
+        const { client } = createFakeClient({
+            listDatabases: () => ({ databases: [{ name: 'admin', sizeOnDisk: 1 }] }),
+        });
+
+        const stats = await getStorageStats(client);
+
+        expect(stats.databases).toEqual([]);
+        expect(stats.errors).toEqual([]);
     });
 });
 

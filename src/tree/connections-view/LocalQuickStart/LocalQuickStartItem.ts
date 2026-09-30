@@ -15,6 +15,7 @@ import { type IconPath } from 'vscode';
 import { AuthMethodId } from '../../../documentdb/auth/AuthMethod';
 import { type ClustersClient } from '../../../documentdb/ClustersClient';
 import { CredentialCache } from '../../../documentdb/CredentialCache';
+import { maskSensitiveValuesInTelemetry } from '../../../documentdb/utils/connectionStringHelpers';
 import { DocumentDBConnectionString } from '../../../documentdb/utils/DocumentDBConnectionString';
 import { Views } from '../../../documentdb/Views';
 import { DocumentDBExperience } from '../../../DocumentDBExperiences';
@@ -27,9 +28,12 @@ import {
 import {
     InstanceState,
     type DockerReadiness,
+    type OpenLocalQuickStartOptions,
+    type QuickStartActivationSource,
     type QuickStartStatus,
 } from '../../../services/localQuickStart/quickStartTypes';
 import { getResourcesPath } from '../../../utils/icons';
+import { nonNullValue } from '../../../utils/nonNull';
 import { createGenericElementWithContext } from '../../api/createGenericElementWithContext';
 import { containsRetryNode } from '../../api/retryNode';
 import { ClusterItemBase, type EphemeralClusterCredentials } from '../../documentdb/ClusterItemBase';
@@ -50,6 +54,7 @@ function createQuickStartAction(
     label: string,
     iconId: string,
     commandId: string,
+    activationSource?: QuickStartActivationSource,
 ): TreeElement {
     return createGenericElementWithContext({
         id: `${parentId}/${idSuffix}`,
@@ -57,7 +62,13 @@ function createQuickStartAction(
         label,
         iconPath: new vscode.ThemeIcon(iconId),
         commandId,
+        commandArgs: activationSource ? openWizardArgs(undefined, activationSource) : undefined,
     });
+}
+
+/** Arguments for `localQuickStart.open`, which reads its options from the second position. */
+function openWizardArgs(target: unknown, activationSource: QuickStartActivationSource): unknown[] {
+    return [target, { activationSource } satisfies OpenLocalQuickStartOptions];
 }
 
 function createQuickStartRetryAction(parentId: string, retryTarget: unknown): TreeElement {
@@ -67,7 +78,7 @@ function createQuickStartRetryAction(parentId: string, retryTarget: unknown): Tr
         label: l10n.t('Retry setup'),
         iconPath: new vscode.ThemeIcon('refresh'),
         commandId: 'vscode-documentdb.command.localQuickStart.open',
-        commandArgs: [retryTarget],
+        commandArgs: openWizardArgs(retryTarget, 'treeRetryNode'),
     });
 }
 
@@ -93,7 +104,14 @@ function buildPreflightChildren(parentId: string, verdict: QuickStartConnectionP
             ];
         case 'missing':
             return [
-                createQuickStartAction(parentId, 'preflight/recreate', l10n.t('Recreate container'), 'refresh', open),
+                createQuickStartAction(
+                    parentId,
+                    'preflight/recreate',
+                    l10n.t('Recreate container'),
+                    'refresh',
+                    open,
+                    'treePreflightRecreateRow',
+                ),
             ];
         case 'dockerUnreachable':
             return [
@@ -103,6 +121,7 @@ function buildPreflightChildren(parentId: string, verdict: QuickStartConnectionP
                     l10n.t('Review Docker setup'),
                     'tools',
                     open,
+                    'treePreflightReviewDockerRow',
                 ),
                 createQuickStartAction(parentId, 'preflight/viewLogs', l10n.t('View setup log'), 'output', viewLogs),
             ];
@@ -111,7 +130,14 @@ function buildPreflightChildren(parentId: string, verdict: QuickStartConnectionP
             return [];
         default:
             return [
-                createQuickStartAction(parentId, 'preflight/reviewSetup', l10n.t('Review setup'), 'tools', open),
+                createQuickStartAction(
+                    parentId,
+                    'preflight/reviewSetup',
+                    l10n.t('Review setup'),
+                    'tools',
+                    open,
+                    'treePreflightReviewSetupRow',
+                ),
                 createQuickStartAction(parentId, 'preflight/viewLogs', l10n.t('View setup log'), 'output', viewLogs),
             ];
     }
@@ -316,9 +342,7 @@ class QuickStartClusterItem extends ClusterItemBase<ConnectionClusterModel> {
 
     protected async authenticateAndConnect(): Promise<ClustersClient | null> {
         const result = await callWithTelemetryAndErrorHandling('connect', async (context: IActionContext) => {
-            context.telemetry.properties.view = Views.ConnectionsView;
-            context.telemetry.properties.connectionInitiatedFrom = Views.ConnectionsView;
-            context.telemetry.properties.connectionType = 'localQuickStart';
+            this.setConnectionTelemetry(context);
 
             const connectionString = await QuickStartService.readStoredConnectionString(this.alias);
             if (!connectionString) {
@@ -338,10 +362,35 @@ class QuickStartClusterItem extends ClusterItemBase<ConnectionClusterModel> {
                 this.cluster.emulatorConfiguration,
             );
 
+            // Retain authentication error handling; client acquisition reports the connection once.
+            context.telemetry.suppressAll = true;
             return this.getClientWithProgress(this.cluster.clusterId);
         });
 
         return result ?? null;
+    }
+
+    protected override async getClientWithProgress(clusterId: string): Promise<ClustersClient> {
+        const result = await callWithTelemetryAndErrorHandling('connect', async (context: IActionContext) => {
+            context.errorHandling.rethrow = true;
+            context.errorHandling.suppressDisplay = true;
+            this.setConnectionTelemetry(context);
+            const connectionString = CredentialCache.getConnectionStringWithPassword(clusterId);
+            if (connectionString) {
+                maskSensitiveValuesInTelemetry(context, new DocumentDBConnectionString(connectionString));
+            }
+            return super.getClientWithProgress(clusterId);
+        });
+        return nonNullValue(result, 'connected client', 'QuickStartClusterItem.getClientWithProgress');
+    }
+
+    private setConnectionTelemetry(context: IActionContext): void {
+        context.telemetry.properties.view = Views.ConnectionsView;
+        context.telemetry.properties.connectionInitiatedFrom = Views.ConnectionsView;
+        context.telemetry.properties.connectionType = 'localQuickStart';
+        context.telemetry.properties.credentialsRestored = QuickStartService.wereCredentialsRestored(this.alias)
+            ? 'true'
+            : 'false';
     }
 }
 
@@ -436,6 +485,7 @@ export class LocalQuickStartItem implements TreeElement, TreeElementWithContextV
                     l10n.t('Recreate container'),
                     'refresh',
                     'vscode-documentdb.command.localQuickStart.open',
+                    'treeRecreateRow',
                 ),
                 createQuickStartAction(
                     this.id,
@@ -524,6 +574,7 @@ export class LocalQuickStartItem implements TreeElement, TreeElementWithContextV
                     l10n.t('Review setup'),
                     'tools',
                     'vscode-documentdb.command.localQuickStart.open',
+                    'treeReviewSetupRow',
                 ),
             ];
         }
@@ -555,6 +606,7 @@ export class LocalQuickStartItem implements TreeElement, TreeElementWithContextV
                 l10n.t('Set up DocumentDB Local'),
                 'rocket',
                 'vscode-documentdb.command.localQuickStart.open',
+                'treeSetUpRow',
             ),
         ];
     }

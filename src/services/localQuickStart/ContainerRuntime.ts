@@ -498,6 +498,22 @@ export function getExitCode(item: InspectContainersItem): number | undefined {
     }
 }
 
+/** The host port a container was published on. Unlike {@link getBoundHostPort}, also known while it is stopped. */
+export function getPublishedHostPort(
+    item: InspectContainersItem,
+    containerPort: number = QUICK_START_PORT,
+): number | undefined {
+    try {
+        const raw = JSON.parse(item.raw) as {
+            HostConfig?: { PortBindings?: Record<string, Array<{ HostPort?: unknown }> | null> };
+        };
+        const hostPort = Number(raw.HostConfig?.PortBindings?.[`${containerPort}/tcp`]?.[0]?.HostPort);
+        return Number.isInteger(hostPort) && hostPort > 0 ? hostPort : undefined;
+    } catch {
+        return undefined;
+    }
+}
+
 /** Singleton Docker-backed runtime; the default injected into {@link QuickStartService} (WI-0). */
 const containerRuntime = new ContainerRuntimeImpl();
 export const ContainerRuntime: IContainerRuntime = containerRuntime;

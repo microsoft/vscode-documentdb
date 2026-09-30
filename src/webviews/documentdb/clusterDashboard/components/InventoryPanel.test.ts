@@ -199,7 +199,9 @@ describe('InventoryPanel empty states', () => {
 
     it('reports an empty database inventory failure only in the retry panel', () => {
         const reason = 'listDatabases: connection closed';
-        const markup = renderInventory({ storageStats: { ...EMPTY_STORAGE, errors: [reason] } });
+        const markup = renderInventory({
+            storageStats: { ...EMPTY_STORAGE, databases: null, totalSizeBytes: null, errors: [reason] },
+        });
 
         expect(markup).toContain('Could not read databases');
         expect(markup).toContain('Retry');

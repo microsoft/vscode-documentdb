@@ -7,7 +7,7 @@ import { MetricGrid } from '@microsoft/vscode-ext-webview-fluentui/components';
 import * as l10n from '@vscode/l10n';
 import { type JSX } from 'react';
 
-import { type ClusterStorageStats } from '../../../../documentdb/utils/getClusterHealth';
+import { type ClusterDatabaseStorage, type ClusterStorageStats } from '../../../../documentdb/utils/getClusterHealth';
 // TODO(dashboard): promote metricsRow to src/webviews/components/ so views don't reach into each other.
 import { CountMetric, GenericMetric } from '../../collectionView/queryInsightsTab/components/metricsRow';
 import { formatBytes } from '../formatUtils';
@@ -48,10 +48,10 @@ function unavailable(): string {
 
 /** Sums a per-database figure, treating "no database reported it" as null. */
 function sumAcrossDatabases(
-    stats: ClusterStorageStats,
-    read: (database: ClusterStorageStats['databases'][number]) => number | null,
+    databases: ClusterDatabaseStorage[],
+    read: (database: ClusterDatabaseStorage) => number | null,
 ): number | null {
-    return stats.databases.reduce<number | null>((total, database) => {
+    return databases.reduce<number | null>((total, database) => {
         const value = read(database);
         return value === null ? total : (total ?? 0) + value;
     }, null);
@@ -78,8 +78,7 @@ function describeIndexes(count: number | null, sizeBytes: number | null): string
  */
 function clusterTiles(stats: ClusterStorageStats | null): Tile[] {
     const omittedCount = stats?.omittedDatabaseCount ?? 0;
-    const unreportedCount =
-        stats === null ? 0 : stats.databases.filter((database) => database.sizeOnDiskBytes === null).length;
+    const unreportedCount = stats?.databases?.filter((database) => database.sizeOnDiskBytes === null).length ?? 0;
     const isPartial = omittedCount > 0 || unreportedCount > 0;
 
     /** Appended to every summed tile's tooltip while the sum is incomplete. */
@@ -101,23 +100,24 @@ function clusterTiles(stats: ClusterStorageStats | null): Tile[] {
     const asBound = (formatted: string | null): string | null =>
         isPartial && formatted !== null ? l10n.t('≥ {value}', { value: formatted }) : formatted;
 
-    /** `undefined` — the loading skeleton — until the collectors have answered. */
-    const read = <T,>(compute: (loaded: ClusterStorageStats) => T): T | undefined =>
-        stats === null ? undefined : compute(stats);
+    /** `undefined` (the loading skeleton) until the collectors answer, `null` if the databases could not be listed. */
+    const read = <T,>(compute: (databases: ClusterDatabaseStorage[]) => T): T | null | undefined =>
+        stats === null ? undefined : stats.databases === null ? null : compute(stats.databases);
 
     return [
         {
             label: l10n.t('Storage Used'),
-            value: read((loaded) =>
-                asBound(loaded.totalSizeBytes === null ? null : formatBytes(loaded.totalSizeBytes)),
-            ),
+            value:
+                stats === null
+                    ? undefined
+                    : asBound(stats.totalSizeBytes === null ? null : formatBytes(stats.totalSizeBytes)),
             render: 'text',
             tooltip:
                 l10n.t('Combined on-disk size of all user databases. Excludes provisioned disk capacity.') + caveat,
         },
         {
             label: l10n.t('Documents'),
-            value: read((loaded) => sumAcrossDatabases(loaded, (database) => database.objects)),
+            value: read((databases) => sumAcrossDatabases(databases, (database) => database.objects)),
             render: 'roundedCount',
             tooltip:
                 l10n.t('Approximate number of documents across all user databases, based on collection metadata.') +
@@ -125,13 +125,13 @@ function clusterTiles(stats: ClusterStorageStats | null): Tile[] {
         },
         {
             label: l10n.t('Databases / Collections'),
-            value: read((loaded) => {
-                const totalCollections = sumAcrossDatabases(loaded, (database) => database.collections);
+            value: read((databases) => {
+                const totalCollections = sumAcrossDatabases(databases, (database) => database.collections);
 
                 return l10n.t('{databases} / {collections}', {
-                    databases: String(loaded.databases.length),
+                    databases: String(databases.length),
                     collections:
-                        totalCollections === null && loaded.databases.length > 0
+                        totalCollections === null && databases.length > 0
                             ? unavailable()
                             : String(totalCollections ?? 0),
                 });
@@ -141,10 +141,10 @@ function clusterTiles(stats: ClusterStorageStats | null): Tile[] {
         },
         {
             label: l10n.t('Indexes / Size'),
-            value: read((loaded) =>
+            value: read((databases) =>
                 describeIndexes(
-                    sumAcrossDatabases(loaded, (database) => database.indexes),
-                    sumAcrossDatabases(loaded, (database) => database.indexSizeBytes),
+                    sumAcrossDatabases(databases, (database) => database.indexes),
+                    sumAcrossDatabases(databases, (database) => database.indexSizeBytes),
                 ),
             ),
             render: 'text',
@@ -158,8 +158,8 @@ function databaseTiles(stats: ClusterStorageStats | null, databaseName: string):
     // Undefined while the collectors are still working, null once they answered and this
     // database was not among the databases they inspected.
     const database =
-        stats === null ? undefined : (stats.databases.find((entry) => entry.name === databaseName) ?? null);
-    const read = <T,>(compute: (entry: ClusterStorageStats['databases'][number]) => T): T | null | undefined =>
+        stats === null ? undefined : (stats.databases?.find((entry) => entry.name === databaseName) ?? null);
+    const read = <T,>(compute: (entry: ClusterDatabaseStorage) => T): T | null | undefined =>
         database === undefined ? undefined : database === null ? null : compute(database);
 
     return [
