@@ -240,7 +240,9 @@ export const clusterDashboardRouter = router({
             // How large the estates being looked at actually are, and how often the read is only
             // partially answerable — a cluster whose stats are half errors renders a table of
             // dashes, which no error event reports today.
-            myCtx.actionContext.telemetry.measurements.databaseCount = stats.databases.length;
+            if (stats.databases !== null) {
+                myCtx.actionContext.telemetry.measurements.databaseCount = stats.databases.length;
+            }
             myCtx.actionContext.telemetry.measurements.omittedDatabaseCount = stats.omittedDatabaseCount;
             myCtx.actionContext.telemetry.measurements.statsErrorCount = stats.errors.length;
 
@@ -458,7 +460,9 @@ export const clusterDashboardRouter = router({
             ({ result }) => !result.ok,
         ).length;
         myCtx.actionContext.telemetry.measurements.commandCount = diagnostics.commands.length;
-        myCtx.actionContext.telemetry.measurements.databaseCount = storage.databases.length;
+        if (storage.databases !== null) {
+            myCtx.actionContext.telemetry.measurements.databaseCount = storage.databases.length;
+        }
 
         await readOnlyJsonDocumentProvider.openDocument(
             l10n.t('Cluster diagnostics'),

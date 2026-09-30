@@ -168,7 +168,11 @@ export const ClusterDashboard = (): JSX.Element => {
 
                     // The count is the payload: a reload that returns the same rows is
                     // otherwise indistinguishable from one that never happened.
-                    if (source === 'manual') {
+                    if (stats.databases === null) {
+                        if (source !== 'background') {
+                            announce(l10n.t('Failed to read storage statistics.'), 'assertive');
+                        }
+                    } else if (source === 'manual') {
                         announce(l10n.t('Storage statistics refreshed. {0} databases.', stats.databases.length));
                     } else if (source === 'reconcile') {
                         announce(l10n.t('Inventory updated. {0} databases.', stats.databases.length));
@@ -442,7 +446,7 @@ export const ClusterDashboard = (): JSX.Element => {
                 if (namespace.collectionName === undefined) {
                     return (
                         namespace.phase !== 'settling' &&
-                        !storageStats?.databases.some((database) => database.name === namespace.databaseName)
+                        !storageStats?.databases?.some((database) => database.name === namespace.databaseName)
                     );
                 }
 
@@ -683,7 +687,7 @@ export const ClusterDashboard = (): JSX.Element => {
                     </MessageBar>
                 )}
 
-                {storageError !== null && storageStats !== null && storageStats.databases.length > 0 && (
+                {storageError !== null && (storageStats?.databases?.length ?? 0) > 0 && (
                     <MessageBar intent="error" layout="multiline">
                         <MessageBarBody>
                             {l10n.t('Failed to read storage statistics: {0}', storageError)}

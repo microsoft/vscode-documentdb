@@ -174,7 +174,8 @@ export interface ClusterDatabaseStorage {
 
 /** Aggregated storage figures for a cluster. */
 export interface ClusterStorageStats {
-    databases: ClusterDatabaseStorage[];
+    /** `null` when `listDatabases` failed; the reason is in {@link errors}. */
+    databases: ClusterDatabaseStorage[] | null;
     /**
      * Sum of `sizeOnDiskBytes` across the databases in {@link databases} — i.e. exactly
      * the rows the inventory list renders, so the Total always reconciles with them.
@@ -341,7 +342,7 @@ export async function getStorageStats(
             result: { ok: false, error: error instanceof Error ? error.message : String(error) },
         });
         return {
-            databases: [],
+            databases: null,
             totalSizeBytes: null,
             omittedDatabaseCount: 0,
             errors: [describeCommandFailure('listDatabases', error)],

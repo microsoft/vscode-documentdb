@@ -48,6 +48,9 @@ Everything else is a single file at this root, such as:
   overflow without launching an extension host. It belongs to no feature; it was written after the
   Local Quick Start redesign, where the technique caught real defects. The document describes
   itself as a skill candidate — promoting it into `.github/skills/` is a separate decision.
+- **[telemetry-correlation-ids.md](./telemetry-correlation-ids.md)** - future work: an inventory of
+  the telemetry ids used to join events (lineage, surface session, operation) and a draft rule for
+  which one to use. Written after #979 showed how easily they are confused.
 
 There is no bucket folder for these. See the placement rule below.
 

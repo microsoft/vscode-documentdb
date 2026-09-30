@@ -11,7 +11,7 @@ import { DocumentDBConnectionString } from '../../documentdb/utils/DocumentDBCon
 import { ContainerRuntime, getQuickStartOutputChannel } from '../../services/localQuickStart/ContainerRuntime';
 import { secretVariants } from '../../services/localQuickStart/quickStartCredentials';
 import { QuickStartService } from '../../services/localQuickStart/QuickStartService';
-import { InstanceState } from '../../services/localQuickStart/quickStartTypes';
+import { InstanceState, type OpenLocalQuickStartOptions } from '../../services/localQuickStart/quickStartTypes';
 import { type EphemeralClusterCredentials } from '../../tree/documentdb/ClusterItemBase';
 import { getConfirmationAsInSettings } from '../../utils/dialogs/getConfirmation';
 import { showConfirmationAsInSettings } from '../../utils/dialogs/showConfirmation';
@@ -74,7 +74,9 @@ function ensureInstanceOrExplain(context: IActionContext): boolean {
         )
         .then((choice) => {
             if (choice === setUpAction) {
-                return vscode.commands.executeCommand('vscode-documentdb.command.localQuickStart.open');
+                return vscode.commands.executeCommand('vscode-documentdb.command.localQuickStart.open', undefined, {
+                    activationSource: 'notSetUpNotification',
+                } satisfies OpenLocalQuickStartOptions);
             }
             return undefined;
         });
@@ -113,6 +115,7 @@ export async function deleteQuickStartInstance(context: IActionContext): Promise
     // consequences explicit — Delete drops the data volume, so this is a permanent clean slate.
     const wasRunning = QuickStartService.getStatus().state === InstanceState.Running;
     context.telemetry.properties.wasRunning = String(wasRunning);
+    context.telemetry.properties.priorState = QuickStartService.getStatus().state;
 
     const detail = wasRunning
         ? l10n.t(

@@ -69,8 +69,29 @@ jest.mock('../../_integration/trpc', () => {
     };
 });
 
+// Emits through azext-utils, which this file's minimal `vscode` stub cannot load (see above).
+const mockReportWizardStep = jest.fn();
+jest.mock('./wizardTelemetry', () => ({
+    reportWizardStep: (...args: unknown[]) => mockReportWizardStep(...args) as unknown,
+}));
+
 import { createCallerFactory } from '../../_integration/trpc';
 import { localQuickStartRouter, type RouterContext } from './localQuickStartRouter';
+import { type QuickStartWizardSession } from './wizardTelemetry';
+
+function wizardSession(): QuickStartWizardSession {
+    return {
+        id: 'session-1',
+        openedAt: 0,
+        initialPhase: 'introduction',
+        phase: 'configure',
+        phaseEnteredAt: 0,
+        stepChangeCount: 1,
+        setupAttemptCount: 0,
+        waitLongerCount: 0,
+        setupSucceeded: false,
+    };
+}
 
 function createContext(): RouterContext & {
     actionContext: {
@@ -218,6 +239,52 @@ describe('localQuickStartRouter', () => {
         });
 
         afterEach(() => mockProvision.mockReset());
+    });
+
+    describe('wizard session', () => {
+        it('reports a step change against the panel session', async () => {
+            const session = wizardSession();
+            const context = { ...createContext(), wizardSession: session };
+            const caller = createCallerFactory(localQuickStartRouter)(context);
+
+            await caller.reportStepChange({ to: 'provisioning', trigger: 'startSetup' });
+
+            expect(mockReportWizardStep).toHaveBeenCalledWith(session, 'provisioning', 'startSetup');
+        });
+
+        it('stamps the session on procedure events and records an explicit Close', async () => {
+            const session = wizardSession();
+            const context = { ...createContext(), wizardSession: session };
+            const caller = createCallerFactory(localQuickStartRouter)(context);
+
+            await caller.closePanel();
+
+            expect(context.closePanel).toHaveBeenCalled();
+            expect(session.closeReason).toBe('closeButton');
+            expect(context.actionContext.telemetry.properties).toMatchObject({
+                quickStartSessionId: 'session-1',
+                wizardStep: 'configure',
+            });
+        });
+
+        it('counts setup attempts and records a successful setup', async () => {
+            mockProvision.mockImplementation(async function* () {
+                yield { stage: 'done', status: 'done' };
+            });
+            const session = wizardSession();
+            const context = { ...createContext(), wizardSession: session };
+            const caller = createCallerFactory(localQuickStartRouter)(context);
+
+            const events = ((await caller.startQuickStart()) as AsyncIterable<unknown>)[Symbol.asyncIterator]();
+            while (!(await events.next()).done) {
+                // drain
+            }
+
+            expect(session.setupAttemptCount).toBe(1);
+            expect(session.setupSucceeded).toBe(true);
+            expect(context.actionContext.telemetry.measurements.setupAttempt).toBe(1);
+            mockProvision.mockReset();
+        });
     });
 
     describe('checkPassword', () => {
