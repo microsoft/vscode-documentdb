@@ -105,16 +105,21 @@ function quoteExecutableIfNeeded(executable: string): string {
 
 // Keyed on the group rather than the shell's own exit: the shell can die on SIGTERM while the docker
 // process it started ignores it and keeps the output pipes open.
-function killProcessTree(child: ChildProcess, signal: NodeJS.Signals): void {
+export function killProcessTree(
+    child: Pick<ChildProcess, 'pid'>,
+    signal: NodeJS.Signals,
+    platform: NodeJS.Platform = process.platform,
+    spawnProcess: typeof spawn = spawn,
+): void {
     if (child.pid === undefined) {
         return;
     }
     try {
-        if (process.platform === 'win32') {
-            spawn('taskkill', ['/pid', String(child.pid), '/T', '/F'], { stdio: 'ignore', windowsHide: true }).on(
-                'error',
-                () => undefined,
-            );
+        if (platform === 'win32') {
+            spawnProcess('taskkill', ['/pid', String(child.pid), '/T', '/F'], {
+                stdio: 'ignore',
+                windowsHide: true,
+            }).on('error', () => undefined);
         } else {
             // Negative pid: the whole process group, so the signal reaches docker and not only the shell.
             process.kill(-child.pid, signal);

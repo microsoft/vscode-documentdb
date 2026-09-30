@@ -27,7 +27,16 @@ module.exports = (env, { mode }) => {
             filename: '[name].js',
             libraryTarget: 'module',
         },
-        cache: false,
+        // CI restores this between runs; local and release builds stay uncached.
+        cache: process.env.WEBPACK_CACHE_DIR
+            ? {
+                  type: 'filesystem',
+                  cacheDirectory: path.resolve(process.env.WEBPACK_CACHE_DIR),
+                  name: `${path.basename(__filename, '.js')}-${mode}`,
+                  // swc-loader reads .swcrc, which isn't part of the module graph.
+                  buildDependencies: { config: [__filename, path.resolve(__dirname, '.swcrc')] },
+              }
+            : false,
         experiments: {
             outputModule: true,
         },

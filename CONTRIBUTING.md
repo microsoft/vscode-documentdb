@@ -29,9 +29,15 @@ See [1.6 Force-push policy](#16-force-push-policy) for the rules behind the forc
 
 CI runs automatically on:
 
-- **Push to `main` or a release branch** (`release/**`) — full build, tests, and packaging; build sizes cached for PR comparisons.
+- **Push to `main`** — full build, tests, and packaging; build sizes cached for PR comparisons. Release branches get CI through their PRs.
 - **Pull requests targeting `main`, `release/**`, or `feature/**`** — full build, tests, packaging, and a code-quality report posted as a PR comment.
-- **Manual dispatch** — use `workflow_dispatch` with `enforce_full_run` to run the full pipeline on any branch.
+- **Manual dispatch** — `workflow_dispatch` runs the full pipeline on any branch.
+
+Besides the checks in [§4.2](#42-case-2--handing-over-the-full-list), CI runs three that you can reproduce locally:
+
+- **`npm run test:smoke`** — loads the packaged VSIX into VS Code and checks every declared command registers. Run `npm run package` first; on Linux without a display, use `xvfb-run -a npm run test:smoke`.
+- **`npm run test:integration`** — tests against a running DocumentDB Local. Set `DOCUMENTDB_INTEGRATION_USERNAME` and `DOCUMENTDB_INTEGRATION_PASSWORD` to its credentials (port defaults to 10260; override with `DOCUMENTDB_INTEGRATION_PORT`).
+- **`npm run api-extractor`** in `api/`, after `npm ci` there — regenerates the API report. CI fails if `api/etc/` changes, so commit the result after changing the public API.
 
 ### 1.3 Releases
 

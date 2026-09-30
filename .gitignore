@@ -282,3 +282,6 @@ stats.json
 
 docs/analysis/
 docs/plan/
+
+# api-extractor scratch output
+api/temp/

@@ -11,6 +11,8 @@ module.exports = {
             displayName: 'extension',
             testEnvironment: 'node',
             testMatch: ['<rootDir>/src/**/*.test.ts'],
+            // Real-server tests run in CI's db-integration job via jest.integration.config.js.
+            testPathIgnorePatterns: ['/node_modules/', '\\.integration\\.test\\.ts$'],
             // @swc/jest transpiles without type-checking, avoiding ts-jest's
             // per-worker TypeScript compiler (~500MB+) which was causing OOM in CI.
             // Options are inlined (not read from .swcrc) because @swc/jest's strict
@@ -54,6 +56,7 @@ module.exports = {
         },
         '<rootDir>/packages/documentdb-js-schema-analyzer',
         '<rootDir>/packages/documentdb-js-operator-registry',
+        '<rootDir>/packages/documentdb-js-shell-api-types',
         '<rootDir>/packages/documentdb-js-shell-runtime',
         '<rootDir>/packages/vscode-ext-webview',
         '<rootDir>/packages/vscode-ext-webview-fluentui',

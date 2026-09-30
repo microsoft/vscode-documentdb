@@ -3,24 +3,16 @@ name: CI
 # This workflow handles the following scenarios:
 #
 # 1. Push to `main`:
-#    - Runs all jobs: code checks, tests, packaging, and caches build sizes
-#      for PR comparisons
+#    - Runs all jobs and caches build sizes for PR comparisons
 #
 # 2. Pull Requests to `main`, `release/**`, or `feature/**`:
-#    - Runs all jobs: code checks, tests, integration tests, and packaging
+#    - Runs all jobs
 #    - Posts PR comments with code quality report and build size comparison
 #
-# 3. Manual run via `workflow_dispatch`:
-#    - Optional `enforce_full_run` input forces integration tests and packaging on any branch
+# 3. Manual run via `workflow_dispatch`
 
 on:
     workflow_dispatch:
-        inputs:
-            enforce_full_run:
-                description: 'Run integration tests and packaging jobs on manual dispatch'
-                required: false
-                type: boolean
-                default: false
 
     push:
         branches:
@@ -32,64 +24,334 @@ on:
             - release/**
             - feature/**
 
+# Jobs that comment on PRs add pull-requests: write themselves.
+permissions:
+    contents: read
+
 concurrency:
     group: '${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}'
     cancel-in-progress: true
 
 jobs:
-    code-quality-and-tests:
-        name: Code Quality & Tests
+    localization:
+        name: Localization
+        runs-on: ubuntu-latest
+        steps:
+            - name: Checkout Repository
+              uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+            - name: Setup Node.js and Dependencies
+              uses: ./.github/actions/setup
+
+            - name: Check Localization Files
+              run: npm run l10n:check
+
+    lint:
+        name: Lint
+        runs-on: ubuntu-latest
+        steps:
+            - name: Checkout Repository
+              uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+            - name: Setup Node.js and Dependencies
+              uses: ./.github/actions/setup
+
+            - name: Build Workspace Packages
+              run: npm run build --workspaces --if-present
+
+            - name: Run ESLint
+              run: npm run lint -- --concurrency=4
+
+    formatting:
+        name: Formatting
+        runs-on: ubuntu-latest
+        steps:
+            - name: Checkout Repository
+              uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+            - name: Setup Node.js and Dependencies
+              uses: ./.github/actions/setup
+
+            - name: Check Code Formatting (Prettier)
+              run: npm run prettier
+
+    type-check:
+        name: Type Check
+        runs-on: ubuntu-latest
+        steps:
+            - name: Checkout Repository
+              uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+            - name: Setup Node.js and Dependencies
+              uses: ./.github/actions/setup
+
+            - name: Type Check (tsc)
+              run: npm run build
+
+    unit-tests:
+        name: Unit Tests
+        runs-on: ubuntu-latest
+        timeout-minutes: 10
+        steps:
+            - name: Checkout Repository
+              uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+            - name: Setup Node.js and Dependencies
+              uses: ./.github/actions/setup
+
+            # jest.config's 25% is one worker on a 4-core runner
+            - name: Run Unit Tests (Jest)
+              run: npm run jesttest -- --maxWorkers=4
+
+    build-and-package:
+        name: Package
         runs-on: ubuntu-latest
         permissions:
+            contents: read
             pull-requests: write
         defaults:
             run:
                 working-directory: '.'
         steps:
-            - name: ✅ Checkout Repository
+            - name: Checkout Repository
               uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
-            - name: 🛠 Setup Node.js Environment (with cache)
-              uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+            - name: Setup Node.js and Dependencies
+              uses: ./.github/actions/setup
+
+            # A warm cache turns ~75s of webpack into seconds; output is identical to a cold build.
+            - name: Restore webpack cache
+              id: webpack-cache
+              uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
               with:
-                  node-version-file: .nvmrc
-                  cache: npm
-                  cache-dependency-path: '**/package-lock.json'
+                  path: ${{ runner.temp }}/webpack-cache
+                  key: webpack-${{ runner.os }}-${{ hashFiles('package-lock.json', 'webpack.config.*.js', '.swcrc') }}-${{ github.sha }}
+                  restore-keys: webpack-${{ runner.os }}-${{ hashFiles('package-lock.json', 'webpack.config.*.js', '.swcrc') }}-
 
-            - name: 📦 Install Dependencies (npm ci)
-              run: npm ci --prefer-offline --no-audit --no-fund --progress=false --verbose
+            - name: Package Distributables (vsix/tgz)
+              run: npm run package
+              env:
+                  WEBPACK_CACHE_DIR: ${{ runner.temp }}/webpack-cache
 
-            - name: 🔨 Build Workspace Packages
-              run: npm run build --workspaces --if-present
+            # PRs reuse the cache from their base branch, so only pushes save one (plus a PR's first run, to seed it).
+            - name: Save webpack cache
+              if: github.event_name == 'push' || steps.webpack-cache.outputs.cache-matched-key == ''
+              uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+              with:
+                  path: ${{ runner.temp }}/webpack-cache
+                  key: ${{ steps.webpack-cache.outputs.cache-primary-key }}
 
-            - name: 🌐 Check Localization Files
-              id: l10n
-              continue-on-error: true
-              run: npm run l10n:check
+            - name: Collect build sizes
+              id: sizes
+              run: |
+                  VSIX_FILE=$(find . -maxdepth 1 -name '*.vsix' | head -1)
+                  VSIX_SIZE=$(stat --format=%s "$VSIX_FILE")
+                  WEBVIEW_SIZE=$(stat --format=%s dist/views.js 2>/dev/null || echo 0)
+                  echo "vsix_file=$(basename "$VSIX_FILE")" >> $GITHUB_OUTPUT
+                  echo "vsix_size=$VSIX_SIZE" >> $GITHUB_OUTPUT
+                  echo "webview_size=$WEBVIEW_SIZE" >> $GITHUB_OUTPUT
+                  echo "{\"vsixSize\": $VSIX_SIZE, \"webviewSize\": $WEBVIEW_SIZE}" > build-sizes.json
+                  echo "VSIX: $VSIX_FILE ($VSIX_SIZE bytes), Webview: $WEBVIEW_SIZE bytes"
 
-            - name: 🧹 Run ESLint
-              id: lint
-              continue-on-error: true
-              run: npm run lint
+            - name: Upload Artifacts
+              uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+              with:
+                  name: Artifacts-${{ github.run_id }}
+                  path: |
+                      *.vsix
+                      *.tgz
 
-            - name: 🎨 Check Code Formatting (Prettier)
-              id: prettier
-              continue-on-error: true
-              run: npm run prettier
+            - name: Cache build sizes (push only)
+              if: github.event_name == 'push'
+              uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+              with:
+                  path: build-sizes.json
+                  key: build-sizes-${{ github.ref_name }}-${{ github.sha }}
 
-            - name: 🧪 Run Unit Tests (Jest)
-              run: npm run jesttest
+            - name: Restore base branch sizes (PR only)
+              if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository
+              id: base-cache
+              uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+              with:
+                  path: build-sizes.json
+                  key: build-sizes-${{ github.event.pull_request.base.ref }}-${{ github.event.pull_request.base.sha }}
+                  restore-keys: |
+                      build-sizes-${{ github.event.pull_request.base.ref }}-
 
-            - name: 💬 Post PR Code Quality Report
+            - name: Prepare base sizes for comparison
+              if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository && steps.base-cache.outputs.cache-matched-key
+              run: |
+                  # Cache restore overwrites build-sizes.json with base branch data.
+                  # Rename it so the PR comment step can read base vs PR separately.
+                  mv build-sizes.json base-sizes.json
+
+            - name: Post PR Build Size Report
               if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository
               uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
               with:
                   github-token: ${{ secrets.GITHUB_TOKEN }}
                   script: |
+                      const fs = require('fs');
+
+                      const prVsix    = parseInt('${{ steps.sizes.outputs.vsix_size }}', 10);
+                      const prWebview = parseInt('${{ steps.sizes.outputs.webview_size }}', 10);
+                      const vsixFile  = '${{ steps.sizes.outputs.vsix_file }}';
+
+                      const fmt = (bytes) => {
+                        if (bytes >= 1024 * 1024) return (bytes / 1024 / 1024).toFixed(2) + ' MB';
+                        return Math.round(bytes / 1024).toLocaleString() + ' KB';
+                      };
+                      const delta = (pr, base) => {
+                        const diff = pr - base;
+                        const pct  = base > 0 ? ((diff / base) * 100).toFixed(1) : '∞';
+                        const sign = diff > 0 ? '+' : '';
+                        return `${sign}${fmt(diff)} (${sign}${pct}%)`;
+                      };
+
+                      let baseSizes = null;
+                      try {
+                        baseSizes = JSON.parse(fs.readFileSync('base-sizes.json', 'utf8'));
+                      } catch (_) { /* no cache */ }
+
+                      const runUrl = `${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}`;
+                      const marker = '<!-- build-size-report -->';
+                      let body;
+
+                      if (baseSizes) {
+                        body = [
+                          marker,
+                          '## Build Size Report',
+                          '',
+                          '| Metric | Base (`${{ github.event.pull_request.base.ref }}`) | PR | Delta |',
+                          '|--------|------|-----|-------|',
+                          `| VSIX (\`${vsixFile}\`) | ${fmt(baseSizes.vsixSize)} | ${fmt(prVsix)} | ${delta(prVsix, baseSizes.vsixSize)} |`,
+                          `| Webview bundle (\`views.js\`) | ${fmt(baseSizes.webviewSize)} | ${fmt(prWebview)} | ${delta(prWebview, baseSizes.webviewSize)} |`,
+                          '',
+                          `_[Download artifact](${runUrl}) · updated automatically on each push._`,
+                        ].join('\n');
+                      } else {
+                        body = [
+                          marker,
+                          '## Build Size Report',
+                          '',
+                          '| Metric | Size |',
+                          '|--------|------|',
+                          `| VSIX (\`${vsixFile}\`) | ${fmt(prVsix)} |`,
+                          `| Webview bundle (\`views.js\`) | ${fmt(prWebview)} |`,
+                          '',
+                          `> No baseline cached for \`${{ github.event.pull_request.base.ref }}\` yet — delta will appear after the next push to that branch.`,
+                          '',
+                          `_[Download artifact](${runUrl}) · updated automatically on each push._`,
+                        ].join('\n');
+                      }
+
+                      const { data: comments } = await github.rest.issues.listComments({
+                        owner: context.repo.owner,
+                        repo: context.repo.repo,
+                        issue_number: context.issue.number,
+                      });
+                      const existing = comments.find(c => c.body && c.body.includes(marker));
+                      if (existing) {
+                        await github.rest.issues.deleteComment({
+                          owner: context.repo.owner,
+                          repo: context.repo.repo,
+                          comment_id: existing.id,
+                        });
+                      }
+                      await github.rest.issues.createComment({
+                        owner: context.repo.owner,
+                        repo: context.repo.repo,
+                        issue_number: context.issue.number,
+                        body,
+                      });
+
+            # Installs the VSIX into VS Code and checks it activates and registers every command it declares.
+            # VS Code isn't cached: downloading it took ~5s, restoring it from the Actions cache 75s.
+            - name: Smoke Test (packaged VSIX)
+              timeout-minutes: 5
+              run: xvfb-run -a npm run test:smoke
+
+    # The same client code the extension uses, against a real DocumentDB instead of mocks.
+    db-integration:
+        name: Database Integration Tests
+        runs-on: ubuntu-latest
+        timeout-minutes: 10
+        services:
+            documentdb:
+                # What Quick Start's default `latest` tag points to, pinned so a new image can't fail unrelated PRs.
+                image: ghcr.io/documentdb/documentdb/documentdb-local:pg17-1.0.0
+                env:
+                    USERNAME: ciuser
+                    PASSWORD: ci-${{ github.run_id }}
+                ports:
+                    - 10260:10260
+        steps:
+            - name: Checkout Repository
+              uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+            - name: Setup Node.js and Dependencies
+              uses: ./.github/actions/setup
+
+            - name: Run Integration Tests (Jest)
+              run: npm run test:integration
+              env:
+                  DOCUMENTDB_INTEGRATION_USERNAME: ciuser
+                  DOCUMENTDB_INTEGRATION_PASSWORD: ci-${{ github.run_id }}
+
+    api-typings:
+        name: Extract API Typings
+        runs-on: ubuntu-latest
+        defaults:
+            run:
+                working-directory: api
+        steps:
+            - name: Checkout Repository
+              uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+            - name: Setup Node.js Environment
+              uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+              with:
+                  node-version-file: .nvmrc
+                  cache: npm
+                  cache-dependency-path: api/package-lock.json
+
+            - name: Install Dependencies (npm ci)
+              run: npm ci --prefer-offline --no-audit --no-fund --progress=false
+
+            # `api-extractor --local` rewrites the committed report instead of failing, so compare it after.
+            - name: Run API Extractor
+              run: |
+                  npm run api-extractor
+                  # Assigned first so a failing git status fails the step instead of reading as clean.
+                  status="$(git status --porcelain -- etc)"
+                  if [ -n "$status" ]; then
+                      git status --short -- etc
+                      git diff -- etc
+                      echo "::error::The public API changed. Run 'npm run api-extractor' in api/ and commit api/etc."
+                      exit 1
+                  fi
+
+    # Branch protection requires a check named "Build & Package", so this gate keeps that name
+    # and fails if any job above failed.
+    # A new job must join `needs` and have no job-level `if:`, since a skipped job passes the gate.
+    ci-gate:
+        name: Build & Package
+        runs-on: ubuntu-latest
+        if: always()
+        needs: [localization, lint, formatting, type-check, unit-tests, build-and-package, db-integration, api-typings]
+        permissions:
+            pull-requests: write
+        steps:
+            - name: Post PR Code Quality Report
+              if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository && !contains(needs.*.result, 'cancelled')
+              uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+              with:
+                  github-token: ${{ secrets.GITHUB_TOKEN }}
+                  script: |
                       const results = {
-                        l10n:     '${{ steps.l10n.outcome }}',
-                        lint:     '${{ steps.lint.outcome }}',
-                        prettier: '${{ steps.prettier.outcome }}',
+                        l10n:     '${{ needs.localization.result }}',
+                        lint:     '${{ needs.lint.result }}',
+                        prettier: '${{ needs.formatting.result }}',
                       };
                       const labels = {
                         l10n:     'Localization (`l10n`)',
@@ -106,14 +368,14 @@ jobs:
                       const failed = Object.keys(results).filter(k => results[k] === 'failure');
                       const rows = Object.keys(results).map(k => {
                         const ok = results[k] === 'success';
-                        const status = ok ? '✅ Passed' : '❌ Failed';
+                        const status = ok ? 'Passed' : 'Failed';
                         const hint = ok ? '' : hints[k];
                         return `| ${labels[k]} | ${status} | ${hint} |`;
                       }).join('\n');
 
                       const title = failed.length === 0
-                        ? '## ✅ Code Quality Checks'
-                        : '## ⚠️ Code Quality Issues';
+                        ? '## Code Quality Checks'
+                        : '## Code Quality Issues';
 
                       const body = [
                         marker,
@@ -146,205 +408,8 @@ jobs:
                         body,
                       });
 
-            - name: ❌ Fail if code quality checks failed
-              if: steps.l10n.outcome == 'failure' || steps.lint.outcome == 'failure' || steps.prettier.outcome == 'failure'
+            - name: Check job results
+              if: contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled')
               run: |
-                  echo "One or more code quality checks failed (l10n=${{ steps.l10n.outcome }}, lint=${{ steps.lint.outcome }}, prettier=${{ steps.prettier.outcome }})"
+                  echo '${{ toJSON(needs) }}'
                   exit 1
-
-    integration-tests:
-        name: Integration Tests
-        runs-on: ubuntu-latest
-        needs: [code-quality-and-tests]
-        if: |
-            (github.event_name == 'workflow_dispatch' && inputs.enforce_full_run) ||
-            github.ref == 'refs/heads/main' ||
-            startsWith(github.ref, 'refs/heads/release/') ||
-            (startsWith(github.ref, 'refs/pull/') && (
-              github.base_ref == 'main' ||
-              startsWith(github.base_ref, 'release/')
-            ))
-        defaults:
-            run:
-                working-directory: '.'
-        steps:
-            - name: ✅ Checkout Repository
-              uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-
-            - name: 🛠 Setup Node.js Environment (with cache)
-              uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
-              with:
-                  node-version-file: .nvmrc
-                  cache: npm
-                  cache-dependency-path: '**/package-lock.json'
-
-            - name: 📦 Install Dependencies (npm ci)
-              run: npm ci --prefer-offline --no-audit --no-fund --progress=false
-
-            - name: 🔄 Run Integration Tests (Headless UI)
-              if: false # TODO: Disabled — unreliable, needs revisiting
-              run: xvfb-run -a npm test
-
-    # Run on push to `main`/`release/**` (for cache seeding) and for PRs to main/release/**
-    build-and-package:
-        name: Build & Package
-        runs-on: ubuntu-latest
-        needs: [code-quality-and-tests]
-        permissions:
-            pull-requests: write
-        if: |
-            (github.event_name == 'workflow_dispatch' && inputs.enforce_full_run) ||
-            github.ref == 'refs/heads/main' ||
-            startsWith(github.ref, 'refs/heads/release/') ||
-            (startsWith(github.ref, 'refs/pull/') && (
-              github.base_ref == 'main' ||
-              startsWith(github.base_ref, 'release/')
-            ))
-        defaults:
-            run:
-                working-directory: '.'
-        steps:
-            - name: ✅ Checkout Repository
-              uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-
-            - name: 🛠 Setup Node.js Environment (with cache)
-              uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
-              with:
-                  node-version-file: .nvmrc
-                  cache: npm
-                  cache-dependency-path: '**/package-lock.json'
-
-            - name: 📦 Install Dependencies (npm ci)
-              run: npm ci --prefer-offline --no-audit --no-fund --progress=false
-
-            - name: 🏗 Build Project
-              run: npm run build
-
-            - name: 📦 Package Distributables (vsix/tgz)
-              run: npm run package
-
-            - name: 📐 Collect build sizes
-              id: sizes
-              run: |
-                  VSIX_FILE=$(find . -maxdepth 1 -name '*.vsix' | head -1)
-                  VSIX_SIZE=$(stat --format=%s "$VSIX_FILE")
-                  WEBVIEW_SIZE=$(stat --format=%s dist/views.js 2>/dev/null || echo 0)
-                  echo "vsix_file=$(basename "$VSIX_FILE")" >> $GITHUB_OUTPUT
-                  echo "vsix_size=$VSIX_SIZE" >> $GITHUB_OUTPUT
-                  echo "webview_size=$WEBVIEW_SIZE" >> $GITHUB_OUTPUT
-                  echo "{\"vsixSize\": $VSIX_SIZE, \"webviewSize\": $WEBVIEW_SIZE}" > build-sizes.json
-                  echo "VSIX: $VSIX_FILE ($VSIX_SIZE bytes), Webview: $WEBVIEW_SIZE bytes"
-
-            - name: 📤 Upload Artifacts
-              uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
-              with:
-                  name: Artifacts-${{ github.run_id }}
-                  path: |
-                      **/*.vsix
-                      **/*.tgz
-                      !**/node_modules
-
-            - name: 💾 Cache build sizes (push only)
-              if: github.event_name == 'push'
-              uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
-              with:
-                  path: build-sizes.json
-                  key: build-sizes-${{ github.ref_name }}-${{ github.sha }}
-
-            - name: 📥 Restore base branch sizes (PR only)
-              if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository
-              id: base-cache
-              uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
-              with:
-                  path: build-sizes.json
-                  key: build-sizes-${{ github.event.pull_request.base.ref }}-${{ github.event.pull_request.base.sha }}
-                  restore-keys: |
-                      build-sizes-${{ github.event.pull_request.base.ref }}-
-
-            - name: 📐 Prepare base sizes for comparison
-              if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository && steps.base-cache.outputs.cache-matched-key
-              run: |
-                  # Cache restore overwrites build-sizes.json with base branch data.
-                  # Rename it so the PR comment step can read base vs PR separately.
-                  mv build-sizes.json base-sizes.json
-
-            - name: 💬 Post PR Build Size Report
-              if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository
-              uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
-              with:
-                  github-token: ${{ secrets.GITHUB_TOKEN }}
-                  script: |
-                      const fs = require('fs');
-
-                      const prVsix    = parseInt('${{ steps.sizes.outputs.vsix_size }}', 10);
-                      const prWebview = parseInt('${{ steps.sizes.outputs.webview_size }}', 10);
-                      const vsixFile  = '${{ steps.sizes.outputs.vsix_file }}';
-
-                      const fmt = (bytes) => {
-                        if (bytes >= 1024 * 1024) return (bytes / 1024 / 1024).toFixed(2) + ' MB';
-                        return Math.round(bytes / 1024).toLocaleString() + ' KB';
-                      };
-                      const delta = (pr, base) => {
-                        const diff = pr - base;
-                        const pct  = base > 0 ? ((diff / base) * 100).toFixed(1) : '∞';
-                        const sign = diff > 0 ? '+' : '';
-                        const icon = diff > 0 ? '⬆️' : diff < 0 ? '⬇️' : '✅';
-                        return `${icon} ${sign}${fmt(diff)} (${sign}${pct}%)`;
-                      };
-
-                      let baseSizes = null;
-                      try {
-                        baseSizes = JSON.parse(fs.readFileSync('base-sizes.json', 'utf8'));
-                      } catch (_) { /* no cache */ }
-
-                      const runUrl = `${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}`;
-                      const marker = '<!-- build-size-report -->';
-                      let body;
-
-                      if (baseSizes) {
-                        body = [
-                          marker,
-                          '## 📦 Build Size Report',
-                          '',
-                          '| Metric | Base (`${{ github.event.pull_request.base.ref }}`) | PR | Delta |',
-                          '|--------|------|-----|-------|',
-                          `| VSIX (\`${vsixFile}\`) | ${fmt(baseSizes.vsixSize)} | ${fmt(prVsix)} | ${delta(prVsix, baseSizes.vsixSize)} |`,
-                          `| Webview bundle (\`views.js\`) | ${fmt(baseSizes.webviewSize)} | ${fmt(prWebview)} | ${delta(prWebview, baseSizes.webviewSize)} |`,
-                          '',
-                          `_[Download artifact](${runUrl}) · updated automatically on each push._`,
-                        ].join('\n');
-                      } else {
-                        body = [
-                          marker,
-                          '## 📦 Build Size Report',
-                          '',
-                          '| Metric | Size |',
-                          '|--------|------|',
-                          `| VSIX (\`${vsixFile}\`) | ${fmt(prVsix)} |`,
-                          `| Webview bundle (\`views.js\`) | ${fmt(prWebview)} |`,
-                          '',
-                          `> ⚠️ No baseline cached for \`${{ github.event.pull_request.base.ref }}\` yet — delta will appear after the next push to that branch.`,
-                          '',
-                          `_[Download artifact](${runUrl}) · updated automatically on each push._`,
-                        ].join('\n');
-                      }
-
-                      const { data: comments } = await github.rest.issues.listComments({
-                        owner: context.repo.owner,
-                        repo: context.repo.repo,
-                        issue_number: context.issue.number,
-                      });
-                      const existing = comments.find(c => c.body && c.body.includes(marker));
-                      if (existing) {
-                        await github.rest.issues.deleteComment({
-                          owner: context.repo.owner,
-                          repo: context.repo.repo,
-                          comment_id: existing.id,
-                        });
-                      }
-                      await github.rest.issues.createComment({
-                        owner: context.repo.owner,
-                        repo: context.repo.repo,
-                        issue_number: context.issue.number,
-                        body,
-                      });
