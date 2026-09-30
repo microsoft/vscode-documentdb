@@ -183,6 +183,8 @@ We've resolved [issue type] that affected [who/what]. Previously, [problem descr
 
 ## Image References
 
+Store release-note images under `docs/release-notes/images/`.
+
 ```markdown
 <p align="center"><img src="./images/X.Y.Z_feature_name.png" alt="Alt text description" width="800" style="max-width:100%;height:auto;"></p>
 ```

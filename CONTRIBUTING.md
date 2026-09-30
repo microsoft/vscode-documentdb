@@ -360,9 +360,12 @@ Review the generated files and edit for accuracy before continuing.
 
 ### 7.2 Add screenshots
 
-Release notes carry screenshots; the changelog does not. Take the screenshots by hand — only a person can drive the extension to the right state — then hand them to the agent and ask it to place them. Save them under `docs/release-notes/images/` named `X.Y.Z_feature_name.png`.
+Release notes carry screenshots; the changelog does not. The `writing-release-notes` skill asks at
+the start whether screenshots are planned. If they are, provide the final images and save them under
+`docs/release-notes/images/` as `X.Y.Z_feature_name.png`.
 
-The `writing-release-notes` skill owns the exact markup and the width conventions (full-width versus dialog crops); see its `RELEASE-NOTES-FORMAT.md`. Do not hand-write the `<img>` tags.
+The `writing-release-notes` skill owns the exact markup and width conventions (full-width versus
+dialog crops); see its `RELEASE-NOTES-FORMAT.md`. Do not hand-write the `<img>` tags.
 
 ### 7.3 Commit the notes
 
