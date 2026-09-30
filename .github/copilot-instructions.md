@@ -274,3 +274,4 @@ For detailed patterns, see:
 - [skills/tree-cluster-architecture/SKILL.md](skills/tree-cluster-architecture/SKILL.md) - Cluster tree items, identity, lookup, and test contracts
 - [skills/telemetry-instrumentation/SKILL.md](skills/telemetry-instrumentation/SKILL.md) - Telemetry instrumentation patterns
 - [skills/backport/SKILL.md](skills/backport/SKILL.md) - Cherry-picking a merged fix onto a `release/*` branch and opening the backport PR
+- [skills/flagging-fresh-dependencies/SKILL.md](skills/flagging-fresh-dependencies/SKILL.md) - Scanning lockfiles for npm versions published in the last N days and tracing the adding PR and its approver
