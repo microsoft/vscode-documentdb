@@ -326,7 +326,7 @@ interface InstanceRuntimeState {
     pendingReadiness?: PendingReadiness;
     error?: QuickStartMessage;
     inFlight?: QuickStartOperation;
-    /** The last reconcile restored the credentials from the container rather than SecretStorage. */
+    /** The credentials in use were restored from the container during this host session. */
     credentialsRestored?: boolean;
 }
 
@@ -2628,8 +2628,10 @@ export class QuickStartServiceImpl {
             const stored = await this.readStoredConnectionString(alias);
             if (stored) {
                 // Case 1: credentials recoverable ⇒ adopt (running→Running, exited→Stopped).
+                const entry = this.stateFor(alias);
+                entry.credentialsRestored =
+                    entry.credentialsRestored === true && entry.metadata?.connectionString === stored;
                 await this.adoptContainer(alias, record, winner.id, stored);
-                this.stateFor(alias).credentialsRestored = false;
                 return { outcome: 'adopted' };
             }
             if (freshLease) {

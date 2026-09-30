@@ -448,6 +448,16 @@ describe('QuickStartService — WI-2d registry-driven reconcile (multi-instance)
             properties: { trigger: 'refresh', reconcileResult: 'completed' },
             measurements: { outcome_restored: 1, managedContainerCount: 1 },
         });
+
+        await service.reconcile();
+
+        expect(service.wereCredentialsRestored()).toBe(true);
+        expect(lastReconcileTelemetry()?.measurements).toMatchObject({ outcome_adopted: 1 });
+
+        await writeConnectionString(DEFAULT_ALIAS, STORED_CONN, { displayName: DEFAULT_ALIAS, port: 10273 });
+        await service.reconcile();
+
+        expect(service.wereCredentialsRestored()).toBe(false);
     });
 
     it('restores credentials from a stopped container using the port it was published on', async () => {

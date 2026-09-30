@@ -772,6 +772,11 @@ gets a `quickStartSessionId` from the open command, and every event the panel pr
   its stage events.
 - Credential recovery (`documentDB.quickstart.reconcile` and related properties): see
   [decision 0005](./decisions.md#0005---restore-missing-credentials-from-the-managed-container).
+  The managed-instance `connect` event wraps client acquisition, including when adoption already
+  cached the credentials. Its `credentialsRestored` flag survives reconciliation of the same
+  credentials within the extension-host session; replaced credentials, completed setup, and Delete
+  clear it. Existing generic tree failure diagnostics remain separate from this managed-instance
+  connection event.
 
 ---
 

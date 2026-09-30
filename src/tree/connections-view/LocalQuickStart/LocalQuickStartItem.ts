@@ -15,6 +15,7 @@ import { type IconPath } from 'vscode';
 import { AuthMethodId } from '../../../documentdb/auth/AuthMethod';
 import { type ClustersClient } from '../../../documentdb/ClustersClient';
 import { CredentialCache } from '../../../documentdb/CredentialCache';
+import { maskSensitiveValuesInTelemetry } from '../../../documentdb/utils/connectionStringHelpers';
 import { DocumentDBConnectionString } from '../../../documentdb/utils/DocumentDBConnectionString';
 import { Views } from '../../../documentdb/Views';
 import { DocumentDBExperience } from '../../../DocumentDBExperiences';
@@ -32,6 +33,7 @@ import {
     type QuickStartStatus,
 } from '../../../services/localQuickStart/quickStartTypes';
 import { getResourcesPath } from '../../../utils/icons';
+import { nonNullValue } from '../../../utils/nonNull';
 import { createGenericElementWithContext } from '../../api/createGenericElementWithContext';
 import { containsRetryNode } from '../../api/retryNode';
 import { ClusterItemBase, type EphemeralClusterCredentials } from '../../documentdb/ClusterItemBase';
@@ -340,12 +342,7 @@ class QuickStartClusterItem extends ClusterItemBase<ConnectionClusterModel> {
 
     protected async authenticateAndConnect(): Promise<ClustersClient | null> {
         const result = await callWithTelemetryAndErrorHandling('connect', async (context: IActionContext) => {
-            context.telemetry.properties.view = Views.ConnectionsView;
-            context.telemetry.properties.connectionInitiatedFrom = Views.ConnectionsView;
-            context.telemetry.properties.connectionType = 'localQuickStart';
-            context.telemetry.properties.credentialsRestored = QuickStartService.wereCredentialsRestored(this.alias)
-                ? 'true'
-                : 'false';
+            this.setConnectionTelemetry(context);
 
             const connectionString = await QuickStartService.readStoredConnectionString(this.alias);
             if (!connectionString) {
@@ -365,10 +362,35 @@ class QuickStartClusterItem extends ClusterItemBase<ConnectionClusterModel> {
                 this.cluster.emulatorConfiguration,
             );
 
+            // Retain authentication error handling; client acquisition reports the connection once.
+            context.telemetry.suppressAll = true;
             return this.getClientWithProgress(this.cluster.clusterId);
         });
 
         return result ?? null;
+    }
+
+    protected override async getClientWithProgress(clusterId: string): Promise<ClustersClient> {
+        const result = await callWithTelemetryAndErrorHandling('connect', async (context: IActionContext) => {
+            context.errorHandling.rethrow = true;
+            context.errorHandling.suppressDisplay = true;
+            this.setConnectionTelemetry(context);
+            const connectionString = CredentialCache.getConnectionStringWithPassword(clusterId);
+            if (connectionString) {
+                maskSensitiveValuesInTelemetry(context, new DocumentDBConnectionString(connectionString));
+            }
+            return super.getClientWithProgress(clusterId);
+        });
+        return nonNullValue(result, 'connected client', 'QuickStartClusterItem.getClientWithProgress');
+    }
+
+    private setConnectionTelemetry(context: IActionContext): void {
+        context.telemetry.properties.view = Views.ConnectionsView;
+        context.telemetry.properties.connectionInitiatedFrom = Views.ConnectionsView;
+        context.telemetry.properties.connectionType = 'localQuickStart';
+        context.telemetry.properties.credentialsRestored = QuickStartService.wereCredentialsRestored(this.alias)
+            ? 'true'
+            : 'false';
     }
 }
 
