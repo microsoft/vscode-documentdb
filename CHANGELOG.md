@@ -36,7 +36,7 @@
 ### Security
 
 - **DocumentDB Local Credentials in Output Channel**: Quick Start no longer prints the instance password to the "DocumentDB Local Setup" output channel during setup, start, stop, refresh, or reconcile, and removes its temporary credentials file immediately after the container starts instead of leaving it for up to an hour. [#947](https://github.com/microsoft/vscode-documentdb/issues/947), [#951](https://github.com/microsoft/vscode-documentdb/pull/951)
-- **Dependency Security Updates**: Updates `baseline-browser-mapping` to 2.11.23 to address CVE-2026-45819, `js-yaml` to 3.15.2 to limit CPU usage from oversized YAML merge sequences, and `undici` to 7.30.0 for HTTP/2 WebSocket and backpressure fixes. [#920](https://github.com/microsoft/vscode-documentdb/pull/920), [#917](https://github.com/microsoft/vscode-documentdb/pull/917), [#846](https://github.com/microsoft/vscode-documentdb/pull/846)
+- **Dependency Security Updates**: Updates `baseline-browser-mapping` to 2.11.23 to address CVE-2026-45819 and `js-yaml` to 3.15.2 to limit CPU usage from oversized YAML merge sequences. [#920](https://github.com/microsoft/vscode-documentdb/pull/920), [#917](https://github.com/microsoft/vscode-documentdb/pull/917)
 
 ## 0.10.2
 
