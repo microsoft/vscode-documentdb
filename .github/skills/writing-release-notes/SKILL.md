@@ -51,7 +51,19 @@ For format and examples, see [RELEASE-NOTES-FORMAT.md](./RELEASE-NOTES-FORMAT.md
 
 ## Workflow
 
-### Step 1: Determine Version Type
+### Step 1: Confirm the Screenshot Plan
+
+Before drafting or updating release notes, remind the operator to consider whether screenshots
+would help explain the changes. Ask whether the release will include screenshots unless the
+operator already answered this in the current request.
+
+Suggested question: **Will this release include any screenshots?**
+
+If screenshots are planned, the operator provides the final image files. Store them under
+`docs/release-notes/images/` using `{version}_{feature_name}.png` and reference them using the
+markup in [RELEASE-NOTES-FORMAT.md](./RELEASE-NOTES-FORMAT.md). Do not add image placeholders.
+
+### Step 2: Determine Version Type
 
 ```
 Version X.Y.Z:
@@ -63,22 +75,23 @@ Version X.Y.Z:
     └── Add new changelog section at TOP of CHANGELOG.md
 ```
 
-### Step 2: Generate Changelog Entry
+### Step 3: Generate Changelog Entry
 
 1. Read [CHANGELOG-FORMAT.md](./CHANGELOG-FORMAT.md) for format
 2. Add entry at TOP of `CHANGELOG.md` (below `# Change Log` heading)
 3. Keep descriptions brief (1-2 sentences max)
 4. Include issue/PR links in format: `[#123](https://github.com/microsoft/vscode-documentdb/issues/123)`
 
-### Step 3: Generate Release Notes
+### Step 4: Generate Release Notes
 
 1. Read [RELEASE-NOTES-FORMAT.md](./RELEASE-NOTES-FORMAT.md) for format
 2. For X.Y.0: Create new file with full header and "What's New" sections
 3. For X.Y.Z: Append patch section to existing X.Y.md file
 4. Use exciting language for features, clear language for fixes
-5. Include images when applicable (reference existing patterns)
+5. If screenshots were requested, do not mark the release notes complete until each selected image
+   is stored and referenced using [RELEASE-NOTES-FORMAT.md](./RELEASE-NOTES-FORMAT.md).
 
-### Step 4: Update Release Notes Index
+### Step 5: Update Release Notes Index
 
 1. Open `docs/index.md`
 2. Find the **Release Notes** section
@@ -128,3 +141,5 @@ Before completing:
 - [ ] Release notes use proper header format
 - [ ] Patch releases append to existing file with `---` separator
 - [ ] `docs/index.md` Release Notes section updated with link to new version
+- [ ] Screenshot question was answered
+- [ ] Every requested screenshot is saved under `docs/release-notes/images/` and referenced
