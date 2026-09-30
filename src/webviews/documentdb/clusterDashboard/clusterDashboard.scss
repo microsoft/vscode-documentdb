@@ -530,6 +530,75 @@ $content-gutter: var(--spacingHorizontalMNudge); // 10px
 
     // ---- Inventory tiles ---------------------------------------------------
 
+    .statusStrip {
+        display: flex;
+        flex-direction: column;
+        min-width: 0;
+        gap: var(--spacingVerticalS);
+    }
+
+    .dashboardBreadcrumb {
+        box-sizing: border-box;
+        height: 32px;
+        flex: 0 1 auto;
+        flex-wrap: nowrap;
+        min-width: 0;
+
+        .fui-BreadcrumbItem,
+        .fui-BreadcrumbDivider,
+        .fui-Button__icon {
+            flex-shrink: 0;
+        }
+
+        .fui-BreadcrumbItem:last-of-type:not(:first-of-type) {
+            flex-shrink: 1;
+            min-width: 0;
+
+            .fui-BreadcrumbButton {
+                min-width: 0;
+                max-width: 100%;
+            }
+        }
+
+        .fui-BreadcrumbButton {
+            white-space: nowrap;
+        }
+    }
+
+    .dashboardBreadcrumbDatabaseName {
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+
+    .metricsScopeLine {
+        display: flex;
+        align-items: center;
+        gap: var(--spacingHorizontalSNudge);
+        height: 24px;
+        flex-shrink: 0;
+        min-width: 0;
+        font-size: var(--fontSizeBase200);
+    }
+
+    .metricsScopeLabel {
+        flex-shrink: 0;
+        color: var(--colorNeutralForeground3);
+    }
+
+    .metricsScopeType {
+        flex-shrink: 0;
+    }
+
+    .metricsScopeValue {
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        font-weight: var(--fontWeightSemibold);
+    }
+
     .statusTile {
         display: flex;
         flex-direction: column;
@@ -739,9 +808,7 @@ $content-gutter: var(--spacingHorizontalMNudge); // 10px
         background-color: var(--colorNeutralBackground1Hover);
     }
 
-    // A database row is a destination — the whole row steps in, with the trailing chevron as
-    // the visible, keyboard-reachable affordance for the same thing. A collection row is not:
-    // opening one leaves for another editor tab, so only its trailing button does that.
+    // Both levels are destinations; the trailing button remains the keyboard-reachable action.
     .namespaceRowClickable {
         cursor: pointer;
     }

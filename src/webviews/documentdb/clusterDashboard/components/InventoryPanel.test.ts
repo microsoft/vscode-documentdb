@@ -155,12 +155,31 @@ describe('InventoryPanel mouse navigation', () => {
         });
         expect(onViewStateChange).toHaveBeenCalledTimes(1);
     });
+
+    it('returns from the breadcrumb using the shared state reset and existing telemetry', () => {
+        const report = jest.fn();
+        let state = { ...databaseViewState('orders'), filterText: 'recent' };
+        const onViewStateChange: InventoryPanelProps['onViewStateChange'] = (update) => {
+            state = update(state);
+        };
+
+        navigateBackFromCollections('breadcrumb', report, onViewStateChange);
+
+        expect(report).toHaveBeenCalledWith('inventoryNavigation', {
+            direction: 'up',
+            control: 'breadcrumb',
+            level: 'collections',
+        });
+        expect(state).toEqual({ ...databaseViewState('orders'), filterText: '', currentDatabase: null });
+    });
 });
 
 describe('InventoryPanel empty states', () => {
     it('offers database creation after a successful empty cluster read', () => {
         const markup = renderInventory();
 
+        expect(markup).toContain('aria-label="Inventory level"');
+        expect(markup).toContain('aria-label="Inventory controls"');
         expect(markup).toContain('No databases in this cluster');
         expect(markup).toContain('Create one to start storing documents.');
         expect(markup).toContain('New Database');
@@ -180,7 +199,9 @@ describe('InventoryPanel empty states', () => {
 
     it('reports an empty database inventory failure only in the retry panel', () => {
         const reason = 'listDatabases: connection closed';
-        const markup = renderInventory({ storageStats: { ...EMPTY_STORAGE, errors: [reason] } });
+        const markup = renderInventory({
+            storageStats: { ...EMPTY_STORAGE, databases: null, totalSizeBytes: null, errors: [reason] },
+        });
 
         expect(markup).toContain('Could not read databases');
         expect(markup).toContain('Retry');

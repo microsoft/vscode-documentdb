@@ -184,7 +184,7 @@ const RowActionButtons = ({ row, isDatabases, isBusy, onActivate }: RowActionsPr
                     aria-label={primaryLabel}
                     disabled={isBusy}
                     onClick={(event) => {
-                        // A database row handles the click too; without this it fires twice.
+                        // The row handles the click too; without this it fires twice.
                         event.stopPropagation();
                         onActivate(row, 'rowActionButton');
                     }}
@@ -359,13 +359,8 @@ export const NamespaceTable = ({
                             <TableRow
                                 key={row.name}
                                 data-vscode-context={contextMenuContext}
-                                className={isDatabases ? 'namespaceRow namespaceRowClickable' : 'namespaceRow'}
-                                // Only a database row is clickable. Stepping into one
-                                // is a cheap, in-place move; opening a collection
-                                // leaves for another editor tab, which is too much to
-                                // hang on a stray click at a row the reader was only
-                                // reading.
-                                onClick={isDatabases && !isBusy ? () => onActivate(row, 'rowClick') : undefined}
+                                className="namespaceRow namespaceRowClickable"
+                                onClick={!isBusy ? () => onActivate(row, 'rowClick') : undefined}
                             >
                                 <TableCell>
                                     <TableCellLayout

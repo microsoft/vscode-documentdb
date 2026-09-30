@@ -240,7 +240,9 @@ export const clusterDashboardRouter = router({
             // How large the estates being looked at actually are, and how often the read is only
             // partially answerable — a cluster whose stats are half errors renders a table of
             // dashes, which no error event reports today.
-            myCtx.actionContext.telemetry.measurements.databaseCount = stats.databases.length;
+            if (stats.databases !== null) {
+                myCtx.actionContext.telemetry.measurements.databaseCount = stats.databases.length;
+            }
             myCtx.actionContext.telemetry.measurements.omittedDatabaseCount = stats.omittedDatabaseCount;
             myCtx.actionContext.telemetry.measurements.statsErrorCount = stats.errors.length;
 
@@ -248,21 +250,23 @@ export const clusterDashboardRouter = router({
         }),
 
     /**
-     * Opens the interactive shell against this cluster.
+     * Opens the interactive shell against the database currently shown in the dashboard.
      *
      * Routed through the existing shell command rather than reimplemented, so the dashboard
      * inherits its terminal wiring, telemetry and connection handling unchanged.
      */
-    openShell: publicProcedureWithTelemetry.mutation(async ({ ctx }): Promise<void> => {
-        const myCtx = dashboardContext(ctx);
-        myCtx.actionContext.telemetry.properties.activationSource = 'clusterDashboard:clusterToolbar';
+    openShell: publicProcedureWithTelemetry
+        .input(z.object({ databaseName: z.string().min(1) }))
+        .mutation(async ({ input, ctx }): Promise<void> => {
+            const myCtx = dashboardContext(ctx);
+            myCtx.actionContext.telemetry.properties.activationSource = 'clusterDashboard:clusterToolbar';
 
-        await vscode.commands.executeCommand(ShellCommandIds.openWithInput, {
-            clusterId: myCtx.clusterId,
-            clusterDisplayName: myCtx.clusterDisplayName,
-            databaseName: 'test',
-        });
-    }),
+            await vscode.commands.executeCommand(ShellCommandIds.openWithInput, {
+                clusterId: myCtx.clusterId,
+                clusterDisplayName: myCtx.clusterDisplayName,
+                databaseName: input.databaseName,
+            });
+        }),
 
     /** Runs the tree's existing copy-connection-string command for this cluster. */
     copyConnectionString: publicProcedureWithTelemetry.mutation(async ({ ctx }): Promise<void> => {
@@ -458,7 +462,9 @@ export const clusterDashboardRouter = router({
             ({ result }) => !result.ok,
         ).length;
         myCtx.actionContext.telemetry.measurements.commandCount = diagnostics.commands.length;
-        myCtx.actionContext.telemetry.measurements.databaseCount = storage.databases.length;
+        if (storage.databases !== null) {
+            myCtx.actionContext.telemetry.measurements.databaseCount = storage.databases.length;
+        }
 
         await readOnlyJsonDocumentProvider.openDocument(
             l10n.t('Cluster diagnostics'),

@@ -3,7 +3,9 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+import { UserCancelledError, type IActionContext } from '@microsoft/vscode-azext-utils';
 import * as vscode from 'vscode';
+import { AuthMethodId } from '../../../documentdb/auth/AuthMethod';
 import { CredentialCache } from '../../../documentdb/CredentialCache';
 import { QuickStartService } from '../../../services/localQuickStart/QuickStartService';
 import {
@@ -17,13 +19,47 @@ import { LocalQuickStartItem } from './LocalQuickStartItem';
 
 jest.mock('../../../utils/icons', () => ({ getResourcesPath: () => '/resources' }));
 
-jest.mock('@microsoft/vscode-azext-utils', () => ({
-    UserCancelledError: class UserCancelledError extends Error {},
-    callWithTelemetryAndErrorHandling: jest.fn(async (_eventName: string, callback: (ctx: unknown) => unknown) =>
-        callback({ telemetry: { properties: {}, measurements: {} }, errorHandling: {}, valuesToMask: [] }),
-    ),
-    createContextValue: (values: string[]) => values.join(';'),
-    createGenericElement: (opts: Record<string, unknown>) => ({ ...opts }),
+const mockConnectionEvents: Array<{ properties: IActionContext['telemetry']['properties']; valuesToMask: string[] }> =
+    [];
+
+jest.mock('@microsoft/vscode-azext-utils', () => {
+    class UserCancelledError extends Error {}
+    return {
+        UserCancelledError,
+        callWithTelemetryAndErrorHandling: jest.fn(
+            async (eventName: string, callback: (ctx: IActionContext) => unknown): Promise<unknown> => {
+                const context = {
+                    telemetry: { properties: {}, measurements: {} },
+                    errorHandling: {},
+                    valuesToMask: [],
+                } as unknown as IActionContext;
+                try {
+                    const result = await callback(context);
+                    context.telemetry.properties.result = 'Succeeded';
+                    return result;
+                } catch (error) {
+                    context.telemetry.properties.result = error instanceof UserCancelledError ? 'Canceled' : 'Failed';
+                    if (context.errorHandling.rethrow) {
+                        throw error;
+                    }
+                    return undefined;
+                } finally {
+                    if (eventName === 'connect' && !context.telemetry.suppressAll) {
+                        mockConnectionEvents.push({
+                            properties: context.telemetry.properties,
+                            valuesToMask: context.valuesToMask,
+                        });
+                    }
+                }
+            },
+        ),
+        createContextValue: (values: string[]) => values.join(';'),
+        createGenericElement: (opts: Record<string, unknown>) => ({ ...opts }),
+    };
+});
+
+jest.mock('../../../services/connectionDiagnosticsService', () => ({
+    ConnectionDiagnosticsService: { explain: jest.fn().mockResolvedValue(undefined) },
 }));
 
 jest.mock('../../../extensionVariables', () => ({
@@ -101,6 +137,7 @@ async function getClusterItem(): Promise<ClusterItemBase> {
 describe('QuickStartClusterItem — credential source of truth (H5)', () => {
     beforeEach(() => {
         jest.clearAllMocks();
+        mockConnectionEvents.length = 0;
         CredentialCache.deleteCredentials(CLUSTER_ID);
         jest.spyOn(QuickStartService, 'ensureHydrated').mockResolvedValue(undefined);
         jest.spyOn(QuickStartService, 'isHydrated', 'get').mockReturnValue(true);
@@ -152,6 +189,107 @@ describe('QuickStartClusterItem — credential source of truth (H5)', () => {
 
         expect(credentials?.connectionString).toBe(CONNECTION_STRING);
         expect(credentials?.nativeAuthConfig).toEqual({ connectionUser: 'qs_user', connectionPassword: 's3cr3t' });
+    });
+
+    it('still reports credential-read failures before client acquisition', async () => {
+        jest.spyOn(QuickStartService, 'readStoredConnectionString').mockRejectedValue(new Error('keyring unavailable'));
+
+        await expect((await getClusterItem()).connect()).resolves.toBeNull();
+
+        expect(mockGetClient).not.toHaveBeenCalled();
+        expect(mockConnectionEvents).toHaveLength(1);
+        expect(mockConnectionEvents[0].properties).toMatchObject({
+            connectionType: 'localQuickStart',
+            result: 'Failed',
+        });
+    });
+
+    describe.each([false, true])('connection telemetry with cached credentials=%s', (cached) => {
+        beforeEach(() => {
+            jest.spyOn(QuickStartService, 'readStoredConnectionString').mockResolvedValue(CONNECTION_STRING);
+            jest.spyOn(QuickStartService, 'wereCredentialsRestored').mockReturnValue(true);
+            if (cached) {
+                CredentialCache.setAuthCredentials(CLUSTER_ID, AuthMethodId.NativeAuth, CONNECTION_STRING, {
+                    connectionUser: 'qs_user',
+                    connectionPassword: 's3cr3t',
+                });
+            }
+        });
+
+        it.each(['tree', 'command'] as const)(
+            'reports recovered credentials once for a successful %s connection',
+            async (source) => {
+                const client = { listDatabases: jest.fn().mockResolvedValue([{ name: 'sampledb' }]) };
+                mockGetClient.mockResolvedValue(client);
+                const item = await getClusterItem();
+
+                if (source === 'tree') {
+                    expect(await item.getChildren()).toHaveLength(1);
+                } else {
+                    expect(await item.connect()).toBe(client);
+                }
+
+                expect(mockConnectionEvents).toHaveLength(1);
+                expect(mockConnectionEvents[0].properties).toMatchObject({
+                    connectionType: 'localQuickStart',
+                    credentialsRestored: 'true',
+                    result: 'Succeeded',
+                });
+                expect(mockConnectionEvents[0].valuesToMask).toEqual(expect.arrayContaining(['qs_user', 's3cr3t']));
+                expect(JSON.stringify(mockConnectionEvents[0].properties)).not.toContain('s3cr3t');
+            },
+        );
+
+        it.each(['tree', 'command'] as const)(
+            'preserves %s failure handling while reporting recovery failure',
+            async (source) => {
+                const error = new Error('connection rejected');
+                mockGetClient.mockRejectedValue(error);
+                const item = await getClusterItem();
+
+                if (source === 'tree') {
+                    expect(await item.getChildren()).not.toHaveLength(0);
+                } else if (cached) {
+                    await expect(item.connect()).rejects.toBe(error);
+                } else {
+                    await expect(item.connect()).resolves.toBeNull();
+                }
+
+                const events = mockConnectionEvents.filter(
+                    (event) => event.properties.connectionType === 'localQuickStart',
+                );
+                expect(events).toHaveLength(1);
+                expect(events[0].properties).toMatchObject({ credentialsRestored: 'true', result: 'Failed' });
+            },
+        );
+
+        it.each(['tree', 'command'] as const)('preserves cancellation for a %s connection', async (source) => {
+            mockGetClient.mockRejectedValue(new UserCancelledError());
+            const item = await getClusterItem();
+
+            if (source === 'tree') {
+                const children = await item.getChildren();
+                expect(children).toHaveLength(cached ? 0 : 1);
+            } else {
+                await expect(item.connect()).resolves.toBeNull();
+            }
+
+            const events = mockConnectionEvents.filter(
+                (event) => event.properties.connectionType === 'localQuickStart',
+            );
+            expect(events).toHaveLength(1);
+            expect(events[0].properties).toMatchObject({ credentialsRestored: 'true', result: 'Canceled' });
+        });
+
+        it('distinguishes credentials that were not restored', async () => {
+            jest.spyOn(QuickStartService, 'wereCredentialsRestored').mockReturnValue(false);
+            mockGetClient.mockResolvedValue({});
+
+            await (await getClusterItem()).connect();
+
+            expect(mockConnectionEvents).toHaveLength(1);
+            expect(mockConnectionEvents[0].properties.credentialsRestored).toBe('false');
+        });
     });
 
     it('does not connect when the authoritative container preflight rejects the stale running row', async () => {

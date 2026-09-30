@@ -117,6 +117,13 @@ export type WorkerStartupStage =
 
 export type WorkerToMainMessage =
     | {
+          readonly type: 'initTiming';
+          readonly requestId: string;
+          readonly activity: 'databaseConnect' | 'tokenWait';
+          readonly activityId: string;
+          readonly started: boolean;
+      }
+    | {
           readonly type: 'initProgress';
           readonly requestId: string;
           readonly stage: WorkerStartupStage;

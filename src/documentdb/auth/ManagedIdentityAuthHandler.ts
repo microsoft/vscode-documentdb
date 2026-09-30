@@ -7,6 +7,7 @@ import { randomUUID } from 'crypto';
 import { type MongoClientOptions, type OIDCResponse } from 'mongodb';
 import { traceAuthFlow, traceAuthOperation } from '../../utils/authTrace';
 import { type CachedClusterCredentials } from '../CredentialCache';
+import { withTokenAcquisitionTiming, type ConnectionStartupTimings } from '../utils/ConnectionStartupTimings';
 import { DocumentDBConnectionString } from '../utils/DocumentDBConnectionString';
 import { resolveAllowInvalidCertificates } from '../utils/tlsException';
 import { type AuthHandler, type AuthHandlerResponse } from './AuthHandler';
@@ -29,7 +30,7 @@ export class ManagedIdentityAuthHandler implements AuthHandler {
 
     constructor(private readonly clusterCredentials: CachedClusterCredentials) {}
 
-    public async configureAuth(): Promise<AuthHandlerResponse> {
+    public async configureAuth(timings?: ConnectionStartupTimings): Promise<AuthHandlerResponse> {
         const clientId = this.clusterCredentials.managedIdentityConfig?.clientId;
         const tenantId = this.clusterCredentials.managedIdentityConfig?.tenantId;
         traceAuthFlow(
@@ -60,11 +61,13 @@ export class ManagedIdentityAuthHandler implements AuthHandler {
                     const token = await traceAuthOperation(
                         'managedIdentity.oidcCallback',
                         () =>
-                            getManagedIdentityAccessToken(
-                                [DOCUMENTDB_ENTRA_SCOPE],
-                                clientId,
-                                tenantId,
-                                this.tokenCorrelationId,
+                            withTokenAcquisitionTiming(timings, () =>
+                                getManagedIdentityAccessToken(
+                                    [DOCUMENTDB_ENTRA_SCOPE],
+                                    clientId,
+                                    tenantId,
+                                    this.tokenCorrelationId,
+                                ),
                             ),
                         {},
                         this.tokenCorrelationId,

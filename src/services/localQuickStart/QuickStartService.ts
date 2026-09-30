@@ -37,6 +37,7 @@ import {
     ContainerRuntime,
     getBoundHostPort,
     getExitCode,
+    getPublishedHostPort,
     getQuickStartOutputChannel,
     hasExited,
     type IContainerRuntime,
@@ -76,6 +77,7 @@ import {
     type InstanceMetadata,
     InstanceState,
     type InstanceStatus,
+    type OpenLocalQuickStartOptions,
     type PortAvailability,
     type ProvisionStage,
     QUICK_START_ALIAS_LABEL_KEY,
@@ -290,7 +292,7 @@ interface PendingReadiness {
     readonly password: string;
     readonly imageRef: string;
     readonly sampleDataRequested: boolean;
-    readonly journeyCorrelationId: string;
+    readonly provisionCorrelationId: string;
     /** A fresh (non-reusing) attempt owns its half-initialized volume, so a discard may wipe it. */
     readonly reusing: boolean;
     /** This run's lease, so a discard releases it like a failed attempt would. */
@@ -324,7 +326,23 @@ interface InstanceRuntimeState {
     pendingReadiness?: PendingReadiness;
     error?: QuickStartMessage;
     inFlight?: QuickStartOperation;
+    /** The credentials in use were restored from the container during this host session. */
+    credentialsRestored?: boolean;
 }
+
+/** What reconcile concluded for one alias; counted into the `documentDB.quickstart.reconcile` event. */
+type ReconcileOutcome =
+    | 'adopted'
+    | 'restored'
+    | 'provisioning'
+    | 'credentialsMissing'
+    | 'credentialsMissingNoContainer'
+    | 'missing'
+    | 'dataRemoved'
+    | 'scavenged'
+    | 'notInstalled';
+
+type CredentialRestoreFailure = 'noCredentials' | 'storeFailed';
 
 /** Long-running work the tree renders progress for. */
 export type QuickStartOperationKind =
@@ -603,7 +621,7 @@ export class QuickStartServiceImpl {
 
         if (!this.hydration) {
             traceQuickStart('Lazy hydration requested; starting deep reconciliation.');
-            this.hydration = this.reconcile()
+            this.hydration = this.reconcile('hydration')
                 .then(() => {
                     this.hydrated = true;
                     // Reconcile can settle without a status change (nothing was ever set up), which
@@ -638,7 +656,7 @@ export class QuickStartServiceImpl {
     public async refreshHydratedState(): Promise<void> {
         traceQuickStart('Explicit node refresh requested; starting deep reconciliation.');
         try {
-            await this.reconcile();
+            await this.reconcile('refresh');
             this.hydrated = true;
             this.syncLikelyInstalledHint();
             this.lastBackgroundRefreshAt = Date.now();
@@ -675,7 +693,7 @@ export class QuickStartServiceImpl {
 
     private async runProvisionStage<T>(
         stage: Exclude<ProvisionStage, 'done' | 'error'>,
-        journeyCorrelationId: string,
+        provisionCorrelationId: string,
         operation: () => Promise<T>,
         valuesToMask: ReadonlyArray<string> = [],
     ): Promise<T> {
@@ -689,7 +707,7 @@ export class QuickStartServiceImpl {
             // Docker's error lines can quote the image ref, whose tag the user typed.
             telemetryContext.valuesToMask.push(...valuesToMask);
             telemetryContext.telemetry.properties.stage = stage;
-            telemetryContext.telemetry.properties.journeyCorrelationId = journeyCorrelationId;
+            telemetryContext.telemetry.properties.provisionCorrelationId = provisionCorrelationId;
             try {
                 result = await operation();
             } catch (error) {
@@ -714,7 +732,7 @@ export class QuickStartServiceImpl {
         signal: AbortSignal,
         options?: AdvancedQuickStartOptions,
         alias: string = DEFAULT_ALIAS,
-        journeyCorrelationId: string = crypto.randomUUID(),
+        provisionCorrelationId: string = crypto.randomUUID(),
     ): AsyncGenerator<StageEvent> {
         if (this.stateFor(alias).provisioning || this.stateFor(alias).lifecycleBusy) {
             yield stageEvent('error', 'error', { key: 'setupAlreadyInProgress' });
@@ -735,6 +753,7 @@ export class QuickStartServiceImpl {
         // than wiping it; the stored credentials are what opens the volume's cluster, so freshly
         // generated ones would fail against existing data.
         const startFresh = options?.startFresh === true;
+        const priorState = this.stateFor(alias).state;
         const stored = startFresh ? undefined : await this.getReusableCredentials(alias);
         const wantsCustomCredentials = !!(options?.username && options?.password);
         // With its data gone this is a new instance, set up as the wizard showed it. It still keeps the
@@ -776,6 +795,7 @@ export class QuickStartServiceImpl {
         let envFilePath: string | undefined;
         let success = false;
         let portTaken = false;
+        let refusedCredentialsUnavailable = false;
         let readinessTimedOut = false;
         let createTimedOut = false;
         // Owner nonce for this run: stamped on the container (H4) and on the provisioning lease (H3),
@@ -807,7 +827,7 @@ export class QuickStartServiceImpl {
 
             // --- checking ---
             yield stageEvent('checking', 'active');
-            const readiness = await this.runProvisionStage('checking', journeyCorrelationId, async () => {
+            const readiness = await this.runProvisionStage('checking', provisionCorrelationId, async () => {
                 const result = await this.checkDockerReadiness();
                 this.throwIfAborted(signal);
                 const continueAfterIndeterminateReadiness =
@@ -838,6 +858,7 @@ export class QuickStartServiceImpl {
                     // until success; credentials written before `docker run` are restored only if it fails.
                 } else if (existing || hasReadyRecord || volumeAtGate) {
                     const credentialsUnavailable: QuickStartMessage = { key: 'credentialsUnavailable' };
+                    refusedCredentialsUnavailable = true;
                     this.setStatus(alias, InstanceState.CredentialsMissing, undefined, credentialsUnavailable);
                     yield stageEvent('checking', 'error', credentialsUnavailable);
                     return;
@@ -877,7 +898,7 @@ export class QuickStartServiceImpl {
             activeDockerStage = 'pulling';
             await this.runProvisionStage(
                 'pulling',
-                journeyCorrelationId,
+                provisionCorrelationId,
                 async () => {
                     await this.runtime.pullImage(imageRef, cts.token);
                     this.throwIfAborted(signal);
@@ -953,7 +974,7 @@ export class QuickStartServiceImpl {
             createAttempted = true;
             containerId = await this.runProvisionStage(
                 'creating',
-                journeyCorrelationId,
+                provisionCorrelationId,
                 async () => {
                     let createdContainerId: string | undefined;
                     try {
@@ -1004,7 +1025,7 @@ export class QuickStartServiceImpl {
 
             // --- starting (confirm running, read bound port, follow logs) ---
             yield stageEvent('starting', 'active');
-            const inspected = await this.runProvisionStage('starting', journeyCorrelationId, async () => {
+            const inspected = await this.runProvisionStage('starting', provisionCorrelationId, async () => {
                 const result = await this.runtime.inspectContainer(provisionedContainerId);
                 this.throwIfAborted(signal);
                 return result;
@@ -1032,7 +1053,7 @@ export class QuickStartServiceImpl {
                 password: credentials.password,
                 imageRef,
                 sampleDataRequested,
-                journeyCorrelationId,
+                provisionCorrelationId: provisionCorrelationId,
                 reusing: reusesVolume,
                 operationId,
                 leaseHeld,
@@ -1043,7 +1064,7 @@ export class QuickStartServiceImpl {
             if (leaseHeld) {
                 await this.renewProvisioningLease(alias, operationId, boundPort);
             }
-            await this.runProvisionStage('waiting', journeyCorrelationId, async () => {
+            await this.runProvisionStage('waiting', provisionCorrelationId, async () => {
                 await this.waitForReadiness(connectionString, provisionedContainerId, secrets, signal, cts.token);
                 this.throwIfAborted(signal);
 
@@ -1198,7 +1219,12 @@ export class QuickStartServiceImpl {
                 telemetryContext.telemetry.properties.customImage = String(usedCustomImage);
                 telemetryContext.telemetry.properties.sampleData = String(sampleDataRequested);
                 telemetryContext.telemetry.properties.dockerFailureKind = provisioningDockerFailureKind ?? 'none';
-                telemetryContext.telemetry.properties.journeyCorrelationId = journeyCorrelationId;
+                telemetryContext.telemetry.properties.priorState = priorState;
+                telemetryContext.telemetry.properties.startFresh = startFresh ? 'true' : 'false';
+                telemetryContext.telemetry.properties.refusedCredentialsUnavailable = refusedCredentialsUnavailable
+                    ? 'true'
+                    : 'false';
+                telemetryContext.telemetry.properties.provisionCorrelationId = provisionCorrelationId;
                 telemetryContext.telemetry.measurements.provisionMs = Date.now() - provisionStartedAt;
             });
             this.stateFor(alias).provisioning = false;
@@ -1207,7 +1233,8 @@ export class QuickStartServiceImpl {
         // Emitted only now — after `finally` cleared `provisioning` — so a "Wait longer" / "Start
         // over" / "Retry" click triggered by this event never races the still-running guard.
         if (terminalEvent) {
-            yield terminalEvent;
+            // The Error status went out before the rollback, so its reuse flag may be stale.
+            yield { ...terminalEvent, canReuseExistingData: await this.canReuseExistingData(alias) };
         }
     }
 
@@ -1276,6 +1303,7 @@ export class QuickStartServiceImpl {
             undefined,
         );
         this.stateFor(pending.alias).pendingReadiness = undefined;
+        this.stateFor(pending.alias).credentialsRestored = false;
     }
 
     /**
@@ -1316,7 +1344,7 @@ export class QuickStartServiceImpl {
             // Stream the container's logs during THIS wait so "View Docker output" shows the live
             // startup rather than only the stale first-attempt output (opus-4.8).
             void this.runtime.followLogs(pending.containerId, secretVariants(pending.password), cts.token);
-            await this.runProvisionStage('waiting', pending.journeyCorrelationId, async () => {
+            await this.runProvisionStage('waiting', pending.provisionCorrelationId, async () => {
                 await this.waitForReadiness(
                     pending.connectionString,
                     pending.containerId,
@@ -1377,7 +1405,7 @@ export class QuickStartServiceImpl {
             void callWithTelemetryAndErrorHandling('documentDB.quickstart.resumeReadiness', (telemetryContext) => {
                 telemetryContext.errorHandling.suppressDisplay = true;
                 telemetryContext.telemetry.properties.resumeResult = resumeResult;
-                telemetryContext.telemetry.properties.journeyCorrelationId = pending.journeyCorrelationId;
+                telemetryContext.telemetry.properties.provisionCorrelationId = pending.provisionCorrelationId;
                 telemetryContext.telemetry.measurements.resumeMs = Date.now() - resumeStartedAt;
             });
         }
@@ -1659,6 +1687,11 @@ export class QuickStartServiceImpl {
      */
     public async readStoredConnectionString(alias: string = DEFAULT_ALIAS): Promise<string | undefined> {
         return readConnectionString(alias);
+    }
+
+    /** Whether the credentials in use were restored from the container (decision 0005), for telemetry. */
+    public wereCredentialsRestored(alias: string = DEFAULT_ALIAS): boolean {
+        return this.stateFor(alias).credentialsRestored === true;
     }
 
     private async getReusableCredentials(alias: string = DEFAULT_ALIAS): Promise<GeneratedCredentials | undefined> {
@@ -1954,7 +1987,13 @@ export class QuickStartServiceImpl {
                     )
                     .then((choice) =>
                         choice === setUp
-                            ? vscode.commands.executeCommand('vscode-documentdb.command.localQuickStart.open')
+                            ? vscode.commands.executeCommand(
+                                  'vscode-documentdb.command.localQuickStart.open',
+                                  undefined,
+                                  {
+                                      activationSource: 'dataRemovedNotification',
+                                  } satisfies OpenLocalQuickStartOptions,
+                              )
                             : undefined,
                     );
             } else {
@@ -2287,6 +2326,7 @@ export class QuickStartServiceImpl {
                 CredentialCache.deleteCredentials(clusterId(alias));
                 entry.metadata = undefined;
                 entry.dataRemoved = false;
+                entry.credentialsRestored = false;
                 // Otherwise a reopened wizard offers "Wait longer" for the container just removed.
                 entry.pendingReadiness = undefined;
                 this.setStatus(alias, InstanceState.NotInstalled);
@@ -2454,15 +2494,20 @@ export class QuickStartServiceImpl {
      * reservation (crashed host) is scavenged; a ready record whose container vanished becomes
      * Missing (recoverable via recreate).
      */
-    public async reconcile(): Promise<void> {
+    public async reconcile(trigger: 'hydration' | 'refresh' = 'refresh'): Promise<void> {
         if (!this.reconciliation) {
             traceQuickStart('Deep reconciliation started.');
-            this.reconciliation = this.performReconciliation()
+            this.reconciliation = this.performReconciliation(trigger)
                 .then(() => {
                     traceQuickStart('Deep reconciliation completed.');
                 })
                 .catch((error: unknown) => {
                     traceQuickStart('Deep reconciliation failed; Docker state remains unknown.');
+                    void callWithTelemetryAndErrorHandling('documentDB.quickstart.reconcile', (telemetryContext) => {
+                        telemetryContext.errorHandling.suppressDisplay = true;
+                        telemetryContext.telemetry.properties.trigger = trigger;
+                        telemetryContext.telemetry.properties.reconcileResult = 'failed';
+                    });
                     throw error;
                 })
                 .finally(() => {
@@ -2475,7 +2520,7 @@ export class QuickStartServiceImpl {
         await this.reconciliation;
     }
 
-    private async performReconciliation(): Promise<void> {
+    private async performReconciliation(trigger: 'hydration' | 'refresh'): Promise<void> {
         const readiness = this.checkDockerReadiness({ suppressCommandEcho: true }).catch(() => undefined);
         const containersPromise = this.runtime.listByLabel({ [QUICK_START_LABEL_KEY]: '1' }) as Promise<
             Array<{
@@ -2510,15 +2555,24 @@ export class QuickStartServiceImpl {
             ...liveByAlias.keys(),
         ]);
         const scavenge = new Set<string>();
+        const outcomeCounts = new Map<string, number>();
+        const count = (key: string): void => {
+            outcomeCounts.set(key, (outcomeCounts.get(key) ?? 0) + 1);
+        };
         for (const alias of aliases) {
             // An operation running in this window owns the alias until it settles; reconciling now
             // would adopt or scavenge its half-written state.
             const entry = this.stateFor(alias);
             if (entry.provisioning || entry.lifecycleBusy) {
+                count('skippedBusy');
                 continue;
             }
             const record = instances.find((existing) => existing.alias === alias);
             const outcome = await this.reconcileAlias(alias, record, liveByAlias.get(alias) ?? [], now);
+            count(`outcome_${outcome.outcome}`);
+            if (outcome.restoreFailure) {
+                count(`restoreFailed_${outcome.restoreFailure}`);
+            }
             if (outcome.scavenge) {
                 scavenge.add(alias);
             }
@@ -2542,6 +2596,18 @@ export class QuickStartServiceImpl {
             .sort()
             .join(', ');
         traceQuickStart(`Reconciled ${aliases.size} instance(s): ${stateSummary}.`);
+
+        // One event per deep reconcile: which recovery paths ran, and how often.
+        void callWithTelemetryAndErrorHandling('documentDB.quickstart.reconcile', (telemetryContext) => {
+            telemetryContext.errorHandling.suppressDisplay = true;
+            telemetryContext.telemetry.properties.trigger = trigger;
+            telemetryContext.telemetry.properties.reconcileResult = 'completed';
+            telemetryContext.telemetry.measurements.instanceCount = aliases.size;
+            telemetryContext.telemetry.measurements.managedContainerCount = containers.length;
+            for (const [key, value] of outcomeCounts) {
+                telemetryContext.telemetry.measurements[key] = value;
+            }
+        });
     }
 
     /**
@@ -2554,7 +2620,7 @@ export class QuickStartServiceImpl {
         record: QuickStartInstanceRecord | undefined,
         containers: Array<{ id: string; createdAt?: Date }>,
         now: number,
-    ): Promise<{ scavenge?: boolean }> {
+    ): Promise<{ outcome: ReconcileOutcome; scavenge?: boolean; restoreFailure?: CredentialRestoreFailure }> {
         const winner = this.pickManagedContainer(alias, containers);
         const freshLease = record !== undefined && isProvisioningLeaseFresh(record, now);
 
@@ -2562,14 +2628,23 @@ export class QuickStartServiceImpl {
             const stored = await this.readStoredConnectionString(alias);
             if (stored) {
                 // Case 1: credentials recoverable ⇒ adopt (running→Running, exited→Stopped).
+                const entry = this.stateFor(alias);
+                entry.credentialsRestored =
+                    entry.credentialsRestored === true && entry.metadata?.connectionString === stored;
                 await this.adoptContainer(alias, record, winner.id, stored);
-                return {};
+                return { outcome: 'adopted' };
             }
             if (freshLease) {
                 // A fresh in-flight container whose secret isn't written yet is Provisioning — never
                 // credential-unavailable.
                 this.setStatus(alias, InstanceState.Provisioning);
-                return {};
+                return { outcome: 'provisioning' };
+            }
+            const restored = await this.recoverCredentialsFromContainer(alias, winner.id);
+            if ('connectionString' in restored) {
+                await this.adoptContainer(alias, await getInstance(alias), winner.id, restored.connectionString);
+                this.stateFor(alias).credentialsRestored = true;
+                return { outcome: 'restored' };
             }
             // Case 4: labelled container + no recoverable secret + no fresh lease ⇒ surface as
             // credential-unavailable. NEVER remove it and NEVER touch its volume (R2).
@@ -2577,33 +2652,33 @@ export class QuickStartServiceImpl {
                 `DocumentDB Local instance "${alias}" is present but its stored credentials are missing; surfacing as credential-unavailable (not removed).`,
             );
             this.setStatus(alias, InstanceState.CredentialsMissing, undefined, { key: 'credentialsUnavailable' });
-            return {};
+            return { outcome: 'credentialsMissing', restoreFailure: restored.failure };
         }
 
         // No live container.
         if (freshLease) {
             // Case 2: a create is genuinely in flight (its container isn't listed yet).
             this.setStatus(alias, InstanceState.Provisioning);
-            return {};
+            return { outcome: 'provisioning' };
         }
         if (record?.phase === 'provisioning') {
             // Stale pre-create reservation (crashed host): nothing was created ⇒ scavenge + clear.
             this.stateFor(alias).metadata = undefined;
             this.setStatus(alias, InstanceState.NotInstalled);
-            return { scavenge: true };
+            return { outcome: 'scavenged', scavenge: true };
         }
         if (record?.phase === 'ready') {
             if ((await this.dataVolumeExists(alias)) === false) {
                 // Removed together with its data volume: nothing is left to recreate.
                 this.markDataRemoved(alias);
-                return {};
+                return { outcome: 'dataRemoved' };
             }
             const stored = await this.readStoredConnectionString(alias);
             if (!stored) {
                 // The data is still on disk but nothing can open it; setup must offer Start fresh
                 // up front rather than refuse after the click.
                 this.setStatus(alias, InstanceState.CredentialsMissing, undefined, { key: 'credentialsUnavailable' });
-                return {};
+                return { outcome: 'credentialsMissingNoContainer' };
             }
             // Case 3: a known ready instance whose container vanished ⇒ Missing (recoverable via a
             // recreate that reuses the volume). Keep the record, and rebuild the metadata the tree
@@ -2616,12 +2691,49 @@ export class QuickStartServiceImpl {
             entry.port = record.port;
             entry.error = undefined;
             this.statusEmitter.fire();
-            return {};
+            return { outcome: 'missing' };
         }
         // No record and no container (only the always-present DEFAULT reaches here) ⇒ NotInstalled.
         this.stateFor(alias).metadata = undefined;
         this.setStatus(alias, InstanceState.NotInstalled);
-        return {};
+        return { outcome: 'notInstalled' };
+    }
+
+    /**
+     * Rebuild and store the connection string from the container's own environment, where setup
+     * passed the credentials. Covers a container created by another VS Code profile or install, or a
+     * secret the OS keyring can no longer read. See decision 0005.
+     */
+    private async recoverCredentialsFromContainer(
+        alias: string,
+        containerId: string,
+    ): Promise<{ connectionString: string } | { failure: CredentialRestoreFailure }> {
+        const inspected = await this.runtime.inspectContainer(containerId);
+        const username = inspected?.environmentVariables?.['USERNAME'];
+        const password = inspected?.environmentVariables?.['PASSWORD'];
+        if (!inspected || !username || !password) {
+            return { failure: 'noCredentials' };
+        }
+        const port =
+            getBoundHostPort(inspected) ??
+            getPublishedHostPort(inspected) ??
+            (await getInstance(alias))?.port ??
+            QUICK_START_PORT;
+        const connectionString = composeConnectionString(username, password, port);
+        try {
+            await writeConnectionString(alias, connectionString, {
+                displayName: alias === DEFAULT_ALIAS ? DEFAULT_INSTANCE_DISPLAY_NAME : alias,
+                port,
+            });
+        } catch {
+            // SecretStorage itself may be what failed, so stay on the credential-unavailable path.
+            meterQuickStartSilentCatch('reconcile_storeRecoveredCredentials');
+            return { failure: 'storeFailed' };
+        }
+        getQuickStartOutputChannel().appendLine(
+            `DocumentDB Local instance "${alias}" had no stored credentials; restored them from its container.`,
+        );
+        return { connectionString };
     }
 
     /**

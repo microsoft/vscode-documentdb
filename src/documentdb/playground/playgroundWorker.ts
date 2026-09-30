@@ -111,6 +111,19 @@ parentPort.on('message', (msg: MainToWorkerMessage) => {
 // ─── Init handler ────────────────────────────────────────────────────────────
 
 async function handleInit(msg: Extract<MainToWorkerMessage, { type: 'init' }>): Promise<void> {
+    let connecting = true;
+    const reportTiming = (activity: 'databaseConnect' | 'tokenWait', activityId: string, started: boolean): void => {
+        if (connecting) {
+            const timing: WorkerToMainMessage = {
+                type: 'initTiming',
+                requestId: msg.requestId,
+                activity,
+                activityId,
+                started,
+            };
+            parentPort!.postMessage(timing);
+        }
+    };
     const reportProgress = (stage: WorkerStartupStage): void => {
         const progress: WorkerToMainMessage = { type: 'initProgress', requestId: msg.requestId, stage };
         parentPort!.postMessage(progress);
@@ -151,8 +164,14 @@ async function handleInit(msg: Extract<MainToWorkerMessage, { type: 'init' }>): 
                     clientId: usesManagedIdentity ? msg.managedIdentityClientId : undefined,
                 };
                 reportProgress('acquiringToken');
+                reportTiming('tokenWait', requestId, true);
                 parentPort!.postMessage(tokenRequest);
-                const accessToken = await tokenPromise;
+                let accessToken: string;
+                try {
+                    accessToken = await tokenPromise;
+                } finally {
+                    reportTiming('tokenWait', requestId, false);
+                }
                 reportProgress('authenticating');
 
                 // Parse the JWT exp claim for a meaningful cache duration.
@@ -181,7 +200,13 @@ async function handleInit(msg: Extract<MainToWorkerMessage, { type: 'init' }>): 
     // Create and connect the database client
     reportProgress('connecting');
     mongoClient = new MongoClient(msg.connectionString, options);
-    await mongoClient.connect();
+    reportTiming('databaseConnect', msg.requestId, true);
+    try {
+        await mongoClient.connect();
+    } finally {
+        reportTiming('databaseConnect', msg.requestId, false);
+        connecting = false;
+    }
 
     // Create the shell runtime with console output routing to the main thread
     reportProgress('initializingRuntime');
