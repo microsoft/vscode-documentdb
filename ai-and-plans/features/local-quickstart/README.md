@@ -2,7 +2,7 @@
 feature: local-quickstart
 kind: notes
 status: active
-prs: [653, 798, 876, 958, 954, 953, 955]
+prs: [653, 798, 876, 958, 954, 953, 955, 979]
 verified: 2026-08-14
 code:
   - src/commands/localQuickStart/**
@@ -60,8 +60,9 @@ regular new-connection wizard instead ([0001](./decisions.md#0001--single-manage
   is a Docker CLI that can reach a Linux-container daemon from the extension host.
 - **Collision safety is non-negotiable.** A pre-existing container holding a planned name or port is
   never recreated over. Ours gets re-adopted; anything else is rejected with an inline error.
-- **Existing data is preserved.** A volume without recoverable credentials requires an explicit
-  Start fresh. Its removal waits until the port check and image download succeed. Sample data is
+- **Existing data is preserved.** A managed container with no stored credentials has them restored
+  from its own environment ([0005](./decisions.md#0005---restore-missing-credentials-from-the-managed-container)).
+  A volume without recoverable credentials requires an explicit Start fresh. Its removal waits until the port check and image download succeed. Sample data is
   loaded only into a new volume, so recreating an instance does not restore documents the user deleted.
 - **Refresh reports; it does not clean up.** A container and volume both gone show as not set up, but
   the record and credentials stay until setup or Delete: Docker pointed at another engine or context
@@ -69,26 +70,30 @@ regular new-connection wizard instead ([0001](./decisions.md#0001--single-manage
 
 ## Timeline
 
-| Date       | PR   | What changed                                                 | Docs                                                                                     |
-| ---------- | ---- | ------------------------------------------------------------ | ---------------------------------------------------------------------------------------- |
-| 2026-06-15 | #653 | Initial design, benchmarked against the PostgreSQL extension | [iterations/01-initial-design.md](./iterations/01-initial-design.md)                     |
-| 2026-06-22 | —    | POC scope, plan, and 5-agent review                          | [iterations/02-poc/](./iterations/02-poc/)                                               |
-| 2026-06-25 | —    | Instance model locked to one instance                        | [decisions.md#0001](./decisions.md#0001--single-managed-instance-ownership-bounded)      |
-| 2026-06-26 | —    | v1 production-readiness gap analysis                         | [v1-readiness-gaps.md](./v1-readiness-gaps.md)                                           |
-| 2026-07-06 | —    | Single → multi instance reversal                             | [decisions.md#0002](./decisions.md#0002--multiple-managed-instances-in-v1-reconstructed) |
-| 2026-08-02 | —    | Provider-neutral Docker readiness                            | [iterations/04-ui-redesign/](./iterations/04-ui-redesign/)                               |
-| 2026-08-04 | #798 | UI redesign shipped (Concept F)                              | [iterations/04-ui-redesign/](./iterations/04-ui-redesign/)                               |
-| 2026-08-09 | #876 | State sync + infrastructure error translation                | [iterations/05-error-translation.md](./iterations/05-error-translation.md)               |
-| 2026-09-23 | #958 | Setup never wipes a data volume before it can succeed (#946) | [iterations/06-data-volume-protection/](./iterations/06-data-volume-protection/)         |
-| 2026-09-24 | #954 | Setup failures show Docker's error, not an exit code         | [iterations/07-setup-failures.md](./iterations/07-setup-failures.md)                     |
-| 2026-09-24 | #953 | Reject credentials and ports setup can't honor (#949)        | [iterations/08-input-validation.md](./iterations/08-input-validation.md)                 |
-| 2026-09-24 | #955 | Tree and wizard stop showing a stale instance (#950)         | [iterations/09-state-recovery.md](./iterations/09-state-recovery.md)                     |
+| Date       | PR   | What changed                                                 | Docs                                                                                              |
+| ---------- | ---- | ------------------------------------------------------------ | ------------------------------------------------------------------------------------------------- |
+| 2026-06-15 | #653 | Initial design, benchmarked against the PostgreSQL extension | [iterations/01-initial-design.md](./iterations/01-initial-design.md)                              |
+| 2026-06-22 | —    | POC scope, plan, and 5-agent review                          | [iterations/02-poc/](./iterations/02-poc/)                                                        |
+| 2026-06-25 | —    | Instance model locked to one instance                        | [decisions.md#0001](./decisions.md#0001--single-managed-instance-ownership-bounded)               |
+| 2026-06-26 | —    | v1 production-readiness gap analysis                         | [v1-readiness-gaps.md](./v1-readiness-gaps.md)                                                    |
+| 2026-07-06 | —    | Single → multi instance reversal                             | [decisions.md#0002](./decisions.md#0002--multiple-managed-instances-in-v1-reconstructed)          |
+| 2026-08-02 | —    | Provider-neutral Docker readiness                            | [iterations/04-ui-redesign/](./iterations/04-ui-redesign/)                                        |
+| 2026-08-04 | #798 | UI redesign shipped (Concept F)                              | [iterations/04-ui-redesign/](./iterations/04-ui-redesign/)                                        |
+| 2026-08-09 | #876 | State sync + infrastructure error translation                | [iterations/05-error-translation.md](./iterations/05-error-translation.md)                        |
+| 2026-09-23 | #958 | Setup never wipes a data volume before it can succeed (#946) | [iterations/06-data-volume-protection/](./iterations/06-data-volume-protection/)                  |
+| 2026-09-24 | #954 | Setup failures show Docker's error, not an exit code         | [iterations/07-setup-failures.md](./iterations/07-setup-failures.md)                              |
+| 2026-09-24 | #953 | Reject credentials and ports setup can't honor (#949)        | [iterations/08-input-validation.md](./iterations/08-input-validation.md)                          |
+| 2026-09-24 | #955 | Tree and wizard stop showing a stale instance (#950)         | [iterations/09-state-recovery.md](./iterations/09-state-recovery.md)                              |
+| 2026-09-29 | #979 | Restore missing credentials from the container               | [decisions.md#0005](./decisions.md#0005---restore-missing-credentials-from-the-managed-container) |
+| 2026-09-29 | #979 | Wizard journey telemetry and correlation ids                 | [decisions.md#0006](./decisions.md#0006---wizard-journey-telemetry-and-correlation-ids)           |
 
 ## Decisions
 
-See [decisions.md](./decisions.md). Four entries: the single-instance model (0001, superseded), its
-reversal to multi-instance (0002), the Concept F wizard information architecture (0003), and the
-managed-node cluster-command context boundary plus its deferred replacement (0004).
+See [decisions.md](./decisions.md). Six entries: the single-instance model (0001, superseded), its
+reversal to multi-instance (0002), the Concept F wizard information architecture (0003), the
+managed-node cluster-command context boundary plus its deferred replacement (0004), restoring
+missing credentials from the managed container (0005), and the wizard journey telemetry and its
+correlation ids (0006).
 
 ## Open gaps
 
