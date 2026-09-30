@@ -322,7 +322,9 @@ export const ClusterDashboard = (): JSX.Element => {
 
     const openShell = useCallback(async (): Promise<void> => {
         try {
-            await trpcClient.clusterDashboard.openShell.mutate();
+            await trpcClient.clusterDashboard.openShell.mutate({
+                databaseName: inventoryViewState.currentDatabase ?? 'test',
+            });
         } catch (error) {
             void trpcClient.common.displayErrorMessage.mutate({
                 message: l10n.t('Failed to open the interactive shell.'),
@@ -330,7 +332,7 @@ export const ClusterDashboard = (): JSX.Element => {
                 cause: error instanceof Error ? error.message : String(error),
             });
         }
-    }, [trpcClient]);
+    }, [trpcClient, inventoryViewState.currentDatabase]);
 
     const copyConnectionString = useCallback(async (): Promise<void> => {
         try {
@@ -709,7 +711,6 @@ export const ClusterDashboard = (): JSX.Element => {
                     currentDatabase={inventoryViewState.currentDatabase}
                     isUnavailable={!isRefreshingStorage && storageStats === null && storageError !== null}
                 />
-
                 <InventoryPanel
                     storageStats={storageStats}
                     storageError={storageError}

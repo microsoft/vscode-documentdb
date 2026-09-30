@@ -215,9 +215,15 @@ export const StatusStrip = ({
     // A failed read is a terminal state, not slow work: collapse the loading skeleton onto
     // the "not reported" placeholder so the strip stops implying work is still in flight.
     const tiles = isUnavailable ? computedTiles.map((tile) => ({ ...tile, value: tile.value ?? null })) : computedTiles;
+    const scopeValue = currentDatabase ?? l10n.t('All databases');
 
     return (
         <div className="statusStrip">
+            <div className="metricsScopeLine">
+                <span className="metricsScopeLabel">{l10n.t('Scope:')} </span>
+                {currentDatabase !== null && <span className="metricsScopeType">{l10n.t('Database')} </span>}
+                <span className="metricsScopeValue">{scopeValue}</span>
+            </div>
             <MetricGrid className="metricsRow">
                 {tiles.map((tile) => (
                     <div className="statusTile" key={tile.label}>

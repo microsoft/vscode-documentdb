@@ -2,7 +2,7 @@
 feature: cluster-dashboard
 kind: decisions
 status: active
-prs: [823]
+prs: [823, 980]
 created: 2026-08-24
 ---
 
@@ -30,6 +30,7 @@ created: 2026-08-24
 | 0020 | Show the dashboard on tree connect by default                 | Accepted            | New entry point, with a persistent opt-out                                 | 2026-09-09 | #823 |
 | 0021 | Unavailable table values are enough for best-effort summaries | Accepted            | Replaces proposed completeness badges and row warning icons with N/A cells | 2026-09-10 | #823 |
 | 0022 | Labels name content; icons communicate navigation             | Accepted            | Replaces generic file and document icons with destination-oriented actions | 2026-09-10 | #823 |
+| 0023 | Dashboard proposals are ideas, not a specification            | Accepted            | Approves the scope design as implemented, not literal proposal conformance | 2026-09-29 | #980 |
 
 > Entries below are **semantically** immutable: append new entries rather than
 > rewriting old ones, and record reversals as a new entry plus a status change
@@ -893,3 +894,39 @@ Likewise, file and document icons describe content rather than destination. The 
 `screen-full` icons consistently signal that the action navigates away from the current context.
 Accessible labels carry the precise action, so matching icons can be reused without obscuring the
 difference between drilling into a database and opening a collection.
+
+---
+
+## 0023: Dashboard proposals are ideas, not a specification
+
+**Status:** Accepted · **Date:** 2026-09-29 · **Raised by:** Operator
+**Evidence:** [PR #980 review, R3](./iterations/04-navigation-scope-review.md#r3---distinguish-the-adopted-scope-proposal-from-the-deferred-proposals)
+and the operator's follow-up: "record an operator decision to implement it the way it
+was implemented. the proposals were just a set of ideas, not a spec."
+
+### Decision
+
+Keep the metric-scope design as implemented: a compact informational line above the cards
+reads `Scope: All databases` or `Scope: Database <name>`, with the breadcrumb beside the
+inventory. The scope line is not a navigation control; it keeps its height, truncates long
+names, and adds no tooltip or keyboard tab stop. The breadcrumb retains access to the full
+database name.
+
+Treat the [dashboard proposals](./cosmos-dashboard-proposals.md) as ideas to consider,
+not an implementation specification. The earlier dismissible-tag suggestion does not
+require replacing the implemented scope line. Proposals 2-8 remain discussion only;
+this decision does not approve additional features.
+
+### Reasoning
+
+The operator explicitly approved the implemented design and clarified that the proposals
+were a set of ideas, not a spec. Differences from those suggestions are therefore not
+implementation defects merely because they differ. Documentation should distinguish the
+approved design from the remaining ideas rather than describe every proposal as unimplemented.
+
+### Rejected alternatives
+
+- Rework the implemented scope line solely to conform to the earlier tag or navigation
+  suggestions: the operator approved the current implementation instead.
+- Treat the full proposal list as approved work: the operator expressly described it as
+  ideas, not a specification.
