@@ -48,20 +48,36 @@ Out of scope:
 
 ### Ground rules
 
-1. **Sequential.** Each stage is one stretch of autonomous agent work followed by one operator gate.
-   A stage starts only after the previous gate passes.
-2. **Release hold.** Every stage ends on a working `main` that passes its checks, but no release is
-   cut until the Stage 6 gate passes (operator, 2026-10-01). An urgent patch during the hold ships
-   from a `release/<X.Y.Z>` branch off the last tag, as the backport skill describes.
-3. **The repository's verification rules apply.** Case 1 while working, Case 2 at hand-over,
-   including the AI pre-review (CONTRIBUTING.md §6) in every stage. The checks L1 to L3 below run at
-   the end of a stage and in CI, not on every commit.
-4. **Verify the packaged VSIX, not F5.** Every gate installs the packaged VSIX. Cosmos DB's four
+1. **One branch, one PR** (operator, 2026-10-01). All stages are committed to
+   `dev/tnaum/modernization`, and its single draft PR to `main` merges only after Stage 6 passes.
+   Coding agents must:
+   - commit to this branch only, never to `main`, and open no separate per-stage PRs;
+   - prefix commit subjects with the stage, for example `S2: convert schema-analyzer tests to Vitest`;
+   - keep the PR in draft until G6; CI runs on every push through it;
+   - bring in `main` with a merge commit, not a rebase, as the branch already does. Merge `main` at the
+     start of every stage and before every gate. After Stage 2, convert any Jest tests that arrive
+     with a merge;
+   - never hand-merge `package-lock.json` (or `l10n/bundle.l10n.json`). Take either side and
+     regenerate it with the Node and npm versions from `.nvmrc`, so CI's `npm ci` accepts it;
+   - record progress inline in this document, under the stage it belongs to, when the work is
+     committed: what landed, in which commits, and any deviation with the alternatives considered.
+2. **Sequential.** Each stage is one stretch of autonomous agent work followed by one operator gate.
+   A stage starts only after the previous gate passes. Every stage ends with the branch building and
+   passing its checks.
+3. **Release.** `main` is not touched until the PR merges, so this plan does not block releases from
+   `main`. The modernization reaches users only after the merge, through the release steps in
+   Stage 6.
+4. **The repository's verification rules apply.** Case 1 while working. Every stage ends with an AI
+   review of that stage's diff by the stage's reviewer model, committed as
+   `docs/ai-and-plans/modernization/iterations/<NN>-<stage>-review.md`. The full Case 2 list and the
+   AI pre-review of CONTRIBUTING.md §6 run once, before the PR is marked ready for review. The checks
+   L1 to L3 below run at the end of a stage and in CI, not on every commit.
+5. **Verify the packaged VSIX, not F5.** Every gate installs the packaged VSIX. Cosmos DB's four
    post-migration bugs (blank webviews, missing CSS, Monaco workers, a dev build mistaken for
    production) were all invisible in development mode.
-5. **New dependencies.** Pick versions that are past the 7-day internal feed quarantine; the
+6. **New dependencies.** Pick versions that are past the 7-day internal feed quarantine; the
    `flagging-fresh-dependencies` skill helps. Regenerate the lockfile once per stage.
-6. **Models.** Each stage names an author model and a reviewer model. The rules behind the picks:
+7. **Models.** Each stage names an author model and a reviewer model. The rules behind the picks:
    - author and reviewer come from **different model families**, so they tend to catch different
      mistakes;
    - bulk work goes to the cheaper, efficient models, and risky module and build work to the
@@ -340,8 +356,9 @@ plugin in a real editor; Kubernetes, Atlas and Azure discovery against real back
   - The `bson` identity check passes, and fails with a second copy.
   - L0; L1 (our `views.js` should shrink slightly from better tree-shaking, and must not grow); L2;
     L3.
-- **Operator gate G3:** decide the version bumps and publish. Publishing is irreversible, but this
-  repo uses the workspace copies, so no later stage waits on it.
+- **Operator gate G3:** decide the version bumps. Publish the packages only after the PR has merged,
+  from `main`: publishing is irreversible, and a package should not ship from an unmerged branch.
+  This repo uses the workspace copies, so no stage waits on publishing.
 
 ### Stage 4: webviews to Vite, split per view
 
@@ -441,13 +458,15 @@ plugin in a real editor; Kubernetes, Atlas and Azure discovery against real back
     run every package build.
 - **Automated verification:** L0 to L3, plus a comparison with the Stage 0 baselines, recorded in
   this document.
-- **Operator gate G6:** the full manual checklist on Windows or macOS as well as Linux. Passing it
-  ends the release hold. The release itself:
-  1. Build in ADO, from versions past the feed quarantine.
-  2. Download the signed VSIX and record its SHA-256.
-  3. Run L1 and L3 on that exact file (`npm run test:vsix -- <signed.vsix>`), and an L2 pass on its
+- **Operator gate G6:** the full manual checklist on Windows or macOS as well as Linux. Then:
+  1. Run the full Case 2 list and the CONTRIBUTING.md §6 AI pre-review; mark the PR ready for
+     review; merge it into `main`.
+  2. Publish the package versions decided at G3, from `main`.
+  3. Build the extension in ADO from `main`, with versions past the feed quarantine.
+  4. Download the signed VSIX and record its SHA-256.
+  5. Run L1 and L3 on that exact file (`npm run test:vsix -- <signed.vsix>`), and an L2 pass on its
      extracted contents.
-  4. Approve `release.yml` only for that digest.
+  6. Approve `release.yml` only for that digest.
 
 ### Stage 7: hand-over to the E2E iteration
 
@@ -547,14 +566,14 @@ contradiction-only fixes were also corrected directly.
 
 **Operator decisions (2026-10-01):**
 
-| Topic                    | Decision                                                                                      | Effect on the plan                                                                                  |
-| ------------------------ | --------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------- |
-| Releases during the work | No release until the full modernization is complete and tested                                | "Releasable `main`" becomes "working `main`, release hold until G6"; urgent patches via `release/*` |
-| CSS isolation            | Not a hard requirement. SlickGrid is replaced after this migration, so do not optimize for it | Global inlined CSS with `cssCodeSplit: false`; isolation applies to JavaScript chunks only          |
-| Node / engine floor      | Match Cosmos DB on `main`                                                                     | `engines.vscode` `^1.109.0`, `engines.node` `>=22.18.0`, decided before Stage 3                     |
-| TS server plugin         | A CommonJS plugin entry is acceptable; VS Code's TypeScript loads it                          | `playgroundTsPlugin` stays `.cjs` inside the otherwise ESM host                                     |
-| Feed quarantine          | 7 days for ADO; not a concern                                                                 | Freshness automation moves to future work                                                           |
-| ADO pipeline use         | ADO builds run only when a release is prepared, from quarantine-clear versions                | `pipelines-readme.md` updated; no post-merge ADO failures on `main` to guard against                |
+| Topic                    | Decision                                                                                      | Effect on the plan                                                                                                                   |
+| ------------------------ | --------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
+| Releases during the work | No release until the full modernization is complete and tested                                | Refined the same day: all stages stay on `dev/tnaum/modernization` in one PR that merges after G6, so `main` is untouched until then |
+| CSS isolation            | Not a hard requirement. SlickGrid is replaced after this migration, so do not optimize for it | Global inlined CSS with `cssCodeSplit: false`; isolation applies to JavaScript chunks only                                           |
+| Node / engine floor      | Match Cosmos DB on `main`                                                                     | `engines.vscode` `^1.109.0`, `engines.node` `>=22.18.0`, decided before Stage 3                                                      |
+| TS server plugin         | A CommonJS plugin entry is acceptable; VS Code's TypeScript loads it                          | `playgroundTsPlugin` stays `.cjs` inside the otherwise ESM host                                                                      |
+| Feed quarantine          | 7 days for ADO; not a concern                                                                 | Freshness automation moves to future work                                                                                            |
+| ADO pipeline use         | ADO builds run only when a release is prepared, from quarantine-clear versions                | `pipelines-readme.md` updated; no post-merge ADO failures on `main` to guard against                                                 |
 
 **Re-assessment of the findings at major or above:**
 
@@ -571,7 +590,7 @@ contradiction-only fixes were also corrected directly.
 | F09 | major             | **major**   | Confirmed: the scripts import sources without extensions and use `__dirname`, which Node's type stripping cannot run. Use `tsx` instead                                                                                                                                      | Stage 3, task 5                           |
 | F10 | major             | **major**   | Agreed: serving from the origin root hides root-relative URLs, and our CSP has no `data:` for fonts while Vite inlines small assets by default. L2 serves under a prefix; Stage 4 sets `base: './'` and keeps fonts as files                                                 | L2 check; Stage 4                         |
 | F11 | major             | minor       | Real in general, but ADO only runs for deliberate releases built from quarantine-clear versions                                                                                                                                                                              | future-work.md                            |
-| F12 | major             | minor       | Resolved by the release hold: no stage is released on its own, and G6 covers the platforms before the only release                                                                                                                                                           | Ground rules; future-work.md              |
+| F12 | major             | minor       | Resolved by the single-PR rule: no stage reaches `main` or users on its own, and G6 covers the platforms before the merge                                                                                                                                                    | Ground rules; future-work.md              |
 | F13 | major             | **major**   | Confirmed: `.github/copilot-instructions.md` mandates Jest commands and the AI pre-review. Stage 2 now updates every place that names Jest; every stage keeps the AI pre-review, including Stage 1                                                                           | Ground rules; Stage 1; Stage 2            |
 | F18 | major             | minor       | Correct about ARIA (a header row is a valid `row`), but it is wording in a later plan, not a risk to this iteration. Fixed in the grid plan                                                                                                                                  | `slickgrid-removal.md`                    |
 

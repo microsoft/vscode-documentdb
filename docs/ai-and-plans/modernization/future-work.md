@@ -58,9 +58,10 @@ wording in the grid plan), and the Stage 6 reviewer part of F20.
 - **What:** Windows and macOS spot checks at the risky stages (S3, S4, S5) instead of only at G6:
   package scripts, worker paths, asset URLs, native optional dependencies. Note that the ADO release
   build packages on Windows, while GitHub CI runs Linux.
-- **Why deferred:** there is a release hold until G6 (operator, 2026-10-01), so no intermediate stage
+- **Why deferred:** all stages stay on one branch and one PR that merges after G6 (operator,
+  2026-10-01), so no intermediate stage
   ships on its own. G6 covers the platforms before the only release.
-- **Revisit when:** the release hold is lifted early, or a stage touches platform-specific paths
+- **Revisit when:** stages start merging to `main` separately, or a stage touches platform-specific paths
   heavily enough that finding a problem at G6 would mean redoing that stage.
 
 ### Discriminating checks for `keepNames`, telemetry and TypeScript 6 (F17)
