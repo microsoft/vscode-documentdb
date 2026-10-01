@@ -14,7 +14,7 @@ code:
 # Removing SlickGrid from the Collection View
 
 **Status:** guidance for a future iteration. Not scheduled. Written 2026-09-30 during the
-modernization re-review ([build-and-test-stack.md, Rev 6](./build-and-test-stack.md#rev-6-2026-09-30-re-review-and-the-sequential-execution-plan)).
+modernization re-review ([build-and-test-stack.md, execution plan](./build-and-test-stack.md#execution-plan)).
 
 **When:** after the modernization iteration, and not in parallel with it. The migration and the grid
 swap both change `collectionView`, so doing both at once would make any regression impossible to
@@ -90,8 +90,9 @@ All of these are visible in the current code or in the E2E research.
   `showHeaderRow: false`). A comment records a two-hour search for why the expand chevrons were
   missing.
 - **The checkbox selector is broken** when columns change after the grid exists, so it is disabled.
-- **Accessibility and testing:** SlickGrid gives its header `role="row"`, so `getByRole('row')`
-  returns one row too many. It also needs a synthetic `scroll` event before it renders more rows in a
+- **Testing quirks:** the header row has `role="row"`, which is correct ARIA grid semantics (column
+  headers sit inside a `row`), so tests must count data rows separately, not use a bare
+  `getByRole('row')`. SlickGrid also needs a synthetic `scroll` event before it renders more rows in a
   headless browser ([e2e-testing-strategy.md](./e2e-testing-strategy.md), "Copy verbatim" table).
 - **Styling is a second theme system.** The grid is themed through a SlickGrid SCSS theme with
   VS Code variable overrides, separately from the Fluent theming that
@@ -137,7 +138,7 @@ SlickGrid still ships.
   rows, selection callback, step-in callback, loading state). Make `DataViewPanelTable` /
   `DataViewPanelTree` thin SlickGrid-backed implementations of them. After this step,
   `slickgrid-react` is imported in exactly two files, both behind the interface.
-- **Automated:** build; the L2 production-bundle harness (modernization Rev 6, R6.3) shows the
+- **Automated:** build; the L2 production-bundle pass (modernization plan, "The automated checks") shows the
   Collection View unchanged.
 - **Operator:** a quick visual check of both views.
 
@@ -158,7 +159,8 @@ SlickGrid still ships.
 - **Agent:** build the table view with the leading candidate behind the G2 interface, in a branch.
   Run the G3 tests and the L2 fixtures against it. In the integrated browser, measure first render
   and scroll for the 1,000-row fixture, the chunk size from the bundle report, and the accessibility
-  tree (`grid`, `row`, `gridcell`, `aria-selected`, no extra header row). Repeat for the tree view if
+  tree (`grid`, `row`, `gridcell`, `columnheader`, `aria-selected`, correct `aria-rowcount` /
+  `aria-rowindex` under virtualization; the header row is expected and counted separately). Repeat for the tree view if
   the candidate claims to support it; otherwise spike the tree candidate separately.
 - **Operator gate:** choose the library (or libraries), based on the numbers and a hands-on try in
   the packaged VSIX. Record the decision and the rejected candidates.
