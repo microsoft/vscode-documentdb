@@ -7,6 +7,403 @@
 **Companion document:** [`e2e-testing-strategy.md`](./e2e-testing-strategy.md) — deep dive on their
 Playwright E2E suite and how it relates to our parked PR #867.
 
+**Re-reviewed:** 2026-09-30 against `vscode-cosmosdb` `main` at `07ac7f86` (84 commits after the
+reference commit). The findings and the **sequential execution plan** are in
+[Rev 6](#rev-6-2026-09-30-re-review-and-the-sequential-execution-plan) directly below. Where Rev 6
+and the older sections disagree on **sequencing or scope**, Rev 6 wins. The measurements in Parts A,
+C and I are still the evidence base. Rev 6 refreshes the ones that have gone stale.
+
+---
+
+## Rev 6 (2026-09-30): re-review and the sequential execution plan
+
+**Scope of this iteration:** the build, bundling and unit-test stack, moving our own packages to ESM
+(R6.7), stripping the legacy VS Code test harness, and a small **packaged-artifact gate** split
+between GitHub Actions and ADO (R6.8). The E2E suite (Playwright against a
+real VS Code, and unparking the #867 harness) is **out of scope**. It gets its own iteration after
+this one. Phase 4 of the older Sequence table therefore moves out of this plan.
+
+### R6.1 What Cosmos DB changed since the reference commit
+
+Reference commit `4b1bb6c` (2026-08-05), re-checked at `07ac7f86` (2026-09-29). Most of the 84
+commits are product fixes. This table lists the ones that touch the stack, the pipeline, or a
+failure class the migration could bring back. E2E-only commits are left to the companion document.
+
+| #   | Cosmos DB change                                                                                                                                                                                                                                                                                                                | Source                               | How it differs from our plan                                                                                                                                                                                                 | Action for us                                                                                                                                        |
+| --- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
+| N1  | Adopted **our** `@microsoft/vscode-ext-webview` on `main`. Vite dev still needs `optimizeDeps.include` for three subpaths because the package is CJS                                                                                                                                                                            | #3217 (2026-08-26)                   | H.5 described this as a finding on an unmerged branch. It is now in production on `main`                                                                                                                                     | R13 becomes **ESM-only packages** (R6.7, Stage 3)                                                                                                    |
+| N2  | Vitest needs `deps.optimizer.ssr` pre-bundling for `@microsoft/vscode-ext-webview` (root, `/host`, `/react`, `/webview`). The CJS host entry `require`s `vscode`, which bypasses the Vitest alias to the mock                                                                                                                   | `9fb37690`, `vitest.config.ts`       | **New.** The plan assumed the CJS cost only affected the Vite dev server. It affects the test runner too, and we will hit it ourselves in Stage 2                                                                            | Copy Cosmos DB's workaround in Stage 2. Stage 3 ships the package as ESM, which should make it unnecessary; a consumer test in the package proves it |
+| N3  | Adopted `@microsoft/vscode-ext-webview-fluentui` 1.1.0. Vitest needs `server.deps.inline` for it: the package is ESM and imports named Fluent exports that resolve to CJS under Node (`Named export 'createDarkTheme' not found`)                                                                                               | `9fb37690`, `e7049bda`               | **New.** The plan predates this package. Our second package has a consumer-side interop cost too, but in the opposite direction                                                                                              | Expect the same `inline` entry in our own Vitest config. Look at whether the package can avoid named imports from Fluent's CJS build                 |
+| N4  | Every `.js.map` published in fluentui 1.1.0 points at `src` files that are not in the package. The result is a wall of sourcemap warnings on every Vitest run                                                                                                                                                                   | issue #926 (in this repo)            | **New**                                                                                                                                                                                                                      | Set `inlineSources: true` in all packages (Stage 3)                                                                                                  |
+| N5  | The ADO build moved to **`networkisolation: DefaultDeny`** (SFI ES-4.2.4). `npm test` downloads VS Code and installs a Marketplace extension. Both were blocked with `EACCES`, so the step was disabled in ADO. Integration and E2E tests now gate only on GitHub Actions                                                       | #3275, #3278, #3280, #3289           | **New. It directly affects Phase 0a.** The plan assumed the installed-VSIX check could run in any CI. Our `.azure-pipelines/build.yml` still has a `🧪 Test` step that runs `npm test`                                       | Anything that downloads VS Code runs **on GitHub Actions only**. Remove the ADO Test step in Stage 1. Full explanation and split: R6.8               |
+| N6  | Dependency bump reverted, then relanded lockfile-only with "feed-safe" versions (past the internal feed quarantine)                                                                                                                                                                                                             | #3272, #3281, #3284                  | **New constraint.** The migration adds many devDependencies (Vite, Vitest, plugin-react, coverage, jsdom). A version newer than the quarantine window breaks the internal build                                              | Choose every new version with the `flagging-fresh-dependencies` skill. Regenerate the lockfile once per stage (repo memory: lockfile discipline)     |
+| N7  | Toolchain on `main` now: Vite `~8.0` (Rolldown-based, still configured through `build.rollupOptions.output.manualChunks`), Vitest `~4.1`, `@vitejs/plugin-react` `^6`, `@playwright/test` `~1.61`, `@vscode/test-electron` `~3.0`, **TypeScript `~6.0`** with `module: ESNext` + `moduleResolution: Bundler`, engine `^1.109.0` | `package.json`, `tsconfig.base.json` | The plan did not cover TypeScript. Our `tsconfig.json` is `module: commonjs`, with `baseUrl` and a `"*"` paths mapping, so it is not ready for TS 6/7 defaults                                                               | Switch `tsconfig` to Bundler resolution together with ESM (Stage 5). Bump TypeScript last (Stage 6)                                                  |
+| N8  | Webview CSS goes through JS via a ~30-line `vite-plugin-inline-css.mjs`, because the webview HTML has no hook for `<link>` tags                                                                                                                                                                                                 | `plugins/`                           | Confirms #3037 from the other side. **The HTML template is ours:** `WebviewController.getDocumentTemplate` in `packages/vscode-ext-webview` emits one `<script type="module">` that imports `render`, and no stylesheet link | Adopt the inline-css approach in Stage 4. Do not change the package template in this iteration                                                       |
+| N9  | Proxy routing now goes through VS Code (`http.proxySupport`) by clearing custom agents, and an isolated proxy/TLS test launcher was added                                                                                                                                                                                       | #3367                                | A product fix that came from a production problem. Not about the stack                                                                                                                                                       | Out of scope. Pass it to the E2E iteration: our Azure and Atlas discovery HTTP calls are the equivalent surface                                      |
+| N10 | Fixed an activation race: the external URI handler ran before the Azure Resources API was ready                                                                                                                                                                                                                                 | #3288                                | A product fix, but activation ordering **changes** when the entry becomes an async `main.mjs` loader                                                                                                                         | Add "open a `vscode://` URI on a cold start" to the Stage 5 operator gate                                                                            |
+| N11 | `vsce` for signing now comes from the repo-pinned version through `npx`, not a global install                                                                                                                                                                                                                                   | #3286                                | Pipeline hygiene                                                                                                                                                                                                             | Note only                                                                                                                                            |
+| N12 | Their pre-ship visual checklist was **removed** from the repo docs as "PR review content"                                                                                                                                                                                                                                       | `e7049bda`                           | Our plan keeps a checklist                                                                                                                                                                                                   | Keep ours, but in this plan and in iteration files, not in user-facing docs                                                                          |
+
+Unrelated production fixes (large JSON freezes #3342, document data loss #3266, tree sorting, NL2Query)
+were reviewed and do not affect the stack.
+
+### R6.2 What changed in this repo since the research date
+
+| Plan claim                                                       | Now (measured 2026-09-30)                                                                                                                                                                                                                                                                        | Consequence                                                                                                                      |
+| ---------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------- |
+| "All six Jest projects use `ts-jest`" (A2, R4)                   | The root `extension` project moved to `@swc/jest` in `95dc1786` (2026-09-14, "reduce Jest memory usage in CI"). The new `extension-webview` (jsdom) project and the five package projects still use `ts-jest`. `maxWorkers: '25%'` is unchanged                                                  | **R4 is half done.** Do not convert the rest to `@swc/jest`: Vitest replaces them in Stage 2                                     |
+| Four webviews                                                    | **Five**: `clusterDashboard` was added                                                                                                                                                                                                                                                           | All checks cover five                                                                                                            |
+| 110 files, 1,905 `jest.*` call sites, 313 `jest.mock()`          | **293 test files, 2,812 `jest.*` call sites, 448 `jest.mock()`**                                                                                                                                                                                                                                 | **+48 % in seven weeks.** Every week of delay makes the Vitest conversion larger. This argues for Stage 2 early and in one sweep |
+| One owned package, CJS                                           | Six workspace packages, all published. Five are CJS (`module: commonjs`): the four `@documentdb-js/*` packages and `vscode-ext-webview` 0.10.1. `vscode-ext-webview-fluentui` 1.1.0 is already ESM. Jest cannot load the ESM one: three Cluster Dashboard tests `jest.mock()` it for that reason | All six move to ESM-only in Stage 3 (R6.7), after Vitest                                                                         |
+| `maxChunks: 1`, analyzer commented out, Monaco `['sql', 'json']` | Unchanged                                                                                                                                                                                                                                                                                        | A1 still holds                                                                                                                   |
+| Engine `^1.105.0`                                                | Unchanged                                                                                                                                                                                                                                                                                        | Operator decision before Stage 5                                                                                                 |
+| `npm test` is a no-op                                            | Unchanged. The ADO `build.yml` still runs it. The GitHub `main.yml` `integration-tests` job has `if: false`                                                                                                                                                                                      | Stage 1                                                                                                                          |
+| K.4 #27 `keepNames` "if anything compares `fn.name`"             | `webpack.config.ext.js` already sets Terser `keep_classnames` / `keep_fnames: true`, with a TODO saying "code should not rely on function names"                                                                                                                                                 | Not hypothetical: carry `keepNames: true` into the new host build from day one                                                   |
+| K.4 #24 `const enum`                                             | One, local to its module (`SecretIndex` in `connectionStorageService.ts`)                                                                                                                                                                                                                        | Safe under `isolatedModules`. Convert it to a plain object in Stage 1 anyway                                                     |
+| K.4 #25 `__dirname`                                              | Three runtime uses: `playground/WorkerSessionManager.ts` (worker path), `playground/tsPlugin/index.ts`, `packages/documentdb-js-shell-api-types/src/index.ts`                                                                                                                                    | All three are about separate entry points or files on disk. Convert them in Stage 5 and verify them in the **packaged** build    |
+
+### R6.3 How we verify automatically: the test levels
+
+The operator's time is the scarce resource. Each stage below states which of these levels the agent
+runs by itself, and only what the levels cannot prove goes to an operator gate.
+
+| Level  | What                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    | Runs where                                                                                                                             | Catches                                                                                                                                         | Status                            |
+| ------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------- |
+| **L0** | `npm run build` (type check), lint, unit tests                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          | Agent terminal, all CI                                                                                                                 | Logic and types                                                                                                                                 | Exists                            |
+| **L1** | **Artifact inspection** (plain Node script, no UI): unzip the VSIX; diff its file list and sizes against a committed baseline manifest (with a tolerance); assert `views.js` exports `render`; assert every chunk a dynamic import references exists in the VSIX; assert the production bundle contains no dev-server host string (`127.0.0.1:18080`, `DEVSERVER`); from the bundle report, assert the Local Quick Start / Atlas Credentials import graphs do not include the Monaco or SlickGrid chunks                                                                                                                                                                                                                                                                                                                | Agent terminal, GitHub Actions, ADO (no network needed)                                                                                | Missing assets, lost entry export (#3037), build-mode confusion (#3164), splitting regressions, copied-asset bloat (I.3)                        | To build in Stage 0               |
+| **L2** | **Production-bundle harness in the integrated browser.** Serve the `dist/` **extracted from the VSIX** with a static server. Generate one HTML page per webview from the **same template** as `WebviewController.getDocumentTemplate`: the same CSP meta tag, with `cspSource` set to the static origin, the same inert-JSON boot script, and a fake `acquireVsCodeApi`. The agent drives it with `open_browser_page`, `read_page` and `run_playwright_code`. For each of the five views, assert: root is not empty; styles are applied (a known Fluent class resolves to a non-default computed style); no `console.error`, `pageerror` or `securitypolicyviolation`; which network requests were made (Local Quick Start must not fetch Monaco/SlickGrid chunks); for Monaco views, a worker constructs without error | Agent (integrated browser); later GitHub Actions headless in the E2E iteration                                                         | Blank render and missing CSS (#3037), CSP violations, lazy-chunk 404s, worker construction failures, per-view bundle leaks                      | To build in Stage 0               |
+| **L3** | **Installed-VSIX activation smoke** (the old Phase 0a). `@vscode/test-electron` downloads VS Code and installs our VSIX into a temp `--extensions-dir`. `--extensionDevelopmentPath` points at a tiny **probe** extension, not ours. The probe activates `ms-azuretools.vscode-documentdb`, asserts that a set of commands is registered, and fails on activation errors                                                                                                                                                                                                                                                                                                                                                                                                                                                | GitHub Actions only (N5, R6.8). Locally, it needs a display: **this dev machine has no Xvfb** (checked). The operator installs it once | Entry point, ESM resolution, externals, `__dirname`, native optional dependencies, name-dependent code, telemetry "type: module" breakage (J.7) | To build in Stage 0               |
+| **L4** | **The full workbench in the integrated browser via `code serve-web`**. Details under "L4 spike" below                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   | Agent (integrated browser), local only                                                                                                 | The same as the operator checklist, with a real CSP, real theme variables and real host messaging                                               | **Spike, partial.** Not relied on |
+| **L5** | Desktop VS Code driven by Playwright `_electron.launch` (Cosmos DB's harness), or attaching over CDP to a running VS Code started with `--remote-debugging-port`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        | E2E iteration                                                                                                                          | Everything, including desktop-only behavior                                                                                                     | **Out of scope**                  |
+
+**Build the checks before using them, and prove they can fail.** Stage 0 runs L1 to L3 against
+**today's** webpack VSIX, where they must pass. It then runs them once against a deliberately broken
+variant, where they must fail. Examples: drop the CSS from the bundle, rename the `render` export,
+point a dynamic import at a missing chunk. A check that has never failed has not been shown to work.
+
+**L2 relationship to the existing technique.** [live-preview-playwright.md](../live-preview-playwright.md)
+tests individual webviews against the **dev server** bundle with a hand-written shim. L2 is the same
+loop aimed at the **production** artifact, with the HTML generated from the real template. It is the
+"committed harness" listed in that document's future work. Its gotchas apply unchanged: use one
+static page per view (no query strings through the remote port forward), set no viewport before
+screenshots, and give a real payload for every tRPC path you answer.
+
+**L4 spike (2026-09-30, exploratory, cleaned up afterwards).** The team has only used the integrated
+browser for individual webviews. This spike checked whether it can also host the **entire
+workbench**:
+
+- Worked: the standalone CLI (`~/.vscode-server/code-<commit> serve-web --port … --without-connection-token --server-data-dir <tmp> --cli-data-dir <tmp>`)
+  downloaded the server. `<cli-data-dir>/serve-web/<commit>/bin/code-server --install-extension <vsix> --extensions-dir <server-data-dir>/extensions`
+  installed the packaged DocumentDB 0.10.2 VSIX in isolation. The workbench rendered in the
+  integrated browser, and Playwright could drive it: the activity bar, the Extensions view (DocumentDB
+  listed as installed on the server), the command palette, dialogs, and the full accessibility tree.
+- Did not work yet: the DocumentDB view container did not appear, and its commands were not in the
+  palette. The folder opened in **Restricted Mode**, and the machine setting
+  `security.workspace.trust.enabled: false` had no effect, since trust is client-side in the web.
+  Several built-in web extensions failed with "Not Found" / 403 behind the remote port forward.
+- Not verified: webview iframes in VS Code for the Web are expected to load from a `vscode-cdn.net`
+  origin, so they would need internet access. [INFERRED]
+- Next time-boxed attempt (Stage 0, optional): run on a local, not port-forwarded, machine; try the
+  server's `--disable-workspace-trust`, which may not pass through `serve-web` [INFERRED]; then open a
+  DocumentDB webview and check that Playwright can reach into its frame through `page.frames()`.
+- If this works, it replaces most operator gate items with agent runs. **No stage depends on it.**
+
+**What stays with the operator** in this iteration, because L0 to L3 cannot prove it: real
+`vscode-webview://` origin behavior (Monaco workers, `asWebviewUri`); dark and high-contrast themes
+in the real workbench; the F5 / watch / HMR developer loop; Windows and macOS packaging; URI-handler
+cold start (N10); playground worker and TS plugin in a real editor; Kubernetes and Atlas lazy paths
+against real backends.
+
+### R6.4 Legacy VS Code test harness: what to strip (Stage 1)
+
+This repo tests with **Jest only**. The Mocha suite under `test/` came over with the codebase's
+history. It was never maintained here, is not in the Jest `testMatch`, and never runs. The intent is
+to **drop it**, not migrate it. Its only replacement is L3 (R6.3) now, and the E2E iteration later
+(companion document).
+
+| Item                                                                                                                                                                          | What it is                                                                         | Verdict                                                                                                                                 |
+| ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
+| `test/improveError.test.ts`, `test/wrapError.test.ts`, `test/util/getIp.test.ts`, `test/util/setEnvironmentVariables.test.ts`                                                 | Mocha `suite`/`test` unit tests of plain utilities, run through `extension.bundle` | Delete. If a utility turns out to have no Jest coverage, write a fresh Jest test for it; do not port the Mocha file                     |
+| `test/global.test.ts`, `TestActionContext.ts`, `TestOutputChannel.ts`, `TestUserInput.ts`, `runWithSetting.ts`, `test.code-workspace`, `test/util/setEnvironmentVariables.ts` | Harness for the above. Nothing under `src/` or `packages/` imports them (checked)  | Delete. If `setEnvironmentVariables` is still needed, move it with its test                                                             |
+| `extension.bundle.ts`                                                                                                                                                         | Re-export surface "for tests". Only `test/**` imports it                           | Delete                                                                                                                                  |
+| `export * from './src/utils/getIp'` at the end of `main.ts`                                                                                                                   | Its comment says it exists for tests not yet moved to Jest                         | Remove                                                                                                                                  |
+| `.vscode-test.js`                                                                                                                                                             | `@vscode/test-cli` config. It still installs the retired `ms-vscode.azure-account` | Delete                                                                                                                                  |
+| `.vscode/launch.json` "Launch Tests" and "Launch Tests (webpack)"                                                                                                             | Point at `out/test/index` and `dist/test/index`, which do not exist                | Delete                                                                                                                                  |
+| `mocha`, `@types/mocha`, `mocha-junit-reporter`, `mocha-multi-reporters`, `eslint-plugin-mocha`, `@vscode/test-cli`                                                           | Used only by the above                                                             | Remove. **Keep** `@vscode/test-electron` for L3. **Keep** `ts-node` (package scripts use it) and `jest-mock-vscode` (unit tests use it) |
+| `eslint.config.mjs` Mocha block for `test/**`                                                                                                                                 |                                                                                    | Remove                                                                                                                                  |
+| `tsconfig.json` commented `types: ["jest", "mocha", …]` block                                                                                                                 |                                                                                    | Remove                                                                                                                                  |
+| `package.json` `test` no-op                                                                                                                                                   |                                                                                    | Point it at the unit tests now. L3 gets its own script (`test:vsix`) in Stage 0                                                         |
+| `.azure-pipelines/build.yml` `🧪 Test` step                                                                                                                                   | Runs the no-op                                                                     | Remove (N5: nothing that downloads VS Code belongs in ADO)                                                                              |
+| `.azure-pipelines/linux/xvfb.init`                                                                                                                                            | No pipeline references it (checked)                                                | Delete                                                                                                                                  |
+| `.github/workflows/main.yml` `integration-tests` job                                                                                                                          | `if: false`, "unreliable, needs revisiting"                                        | Delete. L3 gets a new job in Stage 0                                                                                                    |
+| Root `main.js` and the "Launch Extension + Host" config                                                                                                                       | Unbundled dev path that loads `out/src/extension`                                  | **Keep until Stage 5**, where `main.mjs` replaces it                                                                                    |
+
+### R6.5 SlickGrid: what to do first (and why later)
+
+SlickGrid will be replaced in a later iteration. **Do not replace it during this one.** The
+migration and the grid swap both change `collectionView`, and doing both at once would make any
+regression impossible to attribute (H.6). Doing the swap before Stage 2 would also mean writing its
+component tests twice, once in Jest and again in Vitest.
+
+The guidance for the removal itself lives in its own plan:
+**[slickgrid-removal.md](./slickgrid-removal.md)** (footprint, behavior contract, pain points,
+candidates, and a sequential plan G1 to G6).
+
+The only thing this iteration does for it:
+
+1. **Stage 4: isolate it.** Give `slickgrid-react` (plus `src/webviews/slickgrid.scss`) its own named
+   chunk that only `collectionView` loads, the same way Cosmos DB keeps `react-data-grid` out of
+   `vendor` (K.1 #3). Record that chunk's size in the L1 baseline, so the replacement's size can be
+   measured against it. Watch the ESM interop: `tsconfig.json` carries
+   `allowSyntheticDefaultImports` "to fix SlickGrid integration", and that is exactly the kind of
+   default-import shim that behaves differently under Vite/Rolldown.
+
+### R6.6 The sequential plan
+
+Each stage is one stretch of autonomous agent work followed by one operator gate. Stages do not
+overlap. A stage starts only after the previous gate passes. Every stage ends on a working,
+releasable `main`. In every stage the agent follows the repository's verification rules: Case 1 while
+working, Case 2 at hand-over.
+
+**Model recommendations** (2026-09-30) open each stage. They are based on GitHub's published model
+descriptions and per-token prices
+([supported models](https://docs.github.com/en/copilot/reference/ai-models/supported-models),
+[comparison](https://docs.github.com/en/copilot/reference/ai-models/model-comparison),
+[pricing](https://docs.github.com/en/copilot/reference/copilot-billing/models-and-pricing)), not on
+runs in this repo. The rules behind them:
+
+- The author and the reviewer come from **different model families**, so they tend to catch
+  different mistakes. This also feeds the repo's AI pre-review (CONTRIBUTING.md §6).
+- Bulk work goes to the cheaper, efficient models. Risky module and build work goes to the strongest.
+- Keep the default context and reasoning settings. For GPT models, input above 272K tokens is
+  billed at about twice the rate.
+- Avoid models marked ⚠ in the picker. Claude Opus 4.7 and Gemini 3.5 / 3.6 Flash are retired on
+  2026-10-02.
+- Re-check this guidance when the model list changes. Stage 0 or Stage 1 is a cheap place to run two
+  candidates against each other, because both have a clear pass/fail result.
+
+```mermaid
+flowchart LR
+    S0[S0 Baseline and checks] --> S1[S1 Strip legacy tests] --> S2[S2 Jest to Vitest] --> S3[S3 Packages to ESM] --> S4[S4 Views to Vite and splitting] --> S5[S5 Host to ESM and Vite] --> S6[S6 Remove webpack, CI gates, TS 6] --> S7[S7 Hand-over to E2E iteration]
+```
+
+#### Stage 0: baseline and the verification tooling
+
+- **Models:** author **Claude Opus 5.5**, reviewer **GPT-6 Sol**. Open-ended tool building (VSIX
+  inspection, browser harness, VSIX activation check, the `serve-web` follow-up) needs strong
+  agentic recovery; GPT-6 Sol is a low-cost reviewer with a published model card. Optional: run the
+  L1 script as a head-to-head trial against GPT-6.1 Sol or GPT-6 Astra.
+- **Autonomous:** record the baselines on today's stack: `webpack-prod` time (three runs), per-file
+  `dist` sizes, VSIX size and file manifest, dependency count, and unit-test wall time (three runs,
+  median). Re-enable the bundle analyzer behind `BUNDLE_ANALYZE` (R1). Build L1 (VSIX inspection
+  script plus committed baseline manifest), L2 (a production-bundle page per webview, generated from
+  the real template) and L3 (`test:vsix`, a probe extension, and a GitHub Actions job with a cached
+  `.vscode-test/`). Add L1 to the ADO build **before signing** (R6.8), and a GitHub Actions
+  dependency-freshness check ([pipelines-readme.md §2.1](./pipelines-readme.md#21-package-source-public-npmjs-versus-the-internal-feed)).
+  Prove each check passes on the
+  current VSIX **and fails on a broken variant**.
+  Optionally, the time-boxed L4 follow-up.
+- **Automated verification:** L0 to L3 green on the current VSIX. The broken variants fail as
+  expected.
+- **Operator gate G0:** install the current VSIX (not F5) and run the manual checklist once to
+  record a baseline (see "Phase 0" below, updated to five webviews). Install Xvfb locally if L3
+  should run on the dev machine. Decide whether the L2 harness is committed as dev-only and excluded
+  from the VSIX. The expected answer is yes, via `.vscodeignore`.
+- **Exit:** baselines are committed in this document, and L1 to L3 run on every PR that touches
+  build config.
+
+#### Stage 1: strip the legacy harness
+
+- **Models:** author **Claude Sonnet 5.5**, no model reviewer; the operator reviews the diff (G1).
+  Small, mechanical, and easy to check. Opus would be overkill.
+- **Autonomous:** everything in R6.4. Before deleting, check whether `improveError`, `wrapError`,
+  `getIp` and `setEnvironmentVariables` already have Jest coverage, and add a small Jest test only
+  where they have none. Convert the one `const enum`.
+- **Automated verification:** L0; L1 (the VSIX manifest must not change except for removed dev-only
+  files, of which there should be none); L3.
+- **Operator gate G1:** review the dependency and CI diff only. No manual UI check is needed.
+
+#### Stage 2: Jest to Vitest, in one sweep
+
+- **Models:** author **Claude Sonnet 5.5** for the codemod and the bulk sweep (alternative:
+  GPT-5.3-Codex). Hand **Claude Opus 5.5** the `vi.hoisted` / mock-hoisting failures and every
+  `TDD:` suite. Reviewer **GPT-6 Sol**. Work in batches of test files rather than switching to the
+  1M-token context.
+- **Why before the bundler:** Vitest does not need Vite as the build bundler. With Vitest in place,
+  Stages 3 to 5 have a fast, ESM-native test net, and the bundler change can be told apart from the
+  test-runner change (H.6). The test surface is growing about 48 % every seven weeks (R6.2), so later
+  costs more.
+- **Why before the packages go ESM:** Jest cannot load ESM-only packages without transform
+  workarounds. The three Cluster Dashboard tests that `jest.mock()` the fluentui package show it
+  (R6.2). Vitest loads them natively.
+- **Autonomous:** a codemod for `jest.*` to `vi.*`, then `vi.hoisted` for the hoisting cases (I.4
+  predicts some; 448 `jest.mock()` sites). Move the `extension-webview` jsdom project to per-file
+  `// @vitest-environment jsdom` (Cosmos DB #3172). Merge the six package projects into one Vitest
+  workspace. Copy Cosmos DB's N2 and N3 settings for now; Stage 3 should make them unnecessary.
+  Replace the fluentui `jest.mock()` stubs with the real package where the test allows. Remove
+  `ts-jest`, `@swc/jest`, `jest`, `jest-environment-jsdom`, and `eslint-plugin-jest` (replace it with
+  the Vitest ESLint plugin if one is wanted).
+- **Automated verification:** the same test count as before, give or take documented deletions;
+  record the wall time against the Stage 0 baseline; L0. The shipped artifact is unchanged, so L1 to
+  L3 are a formality.
+- **Operator gate G2:** review the list of tests changed beyond mechanical renames. Watch `TDD:`
+  suites in particular: per the repo rules, a changed contract needs the operator's decision.
+
+#### Stage 3: our packages to ESM (R6.7, and N1 to N4)
+
+- **Models:** author **Claude Opus 5.5**, reviewer **GPT-6.1 Sol** (or GPT-6 Sol). Module format,
+  `exports` maps, `require(esm)` and the duplicate-`bson` risk are subtle, and mistakes only show up
+  in consumers.
+- **Autonomous:** everything in R6.7, one package per commit, in dependency order. Remove the Stage 2
+  N2/N3 workarounds from the Vitest config once the packages load without them.
+- **Automated verification:** per package, the consumer smoke tests and `publint` /
+  `@arethetypeswrong/cli` on the packed tarball (R6.7); L0; L1 (our `views.js` should shrink a
+  little from better tree-shaking, and must not grow); L2; L3. The BSON single-instance check (R6.7)
+  must pass.
+- **Operator gate G3:** decide the version bumps and publish. Publishing is irreversible and helps
+  Cosmos DB, but this repo uses the workspace copies, so **no later stage waits on the publish**.
+
+#### Stage 4: webviews to Vite, per-view splitting
+
+- **Models:** author **Claude Opus 5.5**, reviewer **GPT-6 Sol**. Vite config, CSS inlining, workers
+  and chunking each have several plausible-but-wrong solutions; the L2 browser checks catch most
+  regressions, so a second strong author is not needed.
+- **Autonomous:** add `vite.config.views.mjs` **next to** webpack (K.1 #1) and write it to
+  `dist/` the same way. Make `WebviewRegistry` lazy (R2). Add `manualChunks` for `monaco-editor`,
+  Fluent + Griffel, React, and a separate SlickGrid chunk (R6.5). Add inline-css (N8) and an entry
+  plugin that keeps the `render` export (Cosmos DB #3037). Handle Monaco workers in both `serve` and
+  `build` (Cosmos DB #3169). Point `watch:views` at Vite. Decide on `sql` in the Monaco language list
+  (R5). Flip the default only when every check passes. Keep the webpack views config until Stage 6.
+- **Automated verification:** L1 (per-view graphs: Local Quick Start and Atlas Credentials free of
+  Monaco and SlickGrid; bundle sizes recorded); **L2 is the main gate here** (all five views
+  non-blank, styled, CSP clean, workers constructing); L3.
+- **Operator gate G4:** install the packaged VSIX. For all five webviews check the dark,
+  light and high-contrast themes, Monaco editing and workers in the real `vscode-webview://` origin,
+  and a DevTools console that stays clean. Check that F5 plus watch give a working dev loop with HMR.
+
+#### Stage 5: extension host to ESM and Vite
+
+- **Models:** author **Claude Opus 5.5**; the alternative is a head-to-head trial against **GPT-6
+  Astra**, which is positioned for long autonomous runs with independent verification but costs about
+  2.5x as much. Whichever writes it, the other reviews. This is the riskiest stage, so it is where a
+  more expensive reviewer pays off.
+- **Before starting:** the operator confirms the engine floor. Keep `^1.105.0` unless the empirical
+  check fails (J.3).
+- **Autonomous:** `"type": "module"` (J.7: telemetry breaks without it), a `main.mjs` thin loader,
+  `vite.config.ext.mjs` for the three entries (`main`, `playgroundWorker`, `playgroundTsPlugin`),
+  audit the 18 externals (J.7 / K.3 #20), convert the three `__dirname` uses, `keepNames: true`, the
+  `createRequire` banner for CJS dependencies, a single `bson` instance (R6.7), `tsconfig` on `module: ESNext` + `moduleResolution:
+Bundler` without `baseUrl` (N7), and the rules from K.4 #26 to #28 for guarded requires and
+  type-only externals. Delete root `main.js` and "Launch Extension + Host". If the host build is
+  painful, fall back to esbuild **for the host only** (J.6, option C).
+- **Automated verification:** **L3 is the main gate here** (activation, commands, no errors); L1
+  (entry files, chunks, externals present or absent as intended); L2 (unchanged views); L0.
+- **Operator gate G5:** install the VSIX, then check: activation time against the baseline; a `vscode://`
+  URI on a cold start (N10); playground run (worker and TS plugin); Kubernetes discovery (lazy chunk);
+  Atlas discovery; Azure discovery; a connection with Kerberos or another native optional dependency
+  where one is available; and that telemetry events appear with `DEBUGTELEMETRY`.
+
+#### Stage 6: remove webpack, lock in, TypeScript 6
+
+- **Models:** author **Claude Sonnet 5.5**, reviewer **Claude Opus 5.5**. Mostly deletion, CI wiring
+  and docs. Escalate the TypeScript 6 bump to Opus if it surfaces type errors that need judgment.
+- **Autonomous:** delete the webpack configs, loaders and plugins, and record the dependency count
+  (I.5). Put the CI gates in place per the split in R6.8: the L1 manifest and size budget (with a
+  tolerance) in both GitHub Actions and ADO, L3 on GitHub Actions, and the bundle report as a PR
+  artifact (K.1 #7). Write the equivalent of Cosmos DB's
+  `docs/webview-build.md` (K.1 #8). Then bump TypeScript to 6.x with feed-safe versions (N6).
+- **Automated verification:** L0 to L3, plus comparison against the Stage 0 baselines, recorded in
+  this document.
+- **Operator gate G6:** a full manual pass on the final VSIX, on Windows or macOS as well as Linux.
+  This is the release candidate for the stack change.
+
+#### Stage 7: hand-over to the E2E iteration
+
+**Models:** **Claude Sonnet 5.5** to write the hand-over; nothing else is needed.
+
+This stage adds no new work. It lists what the E2E iteration inherits: the L2 harness (to run headless in
+CI), L3 (to extend into Extension Host integration tests), the L4 spike notes, N9 (proxy routing)
+and N10 (URI activation) as candidate specs, and the companion document.
+
+### R6.7 Our packages to ESM
+
+**Operator direction (2026-09-30):** the packages stayed CommonJS only because the modernization kept
+being deferred. They are now in scope.
+
+| Package                                  | Version | Today                                                | Published by                                              | Runs in                                                     | Package-specific work                                                                          |
+| ---------------------------------------- | ------- | ---------------------------------------------------- | --------------------------------------------------------- | ----------------------------------------------------------- | ---------------------------------------------------------------------------------------------- |
+| `@documentdb-js/operator-registry`       | 0.8.1   | CJS, no `exports` map                                | GitHub `npm-publish-documentdb-js.yml`                    | Extension host (completions)                                | Its scraper script runs on `ts-node`                                                           |
+| `@documentdb-js/schema-analyzer`         | 1.0.0   | CJS, no `exports` map; depends on `mongodb`          | GitHub `npm-publish-documentdb-js.yml`                    | Extension host                                              | **BSON single instance** (below)                                                               |
+| `@documentdb-js/shell-api-types`         | 0.8.1   | CJS, no `exports` map                                | GitHub `npm-publish-documentdb-js.yml`                    | Extension host, playground TS plugin                        | Reads a `.d.ts` through `__dirname`; its verify script runs on `ts-node`                       |
+| `@documentdb-js/shell-runtime`           | 0.8.1   | CJS, no `exports` map; depends on `mongodb`, mongosh | GitHub `npm-publish-documentdb-js.yml`                    | Playground worker thread, interactive shell                 | BSON single instance; the worker is a separate entry point, so verify it in the packaged build |
+| `@microsoft/vscode-ext-webview`          | 0.10.1  | CJS, `exports` with `default` only                   | ADO `build-npm-packages.yml` / `release-npm-packages.yml` | Extension host (`/host`) and webview (`/webview`, `/react`) | Removes Cosmos DB's N1 and N2 workarounds                                                      |
+| `@microsoft/vscode-ext-webview-fluentui` | 1.1.0   | **Already ESM** (`type: module`)                     | ADO, as above                                             | Webview                                                     | `inlineSources` (N4); check whether named imports from Fluent's CJS build can be avoided (N3)  |
+
+**Recommendation: ESM-only, not dual ESM + CJS.** This replaces R13's "dual build".
+
+- **Dual packages create two module instances, and this repo has already been bitten by that.**
+  `bson` ships separate ESM and CJS entries. When both were bundled, `instanceof` failed and the
+  schema analyzer classified `ObjectId`, `Double` and `Int32` as plain objects (repo memory
+  `bson-dual-package-hazard`). A dual `schema-analyzer` would add a second way to get there.
+- **CJS consumers can still load an ESM-only package.** `require(esm)` is unflagged since Node 20.19
+  and 22.12, for modules without top-level await. Our `engines.node` is `>=22.18`. Confirm the Node
+  version inside the VS Code extension host at our engine floor is at least 22.12. [VERIFY]
+- **It removes workarounds on both sides:** Cosmos DB's Vite `optimizeDeps` and Vitest
+  `deps.optimizer.ssr` entries (N1, N2), and our own `jest.mock()` stubs of the fluentui package.
+- **It improves tree-shaking** of the webview bundle, which is the original R13 argument.
+
+**Work per package** (Stage 3, one package per commit, in dependency order):
+
+1. `"type": "module"`, and an `exports` map with `types` and `default` for every subpath.
+2. `tsconfig`: `module` / `moduleResolution` `NodeNext` for the packages that run under Node (the
+   four `@documentdb-js/*` packages and `vscode-ext-webview`). `NodeNext` requires `.js` extensions
+   on relative imports, which a codemod can add. fluentui is browser-only and keeps `bundler`.
+3. `__dirname` -> `import.meta.dirname` (shell-api-types).
+4. `inlineSources: true`, so the published sourcemaps work (N4, issue #926).
+5. The `ts-node` scripts (operator-registry scraper, shell-api-types verifier) -> Node's built-in
+   type stripping, on by default in our Node floor (22.18). Then drop `ts-node`. [VERIFY that the
+   scripts use no TypeScript-only runtime syntax, such as `enum` or `namespace`, that stripping
+   rejects.]
+6. Version bumps, because this breaks CJS consumers on older Node: `schema-analyzer` 2.0.0, the
+   0.8.x packages 0.9.0, `vscode-ext-webview` 0.11.0, and fluentui 1.1.1 (sourcemaps only).
+
+**BSON single instance.** `schema-analyzer` and `shell-runtime` depend on `mongodb`, which is CJS and
+`require`s the CJS `bson` entry. ESM code importing `bson` gets the ESM entry. In the extension bundle,
+that means two `bson` copies and broken `instanceof`. The rules:
+
+- Pin one `bson` entry in every bundler config (webpack until Stage 6, Vite from Stage 4 or 5), with a
+  resolve alias.
+- Add a unit test that runs the analyzer on documents decoded by `mongodb`'s own `bson`, not
+  hand-built ones.
+- Make the check in the repo memory part of L1: the packaged bundle contains exactly one `bson`
+  module.
+
+**Verification, autonomous:** for each package, pack the tarball and run
+[`publint`](https://publint.dev) and [`@arethetypeswrong/cli`](https://github.com/arethetypeswrong/arethetypeswrong.github.io)
+on it, then run the consumer smoke tests: `node -e "require('<pkg>')"` (require(esm)),
+`node --input-type=module -e "import '<pkg>'"`, a Vitest import (with the `vscode` alias for
+`vscode-ext-webview/host`), and the extension's own webpack build. Then L1 to L3 for the extension.
+**Operator:** version bumps and publishing (gate G3).
+
+### R6.8 GitHub Actions and ADO: the network isolation problem, and what runs where
+
+The full explanation now lives in its own file, to make it easier to catch up on:
+**[pipelines-readme.md](./pipelines-readme.md)**. It covers the inventory of both CI systems, the
+feed-quarantine and network-isolation constraints (with Cosmos DB's #3275 to #3289 sequence), the
+table of where each check runs, and a short decision list for new checks.
+
+What this plan depends on from it:
+
+- **The split rule.** ADO produces the shipped artifact from vetted inputs, and checks that exact
+  artifact with checks that need no network. GitHub Actions runs everything that needs the internet
+  or a display, and everything that exists for PR feedback.
+- **L1** runs in both pipelines, in ADO before signing, against one committed manifest. **L3** and
+  the future E2E suite run on GitHub Actions only. The ADO `🧪 Test` step is removed in Stage 1.
+- **A freshness check** on GitHub Actions fails PRs that add a version younger than the feed
+  quarantine (N6). The migration adds many devDependencies, so this goes in with Stage 0.
+- **A release-checklist step:** run `npm run test:vsix` locally on the ADO-signed VSIX before
+  approving `release.yml`.
+
 ---
 
 ## Executive Summary & Recommendation
@@ -77,6 +474,9 @@ dev mode worked fine the whole time. **F5 development testing would not have cau
 | **3. Lock in**                 | CI gates on bundle size and activation time                                                                                                                      | Prevents silent regression.                                                                                    |
 | **4. Test layers**             | Extension Host integration tests, then Playwright E2E, then unpark the #867 harness                                                                              | Built **on** the new stack, so none of it is throwaway. Mirrors what they did.                                 |
 
+> **Superseded on sequencing by [Rev 6 R6.6](#r66-the-sequential-plan)**, which splits this table
+> into eight sequential stages and moves Phase 4 (E2E) into its own iteration.
+
 **Do not** do the Webpack code-splitting fix first. If Vite is the destination, that work is
 throwaway — `manualChunks` is the mechanism that survives. The same logic is why the E2E _suite_
 belongs in Phase 4: its `globalSetup` build invocation and the #867 harness are both stack-coupled.
@@ -93,7 +493,7 @@ step, not against F5. Check 0 is automated (Phase 0a); the rest are manual.
 | --- | -------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------- |
 | 0   | **Automated:** install the VSIX, launch without `--extensionDevelopmentPath`, assert activation + a registered command + zero console errors | Everything below that is fatal rather than cosmetic — and it runs on every PR |
 | 1   | Install the packaged VSIX; extension activates                                                                                               | Packaging / entry-point / ESM resolution                                      |
-| 2   | Open all four webviews; each renders non-blank                                                                                               | Their #3037 — lost entry export in app-mode build                             |
+| 2   | Open all five webviews (Rev 6); each renders non-blank                                                                                       | Their #3037 — lost entry export in app-mode build                             |
 | 3   | Styling is correct (grid, editor, splitters, icons, fonts)                                                                                   | Their #3037 — emitted CSS not linked into webview HTML                        |
 | 4   | Monaco loads and edits; check DevTools for worker errors                                                                                     | Their #3169 — worker origin under `vscode-webview://`                         |
 | 5   | DevTools console clean on every panel                                                                                                        | CSP violations, failed asset URLs, lazy-chunk 404s                            |
@@ -147,6 +547,8 @@ superseded guidance.
 | **3 — current** | Full migration, but **E2E comes after it**. Phase 0 is a written manual checklist run against a **packaged VSIX**.                                                                        | The reference project's own timeline disproved "E2E first": they migrated (2026-04-30), ran broken for 18 days, released only after fixing (2026-05-19), and built E2E six weeks later (2026-06-10). Nothing broken shipped. Building E2E first would also mean building part of it against the outgoing stack — the same "don't build on the layer you're deleting" argument already used to reject doing Webpack code-splitting first. Rev 2 applied that reasoning inconsistently.                                                                                                                                                                                                                    |
 | **4 — current** | Unchanged on substance: **Vite for both targets**. esbuild evaluated and rejected as the _primary_ stack, retained as a host-only fallback (Part J).                                      | Reviewed `vscode-azuretools/eng/MIGRATION.md`. Their esbuild standardisation is silent on webviews — our actual pain — and ships as an **alpha** eng package that also imposes Mocha. Two of our assumptions improved though: the ESM engine floor is likely a non-issue (Node 22 → VS Code 1.101.0), and `@microsoft/vscode-azext-utils` already ships dual ESM/CJS.                                                                                                                                                                                                                                                                                                                                    |
 | **5 — current** | Unchanged on the stack. **Sequencing amended:** Phase 0 splits into **0a**, one automated installed-VSIX activation check built _before_ the migration, and **0b**, the manual checklist. | A detailed architecture report on **Ref1** (an internal, more mature sibling suite) landed. Its hardest-defended claim is that a bundler migration must be validated against a **packaged artifact continuously**, because packaging-time breakage is invisible to both F5 and source-mode tests. Ref1 has the lane that catches this but runs it on `workflow_dispatch` only, so its own bundler migration was never covered by it. Rev 3's "do not build on the layer you are deleting" logic still holds for the E2E _suite_; it does not apply to 0a, which asserts on a VSIX rather than a build config. Ref1 also supplied four concrete bundler-breakage classes now folded into Phase 0 and K.5. |
+
+| **6 - current** | Stack unchanged. **Execution rewritten as eight sequential stages** (R6.6), each ending on an operator gate. Vitest moves **before** the bundler. E2E becomes its own iteration. The legacy Mocha harness is dropped. Our six packages move to **ESM-only**, not dual (R6.7). The installed-VSIX check (0a, now L3) runs on GitHub Actions only, and L1 runs in both pipelines (R6.8). SlickGrid removal gets its own plan ([slickgrid-removal.md](./slickgrid-removal.md)). | Re-review against Cosmos DB `main` at `07ac7f86` (R6.1): their ADO pipeline adopted `DefaultDeny` network isolation, which blocked `npm test`; both of our packages now carry consumer-side interop costs in their Vitest config; the feed-quarantine constraint on new dependencies; TypeScript 6. In this repo (R6.2): the Jest surface grew 48 % in seven weeks, which argues for converting it early; there is now a fifth webview. The automated test levels (R6.3) move most verification from the operator to the agent. |
 
 **What survived every revision:** the measurements in Parts A, C and I, and the four failure
 classes in the Phase 0 checklist. Those are evidence, not preference.
@@ -1299,6 +1701,18 @@ git -C /tmp/cosmosdb worktree remove --force /tmp/cosmos-bench/at-2999
 - Branch `dev/tnuam/use-npm-webview-api` (**not merged to `main`**) — commits `f8d11a9` (remove
   local `@cosmosdb/webview-rpc`) and `620206e` (pre-bundle `@microsoft/vscode-ext-webview`
   subpaths in dev, with the CJS rationale quoted in H.5); 2026-07-29
+
+**Cosmos DB, Rev 6 re-review (2026-09-30, `main` at `07ac7f86`):**
+
+- PR #3217 / `800cb298` - adopt `@microsoft/vscode-ext-webview` on `main`; Vite `optimizeDeps` for its CJS subpaths; 2026-08-26
+- `9fb37690`, `e7049bda` - adopt `@microsoft/vscode-ext-webview-fluentui`; Vitest `server.deps.inline` and `deps.optimizer.ssr` rationale; 2026-09-16
+- PRs #3275, #3278, #3280, #3289 - ADO `networkisolation: DefaultDeny`; `npm test` disabled in ADO; 2026-08-18/19
+- PRs #3272, #3281, #3284 - dependency bump reverted, relanded as feed-safe lockfile-only; 2026-08-18/19
+- PR #3286 - pinned local `vsce` for signing; 2026-08-19
+- PR #3288 - external URI activation race; 2026-08-19
+- PR #3367 - proxy routing through VS Code, plus an isolated proxy/TLS launcher; 2026-09-29
+- `plugins/vite-plugin-inline-css.mjs` - CSS through JS because the webview HTML has no `<link>` hook
+- Issue #926 (this repo) - fluentui sourcemaps and theme gaps reported from Cosmos DB's adoption
 
 **Ref1 (internal, redacted):** a ten-chapter architecture report on an internal sibling extension's
 E2E system and build pipeline, produced for this research. Not committed — it cannot be sufficiently
