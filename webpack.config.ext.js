@@ -84,6 +84,13 @@ module.exports = (env, { mode }) => {
         ],
         resolve: {
             roots: [__dirname],
+            alias: {
+                // One `bson` per graph. `bson` ships separate CommonJS and ESM builds: the driver
+                // `require`s the CommonJS one, while an ES module (our ESM-only packages) importing `bson`
+                // would get the ESM one. Two copies break `instanceof` across them. Pinned to the entry the
+                // driver uses; `build/verification/bson-identity/` checks it at runtime.
+                bson$: require.resolve('bson'),
+            },
             // conditionNames: ['import', 'require', 'node'], // Uncomment when we will use VSCode what supports modules
             mainFields: ['module', 'main'],
             extensions: ['.js', '.ts'],

@@ -5,6 +5,7 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+const fs = require('fs');
 const path = require('path');
 const webpack = require('webpack');
 const ReactRefreshWebpackPlugin = require('@pmmmwh/react-refresh-webpack-plugin');
@@ -12,6 +13,12 @@ const CopyWebpackPlugin = require('copy-webpack-plugin');
 const MonacoWebpackPlugin = require('monaco-editor-webpack-plugin');
 const { BundleAnalyzerPlugin } = require('webpack-bundle-analyzer');
 const { BundleReportPlugin } = require('./build/verification/BundleReportPlugin.cjs');
+
+// `bson` does not export `./package.json`, so locate its browser build next to the CommonJS main.
+const bsonBrowserEntry = path.join(path.dirname(require.resolve('bson')), 'bson.mjs');
+if (!fs.existsSync(bsonBrowserEntry)) {
+    throw new Error(`bson browser entry not found at ${bsonBrowserEntry}; update the bson alias`);
+}
 
 module.exports = (env, { mode }) => {
     const isDev = mode === 'development';
@@ -34,6 +41,11 @@ module.exports = (env, { mode }) => {
         },
         resolve: {
             roots: [__dirname],
+            alias: {
+                // One `bson` if a view ever imports it (none does today; L1 allows zero, rejects two).
+                // Pinned to bson's browser entry, which its `exports` map selects for web targets.
+                bson$: bsonBrowserEntry,
+            },
             extensions: ['.js', '.jsx', '.ts', '.tsx'],
         },
         module: {

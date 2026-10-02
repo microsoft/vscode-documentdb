@@ -24,6 +24,28 @@ BSON, but reject duplicates. Each view records its graph even while the views sh
 Once Stage 4 introduces separate entries, use `--require-lightweight-views` to require Local Quick
 Start and Atlas Credentials to exclude Monaco and SlickGrid.
 
+### `bson` identity (runtime)
+
+L1 counts the `node_modules/**/bson/lib/bson.*` modules in each shipped graph. It cannot see a copy
+under another path (a dependency that vendors or pre-bundles `bson`), and it only sees the importers
+the graph has today. Both webpack configs therefore pin `bson` with a `resolve.alias` (`bson$`): the
+host config to the CommonJS entry the driver `require`s, the views config to bson's browser entry.
+[`bson-identity/check.cjs`](./bson-identity/check.cjs) builds two probe entries with the real
+`webpack.config.ext.js` (production mode, same aliases, loaders and externals), runs them in Node
+and requires every route to `ObjectId` to be one constructor, separately for the `main` and
+`playgroundWorker` graphs. Routes: `mongodb`; `bson` from TypeScript compiled like `src/`; `bson`
+and `mongodb` from an ES module (as our ESM-only packages would import them); and, in the host, a
+value parsed by `@mongodb-js/shell-bson-parser`. `npm run test:verification` runs it together with a
+negative control that removes the alias and must fail on the ES-module route. Standalone:
+
+```bash
+node build/verification/bson-identity/check.cjs            # identity
+node build/verification/bson-identity/check.cjs --prove    # identity, then the alias-removed control
+```
+
+It builds and runs probe bundles instead of inspecting the packaged artifact, so it is not part of L1,
+which stays offline and build-free for the ADO release build.
+
 The committed [baseline](./baseline.json) uses the operator-approved tolerance: the greater of 10%
 or 4 KiB per file. Added/missing files always fail. Review intentional artifact changes before
 regenerating:

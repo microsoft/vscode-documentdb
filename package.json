@@ -77,7 +77,7 @@
     "verify:vsix": "node build/verification/inspect.cjs",
     "prove:vsix": "node build/verification/prove-inspection.cjs",
     "verify:packages": "node build/verification/package-checks/check-packages.mjs",
-    "test:verification": "node --test build/verification/*.test.cjs build/verification/activation/*.test.cjs && vitest run --config build/verification/browser/vitest.config.ts",
+    "test:verification": "node --test build/verification/*.test.cjs build/verification/activation/*.test.cjs build/verification/bson-identity/*.test.cjs && vitest run --config build/verification/browser/vitest.config.ts",
     "test:vsix": "node build/verification/activation/run.cjs",
     "prove:activation": "node build/verification/activation/prove.cjs",
     "prepare:browser-check": "tsx --tsconfig build/verification/browser/tsconfig.json build/verification/browser/harness.ts prepare",
