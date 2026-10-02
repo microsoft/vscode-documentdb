@@ -1404,13 +1404,20 @@ for the expected reason`, and `PASS: missing-file rejected for the expected reas
     **Claude Opus 5.5**; the largest context variant was requested, but the runtime does not expose
     a context-tier identifier, so the variant cannot be confirmed. **Phase B** (tasks 7 and 8, task
     9's `template.ts` loading, end-of-stage verification and the L1 baseline decision) is a second
-    agent. Agents do not push or touch CI in this phase (operator, 2026-10-02); no merge from `main`
-    (Stage 1 operator decision).
+    agent, also **Claude Opus 5.5**, with the same caveat: the largest context was requested and
+    the variant is not exposed. Phase A did not push or touch CI (operator, 2026-10-02). Phase B
+    pushed once at the end and did not dispatch, re-run or watch CI (operator instruction: runners
+    stalled, and PR #880 conflicts with `main`, so `pull_request` CI does not trigger). No merge
+    from `main` (Stage 1 operator decision).
   - **Phase A status: completed.** Commits: `732c5c91` (engines), `174c836a` (`tsx`,
     browser-check scripts), `dc2344c5` operator-registry, `bf88c9f1` schema-analyzer, `22512691`
     shell-api-types, `89f8b162` shell-runtime, `74a627f9` vscode-ext-webview, `4a2000fa` fluentui,
-    `f2ddb288` (`ts-node` dropped), `befa8e49` + `fd4085b6` (package checks), plus this record.
-    Phase B items are listed at the end of this stage.
+    `f2ddb288` (`ts-node` dropped), `befa8e49` + `fd4085b6` (package checks), `197532c2` (record).
+  - **Phase B status: completed.** Commits: `657df178` (task 9, `template.ts`), `089afba3`
+    (task 7, `bson` alias and identity check), `39046f89` (task 8, Vitest settings), `dd8202bd`
+    (L1 `import.meta` check) + `471be2e2` (Prettier, format only), plus this record. Details under
+    each task and under "Automated verification". **CI: pending**; the orchestrator verifies the
+    pushed head.
 - **Goal:** all six workspace packages ship as **ESM-only**, not as dual ESM + CJS builds.
 - **Why ESM-only:**
   - Dual packages load two module instances. This repo has been bitten by exactly that: `bson`
@@ -1501,6 +1508,26 @@ for the expected reason`, and `PASS: missing-file rejected for the expected reas
        moment someone does); a global `node.__dirname: 'eval-only'` (also changes webpack's
        static evaluation of `__dirname` in CommonJS dependencies); ESM output (Stage 5). L1 has
        no check for `import.meta` in CommonJS bundles; see the open items.
+       - **Phase B: L1 now checks it (`dd8202bd`, format-only follow-up `471be2e2`).**
+         `BundleReportPlugin` records each compilation's normalized `output.chunkFormat` (host
+         `commonjs`, views `module`), and L1 requires one of those two values. Every packaged
+         `.js` file that belongs to a `commonjs` compilation (`main.js`, `playgroundWorker.js`,
+         `playgroundTsPlugin.js` and any of their chunks) is parsed with acorn and rejected on an
+         `import.meta` `MetaProperty` node (`<file>: import.meta in a CommonJS bundle`). It
+         checks syntax, not text, so a string containing `import.meta` passes, and the ESM
+         `views.js` may use `import.meta`. When Stage 5 makes the host ESM, its `chunkFormat`
+         changes and the check stops applying by itself. Unit test in `inspect.test.cjs`; a
+         mutation that disabled the assertion made that test fail. `prove:vsix` has a fifth
+         negative control, `import-meta-in-commonjs`, which appends
+         `module.exports.proof = import.meta.dirname;` to `main.js`. **L1 now prints five
+         `PASS: … rejected for the expected reason` lines.** Considered and rejected: a text
+         search (false positives in strings and comments); parsing CommonJS files as scripts,
+         which also rejects `import`/`export` declarations (broader than the finding and with a
+         less specific message; not needed today); deciding by file name or report order,
+         which Stage 4/5 would silently break. The Prettier commit only reformats
+         `inspect.cjs`, `inspect.test.cjs` and `prove-inspection.cjs`, which were not
+         Prettier-clean before (the repository's `prettier` script does not cover `build/`).
+         It is a separate commit so `dd8202bd` shows only the behavior change.
   4. `inlineSources: true`, so the published sourcemaps carry their sources (issue #926 reports a
      wall of sourcemap warnings without them).
      - **Done in all six packages** (each package's commit). fluentui's `type-tests/tsconfig.json`
@@ -1542,12 +1569,100 @@ for the expected reason`, and `PASS: missing-file rejected for the expected reas
        worker). Prove the check by adding a second copy on purpose and watching it fail.
      - **Phase B.** Not started in Phase A. L1 still reports one `bson` module per graph
        (`node_modules/bson/lib/bson.cjs` in `main` and `playgroundWorker`) on the Phase A VSIX.
+     - **Done, `089afba3`.**
+       - **Alias.** `webpack.config.ext.js` (one config for `main`, `playgroundWorker` and
+         `playgroundTsPlugin`) sets `resolve.alias.bson$` to `require.resolve('bson')`, i.e.
+         `bson/lib/bson.cjs`, the entry the driver already `require`s. `webpack.config.views.js`
+         sets `bson$` to bson's browser entry `bson/lib/bson.mjs` (the entry its `exports` map
+         picks for web targets; the CommonJS build is the Node one), and the config throws at
+         load if that file is missing, because `bson` does not export `./package.json`. No view
+         reaches `bson` today; the alias pins the entry for the first one that does. `$` keeps
+         subpath requests unaffected (there are none). Vite later: Stage 4/5 must carry the same
+         alias (Vitest already has one from Stage 2). The host bundles built with the alias are
+         **byte-identical** to Phase A's (`main.js`, `playgroundWorker.js`,
+         `playgroundTsPlugin.js`; `views.js` too), because nothing reachable imports `bson` with
+         the `import` condition yet. The alias is a guard for the first ESM importer (our
+         ESM-only packages, or an ESM dependency), not a fix for a current duplicate.
+       - **Identity check.** `build/verification/bson-identity/check.cjs` loads the real
+         `webpack.config.ext.js` in production mode and replaces only the entries (with
+         `hostProbe.ts` as `main`, `workerProbe.ts` as `playgroundWorker`), the output directory
+         (a temp directory) and two plugins (`BundleReportPlugin`, which would overwrite the real
+         report, and `CopyWebpackPlugin`). Aliases, conditions, the swc rule, the
+         `javascript/esm` parser settings and externals stay as shipped. It `require`s both
+         bundles in Node and requires every route to `ObjectId` in each graph to be the same
+         constructor as the driver's, and a driver `ObjectId` instance to be `instanceof` each.
+         Routes: `mongodb`; `bson` from TypeScript compiled by the same swc rule as `src/`;
+         `bson` and `mongodb` imported from an ES module (`esmConsumer.mjs`, standing for our
+         ESM-only packages); and in the host, a value parsed by `@mongodb-js/shell-bson-parser`
+         (in the host graph). The failure message lists the `bson` modules in that graph.
+         `bson-identity/identity.test.cjs` runs it plus a negative control (alias removed, must
+         fail on the ES-module route with `bson.node.mjs` in the graph); `test:verification`
+         now includes that folder (35 Node tests instead of 32), so CI's L1 job runs it.
+         Standalone: `node build/verification/bson-identity/check.cjs [--prove]`. About 12 s.
+       - **Identity versus L1's count.** L1 (since Stage 0) reads the shipped, hash-bound bundle
+         reports and asserts exactly one module matching `node_modules/**/bson/lib/bson.*` per
+         entry graph. It runs offline on the packaged artifact (GitHub Actions and ADO). It cannot
+         see a copy under another path (a dependency that vendors or pre-bundles `bson`), and it
+         cannot tell whether two routes share one runtime constructor. The identity check
+         executes code built with the shipped config and compares constructors, but does not
+         inspect the shipped artifact; it needs webpack, so it runs in `test:verification`, not
+         in L1/`verify:vsix` (which must stay offline and build-free for ADO). Run against the
+         actual shipped bundles was considered and rejected: their webpack runtime does not
+         expose the module registry, and loading `main.js` would execute the whole extension
+         against a `vscode` stub.
+       - **Proof (local, 2026-10-02):**
+         - Pass: `PASS: main: 5 routes to ObjectId share one constructor (bson/lib/bson.cjs)` and
+           `PASS: playgroundWorker: 4 routes to ObjectId share one constructor (bson/lib/bson.cjs)`.
+         - Alias removed (`--without-alias`, also the automated control): exit 1,
+           `main: ObjectId via bson (ES module) is not the same constructor as via mongodb (bson
+           modules in graph: bson/lib/bson.cjs, bson/lib/bson.node.mjs)`, and the same line for
+           `playgroundWorker`.
+         - Second copy on purpose, alias in place: `node_modules/bson/lib/bson.cjs` copied to
+           `node_modules/mongodb/lib/vendored-bson.cjs`, and the driver's two `require("bson")`
+           in `node_modules/mongodb/lib/bson.js` pointed at it. Exit 1 with five failures, e.g.
+           `main: ObjectId via bson (TypeScript, compiled like src/) is not the same constructor
+           as via mongodb (bson modules in graph: bson/lib/bson.cjs)`. The listed modules show
+           one `bson` module, i.e. L1's count would not have caught this copy. Reverted:
+           backup restored, sha256 of `mongodb/lib/bson.js` verified (`6c383f11…`), rerun passed.
+         - Nested copy `node_modules/mongodb/node_modules/bson`: passes with the alias (the alias
+           also redirects the driver's request); without the alias, exit 1 with
+           `mongodb/node_modules/bson/lib/bson.cjs` and `bson/lib/bson.node.mjs` listed next to
+           `bson/lib/bson.cjs`. Copy removed afterwards.
+       - Considered and rejected: a shared helper module for the alias (two lines, two configs);
+         making L1 build probes (breaks its offline ADO contract).
   8. Remove the Stage 2 Vitest setting for `vscode-ext-webview` once the tests pass without it.
      Remove the fluentui one only if its own consumer test passes without it.
      - **Phase B.** Untouched in Phase A; the full suite passes with both settings in place.
        Evidence for Phase B: the packed-tarball Vitest probe (below) shows that a consumer which
        installs fluentui into `node_modules` must inline it (Fluent's named exports). In this repo
        the workspace symlink resolves outside `node_modules`, so Vitest inlines it anyway.
+     - **Done, `39046f89`: both removed.**
+       - `deps.optimizer.ssr` (pre-bundle of `@microsoft/vscode-ext-webview`, `/host`, `/react`,
+         `/webview`) removed: full Vitest **296 / 4,588** without it.
+       - The `default` keys in the two `vi.mock` factories that the pre-bundle needed
+         (`rpcConcurrencyLogger.test.ts` for `/host`, `CollectionQueryActionBar.test.ts` for
+         `/react`) removed; both files pass (2 files / 7 tests). Control: with the old pre-bundle
+         config restored and the keys removed, they also pass, so the keys have been redundant
+         since the package became ESM (`74a627f9`). Test mechanics only; neither is a `TDD:`
+         suite. The Stage 2 notes that mention the keys (B14, the Phase A follow-up finding, the
+         open item) are history and stay; no recipe, README or codemod mentions them.
+       - `server.deps.inline` entry for `@microsoft/vscode-ext-webview-fluentui` removed
+         (`@azure/identity` and `@azure/msal-node` stay): full Vitest **296 / 4,588**, and the
+         consumer tests (`clusterDashboard`, `_integration`, collection-view toolbar: 11 files /
+         100 tests) pass. Control, to check this carefully: forcing the package external
+         (`server.deps.external: [/vscode-ext-webview-fluentui/]`, throwaway) fails exactly the two
+         files that render the real package, `StatusStrip.test.ts` and
+         `StatusStrip.inventory.test.tsx`
+         (`Cannot find module …/@fluentui/react-icons/lib/icons/chunk-0`,
+         the extensionless-import problem Phase A recorded). So the consumers do need the package
+         transformed. They get that without the setting because the workspace symlink resolves to
+         `packages/vscode-ext-webview-fluentui`, outside `node_modules`, and Vitest inlines such
+         files by default. The config comment now says this, and that a registry-installed copy
+         would need `inline` again. The fluentui README's advice to registry consumers is
+         unchanged and still correct (`verify:packages` enforces it: the no-inline control fails
+         5 / 14).
+       - Considered and rejected: keeping the fluentui entry as belt-and-braces. It has no effect
+         in this repository, and the control above shows what it would protect against.
   9. **Stage 0 tooling that depends on this stage:**
      - `prepare:browser-check` and `serve:browser-check` run on `ts-node`. Move them to `tsx`
        together with the package scripts, before dropping `ts-node`.
@@ -1566,7 +1681,21 @@ for the expected reason`, and `PASS: missing-file rejected for the expected reas
        `Unexpected host-template dependency: ./attachTrpc.js`, and `npm run test:verification`
        fails 3 of 45 Vitest tests in `browser/harness.test.ts` (the 32 Node tests pass). L2
        cannot run until Phase B fixes the loader or imports the built package.
-     - Rerun L2 before G3 to prove both.
+     - **Fixed, `657df178`.** The loader's fixed list now names `./attachTrpc.js` and
+       `./middleware/logging.js` (the specifiers the source has since the codemod), and still
+       throws on any other dependency, so a new import in `WebviewController.ts` remains a loud
+       harness change. It still transpiles the real source; nothing was copied. Chosen over
+       importing the built package: `dist/host/WebviewController.js` is ESM and imports `vscode`
+       plus the real `./attachTrpc.js` (and through it `@trpc/server`) and
+       `./middleware/logging.js`, so stubbing `vscode` and those two would need an ESM loader
+       hook instead of the current two-name `require` stub, and L2 would depend on a fresh
+       workspace build. `npm run test:verification`: 32 Node tests and
+       **45 / 45** Vitest tests passed (35 Node tests at the end of Phase B: two `bson` identity
+       tests and one `import.meta` test were added).
+       `prepare:browser-check` on the Phase A VSIX produced all six pages; the CSP meta tag is
+       the production one (nonce, `cspSource` set to the static origin).
+     - Rerun L2 before G3 to prove both. **Phase B:** prepared and served on the final VSIX (see
+       Phase B results); the integrated-browser part is left to the orchestrator.
 - **Automated verification:**
   - Per package, on the packed tarball: `publint` and `@arethetypeswrong/cli`; then `require()` it
     (exercises `require(esm)`), `import` it, import it under Vitest (with the `vscode` alias for
@@ -1644,15 +1773,60 @@ for the expected reason`, and `PASS: missing-file rejected for the expected reas
   - **Open items from Phase A:**
     - **Phase B:** fix `build/verification/browser/template.ts` (task 9), then rerun
       `test:verification` and L2; tasks 7 and 8; the L1 baseline decision for the size deltas
-      above.
+      above. **Done in Phase B** (below), except L2's browser part (orchestrator).
     - **Phase B / G1-3:** consider an L1 assertion that no CommonJS bundle contains
       `import.meta`. The webpack fix above currently has no automated guard beyond this record.
+      **Done in Phase B** (`dd8202bd`, under task 3).
     - **Operator:** the operator-registry `scrape` source (`MicrosoftDocs/nosql-docs`) is
       private, and shell-api-types `verify`'s compatibility page returns 404. Both scripts need
       new upstream URLs before their next real run. This is not caused by this stage.
     - **G1-3:** the `engines.vscode` and version decisions listed under the checkpoint. fluentui
       declares no `engines.node` (browser-only), which departs from "the packages declare the
       same floor".
+  - **Phase B results (local, Node 22.21.1 / npm 10.9.3, tree at `471be2e2`; the VSIX was
+    packaged at `dd8202bd`, and `471be2e2` only reformats `build/` scripts that are not shipped):**
+    - **L0:** `npm run build` passed; full Vitest **296 files / 4,588 tests** (unchanged; no test
+      added or removed, two `vi.mock` factories simplified under task 8); `npm run lint` passed.
+      `npm run test:verification`: **35** Node tests (32 + the 2 `bson` identity tests + the
+      `import.meta` unit test) and **3 files / 45** Vitest tests passed.
+    - **`bson` identity check:** passes in both graphs; the negative control fails as expected
+      (task 7 has the exact output).
+    - **Package checks (`npm run verify:packages`): all passed**, same results as Phase A
+      (the Vitest probe still inlines both webview packages, and its no-inline control still
+      fails 5 / 14, as required).
+    - **L1 (`npm run package`, `npm run verify:vsix`): passed against the unchanged baseline; the
+      baseline was not regenerated.** `npm run prove:vsix` printed five lines:
+      `PASS: render-renamed …`, `PASS: missing-import …`, `PASS: dev-server …`,
+      `PASS: missing-file …` and `PASS: import-meta-in-commonjs rejected for the expected
+      reason`. Per file against `build/verification/baseline.json` (Stage 0 sizes):
+      `views.js` 6,490,321 → 6,379,817 (**−110,504**, did not grow); `main.js` 4,761,367 →
+      4,719,092 (−42,275); `playgroundWorker.js` 7,443,125 → 7,438,855 (−4,270);
+      `views.js.LICENSE.txt` 2,594 → 2,358 (−236); `main.js.LICENSE.txt` 477 → 438 (−39);
+      `package.json` 96,079 → 95,918 (−161). VSIX 9,597,420 → 9,566,329 bytes, 124 files, none
+      added or missing; every other file unchanged. Against the Phase A VSIX: `main.js`,
+      `playgroundWorker.js`, `playgroundTsPlugin.js` and `views.js` are **byte-identical**; the
+      only change is `package.json` (+44 B, the `test:verification` script now runs the
+      `bson-identity` folder). `bson` graphs: `node_modules/bson/lib/bson.cjs` once in `main`
+      and in `playgroundWorker`; none in the views. Webpack warnings unchanged (2 host:
+      `debug`, `express`; 3 views: size).
+    - **L2: prepared, not run in a browser.** On the final VSIX,
+      `npm run prepare:browser-check -- --vsix vscode-documentdb-0.11.0.vsix --output <tmp>
+      --port 18084` generated the five view pages and the broken-CSS page from the real
+      `WebviewController.ts`. `serve:browser-check` started; all six pages, the helper,
+      `runtime.js`, `theme.css` and `artifact/views.js` (6,379,817 B) answered 200, a
+      root-relative `/views.js` and an unknown page 404. The server was stopped. This session
+      had no integrated browser tools, so the Playwright helper (`integrated-all-checks.js`) was
+      **not** run; the orchestrator runs it.
+    - **L3: not run locally.** No passwordless `sudo` on this shared machine, so the missing
+      Electron libraries (`libatk-1.0.so.0`) could not be installed. Left to CI.
+    - **CI: pending**, verified by the orchestrator. Pushed once at the end; no run was
+      dispatched, re-run or watched.
+    - **Dependency scans:** one `package.json` change (the `test:verification` script, in
+      `089afba3`): 0 fresh (1,635 locked versions; `api/` 116). No pins, no overrides, no
+      lockfile change in Phase B.
+    - **`TDD:` suites:** none changed in Phase B.
+    - **Formatting:** Prettier on every file changed in Phase B except this plan (hand-formatted,
+      as in Phase A); for the three L1 scripts, as a separate format-only commit (task 3 note).
 - **Operator gate G3:** decide the version bumps. Publish the packages only after the PR has merged,
   from `main`: publishing is irreversible, and a package should not ship from an unmerged branch.
   This repo uses the workspace copies, so no stage waits on publishing. Decided at the combined
@@ -1667,10 +1841,13 @@ Stage 3 package checks and the three AI reviews.
 
 1. The inline records of Stages 1 to 3 and the three review files under `iterations/`.
 2. The dependency diff: what was removed (Mocha, Jest, `ts-jest`, `ts-node`, ...), what was added
-   (Vitest, `tsx`, `publint`, `@arethetypeswrong/cli`, ...), and the fresh-dependency scan results
-   with every pinned-back version (ground rule 6).
+   (Vitest, `tsx`, ...; `publint` and `@arethetypeswrong/cli` run through pinned `npx` and were
+   not added as dependencies), and the fresh-dependency scan results with every pinned-back
+   version (ground rule 6).
 3. The CI diff: the removed `integration-tests` job and ADO `🧪 Test` step, and the Vitest step
-   that replaces `jesttest`. CI is green on the Stage 3 head with L1 and L3 actually run.
+   that replaces `jesttest`. CI is green on the Stage 3 head with L1 and L3 actually run. From
+   Stage 3 on, L1's proof prints five `PASS: … rejected for the expected reason` lines (the fifth
+   is `import-meta-in-commonjs`), and `test:verification` includes the `bson` identity check.
 4. The list of `TDD:` suite changes, and of tests changed beyond mechanical renames.
 5. Decisions: the package versions in the Stage 3 table (`schema-analyzer` becomes 2.0.0, a major
    version), and accepting that `engines.vscode` `^1.109.0` stops updates for users on VS Code
