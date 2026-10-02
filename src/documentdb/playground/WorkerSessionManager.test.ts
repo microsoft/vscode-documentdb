@@ -3,7 +3,10 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+import { afterEach, beforeEach, describe, expect, it, vi, type Mock, type MockInstance } from 'vitest';
+
 import { type IActionContext, type ITelemetryContext, type UserCancelledError } from '@microsoft/vscode-azext-utils';
+import * as workerThreads from 'worker_threads';
 import { Worker } from 'worker_threads';
 import { ext } from '../../extensionVariables';
 import {
@@ -21,13 +24,13 @@ interface RecordedTelemetry {
 
 const mockTelemetryEvents: RecordedTelemetry[] = [];
 
-jest.mock('@microsoft/vscode-azext-utils', () => {
-    const actual = jest.requireActual<{ UserCancelledError: typeof UserCancelledError }>(
+vi.mock('@microsoft/vscode-azext-utils', async () => {
+    const actual = await vi.importActual<{ UserCancelledError: typeof UserCancelledError }>(
         '@microsoft/vscode-azext-utils',
     );
     return {
         ...actual,
-        callWithTelemetryAndErrorHandling: jest.fn(
+        callWithTelemetryAndErrorHandling: vi.fn(
             async (eventName: string, callback: (context: IActionContext) => Promise<unknown>): Promise<unknown> => {
                 const context = {
                     telemetry: { properties: {}, measurements: {} },
@@ -60,38 +63,40 @@ jest.mock('@microsoft/vscode-azext-utils', () => {
     };
 });
 
-jest.mock('../../extensionVariables', () => ({
+vi.mock('../../extensionVariables', () => ({
     ext: {
         outputChannel: {
-            trace: jest.fn(),
-            warn: jest.fn(),
-            error: jest.fn(),
+            trace: vi.fn(),
+            warn: vi.fn(),
+            error: vi.fn(),
         },
     },
 }));
 
 // Mock worker_threads — the WorkerSessionManager creates Worker instances
-jest.mock('worker_threads', () => {
-    const mockPostMessage = jest.fn();
-    const mockTerminate = jest.fn().mockResolvedValue(0);
+vi.mock('worker_threads', () => {
+    const mockPostMessage = vi.fn();
+    const mockTerminate = vi.fn().mockResolvedValue(0);
     const listeners = new Map<string, ((...args: unknown[]) => void)[]>();
 
-    const MockWorker = jest.fn().mockImplementation(() => ({
-        postMessage: mockPostMessage,
-        terminate: mockTerminate,
-        on: jest.fn((event: string, handler: (...args: unknown[]) => void) => {
-            const existing = listeners.get(event) ?? [];
-            existing.push(handler);
-            listeners.set(event, existing);
-        }),
-        _emit: (event: string, ...args: unknown[]) => {
-            const handlers = listeners.get(event) ?? [];
-            for (const handler of handlers) {
-                handler(...args);
-            }
-        },
-        _listeners: listeners,
-    }));
+    const MockWorker = vi.fn().mockImplementation(function () {
+        return {
+            postMessage: mockPostMessage,
+            terminate: mockTerminate,
+            on: vi.fn((event: string, handler: (...args: unknown[]) => void) => {
+                const existing = listeners.get(event) ?? [];
+                existing.push(handler);
+                listeners.set(event, existing);
+            }),
+            _emit: (event: string, ...args: unknown[]) => {
+                const handlers = listeners.get(event) ?? [];
+                for (const handler of handlers) {
+                    handler(...args);
+                }
+            },
+            _listeners: listeners,
+        };
+    });
 
     return {
         Worker: MockWorker,
@@ -108,18 +113,17 @@ describe('WorkerSessionManager', () => {
     let callbacks: WorkerSessionCallbacks;
 
     beforeEach(() => {
-        jest.clearAllMocks();
+        vi.clearAllMocks();
         mockTelemetryEvents.length = 0;
         // Reset listeners between tests
-        // eslint-disable-next-line @typescript-eslint/no-require-imports
-        const wt = require('worker_threads') as { _resetListeners: () => void };
+        const wt = workerThreads as unknown as { _resetListeners: () => void };
         wt._resetListeners();
 
         callbacks = {
-            onConsoleOutput: jest.fn(),
-            onLog: jest.fn(),
-            onTokenRequest: jest.fn(),
-            onWorkerExit: jest.fn(),
+            onConsoleOutput: vi.fn(),
+            onLog: vi.fn(),
+            onTokenRequest: vi.fn(),
+            onWorkerExit: vi.fn(),
         };
     });
 
@@ -161,7 +165,7 @@ describe('WorkerSessionManager', () => {
 
     describe('initialization timeout', () => {
         it('explains the failed connection and identifies the timeout setting', async () => {
-            jest.useFakeTimers();
+            vi.useFakeTimers();
             const manager = new WorkerSessionManager(callbacks);
             const initPromise = manager.ensureWorker(
                 'cluster-1',
@@ -176,7 +180,7 @@ describe('WorkerSessionManager', () => {
                 1000,
             );
 
-            jest.advanceTimersByTime(1000);
+            vi.advanceTimersByTime(1000);
 
             await expect(initPromise).rejects.toMatchObject({
                 message:
@@ -184,21 +188,21 @@ describe('WorkerSessionManager', () => {
                 settingKey: 'documentDB.connectionTimeout',
                 settingsHint: 'The connection did not finish in time. You can increase the timeout in Settings:',
             });
-            jest.useRealTimers();
+            vi.useRealTimers();
         });
     });
 
     describe('startup tracking', () => {
-        let trace: jest.SpyInstance;
+        let trace: MockInstance;
 
         beforeEach(() => {
-            jest.useFakeTimers();
-            trace = jest.spyOn(ext.outputChannel, 'trace');
+            vi.useFakeTimers();
+            trace = vi.spyOn(ext.outputChannel, 'trace');
         });
 
         afterEach(() => {
             trace.mockRestore();
-            jest.useRealTimers();
+            vi.useRealTimers();
         });
 
         function startupEvent(): RecordedTelemetry {
@@ -232,8 +236,8 @@ describe('WorkerSessionManager', () => {
                 1000,
                 telemetryContext,
             );
-            const worker = jest.mocked(Worker).mock.results.at(-1)?.value as {
-                postMessage: jest.Mock;
+            const worker = vi.mocked(Worker).mock.results.at(-1)?.value as {
+                postMessage: Mock;
                 _emit: (event: string, ...args: unknown[]) => void;
             };
             const initMessage = worker.postMessage.mock.calls.at(-1)?.[0] as MainToWorkerMessage;
@@ -242,9 +246,9 @@ describe('WorkerSessionManager', () => {
 
         it('reports a stalled token request with total and stage timings without connection details', async () => {
             const { initPromise, requestId, worker } = startWorker();
-            jest.advanceTimersByTime(200);
+            vi.advanceTimersByTime(200);
             worker._emit('message', { type: 'initProgress', requestId, stage: 'acquiringToken' });
-            jest.advanceTimersByTime(800);
+            vi.advanceTimersByTime(800);
 
             await expect(initPromise).rejects.toMatchObject({
                 message:
@@ -257,7 +261,7 @@ describe('WorkerSessionManager', () => {
             expect(ext.outputChannel.error).toHaveBeenCalledTimes(1);
             expect(trace).not.toHaveBeenCalled();
             expect(trace.mock.calls.map((call) => String(call[0])).join('\n')).not.toMatch(/private-/);
-            expect(jest.mocked(ext.outputChannel.error).mock.calls.flat().join('\n')).not.toMatch(/private-/);
+            expect(vi.mocked(ext.outputChannel.error).mock.calls.flat().join('\n')).not.toMatch(/private-/);
             expect(startupEvent().telemetry).toMatchObject({
                 maskEntireErrorMessage: true,
                 properties: {
@@ -281,11 +285,11 @@ describe('WorkerSessionManager', () => {
         it('logs one successful startup summary, ignoring stale progress', async () => {
             const { manager, initPromise, requestId, worker } = startWorker();
             worker._emit('message', { type: 'initProgress', requestId, stage: 'acquiringToken' });
-            jest.advanceTimersByTime(150);
+            vi.advanceTimersByTime(150);
             worker._emit('message', { type: 'initProgress', requestId, stage: 'authenticating' });
             expect(trace).not.toHaveBeenCalled();
             worker._emit('message', { type: 'initProgress', requestId: 'stale-request', stage: 'loadingDriver' });
-            jest.advanceTimersByTime(50);
+            vi.advanceTimersByTime(50);
             worker._emit('message', { type: 'initResult', requestId, success: true });
             await initPromise;
             expect(trace).toHaveBeenCalledWith(
@@ -322,7 +326,7 @@ describe('WorkerSessionManager', () => {
                 `[WorkerSessionManager] startup=${requestId} failed surface=shell auth=MicrosoftEntraID lastStage=stage04AcquiringToken elapsedMs=0 timeoutMs=1000 stageDurationsMs={"stage01StartingWorker":0,"stage04AcquiringToken":0} costTimingsMs={}`,
             );
             expect(trace.mock.calls.map((call) => String(call[0])).join('\n')).not.toMatch(/private-/);
-            expect(jest.mocked(ext.outputChannel.error).mock.calls.flat().join('\n')).not.toMatch(/private-/);
+            expect(vi.mocked(ext.outputChannel.error).mock.calls.flat().join('\n')).not.toMatch(/private-/);
             const event = startupEvent();
             expect(event.telemetry.properties).toMatchObject({ startupOutcome: 'failed', result: 'Failed' });
             expect(event.error).toMatchObject({ message: 'Worker startup failed', stack: undefined });
@@ -331,7 +335,7 @@ describe('WorkerSessionManager', () => {
 
         it('logs an unexpected startup exit at error level', async () => {
             const { initPromise, requestId, worker } = startWorker();
-            jest.advanceTimersByTime(100);
+            vi.advanceTimersByTime(100);
             worker._emit('exit', 1);
 
             await expect(initPromise).rejects.toThrow('Worker exited unexpectedly');
@@ -358,13 +362,13 @@ describe('WorkerSessionManager', () => {
 
         it('accumulates repeated stages and keeps the last visit duration separately', async () => {
             const { initPromise, requestId, worker } = startWorker();
-            jest.advanceTimersByTime(100);
+            vi.advanceTimersByTime(100);
             worker._emit('message', { type: 'initProgress', requestId, stage: 'acquiringToken' });
-            jest.advanceTimersByTime(200);
+            vi.advanceTimersByTime(200);
             worker._emit('message', { type: 'initProgress', requestId, stage: 'authenticating' });
-            jest.advanceTimersByTime(100);
+            vi.advanceTimersByTime(100);
             worker._emit('message', { type: 'initProgress', requestId, stage: 'acquiringToken' });
-            jest.advanceTimersByTime(600);
+            vi.advanceTimersByTime(600);
 
             await expect(initPromise).rejects.toThrow('Waiting for authentication token (0.6 seconds in this stage)');
             expect(startupEvent().telemetry.measurements).toMatchObject({
@@ -389,7 +393,7 @@ describe('WorkerSessionManager', () => {
                 'authenticating',
                 'initializingRuntime',
             ]) {
-                jest.advanceTimersByTime(10);
+                vi.advanceTimersByTime(10);
                 worker._emit('message', { type: 'initProgress', requestId, stage });
             }
             worker._emit('message', { type: 'initResult', requestId, success: true });
@@ -415,21 +419,21 @@ describe('WorkerSessionManager', () => {
             const timing = (activity: 'databaseConnect' | 'tokenWait', activityId: string, started: boolean): void => {
                 worker._emit('message', { type: 'initTiming', requestId, activity, activityId, started });
             };
-            callbacks.onTokenRequest = jest.fn(async (message, postResponse, timings): Promise<void> => {
+            callbacks.onTokenRequest = vi.fn(async (message, postResponse, timings): Promise<void> => {
                 const stop = timings?.startTokenAcquire();
-                jest.advanceTimersByTime(20);
+                vi.advanceTimersByTime(20);
                 stop?.();
                 postResponse({ type: 'tokenResponse', requestId: message.requestId, accessToken: 'private-token' });
             });
             timing('databaseConnect', requestId, true);
-            jest.advanceTimersByTime(10);
+            vi.advanceTimersByTime(10);
             timing('tokenWait', 'token-request', true);
             timing('tokenWait', 'token-request', true);
-            jest.advanceTimersByTime(5);
+            vi.advanceTimersByTime(5);
             worker._emit('message', { type: 'tokenRequest', requestId: 'token-request', scopes: ['private-scope'] });
-            jest.advanceTimersByTime(5);
+            vi.advanceTimersByTime(5);
             timing('tokenWait', 'token-request', false);
-            jest.advanceTimersByTime(10);
+            vi.advanceTimersByTime(10);
             timing('databaseConnect', requestId, false);
             worker._emit('message', { type: 'initResult', requestId, success: true });
             await initPromise;
@@ -451,7 +455,7 @@ describe('WorkerSessionManager', () => {
 
         it('freezes partial worker timings on timeout and ignores late provider completion', async () => {
             let finishProvider: (() => void) | undefined;
-            callbacks.onTokenRequest = jest.fn((message, postResponse, timings): Promise<void> => {
+            callbacks.onTokenRequest = vi.fn((message, postResponse, timings): Promise<void> => {
                 const stop = timings?.startTokenAcquire();
                 return new Promise<void>((resolve) => {
                     finishProvider = (): void => {
@@ -473,7 +477,7 @@ describe('WorkerSessionManager', () => {
                 activityId: requestId,
                 started: true,
             });
-            jest.advanceTimersByTime(100);
+            vi.advanceTimersByTime(100);
             worker._emit('message', {
                 type: 'initTiming',
                 requestId,
@@ -481,9 +485,9 @@ describe('WorkerSessionManager', () => {
                 activityId: 'token-request',
                 started: true,
             });
-            jest.advanceTimersByTime(50);
+            vi.advanceTimersByTime(50);
             worker._emit('message', { type: 'tokenRequest', requestId: 'token-request', scopes: ['private-scope'] });
-            jest.advanceTimersByTime(850);
+            vi.advanceTimersByTime(850);
             await expect(initPromise).rejects.toThrow('Operation timed out');
 
             const event = startupEvent();
@@ -493,7 +497,7 @@ describe('WorkerSessionManager', () => {
                 tokenAcquireDurationMs: 850,
             });
             const snapshot = JSON.stringify(event);
-            jest.advanceTimersByTime(1000);
+            vi.advanceTimersByTime(1000);
             finishProvider?.();
             worker._emit('message', {
                 type: 'initTiming',
@@ -522,7 +526,7 @@ describe('WorkerSessionManager', () => {
                 activityId: requestId,
                 started: true,
             });
-            jest.advanceTimersByTime(40);
+            vi.advanceTimersByTime(40);
             worker._emit('message', {
                 type: 'initTiming',
                 requestId,
@@ -555,7 +559,7 @@ describe('WorkerSessionManager', () => {
 
         it('reports worker construction failures while preserving the original error', async () => {
             const originalError = new Error('private-construction-error');
-            jest.mocked(Worker).mockImplementationOnce(() => {
+            vi.mocked(Worker).mockImplementationOnce(function () {
                 throw originalError;
             });
             const manager = new WorkerSessionManager(callbacks);
@@ -625,14 +629,13 @@ describe('WorkerSessionManager', () => {
         }
 
         function getWorkerMock(): {
-            postMessage: jest.Mock;
-            terminate: jest.Mock;
+            postMessage: Mock;
+            terminate: Mock;
             emit: (event: string, ...args: unknown[]) => void;
         } {
-            // eslint-disable-next-line @typescript-eslint/no-require-imports
-            const wt = require('worker_threads') as {
-                _mockPostMessage: jest.Mock;
-                _mockTerminate: jest.Mock;
+            const wt = workerThreads as unknown as {
+                _mockPostMessage: Mock;
+                _mockTerminate: Mock;
                 _getListeners: () => Map<string, ((...args: unknown[]) => void)[]>;
             };
             return {
@@ -679,8 +682,7 @@ describe('WorkerSessionManager', () => {
             expect(callbacks.onWorkerExit).toHaveBeenCalledWith(1);
 
             // Step 3: Recovery — next ensureWorker should spawn a new worker
-            // eslint-disable-next-line @typescript-eslint/no-require-imports
-            const wt = require('worker_threads') as { _resetListeners: () => void };
+            const wt = workerThreads as unknown as { _resetListeners: () => void };
             wt._resetListeners();
 
             const init2 = manager.ensureWorker('cluster-A', makeInitMsg('cluster-A'));
@@ -738,14 +740,13 @@ describe('WorkerSessionManager', () => {
         }
 
         function getWorkerMock(): {
-            postMessage: jest.Mock;
-            terminate: jest.Mock;
+            postMessage: Mock;
+            terminate: Mock;
             emit: (event: string, ...args: unknown[]) => void;
         } {
-            // eslint-disable-next-line @typescript-eslint/no-require-imports
-            const wt = require('worker_threads') as {
-                _mockPostMessage: jest.Mock;
-                _mockTerminate: jest.Mock;
+            const wt = workerThreads as unknown as {
+                _mockPostMessage: Mock;
+                _mockTerminate: Mock;
                 _getListeners: () => Map<string, ((...args: unknown[]) => void)[]>;
             };
             return {
@@ -783,8 +784,7 @@ describe('WorkerSessionManager', () => {
             expect(manager.isConnectedTo('cluster-A')).toBe(true);
 
             // Reset listeners for new worker
-            // eslint-disable-next-line @typescript-eslint/no-require-imports
-            const wt = require('worker_threads') as { _resetListeners: () => void };
+            const wt = workerThreads as unknown as { _resetListeners: () => void };
             wt._resetListeners();
 
             // Switch to cluster-B — should terminate cluster-A's worker
@@ -803,8 +803,7 @@ describe('WorkerSessionManager', () => {
 
         it('should not re-spawn when ensureWorker is called with the same cluster', async () => {
             const manager = new WorkerSessionManager(callbacks);
-            // eslint-disable-next-line @typescript-eslint/no-require-imports
-            const { Worker: WorkerMock } = require('worker_threads') as { Worker: jest.Mock };
+            const { Worker: WorkerMock } = workerThreads as unknown as { Worker: Mock };
 
             const init1 = manager.ensureWorker('cluster-A', makeInitMsg('cluster-A'));
             const worker1 = getWorkerMock();
@@ -845,8 +844,7 @@ describe('WorkerSessionManager', () => {
             expect(manager.workerState).toBe('idle');
 
             // Reset listeners for new worker
-            // eslint-disable-next-line @typescript-eslint/no-require-imports
-            const wt = require('worker_threads') as { _resetListeners: () => void };
+            const wt = workerThreads as unknown as { _resetListeners: () => void };
             wt._resetListeners();
 
             // Respawn with cluster-B

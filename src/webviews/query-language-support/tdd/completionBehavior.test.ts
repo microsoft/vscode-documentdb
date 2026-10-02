@@ -3,6 +3,8 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+import { afterEach, describe, expect, test } from 'vitest';
+
 /**
  * TDD Behavior Tests — Completion Categories by Cursor Position
  *
