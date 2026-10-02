@@ -673,8 +673,10 @@ plugin in a real editor; Kubernetes, Atlas and Azure discovery against real back
       production webpack retained its existing performance warnings. Changed-file Prettier and
       lint passed. The VSIX still has **124 files** and passes the original size tolerance;
       no baseline, tolerance, verification-tooling or production-source file changed for this fix.
-      **Pending:** normally push and confirm CI actually checks out the pushed head and logs all
-      four L1 rejection proofs plus `L3 PASS` and `L3 PROOF PASS`.
+      **CI completed:** normally pushed `116a6c7b` and its inline-reference follow-up `84aacaf7`,
+      including the earlier stop/clarification records. Run `37010184351` passed; all four jobs'
+      checkout logs show the exact pushed head `84aacaf7c725e99f96e4895173f1d7ab1a08f0fe`.
+      All six required L1/L3 proof lines are present, recorded under final completion below.
 - **Automated verification:** L0; L1 (the VSIX contents must not change); L3.
   - **Local L0 passed:** `npm run build` passed before and after dependency pruning.
     Post-change full Jest passed **295 suites / 4,582 tests / 4 snapshots** (Node 22.18.0,
@@ -732,9 +734,28 @@ plugin in a real editor; Kubernetes, Atlas and Azure discovery against real back
     - **Status at the stop:** all original implementation tasks and local checks were complete;
       Stage 1's CI gate was **blocked**, not passed. Stop record `299ac50f` and operator
       clarification `e76e7831` were committed locally, initially unpushed. **Resumed** under the
-      orchestrator's temporary PR-head checkout decision above; the successful rerun must be
-      recorded before Stage 1 is complete. No Stage 2 work, stage review file or PR readiness
+      orchestrator's temporary PR-head checkout decision above; the successful rerun is
+      recorded below. No Stage 2 work, stage review file or PR readiness
       change is part of this agent's task.
+  - **Stage 1 completed after the checkout fix:** `gh run watch --exit-status` returned 0 for
+    [37010184351](https://github.com/microsoft/vscode-documentdb/actions/runs/37010184351),
+    reported head `84aacaf7c725e99f96e4895173f1d7ab1a08f0fe`. Code Quality & Tests,
+    Build & Package, L1 and L3 all passed. Full CI Jest passed **295 suites / 4,582 tests**;
+    verification-tooling Jest passed **3 suites / 45 tests**. All four checkout logs independently
+    confirmed that head, rather than GitHub's synthetic merge commit. The baseline and its
+    tolerance remain unchanged; no merge/rebase onto `main` occurred.
+    The CI logs contain exactly these four L1 rejection proofs and the two L3 proofs:
+    - `PASS: render-renamed rejected for the expected reason`
+    - `PASS: missing-import rejected for the expected reason`
+    - `PASS: dev-server rejected for the expected reason`
+    - `PASS: missing-file rejected for the expected reason`
+    - `L3 PASS: installed VSIX activated, final commands registered, and DocumentDB activation logs are clean.`
+    - `L3 PROOF PASS: activation and final commands passed; actual logs rejected L3_INJECTED_SWALLOWED_ACTIVATION_ERROR.`
+    - **Remaining operator items:** G1-3 review after Stage 3, including the orchestrator's
+      temporary checkout-policy decision; revisit that policy before G6 when the branch takes
+      `main`'s lockfile. This is Case 1 plus the stage checks; full Case 2, including
+      `prettier-fix`, stays deferred until ready for review. No `TDD:` changes, additional
+      dependencies, stage review file, localization generation or PR readiness change was made.
 - **Operator gate G1:** review the dependency and CI diff. No manual UI check is needed. Reviewed
   at the combined checkpoint G1-3 after Stage 3.
 
