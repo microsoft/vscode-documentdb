@@ -873,6 +873,12 @@ plugin in a real editor; Kubernetes, Atlas and Azure discovery against real back
     - **Snapshots:** Vitest keys separate `describe` names with `>` and uses a different header.
       `promptTemplates.test.ts.snap` was rewritten with `-u`; a script compared all **4** stored
       values with the Jest originals and found them byte-identical.
+    - **Phase B B01, `e2f99b4a`:** completed **18** package test files (operator-registry **4**,
+      schema-analyzer **3**, shell-runtime **2**, vscode-ext-webview **9**). Vitest **18 files /
+      252 tests** passed; remaining Jest **258 suites / 3,972 tests** passed; `npm run build` and
+      targeted Prettier / ESLint passed. Recipe step 5 fixed two constructor mocks; assertions
+      unchanged. Leftovers: **none**; recipe deviations: **none**. No dependency changes, push,
+      CI activity or stage review; CI remains deferred to the orchestrator.
     - **Conversion recipe for Phase B** (also the batch lists' reference):
       1. Take a batch from the batch list; never touch config files. A file moves from Jest to
          Vitest when it imports from `'vitest'`: Jest ignores it from then on and Vitest
