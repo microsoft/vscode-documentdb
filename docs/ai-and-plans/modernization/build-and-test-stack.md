@@ -1399,6 +1399,18 @@ for the expected reason`, and `PASS: missing-file rejected for the expected reas
 - **Models:** author **Claude Opus 5.5**, reviewer **GPT-6.1 Sol** (or GPT-6 Sol). Module format,
   `exports` maps, `require(esm)` and the duplicate-`bson` risk are subtle, and mistakes only show up
   in consumers.
+  - **Execution (2026-10-02):** two phases. **Phase A** (engines bump, tasks 1 to 6, the `tsx`
+    move including task 9's scripts, the packed-tarball checks, Phase A verification) authored by
+    **Claude Opus 5.5**; the largest context variant was requested, but the runtime does not expose
+    a context-tier identifier, so the variant cannot be confirmed. **Phase B** (tasks 7 and 8, task
+    9's `template.ts` loading, end-of-stage verification and the L1 baseline decision) is a second
+    agent. Agents do not push or touch CI in this phase (operator, 2026-10-02); no merge from `main`
+    (Stage 1 operator decision).
+  - **Phase A status: completed.** Commits: `732c5c91` (engines), `174c836a` (`tsx`,
+    browser-check scripts), `dc2344c5` operator-registry, `bf88c9f1` schema-analyzer, `22512691`
+    shell-api-types, `89f8b162` shell-runtime, `74a627f9` vscode-ext-webview, `4a2000fa` fluentui,
+    `f2ddb288` (`ts-node` dropped), `befa8e49` + `fd4085b6` (package checks), plus this record.
+    Phase B items are listed at the end of this stage.
 - **Goal:** all six workspace packages ship as **ESM-only**, not as dual ESM + CJS builds.
 - **Why ESM-only:**
   - Dual packages load two module instances. This repo has been bitten by exactly that: `bson`
@@ -1411,6 +1423,13 @@ for the expected reason`, and `PASS: missing-file rejected for the expected reas
   - It improves tree-shaking in the webview bundle.
 - **Before starting (decided 2026-10-01):** raise `engines.vscode` to `^1.109.0`, matching Cosmos DB,
   and `@types/vscode` with it. `engines.node` stays `>=22.18.0`; the packages declare the same floor.
+  - **Done, `732c5c91`.** `engines.vscode` `^1.109.0`; `@types/vscode` `~1.109.0`, resolved
+    1.109.0 (published 2026-02-04; the newest 1.109.x, and 1.110.0 is the next release). L3's runner
+    derives its VS Code version from `engines.vscode`, so it now downloads 1.109.0; nothing else
+    pinned 1.105. Freshness scan: 0 fresh. `npm run build`, full Vitest (**296 / 4,588**),
+    `npm run test:verification` (32 Node tests, 3 files / 45 Vitest tests) and lint passed. The
+    five Node-run packages declare `engines.node` `>=22.18.0`. fluentui is browser-only and got no
+    `engines` field.
 - **The packages:**
 
   | Package                                  | Today              | Runs in                                                     | Specific work                                                                       | New version |
@@ -1425,20 +1444,95 @@ for the expected reason`, and `PASS: missing-file rejected for the expected reas
   The `@documentdb-js/*` packages are published from GitHub (`npm-publish-documentdb-js.yml`), the
   `@microsoft/*` packages from ADO (`release-npm-packages.yml`).
 
+  - **Dependency order (Phase A).** The workspace graph has no edges between the six packages: no
+    package imports or declares another (only doc comments name them). They are six leaves whose
+    consumers are the extension host bundle (`main`), the playground worker, the webview bundle,
+    the TS plugin (which reads its own `typeDefs` copy and imports no package) and the root tests.
+    With no constraint, the table order was used: operator-registry, schema-analyzer,
+    shell-api-types, shell-runtime, vscode-ext-webview, fluentui. After every package:
+    `npm run build`, the **full** Vitest run (not only the package's tests, since all consumers
+    are in the root suite), production webpack builds of the host and webview bundles, and
+    `npm run lint`. All passed after each package (296 / 4,588; webpack warnings unchanged:
+    2 host, 3 views, the same `debug` / `express` and size warnings as in Stage 1's CI logs).
+
 - **Tasks**, one package per commit, in dependency order:
   1. `"type": "module"`, and an `exports` map with `types` and `default` for every subpath.
+     - **Done in each package's commit (above).** Every map also exports `./package.json`.
+       `main`, `types` and vscode-ext-webview's `typesVersions` stay: the root project still uses
+       `module: commonjs` with node10 resolution, which ignores `exports`. shell-api-types exports
+       `./typeDefs/*` so its shipped `.d.ts` stays reachable by path, as it was before the map
+       existed. Each version bump refreshed `package-lock.json` (`npm install`).
   2. `tsconfig`: `module` and `moduleResolution` `NodeNext` for the packages that run under Node (the
      four `@documentdb-js/*` packages and `vscode-ext-webview`). `NodeNext` requires `.js`
      extensions on relative imports; a codemod adds them. fluentui is browser-only and keeps
      `bundler`.
+     - **Done.** Codemod `build/esm-migration/add-js-extensions.mjs` (TypeScript AST; static and
+       dynamic imports, `import()` types, `vi.mock`-family calls; `--check` mode; kept for the
+       extension host in Stage 5). Specifiers rewritten, all resolved, none manual:
+       operator-registry 55 (19 files), schema-analyzer 19 (9), shell-api-types 5 (4),
+       shell-runtime 21 (9), vscode-ext-webview 82 (33). Package tests and `scripts/` were
+       included. The operator-registry generator now emits `.js` specifiers; `npm run generate`
+       reproduces the committed `src/` byte for byte.
+     - **Root project changes (deviation, `dc2344c5`, `22512691`).** The CommonJS root
+       `tsconfig.json` compiled two kinds of package files itself: shell-api-types `src/` (it was
+       the only package missing from `references`) and every package's `scripts/`. Both now use
+       `import.meta.dirname`, which TypeScript rejects under `module: commonjs` (TS1343). Fixes:
+       shell-api-types joins `references` (root then reads its `.d.ts`; the package build
+       type-checks `src/` including its test); `packages/*/scripts` is excluded from the root and
+       each `tsconfig.scripts.json` moved to `scripts/tsconfig.json`, so `tsc -p scripts` and
+       ESLint's project service type-check the scripts with their real NodeNext settings.
+       Considered and rejected: keeping the scripts in the root project (TS1343); ESLint
+       `allowDefaultProject` for them (lints with default compiler settings, weaker); a root
+       `module` change (Stage 5's job).
   3. `__dirname` to `import.meta.dirname` (shell-api-types).
+     - **Done, `22512691`.** `getShellApiDtsContent()` reads `../typeDefs/…` through
+       `import.meta.dirname`. operator-registry's `operatorReference.test.ts` was converted too
+       (it is compiled into that package's `dist`).
+     - **Found and fixed (deviation, same commit):** webpack 5.105 left `import.meta.dirname`
+       verbatim in the CommonJS host bundle (`dist/main.js`), where loading it via `require`
+       would be a syntax error (`node --check` hides it, because Node 22 re-parses the file as
+       ESM). `webpack.config.ext.js` now sets `module.parser['javascript/esm'].node` to
+       `{ __dirname: 'eval-only', __filename: 'eval-only' }`, which rewrites
+       `import.meta.dirname`/`filename` to `__dirname`/`__filename` in ES modules only; CommonJS
+       modules keep `node: { __dirname: false }`. After the change, `main.js`,
+       `playgroundWorker.js` and `playgroundTsPlugin.js` contain no `import.meta.dirname`/
+       `filename`/`url`. Rejected: relying on tree-shaking (the extension never calls
+       `getShellApiDtsContent`, but a development build keeps it, and the bundle would break the
+       moment someone does); a global `node.__dirname: 'eval-only'` (also changes webpack's
+       static evaluation of `__dirname` in CommonJS dependencies); ESM output (Stage 5). L1 has
+       no check for `import.meta` in CommonJS bundles; see the open items.
   4. `inlineSources: true`, so the published sourcemaps carry their sources (issue #926 reports a
      wall of sourcemap warnings without them).
+     - **Done in all six packages** (each package's commit). fluentui's `type-tests/tsconfig.json`
+       sets `inlineSources: false`, because it turns `sourceMap` off. The Vitest package probe
+       reports **0** "points to missing source files" warnings with both packages inlined.
   5. Package scripts (operator-registry `scrape` / `generate` / `evaluate`, shell-api-types `verify`)
      from `ts-node` to `tsx`, then drop `ts-node`. Node's built-in type stripping is not enough: it
      needs real file extensions and ignores `tsconfig`, and the scripts import package sources
      without extensions. Convert the scripts' own `__dirname` uses too.
+     - **Done.** `tsx` `~4.23.15` added in `174c836a` (published 2026-09-20; +28 locked
+       packages, including esbuild 0.28; scan 0 fresh). Because `"type": "module"` stops
+       `ts-node` from running a package's scripts, each package moved its scripts in its own
+       commit. `scrape` / `generate` / `evaluate` (`dc2344c5`) and `verify` (`22512691`) run on
+       `tsx`; their `__dirname` uses became `import.meta.dirname`, and usage comments say
+       `npx tsx`. `ts-node` was dropped in `f2ddb288` (with the `"ts-node"` block of the browser
+       harness `tsconfig.json`); `git grep` finds no other use. Scan: 0 fresh (−13 locked packages).
+     - **Runs:** `generate` passed and reproduced `src/` byte for byte. `evaluate` passed
+       (100 % description coverage, 95.8 % snippet coverage, 0 gaps). `scrape` has no dry-run;
+       it ran under `tsx` up to and including its own Phase 0 verification, then a preload stopped
+       it before it could scrape or write. Phase 0 failed upstream: all four probe URLs return 404,
+       because `MicrosoftDocs/nosql-docs` is now private (anonymous raw fetches return 404).
+       `verify` also gets 404 from
+       `MicrosoftDocs/azure-databases-docs/.../compatibility-query-language.md`. It was replayed
+       offline: a `fetch` stub served a table rebuilt from the committed report. It ran end to end
+       (`[SHELL-API-COMPATIBLE]`, report written to the `import.meta.dirname` path) and the file
+       was restored. Both 404s are upstream and pre-date this stage (open item for the operator).
   6. The version bumps in the table.
+     - **Done** (each package's commit): operator-registry 0.9.0, schema-analyzer 2.0.0,
+       shell-api-types 0.9.0, shell-runtime 0.9.0, vscode-ext-webview 0.11.0, fluentui 1.1.1.
+       Release notes: schema-analyzer `CHANGELOG.md` 2.0.0; vscode-ext-webview `MIGRATION.md`
+       `0.10.x → 0.11.0` and README status; fluentui `CHANGELOG.md` 1.1.1. The other three
+       packages have no changelog file. Nothing was published (G1-3 decides).
   7. **A single `bson` instance.** `mongodb` is CommonJS and `require`s the CJS `bson` entry; ESM
      code that imports `bson` gets the ESM entry, and a bundle with both breaks `instanceof`.
      - Pin one `bson` entry with a resolve alias in every bundler config (webpack now, Vite later).
@@ -1446,8 +1540,14 @@ for the expected reason`, and `PASS: missing-file rejected for the expected reas
        analyzer test passes even with two copies. Assert that `ObjectId` reached through `mongodb`
        and through `bson` is the same constructor, in each runtime graph (extension host, playground
        worker). Prove the check by adding a second copy on purpose and watching it fail.
+     - **Phase B.** Not started in Phase A. L1 still reports one `bson` module per graph
+       (`node_modules/bson/lib/bson.cjs` in `main` and `playgroundWorker`) on the Phase A VSIX.
   8. Remove the Stage 2 Vitest setting for `vscode-ext-webview` once the tests pass without it.
      Remove the fluentui one only if its own consumer test passes without it.
+     - **Phase B.** Untouched in Phase A; the full suite passes with both settings in place.
+       Evidence for Phase B: the packed-tarball Vitest probe (below) shows that a consumer which
+       installs fluentui into `node_modules` must inline it (Fluent's named exports). In this repo
+       the workspace symlink resolves outside `node_modules`, so Vitest inlines it anyway.
   9. **Stage 0 tooling that depends on this stage:**
      - `prepare:browser-check` and `serve:browser-check` run on `ts-node`. Move them to `tsx`
        together with the package scripts, before dropping `ts-node`.
@@ -1456,6 +1556,16 @@ for the expected reason`, and `PASS: missing-file rejected for the expected reas
        so L2 uses the real production template and CSP. Once the package is ESM with `.js`
        relative imports, check that this still loads, or import the built package instead. Do not
        copy the template by hand: L2's value is that it uses the real one.
+     - **Phase A: the `tsx` move is done (`174c836a`).** `prepare:browser-check` (on the Stage 2
+       VSIX) and `serve:browser-check` (pages answered 200) worked on `tsx` before the package
+       change.
+     - **Broken since `74a627f9` (handed to Phase B, not fixed in Phase A by instruction).**
+       `template.ts` transpiles `WebviewController.ts` to CommonJS and resolves its imports from a
+       fixed list. It knows `./attachTrpc` and `./middleware/logging`, but the codemod made them
+       `./attachTrpc.js` and `./middleware/logging.js`. So `prepare:browser-check` stops with
+       `Unexpected host-template dependency: ./attachTrpc.js`, and `npm run test:verification`
+       fails 3 of 45 Vitest tests in `browser/harness.test.ts` (the 32 Node tests pass). L2
+       cannot run until Phase B fixes the loader or imports the built package.
      - Rerun L2 before G3 to prove both.
 - **Automated verification:**
   - Per package, on the packed tarball: `publint` and `@arethetypeswrong/cli`; then `require()` it
@@ -1466,6 +1576,83 @@ for the expected reason`, and `PASS: missing-file rejected for the expected reas
   - The `bson` identity check passes, and fails with a second copy.
   - L0; L1 (our `views.js` should shrink slightly from better tree-shaking, and must not grow); L2;
     L3.
+  - **Phase A results (local, Node 22.18.0 / npm 10.9.3, at `fd4085b6`):**
+    - **L0:** `npm run build` passed; full Vitest **296 files / 4,588 tests**, identical to the
+      Stage 2 baseline (no test added or removed); `npm run lint` passed. `npm run
+      test:verification`: 32 Node tests passed, Vitest 42 / 45 (the 3 `template.ts` failures
+      under task 9).
+    - **Package checks (`npm run verify:packages`, `build/verification/package-checks/`): all
+      passed.** Each tarball goes through publint 0.3.24 (`--strict`) and ATTW 0.18.5, then a
+      CommonJS `require` probe, an ESM `import` probe and a Vitest probe, each making
+      representative calls (details in `build/verification/README.md`). publint is clean and ATTW
+      reports only `CJSResolvesToESM` (node16-cjs) for every package; no shipped file has a
+      top-level await. Per package:
+      - operator-registry 0.9.0 (87 files, 85 KB): all probes pass. 309 operators, a `$eq`
+        filter completion and its doc link.
+      - schema-analyzer 2.0.0 (28 files, 35 KB): all probes pass. Fields from driver
+        `ObjectId` / `Int32` / `Double` values, each classified by its BSON type.
+      - shell-api-types 0.9.0 (21 files, 20 KB): all probes pass. Reads the 30,307-character
+        `.d.ts`; `./typeDefs/*` resolves to the same file.
+      - shell-runtime 0.9.0 (47 files, 57 KB): all probes pass. `HelpProvider`, and
+        `DocumentDBShellRuntime.evaluate('help')` without a server.
+      - vscode-ext-webview 0.11.0 (117 files, 105 KB): all four entries pass in every probe:
+        a caller on `.`, `attachTrpc` on `/host`, a `/webview` ↔ `/host` tRPC round trip, and a
+        React render with `useTrpcClient` on `/react`.
+      - fluentui 1.1.1 (272 files, 142 KB): under Vitest (jsdom, inlined) all three entries pass
+        (theme and provider render, `MetricCard`, Monaco theme). Under plain Node `/monaco` loads,
+        while `.` and `/components` fail as expected because of Fluent UI's packaging.
+
+      ATTW's only finding, `CJSResolvesToESM` for TypeScript's node16 CommonJS resolution, is
+      inherent to ESM-only packages and accepted. The `require` probe shows Node's
+      `require(esm)` loads every entry, and the check fails on any other ATTW problem kind.
+      Under plain Node, `@fluentui/react-components` resolves to CommonJS without detectable named
+      exports, and `@fluentui/react-icons`' ESM build uses extensionless imports. Our package
+      cannot change that without dropping the named imports that bundlers need for tree-shaking,
+      so the fluentui README now tells test-runner users to inline the package. The check
+      requires exactly that failure, and a Vitest control run without inlining must fail
+      (5 / 14), as it does.
+    - **No top-level await:** the static scan found none in any shipped file, and the `require()`
+      of every Node-loadable entry succeeded. Node would throw `ERR_REQUIRE_ASYNC_MODULE` for a
+      top-level await anywhere in the ESM graph. Mutation proof: appending
+      `await Promise.resolve();` to an unpacked `schema-analyzer/dist/index.js` made the scan
+      report it and `require()` throw `ERR_REQUIRE_ASYNC_MODULE`. Restored, it loads.
+    - **Bundles:** host, worker and webview production builds after every package (above). The
+      packaged production `playgroundWorker.js` was driven in a worker thread against a local
+      `documentdb-local` container: init, an insert and find with `ObjectId` / `NumberInt` /
+      double, and shutdown. It returned correctly typed EJSON (`$oid`, `$numberInt`,
+      `$numberDouble`). This is a throwaway smoke test, not a committed check.
+    - **L1 (`npm run package`, `npm run verify:vsix`): passed**, no baseline change (the baseline
+      decision is Phase B's). Against `build/verification/baseline.json`: `views.js` 6,490,321 →
+      6,379,817 (**−110,504, −1.70 %**); `main.js` 4,761,367 → 4,719,092 (−42,275, −0.89 %);
+      `playgroundWorker.js` 7,443,125 → 7,438,855 (−4,270, −0.06 %); `views.js.LICENSE.txt`
+      2,594 → 2,358 (−236; `is-plain-object` and two istanbul comments tree-shaken out);
+      `main.js.LICENSE.txt` 477 → 438 (−39); `package.json` 96,079 → 95,874 (−205); VSIX
+      9,597,420 → 9,566,323 bytes. No file added or missing. Every other file is unchanged,
+      including `playgroundTsPlugin.js` (6,654). `bson` graphs: one module each in `main` and
+      `playgroundWorker`; none in the views. `npm run prove:vsix` passed.
+    - **L2: blocked** by the `template.ts` loader (task 9, Phase B).
+    - **L3: not run.** VS Code 1.109.0 downloaded, but the binary does not start on this machine
+      (`libatk-1.0.so.0` missing; system packages were not installed on the shared machine).
+      Deferred to CI (orchestrator).
+    - **Dependency scans:** after every `package.json` or lockfile change: 0 fresh each time. No
+      version was pinned back and no override was added in Phase A. publint 0.3.25 (2026-10-01)
+      was avoided by pinning `npx` to 0.3.24; neither tool is a dependency.
+    - **`TDD:` suites:** none changed in Phase A.
+    - **Formatting:** Prettier was run on every changed file except this plan, which is not
+      Prettier-clean at its Stage 2 head (about 600 unrelated lines would change). This record
+      was formatted by hand.
+  - **Open items from Phase A:**
+    - **Phase B:** fix `build/verification/browser/template.ts` (task 9), then rerun
+      `test:verification` and L2; tasks 7 and 8; the L1 baseline decision for the size deltas
+      above.
+    - **Phase B / G1-3:** consider an L1 assertion that no CommonJS bundle contains
+      `import.meta`. The webpack fix above currently has no automated guard beyond this record.
+    - **Operator:** the operator-registry `scrape` source (`MicrosoftDocs/nosql-docs`) is
+      private, and shell-api-types `verify`'s compatibility page returns 404. Both scripts need
+      new upstream URLs before their next real run. This is not caused by this stage.
+    - **G1-3:** the `engines.vscode` and version decisions listed under the checkpoint. fluentui
+      declares no `engines.node` (browser-only), which departs from "the packages declare the
+      same floor".
 - **Operator gate G3:** decide the version bumps. Publish the packages only after the PR has merged,
   from `main`: publishing is irreversible, and a package should not ship from an unmerged branch.
   This repo uses the workspace copies, so no stage waits on publishing. Decided at the combined
