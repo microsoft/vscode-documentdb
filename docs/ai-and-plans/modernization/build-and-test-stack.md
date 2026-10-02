@@ -66,6 +66,19 @@ Out of scope:
 2. **Sequential.** Each stage is one stretch of autonomous agent work followed by one operator gate.
    A stage starts only after the previous gate passes. Every stage ends with the branch building and
    passing its checks.
+   - **Exception: Stages 1 to 3 run back to back (operator decision, 2026-10-02).** G1, G2 and G3
+     are combined into one checkpoint, **G1-3**, after Stage 3. Each of the three stages still ends
+     with the branch building and passing its checks, its own AI review file and its inline record
+     before the next one starts, so the checkpoint reviews three separable stages. Each stage runs
+     in its own agent session with its own author and reviewer models. The agent stops before G1-3
+     only when L1, L2 or L3 fails and the only fix would weaken a check, when ground rule 6 cannot
+     be satisfied, or when a decision is needed that this plan does not make. Stage 4 starts only
+     after G1-3 passes.
+   - **`TDD:` suites may change in this work (operator decision, 2026-10-02).** This overrides, for
+     this branch only, the repository rule to stop and ask before changing a `TDD:` suite. Every
+     such change is recorded under its stage's task: the suite and file, whether the behavior
+     changed or only the test mechanics, the contract before and after, the reason, and the
+     commit. The operator reviews the list at G1-3.
 3. **Release.** `main` is not touched until the PR merges, so this plan does not block releases from
    `main`. The modernization reaches users only after the merge, through the release steps in
    Stage 6.
@@ -77,8 +90,15 @@ Out of scope:
 5. **Verify the packaged VSIX, not F5.** Every gate installs the packaged VSIX. Cosmos DB's four
    post-migration bugs (blank webviews, missing CSS, Monaco workers, a dev build mistaken for
    production) were all invisible in development mode.
-6. **New dependencies.** Pick versions that are past the 7-day internal feed quarantine; the
-   `flagging-fresh-dependencies` skill helps. Regenerate the lockfile once per stage.
+6. **New dependencies (operator decision, 2026-10-02).** After every change to `package.json` or a
+   lockfile, run the `flagging-fresh-dependencies` skill's scan:
+   `node .github/skills/flagging-fresh-dependencies/scripts/find-fresh-dependencies.mjs --fail-on-fresh`.
+   For this development and testing phase, remove every version it reports as published within the
+   last 7 days, direct or transitive: pin a direct dependency to its newest version older than 7
+   days, or add an `overrides` entry for a transitive one, then regenerate the lockfile and rescan
+   until it reports none. Exit code 3 means the lookup was incomplete; rerun before concluding.
+   Record the scan result (counts, and every version pinned back or overridden) under the stage's
+   task. Remove overrides that are no longer needed before G6.
 7. **Models.** Each stage names an author model and a reviewer model. The rules behind the picks:
    - author and reviewer come from **different model families**, so they tend to catch different
      mistakes;
@@ -491,9 +511,10 @@ plugin in a real editor; Kubernetes, Atlas and Azure discovery against real back
     proofs logged (four L1 rejections, `L3 PASS`, `L3 PROOF PASS`). The installed-VSIX manual
     checklist passed; the harness is confirmed absent from the VSIX; the BSON rule is accepted; the
     SchemaStore fix stays on the branch. The ADO build failed on quarantined dependencies, which
-    led to the `v0.11.0` rebase recorded under the baseline task. **Still open:** the ADO build
-    on the rebased branch, and the L1 manifest design (operator direction recorded under the L1
-    task).
+    led to the `v0.11.0` rebase recorded under the baseline task.
+  - **G0 passed (operator, 2026-10-02):** the ADO build passed on the rebased branch (`266aa693`).
+    Stage 1 may start; Stages 1 to 3 run back to back under ground rule 2. The L1 manifest design
+    (operator direction recorded under the L1 task) stays open and must be decided before Stage 4.
 
 ### Stage 1: remove the legacy test harness
 
@@ -534,7 +555,8 @@ plugin in a real editor; Kubernetes, Atlas and Azure discovery against real back
   - Dev loop: `watch:views` fails on a tree without `dist/views.js`. Run `npm run webpack-dev-wv`
     once first (see the known limitation under Stage 0).
 - **Automated verification:** L0; L1 (the VSIX contents must not change); L3.
-- **Operator gate G1:** review the dependency and CI diff. No manual UI check is needed.
+- **Operator gate G1:** review the dependency and CI diff. No manual UI check is needed. Reviewed
+  at the combined checkpoint G1-3 after Stage 3.
 
 ### Stage 2: Jest to Vitest, in one sweep
 
@@ -579,8 +601,8 @@ plugin in a real editor; Kubernetes, Atlas and Azure discovery against real back
 - **Automated verification:** the same test count as before, give or take documented deletions;
   wall time compared with the Stage 0 baseline; L0. The shipped artifact does not change, so L1 to L3
   are a formality.
-- **Operator gate G2:** review the tests that changed beyond mechanical renames. A changed `TDD:`
-  suite is a contract change and needs the operator's decision.
+- **Operator gate G2:** review the tests that changed beyond mechanical renames, and every recorded
+  `TDD:` suite change (ground rule 2). Reviewed at the combined checkpoint G1-3 after Stage 3.
 
 ### Stage 3: our packages to ESM
 
@@ -656,7 +678,51 @@ plugin in a real editor; Kubernetes, Atlas and Azure discovery against real back
     L3.
 - **Operator gate G3:** decide the version bumps. Publish the packages only after the PR has merged,
   from `main`: publishing is irreversible, and a package should not ship from an unmerged branch.
-  This repo uses the workspace copies, so no stage waits on publishing.
+  This repo uses the workspace copies, so no stage waits on publishing. Decided at the combined
+  checkpoint G1-3.
+
+### Combined checkpoint G1-3 (after Stage 3)
+
+What the operator actually has to do. Everything else in Stages 1 to 3 is covered by L0 to L3, the
+Stage 3 package checks and the three AI reviews.
+
+**Review (reading, no setup):**
+
+1. The inline records of Stages 1 to 3 and the three review files under `iterations/`.
+2. The dependency diff: what was removed (Mocha, Jest, `ts-jest`, `ts-node`, ...), what was added
+   (Vitest, `tsx`, `publint`, `@arethetypeswrong/cli`, ...), and the fresh-dependency scan results
+   with every pinned-back version (ground rule 6).
+3. The CI diff: the removed `integration-tests` job and ADO `🧪 Test` step, and the Vitest step
+   that replaces `jesttest`. CI is green on the Stage 3 head with L1 and L3 actually run.
+4. The list of `TDD:` suite changes, and of tests changed beyond mechanical renames.
+5. Decisions: the package versions in the Stage 3 table (`schema-analyzer` becomes 2.0.0, a major
+   version), and accepting that `engines.vscode` `^1.109.0` stops updates for users on VS Code
+   1.105 to 1.108.
+
+**Hands-on, on the VSIX that CI built from the Stage 3 head**, installed in VS Code 1.109 or newer
+(not F5). Stages 1 and 2 do not change the VSIX, which L1 proves, so these checks target Stage 3:
+our packages become ESM inside the bundles, and L3 does not cover workers or the TS plugin.
+
+1. **Playground (worker and `shell-runtime`):** open a `.documentdb` playground and run a query
+   against a real cluster. Results appear, and the output channel shows no errors.
+2. **TS plugin (`shell-api-types` reading its `.d.ts`):** in the same file, completions and hover
+   return results for shell methods such as `db.collection.find`.
+3. **Single `bson` copy, as the user sees it (`schema-analyzer`):** open a collection whose
+   documents contain `ObjectId`, `Double` and `Int32` fields. Schema-driven completions and types
+   show those BSON types, not plain `object`.
+4. **Query completions (`operator-registry`):** operator completions appear in the Collection View
+   query editor.
+5. **Webviews (`vscode-ext-webview` is now ESM):** Collection View and Document View open and
+   render, and editing and saving a document works.
+6. **Interactive shell**, if available in your setup: one command returns a result.
+7. **Clean run:** _Developer: Show Running Extensions_ lists DocumentDB without errors, and the
+   DevTools console shows no errors from the panels used above.
+
+Optional: run the unit tests once locally with the new command to check that the developer
+workflow still suits you.
+
+Passing G1-3 allows Stage 4 to start. Before Stage 4, the L1 file-list decision recorded under
+Stage 0 must also be made.
 
 ### Stage 4: webviews to Vite, split per view
 
