@@ -3,6 +3,8 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+import { describe, it, expect, vi } from 'vitest';
+
 import { type BrowserReport } from './runtime';
 import { runIntegratedCheck, type IntegratedPage } from './playwright';
 
@@ -17,18 +19,18 @@ interface LocatorFixture {
 
 function fixturePage(report: BrowserReport): IntegratedPage {
     const locator: LocatorFixture = {
-        click: jest.fn(async (): Promise<void> => {}), fill: jest.fn(async (): Promise<void> => {}),
-        press: jest.fn(async (): Promise<void> => {}),
-        focus: jest.fn(async (): Promise<void> => {}),
+        click: vi.fn(async (): Promise<void> => {}), fill: vi.fn(async (): Promise<void> => {}),
+        press: vi.fn(async (): Promise<void> => {}),
+        focus: vi.fn(async (): Promise<void> => {}),
         first: (): LocatorFixture => locator,
         last: (): LocatorFixture => locator,
     };
     return {
-        on: jest.fn(), off: jest.fn(), bringToFront: jest.fn(), goto: jest.fn(), waitForFunction: jest.fn(),
-        keyboard: { insertText: jest.fn(async (): Promise<void> => {}) },
-        getByRole: jest.fn((): LocatorFixture => locator),
-        locator: jest.fn((): LocatorFixture => locator),
-        evaluate: jest.fn().mockImplementation(async (operation: () => unknown): Promise<unknown> => {
+        on: vi.fn(), off: vi.fn(), bringToFront: vi.fn(), goto: vi.fn(), waitForFunction: vi.fn(),
+        keyboard: { insertText: vi.fn(async (): Promise<void> => {}) },
+        getByRole: vi.fn((): LocatorFixture => locator),
+        locator: vi.fn((): LocatorFixture => locator),
+        evaluate: vi.fn().mockImplementation(async (operation: () => unknown): Promise<unknown> => {
             return operation.toString().includes('navigator.platform') ? 'Control' :
                 operation.toString().includes('beginEditorProbe') ? undefined :
                 operation.toString().includes('stage0Harness.check') ? report : undefined;
@@ -121,7 +123,7 @@ describe('Stage 0 L2 integrated browser helper', (): void => {
 
     it('preserves an activation or readiness timeout as a failure rather than reporting a passing fixture', async (): Promise<void> => {
         const page = fixturePage(good);
-        jest.mocked(page.waitForFunction).mockRejectedValueOnce(new Error('Page never became visible'));
+        vi.mocked(page.waitForFunction).mockRejectedValueOnce(new Error('Page never became visible'));
         await expect(runIntegratedCheck(page, 'http://localhost/stage0/l2/pages/collectionView.html'))
             .rejects.toThrow('settling (activating the browser page): Page never became visible');
         expect(page.goto).not.toHaveBeenCalled();

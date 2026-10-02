@@ -3,6 +3,8 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+import { describe, it, expect, vi } from 'vitest';
+
 import { existsSync, mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { resolve, join } from 'node:path';
@@ -30,8 +32,8 @@ describe('Stage 0 L2 production browser harness', (): void => {
                 ['extension.vsixmanifest', Buffer.from('<manifest/>')],
                 ['[Content_Types].xml', Buffer.from('<types/>')],
             ]));
-            const read = jest.spyOn(vsixTools, 'readVsix');
-            const extract = jest.spyOn(vsixTools, 'extractVsix');
+            const read = vi.spyOn(vsixTools, 'readVsix');
+            const extract = vi.spyOn(vsixTools, 'extractVsix');
             prepare({ vsix: archive, output, prefix: '/stage0/l2', origin: 'http://127.0.0.1:18081', repository });
             expect(read).toHaveBeenCalledWith(archive);
             expect(extract).toHaveBeenCalledWith(archive, join(output, 'unpacked'));
@@ -45,7 +47,7 @@ describe('Stage 0 L2 production browser harness', (): void => {
             expect(existsSync(join(output, 'site/pages/localQuickStart.html'))).toBe(true);
             expect(existsSync(join(output, 'site/pages/collectionView-broken-css.html'))).toBe(true);
         } finally {
-            jest.restoreAllMocks();
+            vi.restoreAllMocks();
             rmSync(temporary, { recursive: true });
         }
     });

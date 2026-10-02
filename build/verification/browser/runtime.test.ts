@@ -3,6 +3,10 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+// @vitest-environment jsdom
+
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+
 import { type HarnessFixture } from './fixtures';
 import { inertJson } from './template';
 
@@ -41,7 +45,7 @@ function validationRequest(worker: Worker, uri = 'inmemory://fixture/editor.json
 async function boot(fixture: unknown = base): Promise<ReturnType<typeof window.acquireVsCodeApi>> {
     document.body.innerHTML = `<script type="application/json" id="stage0-fixture">${inertJson(fixture)}</script><div>Settled fixture</div>`;
     Object.defineProperty(document.body, 'innerText', { configurable: true, value: 'Settled fixture' });
-    jest.resetModules();
+    vi.resetModules();
     await import('./runtime');
     return window.acquireVsCodeApi();
 }
@@ -55,7 +59,7 @@ describe('Stage 0 L2 fixture transport', (): void => {
             configurable: true, value: (): { name: string }[] => [{ name: 'http://localhost/stage0/l2/artifact/views.js' }],
         });
     });
-    afterEach((): void => { jest.restoreAllMocks(); });
+    afterEach((): void => { vi.restoreAllMocks(); });
 
     it.each([
         { view: 'unknown-view' },
@@ -71,7 +75,7 @@ describe('Stage 0 L2 fixture transport', (): void => {
     });
 
     it('answers the real {id, op} protocol with result then completion', async (): Promise<void> => {
-        const messages = jest.spyOn(window, 'postMessage').mockImplementation((): void => {});
+        const messages = vi.spyOn(window, 'postMessage').mockImplementation((): void => {});
         const api = await boot();
         api.postMessage({ id: 'query-id', op: { type: 'query', path: 'fixture.query', input: undefined } });
         await Promise.resolve();
@@ -81,7 +85,7 @@ describe('Stage 0 L2 fixture transport', (): void => {
     });
 
     it('preserves an explicit void result instead of turning JSON undefined into null', async (): Promise<void> => {
-        const messages = jest.spyOn(window, 'postMessage').mockImplementation((): void => {});
+        const messages = vi.spyOn(window, 'postMessage').mockImplementation((): void => {});
         const api = await boot();
         api.postMessage({ id: 'mutation-id', op: { type: 'mutation', path: 'fixture.mutation' } });
         await Promise.resolve();
@@ -91,7 +95,7 @@ describe('Stage 0 L2 fixture transport', (): void => {
     });
 
     it('fails unknown paths explicitly rather than replying null', async (): Promise<void> => {
-        const messages = jest.spyOn(window, 'postMessage').mockImplementation((): void => {});
+        const messages = vi.spyOn(window, 'postMessage').mockImplementation((): void => {});
         const api = await boot();
         expect((): void => api.postMessage({ id: 'unknown-id', op: { type: 'query', path: 'unknown.path' } }))
             .toThrow('No query fixture for unknown.path');
@@ -103,7 +107,7 @@ describe('Stage 0 L2 fixture transport', (): void => {
     });
 
     it('fails invalid requests and operation-type mismatches', async (): Promise<void> => {
-        jest.spyOn(window, 'postMessage').mockImplementation((): void => {});
+        vi.spyOn(window, 'postMessage').mockImplementation((): void => {});
         const api = await boot();
         expect((): void => api.postMessage({ op: {} })).toThrow('Invalid tRPC request');
         expect((): void => api.postMessage({ id: 'wrong-type', op: { type: 'mutation', path: 'fixture.query' } }))
@@ -111,7 +115,7 @@ describe('Stage 0 L2 fixture transport', (): void => {
     });
 
     it('keeps streaming fixtures open and honors stop before delivery', async (): Promise<void> => {
-        const messages = jest.spyOn(window, 'postMessage').mockImplementation((): void => {});
+        const messages = vi.spyOn(window, 'postMessage').mockImplementation((): void => {});
         const api = await boot();
         api.postMessage({ id: 'sub-1', op: { type: 'subscription', path: 'fixture.subscription' } });
         await Promise.resolve();

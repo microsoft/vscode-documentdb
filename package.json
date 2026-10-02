@@ -79,7 +79,7 @@
     "test:vitest": "vitest run",
     "verify:vsix": "node build/verification/inspect.cjs",
     "prove:vsix": "node build/verification/prove-inspection.cjs",
-    "test:verification": "node --test build/verification/*.test.cjs build/verification/activation/*.test.cjs && jest --no-coverage --config build/verification/browser/jest.config.cjs --runInBand",
+    "test:verification": "node --test build/verification/*.test.cjs build/verification/activation/*.test.cjs && vitest run --config build/verification/browser/vitest.config.ts",
     "test:vsix": "node build/verification/activation/run.cjs",
     "prove:activation": "node build/verification/activation/prove.cjs",
     "prepare:browser-check": "ts-node --project build/verification/browser/tsconfig.json build/verification/browser/harness.ts prepare",
