@@ -899,6 +899,14 @@ plugin in a real editor; Kubernetes, Atlas and Azure discovery against real back
       static import, and an explicit undefined export preserving Jest's fixture value. Initial
       Vitest/lint failures were resolved or left on green Jest. No dependency changes, push,
       CI activity or stage review; CI remains deferred to the orchestrator.
+    - **Phase B B04, `f829a2f0`:** converted all **15** listed `src/commands` test files
+      (shell, collection/index paste, playground, removal, authentication and credentials);
+      Vitest **15 files / 70 tests**, remaining Jest **212 suites / 3,613 tests**, build and
+      targeted Prettier / ESLint passed; assertions unchanged. Leftovers: **none**.
+      Recipe typing deviation: the azext-utils factory uses a module-promise `importOriginal`
+      with inferred types because its namespace type import failed `no-restricted-imports`;
+      mock behavior is unchanged. No dependency changes, push, CI activity or stage review;
+      CI remains deferred to the orchestrator.
     - **Phase A follow-up (shared-harness gaps), `86baf001`, `73046b44`, `df9a8e1a`:**
       - **Diagnosis:** CommonJS packages in `node_modules` call Node's own `require('vscode')`,
         which Vite's alias never sees: `@vscode/extension-telemetry` (reached through the
