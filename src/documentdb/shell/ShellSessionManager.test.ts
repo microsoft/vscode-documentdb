@@ -3,6 +3,8 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
 import { type AuthenticationSession } from 'vscode';
 import { AuthMethodId } from '../auth/AuthMethod';
 import { CredentialCache } from '../CredentialCache';
@@ -12,23 +14,23 @@ import { type MainToWorkerMessage, type WorkerToMainMessage } from '../playgroun
 import { ConnectionStartupTimings } from '../utils/ConnectionStartupTimings';
 import { ShellSessionManager } from './ShellSessionManager';
 
-const mockGetSessionFromVSCode = jest.fn();
-const mockGetManagedIdentityAccessToken = jest.fn();
+const mockGetSessionFromVSCode = vi.fn();
+const mockGetManagedIdentityAccessToken = vi.fn();
 let workerCallbacks: WorkerSessionCallbacks;
 
-jest.mock('@microsoft/vscode-azext-azureauth/out/src/getSessionFromVSCode', () => ({
+vi.mock('@microsoft/vscode-azext-azureauth/out/src/getSessionFromVSCode', () => ({
     getSessionFromVSCode: (...args: unknown[]) => mockGetSessionFromVSCode(...args),
 }));
 
-jest.mock('../auth/managedIdentityTokenProvider', () => ({
+vi.mock('../auth/managedIdentityTokenProvider', () => ({
     getManagedIdentityAccessToken: (...args: unknown[]) => mockGetManagedIdentityAccessToken(...args),
 }));
 
-jest.mock('../playground/WorkerSessionManager', () => ({
-    WorkerSessionManager: jest.fn().mockImplementation((callbacks: WorkerSessionCallbacks) => {
+vi.mock('../playground/WorkerSessionManager', () => ({
+    WorkerSessionManager: vi.fn().mockImplementation(function (callbacks: WorkerSessionCallbacks) {
         workerCallbacks = callbacks;
         return {
-            ensureWorker: jest.fn(
+            ensureWorker: vi.fn(
                 async (_clusterId: string, initMessage: MainToWorkerMessage & { type: 'init' }): Promise<void> => {
                     if (initMessage.authMechanism !== 'MicrosoftEntraID') {
                         return;
@@ -53,7 +55,7 @@ jest.mock('../playground/WorkerSessionManager', () => ({
             get workerState(): string {
                 return 'ready';
             },
-            dispose: jest.fn(),
+            dispose: vi.fn(),
         };
     }),
 }));
@@ -62,7 +64,7 @@ describe('ShellSessionManager', () => {
     const clusterId = 'test-cluster-id';
 
     beforeEach(() => {
-        jest.clearAllMocks();
+        vi.clearAllMocks();
         CredentialCache.setAuthCredentials(
             clusterId,
             AuthMethodId.MicrosoftEntraID,
@@ -138,7 +140,7 @@ describe('ShellSessionManager', () => {
         now = 10;
         const stopWait = timings.startTokenWait();
         now = 15;
-        const postResponse = jest.fn();
+        const postResponse = vi.fn();
         await workerCallbacks.onTokenRequest?.(
             { type: 'tokenRequest', requestId: 'token-request', scopes: ['scope'], source },
             postResponse,

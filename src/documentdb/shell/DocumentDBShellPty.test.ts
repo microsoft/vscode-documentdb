@@ -3,6 +3,9 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+import { afterEach, beforeEach, describe, expect, it, vi, type Mock, type MockInstance } from 'vitest';
+
+import { type UserCancelledError } from '@microsoft/vscode-azext-utils';
 import * as vscode from 'vscode';
 import { ext } from '../../extensionVariables';
 import { accumulateTelemetry } from '../../utils/accumulatingTelemetry';
@@ -13,16 +16,18 @@ import { ShellCompletionProvider } from './ShellCompletionProvider';
 import { ShellSpinner } from './ShellSpinner';
 
 // callWithTelemetryAndErrorHandling from @microsoft/vscode-azext-utils silently swallows
-// errors in the Jest environment because its internal error handling relies on extension
+// errors in the test environment because its internal error handling relies on extension
 // infrastructure (ext._internalReporter, etc.) that is not initialized in unit tests.
 // With rethrow=true set by the callback, the framework's handleError() never reaches the
 // rethrow check — it hits an error state first and calls sendHandlerFailedEvent() instead.
 // This mock runs the callback transparently so errors propagate correctly to callers.
-jest.mock('@microsoft/vscode-azext-utils', () => {
-    const actual = jest.requireActual('@microsoft/vscode-azext-utils');
+vi.mock('@microsoft/vscode-azext-utils', async () => {
+    const actual = await vi.importActual<{ UserCancelledError: typeof UserCancelledError }>(
+        '@microsoft/vscode-azext-utils',
+    );
     return {
         ...actual,
-        callWithTelemetryAndErrorHandling: jest.fn(
+        callWithTelemetryAndErrorHandling: vi.fn(
             async (_callbackId: string, callback: (ctx: unknown) => Promise<unknown>) => {
                 const ctx = {
                     telemetry: {
@@ -43,21 +48,21 @@ jest.mock('@microsoft/vscode-azext-utils', () => {
 
 // Connection failures are logged so they survive in a shared output channel; the extension's
 // output channel is not initialized in unit tests.
-jest.mock('../../extensionVariables', () => ({
+vi.mock('../../extensionVariables', () => ({
     ext: {
         outputChannel: {
-            error: jest.fn(),
-            warn: jest.fn(),
-            info: jest.fn(),
-            debug: jest.fn(),
-            trace: jest.fn(),
-            appendLine: jest.fn(),
+            error: vi.fn(),
+            warn: vi.fn(),
+            info: vi.fn(),
+            debug: vi.fn(),
+            trace: vi.fn(),
+            appendLine: vi.fn(),
         },
     },
 }));
 
-jest.mock('../../utils/accumulatingTelemetry', () => ({
-    accumulateTelemetry: jest.fn(
+vi.mock('../../utils/accumulatingTelemetry', () => ({
+    accumulateTelemetry: vi.fn(
         (_eventName: string, update: (sample: { measurements: Record<string, number> }) => void) => {
             update({ measurements: {} });
         },
@@ -65,21 +70,21 @@ jest.mock('../../utils/accumulatingTelemetry', () => ({
 }));
 
 // Mock ShellSessionManager
-const mockInitialize = jest.fn().mockResolvedValue({
+const mockInitialize = vi.fn().mockResolvedValue({
     host: 'test-host.documents.azure.com:10255',
     additionalHostCount: 0,
     authMechanism: 'NativeAuth',
     isEmulator: false,
 });
-const mockEvaluate = jest.fn();
-const mockDispose = jest.fn();
-const mockKillWorker = jest.fn();
-const mockSetActiveDatabase = jest.fn();
+const mockEvaluate = vi.fn();
+const mockDispose = vi.fn();
+const mockKillWorker = vi.fn();
+const mockSetActiveDatabase = vi.fn();
 
-jest.mock('./ShellSessionManager', () => ({
-    ShellSessionManager: jest.fn().mockImplementation((_connectionInfo, callbacks) => {
+vi.mock('./ShellSessionManager', () => ({
+    ShellSessionManager: vi.fn().mockImplementation(function (_connectionInfo, callbacks) {
         // Store callbacks so tests can trigger events
-        (mockInitialize as jest.Mock & { _callbacks?: unknown })._callbacks = callbacks;
+        (mockInitialize as Mock & { _callbacks?: unknown })._callbacks = callbacks;
         return {
             initialize: mockInitialize,
             evaluate: mockEvaluate,
@@ -108,16 +113,16 @@ describe('DocumentDBShellPty', () => {
     };
 
     beforeEach(() => {
-        jest.clearAllMocks();
+        vi.clearAllMocks();
         written = '';
         closeCode = undefined;
         terminalName = undefined;
         settingOverrides = {};
 
         // Mock settings
-        jest.spyOn(vscode.workspace, 'getConfiguration').mockImplementation((section?: string) => {
+        vi.spyOn(vscode.workspace, 'getConfiguration').mockImplementation((section?: string) => {
             return {
-                get: jest.fn((_key: string, defaultValue?: unknown) => {
+                get: vi.fn((_key: string, defaultValue?: unknown) => {
                     if (section === undefined || section === '') {
                         if (_key in settingOverrides) {
                             return settingOverrides[_key];
@@ -156,7 +161,7 @@ describe('DocumentDBShellPty', () => {
             throw new Error('Shell output contains a deprecated hint marker');
         }
 
-        jest.restoreAllMocks();
+        vi.restoreAllMocks();
     });
 
     describe('open', () => {
@@ -339,7 +344,7 @@ describe('DocumentDBShellPty', () => {
             pty.open(undefined);
             await new Promise((resolve) => setTimeout(resolve, 10));
 
-            const logged = jest.mocked(ext.outputChannel.error).mock.calls.map(String).join('\n');
+            const logged = vi.mocked(ext.outputChannel.error).mock.calls.map(String).join('\n');
             expect(logged).toContain('[Shell] Failed to connect');
             expect(logged).not.toContain('sup3r-s3cret');
 
@@ -476,7 +481,7 @@ describe('DocumentDBShellPty', () => {
     });
 
     describe('database switching', () => {
-        let prewarmCollections: jest.SpyInstance;
+        let prewarmCollections: MockInstance;
 
         beforeEach(async () => {
             mockInitialize.mockResolvedValue({
@@ -484,7 +489,7 @@ describe('DocumentDBShellPty', () => {
                 authMechanism: 'NativeAuth',
                 isEmulator: false,
             });
-            prewarmCollections = jest
+            prewarmCollections = vi
                 .spyOn(ShellCompletionProvider.prototype, 'prewarmCollections')
                 .mockResolvedValue(undefined);
             pty.open(undefined);
@@ -592,7 +597,7 @@ describe('DocumentDBShellPty', () => {
                 }),
             );
 
-            const stopSpy = jest.spyOn(ShellSpinner.prototype, 'stop');
+            const stopSpy = vi.spyOn(ShellSpinner.prototype, 'stop');
 
             pty.open(undefined);
             await new Promise((resolve) => setTimeout(resolve, 10));
@@ -734,7 +739,7 @@ describe('DocumentDBShellPty', () => {
          * rewrite the `db.` dot, which inline ghost text cannot represent.
          */
         function mockBracketNotationCandidate(): void {
-            jest.spyOn(ShellCompletionProvider.prototype, 'getCompletions').mockReturnValue({
+            vi.spyOn(ShellCompletionProvider.prototype, 'getCompletions').mockReturnValue({
                 candidates: [
                     {
                         label: 'restaurants-something',
@@ -789,7 +794,7 @@ describe('DocumentDBShellPty', () => {
          * so it is never a single candidate.
          */
         function mockDbDotCandidates(collectionNames: string[]): void {
-            jest.spyOn(ShellCompletionProvider.prototype, 'getCompletions').mockReturnValue({
+            vi.spyOn(ShellCompletionProvider.prototype, 'getCompletions').mockReturnValue({
                 candidates: [
                     ...collectionNames.map((name) => ({
                         label: name,
@@ -870,7 +875,7 @@ describe('DocumentDBShellPty', () => {
         });
 
         it('previews a bracket-notation collection rather than counting it, once a prefix is typed', async () => {
-            jest.spyOn(ShellCompletionProvider.prototype, 'getCompletions').mockReturnValue({
+            vi.spyOn(ShellCompletionProvider.prototype, 'getCompletions').mockReturnValue({
                 candidates: [
                     {
                         label: 'restaurants-original',
@@ -926,7 +931,7 @@ describe('DocumentDBShellPty', () => {
             pty.handleInput('e');
             await afterGhostDebounce();
 
-            const shownCalls = (accumulateTelemetry as jest.Mock).mock.calls.filter(
+            const shownCalls = (accumulateTelemetry as Mock).mock.calls.filter(
                 ([eventName]) => eventName === 'shell.historySuggestion',
             );
             expect(shownCalls).toHaveLength(1);
@@ -982,7 +987,7 @@ describe('DocumentDBShellPty', () => {
 
         /** `use ` offers every database, at an empty prefix. */
         function mockDatabaseCandidates(): void {
-            jest.spyOn(ShellCompletionProvider.prototype, 'getCompletions').mockReturnValue({
+            vi.spyOn(ShellCompletionProvider.prototype, 'getCompletions').mockReturnValue({
                 candidates: DATABASES.map((name) => ({
                     label: name,
                     insertText: name,
@@ -1036,14 +1041,14 @@ describe('DocumentDBShellPty', () => {
         });
 
         it('still accepts a closing-bracket ghost, which has no completion behind it', async () => {
-            jest.spyOn(ShellCompletionProvider.prototype, 'getCompletions').mockReturnValue({
+            vi.spyOn(ShellCompletionProvider.prototype, 'getCompletions').mockReturnValue({
                 candidates: [],
                 prefix: '',
                 replacementStart: 0,
             });
             // Keeps the schema hint out of the way, so the closing-bracket
             // fallback is the ghost under test.
-            jest.spyOn(ShellCompletionProvider.prototype, 'detectContext').mockReturnValue({ kind: 'unknown' });
+            vi.spyOn(ShellCompletionProvider.prototype, 'detectContext').mockReturnValue({ kind: 'unknown' });
 
             pty.handleInput('db.c.find({ _id: 1 ');
             await afterGhostDebounce();
@@ -1067,7 +1072,7 @@ describe('DocumentDBShellPty', () => {
         });
 
         it('still completes through a non-insertable preview hint', async () => {
-            jest.spyOn(ShellCompletionProvider.prototype, 'getCompletions').mockReturnValue({
+            vi.spyOn(ShellCompletionProvider.prototype, 'getCompletions').mockReturnValue({
                 candidates: [
                     {
                         label: 'restaurants-original',
@@ -1142,7 +1147,7 @@ describe('DocumentDBShellPty', () => {
 
         it('inline hints off: no collection count at `db.`', async () => {
             settingOverrides[INLINE_HINTS] = false;
-            jest.spyOn(ShellCompletionProvider.prototype, 'getCompletions').mockReturnValue({
+            vi.spyOn(ShellCompletionProvider.prototype, 'getCompletions').mockReturnValue({
                 candidates: [{ label: 'restaurants', insertText: 'restaurants', kind: 'collection' }],
                 prefix: '',
                 replacementStart: 3,
@@ -1156,7 +1161,7 @@ describe('DocumentDBShellPty', () => {
 
         it('inline hints off: `db.` gives the row back to the history suggestion it displaced', async () => {
             settingOverrides[INLINE_HINTS] = false;
-            jest.spyOn(ShellCompletionProvider.prototype, 'getCompletions').mockReturnValue({
+            vi.spyOn(ShellCompletionProvider.prototype, 'getCompletions').mockReturnValue({
                 candidates: [{ label: 'restaurants', insertText: 'restaurants', kind: 'collection' }],
                 prefix: '',
                 replacementStart: 3,
@@ -1484,9 +1489,9 @@ describe('DocumentDBShellPty', () => {
          * @param vscodePasteWarning - value for terminal.integrated.enableMultiLinePasteWarning (default: 'never')
          */
         function mockPasteBehavior(behavior: string, vscodePasteWarning: string = 'never'): void {
-            jest.spyOn(vscode.workspace, 'getConfiguration').mockImplementation((section?: string) => {
+            vi.spyOn(vscode.workspace, 'getConfiguration').mockImplementation((section?: string) => {
                 return {
-                    get: jest.fn((_key: string, defaultValue?: unknown) => {
+                    get: vi.fn((_key: string, defaultValue?: unknown) => {
                         if (section === 'terminal.integrated' && _key === 'enableMultiLinePasteWarning') {
                             return vscodePasteWarning;
                         }
@@ -1513,7 +1518,7 @@ describe('DocumentDBShellPty', () => {
         it('should show QuickPick when behavior is "ask" and multi-line paste detected', async () => {
             mockPasteBehavior('ask');
 
-            const showQuickPickSpy = jest
+            const showQuickPickSpy = vi
                 .spyOn(vscode.window, 'showQuickPick')
                 .mockResolvedValue({ label: 'Cancel', detail: '', id: 'cancel' } as never);
 
@@ -1534,7 +1539,7 @@ describe('DocumentDBShellPty', () => {
                 durationMs: 1,
             });
 
-            const showQuickPickSpy = jest
+            const showQuickPickSpy = vi
                 .spyOn(vscode.window, 'showQuickPick')
                 .mockResolvedValue({ label: 'Execute as One', detail: '', id: 'join' } as never);
 
@@ -1580,7 +1585,7 @@ describe('DocumentDBShellPty', () => {
         it('should discard input when dialog is cancelled', async () => {
             mockPasteBehavior('ask');
 
-            const showQuickPickSpy = jest.spyOn(vscode.window, 'showQuickPick').mockResolvedValue(undefined);
+            const showQuickPickSpy = vi.spyOn(vscode.window, 'showQuickPick').mockResolvedValue(undefined);
 
             pty.handleInput('line1\nline2\n');
 
@@ -1596,7 +1601,7 @@ describe('DocumentDBShellPty', () => {
 
             mockEvaluate.mockResolvedValue({ type: null, printable: '"ok"', durationMs: 1 });
 
-            const showQuickPickSpy = jest.spyOn(vscode.window, 'showQuickPick');
+            const showQuickPickSpy = vi.spyOn(vscode.window, 'showQuickPick');
 
             // Single line with trailing \r — should NOT trigger the dialog
             pty.handleInput('show dbs\r');
@@ -1617,7 +1622,7 @@ describe('DocumentDBShellPty', () => {
                 .mockResolvedValueOnce({ type: null, printable: '"r1"', durationMs: 1 })
                 .mockResolvedValueOnce({ type: null, printable: '"r2"', durationMs: 1 });
 
-            const showQuickPickSpy = jest.spyOn(vscode.window, 'showQuickPick');
+            const showQuickPickSpy = vi.spyOn(vscode.window, 'showQuickPick');
 
             pty.handleInput('show dbs\nuse mydb\n');
 
@@ -1635,7 +1640,7 @@ describe('DocumentDBShellPty', () => {
             // behavior=ask and VS Code's warning is 'never' → show our dialog
             mockPasteBehavior('ask', 'never');
 
-            const showQuickPickSpy = jest
+            const showQuickPickSpy = vi
                 .spyOn(vscode.window, 'showQuickPick')
                 .mockResolvedValue({ label: 'Cancel', detail: '', id: 'cancel' } as never);
 
@@ -1651,7 +1656,7 @@ describe('DocumentDBShellPty', () => {
             // behavior=alwaysAsk and VS Code's warning is 'auto' → still show our dialog
             mockPasteBehavior('alwaysAsk', 'auto');
 
-            const showQuickPickSpy = jest
+            const showQuickPickSpy = vi
                 .spyOn(vscode.window, 'showQuickPick')
                 .mockResolvedValue({ label: 'Cancel', detail: '', id: 'cancel' } as never);
 

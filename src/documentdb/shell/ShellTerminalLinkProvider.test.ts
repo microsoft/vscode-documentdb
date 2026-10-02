@@ -3,6 +3,8 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
 import { EJSON } from 'bson';
 import * as vscode from 'vscode';
 import { HelpProvider } from '../../../packages/documentdb-js-shell-runtime/src/HelpProvider';
@@ -37,7 +39,7 @@ describe('ShellTerminalLinkProvider', () => {
     let mockTerminal: vscode.Terminal;
 
     beforeEach(() => {
-        jest.clearAllMocks();
+        vi.clearAllMocks();
         provider = new ShellTerminalLinkProvider();
 
         // Create a mock terminal
@@ -223,7 +225,7 @@ describe('ShellTerminalLinkProvider', () => {
 
     describe('handleTerminalLink', () => {
         it('should execute the open collection view command', () => {
-            const spy = jest.spyOn(vscode.commands, 'executeCommand').mockResolvedValue(undefined);
+            const spy = vi.spyOn(vscode.commands, 'executeCommand').mockResolvedValue(undefined);
 
             const link = {
                 linkType: 'collectionView' as const,
@@ -374,7 +376,7 @@ describe('ShellTerminalLinkProvider', () => {
         });
 
         it('should execute openSettings command for settings links', () => {
-            const spy = jest.spyOn(vscode.commands, 'executeCommand').mockResolvedValue(undefined);
+            const spy = vi.spyOn(vscode.commands, 'executeCommand').mockResolvedValue(undefined);
 
             const link = {
                 linkType: 'settings' as const,
@@ -472,7 +474,7 @@ describe('ShellTerminalLinkProvider', () => {
         });
 
         it('should execute the open playground command for playground links', () => {
-            const spy = jest.spyOn(vscode.commands, 'executeCommand').mockResolvedValue(undefined);
+            const spy = vi.spyOn(vscode.commands, 'executeCommand').mockResolvedValue(undefined);
 
             const link = {
                 linkType: 'playground' as const,
