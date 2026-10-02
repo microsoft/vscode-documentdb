@@ -540,9 +540,12 @@ plugin in a real editor; Kubernetes, Atlas and Azure discovery against real back
     not expose an independently verifiable context-tier identifier, so that variant cannot be
     confirmed here. No stage review file is written in this run; the separate review follows
     Stage 3 under ground rule 2.
-  - **Operator decision (2026-10-02):** do **not** merge `main` into this branch during this run,
-    overriding ground rule 1's stage-start merge. Work remains on `dev/tnaum/modernization`;
-    no rebase, merge, force push, `main` changes or new PR are part of this stage.
+  - **Operator decision (2026-10-02, clarified):** continue on the current `v0.11.0`-based branch.
+    Do **not** merge or rebase onto `main` at any point in this run, overriding ground rule 1's
+    stage-start and pre-gate merges. Operator's reason, verbatim:
+    "continue on the base we had; this is needed for our ADO tests later."
+    Work remains on `dev/tnaum/modernization`; no force push, `main` changes or new PR are part
+    of this stage.
 - **Goal:** delete the Mocha suite and everything that only exists for it. This repo tests with Jest;
   the Mocha files are not in the Jest `testMatch` and never run.
 - **Tasks:**
