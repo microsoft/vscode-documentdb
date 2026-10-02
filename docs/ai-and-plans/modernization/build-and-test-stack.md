@@ -934,6 +934,15 @@ plugin in a real editor; Kubernetes, Atlas and Azure discovery against real back
       VS Code mock, preserving Jest's missing-export value per recipe step 8.
       Leftovers: **none**; recipe deviations: **none**; no other alternatives needed.
       No dependency changes, push, CI activity or stage review; CI remains deferred to the orchestrator.
+    - **Phase B B09, `e1094b57`:** converted all **19** listed `src/plugins/service-kubernetes`
+      test files (commands, discovery tree/wizard, client, tunnels and source stores); Vitest
+      **19 files / 340 tests**, remaining Jest **118 suites / 1,834 tests**, build and targeted
+      Prettier / ESLint passed. AST comparison confirmed assertions unchanged; leftovers: **none**.
+      Recipe typing addition: static imports exposed incomplete client fixtures; named API types,
+      typed mocks and a test-local `Partial` helper preserve their values and the generic
+      `makeApiClient` signature. Direct fixture casts were rejected by TypeScript; initial
+      fixture-type and missing-default-export failures were resolved. No dependency changes,
+      push, CI activity or stage review; CI remains deferred to the orchestrator.
     - **Phase A follow-up (shared-harness gaps), `86baf001`, `73046b44`, `df9a8e1a`:**
       - **Diagnosis:** CommonJS packages in `node_modules` call Node's own `require('vscode')`,
         which Vite's alias never sees: `@vscode/extension-telemetry` (reached through the
