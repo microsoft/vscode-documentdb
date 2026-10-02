@@ -17,7 +17,7 @@ import { rpcConcurrencyLogger } from './rpcConcurrencyLogger';
 const consoleLog = vi.fn();
 vi.mock('@microsoft/vscode-ext-webview/host', () => {
     const consoleProcedureLogger = { onEnd: (entry: unknown) => consoleLog(entry) };
-    return { consoleProcedureLogger, default: { consoleProcedureLogger } };
+    return { consoleProcedureLogger };
 });
 vi.mock('../../../utils/accumulatingTelemetry', () => ({
     accumulateTelemetry: vi.fn(),

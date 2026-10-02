@@ -64,33 +64,17 @@ export default defineConfig({
                     setupFiles: [path.join(repoRoot, 'test/vitest/setup.ts')],
                     server: {
                         deps: {
-                            // TEMPORARY (Stage 3 revisits): `@microsoft/vscode-ext-webview-fluentui` is ESM
-                            // but imports named exports from Fluent, which is CommonJS under Node. Left
-                            // external, the import throws "Named export ... not found"; inlining lets Vite
-                            // apply its CommonJS interop. Keep until a consumer test passes without it.
+                            // Our workspace packages need no entry here: their symlinks resolve to
+                            // `packages/*`, outside `node_modules`, and Vitest inlines such files. That
+                            // matters for `@microsoft/vscode-ext-webview-fluentui`, which plain Node cannot
+                            // load (Fluent's packaging; see its README). A copy installed from the registry
+                            // would need `inline` again.
                             //
                             // `@azure/identity` and `@azure/msal-node` are inlined so `vi.resetModules()`
                             // reloads them, as `jest.resetModules()` did: the managed-identity endpoint
                             // harness re-imports them per test to pick up new IDENTITY_* variables, and
                             // modules Node loads directly survive a reset.
-                            inline: ['@microsoft/vscode-ext-webview-fluentui', '@azure/identity', '@azure/msal-node'],
-                        },
-                    },
-                    deps: {
-                        optimizer: {
-                            ssr: {
-                                // TEMPORARY (Stage 3 makes this unnecessary): `@microsoft/vscode-ext-webview`
-                                // ships CommonJS and its host entry `require`s `vscode`, which bypasses the
-                                // alias above. Pre-bundling rewrites those `require` calls so they resolve
-                                // to the test mock.
-                                enabled: true,
-                                include: [
-                                    '@microsoft/vscode-ext-webview',
-                                    '@microsoft/vscode-ext-webview/host',
-                                    '@microsoft/vscode-ext-webview/react',
-                                    '@microsoft/vscode-ext-webview/webview',
-                                ],
-                            },
+                            inline: ['@azure/identity', '@azure/msal-node'],
                         },
                     },
                 },

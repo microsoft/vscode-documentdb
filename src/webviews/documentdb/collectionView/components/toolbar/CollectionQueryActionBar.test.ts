@@ -18,7 +18,7 @@ import { CollectionQueryActionBar, type CollectionQueryActionBarProps } from './
 
 vi.mock('@microsoft/vscode-ext-webview/react', () => {
     const useConfiguration = (): { enableAIQueryGeneration: boolean } => ({ enableAIQueryGeneration: true });
-    return { useConfiguration, default: { useConfiguration } };
+    return { useConfiguration };
 });
 
 vi.mock('@vscode/l10n', () => ({
