@@ -18,7 +18,7 @@
  * Shell-only methods (no server command) are flagged with `shellOnly: true`.
  */
 
-import { type ShellMethodEntry } from './types';
+import { type ShellMethodEntry } from './types.js';
 
 // ---------------------------------------------------------------------------
 // Database methods (db.*)

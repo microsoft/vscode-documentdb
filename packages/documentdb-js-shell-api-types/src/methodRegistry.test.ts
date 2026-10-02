@@ -5,7 +5,7 @@
 
 import { describe, expect, it } from 'vitest';
 
-import { getMethodsByTarget, getRequiredServerCommands, SHELL_API_METHODS } from './methodRegistry';
+import { getMethodsByTarget, getRequiredServerCommands, SHELL_API_METHODS } from './methodRegistry.js';
 
 describe('methodRegistry', () => {
     it('should have methods for all target types', () => {

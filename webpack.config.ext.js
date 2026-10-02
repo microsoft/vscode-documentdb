@@ -89,6 +89,14 @@ module.exports = (env, { mode }) => {
             extensions: ['.js', '.ts'],
         },
         module: {
+            parser: {
+                // ES modules (our ESM-only workspace packages) use `import.meta.dirname`/`filename`, which
+                // a CommonJS bundle cannot contain. 'eval-only' rewrites them to `__dirname`/`__filename`.
+                // Scoped to `javascript/esm` so CommonJS modules keep the `node` settings above.
+                'javascript/esm': {
+                    node: { __dirname: 'eval-only', __filename: 'eval-only' },
+                },
+            },
             rules: [
                 {
                     test: /\.(ts)$/iu,

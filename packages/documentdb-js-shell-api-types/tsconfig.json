@@ -3,7 +3,8 @@
     "composite": true,
     "declaration": true,
     "declarationMap": true,
-    "module": "commonjs",
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
     "target": "ES2023",
     "lib": ["ES2023"],
     "rootDir": "./src",
@@ -13,7 +14,8 @@
     "allowSyntheticDefaultImports": true,
     "skipLibCheck": true,
     "resolveJsonModule": true,
-    "sourceMap": true
+    "sourceMap": true,
+    "inlineSources": true
   },
   "include": ["src/**/*"],
   "exclude": ["node_modules", "dist"]

@@ -18,10 +18,10 @@
  */
 
 // Types
-export type { ShellMethodEntry } from './types';
+export type { ShellMethodEntry } from './types.js';
 
 // Method registry
-export { SHELL_API_METHODS, getMethodsByTarget, getRequiredServerCommands } from './methodRegistry';
+export { SHELL_API_METHODS, getMethodsByTarget, getRequiredServerCommands } from './methodRegistry.js';
 
 // .d.ts content — loaded lazily on first access
 import * as fs from 'fs';
@@ -35,7 +35,7 @@ let _dtsContent: string | undefined;
  */
 export function getShellApiDtsContent(): string {
     if (_dtsContent === undefined) {
-        const dtsPath = path.join(__dirname, '..', 'typeDefs', 'documentdb-shell-api.d.ts');
+        const dtsPath = path.join(import.meta.dirname, '..', 'typeDefs', 'documentdb-shell-api.d.ts');
         _dtsContent = fs.readFileSync(dtsPath, 'utf8');
     }
     return _dtsContent;

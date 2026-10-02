@@ -23,10 +23,11 @@
     },
     "jsx": "react-jsx"
   },
-  "exclude": ["node_modules", ".vscode-test", "packages/*/dist", "packages/documentdb-js-operator-registry/scripts"],
+  "exclude": ["node_modules", ".vscode-test", "packages/*/dist", "packages/*/scripts"],
   "references": [
     { "path": "packages/documentdb-js-schema-analyzer" },
     { "path": "packages/documentdb-js-operator-registry" },
+    { "path": "packages/documentdb-js-shell-api-types" },
     { "path": "packages/documentdb-js-shell-runtime" },
     { "path": "packages/vscode-ext-webview" },
     { "path": "packages/vscode-ext-webview-fluentui" }
