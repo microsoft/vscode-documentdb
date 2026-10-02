@@ -3,20 +3,22 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-jest.mock('vscode', () => ({
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+
+vi.mock('vscode', () => ({
     l10n: { t: (message: string): string => message },
     ThemeIcon: class ThemeIcon {
         constructor(public readonly id: string) {}
     },
 }));
 
-jest.mock('@vscode/l10n', () => ({
+vi.mock('@vscode/l10n', () => ({
     t: (message: string, ...args: unknown[]): string =>
         message.replace(/\{(\d+)\}/g, (_match: string, index: string) => String(args[Number(index)])),
 }));
 
-const mockOutputChannel = { info: jest.fn(), error: jest.fn() };
-jest.mock('../../../extensionVariables', () => ({
+const mockOutputChannel = { info: vi.fn(), error: vi.fn() };
+vi.mock('../../../extensionVariables', () => ({
     ext: {
         get outputChannel(): typeof mockOutputChannel {
             return mockOutputChannel;
@@ -24,10 +26,10 @@ jest.mock('../../../extensionVariables', () => ({
     },
 }));
 beforeEach(() => {
-    jest.clearAllMocks();
+    vi.clearAllMocks();
 });
 
-jest.mock('@microsoft/vscode-azext-utils', () => ({
+vi.mock('@microsoft/vscode-azext-utils', () => ({
     AzureWizardPromptStep: class AzureWizardPromptStep {},
 }));
 
@@ -39,7 +41,7 @@ import { ChooseAuthMethodStep } from './ChooseAuthMethodStep';
 
 describe('ChooseAuthMethodStep authentication families', () => {
     it('auto-selects the Entra family when account and managed identity are the only methods', async () => {
-        const showQuickPick = jest.fn();
+        const showQuickPick = vi.fn();
         const context = {
             availableAuthMethods: [AuthMethodId.MicrosoftEntraID, AuthMethodId.ManagedIdentity],
             telemetry: { properties: {}, measurements: {} },
@@ -69,7 +71,7 @@ describe('ChooseAuthMethodStep authentication families', () => {
                 AuthMethodId.MicrosoftEntraID,
                 AuthMethodId.ManagedIdentity,
             ],
-            ui: { showQuickPick: jest.fn().mockResolvedValue({ authMethod: AuthMethodId.MicrosoftEntraID }) },
+            ui: { showQuickPick: vi.fn().mockResolvedValue({ authMethod: AuthMethodId.MicrosoftEntraID }) },
         };
 
         await step.prompt(context as never);
@@ -125,7 +127,7 @@ describe('ChooseAuthMethodStep authentication families', () => {
                 measurements: {},
             },
             availableAuthMethods: [AuthMethodId.NativeAuth, AuthMethodId.MicrosoftEntraID],
-            ui: { showQuickPick: jest.fn().mockRejectedValue(error) },
+            ui: { showQuickPick: vi.fn().mockRejectedValue(error) },
         };
 
         await expect(makeStep().prompt(context as never)).rejects.toBe(error);
