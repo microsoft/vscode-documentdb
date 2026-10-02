@@ -288,11 +288,3 @@ extends:
                                   !**/node_modules/**
                               TargetFolder: $(ob_outputDirectory)
                           condition: and(succeeded(), ne(variables['System.PullRequest.IsFork'], 'True'))
-
-                        - task: Npm@1
-                          displayName: '🧪 Test'
-                          inputs:
-                              command: custom
-                              customCommand: test
-                              workingDir: $(Build.SourcesDirectory)
-                          condition: succeeded()

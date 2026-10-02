@@ -90,16 +90,16 @@ PR handoff to reconstruct it. Minor implementation choices do not need this chec
 
 ## Project Structure
 
-| Folder          | Purpose                                    |
-| --------------- | ------------------------------------------ |
-| `src/`          | Main extension source code                 |
-| `src/webviews/` | React web view components                  |
-| `src/commands/` | Command handlers (one folder per command)  |
-| `src/services/` | Singleton services                         |
-| `src/tree/`     | Tree view data providers                   |
-| `api/`          | Separate Node.js project for extension API |
-| `l10n/`         | Localization files                         |
-| `test/`         | Jest tests                                 |
+| Folder                                               | Purpose                                    |
+| ---------------------------------------------------- | ------------------------------------------ |
+| `src/`                                               | Main extension source code                 |
+| `src/webviews/`                                      | React web view components                  |
+| `src/commands/`                                      | Command handlers (one folder per command)  |
+| `src/services/`                                      | Singleton services                         |
+| `src/tree/`                                          | Tree view data providers                   |
+| `api/`                                               | Separate Node.js project for extension API |
+| `l10n/`                                              | Localization files                         |
+| `src/**/*.test.ts`, `src/**/*.test.tsx`, `packages/` | Jest unit tests                            |
 
 ## Branching
 

@@ -43,6 +43,3 @@ export async function deactivate(ctx: vscode.ExtensionContext): Promise<void> {
 }
 
 perfStats.loadEndTime = Date.now();
-
-// Since not all unit/integration tests right now might be moved to jest, we need to export some classes/functions.
-export * from './src/utils/getIp';

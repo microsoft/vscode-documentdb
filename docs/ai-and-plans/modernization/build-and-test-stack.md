@@ -535,11 +535,32 @@ plugin in a real editor; Kubernetes, Atlas and Azure discovery against real back
 
 - **Models:** author **Claude Sonnet 5.5**, reviewer **GPT-6 Sol** for the AI pre-review. Small,
   mechanical, and easy to check.
+  - **Execution (2026-10-02):** authored by **GPT-6.1 Sol**, superseding the Models line per
+    ground rule 2. The requested variant is the largest, long-context variant; the runtime does
+    not expose an independently verifiable context-tier identifier, so that variant cannot be
+    confirmed here. No stage review file is written in this run; the separate review follows
+    Stage 3 under ground rule 2.
+  - **Operator decision (2026-10-02):** do **not** merge `main` into this branch during this run,
+    overriding ground rule 1's stage-start merge. Work remains on `dev/tnaum/modernization`;
+    no rebase, merge, force push, `main` changes or new PR are part of this stage.
 - **Goal:** delete the Mocha suite and everything that only exists for it. This repo tests with Jest;
   the Mocha files are not in the Jest `testMatch` and never run.
 - **Tasks:**
   - First, check whether `improveError`, `wrapError`, `getIp` and `setEnvironmentVariables` already
     have Jest tests. Write a small Jest test only where one is missing; do not port the Mocha files.
+    - **Completed in this implementation commit (hash follows in the record commit):** searched
+      `src/` and `packages/` before deleting the
+      harness: none of the four had Jest coverage. Added four small independent suites under
+      `src/utils/`, including `testUtils/setEnvironmentVariables.test.ts`, with **18 new tests**.
+      Network requests are mocked; range boundaries, valid/fallback IPv4 retrieval, final error
+      propagation, error identity/message handling and environment restoration are covered.
+      No Mocha files were ported and no `TDD:` suite was changed.
+    - **Verification:** baseline full Jest passed **291 suites / 4,564 tests / 4 snapshots**
+      (Node 22.21.1, 39.964 s). Initial helper-only run failed **2 suites / 5 tests** because
+      `jest-mock-vscode` does not define `CancellationError`, which the real `parseError` uses.
+      Added that class to the two suites' local VS Code mocks, without replacing `parseError`;
+      the subsequent targeted `npm test` run passed **8 suites / 89 tests**, including all four
+      connection-storage regression suites (Node 22.18.0).
   - Delete:
     - `test/improveError.test.ts`, `test/wrapError.test.ts`, `test/util/getIp.test.ts`,
       `test/util/setEnvironmentVariables.test.ts`;
@@ -558,18 +579,83 @@ plugin in a real editor; Kubernetes, Atlas and Azure discovery against real back
     - the disabled `integration-tests` job (`if: false`) in `.github/workflows/main.yml`;
     - the `🧪 Test` step in `.azure-pipelines/build.yml`. It runs the no-op `npm test` today, and
       would break an isolated ADO build as soon as `npm test` downloads VS Code.
+    - **Completed in this implementation commit (hash follows in the record commit):** removed
+      every listed legacy file/configuration, the Mocha
+      ESLint import/block and obsolete bundle-import restriction, the commented TypeScript types
+      block, the disabled GitHub integration job and ADO Test step. The GitHub job itself had a
+      normal trigger condition; its actual test step was `if: false`, so the entire idle job was
+      removed as requested. Updated workflow descriptions, pipeline documentation and the
+      repository test-location guidance.
+    - **Plan-permitted retention:** moved the environment utility to
+      `src/utils/testUtils/setEnvironmentVariables.ts`, beside its new test, and replaced its
+      retired bundle type import with the local `IDisposable` type. The unset-variable case now
+      deletes the variable on disposal rather than assigning the literal string `"undefined"`.
+      Considered deleting the utility entirely, but retained it to satisfy the explicit request
+      for missing helper coverage. This is test-only code, not a shipped feature change.
   - Remove devDependencies: `mocha`, `@types/mocha`, `mocha-junit-reporter`, `mocha-multi-reporters`,
     `eslint-plugin-mocha`, `@vscode/test-cli`. Keep `@vscode/test-electron` (L3 uses it), `ts-node`
     (package scripts use it until Stage 3) and `jest-mock-vscode` (unit tests use it).
+    - **Completed in this implementation commit (hash follows in the record commit):** removed
+      exactly the six dependencies; retained all three
+      required tools. Regenerated the lockfile with `npm install`, using
+      `--ignore-scripts --no-audit --no-fund`, on Node **22.18.0** / npm **10.9.3** (not hand-edited).
+      The lock diff contains only
+      removals; no surviving version changed.
+    - **Ground rule 6 passed:** the required scan after the manifest edit found **0 fresh**
+      versions (root **1,772 versions / 1,599 packages**, API **116 / 106**). The scan after
+      lockfile regeneration again found **0 fresh** (root **1,745 / 1,580**, API **116 / 106**),
+      both exit 0, with no lookup failures. One existing root git/private/unpublished entry has
+      no registry publish time. No pins or overrides were needed; the API lockfile is unchanged.
   - Point `npm test` at the unit tests.
+    - **Completed in this implementation commit (hash follows in the record commit):** delegates
+      to `npm run jesttest --`, preserving its
+      workspace prebuild and forwarding test selectors/options. Verified via the targeted
+      **8-suite / 89-test** run above; it no longer prints a no-op deprecation notice.
   - Convert the one `const enum` (`SecretIndex` in `src/services/connectionStorageService.ts`) to a
     plain object. Bundlers that compile files one at a time cannot inline `const enum` values across
     files.
+    - **Completed in this implementation commit (hash follows in the record commit):** replaced
+      it with an `as const` object, preserving every
+      append-only secret slot **0 through 6** and all consumers. Existing storage tests passed;
+      no storage schema, auth contract or `TDD:` test changed.
   - Keep root `main.js` and the "Launch Extension + Host" configuration for now; Stage 5 replaces
     them.
+    - **Completed:** root `main.js` and that launch configuration are retained unchanged.
   - Dev loop: `watch:views` fails on a tree without `dist/views.js`. Run `npm run webpack-dev-wv`
     once first (see the known limitation under Stage 0).
+    - **Skipped:** no dev watch or UI loop was needed for this harness-only stage.
 - **Automated verification:** L0; L1 (the VSIX contents must not change); L3.
+  - **Local L0 passed:** `npm run build` passed before and after dependency pruning.
+    Post-change full Jest passed **295 suites / 4,582 tests / 4 snapshots** (Node 22.18.0,
+    44.519 s), a delta of **+4 suites / +18 tests**. The editor reports a pre-existing
+    TypeScript 6 `baseUrl` deprecation; the repository's TypeScript 5.9.3 build passes. No
+    suppression or TypeScript upgrade was added (Stage 6 owns that).
+    A final build/full Jest rerun after the lint fix also passed **295 suites / 4,582 tests /
+    4 snapshots** (38.199 s).
+  - **Local artifact checks passed:** `npm run package`, `npm run verify:vsix --
+vscode-documentdb-0.11.0.vsix`, `npm run prove:vsix -- vscode-documentdb-0.11.0.vsix` and
+    `npm run test:verification`. The archive file list is identical: **124 entries**; VSIX
+    **9,597,420 -> 9,596,077 bytes**. Only `extension/main.js` (**4,761,367 -> 4,757,299**),
+    `extension/package.json` (**96,079 -> 95,636**) and `extension/playgroundWorker.js`
+    (**7,443,125 -> 7,440,948**) changed size, all within L1 tolerance. No baseline or check changed.
+    SHA-256: `e133f0167a2bee2327636cfdacd06a5194c0ed806f221f870ced2202fd72b16b`.
+    The four local proof lines are `PASS: render-renamed rejected for the expected reason`,
+    `PASS: missing-import rejected for the expected reason`, `PASS: dev-server rejected for the
+expected reason`, `PASS: missing-file rejected for the expected reason`.
+    Verification tooling passed **32 Node tests** and **3 Jest suites / 45 tests**.
+    Production webpack emitted its existing bundle-size/performance warnings.
+  - **Pre-push checks:** changed-file `npx prettier --write` ran. Initial `npm run lint` failed
+    on two inline `import()` type annotations in the new mocks; switched them to namespace type
+    imports. Lint and the **8-suite / 89-test** targeted rerun then passed.
+  - **Pending:** pushed-head CI L1/L3 proof confirmation. A preceding Stage 0 run
+    [37004033067](https://github.com/microsoft/vscode-documentdb/actions/runs/37004033067)
+    failed L1: `extension/playgroundWorker.js` was **6,555,531 bytes**, versus the committed
+    **7,443,125-byte** baseline (allowed delta **744,313**); L3 passed. This is not claimed as
+    Stage 1 evidence, and no speculative fix or baseline regeneration was attempted.
+    Any Stage 1 L1 failure stops this stage. No L2 UI pass is required by this stage, and none
+    is claimed. Case 1 plus the requested stage checks applies; full Case 2 (including
+    repository-wide `prettier-fix`) remains deferred until ready for review. No localization
+    strings changed; `npm run l10n` was not run.
 - **Operator gate G1:** review the dependency and CI diff. No manual UI check is needed. Reviewed
   at the combined checkpoint G1-3 after Stage 3.
 

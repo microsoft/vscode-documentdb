@@ -33,15 +33,15 @@ the operator-run ADO build and the G0 manual checklist remain outstanding.
 
 ### GitHub Actions (`.github/workflows/`)
 
-| Workflow                              | Triggers                                                          | What it does                                                                                                                                                                    |
-| ------------------------------------- | ----------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `main.yml` ("CI")                     | PRs to `main`, `release/**`, `feature/**`; push to `main`; manual | Build the workspaces, `l10n:check`, lint, Prettier, `jesttest`; an `integration-tests` job that is disabled (`if: false`); build and package a VSIX artifact, with a PR comment |
-| `api-extractor.yaml`                  | Push to `main` and `release/**`; PRs                              | Extracts the public API typings                                                                                                                                                 |
-| `api-publish.yaml`                    | Manual                                                            | Publishes the API typings package to npm                                                                                                                                        |
-| `npm-publish-documentdb-js.yml`       | Manual, one checkbox per package                                  | Publishes the four `@documentdb-js/*` packages to npmjs with provenance                                                                                                         |
-| `bump-version-pr.yaml`                | Manual                                                            | Opens the version bump PR after a release                                                                                                                                       |
-| `deploy-documentation-production.yml` | Push to `main` touching `docs/**`; manual                         | Deploys the documentation site                                                                                                                                                  |
-| `seed-build-cache.yml`                | Manual (`seed` / `verify`)                                        | Build-size cache                                                                                                                                                                |
+| Workflow                              | Triggers                                                          | What it does                                                                                                                                                 |
+| ------------------------------------- | ----------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `main.yml` ("CI")                     | PRs to `main`, `release/**`, `feature/**`; push to `main`; manual | Build the workspaces, `l10n:check`, lint, Prettier, `jesttest`; build and package a VSIX artifact, with a PR comment; L1 inspection and L3 activation/proofs |
+| `api-extractor.yaml`                  | Push to `main` and `release/**`; PRs                              | Extracts the public API typings                                                                                                                              |
+| `api-publish.yaml`                    | Manual                                                            | Publishes the API typings package to npm                                                                                                                     |
+| `npm-publish-documentdb-js.yml`       | Manual, one checkbox per package                                  | Publishes the four `@documentdb-js/*` packages to npmjs with provenance                                                                                      |
+| `bump-version-pr.yaml`                | Manual                                                            | Opens the version bump PR after a release                                                                                                                    |
+| `deploy-documentation-production.yml` | Push to `main` touching `docs/**`; manual                         | Deploys the documentation site                                                                                                                               |
+| `seed-build-cache.yml`                | Manual (`seed` / `verify`)                                        | Build-size cache                                                                                                                                             |
 
 All of them install from **public npmjs**: there is no `.npmrc` at the repository root.
 
@@ -50,12 +50,12 @@ All of them install from **public npmjs**: there is no `.npmrc` at the repositor
 All four extend the OneBranch governed templates (`v2/OneBranch.Official.CrossPlat.yml`, or the
 NonOfficial variant for non-official runs of the build pipelines).
 
-| Pipeline                   | Triggers                                                                                                                              | What it does                                                                                                                                                                  |
-| -------------------------- | ------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `build.yml`                | YAML declares push to `main` and `next`, `pr: none`. **In practice it is run only when a release is prepared** (operator, 2026-10-01) | `npm ci` from the internal feed, build, package, **sign** the VSIX, verify the signature, stage the artifacts, then a `🧪 Test` step that runs `npm test` (currently a no-op) |
-| `release.yml`              | Run by hand, with `publishVersion`; `dryRun` defaults to `true`                                                                       | Takes the artifacts of the `build.yml` run, validates version and manifest, and **publishes the signed VSIX to the Marketplace**                                              |
-| `build-npm-packages.yml`   | `trigger: none`, `pr: none` (manual)                                                                                                  | Builds the npm packages from the internal feed, runs `npm run test --workspaces`, packs `vscode-ext-webview` and `vscode-ext-webview-fluentui`                                |
-| `release-npm-packages.yml` | `trigger: none`, `pr: none` (manual)                                                                                                  | Publishes the `@microsoft`-scoped packages through ESRP                                                                                                                       |
+| Pipeline                   | Triggers                                                                                                                              | What it does                                                                                                                                   |
+| -------------------------- | ------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
+| `build.yml`                | YAML declares push to `main` and `next`, `pr: none`. **In practice it is run only when a release is prepared** (operator, 2026-10-01) | `npm ci` from the internal feed, build, package, offline L1 inspection, **sign** the VSIX, verify the signature, stage the artifacts           |
+| `release.yml`              | Run by hand, with `publishVersion`; `dryRun` defaults to `true`                                                                       | Takes the artifacts of the `build.yml` run, validates version and manifest, and **publishes the signed VSIX to the Marketplace**               |
+| `build-npm-packages.yml`   | `trigger: none`, `pr: none` (manual)                                                                                                  | Builds the npm packages from the internal feed, runs `npm run test --workspaces`, packs `vscode-ext-webview` and `vscode-ext-webview-fluentui` |
+| `release-npm-packages.yml` | `trigger: none`, `pr: none` (manual)                                                                                                  | Publishes the `@microsoft`-scoped packages through ESRP                                                                                        |
 
 The internal feed is `msdata/CosmosDB/_packaging/vscode-documentdb`, configured in
 `.azure-pipelines/.npmrc`.
@@ -121,9 +121,9 @@ from the internet while it runs.
 
 **Where we stand** [MEASURED]: our `build.yml` has **no** `networkisolation` setting today. It lives
 in the same ADO organization and project as Cosmos DB's (`msdata/CosmosDB`, from the feed URL), so
-expect the same requirement to reach us [INFERRED]. Our `🧪 Test` step only passes because
-`npm test` does nothing. If `npm test` ever starts VS Code, the official build breaks the day
-isolation is enabled. The modernization plan removes that step (Stage 1).
+expect the same requirement to reach us [INFERRED]. Stage 1 removes the legacy `🧪 Test` step
+and points `npm test` at the Jest unit suite; it does not download VS Code. L3 remains on
+GitHub Actions, not in the official build, so activation checks do not break an isolated build.
 
 ## 3. Where each check runs
 
@@ -136,20 +136,20 @@ The check names L1 to L3 come from the modernization plan
 L1 inspects the unzipped VSIX against a committed manifest, L2 renders the production webview bundle
 in a browser, and L3 installs the VSIX into a downloaded VS Code and checks that it activates.
 
-| Check                                | Today                             | GitHub Actions (planned)                 | ADO official build (planned) | Why                                                                                |
-| ------------------------------------ | --------------------------------- | ---------------------------------------- | ---------------------------- | ---------------------------------------------------------------------------------- |
-| `npm ci`                             | both                              | public npmjs                             | internal feed                | Different sources, see 2.1                                                         |
-| Build / type check                   | both                              | yes                                      | yes                          | ADO must build what it signs                                                       |
-| Lint, Prettier, `l10n:check`         | GitHub                            | yes (gate)                               | no                           | PR feedback; no effect on the artifact                                             |
-| Unit tests (Jest, later Vitest)      | GitHub; ADO only for npm packages | yes (gate)                               | optional                     | Need no network, so they can run in ADO, but GitHub already gates every PR         |
-| Package the VSIX                     | both                              | yes (PR artifact, and input to L3)       | yes (**the one that ships**) |                                                                                    |
-| **L1** artifact inspection           | implemented; local pass           | wired as a separate job                  | **wired before signing**     | Needs no network. Rerun on the downloaded ADO artifact at release time (section 4) |
-| **L2** production-bundle harness     | integrated-browser pass           | later, headless (needs browser binaries) | no                           | Browser download                                                                   |
-| **L3** installed-VSIX smoke          | implemented; CI proof pending     | wired as a separate job on PRs           | **no**                       | Downloads VS Code; local machine has no display/Xvfb                               |
-| E2E suite (future iteration)         | not yet                           | yes                                      | no                           | Downloads VS Code, browsers, Docker images                                         |
-| `🧪 Test` step (`npm test`, a no-op) | ADO                               | n/a                                      | **removed**                  | Would break under isolation once `npm test` does something                         |
-| Dependency freshness                 | manual (skill)                    | future work, not planned                 | implicit (`npm ci` fails)    | Release builds are prepared from quarantine-clear versions (2.1)                   |
-| Sign, verify signature, publish      | ADO                               | no                                       | yes                          |                                                                                    |
+| Check                            | Today                             | GitHub Actions (planned)                 | ADO official build (planned) | Why                                                                                     |
+| -------------------------------- | --------------------------------- | ---------------------------------------- | ---------------------------- | --------------------------------------------------------------------------------------- |
+| `npm ci`                         | both                              | public npmjs                             | internal feed                | Different sources, see 2.1                                                              |
+| Build / type check               | both                              | yes                                      | yes                          | ADO must build what it signs                                                            |
+| Lint, Prettier, `l10n:check`     | GitHub                            | yes (gate)                               | no                           | PR feedback; no effect on the artifact                                                  |
+| Unit tests (Jest, later Vitest)  | GitHub; ADO only for npm packages | yes (gate)                               | optional                     | Need no network, so they can run in ADO, but GitHub already gates every PR              |
+| Package the VSIX                 | both                              | yes (PR artifact, and input to L3)       | yes (**the one that ships**) |                                                                                         |
+| **L1** artifact inspection       | implemented; local pass           | wired as a separate job                  | **wired before signing**     | Needs no network. Rerun on the downloaded ADO artifact at release time (section 4)      |
+| **L2** production-bundle harness | integrated-browser pass           | later, headless (needs browser binaries) | no                           | Browser download                                                                        |
+| **L3** installed-VSIX smoke      | implemented; CI proof pending     | wired as a separate job on PRs           | **no**                       | Downloads VS Code; local machine has no display/Xvfb                                    |
+| E2E suite (future iteration)     | not yet                           | yes                                      | no                           | Downloads VS Code, browsers, Docker images                                              |
+| Legacy `🧪 Test` step            | removed in Stage 1                | n/a                                      | **removed**                  | Retired no-op harness; unit tests run on GitHub and L3 must not download VS Code in ADO |
+| Dependency freshness             | manual (skill)                    | future work, not planned                 | implicit (`npm ci` fails)    | Release builds are prepared from quarantine-clear versions (2.1)                        |
+| Sign, verify signature, publish  | ADO                               | no                                       | yes                          |                                                                                         |
 
 ## 4. The gap between the two VSIXs, and how to close it
 
