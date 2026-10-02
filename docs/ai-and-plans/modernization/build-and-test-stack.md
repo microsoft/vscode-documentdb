@@ -656,7 +656,7 @@ plugin in a real editor; Kubernetes, Atlas and Azure discovery against real back
       comparison, runs only on manual dispatch and already uses the selected branch; it needs
       no change. The five other workflows do not run these artifact checks. No other workflow
       is changed.
-    - **Completed in the dedicated checkout-policy commit (hash follows in the record commit):**
+    - **Completed in the separate checkout-policy commit `116a6c7b`:**
       all four CI checkouts now select the same PR
       head. Verification and pushed-head CI proof confirmation follow below. **Revisit before
       G6**, when the branch takes `main`'s lockfile; this is a temporary checkout policy, not a
