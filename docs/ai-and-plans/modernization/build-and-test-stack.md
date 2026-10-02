@@ -1121,13 +1121,13 @@ plugin in a real editor; Kubernetes, Atlas and Azure discovery against real back
         the file (step 5). `TDD: PlaygroundHoverProvider`: codemod only (the `vitest` import).
       - `.../playground-completions/tdd/dynamicSchemaIntegration.test.ts`, `TDD: CollectionNameCache`:
         codemod only (`jest.mock`/`jest.fn`/`jest.clearAllMocks` → `vi.*`, `jest.Mock` → `Mock`).
-      - `.../playground-completions/tdd/playgroundContextDetector.test.ts`, `TDD: Query Playground
-Context Detection` and `TDD: Method Argument Context Detection`: codemod only.
+      - `.../playground-completions/tdd/playgroundContextDetector.test.ts`,
+        `TDD: Query Playground Context Detection` and `TDD: Method Argument Context Detection`: codemod only.
       - `src/documentdb/query-language/shared/tdd/sharedCompletionLogic.test.ts`, its seven `TDD:`
         suites (`getOperatorSortPrefix`, `getCategoryLabel`, `KEY_POSITION_OPERATORS`,
         `stripOuterBraces`, `escapeSnippetDollars`, `getTypeSuggestionDefs`, `JS_GLOBALS`): codemod only.
-      - `src/webviews/query-language-support/tdd/completionBehavior.test.ts`, `TDD: Completion
-Behavior`: codemod only.
+      - `src/webviews/query-language-support/tdd/completionBehavior.test.ts`,
+        `TDD: Completion Behavior`: codemod only.
     - **Codemod kept (Phase C decision):** `build/test-migration/jest-to-vitest.mjs` stays, with
       its header updated. Ground rule 1 requires Jest tests arriving with later `main` merges to be
       converted, and `main` still adds Jest tests. Delete it once the modernization PR has merged.
@@ -1346,9 +1346,11 @@ Behavior`: codemod only.
       (**124 entries, 9,596,208 bytes**, SHA-256
       `365aa2e88055b80a2e4a87b2db2065ba637b1cb63e60ae0dbdbc8ecc610f51dd`). `npm run verify:vsix`
       passed against the **unchanged** baseline; the baseline was not regenerated.
-      `npm run prove:vsix` printed the four lines `PASS: render-renamed rejected for the expected
-reason`, `PASS: missing-import rejected for the expected reason`, `PASS: dev-server rejected
-for the expected reason`, and `PASS: missing-file rejected for the expected reason`.
+      `npm run prove:vsix` printed the four lines
+      `PASS: render-renamed rejected for the expected reason`,
+      `PASS: missing-import rejected for the expected reason`,
+      `PASS: dev-server rejected for the expected reason`, and
+      `PASS: missing-file rejected for the expected reason`.
       `npm run test:verification` passed **32 + 45** tests. Against Stage 1's packaged VSIX,
       `extension/main.js` (4,757,299) and `extension/playgroundWorker.js` (7,440,948) have the same
       sizes. Only `extension/package.json` changed (**95,636 → 95,799 bytes**). It is the repo's
@@ -1450,7 +1452,6 @@ for the expected reason`, and `PASS: missing-file rejected for the expected reas
 
   The `@documentdb-js/*` packages are published from GitHub (`npm-publish-documentdb-js.yml`), the
   `@microsoft/*` packages from ADO (`release-npm-packages.yml`).
-
   - **Dependency order (Phase A).** The workspace graph has no edges between the six packages: no
     package imports or declares another (only doc comments name them). They are six leaves whose
     consumers are the extension host bundle (`main`), the playground worker, the webview bundle,
@@ -1614,14 +1615,14 @@ for the expected reason`, and `PASS: missing-file rejected for the expected reas
          - Pass: `PASS: main: 5 routes to ObjectId share one constructor (bson/lib/bson.cjs)` and
            `PASS: playgroundWorker: 4 routes to ObjectId share one constructor (bson/lib/bson.cjs)`.
          - Alias removed (`--without-alias`, also the automated control): exit 1,
-           `main: ObjectId via bson (ES module) is not the same constructor as via mongodb (bson
-           modules in graph: bson/lib/bson.cjs, bson/lib/bson.node.mjs)`, and the same line for
+           `main: ObjectId via bson (ES module) is not the same constructor as via mongodb (bson modules in graph: bson/lib/bson.cjs, bson/lib/bson.node.mjs)`,
+           and the same line for
            `playgroundWorker`.
          - Second copy on purpose, alias in place: `node_modules/bson/lib/bson.cjs` copied to
            `node_modules/mongodb/lib/vendored-bson.cjs`, and the driver's two `require("bson")`
            in `node_modules/mongodb/lib/bson.js` pointed at it. Exit 1 with five failures, e.g.
-           `main: ObjectId via bson (TypeScript, compiled like src/) is not the same constructor
-           as via mongodb (bson modules in graph: bson/lib/bson.cjs)`. The listed modules show
+           `main: ObjectId via bson (TypeScript, compiled like src/) is not the same constructor as via mongodb (bson modules in graph: bson/lib/bson.cjs)`.
+           The listed modules show
            one `bson` module, i.e. L1's count would not have caught this copy. Reverted:
            backup restored, sha256 of `mongodb/lib/bson.js` verified (`6c383f11…`), rerun passed.
          - Nested copy `node_modules/mongodb/node_modules/bson`: passes with the alias (the alias
@@ -1707,8 +1708,8 @@ for the expected reason`, and `PASS: missing-file rejected for the expected reas
     L3.
   - **Phase A results (local, Node 22.18.0 / npm 10.9.3, at `fd4085b6`):**
     - **L0:** `npm run build` passed; full Vitest **296 files / 4,588 tests**, identical to the
-      Stage 2 baseline (no test added or removed); `npm run lint` passed. `npm run
-      test:verification`: 32 Node tests passed, Vitest 42 / 45 (the 3 `template.ts` failures
+      Stage 2 baseline (no test added or removed); `npm run lint` passed.
+      `npm run test:verification`: 32 Node tests passed, Vitest 42 / 45 (the 3 `template.ts` failures
       under task 9).
     - **Package checks (`npm run verify:packages`, `build/verification/package-checks/`): all
       passed.** Each tarball goes through publint 0.3.24 (`--strict`) and ATTW 0.18.5, then a
@@ -1740,6 +1741,7 @@ for the expected reason`, and `PASS: missing-file rejected for the expected reas
       so the fluentui README now tells test-runner users to inline the package. The check
       requires exactly that failure, and a Vitest control run without inlining must fail
       (5 / 14), as it does.
+
     - **No top-level await:** the static scan found none in any shipped file, and the `require()`
       of every Node-loadable entry succeeded. Node would throw `ERR_REQUIRE_ASYNC_MODULE` for a
       top-level await anywhere in the ESM graph. Mutation proof: appending
@@ -1770,6 +1772,7 @@ for the expected reason`, and `PASS: missing-file rejected for the expected reas
     - **Formatting:** Prettier was run on every changed file except this plan, which is not
       Prettier-clean at its Stage 2 head (about 600 unrelated lines would change). This record
       was formatted by hand.
+
   - **Open items from Phase A:**
     - **Phase B:** fix `build/verification/browser/template.ts` (task 9), then rerun
       `test:verification` and L2; tasks 7 and 8; the L1 baseline decision for the size deltas
@@ -1800,8 +1803,8 @@ for the expected reason`, and `PASS: missing-file rejected for the expected reas
     - **L1 (`npm run package`, `npm run verify:vsix`): passed against the unchanged baseline; the
       baseline was not regenerated.** `npm run prove:vsix` printed five lines:
       `PASS: render-renamed …`, `PASS: missing-import …`, `PASS: dev-server …`,
-      `PASS: missing-file …` and `PASS: import-meta-in-commonjs rejected for the expected
-      reason`. Per file against `build/verification/baseline.json` (Stage 0 sizes):
+      `PASS: missing-file …` and
+      `PASS: import-meta-in-commonjs rejected for the expected reason`. Per file against `build/verification/baseline.json` (Stage 0 sizes):
       `views.js` 6,490,321 → 6,379,817 (**−110,504**, did not grow); `main.js` 4,761,367 →
       4,719,092 (−42,275); `playgroundWorker.js` 7,443,125 → 7,438,855 (−4,270);
       `views.js.LICENSE.txt` 2,594 → 2,358 (−236); `main.js.LICENSE.txt` 477 → 438 (−39);
@@ -1813,8 +1816,8 @@ for the expected reason`, and `PASS: missing-file rejected for the expected reas
       and in `playgroundWorker`; none in the views. Webpack warnings unchanged (2 host:
       `debug`, `express`; 3 views: size).
     - **L2: prepared, not run in a browser.** On the final VSIX,
-      `npm run prepare:browser-check -- --vsix vscode-documentdb-0.11.0.vsix --output <tmp>
-      --port 18084` generated the five view pages and the broken-CSS page from the real
+      `npm run prepare:browser-check -- --vsix vscode-documentdb-0.11.0.vsix --output <tmp> --port 18084`
+      generated the five view pages and the broken-CSS page from the real
       `WebviewController.ts`. `serve:browser-check` started; all six pages, the helper,
       `runtime.js`, `theme.css` and `artifact/views.js` (6,379,817 B) answered 200, a
       root-relative `/views.js` and an unknown page 404. The server was stopped. This session
@@ -1834,6 +1837,14 @@ for the expected reason`, and `PASS: missing-file rejected for the expected reas
       `inspect.test.cjs`, `prove-inspection.cjs` and `browser/template.ts`. They were formatted
       in separate format-only commits (`471be2e2`, `3ccd5a06`), so the behavior commits stay
       readable.
+    - **Plan Markdown made Prettier-stable (orchestrator follow-up):** the Stage 2 CI dispatch
+      (run 37051119892) failed `npm run prettier` on this file, so Build, L1 and L3 were skipped.
+      Cause: inline code spans wrapped across lines; Prettier printed their continuation at column
+      0, which the next pass read as a lazy continuation that restructured the enclosing lists
+      (641, then 361 lines changed per pass). Fixed by re-wrapping nine such spans so each stays on
+      one line, plus Prettier's list-looseness blank lines; no word changed
+      (`git diff --word-diff --ignore-all-space`), and a second `--write` is a no-op.
+
 - **Operator gate G3:** decide the version bumps. Publish the packages only after the PR has merged,
   from `main`: publishing is irreversible, and a package should not ship from an unmerged branch.
   This repo uses the workspace copies, so no stage waits on publishing. Decided at the combined
