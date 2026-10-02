@@ -29,6 +29,8 @@ export default defineConfig({
                     root: repoRoot,
                     environment: 'node',
                     include: vitestFiles(repoRoot, 'src'),
+                    // Lets CommonJS dependencies `require('vscode')` and get the aliased mock above.
+                    setupFiles: [path.join(repoRoot, 'test/vitest/setup.ts')],
                     server: {
                         deps: {
                             // TEMPORARY (Stage 3 revisits): `@microsoft/vscode-ext-webview-fluentui` is ESM

@@ -89,6 +89,8 @@ export function convert(file, source) {
         }
     }
 
+    code = rewriteTwoArgumentGenerics(file, code);
+
     const free = freeIdentifiers(file, code);
     const runtime = [...RUNTIME_GLOBALS, 'vi'].filter((name) => free.has(name));
     const specifiers = [...runtime, ...[...usedTypes].map((name) => `type ${name}`)];
@@ -109,6 +111,34 @@ export function convert(file, source) {
         }
     });
     return { output: code, leftovers };
+}
+
+/**
+ * Jest's `fn<Return, Args>()`, `Mock<Return, Args>` and `SpyInstance<Return, Args>` take two type
+ * arguments; Vitest takes one function type: `fn<(...args: Args) => Return>()`.
+ */
+function rewriteTwoArgumentGenerics(file, code) {
+    const kind = file.endsWith('.tsx') ? ts.ScriptKind.TSX : ts.ScriptKind.TS;
+    const source = ts.createSourceFile(file, code, ts.ScriptTarget.Latest, true, kind);
+    const edits = [];
+    const visit = (node) => {
+        let typeArguments;
+        if (ts.isCallExpression(node) && node.expression.getText(source) === 'vi.fn') {
+            typeArguments = node.typeArguments;
+        } else if (ts.isTypeReferenceNode(node) && ['Mock', 'MockInstance'].includes(node.typeName.getText(source))) {
+            typeArguments = node.typeArguments;
+        }
+        if (typeArguments?.length === 2) {
+            const [result, args] = typeArguments.map((argument) => argument.getText(source));
+            edits.push({ start: typeArguments.pos, end: typeArguments.end, text: `(...args: ${args}) => ${result}` });
+        }
+        ts.forEachChild(node, visit);
+    };
+    visit(source);
+    for (const edit of edits.sort((a, b) => b.start - a.start)) {
+        code = code.slice(0, edit.start) + edit.text + code.slice(edit.end);
+    }
+    return code;
 }
 
 /**
