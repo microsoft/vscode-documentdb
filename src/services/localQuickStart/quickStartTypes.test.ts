@@ -3,6 +3,8 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+import { describe, expect, it } from 'vitest';
+
 import { QUICK_START_IMAGE, QUICK_START_IMAGE_REPOSITORY, resolveQuickStartImage } from './quickStartTypes';
 
 describe('resolveQuickStartImage (Advanced image-tag override, P1-4)', () => {

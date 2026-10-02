@@ -3,26 +3,28 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+import { beforeEach, describe, expect, it, vi, type Mock } from 'vitest';
+
 import { ClustersClient } from '../../../../documentdb/ClustersClient';
 import { CredentialCache } from '../../../../documentdb/CredentialCache';
 import { ext } from '../../../../extensionVariables';
 import { DocumentDbCollectionIndexCopier } from './DocumentDbCollectionIndexCopier';
 
-jest.mock('../../../../documentdb/ClustersClient', () => ({
-    ClustersClient: { getClient: jest.fn() },
+vi.mock('../../../../documentdb/ClustersClient', () => ({
+    ClustersClient: { getClient: vi.fn() },
 }));
 
-jest.mock('../../../../documentdb/CredentialCache', () => ({
-    CredentialCache: { hasCredentials: jest.fn() },
+vi.mock('../../../../documentdb/CredentialCache', () => ({
+    CredentialCache: { hasCredentials: vi.fn() },
 }));
 
-jest.mock('../../../../extensionVariables', () => ({
+vi.mock('../../../../extensionVariables', () => ({
     ext: {
-        outputChannel: { trace: jest.fn(), debug: jest.fn(), error: jest.fn(), warn: jest.fn() },
+        outputChannel: { trace: vi.fn(), debug: vi.fn(), error: vi.fn(), warn: vi.fn() },
     },
 }));
 
-jest.mock('vscode', () => ({
+vi.mock('vscode', () => ({
     l10n: {
         t: (message: string, ...args: string[]): string =>
             args.reduce((result, value, index) => result.replace(`{${index}}`, value), message),
@@ -45,15 +47,11 @@ interface MockIndex {
     cosmosSearchOptions?: Record<string, unknown>;
 }
 
-function createClient(
-    indexes: MockIndex[],
-    createIndex: jest.Mock = jest.fn(),
-    hideIndex: jest.Mock = jest.fn(),
-): ClustersClient {
+function createClient(indexes: MockIndex[], createIndex: Mock = vi.fn(), hideIndex: Mock = vi.fn()): ClustersClient {
     return {
-        listCollections: jest.fn().mockResolvedValue([{ name: source.collectionName }]),
-        getCollection: jest.fn().mockReturnValue({
-            indexes: jest.fn().mockResolvedValue(indexes),
+        listCollections: vi.fn().mockResolvedValue([{ name: source.collectionName }]),
+        getCollection: vi.fn().mockReturnValue({
+            indexes: vi.fn().mockResolvedValue(indexes),
         }),
         createIndex,
         hideIndex,
@@ -67,7 +65,7 @@ function createCopier(
     sourceClient: ClustersClient,
     targetClient: ClustersClient = createClient([]),
 ): DocumentDbCollectionIndexCopier {
-    jest.mocked(ClustersClient.getClient).mockImplementation(async (clusterId) =>
+    vi.mocked(ClustersClient.getClient).mockImplementation(async (clusterId) =>
         clusterId === source.clusterId ? sourceClient : targetClient,
     );
     return new DocumentDbCollectionIndexCopier(source, target);
@@ -75,15 +73,15 @@ function createCopier(
 
 describe('DocumentDbCollectionIndexCopier', () => {
     beforeEach(() => {
-        jest.clearAllMocks();
-        jest.mocked(CredentialCache.hasCredentials).mockReturnValue(true);
+        vi.clearAllMocks();
+        vi.mocked(CredentialCache.hasCredentials).mockReturnValue(true);
     });
 
     it('rejects a disconnected source before connecting to either endpoint', async () => {
         const sourceClient = createClient([]);
         const targetClient = createClient([]);
         const copier = createCopier(sourceClient, targetClient);
-        jest.mocked(CredentialCache.hasCredentials).mockReturnValue(false);
+        vi.mocked(CredentialCache.hasCredentials).mockReturnValue(false);
 
         await expect(copier.copyIndexes()).rejects.toMatchObject({
             name: 'SourceConnectionUnavailableError',
@@ -100,7 +98,7 @@ describe('DocumentDbCollectionIndexCopier', () => {
         const targetClient = createClient([]);
         const copier = createCopier(sourceClient, targetClient);
         await copier.getSourceIndexSummary();
-        jest.mocked(sourceClient.listCollections).mockResolvedValue([]);
+        vi.mocked(sourceClient.listCollections).mockResolvedValue([]);
         const signal = new AbortController().signal;
 
         await expect(copier.copyIndexes({ signal })).rejects.toMatchObject({
@@ -121,7 +119,7 @@ describe('DocumentDbCollectionIndexCopier', () => {
         const targetClient = createClient([]);
         const copier = createCopier(sourceClient, targetClient);
         const failure = new Error('Source access denied');
-        jest.mocked(sourceClient.listCollections).mockRejectedValue(failure);
+        vi.mocked(sourceClient.listCollections).mockRejectedValue(failure);
 
         await expect(copier.copyIndexes()).rejects.toBe(failure);
 
@@ -136,7 +134,7 @@ describe('DocumentDbCollectionIndexCopier', () => {
         const targetClient = createClient([]);
         const copier = createCopier(sourceClient, targetClient);
         const validationStarted = new Promise<void>((resolve) => {
-            jest.mocked(sourceClient.listCollections).mockImplementation(() => {
+            vi.mocked(sourceClient.listCollections).mockImplementation(() => {
                 resolve();
                 return new Promise(() => undefined);
             });
@@ -162,13 +160,13 @@ describe('DocumentDbCollectionIndexCopier', () => {
     });
 
     it('counts all source indexes and summarizes copyable document-affecting options', async () => {
-        const indexes = jest.fn().mockResolvedValue([
+        const indexes = vi.fn().mockResolvedValue([
             { key: { _id: 1 }, name: '_id_' },
             { key: { email: 1 }, name: 'email_1', unique: true },
             { key: { expiresAt: 1 }, name: 'expiresAt_1', expireAfterSeconds: 0 },
         ]);
         const sourceClient = {
-            getCollection: jest.fn().mockReturnValue({ indexes }),
+            getCollection: vi.fn().mockReturnValue({ indexes }),
         } as unknown as ClustersClient;
         const copier = createCopier(sourceClient);
         const signal = new AbortController().signal;
@@ -211,9 +209,9 @@ describe('DocumentDbCollectionIndexCopier', () => {
 
     it('stops waiting for source indexes when counting is cancelled', async () => {
         const controller = new AbortController();
-        const indexes = jest.fn().mockReturnValue(new Promise(() => undefined));
+        const indexes = vi.fn().mockReturnValue(new Promise(() => undefined));
         const sourceClient = {
-            getCollection: jest.fn().mockReturnValue({ indexes }),
+            getCollection: vi.fn().mockReturnValue({ indexes }),
         } as unknown as ClustersClient;
         const copier = createCopier(sourceClient);
         const countPromise = copier.getSourceIndexSummary({ signal: controller.signal });
@@ -225,7 +223,7 @@ describe('DocumentDbCollectionIndexCopier', () => {
 
     it.each(['source', 'target'] as const)('stops waiting for %s indexes when copying is cancelled', async (side) => {
         const controller = new AbortController();
-        const pendingIndexes = jest.fn();
+        const pendingIndexes = vi.fn();
         const catalogReadStarted = new Promise<void>((resolve) => {
             pendingIndexes.mockImplementation(() => {
                 resolve();
@@ -233,8 +231,8 @@ describe('DocumentDbCollectionIndexCopier', () => {
             });
         });
         const pendingClient = {
-            listCollections: jest.fn().mockResolvedValue([{ name: source.collectionName }]),
-            getCollection: jest.fn().mockReturnValue({ indexes: pendingIndexes }),
+            listCollections: vi.fn().mockResolvedValue([{ name: source.collectionName }]),
+            getCollection: vi.fn().mockReturnValue({ indexes: pendingIndexes }),
         } as unknown as ClustersClient;
         const sourceClient = side === 'source' ? pendingClient : createClient([]);
         const targetClient = side === 'target' ? pendingClient : createClient([]);
@@ -253,8 +251,8 @@ describe('DocumentDbCollectionIndexCopier', () => {
     });
 
     it('skips equivalent definitions even when names differ', async () => {
-        const createIndex = jest.fn();
-        const onProgress = jest.fn();
+        const createIndex = vi.fn();
+        const onProgress = vi.fn();
         const copier = createCopier(
             createClient([{ key: { email: 1 }, name: 'source_name', v: 2, unique: true }]),
             createClient([{ key: { email: 1 }, name: 'target_name', v: 1, unique: true }], createIndex),
@@ -275,8 +273,8 @@ describe('DocumentDbCollectionIndexCopier', () => {
     });
 
     it('preserves the name and options when no collision exists', async () => {
-        const createIndex = jest.fn().mockResolvedValue({ ok: 1 });
-        const onStart = jest.fn();
+        const createIndex = vi.fn().mockResolvedValue({ ok: 1 });
+        const onStart = vi.fn();
         const copier = createCopier(
             createClient([{ key: { email: 1 }, name: 'email_1', v: 2, unique: true }]),
             createClient([], createIndex),
@@ -302,9 +300,9 @@ describe('DocumentDbCollectionIndexCopier', () => {
     });
 
     it('copies selected indexes in source catalog order', async () => {
-        const createIndex = jest.fn().mockResolvedValue({ ok: 1 });
-        const onStart = jest.fn();
-        const onProgress = jest.fn();
+        const createIndex = vi.fn().mockResolvedValue({ ok: 1 });
+        const onStart = vi.fn();
+        const onProgress = vi.fn();
         const copier = createCopier(
             createClient([
                 { key: { _id: 1 }, name: '_id_' },
@@ -332,10 +330,10 @@ describe('DocumentDbCollectionIndexCopier', () => {
     });
 
     it('rejects the built-in _id index and unresolved names before reading the target catalog', async () => {
-        const targetIndexes = jest.fn().mockResolvedValue([]);
+        const targetIndexes = vi.fn().mockResolvedValue([]);
         const targetClient = {
-            getCollection: jest.fn().mockReturnValue({ indexes: targetIndexes }),
-            createIndex: jest.fn(),
+            getCollection: vi.fn().mockReturnValue({ indexes: targetIndexes }),
+            createIndex: vi.fn(),
         } as unknown as ClustersClient;
         const copier = createCopier(createClient([{ key: { _id: 1 }, name: '_id_' }]), targetClient);
 
@@ -356,7 +354,7 @@ describe('DocumentDbCollectionIndexCopier', () => {
     });
 
     it('compares selected indexes against the whole target catalog excluding _id', async () => {
-        const createIndex = jest.fn();
+        const createIndex = vi.fn();
         const copier = createCopier(
             createClient([
                 { key: { email: 1 }, name: 'email_1' },
@@ -382,7 +380,7 @@ describe('DocumentDbCollectionIndexCopier', () => {
     });
 
     it('preserves DocumentDB-specific options when creating a vector index', async () => {
-        const createIndex = jest.fn().mockResolvedValue({ ok: 1 });
+        const createIndex = vi.fn().mockResolvedValue({ ok: 1 });
         const cosmosSearchOptions = {
             kind: 'vector-hnsw',
             m: 16,
@@ -412,7 +410,7 @@ describe('DocumentDbCollectionIndexCopier', () => {
     });
 
     it('requests background creation even when the source reports foreground creation', async () => {
-        const createIndex = jest.fn().mockResolvedValue({ ok: 1 });
+        const createIndex = vi.fn().mockResolvedValue({ ok: 1 });
         const copier = createCopier(
             createClient([{ key: { email: 1 }, name: 'email_1', background: false }]),
             createClient([], createIndex),
@@ -429,11 +427,11 @@ describe('DocumentDbCollectionIndexCopier', () => {
 
     it('creates a hidden index before hiding it', async () => {
         const calls: string[] = [];
-        const createIndex = jest.fn().mockImplementation(async () => {
+        const createIndex = vi.fn().mockImplementation(async () => {
             calls.push('create');
             return { ok: 1 };
         });
-        const hideIndex = jest.fn().mockImplementation(async () => {
+        const hideIndex = vi.fn().mockImplementation(async () => {
             calls.push('hide');
             return { ok: 1 };
         });
@@ -454,8 +452,8 @@ describe('DocumentDbCollectionIndexCopier', () => {
     });
 
     it('skips an equivalent target index without changing its visibility', async () => {
-        const createIndex = jest.fn();
-        const hideIndex = jest.fn();
+        const createIndex = vi.fn();
+        const hideIndex = vi.fn();
         const copier = createCopier(
             createClient([{ key: { addedAt: -1 }, name: 'source_name', hidden: true }]),
             createClient([{ key: { addedAt: -1 }, name: 'target_name' }], createIndex, hideIndex),
@@ -473,8 +471,8 @@ describe('DocumentDbCollectionIndexCopier', () => {
             createClient([{ key: { addedAt: -1 }, name: 'addedAt_-1', hidden: true }]),
             createClient(
                 [],
-                jest.fn().mockResolvedValue({ ok: 1 }),
-                jest.fn().mockResolvedValue({ ok: 0, errmsg: 'hide failed' }),
+                vi.fn().mockResolvedValue({ ok: 1 }),
+                vi.fn().mockResolvedValue({ ok: 0, errmsg: 'hide failed' }),
             ),
         );
 
@@ -485,7 +483,7 @@ describe('DocumentDbCollectionIndexCopier', () => {
     });
 
     it('adds a suffix when an index name collides with a different definition', async () => {
-        const createIndex = jest.fn().mockResolvedValue({ ok: 1 });
+        const createIndex = vi.fn().mockResolvedValue({ ok: 1 });
         const copier = createCopier(
             createClient([{ key: { email: 1 }, name: 'shared' }]),
             createClient(
@@ -509,8 +507,8 @@ describe('DocumentDbCollectionIndexCopier', () => {
     });
 
     it('skips a same-key options conflict instead of creating a renamed duplicate', async () => {
-        const createIndex = jest.fn();
-        const onProgress = jest.fn();
+        const createIndex = vi.fn();
+        const onProgress = vi.fn();
         const copier = createCopier(
             createClient([{ key: { createdAt: 1 }, name: 'createdAt_1', expireAfterSeconds: 3600 }]),
             createClient([{ key: { createdAt: 1 }, name: 'createdAt_1', expireAfterSeconds: 2592000 }], createIndex),
@@ -529,10 +527,10 @@ describe('DocumentDbCollectionIndexCopier', () => {
     });
 
     it('rejects document-affecting indexes by default before reading the target catalog', async () => {
-        const targetIndexes = jest.fn().mockResolvedValue([]);
+        const targetIndexes = vi.fn().mockResolvedValue([]);
         const targetClient = {
-            getCollection: jest.fn().mockReturnValue({ indexes: targetIndexes }),
-            createIndex: jest.fn(),
+            getCollection: vi.fn().mockReturnValue({ indexes: targetIndexes }),
+            createIndex: vi.fn(),
         } as unknown as ClustersClient;
         const copier = createCopier(
             createClient([
@@ -550,7 +548,7 @@ describe('DocumentDbCollectionIndexCopier', () => {
     });
 
     it('allows the dedicated flow to copy TTL and unique indexes', async () => {
-        const createIndex = jest.fn().mockResolvedValue({ ok: 1 });
+        const createIndex = vi.fn().mockResolvedValue({ ok: 1 });
         const copier = createCopier(
             createClient([
                 { key: { email: 1 }, name: 'email_1', unique: true },
@@ -567,7 +565,7 @@ describe('DocumentDbCollectionIndexCopier', () => {
     });
 
     it('allows non-document-affecting options without an explicit opt-in', async () => {
-        const createIndex = jest.fn().mockResolvedValue({ ok: 1 });
+        const createIndex = vi.fn().mockResolvedValue({ ok: 1 });
         const copier = createCopier(
             createClient([
                 {
@@ -594,7 +592,7 @@ describe('DocumentDbCollectionIndexCopier', () => {
     });
 
     it('ignores server-generated options when comparing definitions', async () => {
-        const createIndex = jest.fn();
+        const createIndex = vi.fn();
         const copier = createCopier(
             createClient([{ key: { title: 'text' }, name: 'title_text', textIndexVersion: 3, weights: { title: 1 } }]),
             createClient(
@@ -614,7 +612,7 @@ describe('DocumentDbCollectionIndexCopier', () => {
     it('propagates index creation failures', async () => {
         const copier = createCopier(
             createClient([{ key: { email: 1 }, name: 'email_1' }]),
-            createClient([], jest.fn().mockResolvedValue({ ok: 0, note: 'creation failed' })),
+            createClient([], vi.fn().mockResolvedValue({ ok: 0, note: 'creation failed' })),
         );
 
         await expect(copier.copyIndexes({ sourceIndexNames: ['email_1'] })).rejects.toThrow(
@@ -626,7 +624,7 @@ describe('DocumentDbCollectionIndexCopier', () => {
     it('logs a successful createIndexes note without treating it as a failure', async () => {
         const copier = createCopier(
             createClient([{ key: { email: 1 }, name: 'email_1' }]),
-            createClient([], jest.fn().mockResolvedValue({ ok: 1, note: 'all indexes already exist' })),
+            createClient([], vi.fn().mockResolvedValue({ ok: 1, note: 'all indexes already exist' })),
         );
 
         await expect(copier.copyIndexes()).resolves.toMatchObject({ createdCount: 1 });
@@ -634,7 +632,7 @@ describe('DocumentDbCollectionIndexCopier', () => {
     });
 
     it('preserves the generated fallback name when selecting an unnamed ordinary index', async () => {
-        const createIndex = jest.fn().mockResolvedValue({ ok: 1 });
+        const createIndex = vi.fn().mockResolvedValue({ ok: 1 });
         const copier = createCopier(createClient([{ key: { email: 1, region: -1 } }]), createClient([], createIndex));
 
         await copier.copyIndexes({ sourceIndexNames: ['email_1_region_-1'] });
@@ -648,8 +646,8 @@ describe('DocumentDbCollectionIndexCopier', () => {
 
     it('stops after the current index when cancelled', async () => {
         const controller = new AbortController();
-        const onProgress = jest.fn();
-        const createIndex = jest.fn().mockImplementation(async () => {
+        const onProgress = vi.fn();
+        const createIndex = vi.fn().mockImplementation(async () => {
             controller.abort();
             return { ok: 1 };
         });

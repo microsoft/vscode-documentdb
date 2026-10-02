@@ -3,28 +3,30 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
 import { type IActionContext } from '@microsoft/vscode-azext-utils';
 import { type DocumentDetails, type DocumentReaderOptions } from '../types';
 import { BaseDocumentReader } from './BaseDocumentReader';
 
 // Mock extensionVariables (ext) module
-jest.mock('../../../../extensionVariables', () => ({
+vi.mock('../../../../extensionVariables', () => ({
     ext: {
         outputChannel: {
-            appendLine: jest.fn(),
-            error: jest.fn(),
-            warn: jest.fn(),
-            debug: jest.fn(),
-            trace: jest.fn(),
-            appendLog: jest.fn(),
-            show: jest.fn(),
-            info: jest.fn(),
+            appendLine: vi.fn(),
+            error: vi.fn(),
+            warn: vi.fn(),
+            debug: vi.fn(),
+            trace: vi.fn(),
+            appendLog: vi.fn(),
+            show: vi.fn(),
+            info: vi.fn(),
         },
     },
 }));
 
 // Mock vscode module
-jest.mock('vscode', () => ({
+vi.mock('vscode', () => ({
     l10n: {
         t: (key: string, ...args: unknown[]): string => {
             // Simple replacement: replace {0}, {1}, etc. with the arguments
@@ -155,7 +157,7 @@ describe('BaseDocumentReader', () => {
     beforeEach(() => {
         reader = new MockDocumentReader('testdb', 'testcollection');
         reader.clearErrorConfig();
-        jest.clearAllMocks();
+        vi.clearAllMocks();
     });
 
     // ==================== 1. Core Read Operations ====================
@@ -216,11 +218,11 @@ describe('BaseDocumentReader', () => {
     describe('streamDocuments - Keep-Alive', () => {
         // Use fake timers for keep-alive tests (modern timers mock Date.now())
         beforeEach(() => {
-            jest.useFakeTimers({ now: new Date('2024-01-01T00:00:00Z') });
+            vi.useFakeTimers({ now: new Date('2024-01-01T00:00:00Z') });
         });
 
         afterEach(() => {
-            jest.useRealTimers();
+            vi.useRealTimers();
         });
 
         it('should stream with keep-alive enabled (fast consumer)', async () => {
@@ -242,7 +244,7 @@ describe('BaseDocumentReader', () => {
             })();
 
             // Advance timers to allow keep-alive timer to run
-            jest.advanceTimersByTime(100);
+            vi.advanceTimersByTime(100);
             await Promise.resolve(); // Let microtasks execute
 
             await streamPromise;
@@ -273,7 +275,7 @@ describe('BaseDocumentReader', () => {
                 result.push(next.value);
 
                 // Simulate slow consumer - advance timers to trigger keep-alive
-                jest.advanceTimersByTime(150);
+                vi.advanceTimersByTime(150);
                 await Promise.resolve(); // Let microtasks execute
 
                 next = await iterator.next();
@@ -308,7 +310,7 @@ describe('BaseDocumentReader', () => {
                     if (readCount === 5) {
                         // Advance timers to trigger multiple keep-alive reads
                         for (let i = 0; i < 5; i++) {
-                            jest.advanceTimersByTime(50);
+                            vi.advanceTimersByTime(50);
                             await Promise.resolve();
                         }
                     }
@@ -346,7 +348,7 @@ describe('BaseDocumentReader', () => {
                 }
 
                 // Advance past the timeout period and run all pending timers
-                await jest.advanceTimersByTimeAsync(600);
+                await vi.advanceTimersByTimeAsync(600);
 
                 // Try to read next document - should throw timeout error
                 next = await iterator.next();
@@ -386,7 +388,7 @@ describe('BaseDocumentReader', () => {
                         abortController.abort();
                     }
 
-                    jest.advanceTimersByTime(10);
+                    vi.advanceTimersByTime(10);
                     await Promise.resolve();
                 }
             })();
@@ -424,7 +426,7 @@ describe('BaseDocumentReader', () => {
                 result.push(next.value);
 
                 // Slow consumer to trigger keep-alive
-                await jest.advanceTimersByTimeAsync(100);
+                await vi.advanceTimersByTimeAsync(100);
 
                 next = await iterator.next();
             }
@@ -497,7 +499,7 @@ describe('BaseDocumentReader', () => {
 
     describe('Integration Scenarios', () => {
         it('should handle large document stream with keep-alive', async () => {
-            jest.useFakeTimers({ now: new Date('2024-01-01T00:00:00Z') });
+            vi.useFakeTimers({ now: new Date('2024-01-01T00:00:00Z') });
 
             const documents = createDocuments(1000);
             reader.seedDocuments(documents);
@@ -515,7 +517,7 @@ describe('BaseDocumentReader', () => {
 
                     // Simulate variable processing speed
                     if (result.length % 10 === 0) {
-                        jest.advanceTimersByTime(60);
+                        vi.advanceTimersByTime(60);
                         await Promise.resolve();
                     }
                 }
@@ -530,7 +532,7 @@ describe('BaseDocumentReader', () => {
             const keepAliveReadCount = options.actionContext?.telemetry.measurements.keepAliveReadCount ?? 0;
             expect(keepAliveReadCount).toBeGreaterThanOrEqual(0);
 
-            jest.useRealTimers();
+            vi.useRealTimers();
         });
 
         it('should handle early termination with partial read', async () => {
