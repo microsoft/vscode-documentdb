@@ -737,7 +737,7 @@ plugin in a real editor; Kubernetes, Atlas and Azure discovery against real back
       orchestrator's temporary PR-head checkout decision above; the successful rerun is
       recorded below. No Stage 2 work, stage review file or PR readiness
       change is part of this agent's task.
-  - **Stage 1 completed after the checkout fix:** `gh run watch --exit-status` returned 0 for
+  - **Successful CI recovery after the checkout fix:** `gh run watch --exit-status` returned 0 for
     [37010184351](https://github.com/microsoft/vscode-documentdb/actions/runs/37010184351),
     reported head `84aacaf7c725e99f96e4895173f1d7ab1a08f0fe`. Code Quality & Tests,
     Build & Package, L1 and L3 all passed. Full CI Jest passed **295 suites / 4,582 tests**;
@@ -756,6 +756,24 @@ plugin in a real editor; Kubernetes, Atlas and Azure discovery against real back
       `main`'s lockfile. This is Case 1 plus the stage checks; full Case 2, including
       `prettier-fix`, stays deferred until ready for review. No `TDD:` changes, additional
       dependencies, stage review file, localization generation or PR readiness change was made.
+  - **Final documentation-head confirmation blocked (2026-10-02 14:38 UTC):** proof-record
+    commit `b08aa1c7` was normally pushed after changed-file Prettier and lint passed.
+    [37011967057](https://github.com/microsoft/vscode-documentdb/actions/runs/37011967057)
+    targets that exact pushed head, `b08aa1c732713df32a5ebe91a027a0ed4c5b4352`.
+    Attempt 1 passed Code Quality & Tests and Build & Package, but its queued L1/L3 jobs
+    were cancelled; the run was then restarted as attempt 2. The agent neither cancelled nor
+    requested that rerun. At the latest direct API check, attempt 2's Code Quality & Tests job
+    remained queued with no assigned runner. Two local `gh run watch` processes terminated with
+    exit 143; this is not evidence of a failed artifact check.
+    - **STOPPED pending CI execution:** the source fix and all six proofs are verified on
+      `84aacaf7` above, but the final pushed documentation head's L1/L3 proofs are not yet
+      available and are not claimed. No check, baseline or tolerance was changed to avoid the
+      queue. All implementation/local verification tasks are complete; final-head CI confirmation
+      remains blocked. The orchestrator must wait for or resolve runner availability and confirm
+      attempt 2's L1/L3 proof lines before treating final-head verification as complete.
+    - This documentation-only queue/blocker record is committed locally, not pushed, to avoid
+      replacing the already-queued head with another documentation-only run. The remote head
+      remains `b08aa1c7`; no Stage 2 work or PR readiness change was made by this agent.
 - **Operator gate G1:** review the dependency and CI diff. No manual UI check is needed. Reviewed
   at the combined checkpoint G1-3 after Stage 3.
 
