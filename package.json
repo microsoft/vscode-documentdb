@@ -144,7 +144,6 @@
     "style-loader": "~4.0.0",
     "swc-loader": "~0.2.7",
     "terser-webpack-plugin": "~5.4.0",
-    "ts-node": "~10.9.2",
     "tsx": "~4.23.15",
     "typescript": "~5.9.3",
     "typescript-eslint": "~8.57.0",

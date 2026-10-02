@@ -6,8 +6,5 @@
         "rootDir": "../../.."
     },
     "include": ["./**/*.ts", "./**/*.d.cts"],
-    "ts-node": {
-        "files": true
-    },
     "exclude": []
 }
