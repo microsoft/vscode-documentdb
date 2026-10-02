@@ -166,6 +166,43 @@ browser at each gate; automated in CI only in the E2E iteration.
   gotchas apply: set no viewport before screenshots, and only answer tRPC paths you have a real
   payload for.
 
+**L2-dev: the scenario page (built in Stage 4, from parked PR #867).** L2 is a release gate: one
+settled state per view, from the packaged VSIX, minutes per run. PR #867 showed the other half that
+agents need while developing: any state of a panel, in seconds, with no host, backend or Docker. The
+two share one core and differ only in what they load:
+
+|         | L2 (gate)                                 | L2-dev (development loop)                   |
+| ------- | ----------------------------------------- | ------------------------------------------- |
+| Loads   | `dist/` extracted from the VSIX, real CSP | Webview sources from the Vite dev server    |
+| States  | One settled state per view                | Many named scenarios per view, three themes |
+| Used by | Gates and the release                     | Agents and reviewers while iterating        |
+
+Learnings from #867 that shape both:
+
+- **One fixture core, typed.** #867's scenarios were untyped literals in its HTML and drifted from
+  the router while still passing (`willReuse` vs `canReuseExistingData`; missing `suggestedPort`,
+  `checkPort`, `onInstanceChanged`). L2's fixtures are typed against `AppRouter` and an unknown
+  procedure is an error. L2-dev reuses that core; it does not get its own copy.
+- **Escaping actions are recorded, not performed.** #867 logged `common.openUrl`,
+  `copyConnectionString` and `openConnection` on `window.__harnessCalls`, which is how "the Windows
+  install button opens the Docker Desktop page" became assertable. The shared core records every
+  call this way in both modes.
+- **Wait for an explicit ready signal**, never `load` or `networkidle`. #867 hung on `load` and
+  added `__harnessReady`; L2 hit the same failure and waits for settled content.
+- **Address scenarios by path, not query string**: `/<view>/<scenario>/<theme>`. #867 used
+  `?scenario=&theme=`, and the remote port forward used here mangles query strings.
+- **Stale bundles disappear with the Vite dev server.** #867's "number one time waster" was a stale
+  `dist/views.js` from an in-memory `webpack serve`. Do not port its `writeToDisk` patch.
+- **Screenshots are artifacts, never baselines.** Text is rendered by the OS; baselines need one
+  container image. Settled in #867 and in both reference projects.
+- **Prove it can fail.** #867's one falsifiable claim was a mutation test: revert a known webview
+  fix and expect exactly its assertions to fail. On this branch that fix is `457b913e` (Local Quick
+  Start sends Windows and macOS users to Docker Desktop).
+
+L2-dev adds no new test runner and no `@playwright/test` dependency in this iteration: agents drive
+it with the integrated browser tools. Wiring its assertions into CI (Vitest browser mode, option B)
+is an E2E-iteration decision; see [e2e-testing-strategy.md](./e2e-testing-strategy.md) §4.
+
 **L3: installed-VSIX activation check.** Runs on GitHub Actions only, because it downloads VS Code,
 which an isolated ADO build may block ([pipelines-readme.md](./pipelines-readme.md)). Locally it
 needs a display; this dev machine has no Xvfb, so the operator installs it once.
@@ -676,12 +713,32 @@ plugin in a real editor; Kubernetes, Atlas and Azure discovery against real back
     inline-CSS plugin injects differently.
   - The Vite views build does not use `BundleReportPlugin`, which ends the Stage 0 `watch:views`
     limitation.
+  - **Build L2-dev after the flip**, once L2 passes on the Vite build, so it cannot delay the gate
+    (see L2-dev under the automated checks):
+    - extract the fake `acquireVsCodeApi`, the tRPC answering and the call log from
+      `build/verification/browser/runtime.ts` and `fixtures.ts` into one core that both L2 and
+      L2-dev import. L2 must still pass unchanged afterwards;
+    - scenarios are typed data (`as const satisfies` against the router's inferred outputs), kept
+      beside L2's fixtures. Start with the five L2 states plus #867's Local Quick Start set
+      (`introduction`, `configure`, `provisioning`, `success`, `failed-port-in-use`,
+      `failed-timeout`, `docker-missing-windows`, `docker-missing-mac`, `docker-missing-linux`),
+      retyped against today's router rather than copied;
+    - a dev-server route `/<view>/<scenario>/<theme>` with dark, light and high-contrast theme
+      variables, and a `data-ready` signal per scenario;
+    - any `console.error`, `pageerror` or unknown tRPC path fails the page;
+    - mutation proof: with `457b913e`'s webview change reverted, exactly the Docker Desktop link
+      assertions for `docker-missing-windows` and `docker-missing-mac` fail;
+    - document it where agents look: a short note in `.github/copilot-instructions.md` and an
+      update of [live-preview-playwright.md](../live-preview-playwright.md), which describes the
+      older hand-made page technique.
 - **Automated verification:** L1, now enforcing the per-view graph assertions and recording sizes;
   **L2 is the main gate** (all five views settled on their fixtures, styled, CSP clean, no preload
   errors, worker round-trips complete); L3.
 - **Operator gate G4:** the manual checklist on the installed VSIX, plus: dark, light and
   high-contrast themes in all five webviews; Monaco editing and workers in the real
-  `vscode-webview://` origin; F5 plus watch give a working dev loop with HMR.
+  `vscode-webview://` origin; F5 plus watch give a working dev loop with HMR. Open three L2-dev
+  scenarios in the integrated browser to confirm the agent loop works. Decide whether to close
+  PR #867 with credit to its author, now that its goal is covered.
 
 ### Stage 5: extension host to ESM and Vite
 
@@ -768,7 +825,8 @@ plugin in a real editor; Kubernetes, Atlas and Azure discovery against real back
 ### Stage 7: hand-over to the E2E iteration
 
 - **Models:** **Claude Sonnet 5.5** to write the hand-over.
-- **What the E2E iteration inherits:** the L2 harness (to run headless in CI), L3 (to extend into
+- **What the E2E iteration inherits:** the L2 harness (to run headless in CI), L2-dev and its typed
+  scenarios (to wire their assertions into CI, screenshots as artifacts only), L3 (to extend into
   Extension Host integration tests), the L4 spike notes (B3), and two candidate specs from Cosmos DB
   production fixes: proxy routing through VS Code (#3367) and the URI handler activation race
   (#3288). Its starting point is [e2e-testing-strategy.md](./e2e-testing-strategy.md).
