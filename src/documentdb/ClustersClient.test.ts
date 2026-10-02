@@ -3,6 +3,8 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
 import { type IActionContext, type ITelemetryContext, UserCancelledError } from '@microsoft/vscode-azext-utils';
 import type * as Mongodb from 'mongodb';
 import { MongoClient } from 'mongodb';
@@ -23,8 +25,8 @@ interface RecordedTelemetry {
 
 const mockTelemetryEvents: RecordedTelemetry[] = [];
 
-jest.mock('@microsoft/vscode-azext-utils', () => {
-    const actual = jest.requireActual<{ UserCancelledError: typeof UserCancelledError }>(
+vi.mock('@microsoft/vscode-azext-utils', async () => {
+    const actual = await vi.importActual<{ UserCancelledError: typeof UserCancelledError }>(
         '@microsoft/vscode-azext-utils',
     );
     return {
@@ -32,7 +34,7 @@ jest.mock('@microsoft/vscode-azext-utils', () => {
         parseError: (error: unknown): { message: string } => ({
             message: error instanceof Error ? error.message : String(error),
         }),
-        callWithTelemetryAndErrorHandling: jest.fn(
+        callWithTelemetryAndErrorHandling: vi.fn(
             async (eventName: string, callback: (context: IActionContext) => Promise<unknown>): Promise<unknown> => {
                 const context = {
                     telemetry: { properties: {}, measurements: {} },
@@ -65,22 +67,22 @@ jest.mock('@microsoft/vscode-azext-utils', () => {
     };
 });
 
-jest.mock('mongodb', () => {
-    const actual = jest.requireActual<typeof Mongodb>('mongodb');
-    return { ...actual, MongoClient: jest.fn() };
+vi.mock('mongodb', async () => {
+    const actual = await vi.importActual<typeof Mongodb>('mongodb');
+    return { ...actual, MongoClient: vi.fn() };
 });
 
-jest.mock('../extensionVariables', () => ({
-    ext: { outputChannel: { trace: jest.fn(), error: jest.fn(), debug: jest.fn() } },
+vi.mock('../extensionVariables', () => ({
+    ext: { outputChannel: { trace: vi.fn(), error: vi.fn(), debug: vi.fn() } },
 }));
 
-jest.mock('./utils/getClusterMetadata', () => ({
-    getClusterMetadata: jest.fn().mockResolvedValue({}),
-    getDomainMetadata: jest.fn().mockReturnValue({}),
+vi.mock('./utils/getClusterMetadata', () => ({
+    getClusterMetadata: vi.fn().mockResolvedValue({}),
+    getDomainMetadata: vi.fn().mockReturnValue({}),
 }));
 
-jest.mock('./LlmEnhancedFeatureApis', () => ({ llmEnhancedFeatureApis: jest.fn() }));
-jest.mock('./client/QueryInsightsApis', () => ({ QueryInsightsApis: jest.fn() }));
+vi.mock('./LlmEnhancedFeatureApis', () => ({ llmEnhancedFeatureApis: vi.fn() }));
+vi.mock('./client/QueryInsightsApis', () => ({ QueryInsightsApis: vi.fn() }));
 
 describe('ClustersClient', () => {
     it('should be defined', () => {
@@ -90,30 +92,30 @@ describe('ClustersClient', () => {
 
 describe('regular connection startup diagnostics', () => {
     const clusterId = 'private-cluster';
-    const mockConnect = jest.fn();
-    const mockClose = jest.fn();
+    const mockConnect = vi.fn();
+    const mockClose = vi.fn();
 
     beforeEach(() => {
-        jest.clearAllMocks();
-        jest.useFakeTimers();
+        vi.clearAllMocks();
+        vi.useFakeTimers();
         mockTelemetryEvents.length = 0;
         ClustersClient._clients.clear();
         CredentialCache.setAuthCredentials(clusterId, AuthMethodId.MicrosoftEntraID, 'mongodb://private-host:27017');
         mockConnect.mockImplementation(async (): Promise<void> => {
-            jest.advanceTimersByTime(30);
+            vi.advanceTimersByTime(30);
         });
         mockClose.mockResolvedValue(undefined);
-        jest.mocked(MongoClient).mockImplementation(
-            () => ({ connect: mockConnect, close: mockClose }) as unknown as MongoClient,
-        );
+        vi.mocked(MongoClient).mockImplementation(function () {
+            return { connect: mockConnect, close: mockClose } as unknown as MongoClient;
+        });
         for (const handler of [
             MicrosoftEntraIDAuthHandler,
             ManagedIdentityAuthHandler,
             NativeAuthHandler,
             NoAuthHandler,
         ]) {
-            jest.spyOn(handler.prototype, 'configureAuth').mockImplementation(async () => {
-                jest.advanceTimersByTime(20);
+            vi.spyOn(handler.prototype, 'configureAuth').mockImplementation(async () => {
+                vi.advanceTimersByTime(20);
                 return { connectionString: 'mongodb://private-host:27017', options: {} };
             });
         }
@@ -122,8 +124,8 @@ describe('regular connection startup diagnostics', () => {
     afterEach(() => {
         CredentialCache.deleteCredentials(clusterId);
         ClustersClient._clients.clear();
-        jest.restoreAllMocks();
-        jest.useRealTimers();
+        vi.restoreAllMocks();
+        vi.useRealTimers();
     });
 
     function startupEvent(): RecordedTelemetry {
@@ -169,7 +171,7 @@ describe('regular connection startup diagnostics', () => {
         );
         expect(ext.outputChannel.error).not.toHaveBeenCalled();
         expect(JSON.stringify(startupEvent())).not.toContain('private-');
-        expect(jest.mocked(ext.outputChannel.trace).mock.calls.flat().join('\n')).not.toContain('private-');
+        expect(vi.mocked(ext.outputChannel.trace).mock.calls.flat().join('\n')).not.toContain('private-');
         expect(
             Object.keys(startupEvent().telemetry.measurements)
                 .filter((name) => name.startsWith('stage'))
@@ -185,13 +187,13 @@ describe('regular connection startup diagnostics', () => {
         await expect(ClustersClient.getClient(clusterId)).resolves.toBe(client);
         startupEvent();
         expect(ext.outputChannel.trace).toHaveBeenCalledTimes(1);
-        expect(jest.mocked(MongoClient)).toHaveBeenCalledTimes(1);
+        expect(vi.mocked(MongoClient)).toHaveBeenCalledTimes(1);
     });
 
     it('preserves auth failures and records their partial stage without private error data', async () => {
         const originalError = new Error('private-token private-account');
-        jest.mocked(MicrosoftEntraIDAuthHandler.prototype.configureAuth).mockImplementationOnce(async () => {
-            jest.advanceTimersByTime(15);
+        vi.mocked(MicrosoftEntraIDAuthHandler.prototype.configureAuth).mockImplementationOnce(async () => {
+            vi.advanceTimersByTime(15);
             throw originalError;
         });
 
@@ -206,13 +208,13 @@ describe('regular connection startup diagnostics', () => {
         expect(startupEvent().error).toMatchObject({ message: 'Connection startup failed', stack: undefined });
         expect(JSON.stringify(startupEvent())).not.toContain('private-');
         expect(ext.outputChannel.error).toHaveBeenCalledTimes(1);
-        expect(jest.mocked(MongoClient)).not.toHaveBeenCalled();
+        expect(vi.mocked(MongoClient)).not.toHaveBeenCalled();
     });
 
     it('bundles an early Entra provider wait without subtracting it from later database work', async () => {
-        jest.mocked(MicrosoftEntraIDAuthHandler.prototype.configureAuth).mockImplementationOnce(async (timings) => {
+        vi.mocked(MicrosoftEntraIDAuthHandler.prototype.configureAuth).mockImplementationOnce(async (timings) => {
             const stop = timings?.startTokenAcquire();
-            jest.advanceTimersByTime(20);
+            vi.advanceTimersByTime(20);
             stop?.();
             return { connectionString: 'mongodb://private-host:27017', options: {} };
         });
@@ -227,13 +229,13 @@ describe('regular connection startup diagnostics', () => {
 
     it('excludes a managed-identity provider wait during database connection', async () => {
         CredentialCache.setAuthCredentials(clusterId, AuthMethodId.ManagedIdentity, 'mongodb://private-host:27017');
-        jest.mocked(ManagedIdentityAuthHandler.prototype.configureAuth).mockImplementationOnce(async (timings) => {
+        vi.mocked(ManagedIdentityAuthHandler.prototype.configureAuth).mockImplementationOnce(async (timings) => {
             mockConnect.mockImplementationOnce(async (): Promise<void> => {
-                jest.advanceTimersByTime(10);
+                vi.advanceTimersByTime(10);
                 const stop = timings?.startTokenAcquire();
-                jest.advanceTimersByTime(20);
+                vi.advanceTimersByTime(20);
                 stop?.();
-                jest.advanceTimersByTime(10);
+                vi.advanceTimersByTime(10);
             });
             return { connectionString: 'mongodb://private-host:27017', options: {} };
         });
@@ -273,7 +275,7 @@ describe('regular connection startup diagnostics', () => {
     it('records cancellation during the driver handshake and retains cleanup', async () => {
         const controller = new AbortController();
         mockConnect.mockImplementationOnce(async (): Promise<void> => {
-            jest.advanceTimersByTime(25);
+            vi.advanceTimersByTime(25);
             controller.abort();
             throw new Error('private-driver-abort');
         });
@@ -300,7 +302,7 @@ describe('regular connection startup diagnostics', () => {
         expect(startupEvent().telemetry.properties.connectionCorrelationId).toEqual(expect.any(String));
         expect(startupEvent().telemetry.measurements.stage02ConfiguringAuthDurationMs).toBeUndefined();
         expect(JSON.stringify(startupEvent())).not.toContain('private-');
-        expect(jest.mocked(MongoClient)).not.toHaveBeenCalled();
+        expect(vi.mocked(MongoClient)).not.toHaveBeenCalled();
     });
 });
 

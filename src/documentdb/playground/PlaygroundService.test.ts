@@ -3,6 +3,8 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from 'vitest';
+
 import { PlaygroundService } from './PlaygroundService';
 import { type PlaygroundConnection } from './types';
 
@@ -11,11 +13,11 @@ import * as vscode from 'vscode';
 
 import { CredentialCache } from '../CredentialCache';
 
-jest.mock('../CredentialCache', () => ({
-    CredentialCache: { hasCredentials: jest.fn() },
+vi.mock('../CredentialCache', () => ({
+    CredentialCache: { hasCredentials: vi.fn() },
 }));
 
-const hasCredentialsMock = CredentialCache.hasCredentials as jest.Mock;
+const hasCredentialsMock = CredentialCache.hasCredentials as Mock;
 
 describe('PlaygroundService', () => {
     let service: PlaygroundService;
@@ -77,7 +79,7 @@ describe('PlaygroundService', () => {
         });
 
         it('fires onDidChangeState on setConnection', () => {
-            const listener = jest.fn();
+            const listener = vi.fn();
             service.onDidChangeState(listener);
             service.setConnection(mockUri, connection);
             expect(listener).toHaveBeenCalledTimes(1);
@@ -85,7 +87,7 @@ describe('PlaygroundService', () => {
 
         it('fires onDidChangeState on removeConnection', () => {
             service.setConnection(mockUri, connection);
-            const listener = jest.fn();
+            const listener = vi.fn();
             service.onDidChangeState(listener);
             service.removeConnection(mockUri);
             expect(listener).toHaveBeenCalledTimes(1);
@@ -145,7 +147,7 @@ describe('PlaygroundService', () => {
         });
 
         it('setExecuting tracks state per cluster and fires event', () => {
-            const listener = jest.fn();
+            const listener = vi.fn();
             service.onDidChangeState(listener);
             service.setExecuting('cluster-123', true);
             expect(service.isExecuting('cluster-123')).toBe(true);
@@ -190,7 +192,7 @@ describe('PlaygroundService', () => {
         };
 
         function getCloseDocHandler(): (doc: Partial<vscode.TextDocument>) => void {
-            const calls = (vscode.workspace.onDidCloseTextDocument as jest.Mock).mock.calls;
+            const calls = (vscode.workspace.onDidCloseTextDocument as Mock).mock.calls;
             // Find the callback registered by PlaygroundService
             const lastCall = calls[calls.length - 1];
             return lastCall[0] as (doc: Partial<vscode.TextDocument>) => void;
@@ -212,7 +214,7 @@ describe('PlaygroundService', () => {
 
         it('fires onDidChangeState when document is closed', () => {
             service.setConnection(mockUri, connection);
-            const listener = jest.fn();
+            const listener = vi.fn();
             service.onDidChangeState(listener);
 
             const handler = getCloseDocHandler();
@@ -245,7 +247,7 @@ describe('PlaygroundService', () => {
         };
 
         function getSaveDocHandler(): (doc: Partial<vscode.TextDocument>) => void {
-            const calls = (vscode.workspace.onDidSaveTextDocument as jest.Mock).mock.calls;
+            const calls = (vscode.workspace.onDidSaveTextDocument as Mock).mock.calls;
             return calls[calls.length - 1][0] as (doc: Partial<vscode.TextDocument>) => void;
         }
 
@@ -382,12 +384,12 @@ describe('PlaygroundService', () => {
         };
 
         function getCloseDocHandler(): (doc: Partial<vscode.TextDocument>) => void {
-            const calls = (vscode.workspace.onDidCloseTextDocument as jest.Mock).mock.calls;
+            const calls = (vscode.workspace.onDidCloseTextDocument as Mock).mock.calls;
             return calls[calls.length - 1][0] as (doc: Partial<vscode.TextDocument>) => void;
         }
 
         function getOpenDocHandler(): (doc: Partial<vscode.TextDocument>) => void {
-            const calls = (vscode.workspace.onDidOpenTextDocument as jest.Mock).mock.calls;
+            const calls = (vscode.workspace.onDidOpenTextDocument as Mock).mock.calls;
             return calls[calls.length - 1][0] as (doc: Partial<vscode.TextDocument>) => void;
         }
 
