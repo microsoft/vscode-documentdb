@@ -1,0 +1,11 @@
+{
+    "name": "documentdb-vsix-activation-probe",
+    "publisher": "documentdb-verification",
+    "version": "0.0.1",
+    "engines": {
+        "vscode": "^1.105.0"
+    },
+    "main": "./extension.cjs",
+    "activationEvents": [],
+    "extensionKind": ["workspace"]
+}

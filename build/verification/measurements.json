@@ -1,0 +1,510 @@
+{
+  "node": "v22.18.0",
+  "npm": "10.9.3",
+  "webpackSeconds": [
+    125.167343076,
+    122.616220843,
+    120.086719517
+  ],
+  "unitTestSeconds": [
+    61.783702462,
+    41.721494685,
+    43.030891544
+  ],
+  "unitTestMedianSeconds": 43.030891544,
+  "installedPackageCount": 1836,
+  "distFiles": [
+    {
+      "path": ".vscodeignore",
+      "bytes": 616
+    },
+    {
+      "path": "219.js",
+      "bytes": 29665
+    },
+    {
+      "path": "244.js",
+      "bytes": 1361873
+    },
+    {
+      "path": "269.js",
+      "bytes": 103951
+    },
+    {
+      "path": "307.js",
+      "bytes": 16886
+    },
+    {
+      "path": "326.js",
+      "bytes": 1199
+    },
+    {
+      "path": "333.js",
+      "bytes": 18493
+    },
+    {
+      "path": "404.js",
+      "bytes": 691
+    },
+    {
+      "path": "439.js",
+      "bytes": 2196
+    },
+    {
+      "path": "440.js",
+      "bytes": 9395
+    },
+    {
+      "path": "46.js",
+      "bytes": 126314
+    },
+    {
+      "path": "460.js",
+      "bytes": 4678
+    },
+    {
+      "path": "505.js",
+      "bytes": 630727
+    },
+    {
+      "path": "541.js",
+      "bytes": 1656
+    },
+    {
+      "path": "58.js",
+      "bytes": 4127748
+    },
+    {
+      "path": "582.js",
+      "bytes": 1922
+    },
+    {
+      "path": "618.js",
+      "bytes": 350777
+    },
+    {
+      "path": "664.js",
+      "bytes": 73271
+    },
+    {
+      "path": "712.js",
+      "bytes": 7378
+    },
+    {
+      "path": "744.js",
+      "bytes": 1588
+    },
+    {
+      "path": "756.js",
+      "bytes": 199357
+    },
+    {
+      "path": "774.js",
+      "bytes": 2809
+    },
+    {
+      "path": "797.js",
+      "bytes": 252299
+    },
+    {
+      "path": "797.js.LICENSE.txt",
+      "bytes": 88
+    },
+    {
+      "path": "857.js",
+      "bytes": 67177
+    },
+    {
+      "path": "888.js",
+      "bytes": 1956
+    },
+    {
+      "path": "915.js",
+      "bytes": 905
+    },
+    {
+      "path": "919.js",
+      "bytes": 2824
+    },
+    {
+      "path": "933.js",
+      "bytes": 117875
+    },
+    {
+      "path": "96.js",
+      "bytes": 53088
+    },
+    {
+      "path": "972.js",
+      "bytes": 15305
+    },
+    {
+      "path": "987.js",
+      "bytes": 7170
+    },
+    {
+      "path": "CHANGELOG.md",
+      "bytes": 61810
+    },
+    {
+      "path": "LICENSE.md",
+      "bytes": 1183
+    },
+    {
+      "path": "NOTICE.html",
+      "bytes": 536377
+    },
+    {
+      "path": "README.md",
+      "bytes": 12136
+    },
+    {
+      "path": "SECURITY.md",
+      "bytes": 2767
+    },
+    {
+      "path": "SUPPORT.md",
+      "bytes": 295
+    },
+    {
+      "path": "editor.worker.js",
+      "bytes": 653220
+    },
+    {
+      "path": "f6283f7ccaed1249d9eb.ttf",
+      "bytes": 80340
+    },
+    {
+      "path": "json.worker.js",
+      "bytes": 782619
+    },
+    {
+      "path": "json.worker.js.LICENSE.txt",
+      "bytes": 387
+    },
+    {
+      "path": "main.js",
+      "bytes": 4761155
+    },
+    {
+      "path": "main.js.LICENSE.txt",
+      "bytes": 477
+    },
+    {
+      "path": "package.json",
+      "bytes": 95353
+    },
+    {
+      "path": "package.nls.json",
+      "bytes": 62
+    },
+    {
+      "path": "playground-language-configuration.json",
+      "bytes": 927
+    },
+    {
+      "path": "playgroundTsPlugin.js",
+      "bytes": 6654
+    },
+    {
+      "path": "playgroundWorker.js",
+      "bytes": 6555517
+    },
+    {
+      "path": "playgroundWorker.js.LICENSE.txt",
+      "bytes": 4379
+    },
+    {
+      "path": "resources/debug/README.md",
+      "bytes": 3188
+    },
+    {
+      "path": "resources/debug/examples/collscan-stage1.json",
+      "bytes": 744
+    },
+    {
+      "path": "resources/debug/examples/collscan-stage2-allplans.json",
+      "bytes": 1246
+    },
+    {
+      "path": "resources/debug/examples/collscan-stage2.json",
+      "bytes": 1741
+    },
+    {
+      "path": "resources/debug/examples/query-insights-stage1.json",
+      "bytes": 1183
+    },
+    {
+      "path": "resources/debug/examples/query-insights-stage2-allplans.json",
+      "bytes": 2132
+    },
+    {
+      "path": "resources/debug/examples/query-insights-stage2.json",
+      "bytes": 2935
+    },
+    {
+      "path": "resources/debug/examples/sharded-stage1.json",
+      "bytes": 2727
+    },
+    {
+      "path": "resources/debug/examples/sharded-stage2-allplans.json",
+      "bytes": 1312
+    },
+    {
+      "path": "resources/debug/examples/sharded-stage2.json",
+      "bytes": 7080
+    },
+    {
+      "path": "resources/debug/query-insights-stage1.json",
+      "bytes": 2727
+    },
+    {
+      "path": "resources/debug/query-insights-stage2.json",
+      "bytes": 7080
+    },
+    {
+      "path": "resources/documentdb/documentdb_black 1.png",
+      "bytes": 25229
+    },
+    {
+      "path": "resources/documentdb/documentdb_color 1.png",
+      "bytes": 26174
+    },
+    {
+      "path": "resources/documentdb/documentdb_color_whitetext 3.png",
+      "bytes": 25353
+    },
+    {
+      "path": "resources/documentdb/documentdb_icon 1.png",
+      "bytes": 27267
+    },
+    {
+      "path": "resources/documentdb/documentdb_white 1.png",
+      "bytes": 24032
+    },
+    {
+      "path": "resources/from_node_modules/@microsoft/vscode-azext-azureutils/resources/azureIcons/AzureCosmosDb.svg",
+      "bytes": 2687
+    },
+    {
+      "path": "resources/from_node_modules/@microsoft/vscode-azext-azureutils/resources/azureIcons/MongoClusters.svg",
+      "bytes": 2687
+    },
+    {
+      "path": "resources/from_node_modules/@microsoft/vscode-azext-azureutils/resources/azureSubscription.svg",
+      "bytes": 1623
+    },
+    {
+      "path": "resources/icons/Microsoft-Entra-ID-BW-icon.svg",
+      "bytes": 1090
+    },
+    {
+      "path": "resources/icons/Microsoft-Entra-ID-color-icon.svg",
+      "bytes": 1301
+    },
+    {
+      "path": "resources/icons/Microsoft-Entra-ID-filled-BW-icon.svg",
+      "bytes": 825
+    },
+    {
+      "path": "resources/icons/collection-view-dark.svg",
+      "bytes": 21706
+    },
+    {
+      "path": "resources/icons/collection-view-light.svg",
+      "bytes": 21705
+    },
+    {
+      "path": "resources/icons/document-view-dark.svg",
+      "bytes": 21706
+    },
+    {
+      "path": "resources/icons/document-view-light.svg",
+      "bytes": 21705
+    },
+    {
+      "path": "resources/icons/playground-block-active-light.svg",
+      "bytes": 272
+    },
+    {
+      "path": "resources/icons/playground-block-active.svg",
+      "bytes": 272
+    },
+    {
+      "path": "resources/icons/playground-block-inactive-light.svg",
+      "bytes": 272
+    },
+    {
+      "path": "resources/icons/playground-block-inactive.svg",
+      "bytes": 272
+    },
+    {
+      "path": "resources/icons/playground-dark.svg",
+      "bytes": 1594
+    },
+    {
+      "path": "resources/icons/playground-light.svg",
+      "bytes": 1594
+    },
+    {
+      "path": "resources/icons/playground-result-dark.svg",
+      "bytes": 21706
+    },
+    {
+      "path": "resources/icons/playground-result-light.svg",
+      "bytes": 21705
+    },
+    {
+      "path": "resources/icons/theme-agnostic/AzureDocumentDb.svg",
+      "bytes": 2725
+    },
+    {
+      "path": "resources/icons/theme-agnostic/CosmosDBAccount.svg",
+      "bytes": 2709
+    },
+    {
+      "path": "resources/icons/theme-agnostic/PostgresServer.svg",
+      "bytes": 3554
+    },
+    {
+      "path": "resources/icons/vscode-documentdb-cluster-dark-themes.svg",
+      "bytes": 21706
+    },
+    {
+      "path": "resources/icons/vscode-documentdb-cluster-light-themes.svg",
+      "bytes": 21705
+    },
+    {
+      "path": "resources/icons/vscode-documentdb-icon-dark-themes.svg",
+      "bytes": 21706
+    },
+    {
+      "path": "resources/icons/vscode-documentdb-icon-light-themes.svg",
+      "bytes": 21705
+    },
+    {
+      "path": "resources/prompts/index-advisor-aggregate.prompt.md",
+      "bytes": 17979
+    },
+    {
+      "path": "resources/prompts/index-advisor-count.prompt.md",
+      "bytes": 17410
+    },
+    {
+      "path": "resources/prompts/index-advisor-find.prompt.md",
+      "bytes": 19437
+    },
+    {
+      "path": "resources/readme/collection-view-autocompletion.png",
+      "bytes": 396427
+    },
+    {
+      "path": "resources/readme/documentdb-local.png",
+      "bytes": 312784
+    },
+    {
+      "path": "resources/readme/documentdb-logo.png",
+      "bytes": 26174
+    },
+    {
+      "path": "resources/readme/index-management.png",
+      "bytes": 336624
+    },
+    {
+      "path": "resources/readme/inline-action-buttons.png",
+      "bytes": 16877
+    },
+    {
+      "path": "resources/readme/interactive-shell.png",
+      "bytes": 97332
+    },
+    {
+      "path": "resources/readme/kubernetes-discovery.png",
+      "bytes": 36448
+    },
+    {
+      "path": "resources/readme/mongodb-atlas-discovery.png",
+      "bytes": 294906
+    },
+    {
+      "path": "resources/readme/query-insights.png",
+      "bytes": 121987
+    },
+    {
+      "path": "resources/readme/query-playground.png",
+      "bytes": 151378
+    },
+    {
+      "path": "resources/readme/vscode-documentdb-hero-screenshot.png",
+      "bytes": 383006
+    },
+    {
+      "path": "resources/vscode-documentdb-marketplace-logo.png",
+      "bytes": 60833
+    },
+    {
+      "path": "resources/vscode-documentdb-sidebar-icon.svg",
+      "bytes": 33789
+    },
+    {
+      "path": "resources/walkthroughs/azure-resources.png",
+      "bytes": 69854
+    },
+    {
+      "path": "resources/walkthroughs/browse.png",
+      "bytes": 258690
+    },
+    {
+      "path": "resources/walkthroughs/connect.png",
+      "bytes": 319579
+    },
+    {
+      "path": "resources/walkthroughs/copy-and-paste.png",
+      "bytes": 212005
+    },
+    {
+      "path": "resources/walkthroughs/interactive-shell.png",
+      "bytes": 61552
+    },
+    {
+      "path": "resources/walkthroughs/query-playground.png",
+      "bytes": 98391
+    },
+    {
+      "path": "resources/walkthroughs/query.png",
+      "bytes": 225527
+    },
+    {
+      "path": "resources/walkthroughs/sidebar.png",
+      "bytes": 94194
+    },
+    {
+      "path": "static/.gitkeep",
+      "bytes": 0
+    },
+    {
+      "path": "syntaxes/documentdb-playground-result.tmGrammar.json",
+      "bytes": 130
+    },
+    {
+      "path": "syntaxes/documentdb-playground.tmGrammar.json",
+      "bytes": 139
+    },
+    {
+      "path": "typeDefs/README.md",
+      "bytes": 2811
+    },
+    {
+      "path": "typeDefs/documentdb-shell-api.d.ts",
+      "bytes": 30307
+    },
+    {
+      "path": "views.js",
+      "bytes": 6490321
+    },
+    {
+      "path": "views.js.LICENSE.txt",
+      "bytes": 2594
+    }
+  ]
+}

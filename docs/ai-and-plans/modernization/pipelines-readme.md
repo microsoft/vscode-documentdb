@@ -15,7 +15,8 @@ belongs. Written during the modernization re-review
 ([build-and-test-stack.md, execution plan](./build-and-test-stack.md#execution-plan)).
 
 Marked facts: [MEASURED] was read from the pipeline files on 2026-09-30. [INFERRED] is reasoning,
-not verified. "Planned" rows describe the modernization plan, not today.
+not verified. "Planned" rows describe later modernization work. Stage 0 now wires L1 and L3;
+the operator-run ADO build and the G0 manual checklist remain outstanding.
 
 ## In short
 
@@ -142,9 +143,9 @@ in a browser, and L3 installs the VSIX into a downloaded VS Code and checks that
 | Lint, Prettier, `l10n:check`         | GitHub                            | yes (gate)                                | no                           | PR feedback; no effect on the artifact                                             |
 | Unit tests (Jest, later Vitest)      | GitHub; ADO only for npm packages | yes (gate)                                | optional                     | Need no network, so they can run in ADO, but GitHub already gates every PR         |
 | Package the VSIX                     | both                              | yes (PR artifact, and input to L3)        | yes (**the one that ships**) |                                                                                    |
-| **L1** artifact inspection           | not yet                           | yes                                       | **yes, before signing**      | Needs no network. Rerun on the downloaded ADO artifact at release time (section 4) |
-| **L2** production-bundle harness     | not yet                           | later, headless (needs browser binaries)  | no                           | Browser download                                                                   |
-| **L3** installed-VSIX smoke          | not yet                           | yes (gate on PRs that touch build config) | **no**                       | Downloads VS Code                                                                  |
+| **L1** artifact inspection           | implemented; local pass           | wired as a separate job                   | **wired before signing**     | Needs no network. Rerun on the downloaded ADO artifact at release time (section 4) |
+| **L2** production-bundle harness     | integrated-browser pass           | later, headless (needs browser binaries)  | no                           | Browser download                                                                   |
+| **L3** installed-VSIX smoke          | implemented; CI proof pending     | wired as a separate job on PRs            | **no**                       | Downloads VS Code; local machine has no display/Xvfb                               |
 | E2E suite (future iteration)         | not yet                           | yes                                       | no                           | Downloads VS Code, browsers, Docker images                                         |
 | `🧪 Test` step (`npm test`, a no-op) | ADO                               | n/a                                       | **removed**                  | Would break under isolation once `npm test` does something                         |
 | Dependency freshness                 | manual (skill)                    | future work, not planned                  | implicit (`npm ci` fails)    | Release builds are prepared from quarantine-clear versions (2.1)                   |
@@ -161,7 +162,9 @@ contain different code, and ADO also regenerates `NOTICE.html` (review round 1, 
 deliberate, so this is a release-checklist step for the operator:
 
 1. Download the signed VSIX from the ADO `build.yml` run and record its **SHA-256**.
-2. Run L1 and L3 on that file locally (`npm run test:vsix -- <signed.vsix>`, planned script), and
+2. Download the matching bundle reports (ADO stages `build/verification/reports/*.json`) and run
+   L1 with `npm run verify:vsix -- <signed.vsix> --reports <report-directory>`. Run L3 on that file
+   locally (`npm run test:vsix -- <signed.vsix>`), and
    have an agent run the L2 browser pass on its extracted contents.
 3. Record the digest and the results in the release approval. Approve `release.yml` only for that
    digest.
