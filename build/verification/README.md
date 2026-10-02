@@ -71,8 +71,11 @@ return await new AsyncFunction('page', source)(page);
 ```
 
 The helper executes outside the page and does not weaken its CSP. It checks all five settled views,
-computed styles, diagnostics, network responses, fetched chunks, and actual packaged JSON-worker
-validation round-trips in both Monaco views. A sixth page deliberately drops CSS; its style checks
+computed styles, diagnostics, network responses, fetched chunks, and actual editor-originated worker
+round-trips in both Monaco views. The helper edits the rendered editor and correlates a response with
+that editor's synchronized model: Unicode highlighting for Collection View, and JSON validation with
+diagnostics for Document View. Collection View's custom query validator runs on the main thread and
+is not counted as worker proof. A sixth page deliberately drops CSS; its style checks
 must fail while its other diagnostics remain clean. Reports are persisted in the generated output.
 Stop the server after verification.
 

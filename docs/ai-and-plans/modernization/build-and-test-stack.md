@@ -207,7 +207,7 @@ plugin in a real editor; Kubernetes, Atlas and Azure discovery against real back
     - Measured `dist`: **31,739,702 bytes across 123 files**; `views.js`: **6,490,321 bytes**;
       `main.js`: **4,761,155 bytes**. The complete per-file inventory and raw timings are committed
       in [measurements.json](../../../build/verification/measurements.json).
-    - The final production VSIX is **9,606,938 bytes, 124 archive files**; its file/size manifest and
+    - The initial baseline production VSIX is **9,606,938 bytes, 124 archive files**; its file/size manifest and
       entry graphs are committed in [baseline.json](../../../build/verification/baseline.json).
       SHA-256: `aee1a0591f3342adbf439831b007178babd3bc96d8f0cb65c25c0ef2678abe42`.
       Timing runs were sequential, without concurrent production builds/full test suites. The
@@ -234,18 +234,22 @@ plugin in a real editor; Kubernetes, Atlas and Azure discovery against real back
       Clarification was requested, but the operator was unavailable; this is an explicit pragmatic
       deviation, not an approved design decision. All five views currently record the same heavy
       graph; the lightweight-view assertion remains opt-in until Stage 4.
+    - **Review correction landed in `c1d29535`:** numeric webpack chunk references now resolve only
+      within the referencing file's owning compilation. A collision/ambiguous-owner regression
+      test was added; six inspector tests and the final-VSIX positive/negative checks passed.
   - Build L2: the page generator and typed fixtures for the five views. Exclude the harness from the
     VSIX through `.vscodeignore`.
     - **Landed in `e100be7d`.** All five registry views have typed fixtures and query-free pages
       beneath `/stage0/l2/`, generated from the extracted VSIX using the unchanged production host
       template/CSP. Existing `build/**` exclusion already covers every harness file; archive
       inspection confirmed **zero packaged harness/probe files**.
-    - **Final-VSIX browser proof passed:** five settled fixture views, no unexpected console/page/
+    - **Initial final-VSIX rendering proof passed:** five settled fixture views, no unexpected console/page/
       CSP/preload/network errors, matching computed styles, and recorded fetched chunks. Collection
-      and Document views both completed packaged JSON-worker `doValidation` round-trips and
-      returned validation markers. Evidence is persisted in the execution session's
-      `s0-l2-final-vsix` directory. This proves a static-browser artifact pass, not real
-      `vscode-webview://` behavior.
+      and Document views completed standalone packaged-worker round-trips, but **review F02
+      superseded that worker evidence**: it did not prove the editors used their configured workers.
+      The rendered-editor correction landed in `c1d29535`; its final all-five browser reliability
+      rerun remains in progress. This is a static-browser artifact check, not real
+      `vscode-webview://` behavior. See [the stage review](./iterations/00-stage0-review.md).
   - Build L3: `npm run test:vsix [path-to-vsix]`, the probe extension, and a GitHub Actions job with
     a cached `.vscode-test/` folder.
     - **Landed in `e100be7d`.** The runner pins VS Code to minimum engine **1.105.0**, installs the
@@ -257,6 +261,44 @@ plugin in a real editor; Kubernetes, Atlas and Azure discovery against real back
       sets `DONT_PROMPT_WSL_INSTALL=1`, with a regression assertion. No Xvfb/system dependencies
       were installed. A display-enabled GitHub run must prove actual activation and injected-error
       rejection; the **19 offline activation tests are not a substitute**.
+    - **Actions launch correction landed in `afc08faa`:** the third CI run passed code quality,
+      product tests, packaging and **L1 on the GitHub-built artifact**, then the installed-host
+      job hit Electron's SUID sandbox restriction after successfully installing the VSIX.
+      The runner now uses `--no-sandbox` only for Linux `GITHUB_ACTIONS=true` probe runs, not normal
+      local launches or generic CI; **20 offline activation tests** cover that scope. Failed-host
+      logs are uploaded as diagnostic artifacts. The next push must still prove real activation
+      and the injected-error control; a host launch failure is not a successful negative proof.
+    - **Baseline-blocking lifecycle correction landed in `ffac8111`:** the fourth CI run did
+      activate the installed VSIX and complete the late-command probe. Its logs exposed one
+      classifier false positive (`[trace] initData` manifest metadata) and a real pre-existing
+      disposal-order bug: `SchemaStore.dispose()` logged after the output channel was disposed,
+      throwing and interrupting cleanup. Trace/debug metadata no longer counts as an error, but
+      **the genuine shutdown errors remain blocking; none are suppressed**.
+    - The small product fix registers schema teardown before its logging dependency while
+      preserving all other subscription ordering. **29 schema tests** passed, including final
+      logging, complete timer/cache cleanup, singleton reset, and missing-dependency validation;
+      **22 offline activation tests** passed. The local build passed. Approval to extend Stage 0
+      to this coupled baseline fix was requested, but the operator was unavailable; the pragmatic
+      fix preserves intended cleanup rather than relaxing the gate. Ignoring teardown errors was
+      rejected because the exception demonstrably skipped cleanup. Leaving the required baseline
+      gate permanently failing was the other alternative.
+    - The corrected local production artifact is **9,607,031 bytes**, SHA-256
+      `1a9ed2a78bbbfc5221221d65c2a2495c98a4a37668b048e8dcdd9cb4c966a541`.
+      L1 and its repacked negative controls passed against the **unchanged initial baseline**.
+      These measurements preserve the pre-fix baseline; they are not silently rebased to hide
+      artifact changes. The fifth CI push must still prove positive activation and injected-error
+      rejection on the actual GitHub-built artifact.
+    - **Actual positive/negative host proof passed in run
+      [36979370550](https://github.com/microsoft/vscode-documentdb/actions/runs/36979370550)
+      at `a6689e76`.** The fifth run had already passed genuine activation/installed-path/late
+      commands/clean logs, but its negative injector used the extensionless manifest entry as a
+      literal file path. `a6689e76` uses Node's module resolver and preserves the realpath guard;
+      **24 offline activation tests** cover extensionless `main`, explicit CJS/ESM paths and
+      symlink escapes. The sixth CI run passed **all jobs**, including L1 and actual L3:
+      positive activation was clean, and the negative run registered the final commands but its
+      real logs rejected `L3_INJECTED_SWALLOWED_ACTIVATION_ERROR`. No activation or shutdown
+      errors were waived. The legacy integration step remains disabled; its enclosing job's
+      success is not an E2E/integration-test claim.
   - Prove each check can fail, as described above.
     - **Landed in `e100be7d`; local proof passed where runnable.** L1 rejected actual repacked
       variants with renamed `render`, missing dynamic-import target, a dev-server string, and a
@@ -266,9 +308,19 @@ plugin in a real editor; Kubernetes, Atlas and Azure discovery against real back
       must be adapted when Stage 4 extracts CSS into linked files. L3's partial-activation mutation
       and proof runner are implemented and tested offline; the real-host negative proof awaits CI.
     - Local Case 1 verification passed: `npm run build`, the three baseline product Jest runs,
-      browser-fixture type-check, **24 native harness tests** and **27 scoped browser Jest tests**.
+      browser-fixture type-check, initially **24 native harness tests** and **27 scoped browser Jest tests**.
       Pipeline YAML parsing and patch whitespace checks passed. Local lint, localization,
       `prettier-fix`, and the full Case 2 handover suite were not run; CI retains its existing checks.
+    - **Draft CI feedback addressed in `c1d29535`:** the first push passed product tests,
+      localization, API extraction and CodeQL, but lint and one documentation-formatting check
+      failed before packaging. Introduced header/import/type-safety issues and the precise webpack
+      helper import allowance were corrected; only the failing documentation file was formatted.
+      Final local build and scoped regressions passed: **25 native tests and 44 browser Jest tests**.
+      The second push triggers the full existing draft CI plus L1/L3; it is not a Case 2 handover.
+    - **Follow-up landed in `c37882ea`:** the second CI run passed localization, formatting and
+      product tests, leaving only two webpack-helper import-policy errors. The import rule
+      normalizes away `./`; the exact allowance now uses the normalized path. The third push
+      retries the artifact jobs after this correction.
   - Optional, time-boxed: the L4 follow-up (B3 lists what to try).
     - **Not attempted.** L4 is optional and does not gate G0; effort stayed on L1 to L3.
 - **Automated verification:** L0 to L3 pass on the current VSIX; the broken variants fail.
@@ -277,8 +329,8 @@ plugin in a real editor; Kubernetes, Atlas and Azure discovery against real back
 - **Exit:** baselines are committed. L1 and L3 run as GitHub Actions jobs on PRs that touch build
   config, `package.json` or lockfiles, entry points or assets. L2 results are recorded at each gate.
   - **Current status:** implementation/baselines are committed; L1 and L3 are wired on PRs
-    (including all relevant changes, without a path-filter bypass). G0 is **not passed**: GitHub
-    real-host L3, the operator-run ADO build, the installed-VSIX manual checklist, and confirmation
+    (including all relevant changes, without a path-filter bypass). G0 is **not passed**: the final
+    rendered-editor L2 pass, the operator-run ADO build, the installed-VSIX manual checklist, and confirmation
     of the BSON deviation remain outstanding. PR #880 stays draft; Stage 1 must not start yet.
 
 ### Stage 1: remove the legacy test harness
