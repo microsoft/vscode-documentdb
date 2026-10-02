@@ -11,6 +11,32 @@ import { defineConfig } from 'vitest/config';
 import { vitestFiles } from './build/test-migration/runnerRouting.cjs';
 
 const repoRoot = __dirname;
+
+// Some dependencies (the ESM build of @microsoft/vscode-azext-utils) reference source maps they do
+// not ship, and Vite warns once per inlined file. Vitest replaces `customLogger`, so this plugin
+// wraps the resolved logger instead. It drops only that warning, and only for node_modules files.
+// Typed structurally: under the repo's node10 resolution TypeScript cannot load `vite`'s own types.
+interface WarningLogger {
+    warn(message: string, options?: object): void;
+}
+const quietMissingDependencySourceMaps = {
+    name: 'documentdb:quiet-missing-dependency-source-maps',
+    configResolved(config: { logger: WarningLogger }): void {
+        const warn = config.logger.warn.bind(config.logger) as WarningLogger['warn'];
+        config.logger.warn = (message: string, options?: object): void => {
+            if (message.startsWith('Failed to load source map for') && message.includes('/node_modules/')) {
+                return;
+            }
+            warn(message, options);
+        };
+    },
+};
+
+// Jest's 5 s default never applied to synchronous tests, and Vite's first transform of a large
+// import (the fluentui component tree) costs seconds that Jest did not. 15 s, as in Cosmos DB.
+// Inline projects do not inherit root `test` options, so every project sets it.
+const testTimeout = 15_000;
+
 const packageRoot = (name: string): string => path.join(repoRoot, 'packages', name);
 
 export default defineConfig({
@@ -19,14 +45,23 @@ export default defineConfig({
         maxWorkers: '25%',
         projects: [
             {
+                plugins: [quietMissingDependencySourceMaps],
                 // Replaces the Jest `extension` and `extension-webview` projects. Node is the default;
                 // React component tests opt into a DOM with a `// @vitest-environment jsdom` docblock.
                 resolve: {
-                    alias: [{ find: /^vscode$/, replacement: path.join(repoRoot, 'test/vitest/vscode.ts') }],
+                    alias: [
+                        { find: /^vscode$/, replacement: path.join(repoRoot, 'test/vitest/vscode.ts') },
+                        // `bson` ships separate ESM and CommonJS builds. CommonJS dependencies (the
+                        // driver, shell-bson-parser, our packages' dist) `require` the CommonJS one, so
+                        // ESM importers are pointed at it too: one copy, and `instanceof` holds, as
+                        // under Jest. Node shares the module between `import` and `require`.
+                        { find: /^bson$/, replacement: require.resolve('bson') },
+                    ],
                 },
                 test: {
                     name: 'extension',
                     root: repoRoot,
+                    testTimeout,
                     environment: 'node',
                     include: vitestFiles(repoRoot, 'src'),
                     // Lets CommonJS dependencies `require('vscode')` and get the aliased mock above.
@@ -37,7 +72,12 @@ export default defineConfig({
                             // but imports named exports from Fluent, which is CommonJS under Node. Left
                             // external, the import throws "Named export ... not found"; inlining lets Vite
                             // apply its CommonJS interop. Keep until a consumer test passes without it.
-                            inline: ['@microsoft/vscode-ext-webview-fluentui'],
+                            //
+                            // `@azure/identity` and `@azure/msal-node` are inlined so `vi.resetModules()`
+                            // reloads them, as `jest.resetModules()` did: the managed-identity endpoint
+                            // harness re-imports them per test to pick up new IDENTITY_* variables, and
+                            // modules Node loads directly survive a reset.
+                            inline: ['@microsoft/vscode-ext-webview-fluentui', '@azure/identity', '@azure/msal-node'],
                         },
                     },
                     deps: {
@@ -63,6 +103,7 @@ export default defineConfig({
                 test: {
                     name: 'documentdb-js-schema-analyzer',
                     root: packageRoot('documentdb-js-schema-analyzer'),
+                    testTimeout,
                     environment: 'node',
                     include: vitestFiles(packageRoot('documentdb-js-schema-analyzer'), 'test'),
                 },
@@ -71,6 +112,7 @@ export default defineConfig({
                 test: {
                     name: 'documentdb-js-operator-registry',
                     root: packageRoot('documentdb-js-operator-registry'),
+                    testTimeout,
                     environment: 'node',
                     include: vitestFiles(packageRoot('documentdb-js-operator-registry'), 'src'),
                 },
@@ -80,6 +122,7 @@ export default defineConfig({
                 test: {
                     name: 'documentdb-js-shell-api-types',
                     root: packageRoot('documentdb-js-shell-api-types'),
+                    testTimeout,
                     environment: 'node',
                     include: vitestFiles(packageRoot('documentdb-js-shell-api-types'), 'src'),
                 },
@@ -88,6 +131,7 @@ export default defineConfig({
                 test: {
                     name: 'documentdb-js-shell-runtime',
                     root: packageRoot('documentdb-js-shell-runtime'),
+                    testTimeout,
                     environment: 'node',
                     include: vitestFiles(packageRoot('documentdb-js-shell-runtime'), 'src'),
                 },
@@ -105,6 +149,7 @@ export default defineConfig({
                 test: {
                     name: 'vscode-ext-webview',
                     root: packageRoot('vscode-ext-webview'),
+                    testTimeout,
                     environment: 'node',
                     include: vitestFiles(packageRoot('vscode-ext-webview'), 'src'),
                 },
@@ -115,6 +160,7 @@ export default defineConfig({
                 test: {
                     name: 'vscode-ext-webview-fluentui',
                     root: packageRoot('vscode-ext-webview-fluentui'),
+                    testTimeout,
                     environment: 'jsdom',
                     include: vitestFiles(packageRoot('vscode-ext-webview-fluentui'), 'src'),
                 },
