@@ -5,16 +5,12 @@
 
 import { describe, expect, it, vi } from 'vitest';
 
-import { createElement, type ReactNode } from 'react';
+import { createElement } from 'react';
 // eslint-disable-next-line import/no-internal-modules -- React DOM exposes server rendering through this public subpath.
 import { renderToStaticMarkup } from 'react-dom/server';
 
 import { type ClusterStorageStats } from '../../../../documentdb/utils/getClusterHealth';
 import { StatusStrip } from './StatusStrip';
-
-vi.mock('@microsoft/vscode-ext-webview-fluentui/components', () => ({
-    MetricGrid: ({ children }: { children: ReactNode }): ReactNode => children,
-}));
 
 vi.mock('../../collectionView/queryInsightsTab/components/metricsRow', () => {
     const metric = ({ label, value }: { label: string; value: string | number | null | undefined }): string =>
