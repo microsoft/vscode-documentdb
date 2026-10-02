@@ -548,7 +548,7 @@ plugin in a real editor; Kubernetes, Atlas and Azure discovery against real back
 - **Tasks:**
   - First, check whether `improveError`, `wrapError`, `getIp` and `setEnvironmentVariables` already
     have Jest tests. Write a small Jest test only where one is missing; do not port the Mocha files.
-    - **Completed in this implementation commit (hash follows in the record commit):** searched
+    - **Completed in `521fb828`:** searched
       `src/` and `packages/` before deleting the
       harness: none of the four had Jest coverage. Added four small independent suites under
       `src/utils/`, including `testUtils/setEnvironmentVariables.test.ts`, with **18 new tests**.
@@ -579,7 +579,7 @@ plugin in a real editor; Kubernetes, Atlas and Azure discovery against real back
     - the disabled `integration-tests` job (`if: false`) in `.github/workflows/main.yml`;
     - the `🧪 Test` step in `.azure-pipelines/build.yml`. It runs the no-op `npm test` today, and
       would break an isolated ADO build as soon as `npm test` downloads VS Code.
-    - **Completed in this implementation commit (hash follows in the record commit):** removed
+    - **Completed in `521fb828`:** removed
       every listed legacy file/configuration, the Mocha
       ESLint import/block and obsolete bundle-import restriction, the commented TypeScript types
       block, the disabled GitHub integration job and ADO Test step. The GitHub job itself had a
@@ -595,7 +595,7 @@ plugin in a real editor; Kubernetes, Atlas and Azure discovery against real back
   - Remove devDependencies: `mocha`, `@types/mocha`, `mocha-junit-reporter`, `mocha-multi-reporters`,
     `eslint-plugin-mocha`, `@vscode/test-cli`. Keep `@vscode/test-electron` (L3 uses it), `ts-node`
     (package scripts use it until Stage 3) and `jest-mock-vscode` (unit tests use it).
-    - **Completed in this implementation commit (hash follows in the record commit):** removed
+    - **Completed in `521fb828`:** removed
       exactly the six dependencies; retained all three
       required tools. Regenerated the lockfile with `npm install`, using
       `--ignore-scripts --no-audit --no-fund`, on Node **22.18.0** / npm **10.9.3** (not hand-edited).
@@ -607,20 +607,20 @@ plugin in a real editor; Kubernetes, Atlas and Azure discovery against real back
       both exit 0, with no lookup failures. One existing root git/private/unpublished entry has
       no registry publish time. No pins or overrides were needed; the API lockfile is unchanged.
   - Point `npm test` at the unit tests.
-    - **Completed in this implementation commit (hash follows in the record commit):** delegates
+    - **Completed in `521fb828`:** delegates
       to `npm run jesttest --`, preserving its
       workspace prebuild and forwarding test selectors/options. Verified via the targeted
       **8-suite / 89-test** run above; it no longer prints a no-op deprecation notice.
   - Convert the one `const enum` (`SecretIndex` in `src/services/connectionStorageService.ts`) to a
     plain object. Bundlers that compile files one at a time cannot inline `const enum` values across
     files.
-    - **Completed in this implementation commit (hash follows in the record commit):** replaced
+    - **Completed in `521fb828`:** replaced
       it with an `as const` object, preserving every
       append-only secret slot **0 through 6** and all consumers. Existing storage tests passed;
       no storage schema, auth contract or `TDD:` test changed.
   - Keep root `main.js` and the "Launch Extension + Host" configuration for now; Stage 5 replaces
     them.
-    - **Completed:** root `main.js` and that launch configuration are retained unchanged.
+    - **Completed in `521fb828`:** root `main.js` and that launch configuration are retained unchanged.
   - Dev loop: `watch:views` fails on a tree without `dist/views.js`. Run `npm run webpack-dev-wv`
     once first (see the known limitation under Stage 0).
     - **Skipped:** no dev watch or UI loop was needed for this harness-only stage.
