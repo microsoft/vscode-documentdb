@@ -363,6 +363,13 @@ plugin in a real editor; Kubernetes, Atlas and Azure discovery against real back
       exact file list and per-file size tolerance are a candidate for replacement by a PR report
       (added/removed files, size deltas, per-view sizes), keeping the invariant assertions as hard
       failures. The design is not decided; until it is, the exact list stays as implemented.
+    - **First ADO run (2026-10-02) failed L1 on `NOTICE.html`:** 1,854,647 bytes against the
+      committed 536,377. ADO's `notice@0` task regenerates the file and falls back to the
+      committed copy if it fails, so its size depends on the pipeline, not the build. The file
+      must still be present, but its size is no longer compared. L1 now reports every size
+      mismatch in one run instead of stopping at the first. A check of the local VSIX found no
+      other file whose size CRLF conversion on the Windows agent could push past its tolerance.
+      This is the same friction as the operator direction above, met in ADO first.
     - **Plan discrepancy requiring G0 confirmation:** today's host and playground worker each
       include one BSON implementation, but all five browser graphs include **zero**. Requiring one
       everywhere would fail the unchanged baseline; adding BSON solely to satisfy the checker

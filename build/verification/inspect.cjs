@@ -12,6 +12,8 @@ const { simple } = require('acorn-walk');
 const { readVsix } = require('./vsix.cjs');
 
 const viewNames = ['collectionView', 'documentView', 'localQuickStart', 'atlasCredentials', 'clusterDashboard'];
+// ADO regenerates NOTICE.html (notice@0) and falls back to the committed copy if that task fails.
+const sizeExempt = new Set(['extension/NOTICE.html']);
 
 function manifest(files) {
     return [...files].map(([name, data]) => ({ path: name, bytes: data.length })).sort((left, right) => left.path.localeCompare(right.path));
@@ -20,11 +22,18 @@ function manifest(files) {
 function compareManifest(files, baseline) {
     assert.equal(baseline.version, 1, 'Unsupported VSIX baseline version');
     assert.deepEqual(manifest(files).map((entry) => entry.path), baseline.files.map((entry) => entry.path), 'VSIX file list differs from baseline');
+    const mismatches = [];
     for (const entry of baseline.files) {
+        if (sizeExempt.has(entry.path)) {
+            continue;
+        }
         const actual = files.get(entry.path).length;
         const tolerance = Math.max(baseline.tolerance.absoluteBytes, entry.bytes * baseline.tolerance.fraction);
-        assert.ok(Math.abs(actual - entry.bytes) <= tolerance, `${entry.path}: size ${actual} differs from ${entry.bytes} by more than ${tolerance} bytes`);
+        if (Math.abs(actual - entry.bytes) > tolerance) {
+            mismatches.push(`${entry.path}: size ${actual} differs from ${entry.bytes} by more than ${Math.round(tolerance)} bytes`);
+        }
     }
+    assert.equal(mismatches.length, 0, mismatches.join('\n'));
 }
 
 function resolveAsset(files, filename, reference) {

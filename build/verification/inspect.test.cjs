@@ -54,6 +54,21 @@ test('manifest tolerance accepts its exact boundary but rejects added/missing fi
     assert.throws(() => compareManifest(changed, baseline), /file list/);
 });
 
+test('pipeline-generated NOTICE.html must exist but its size is not compared', () => {
+    const withNotice = new Map([...files, ['extension/NOTICE.html', Buffer.alloc(100)]]);
+    const baseline = { version: 1, tolerance: { fraction: 0.1, absoluteBytes: 4096 }, files: manifest(withNotice) };
+    withNotice.set('extension/NOTICE.html', Buffer.alloc(2_000_000));
+    compareManifest(withNotice, baseline);
+    withNotice.delete('extension/NOTICE.html');
+    assert.throws(() => compareManifest(withNotice, baseline), /file list/);
+});
+
+test('every size mismatch is reported, not only the first', () => {
+    const baseline = { version: 1, tolerance: { fraction: 0.1, absoluteBytes: 4096 }, files: manifest(files) };
+    const changed = new Map([...files].map(([name]) => [name, Buffer.alloc(10_000)]));
+    assert.throws(() => compareManifest(changed, baseline), (error) => /package\.json/.test(error.message) && /views\.js/.test(error.message));
+});
+
 test('production render export, native imports and webpack lazy chunks are checked', () => {
     inspectJavaScript(files, []);
     for (const [source, error] of [
