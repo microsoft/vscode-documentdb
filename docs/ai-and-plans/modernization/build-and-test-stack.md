@@ -546,6 +546,10 @@ plugin in a real editor; Kubernetes, Atlas and Azure discovery against real back
     "continue on the base we had; this is needed for our ADO tests later."
     Work remains on `dev/tnaum/modernization`; no force push, `main` changes or new PR are part
     of this stage.
+  - **Status: completed.** All Stage 1 implementation tasks and local checks passed; the
+    pre-existing L1 blocker is resolved by `116a6c7b`, verified in CI `37010184351`. The
+    orchestrator's 2026-10-02 follow-up supersedes the earlier STOPPED reports and requests
+    pushing all records and rechecking the final pushed head. G1-3 operator review remains pending.
 - **Goal:** delete the Mocha suite and everything that only exists for it. This repo tests with Jest;
   the Mocha files are not in the Jest `testMatch` and never run.
 - **Tasks:**
@@ -677,6 +681,9 @@ plugin in a real editor; Kubernetes, Atlas and Azure discovery against real back
       including the earlier stop/clarification records. Run `37010184351` passed; all four jobs'
       checkout logs show the exact pushed head `84aacaf7c725e99f96e4895173f1d7ab1a08f0fe`.
       All six required L1/L3 proof lines are present, recorded under final completion below.
+      The dependency-install logs additionally show
+      `npm http fetch GET 200 https://registry.npmjs.org/caniuse-lite/-/caniuse-lite-1.0.30001790.tgz`;
+      the merge-ref version **1.0.30001814** is absent.
 - **Automated verification:** L0; L1 (the VSIX contents must not change); L3.
   - **Local L0 passed:** `npm run build` passed before and after dependency pruning.
     Post-change full Jest passed **295 suites / 4,582 tests / 4 snapshots** (Node 22.18.0,
@@ -737,6 +744,14 @@ plugin in a real editor; Kubernetes, Atlas and Azure discovery against real back
       orchestrator's temporary PR-head checkout decision above; the successful rerun is
       recorded below. No Stage 2 work, stage review file or PR readiness
       change is part of this agent's task.
+    - **Resolved by `116a6c7b`:**
+      [CI 37010184351](https://github.com/microsoft/vscode-documentdb/actions/runs/37010184351)
+      checked out the pushed PR head in all four jobs, installed the baseline's
+      `caniuse-lite` **1.0.30001790** and passed L1's four rejection proofs and both L3 proofs.
+      The pre-existing merge-ref dependency defect, not Stage 1's source changes, caused the
+      failure. The orchestrator-authorized deviation and rejected alternatives are recorded in
+      the additional checkout task above; the policy is temporary and must be revisited before
+      G6. No baseline or tolerance regeneration/relaxation was made.
   - **Successful CI recovery after the checkout fix:** `gh run watch --exit-status` returned 0 for
     [37010184351](https://github.com/microsoft/vscode-documentdb/actions/runs/37010184351),
     reported head `84aacaf7c725e99f96e4895173f1d7ab1a08f0fe`. Code Quality & Tests,
@@ -756,7 +771,7 @@ plugin in a real editor; Kubernetes, Atlas and Azure discovery against real back
       `main`'s lockfile. This is Case 1 plus the stage checks; full Case 2, including
       `prettier-fix`, stays deferred until ready for review. No `TDD:` changes, additional
       dependencies, stage review file, localization generation or PR readiness change was made.
-  - **Final documentation-head confirmation blocked (2026-10-02 14:38 UTC):** proof-record
+  - **Historical final documentation-head queue (2026-10-02 14:38 UTC):** proof-record
     commit `b08aa1c7` was normally pushed after changed-file Prettier and lint passed.
     [37011967057](https://github.com/microsoft/vscode-documentdb/actions/runs/37011967057)
     targets that exact pushed head, `b08aa1c732713df32a5ebe91a027a0ed4c5b4352`.
@@ -765,7 +780,7 @@ plugin in a real editor; Kubernetes, Atlas and Azure discovery against real back
     requested that rerun. At the latest direct API check, attempt 2's Code Quality & Tests job
     remained queued with no assigned runner. Two local `gh run watch` processes terminated with
     exit 143; this is not evidence of a failed artifact check.
-    - **STOPPED pending CI execution:** the source fix and all six proofs are verified on
+    - **Status at that handoff: STOPPED pending CI execution:** the source fix and all six proofs were verified on
       `84aacaf7` above, but the final pushed documentation head's L1/L3 proofs are not yet
       available and are not claimed. No check, baseline or tolerance was changed to avoid the
       queue. All implementation/local verification tasks are complete; final-head CI confirmation
@@ -774,6 +789,16 @@ plugin in a real editor; Kubernetes, Atlas and Azure discovery against real back
     - This documentation-only queue/blocker record is committed locally, not pushed, to avoid
       replacing the already-queued head with another documentation-only run. The remote head
       remains `b08aa1c7`; no Stage 2 work or PR readiness change was made by this agent.
+    - **Superseded by the orchestrator's 14:40 continuation:** retain this cancellation/queue
+      history, push the local record, and verify the next pushed head without changing any checks.
+      The resolved L1 source defect is not reopened by unavailable runners.
+  - **Commit reconciliation against `git log`:** `521fb828` implements the original harness
+    removal; `116a6c7b` separately implements the CI checkout fix with the requested subject.
+    Documentation-only commits are `0bcb9e7e` (original implementation reference), `299ac50f`
+    (initial CI failure), `e76e7831` (verbatim operator base-retention clarification),
+    `84aacaf7` (checkout-fix reference), `b08aa1c7` (passing CI proofs) and `682163b5`
+    (final documentation-head queue history). This completion-record update is documentation-only.
+    No Stage 1 implementation commit is missing from the inline task records.
 - **Operator gate G1:** review the dependency and CI diff. No manual UI check is needed. Reviewed
   at the combined checkpoint G1-3 after Stage 3.
 
