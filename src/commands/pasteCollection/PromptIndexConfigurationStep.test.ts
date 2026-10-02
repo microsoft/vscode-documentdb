@@ -3,6 +3,8 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+
 import { type PasteCollectionWizardContext } from './PasteCollectionWizardContext';
 import { PromptIndexConfigurationStep } from './PromptIndexConfigurationStep';
 
@@ -23,14 +25,14 @@ function createContext(selection: 'copy' | 'skip'): PasteCollectionWizardContext
         sourceTtlIndexNames: [],
         telemetry: { properties: {}, measurements: {} },
         ui: {
-            showQuickPick: jest.fn().mockResolvedValue({ id: selection }),
+            showQuickPick: vi.fn().mockResolvedValue({ id: selection }),
         },
     } as unknown as PasteCollectionWizardContext;
 }
 
 describe('PromptIndexConfigurationStep', () => {
     beforeEach(() => {
-        jest.clearAllMocks();
+        vi.clearAllMocks();
     });
 
     it('does not read source indexes for a document-only copy', async () => {

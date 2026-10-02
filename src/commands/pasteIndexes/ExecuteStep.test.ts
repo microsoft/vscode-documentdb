@@ -3,36 +3,41 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+
 import { type IActionContext } from '@microsoft/vscode-azext-utils';
 import { ext } from '../../extensionVariables';
 import { type CollectionIndexCopier } from '../../services/taskService/data-api/indexes/CollectionIndexCopier';
 import { CopyIndexesTask } from '../../services/taskService/tasks/copy-indexes/CopyIndexesTask';
+import type * as TaskServiceModule from '../../services/taskService/taskService';
 import { TaskService, TaskState, type TaskStateChangeEvent } from '../../services/taskService/taskService';
 import { ExecuteStep } from './ExecuteStep';
 import { type PasteIndexesWizardContext } from './PasteIndexesWizardContext';
 
 const stateListeners: Array<(event: TaskStateChangeEvent) => void> = [];
-const start = jest.fn().mockResolvedValue(undefined);
+const start = vi.fn().mockResolvedValue(undefined);
 const fakeTask = {
     start,
-    onDidChangeState: jest.fn((listener: (event: TaskStateChangeEvent) => void) => {
+    onDidChangeState: vi.fn((listener: (event: TaskStateChangeEvent) => void) => {
         stateListeners.push(listener);
-        return { dispose: jest.fn() };
+        return { dispose: vi.fn() };
     }),
 };
 
-jest.mock('../../services/taskService/tasks/copy-indexes/CopyIndexesTask', () => ({
-    CopyIndexesTask: jest.fn(() => fakeTask),
+vi.mock('../../services/taskService/tasks/copy-indexes/CopyIndexesTask', () => ({
+    CopyIndexesTask: vi.fn(function () {
+        return fakeTask;
+    }),
 }));
-jest.mock('../../services/taskService/taskService', () => {
-    const actual = jest.requireActual('../../services/taskService/taskService');
-    return { ...actual, TaskService: { registerTask: jest.fn() } };
+vi.mock('../../services/taskService/taskService', async () => {
+    const actual = await vi.importActual<typeof TaskServiceModule>('../../services/taskService/taskService');
+    return { ...actual, TaskService: { registerTask: vi.fn() } };
 });
-jest.mock('../../extensionVariables', () => ({
+vi.mock('../../extensionVariables', () => ({
     ext: {
         state: {
-            notifyChildrenChanged: jest.fn(),
-            runWithTemporaryDescription: jest.fn((_id: string, _description: string, callback: () => Promise<void>) =>
+            notifyChildrenChanged: vi.fn(),
+            runWithTemporaryDescription: vi.fn((_id: string, _description: string, callback: () => Promise<void>) =>
                 callback(),
             ),
         },
@@ -62,7 +67,7 @@ function createContext(): PasteIndexesWizardContext {
 
 describe('Paste Indexes ExecuteStep', () => {
     beforeEach(() => {
-        jest.clearAllMocks();
+        vi.clearAllMocks();
         stateListeners.length = 0;
     });
 

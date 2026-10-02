@@ -3,11 +3,13 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+
 import { createIndexCopier as createEndpointIndexCopier } from '../../services/taskService/data-api/indexes/createIndexCopier';
 import { type PasteCollectionWizardContext } from './PasteCollectionWizardContext';
 import { createIndexCopier } from './createIndexCopier';
 
-jest.mock('../../services/taskService/data-api/indexes/createIndexCopier');
+vi.mock('../../services/taskService/data-api/indexes/createIndexCopier');
 
 function createContext(isTargetExistingCollection: boolean): PasteCollectionWizardContext {
     return {
@@ -28,7 +30,7 @@ function createContext(isTargetExistingCollection: boolean): PasteCollectionWiza
 
 describe('createIndexCopier', () => {
     beforeEach(() => {
-        jest.clearAllMocks();
+        vi.clearAllMocks();
     });
 
     it.each([

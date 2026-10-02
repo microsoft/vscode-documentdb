@@ -3,15 +3,17 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+import { beforeEach, describe, expect, it, vi, type MockedFunction } from 'vitest';
+
 import * as vscode from 'vscode';
 import { ConflictResolutionStrategy } from '../../services/taskService/tasks/copy-and-paste/copyPasteConfig';
 import { ConfirmOperationStep } from './ConfirmOperationStep';
 import { type PasteCollectionWizardContext } from './PasteCollectionWizardContext';
 
-const showInformationMessage = vscode.window.showInformationMessage as unknown as jest.MockedFunction<
+const showInformationMessage = vscode.window.showInformationMessage as unknown as MockedFunction<
     (message: string, options: vscode.MessageOptions, ...items: string[]) => Thenable<string | undefined>
 >;
-const showWarningMessage = vscode.window.showWarningMessage as unknown as jest.MockedFunction<
+const showWarningMessage = vscode.window.showWarningMessage as unknown as MockedFunction<
     (message: string, options: vscode.MessageOptions, ...items: string[]) => Thenable<string | undefined>
 >;
 
@@ -41,7 +43,7 @@ function createContext(isTargetExistingCollection: boolean): PasteCollectionWiza
 
 describe('ConfirmOperationStep', () => {
     beforeEach(() => {
-        jest.clearAllMocks();
+        vi.clearAllMocks();
         showInformationMessage.mockResolvedValue('Start Copy-and-Paste');
         showWarningMessage.mockResolvedValue('Start Copy-and-Merge');
     });

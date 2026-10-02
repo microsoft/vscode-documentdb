@@ -3,21 +3,23 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+import { beforeEach, describe, expect, it, vi, type Mock } from 'vitest';
+
 import { PromptReconnectStepForErrorNodes } from './PromptReconnectStepForErrorNodes';
 import { type UpdateCredentialsWizardContext } from './UpdateCredentialsWizardContext';
 
 // Mock @vscode/l10n
-jest.mock('@vscode/l10n', () => ({
-    t: jest.fn((str: string) => str),
+vi.mock('@vscode/l10n', () => ({
+    t: vi.fn((str: string) => str),
 }));
 
 // Mock @microsoft/vscode-azext-utils
-jest.mock('@microsoft/vscode-azext-utils', () => ({
+vi.mock('@microsoft/vscode-azext-utils', () => ({
     AzureWizardPromptStep: class {},
 }));
 
 function createMockContext(
-    mockShowQuickPick: jest.Mock,
+    mockShowQuickPick: Mock,
     overrides: Partial<UpdateCredentialsWizardContext> = {},
 ): UpdateCredentialsWizardContext {
     return {
@@ -26,11 +28,11 @@ function createMockContext(
         valuesToMask: [],
         ui: {
             showQuickPick: mockShowQuickPick,
-            showInputBox: jest.fn(),
-            showWarningMessage: jest.fn(),
-            onDidFinishPrompt: jest.fn(),
-            showOpenDialog: jest.fn(),
-            showWorkspaceFolderPick: jest.fn(),
+            showInputBox: vi.fn(),
+            showWarningMessage: vi.fn(),
+            onDidFinishPrompt: vi.fn(),
+            showOpenDialog: vi.fn(),
+            showWorkspaceFolderPick: vi.fn(),
         },
         isEmulator: false,
         storageId: 'test-storage-id',
@@ -43,12 +45,12 @@ function createMockContext(
 
 describe('PromptReconnectStepForErrorNodes', () => {
     let step: PromptReconnectStepForErrorNodes<UpdateCredentialsWizardContext>;
-    let mockShowQuickPick: jest.Mock;
+    let mockShowQuickPick: Mock;
 
     beforeEach(() => {
-        jest.clearAllMocks();
+        vi.clearAllMocks();
         step = new PromptReconnectStepForErrorNodes();
-        mockShowQuickPick = jest.fn();
+        mockShowQuickPick = vi.fn();
     });
 
     describe('shouldPrompt', () => {
