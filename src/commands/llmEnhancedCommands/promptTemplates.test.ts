@@ -3,6 +3,8 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+import { describe, expect, it } from 'vitest';
+
 import {
     AGGREGATE_QUERY_PROMPT_TEMPLATE,
     COUNT_QUERY_PROMPT_TEMPLATE,

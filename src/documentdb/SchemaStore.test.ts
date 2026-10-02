@@ -3,14 +3,16 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { type IActionContext } from '@microsoft/vscode-azext-utils';
+import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from 'vitest';
+
+import { callWithTelemetryAndErrorHandling, type IActionContext } from '@microsoft/vscode-azext-utils';
 import { ObjectId } from 'bson';
 import { SchemaStore, type SchemaChangeEvent } from './SchemaStore';
 
 // Replace the telemetry helper with a no-op mock; individual tests override the
 // implementation to capture the measurements reported by `schemaStore.stats`.
-jest.mock('@microsoft/vscode-azext-utils', () => ({
-    callWithTelemetryAndErrorHandling: jest.fn(),
+vi.mock('@microsoft/vscode-azext-utils', () => ({
+    callWithTelemetryAndErrorHandling: vi.fn(),
 }));
 
 describe('SchemaStore', () => {
@@ -24,7 +26,7 @@ describe('SchemaStore', () => {
 
     afterEach(() => {
         store.dispose();
-        jest.useRealTimers();
+        vi.useRealTimers();
     });
 
     // ── Helpers ──
@@ -189,7 +191,7 @@ describe('SchemaStore', () => {
 
     describe('disposal registration', () => {
         it('keeps logging alive through schema teardown and preserves other subscription ordering', () => {
-            jest.useFakeTimers();
+            vi.useFakeTimers();
             store.addDocuments(clusterId, db, coll, makeDocs([{ name: 'teardown' }]));
             const order: string[] = [];
             let outputDisposed = false;
@@ -210,7 +212,7 @@ describe('SchemaStore', () => {
                 },
             };
             const subscriptions = [before, outputChannel, after];
-            const logStats = jest.spyOn(store, 'logStats').mockImplementation((): void => {
+            const logStats = vi.spyOn(store, 'logStats').mockImplementation((): void => {
                 if (outputDisposed) {
                     throw new Error('Channel has been closed');
                 }
@@ -224,7 +226,7 @@ describe('SchemaStore', () => {
                 }
                 expect(order).toEqual(['before', 'after', 'statistics', 'output']);
                 expect(store.getStats().collectionCount).toBe(0);
-                expect(jest.getTimerCount()).toBe(0);
+                expect(vi.getTimerCount()).toBe(0);
                 expect(SchemaStore.getInstance()).not.toBe(store);
             } finally {
                 logStats.mockRestore();
@@ -232,8 +234,8 @@ describe('SchemaStore', () => {
         });
 
         it('rejects an unregistered output channel without changing subscriptions', () => {
-            const disposable = { dispose: jest.fn() };
-            const outputChannel = { dispose: jest.fn() };
+            const disposable = { dispose: vi.fn() };
+            const outputChannel = { dispose: vi.fn() };
             const subscriptions = [disposable];
             expect(() => SchemaStore.registerForDisposal(subscriptions, outputChannel)).toThrow(
                 'outputChannel subscription',
@@ -297,8 +299,7 @@ describe('SchemaStore', () => {
 
         it('reports cache size, cap, and eviction count via telemetry', async () => {
             const measurements: Record<string, number> = {};
-            const callWithTelemetryMock = jest.requireMock('@microsoft/vscode-azext-utils')
-                .callWithTelemetryAndErrorHandling as jest.Mock;
+            const callWithTelemetryMock = callWithTelemetryAndErrorHandling as unknown as Mock;
             callWithTelemetryMock.mockImplementation(
                 async (_callbackId: string, callback: (ctx: IActionContext) => unknown) => {
                     const ctx = {
@@ -326,7 +327,7 @@ describe('SchemaStore', () => {
 
     describe('onDidChangeSchema', () => {
         beforeEach(() => {
-            jest.useFakeTimers();
+            vi.useFakeTimers();
         });
 
         it('fires after debounce delay on addDocuments', () => {
@@ -339,7 +340,7 @@ describe('SchemaStore', () => {
             expect(events).toHaveLength(0);
 
             // Advance past the 1-second debounce
-            jest.advanceTimersByTime(1000);
+            vi.advanceTimersByTime(1000);
 
             expect(events).toHaveLength(1);
             expect(events[0]).toEqual({
@@ -358,7 +359,7 @@ describe('SchemaStore', () => {
             store.addDocuments(clusterId, db, coll, makeDocs([{ b: 2 }]));
             store.addDocuments(clusterId, db, coll, makeDocs([{ c: 3 }]));
 
-            jest.advanceTimersByTime(1000);
+            vi.advanceTimersByTime(1000);
 
             // Only one event, not three
             expect(events).toHaveLength(1);
@@ -371,7 +372,7 @@ describe('SchemaStore', () => {
             store.addDocuments(clusterId, db, 'users', makeDocs([{ name: 'Alice' }]));
             store.addDocuments(clusterId, db, 'orders', makeDocs([{ total: 99 }]));
 
-            jest.advanceTimersByTime(1000);
+            vi.advanceTimersByTime(1000);
 
             expect(events).toHaveLength(2);
             expect(events.map((e) => e.collectionName)).toEqual(expect.arrayContaining(['users', 'orders']));
@@ -379,7 +380,7 @@ describe('SchemaStore', () => {
 
         it('fires immediately on clearSchema (not debounced)', () => {
             store.addDocuments(clusterId, db, coll, makeDocs([{ name: 'Alice' }]));
-            jest.advanceTimersByTime(1000); // flush addDocuments event
+            vi.advanceTimersByTime(1000); // flush addDocuments event
 
             const events: SchemaChangeEvent[] = [];
             store.onDidChangeSchema((e) => events.push(e));
@@ -410,7 +411,7 @@ describe('SchemaStore', () => {
 
             store.addDocuments(clusterId, db, coll, []);
 
-            jest.advanceTimersByTime(1000);
+            vi.advanceTimersByTime(1000);
 
             expect(events).toHaveLength(0);
         });
@@ -427,7 +428,7 @@ describe('SchemaStore', () => {
             expect(events).toHaveLength(1);
 
             // Advance timers — no additional event from the cancelled addDocuments debounce
-            jest.advanceTimersByTime(1000);
+            vi.advanceTimersByTime(1000);
             expect(events).toHaveLength(1);
         });
     });

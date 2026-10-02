@@ -3,9 +3,8 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-/** @jest-environment jsdom */
+import { describe, expect, it } from 'vitest';
 
-import { describe, expect, it } from '@jest/globals';
 import { setImmediate } from 'timers';
 import * as vscode from 'vscode';
 import { type BaseRouterContext } from '../shared/BaseRouterContext';

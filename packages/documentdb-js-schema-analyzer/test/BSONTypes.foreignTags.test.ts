@@ -3,6 +3,8 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+import { describe, expect, it, vi } from 'vitest';
+
 import {
     Binary,
     BSONRegExp,
@@ -105,7 +107,7 @@ describe('BSONTypes.inferType tag fallback', () => {
 
     it('does not read a tag inherited from Object.prototype', () => {
         const previousDescriptor = Object.getOwnPropertyDescriptor(Object.prototype, '_bsontype');
-        const readTag = jest.fn(() => 'ObjectId');
+        const readTag = vi.fn(() => 'ObjectId');
         try {
             Object.defineProperty(Object.prototype, '_bsontype', { configurable: true, get: readTag });
             expect(BSONTypes.inferType({ value: 1 })).toBe(BSONTypes.Object);

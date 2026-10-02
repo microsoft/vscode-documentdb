@@ -3,6 +3,8 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+import { describe, expect, test } from 'vitest';
+
 /**
  * Verifies the generated index reference data (scraped from the compatibility
  * page's "Index types" and "Index properties" tables).
