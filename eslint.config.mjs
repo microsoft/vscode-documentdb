@@ -59,6 +59,8 @@ export default ts.config(
                         'yaml/types',
                         '**/components/**/*.scss',
                         'build/verification/BundleReportPlugin.cjs',
+                        // TEMPORARY (modernization Stage 2): Jest/Vitest coexistence routing.
+                        'build/test-migration/runnerRouting.cjs',
                     ],
                 },
             ],

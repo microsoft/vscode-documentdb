@@ -75,6 +75,8 @@
     "test": "npm run jesttest --",
     "prejesttest": "npm run build --workspaces --if-present",
     "jesttest": "jest",
+    "pretest:vitest": "npm run build --workspaces --if-present",
+    "test:vitest": "vitest run",
     "verify:vsix": "node build/verification/inspect.cjs",
     "prove:vsix": "node build/verification/prove-inspection.cjs",
     "test:verification": "node --test build/verification/*.test.cjs build/verification/activation/*.test.cjs && jest --no-coverage --config build/verification/browser/jest.config.cjs --runInBand",
@@ -136,6 +138,7 @@
     "jest": "~30.3.0",
     "jest-environment-jsdom": "~30.3.0",
     "jest-mock-vscode": "~4.12.0",
+    "jsdom": "~26.1.0",
     "monaco-editor-webpack-plugin": "~7.1.1",
     "prettier": "~3.8.1",
     "prettier-plugin-organize-imports": "~4.3.0",
@@ -153,6 +156,8 @@
     "ts-node": "~10.9.2",
     "typescript": "~5.9.3",
     "typescript-eslint": "~8.57.0",
+    "vite": "~8.0.16",
+    "vitest": "~4.1.11",
     "webpack": "~5.105.4",
     "webpack-bundle-analyzer": "~5.2.0",
     "webpack-cli": "~6.0.1",
@@ -212,10 +217,14 @@
     "vscode-uri": "~3.1.0",
     "zod": "~4.3.6"
   },
-  "//overrides": "Pin transitive dependencies: glob 12.0.x for latest, test-exclude 7 for compatibility.",
+  "//overrides": "Pin transitive dependencies: glob 12.0.x for latest, test-exclude 7 for compatibility. Modernization Stage 2 (temporary, remove before G6): vite follows the direct pin because npm 10.9 crashes resolving the vite 8.3 devtools peer chain; chai, std-env and tinyrainbow are held below versions inside the 7-day freshness window.",
   "overrides": {
+    "chai": "6.2.2",
     "glob": "~12.0.0",
-    "test-exclude": "~7.0.1"
+    "std-env": "4.2.0",
+    "test-exclude": "~7.0.1",
+    "tinyrainbow": "3.1.1",
+    "vite": "$vite"
   },
   "extensionDependencies": [],
   "contributes": {

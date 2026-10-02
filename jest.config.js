@@ -1,3 +1,9 @@
+const path = require('path');
+// TEMPORARY (modernization Stage 2): test files that import from 'vitest' run under Vitest only.
+const { jestIgnorePatterns } = require('./build/test-migration/runnerRouting.cjs');
+
+const vitestConvertedInSrc = jestIgnorePatterns(path.join(__dirname, 'src'));
+
 /** @type {import('jest').Config} **/
 module.exports = {
     // Limit workers to avoid OOM kills on machines with many cores.
@@ -11,6 +17,7 @@ module.exports = {
             displayName: 'extension',
             testEnvironment: 'node',
             testMatch: ['<rootDir>/src/**/*.test.ts'],
+            testPathIgnorePatterns: vitestConvertedInSrc,
             // @swc/jest transpiles without type-checking, avoiding ts-jest's
             // per-worker TypeScript compiler (~500MB+) which was causing OOM in CI.
             // Options are inlined (not read from .swcrc) because @swc/jest's strict
@@ -48,6 +55,7 @@ module.exports = {
             displayName: 'extension-webview',
             testEnvironment: 'jsdom',
             testMatch: ['<rootDir>/src/webviews/**/*.test.tsx'],
+            testPathIgnorePatterns: vitestConvertedInSrc,
             transform: {
                 '^.+\\.tsx?$': ['ts-jest', {}],
             },

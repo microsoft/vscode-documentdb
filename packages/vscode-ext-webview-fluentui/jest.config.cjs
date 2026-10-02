@@ -15,6 +15,8 @@ module.exports = {
     // injection test needs a real `document.head`.
     testEnvironment: 'jsdom',
     testMatch: ['<rootDir>/src/**/*.test.ts', '<rootDir>/src/**/*.test.tsx'],
+    // TEMPORARY (modernization Stage 2): test files that import from 'vitest' run under Vitest only.
+    testPathIgnorePatterns: require('../../build/test-migration/runnerRouting.cjs').jestIgnorePatterns(__dirname),
     // The package is ESM, so its relative imports carry the `.js` extension a spec-compliant
     // consumer requires. Jest resolves against the TypeScript sources, where no such file exists.
     moduleNameMapper: {

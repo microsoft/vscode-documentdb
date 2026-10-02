@@ -6,6 +6,8 @@ module.exports = {
     maxWorkers: '50%',
     testEnvironment: 'node',
     testMatch: ['<rootDir>/src/**/*.test.ts'],
+    // TEMPORARY (modernization Stage 2): test files that import from 'vitest' run under Vitest only.
+    testPathIgnorePatterns: require('../../build/test-migration/runnerRouting.cjs').jestIgnorePatterns(__dirname),
     // The host facade (WebviewController / openWebview) imports `vscode` at
     // runtime; map it to a minimal stub. Type-checking still uses @types/vscode.
     // The stub deliberately lives outside any `__mocks__/` directory so it is
