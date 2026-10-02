@@ -10,7 +10,8 @@ const webpack = require('webpack');
 const ReactRefreshWebpackPlugin = require('@pmmmwh/react-refresh-webpack-plugin');
 const CopyWebpackPlugin = require('copy-webpack-plugin');
 const MonacoWebpackPlugin = require('monaco-editor-webpack-plugin');
-// const BundleAnalyzerPlugin = require('webpack-bundle-analyzer').BundleAnalyzerPlugin;
+const { BundleAnalyzerPlugin } = require('webpack-bundle-analyzer');
+const { BundleReportPlugin } = require('./build/verification/BundleReportPlugin.cjs');
 
 module.exports = (env, { mode }) => {
     const isDev = mode === 'development';
@@ -116,7 +117,13 @@ module.exports = (env, { mode }) => {
             webSocketServer: 'ws',
         },
         plugins: [
-            //new BundleAnalyzerPlugin(),
+            process.env.BUNDLE_ANALYZE === 'true' &&
+                new BundleAnalyzerPlugin({
+                    analyzerMode: 'static',
+                    openAnalyzer: false,
+                    reportFilename: path.resolve(__dirname, 'build/verification/reports/views.html'),
+                }),
+            new BundleReportPlugin('views'),
             new MonacoWebpackPlugin({ languages: ['sql', 'json'] }),
             new webpack.ProvidePlugin({ React: 'react' }),
             isDev && new webpack.HotModuleReplacementPlugin(),
@@ -127,7 +134,7 @@ module.exports = (env, { mode }) => {
             new webpack.optimize.LimitChunkCountPlugin({
                 maxChunks: 1,
             }),
-        ],
+        ].filter(Boolean),
         devtool: isDev ? 'source-map' : false,
         infrastructureLogging: {
             level: 'log', // enables logging required for problem matchers

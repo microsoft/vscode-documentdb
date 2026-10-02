@@ -3,7 +3,7 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { type IDisposable } from '../../extension.bundle';
+import { type IDisposable } from '../vscodeUtils';
 
 /**
  * Add a set of environment variables, and return to the previous values after disposing the result
@@ -15,17 +15,22 @@ export function setEnvironmentVariables(env: { [key: string]: string }): IDispos
 }
 
 class SetRestoreEnv implements IDisposable {
-    private _previousValues: { [key: string]: string } = {};
+    private _previousValues: { [key: string]: string | undefined } = {};
 
     public set(env: { [key: string]: string }): void {
         for (const key of Object.keys(env || {})) {
-            [this._previousValues[key], process.env[key]] = [process.env[key]!, env[key]];
+            [this._previousValues[key], process.env[key]] = [process.env[key], env[key]];
         }
     }
 
     public restore(): void {
         for (const key of Object.keys(this._previousValues)) {
-            process.env[key] = this._previousValues[key];
+            const previousValue = this._previousValues[key];
+            if (previousValue === undefined) {
+                delete process.env[key];
+            } else {
+                process.env[key] = previousValue;
+            }
         }
     }
 

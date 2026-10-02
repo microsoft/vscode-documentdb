@@ -76,7 +76,7 @@ export async function activateInternal(
 
         const clustersSupport: ClustersExtension = new ClustersExtension();
         context.subscriptions.push(clustersSupport); // to be disposed when extension is deactivated.
-        context.subscriptions.push(SchemaStore.getInstance());
+        SchemaStore.registerForDisposal(context.subscriptions, ext.outputChannel);
         await clustersSupport.activateClustersSupport();
 
         context.subscriptions.push(

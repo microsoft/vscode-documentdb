@@ -9,6 +9,7 @@ const webpack = require('webpack');
 const path = require('path');
 const CopyWebpackPlugin = require('copy-webpack-plugin');
 const TerserPlugin = require('terser-webpack-plugin');
+const { BundleReportPlugin } = require('./build/verification/BundleReportPlugin.cjs');
 
 const excludeRegion = /<!-- region exclude-from-marketplace -->.*?<!-- endregion exclude-from-marketplace -->/gis;
 const supportedLanguages = [];
@@ -119,6 +120,7 @@ module.exports = (env, { mode }) => {
             ],
         },
         plugins: [
+            new BundleReportPlugin('host'),
             new webpack.EnvironmentPlugin({
                 NODE_ENV: mode,
                 IS_BUNDLE: 'true',
