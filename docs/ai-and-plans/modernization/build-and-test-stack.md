@@ -808,6 +808,22 @@ plugin in a real editor; Kubernetes, Atlas and Azure discovery against real back
   GPT-5.3-Codex). Hand mock-hoisting failures and every `TDD:` suite to **Claude Opus 5.5**.
   Reviewer **GPT-6 Sol**. Work in batches of test files rather than switching to the 1M-token
   context. (Superseded for this run by ground rule 2: largest context, still in batches.)
+  - **Execution (2026-10-02):** three phases. **Phase A (setup and pilot)** authored by **Claude
+    Opus 5.5**; the long-context variant was requested, but the runtime exposes no context-tier
+    identifier, so the variant cannot be confirmed. **Phase B (bulk conversion)** by GPT-6.1 Sol
+    subagents using the recipe below; **Phase C (leftovers, `TDD:` suites, browser harness tests,
+    Jest removal, docs/CI, parity, timing, end-of-stage verification)** by a separate agent.
+  - **Operator decision (2026-10-02):** Stages 2 and 3 proceed while GitHub Actions runners are
+    stalled. Agents do not push, run, re-run, cancel or watch CI in this phase; CI verification for
+    Stages 2 and 3 is deferred to the orchestrator. Stage 1's CI evidence is run
+    [37010184351](https://github.com/microsoft/vscode-documentdb/actions/runs/37010184351); the
+    later head runs [37011967057](https://github.com/microsoft/vscode-documentdb/actions/runs/37011967057)
+    and [37021977737](https://github.com/microsoft/vscode-documentdb/actions/runs/37021977737)
+    never got a runner. The branch base is unchanged (no merge or rebase onto `main`, per the
+    Stage 1 operator decision).
+  - **Status: Phase A completed** in `2c54aacf` (setup) and `56c4ff9d` (pilot), committed locally
+    and not pushed. Jest and Vitest coexist until Phase C; `npm test` and CI's `jesttest` step still
+    run Jest, which skips converted files. Phases B and C are pending.
 - **Goal:** one test runner that shares Vite's transform pipeline and loads ESM natively.
 - **Why now:**
   - Vitest does not need Vite as the bundler. With it in place, Stages 3 to 5 have a fast,
@@ -817,10 +833,124 @@ plugin in a real editor; Kubernetes, Atlas and Azure discovery against real back
   - The test surface grew 48 % in seven weeks (now 293 test files, 2,812 `jest.*` call sites,
     448 `jest.mock()` calls). Later costs more.
 - **Tasks:**
+  - **Phase A addition: record the baseline counts.** Completed before any change (Node 22.18.0,
+    npm 10.9.3, `HEAD` `5b4ead56`). Full Jest: **295 suites / 4,582 tests / 4 snapshots**, all
+    passing (39.9 s). Per project (suites / tests): `extension` **248 / 4,005** (all 4 snapshots,
+    in `promptTemplates.test.ts`); `extension-webview` **3 / 7**; `documentdb-js-schema-analyzer`
+    **5 / 150**; `documentdb-js-operator-registry` **6 / 74**; `documentdb-js-shell-runtime`
+    **4 / 109**; `vscode-ext-webview` **11 / 97**; `vscode-ext-webview-fluentui` **18 / 140**.
+    The sixth package, `documentdb-js-shell-api-types`, is not a Jest root project; its own
+    `npm test` passes **1 / 6**. `npm run test:verification`: **32** `node --test` tests and
+    **3 Jest suites / 45 tests**, all passing.
   - Codemod `jest.*` to `vi.*`. Fix mock-hoisting failures with `vi.hoisted`: a `jest.mock()` factory
     that references a `const` declared below it works under `ts-jest` and fails elsewhere.
+    - **Phase A, `2c54aacf`:** added `build/test-migration/jest-to-vitest.mjs` (temporary). It
+      renames the same-named `jest.*` calls (whitespace-tolerant, so Prettier-wrapped
+      `jest\n.fn()` chains are caught) and the `jest.Mock`/`Mocked`/`MockedFunction`/
+      `MockedClass`/`MockedObject`/`SpyInstance` types (`SpyInstance` becomes `MockInstance`).
+      It replaces `@jest/globals` imports, drops bare `jest.mock('vscode')`, and adds a
+      `vitest` import of exactly the free identifiers found by the TypeScript parser; an
+      earlier regex scan missed `describe` in one file. It adds the jsdom docblock to
+      `src/webviews/**/*.test.tsx` and prints `MANUAL` for every remaining `jest` reference and
+      `@jest-environment` comment.
+    - **Phase A pilot, `56c4ff9d`:** 20 files covering every former project (listed under
+      "Automated verification"). Manual fixes needed beyond the codemod:
+      `jest.requireActual` → `await vi.importActual` in an `async` factory
+      (`localQuickStartRouter.test.ts`); `jest.requireMock` → a static import of the mocked
+      module (`SchemaStore.test.ts`); arrow `mockImplementation`s that production code calls with
+      `new` → `function` expressions, which Vitest 4 requires (`PromptTenantStep.test.ts`,
+      `managedIdentityTokenProvider.test.ts`); and a stray `/** @jest-environment jsdom */` in
+      `packages/vscode-ext-webview/src/host/openWebview.test.ts`. Jest honours that comment only
+      as the file's first comment, so it never ran there; Vitest honours it anywhere. It was removed
+      to keep the node environment the file actually ran in.
+    - **`vi.hoisted` finding:** a throwaway probe confirmed that a factory reading a top-level
+      `const` eagerly fails with `Cannot access '…' before initialization` once the mocked module
+      is imported statically. A TypeScript-AST scan of all 296 unit-test files found **one**
+      eager reference (`mockConfigureAzureCredentials` in `PromptTenantStep.test.ts`); it and
+      `managedIdentityTokenProvider.test.ts` only passed because production code imports those
+      modules with `await import(...)`. Both now use `vi.hoisted`. The other factories read outer
+      variables only inside functions, which run later.
+    - **Snapshots:** Vitest keys separate `describe` names with `>` and uses a different header.
+      `promptTemplates.test.ts.snap` was rewritten with `-u`; a script compared all **4** stored
+      values with the Jest originals and found them byte-identical.
+    - **Conversion recipe for Phase B** (also the batch lists' reference):
+      1. Take a batch from the batch list; never touch config files. A file moves from Jest to
+         Vitest when it imports from `'vitest'`: Jest ignores it from then on and Vitest
+         includes it (`build/test-migration/runnerRouting.cjs`).
+      2. `node build/test-migration/jest-to-vitest.mjs <files>`; fix every `MANUAL` line.
+      3. `jest.requireActual(p)` → `await vi.importActual<T>(p)` and make that factory `async`.
+         `jest.requireMock(p)` → import the mocked module statically (it is the mock) and cast it.
+      4. A factory that reads a top-level variable outside a nested function (Vitest error
+         "There was an error when mocking a module" / "before initialization") needs that
+         variable created inside `vi.hoisted`. Example:
+         `const { mockX } = vi.hoisted(() => ({ mockX: vi.fn() }));`. Hoist only those variables.
+      5. `"... is not a constructor"`: change the arrow in `vi.fn(() => …)` or
+         `.mockImplementation(() => …)` to `function () { return …; }`.
+      6. A factory must return every export the code under test reads. Vitest throws
+         `No "x" export is defined on the mock`; add the export, or spread
+         `...(await importOriginal())` from `vi.mock(p, async (importOriginal) => …)`.
+         A default import of a CommonJS module needs `{ default: … }` in the factory.
+      7. jsdom: `src/webviews/**/*.test.tsx` gets `// @vitest-environment jsdom` after the license
+         header (the codemod adds it). Any other file keeps the environment it had under Jest:
+         node in `src/` and most packages, jsdom for the whole fluentui project (set in config).
+         Remove `@jest-environment` comments that were not the file's first comment.
+      8. `jest.replaceProperty` has no `vi` equivalent: assign the value and restore it in
+         `afterEach`. If fake-timer tests hang, `vi.useFakeTimers()` does not fake `nextTick` or
+         `queueMicrotask` by default; pass `toFake` explicitly.
+      9. Snapshot files: `npx vitest run <file> -u` (`-u` after the paths), then confirm only the
+         header and key separators changed.
+      10. Run the batch: `npx vitest run <files>`; then `npm run build` (type-checks tests) and
+          `npx jest` (must stay green on the rest). Run `npx prettier --write <files>` and
+          `npx eslint --quiet <files>`. Commit as `S2: convert <folder> tests to Vitest (Bnn)`.
+      11. Skip `TDD:` suites (Phase C). Do not change assertions; record any non-mechanical
+          change in the commit message for the plan. Vite's Oxc transform warns about
+          `export let` in `namespace ext` (`src/extensionVariables.ts`); ignore it (see the open
+          items).
   - Replace the separate jsdom Jest project with a per-file `// @vitest-environment jsdom` docblock.
+    - **Phase A, `2c54aacf` / `56c4ff9d`:** the `extension` Vitest project defaults to node.
+      The two converted `src/webviews/**/*.test.tsx` pilots carry the docblock and pass under jsdom.
+      Every test in `vscode-ext-webview-fluentui` needs a DOM, and its Jest project ran under jsdom.
+      That package therefore keeps a project-level `environment: 'jsdom'` instead of 18
+      docblocks, preserving parity. Per-file docblocks for that package were considered;
+      they add churn without changing behavior.
+    - **Decorators:** the SWC transform's `decorators: true` was a parser flag only; no source
+      file uses decorators. A throwaway probe confirmed that Vite 8's Oxc transform applies legacy
+      (`experimentalDecorators`) method decorators from `tsconfig.json`, so no Vitest setting
+      is needed.
   - Merge the six package projects into one Vitest workspace.
+    - **Phase A, `2c54aacf`:** one root `vitest.config.ts` with `test.projects`: `extension`
+      (replaces `extension` and `extension-webview`) plus one project per package, all six
+      including `documentdb-js-shell-api-types`. That package never ran in the Jest root run, so
+      its **6** tests are a new addition to the root total. Settings carried over: the 25 %
+      worker cap; the `vscode` alias to the new ESM mock `test/vitest/vscode.ts` (a port of
+      `src/__mocks__/vscode.js` built with `createVSCodeMock(vi)` and static named exports, outside
+      `__mocks__/` so Jest's haste map sees no second `vscode` mock); and `vscode-ext-webview`'s
+      own `vscodeStub.ts` alias. The fluentui `.js` → `.ts` import mapping is native in Vite.
+      Added `test:vitest` (`vitest run`, with the workspace prebuild); `npm test` is unchanged.
+    - **Coexistence mechanism:** `build/test-migration/runnerRouting.cjs` (temporary) classifies a
+      test file as converted when it contains `from 'vitest'`. Each Vitest project's `include` is
+      the list of converted files; the root and package Jest configs set
+      `testPathIgnorePatterns` to the same files. Converting a file therefore moves it between
+      runners with no config edit, so the Phase B agents never touch configs. Alternatives
+      considered: an explicit include list, which needs a config edit per batch; and a
+      `*.vitest.ts` rename, which makes Phase C rename every file back. Phase C replaces each
+      `vitestFiles(root, dir)` with a plain glob and deletes the helper.
+    - **Dependencies:** `vitest ~4.1.11` (2026-08-18; the Cosmos DB pairing), `vite ~8.0.16`
+      (2026-06-01) and `jsdom ~26.1.0` (the version `jest-environment-jsdom` already installed,
+      now direct so it survives Jest removal). `npm install` on npm 10.9.3 first crashed with
+      `Cannot read properties of null (reading 'edgesOut')`. Vite 8.3.x has an optional
+      `@vitejs/devtools` peer chain leading to `vitest@*` (5.x). A direct `vite` pin alone did not
+      help, so a temporary `"vite": "$vite"` override was added. Considered and rejected:
+      `--legacy-peer-deps` (changes peer resolution for the whole tree) and a newer npm than
+      `.nvmrc`'s. The lockfile was regenerated with `npm install` (Node 22.18.0 / npm 10.9.3):
+      **64** entries added, none removed. Existing versions are unchanged except
+      `@tybys/wasm-util` **0.10.1 → 0.10.4**, required by rolldown's `@napi-rs/wasm-runtime`.
+    - **Ground rule 6:** the first scan found **3 fresh** transitive versions: `chai` 6.3.0
+      (2026-09-30), `tinyrainbow` 3.2.0 (2026-09-30) and `std-env` 4.3.0 (2026-09-29). Overrides
+      pin them to `chai` **6.2.2**, `tinyrainbow` **3.1.1** and `std-env` **4.2.0**, the newest
+      versions older than 7 days. The rescan after regeneration found **0 fresh** (root **1,804
+      versions / 1,636 packages**, one unpublished entry; API **116 / 106**), exit 0. All four
+      new overrides are marked temporary in `//overrides`; remove them before G6.
   - Add two temporary interop settings, as Cosmos DB did:
     - `deps.optimizer.ssr` pre-bundling for `@microsoft/vscode-ext-webview` and its `/host`,
       `/react` and `/webview` subpaths. Its CommonJS host entry `require`s `vscode` past the test
@@ -828,23 +958,70 @@ plugin in a real editor; Kubernetes, Atlas and Azure discovery against real back
     - `server.deps.inline` for `@microsoft/vscode-ext-webview-fluentui`. It is already ESM, but it
       imports named exports from Fluent, which is CommonJS under Node. This is a separate problem
       that Stage 3 does not solve; keep the setting until a consumer test passes without it.
+    - **Phase A, `2c54aacf`:** both added to the `extension` project and commented as temporary
+      (Stage 3 revisits). Observed: the pilot's `extension` project passed **8 files / 162 tests**
+      with either setting disabled. Here the workspace packages resolve through symlinks to
+      `packages/*/dist`, outside `node_modules`, so Vitest inlines them regardless; Cosmos DB
+      consumes them from `node_modules`. No pilot file imports `@microsoft/vscode-ext-webview/host`.
+      Both settings stay as the plan requires; Phase C or Stage 3 should repeat this check with
+      the full suite before removing either.
   - Replace the fluentui `jest.mock()` stubs in the Cluster Dashboard tests with the real package
     where the test allows.
+    - **Deferred to Phase C.** Phase B converts those stubs mechanically.
   - Remove `ts-jest`, `@swc/jest`, `jest`, `jest-environment-jsdom`, `eslint-plugin-jest` and the
     `jest.config.js` files. Add the Vitest ESLint plugin if wanted.
+    - **Deferred to Phase C:** Jest must keep running unconverted files until then.
   - In the same stage, update every place that names the Jest commands:
     `.github/copilot-instructions.md` (the Case 1 and Case 2 lists), `CONTRIBUTING.md`, the backport
     skill, the `jesttest` step in `.github/workflows/main.yml`, and the `test` script.
+    - **Deferred to Phase C.** Phase A only added `test:vitest`; CI does not run Vitest yet.
   - **Convert the Stage 0 harness tests too.** `npm run test:verification` runs
     `build/verification/browser/*.test.ts` under Jest with `@swc/jest`
     (`build/verification/browser/jest.config.cjs`, `jest.*` calls, `types: ["jest"]` in its
     `tsconfig.json`). Convert them with the rest; `runtime.test.ts` needs the jsdom environment.
     The `node --test` half stays. These 45 tests count toward the preserved total. The CI L1 job
     runs `test:verification`, so a missed conversion fails there, not in the unit-test job.
+    - **Deferred to Phase C.** Unchanged in Phase A; `test:verification` still passes
+      (**32** node tests; **3 Jest suites / 45 tests**).
   - Dev loop: see the `watch:views` limitation under Stage 0.
 - **Automated verification:** the same test count as before, give or take documented deletions;
   wall time compared with the Stage 0 baseline; L0. The shipped artifact does not change, so L1 to L3
   are a formality.
+  - **Phase A results (local, Node 22.18.0):** `npm run build` passed. Full `npm run lint` passed
+    after two fixes: the mock is now typed as `Record<string, unknown>`, and the routing helper has
+    a `.d.cts` declaration plus a temporary `import/no-internal-modules` allow entry, following
+    the `BundleReportPlugin.cjs` precedent. Prettier ran on every changed file.
+    Jest on the remaining files: **276 suites / 4,224 tests / 0 snapshots** (34.4 s wall). Vitest
+    on the pilot (`CI=true`): **20 files / 364 tests**, snapshots **4 matched / 0 written**
+    (14.3 s wall), with no converted file run by both runners. Per project (Jest remaining + Vitest
+    pilot = baseline): `extension` 3,848 + 157 = 4,005; jsdom webview 2 + 5 = 7; schema-analyzer
+    61 + 89 = 150; operator-registry 56 + 18 = 74; shell-runtime 56 + 53 = 109;
+    `vscode-ext-webview` 79 + 18 = 97; fluentui 122 + 18 = 140; shell-api-types 0 + 6 (new in the
+    root run). Total **4,588 = 4,582 + 6**. These wall times are not Phase C's timing comparison.
+  - **Pilot files:** `src/commands/newConnection/PromptTenantStep.test.ts`,
+    `src/documentdb/auth/managedIdentityTokenProvider.test.ts`,
+    `src/webviews/documentdb/localQuickStart/localQuickStartRouter.test.ts`,
+    `src/commands/copyCollection/copyCollection.test.ts` (implicit `vscode` mock),
+    `src/commands/llmEnhancedCommands/promptTemplates.test.ts` (snapshots),
+    `src/documentdb/SchemaStore.test.ts` (`bson`, `requireMock`),
+    `src/webviews/components/MessageBlock.test.tsx` and
+    `src/webviews/documentdb/clusterDashboard/components/NamespaceTable.test.tsx` (jsdom React);
+    schema-analyzer `SchemaAnalyzer.foreignBson` and `BSONTypes.foreignTags`; operator-registry
+    `indexReference` and `docLinks`; shell-api-types `methodRegistry`; shell-runtime
+    `ResultTransformer` and `CommandInterceptor`; `vscode-ext-webview` `host/openWebview` and
+    `shared/initWebviewTrpc`; fluentui `StepList` (TSX), `injectStyles` and `vscode/vscode`.
+  - **Not run in Phase A:** packaging, L1, L2 and L3 (no artifact change), and CI (operator
+    decision above). No `TDD:` suite changed. No `vscode.l10n.t()` string changed, so
+    `npm run l10n` was not run.
+  - **Phase B batches:** the 270 remaining non-`TDD:` files are in 15 batches of 15 to 24 files,
+    each within one folder. The six `TDD:` suites and the three browser harness tests are held for
+    Phase C. The lists are in the orchestrator's session files (`s2-batches.md`), not committed.
+  - **Open item for the operator:** Vite 8's Oxc transform does not support non-`const` exports in
+    TypeScript namespaces and warns 19 times for `export namespace ext` in
+    `src/extensionVariables.ts`. The output is equivalent today, because no `export let` there has
+    an initializer and TypeScript emits nothing for one without. An initializer added later would
+    be dropped silently under Vitest, and under Vite in Stage 5. Rewriting `ext` is a production
+    change this plan does not make; the decision is the operator's, at Stage 5 at the latest.
 - **Operator gate G2:** review the tests that changed beyond mechanical renames, and every recorded
   `TDD:` suite change (ground rule 2). Reviewed at the combined checkpoint G1-3 after Stage 3.
 
