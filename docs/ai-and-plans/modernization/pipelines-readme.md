@@ -136,20 +136,20 @@ The check names L1 to L3 come from the modernization plan
 L1 inspects the unzipped VSIX against a committed manifest, L2 renders the production webview bundle
 in a browser, and L3 installs the VSIX into a downloaded VS Code and checks that it activates.
 
-| Check                                | Today                             | GitHub Actions (planned)                  | ADO official build (planned) | Why                                                                                |
-| ------------------------------------ | --------------------------------- | ----------------------------------------- | ---------------------------- | ---------------------------------------------------------------------------------- |
-| `npm ci`                             | both                              | public npmjs                              | internal feed                | Different sources, see 2.1                                                         |
-| Build / type check                   | both                              | yes                                       | yes                          | ADO must build what it signs                                                       |
-| Lint, Prettier, `l10n:check`         | GitHub                            | yes (gate)                                | no                           | PR feedback; no effect on the artifact                                             |
-| Unit tests (Jest, later Vitest)      | GitHub; ADO only for npm packages | yes (gate)                                | optional                     | Need no network, so they can run in ADO, but GitHub already gates every PR         |
-| Package the VSIX                     | both                              | yes (PR artifact, and input to L3)        | yes (**the one that ships**) |                                                                                    |
-| **L1** artifact inspection           | implemented; local pass           | wired as a separate job                   | **wired before signing**     | Needs no network. Rerun on the downloaded ADO artifact at release time (section 4) |
-| **L2** production-bundle harness     | integrated-browser pass           | later, headless (needs browser binaries)  | no                           | Browser download                                                                   |
-| **L3** installed-VSIX smoke          | implemented; CI proof pending     | wired as a separate job on PRs            | **no**                       | Downloads VS Code; local machine has no display/Xvfb                               |
-| E2E suite (future iteration)         | not yet                           | yes                                       | no                           | Downloads VS Code, browsers, Docker images                                         |
-| `🧪 Test` step (`npm test`, a no-op) | ADO                               | n/a                                       | **removed**                  | Would break under isolation once `npm test` does something                         |
-| Dependency freshness                 | manual (skill)                    | future work, not planned                  | implicit (`npm ci` fails)    | Release builds are prepared from quarantine-clear versions (2.1)                   |
-| Sign, verify signature, publish      | ADO                               | no                                        | yes                          |                                                                                    |
+| Check                                | Today                             | GitHub Actions (planned)                 | ADO official build (planned) | Why                                                                                |
+| ------------------------------------ | --------------------------------- | ---------------------------------------- | ---------------------------- | ---------------------------------------------------------------------------------- |
+| `npm ci`                             | both                              | public npmjs                             | internal feed                | Different sources, see 2.1                                                         |
+| Build / type check                   | both                              | yes                                      | yes                          | ADO must build what it signs                                                       |
+| Lint, Prettier, `l10n:check`         | GitHub                            | yes (gate)                               | no                           | PR feedback; no effect on the artifact                                             |
+| Unit tests (Jest, later Vitest)      | GitHub; ADO only for npm packages | yes (gate)                               | optional                     | Need no network, so they can run in ADO, but GitHub already gates every PR         |
+| Package the VSIX                     | both                              | yes (PR artifact, and input to L3)       | yes (**the one that ships**) |                                                                                    |
+| **L1** artifact inspection           | implemented; local pass           | wired as a separate job                  | **wired before signing**     | Needs no network. Rerun on the downloaded ADO artifact at release time (section 4) |
+| **L2** production-bundle harness     | integrated-browser pass           | later, headless (needs browser binaries) | no                           | Browser download                                                                   |
+| **L3** installed-VSIX smoke          | implemented; CI proof pending     | wired as a separate job on PRs           | **no**                       | Downloads VS Code; local machine has no display/Xvfb                               |
+| E2E suite (future iteration)         | not yet                           | yes                                      | no                           | Downloads VS Code, browsers, Docker images                                         |
+| `🧪 Test` step (`npm test`, a no-op) | ADO                               | n/a                                      | **removed**                  | Would break under isolation once `npm test` does something                         |
+| Dependency freshness                 | manual (skill)                    | future work, not planned                 | implicit (`npm ci` fails)    | Release builds are prepared from quarantine-clear versions (2.1)                   |
+| Sign, verify signature, publish      | ADO                               | no                                       | yes                          |                                                                                    |
 
 ## 4. The gap between the two VSIXs, and how to close it
 

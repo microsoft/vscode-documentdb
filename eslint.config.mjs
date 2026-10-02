@@ -54,7 +54,14 @@ export default ts.config(
             'import/consistent-type-specifier-style': ['error', 'prefer-inline'],
             'import/no-internal-modules': [
                 'error',
-                { allow: ['antlr4ts/**', 'yaml/types', '**/components/**/*.scss'] },
+                {
+                    allow: [
+                        'antlr4ts/**',
+                        'yaml/types',
+                        '**/components/**/*.scss',
+                        './build/verification/BundleReportPlugin.cjs',
+                    ],
+                },
             ],
             'no-case-declarations': 'error',
             'no-constant-condition': 'error',

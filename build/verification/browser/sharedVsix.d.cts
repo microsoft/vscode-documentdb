@@ -3,10 +3,8 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import * as shared from '../vsix.cjs';
-
-export const vsixTools = {
-    readVsix: shared.readVsix,
-    extractVsix: shared.extractVsix,
-    writeVsix: shared.writeVsix,
-};
+declare module '*/vsix.cjs' {
+    export function readVsix(filename: string): Map<string, Buffer>;
+    export function extractVsix(filename: string, destination: string): void;
+    export function writeVsix(filename: string, files: Map<string, Buffer>): void;
+}

@@ -5,6 +5,9 @@
         "types": ["node", "jest"],
         "rootDir": "../../.."
     },
-    "include": ["./**/*.ts"],
+    "include": ["./**/*.ts", "./**/*.d.cts"],
+    "ts-node": {
+        "files": true
+    },
     "exclude": []
 }

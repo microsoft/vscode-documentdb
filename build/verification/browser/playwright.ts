@@ -3,7 +3,7 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import type { BrowserReport } from './runtime';
+import { type BrowserReport } from './runtime';
 
 interface BrowserRequest {
     url(): string;
@@ -20,6 +20,8 @@ interface BrowserConsole {
 interface BrowserLocator {
     click(): Promise<void>;
     fill(value: string): Promise<void>;
+    press(key: string): Promise<void>;
+    last(): BrowserLocator;
 }
 
 export interface IntegratedPage {
@@ -33,6 +35,8 @@ export interface IntegratedPage {
     off(event: 'response', listener: (response: BrowserResponse) => void): void;
     goto(url: string, options: { waitUntil: 'networkidle' }): Promise<unknown>;
     getByRole(role: string, options: { name: string; exact?: boolean }): BrowserLocator;
+    locator(selector: string): BrowserLocator;
+    readonly keyboard: { insertText: (text: string) => Promise<void> };
     waitForFunction(predicate: () => boolean, argument: undefined, options: { timeout: number }): Promise<unknown>;
     evaluate<T>(operation: () => T | Promise<T>): Promise<T>;
     evaluate<T, A>(operation: (argument: A) => T | Promise<T>, argument: A): Promise<T>;
@@ -80,6 +84,25 @@ export async function runIntegratedCheck(page: IntegratedPage, url: string, expe
                 await page.getByRole('button', { name: 'Verify & Save', exact: true }).click();
             }
             await page.waitForFunction((): boolean => window.stage0Harness?.ready() === true, undefined, { timeout: 30000 });
+            if (url.endsWith('/collectionView.html') || url.endsWith('/documentView.html') || url.endsWith('/collectionView-broken-css.html')) {
+                const documentView = url.endsWith('/documentView.html');
+                const editor = page.getByRole('textbox', {
+                    name: documentView ? 'Document Editor: Edit the document in JSON format' : 'Filter: Enter the DocumentDB query filter',
+                    exact: true,
+                });
+                await page.evaluate((): void => window.stage0Harness.beginEditorProbe('stage0_worker_probe'));
+                await editor.press('ControlOrMeta+A');
+                await page.keyboard.insertText('{ "stage0_worker_probe": "left\u200bright", "invalid": }');
+                await page.waitForFunction((): boolean => window.stage0Harness.editorProbeReady(), undefined, { timeout: 15000 });
+                if (documentView) {
+                    await page.getByRole('button', { name: 'Reload document from the database', exact: true }).click();
+                } else {
+                    await page.locator('.queryEditorActions button').last().click();
+                }
+                await page.waitForFunction((): boolean => window.stage0Harness.ready() &&
+                    !document.querySelector('.monaco-editor .view-lines')?.textContent?.includes('stage0_worker_probe'),
+                undefined, { timeout: 15000 });
+            }
         } catch (error) {
             errors.push(`settling: ${error instanceof Error ? error.message : String(error)}`);
         }
@@ -89,6 +112,13 @@ export async function runIntegratedCheck(page: IntegratedPage, url: string, expe
             }
             return window.stage0Harness.check();
         });
+        if (browser.view === 'collectionView' || browser.view === 'documentView') {
+            const expectedMethod = browser.view === 'documentView' ? 'doValidation' : '$computeUnicodeHighlights';
+            if (browser.worker?.source !== 'rendered-editor' || browser.worker.probeMarker !== 'stage0_worker_probe' ||
+                browser.worker.roundTrip !== expectedMethod) {
+                errors.push(`Rendered Monaco editor worker proof missing or mismatched for ${browser.view}`);
+            }
+        }
         const combined = [...new Set([...browser.errors, ...errors])];
         const cssFailed = combined.some((error): boolean => error.startsWith('Style '));
         const onlyCssErrors = combined.every((error): boolean => error.startsWith('Style ') || error.startsWith('Empty layout:'));

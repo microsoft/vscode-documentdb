@@ -61,7 +61,7 @@ test('production render export, native imports and webpack lazy chunks are check
         ['export function render() {}; import("./absent.js")', /missing dynamic/],
         ['export function render() {}; import("/root.js")', /root-relative/],
         ['export function render() {}; import(variable)', /nonliteral/],
-        ['export function render() {}; r.e(789)', /missing webpack chunk/],
+        ['export function render() {}; r.e(789)', /compilation provenance/],
         ['export function render() {}; console.log("DEVSERVER")', /development-server/],
         ['export function render() {}; console.log("127.0.0.1:18080")', /development-server/],
     ]) {
@@ -72,9 +72,24 @@ test('production render export, native imports and webpack lazy chunks are check
     const split = new Map(files);
     split.set('extension/views.js', Buffer.from('function render() {}; export {render}; import("./chunk.js"); r.e(789)'));
     split.set('extension/chunk.js', Buffer.from('export const value = 1'));
-    inspectJavaScript(split, [{ chunks: [{ id: 789, files: ['chunk.js'] }] }]);
+    const reports = [{ assetHashes: { 'views.js': 'fixture' }, chunks: [{ id: 789, files: ['chunk.js'] }] }];
+    inspectJavaScript(split, reports);
     split.delete('extension/chunk.js');
-    assert.throws(() => inspectJavaScript(split, [{ chunks: [{ id: 789, files: ['chunk.js'] }] }]), /missing/);
+    assert.throws(() => inspectJavaScript(split, reports), /missing/);
+});
+
+test('webpack chunk IDs cannot resolve against another compilation', () => {
+    const bundled = new Map([
+        ...files,
+        ['extension/main.js', Buffer.from('r.e(789)')],
+    ]);
+    const host = { assetHashes: { 'main.js': 'fixture' }, chunks: [] };
+    const views = { assetHashes: { 'views.js': 'fixture' }, chunks: [{ id: 789, files: ['views.js'] }] };
+    assert.throws(() => inspectJavaScript(bundled, [host, views]), /main.js: missing webpack chunk 789 in its compilation/);
+    host.chunks.push({ id: 789, files: ['main.js'] });
+    inspectJavaScript(bundled, [host, views]);
+    views.assetHashes['main.js'] = 'ambiguous';
+    assert.throws(() => inspectJavaScript(bundled, [host, views]), /ambiguous webpack compilation/);
 });
 
 test('entry graph follows lazy chunks and catches duplicate BSON implementations', () => {

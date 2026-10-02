@@ -3,16 +3,16 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import type { AnyProcedure, AnyRouter, inferRouterInputs, inferRouterOutputs } from '@trpc/server';
-import type { WebviewName } from '../../../src/webviews/_integration/WebviewRegistry';
-import type { AppRouter } from '../../../src/webviews/_integration/appRouter';
-import type { AtlasCredentialsWebviewConfig } from '../../../src/webviews/documentdb/atlasCredentials/atlasCredentialsController';
-import type { ClusterDashboardWebviewConfigurationType } from '../../../src/webviews/documentdb/clusterDashboard/clusterDashboardController';
-import type { CollectionViewWebviewConfigurationType } from '../../../src/webviews/documentdb/collectionView/collectionViewController';
-import type { DocumentsViewWebviewConfigurationType } from '../../../src/webviews/documentdb/documentView/documentsViewController';
-import type { LocalQuickStartConfigurationType } from '../../../src/webviews/documentdb/localQuickStart/localQuickStartController';
+import { type AnyProcedure, type AnyRouter, type inferRouterInputs, type inferRouterOutputs } from '@trpc/server';
+import { type WebviewName } from '../../../src/webviews/_integration/WebviewRegistry';
+import { type AppRouter } from '../../../src/webviews/_integration/appRouter';
+import { type AtlasCredentialsWebviewConfig } from '../../../src/webviews/documentdb/atlasCredentials/atlasCredentialsController';
+import { type ClusterDashboardWebviewConfigurationType } from '../../../src/webviews/documentdb/clusterDashboard/clusterDashboardController';
+import { type CollectionViewWebviewConfigurationType } from '../../../src/webviews/documentdb/collectionView/collectionViewController';
+import { type DocumentsViewWebviewConfigurationType } from '../../../src/webviews/documentdb/documentView/documentsViewController';
+import { type LocalQuickStartConfigurationType } from '../../../src/webviews/documentdb/localQuickStart/localQuickStartController';
 import { InstanceState, type DockerStatusResult, type InstanceStatusUpdate } from '../../../src/services/localQuickStart/quickStartTypes';
-import type { CellValue } from '../../../src/utils/slickgrid/CellValue';
+import { type CellValue } from '../../../src/utils/slickgrid/CellValue';
 
 type Inputs = inferRouterInputs<AppRouter>;
 type Outputs = inferRouterOutputs<AppRouter>;

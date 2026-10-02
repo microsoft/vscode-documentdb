@@ -34,17 +34,12 @@ function resolveAsset(files, filename, reference) {
 }
 
 function inspectJavaScript(files, reports) {
-    const chunks = new Map();
-    for (const report of reports) {
-        for (const chunk of report.chunks) {
-            chunks.set(String(chunk.id), chunk.files);
-        }
-    }
     for (const [filename, data] of files) {
         if (!filename.endsWith('.js')) {
             continue;
         }
         const source = data.toString('utf8');
+        const compilations = reports.filter((report) => Object.hasOwn(report.assetHashes || {}, filename.slice('extension/'.length)));
         assert.ok(!/127\.0\.0\.1:18080|DEVSERVER/.test(source), `${filename}: development-server string in production`);
         const tree = parse(source, { ecmaVersion: 'latest', sourceType: 'module', allowReturnOutsideFunction: true });
         if (filename === 'extension/views.js') {
@@ -74,9 +69,11 @@ function inspectJavaScript(files, reports) {
                 // webpack lowers import() to its runtime's .e(chunkId) loader.
                 if (node.callee.type === 'MemberExpression' && node.callee.property.name === 'e' &&
                     node.arguments.length === 1 && node.arguments[0].type === 'Literal' && typeof node.arguments[0].value === 'number') {
+                    assert.equal(compilations.length, 1, `${filename}: missing or ambiguous webpack compilation provenance`);
                     const id = String(node.arguments[0].value);
-                    assert.ok(chunks.has(id), `${filename}: missing webpack chunk ${id} in bundle report`);
-                    for (const asset of chunks.get(id)) {
+                    const chunk = compilations[0].chunks.find((candidate) => String(candidate.id) === id);
+                    assert.ok(chunk, `${filename}: missing webpack chunk ${id} in its compilation report`);
+                    for (const asset of chunk.files) {
                         assert.ok(files.has(`extension/${asset}`), `${filename}: missing webpack chunk asset ${asset}`);
                     }
                 }

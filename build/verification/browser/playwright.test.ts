@@ -3,22 +3,39 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import type { BrowserReport } from './runtime';
+import { type BrowserReport } from './runtime';
 import { runIntegratedCheck, type IntegratedPage } from './playwright';
 
+interface LocatorFixture {
+    click(): Promise<void>;
+    fill(value: string): Promise<void>;
+    press(key: string): Promise<void>;
+    last(): LocatorFixture;
+}
+
 function fixturePage(report: BrowserReport): IntegratedPage {
+    const locator: LocatorFixture = {
+        click: jest.fn(async (): Promise<void> => {}), fill: jest.fn(async (): Promise<void> => {}),
+        press: jest.fn(async (): Promise<void> => {}),
+        last: (): LocatorFixture => locator,
+    };
     return {
         on: jest.fn(), off: jest.fn(), goto: jest.fn(), waitForFunction: jest.fn(),
-        getByRole: jest.fn((): { click: () => Promise<void>; fill: () => Promise<void> } => ({
-            click: jest.fn(async (): Promise<void> => {}), fill: jest.fn(async (): Promise<void> => {}),
-        })),
-        evaluate: jest.fn().mockResolvedValueOnce(report).mockResolvedValue(undefined),
+        keyboard: { insertText: jest.fn(async (): Promise<void> => {}) },
+        getByRole: jest.fn((): LocatorFixture => locator),
+        locator: jest.fn((): LocatorFixture => locator),
+        evaluate: jest.fn().mockImplementation(async (operation: () => unknown): Promise<unknown> => {
+            return operation.toString().includes('beginEditorProbe') ? undefined :
+                operation.toString().includes('stage0Harness.check') ? report : undefined;
+        }),
     };
 }
 
 const good: BrowserReport = {
     view: 'collectionView', errors: [], rpcPaths: ['mongoClusters.collectionView.runFindQuery'],
-    styles: [], chunks: ['http://localhost/stage0/l2/artifact/views.js'], worker: { roundTrip: 'doValidation' }, brokenCss: false,
+    styles: [], chunks: ['http://localhost/stage0/l2/artifact/views.js'],
+    worker: { source: 'rendered-editor', workerUrl: '/stage0/l2/artifact/editor.worker.js', modelUri: 'documentdb-query://filter/session',
+        probeMarker: 'stage0_worker_probe', roundTrip: '$computeUnicodeHighlights', result: { ranges: [{}] } }, brokenCss: false,
 };
 
 describe('Stage 0 L2 integrated browser helper', (): void => {
@@ -26,7 +43,7 @@ describe('Stage 0 L2 integrated browser helper', (): void => {
         const page = fixturePage(good);
         const report = await runIntegratedCheck(page, 'http://localhost/stage0/l2/pages/collectionView.html');
         expect(report.verified).toBe(true);
-        expect(page.evaluate).toHaveBeenCalledTimes(2);
+        expect(page.evaluate).toHaveBeenCalledTimes(3);
         expect(page.on).toHaveBeenCalledTimes(4);
         expect(page.off).toHaveBeenCalledTimes(4);
     });
@@ -34,7 +51,7 @@ describe('Stage 0 L2 integrated browser helper', (): void => {
     it('persists and rejects a normal run with CSS regression', async (): Promise<void> => {
         const page = fixturePage({ ...good, errors: ['Style .slick-cell position: expected absolute, got static'] });
         await expect(runIntegratedCheck(page, 'http://localhost/stage0/l2/pages/collectionView.html')).rejects.toThrow('L2 collectionView failed');
-        expect(page.evaluate).toHaveBeenCalledTimes(2);
+        expect(page.evaluate).toHaveBeenCalledTimes(3);
         expect(page.off).toHaveBeenCalledTimes(4);
     });
 
@@ -64,5 +81,31 @@ describe('Stage 0 L2 integrated browser helper', (): void => {
         expect(page.getByRole).toHaveBeenCalledWith('textbox', { name: 'Public Key', exact: true });
         expect(page.getByRole).toHaveBeenCalledWith('textbox', { name: 'Private Key', exact: true });
         expect(page.getByRole).toHaveBeenCalledWith('button', { name: 'Verify & Save', exact: true });
+    });
+
+    it.each(['collectionView', 'documentView'])('edits and restores the rendered %s editor to prove its own worker integration', async (view: string): Promise<void> => {
+        const worker = view === 'documentView' ? {
+            source: 'rendered-editor' as const, workerUrl: '/stage0/l2/artifact/json.worker.js', modelUri: 'inmemory://fixture/editor.json',
+            probeMarker: 'stage0_worker_probe', roundTrip: 'doValidation' as const, result: [{ message: 'Value expected', severity: 1 }],
+        } : good.worker;
+        const page = fixturePage({ ...good, view, worker });
+        await runIntegratedCheck(page, `http://localhost/stage0/l2/pages/${view}.html`);
+        expect(page.keyboard.insertText).toHaveBeenCalledWith('{ "stage0_worker_probe": "left\u200bright", "invalid": }');
+        expect(page.getByRole).toHaveBeenCalledWith('textbox', {
+            name: view === 'documentView' ? 'Document Editor: Edit the document in JSON format' : 'Filter: Enter the DocumentDB query filter',
+            exact: true,
+        });
+        expect(page.waitForFunction).toHaveBeenCalledTimes(3);
+        if (view === 'documentView') {
+            expect(page.getByRole).toHaveBeenCalledWith('button', { name: 'Reload document from the database', exact: true });
+        } else {
+            expect(page.locator).toHaveBeenCalledWith('.queryEditorActions button');
+        }
+    });
+
+    it('fails a success-shaped report that has no rendered-editor worker evidence', async (): Promise<void> => {
+        const page = fixturePage({ ...good, worker: undefined });
+        await expect(runIntegratedCheck(page, 'http://localhost/stage0/l2/pages/collectionView.html'))
+            .rejects.toThrow('Rendered Monaco editor worker proof missing or mismatched');
     });
 });

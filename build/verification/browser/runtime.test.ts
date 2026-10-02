@@ -1,12 +1,9 @@
-/**
- * @jest-environment jsdom
- */
 /*---------------------------------------------------------------------------------------------
  *  Copyright (c) Microsoft Corporation. All rights reserved.
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import type { HarnessFixture } from './fixtures';
+import { type HarnessFixture } from './fixtures';
 import { inertJson } from './template';
 
 const base: HarnessFixture = {
@@ -17,8 +14,31 @@ const base: HarnessFixture = {
         'fixture.subscription': { type: 'subscription', results: [{ state: 'ready' }], keepOpen: true },
     },
 };
+let constructedWorkers = 0;
+const forwardedMessages: unknown[] = [];
 
-async function boot(fixture: HarnessFixture = base): Promise<ReturnType<typeof window.acquireVsCodeApi>> {
+class FixtureNativeWorker extends EventTarget {
+    public constructor(_url: string | URL, _options?: WorkerOptions) {
+        super();
+        constructedWorkers++;
+    }
+    public postMessage(message: unknown, _options?: Transferable[] | StructuredSerializeOptions): void {
+        forwardedMessages.push(message);
+    }
+    public terminate(): void {}
+}
+
+function syncProbe(worker: Worker, uri = 'inmemory://fixture/editor.json'): void {
+    worker.postMessage({ type: 0, req: 'sync', method: '$acceptNewModel', args: [{
+        url: uri, lines: ['{ "stage0_worker_probe": "left\u200bright", "invalid": }'], versionId: 2, EOL: '\n',
+    }] });
+}
+
+function validationRequest(worker: Worker, uri = 'inmemory://fixture/editor.json'): void {
+    worker.postMessage({ type: 0, req: 'validation', method: '$fmr', args: ['doValidation', [uri]] });
+}
+
+async function boot(fixture: unknown = base): Promise<ReturnType<typeof window.acquireVsCodeApi>> {
     document.body.innerHTML = `<script type="application/json" id="stage0-fixture">${inertJson(fixture)}</script><div>Settled fixture</div>`;
     Object.defineProperty(document.body, 'innerText', { configurable: true, value: 'Settled fixture' });
     jest.resetModules();
@@ -28,11 +48,27 @@ async function boot(fixture: HarnessFixture = base): Promise<ReturnType<typeof w
 
 describe('Stage 0 L2 fixture transport', (): void => {
     beforeEach((): void => {
+        constructedWorkers = 0;
+        forwardedMessages.length = 0;
+        Object.defineProperty(window, 'Worker', { configurable: true, writable: true, value: FixtureNativeWorker });
         Object.defineProperty(performance, 'getEntriesByType', {
             configurable: true, value: (): { name: string }[] => [{ name: 'http://localhost/stage0/l2/artifact/views.js' }],
         });
     });
     afterEach((): void => { jest.restoreAllMocks(); });
+
+    it.each([
+        { view: 'unknown-view' },
+        { content: [true] },
+        { styles: [{ selector: '.fixture', property: 7, expected: 'flex' }] },
+        { rpc: { 'fixture.query': { type: 'query', results: 'invalid' } } },
+        { rpc: { 'fixture.query': { type: 'query', results: [], keepOpen: 'invalid' } } },
+    ])('rejects invalid inert fixture data at the JSON boundary: %j', async (override: unknown): Promise<void> => {
+        if (!override || typeof override !== 'object') {
+            throw new Error('Invalid regression test override');
+        }
+        await expect(boot({ ...base, ...override })).rejects.toThrow('Stage 0 fixture data does not match the browser harness contract');
+    });
 
     it('answers the real {id, op} protocol with result then completion', async (): Promise<void> => {
         const messages = jest.spyOn(window, 'postMessage').mockImplementation((): void => {});
@@ -108,32 +144,119 @@ describe('Stage 0 L2 fixture transport', (): void => {
         expect(report.errors).toContain('vite:preloadError');
     });
 
-    it('requires a worker validation result, not merely construction or initialization', async (): Promise<void> => {
-        const methods: string[] = [];
-        let terminated = false;
-        class FixtureWorker extends EventTarget {
-            public postMessage(message: unknown): void {
-                if (!message || typeof message !== 'object') {
-                    return;
-                }
-                const operation = message as { method: string; req: string };
-                methods.push(operation.method);
-                const res: unknown = operation.method === '$fmr' ? [{ message: 'Value expected', severity: 1 }] : undefined;
-                queueMicrotask((): void => {
-                    this.dispatchEvent(new MessageEvent('message', { data: { seq: operation.req, res } }));
-                });
-            }
-            public terminate(): void { terminated = true; }
-        }
-        Object.defineProperty(window, 'Worker', { configurable: true, value: FixtureWorker });
-        await boot({ ...base, monaco: true });
+    it('never constructs a standalone worker or sends its own messages when checking', async (): Promise<void> => {
+        await boot({ ...base, view: 'documentView', monaco: true });
+        const report = await window.stage0Harness.check();
+        expect(report.errors).toContain('No rendered-editor worker proof for documentView; observed methods: <none>');
+        expect(report.worker).toBeUndefined();
+        expect(constructedWorkers).toBe(0);
+        expect(forwardedMessages).toEqual([]);
+    });
+
+    it('requires model synchronization, a matching editor request, and a correlated diagnostic response', async (): Promise<void> => {
+        await boot({ ...base, view: 'documentView', monaco: true });
+        const worker = new window.Worker('/stage0/l2/artifact/configured.worker.js');
+        window.stage0Harness.beginEditorProbe('stage0_worker_probe');
+        syncProbe(worker);
+        validationRequest(worker);
+        worker.dispatchEvent(new MessageEvent('message', { data: {
+            seq: 'unrelated', res: [{ message: 'Value expected', severity: 1 }],
+        } }));
+        expect(window.stage0Harness.editorProbeReady()).toBe(false);
+        worker.dispatchEvent(new MessageEvent('message', { data: {
+            seq: 'validation', res: [{ message: 'Value expected', severity: 1 }],
+        } }));
+        expect(window.stage0Harness.editorProbeReady()).toBe(true);
         const report = await window.stage0Harness.check();
         expect(report.errors).toEqual([]);
-        expect(methods).toEqual(['$initialize', '$loadForeignModule', '$acceptNewModel', '$fmr']);
         expect(report.worker).toEqual({
-            url: '/stage0/l2/artifact/json.worker.js', roundTrip: 'doValidation',
-            markers: [{ message: 'Value expected', severity: 1 }],
+            source: 'rendered-editor', workerUrl: '/stage0/l2/artifact/configured.worker.js',
+            modelUri: 'inmemory://fixture/editor.json', probeMarker: 'stage0_worker_probe',
+            roundTrip: 'doValidation', result: [{ message: 'Value expected', severity: 1 }],
         });
-        expect(terminated).toBe(true);
+        expect(constructedWorkers).toBe(1);
+        expect(forwardedMessages).toHaveLength(2);
+    });
+
+    it.each(['no-sync', 'wrong-model', 'empty-diagnostics', 'initialization'])('rejects incomplete editor integration: %s', async (scenario: string): Promise<void> => {
+        await boot({ ...base, view: 'documentView', monaco: true });
+        const worker = new window.Worker('/stage0/l2/artifact/configured.worker.js');
+        window.stage0Harness.beginEditorProbe('stage0_worker_probe');
+        if (scenario !== 'no-sync') {
+            syncProbe(worker);
+        }
+        if (scenario === 'initialization') {
+            worker.postMessage({ req: 'validation', method: '$initialize', args: [] });
+        } else {
+            validationRequest(worker, scenario === 'wrong-model' ? 'inmemory://different/model.json' : undefined);
+        }
+        worker.dispatchEvent(new MessageEvent('message', { data: {
+            seq: 'validation', res: scenario === 'empty-diagnostics' ? [] : [{ message: 'Value expected', severity: 1 }],
+        } }));
+        expect(window.stage0Harness.editorProbeReady()).toBe(false);
+        expect((await window.stage0Harness.check()).worker).toBeUndefined();
+    });
+
+    it('observes actual editor-worker highlighting for the custom Collection View language', async (): Promise<void> => {
+        await boot({ ...base, view: 'collectionView', monaco: true });
+        const worker = new window.Worker('/stage0/l2/artifact/configured.worker.js');
+        worker.postMessage({ req: 'initial', method: '$acceptNewModel', args: [{
+            url: 'documentdb-query://filter/session', lines: ['{}'], EOL: '\n',
+        }] });
+        window.stage0Harness.beginEditorProbe('stage0_worker_probe');
+        worker.postMessage({ req: 'sync', method: '$acceptModelChanged', args: ['documentdb-query://filter/session', {
+            changes: [{ text: '{ "stage0_worker_probe": "left\u200bright", "invalid": }', rangeOffset: 0, rangeLength: 2 }], versionId: 2,
+        }] });
+        worker.postMessage({ req: 'highlight', method: '$computeUnicodeHighlights', args: ['documentdb-query://filter/session', {}] });
+        worker.dispatchEvent(new MessageEvent('message', { data: {
+            seq: 'highlight', res: { ranges: [{ startLineNumber: 1, startColumn: 36, endLineNumber: 1, endColumn: 37 }] },
+        } }));
+        expect(window.stage0Harness.editorProbeReady()).toBe(true);
+        expect((await window.stage0Harness.check()).worker?.roundTrip).toBe('$computeUnicodeHighlights');
+    });
+
+    it('does not accept a main-thread marker or a worker reply that has no highlight', async (): Promise<void> => {
+        await boot({ ...base, view: 'collectionView', monaco: true });
+        const worker = new window.Worker('/stage0/l2/artifact/configured.worker.js');
+        window.stage0Harness.beginEditorProbe('stage0_worker_probe');
+        syncProbe(worker);
+        worker.postMessage({ req: 'highlight', method: '$computeUnicodeHighlights', args: ['inmemory://fixture/editor.json', {}] });
+        worker.dispatchEvent(new MessageEvent('message', { data: { seq: 'highlight', res: { ranges: [] } } }));
+        document.body.insertAdjacentHTML('beforeend', '<span class="squiggly-error">Main-thread error</span>');
+        expect(window.stage0Harness.editorProbeReady()).toBe(false);
+        expect((await window.stage0Harness.check()).worker).toBeUndefined();
+    });
+
+    it('records worker response errors without manufacturing a successful proof', async (): Promise<void> => {
+        await boot({ ...base, view: 'documentView', monaco: true });
+        const worker = new window.Worker('/stage0/l2/artifact/configured.worker.js');
+        window.stage0Harness.beginEditorProbe('stage0_worker_probe');
+        syncProbe(worker);
+        validationRequest(worker);
+        worker.dispatchEvent(new MessageEvent('message', { data: { seq: 'validation', err: { message: 'worker failed' } } }));
+        const report = await window.stage0Harness.check();
+        expect(report.worker).toBeUndefined();
+        expect(report.errors).toContain('Editor worker doValidation failed: {"message":"worker failed"}');
+    });
+
+    it('tracks probe text across incremental keystrokes and a model already synchronized before the probe', async (): Promise<void> => {
+        await boot({ ...base, view: 'documentView', monaco: true });
+        const worker = new window.Worker('/stage0/l2/artifact/configured.worker.js');
+        worker.postMessage({ req: 'initial', method: '$acceptNewModel', args: [{
+            url: 'inmemory://fixture/editor.json', lines: [''], EOL: '\n',
+        }] });
+        window.stage0Harness.beginEditorProbe('stage0_worker_probe');
+        const marker = 'stage0_worker_probe';
+        for (let offset = 0; offset < marker.length; offset++) {
+            worker.postMessage({ req: `change-${offset}`, method: '$acceptModelChanged', args: ['inmemory://fixture/editor.json', {
+                changes: [{ rangeOffset: offset, rangeLength: 0, text: marker[offset] }],
+            }] });
+        }
+        validationRequest(worker);
+        worker.dispatchEvent(new MessageEvent('message', { data: {
+            seq: 'validation', res: [{ message: 'Value expected', severity: 1 }],
+        } }));
+        expect(window.stage0Harness.editorProbeReady()).toBe(true);
+        expect((await window.stage0Harness.check()).errors).toEqual([]);
     });
 });

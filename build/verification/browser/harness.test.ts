@@ -14,11 +14,7 @@ import { vsixTools } from './vsix';
 const repository = resolve(__dirname, '../../..');
 
 function writeFixtureVsix(filename: string, files: Map<string, Buffer>): void {
-    const shared: unknown = require('../vsix.cjs');
-    if (!shared || typeof shared !== 'object' || !('writeVsix' in shared) || typeof shared.writeVsix !== 'function') {
-        throw new Error('Shared VSIX test writer unavailable');
-    }
-    Reflect.apply(shared.writeVsix, undefined, [filename, files]);
+    vsixTools.writeVsix(filename, files);
 }
 
 describe('Stage 0 L2 production browser harness', (): void => {
