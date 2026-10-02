@@ -10,6 +10,7 @@ const os = require('node:os');
 const path = require('node:path');
 const net = require('node:net');
 const { spawn } = require('node:child_process');
+const { createRequire } = require('node:module');
 const {
     TARGET_ID,
     LATE_COMMANDS,
@@ -170,7 +171,8 @@ function findInstalledExtension(extensionsDir) {
  * @param {string} directory @param {{ main: string, type?: string }} manifest @returns {void}
  */
 function injectSwallowedError(directory, manifest) {
-    const entry = fs.realpathSync(path.resolve(directory, manifest.main));
+    const installedRequire = createRequire(path.join(directory, 'package.json'));
+    const entry = fs.realpathSync(installedRequire.resolve(path.resolve(directory, manifest.main)));
     if (!isInside(fs.realpathSync(directory), entry)) {
         throw new Error(`Cannot mutate an activation entry outside the installed VSIX: ${entry}`);
     }

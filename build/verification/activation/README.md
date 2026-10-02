@@ -66,7 +66,10 @@ The real initialization telemetry wrapper catches/logs that failure while the AP
 still returns and late commands still exist. Thus the negative control exercises
 the log gate rather than relying on an activation rejection or missing command.
 It fails loudly if the marker was not observed. The injector supports CommonJS
-and module entry points; it rejects shebang entries.
+and module entry points; it resolves manifest `main` using Node resolution
+(including `./main` resolving to `main.js`) before checking the resolved real
+path is inside the installed extension. External/symlink escapes and shebang
+entries are rejected.
 
 The [proof entry point](./prove.cjs) runs that negative control and accepts only
 the expected log-gate failure: the installed-path/activation/late-command probe

@@ -22,7 +22,7 @@ const {
     inspectLogs,
     assertCleanLogs,
 } = require('./checks.cjs');
-const { parseArguments, requireDisplay, runProcess, runActivation, runProof } = require('./runner.cjs');
+const { parseArguments, requireDisplay, runProcess, injectSwallowedError, runActivation, runProof } = require('./runner.cjs');
 
 /** @param {import('node:test').TestContext} context @returns {string} */
 function temporaryDirectory(context) {
@@ -83,6 +83,46 @@ test('requires late registrations including the non-contributed internal export 
     assert.doesNotThrow(() => assertLateCommands(LATE_COMMANDS));
     assert.throws(() => assertLateCommands(LATE_COMMANDS.slice(1)), /internal.exportDocuments/);
     assert.throws(() => assertLateCommands([]), /final command registrations/);
+});
+
+test('injector resolves the production extensionless main and explicit CommonJS/module entries', (context) => {
+    const root = temporaryDirectory(context);
+    for (const [index, entry] of [
+        { main: './main', filename: 'main.js', esm: false },
+        { main: './main.cjs', filename: 'main.cjs', esm: false },
+        { main: './main.mjs', filename: 'main.mjs', esm: true },
+        { main: './main.js', filename: 'main.js', type: 'module', esm: true },
+    ].entries()) {
+        const installed = path.join(root, `installed-${index}`);
+        fs.mkdirSync(installed);
+        const manifest = { main: entry.main, type: entry.type };
+        fs.writeFileSync(path.join(installed, 'package.json'), JSON.stringify(manifest));
+        const source = entry.esm ? 'export const activate = async () => {};\n' : 'module.exports = {};\n';
+        const filename = path.join(installed, entry.filename);
+        fs.writeFileSync(filename, source);
+        injectSwallowedError(installed, manifest);
+        const mutated = fs.readFileSync(filename, 'utf8');
+        assert.match(mutated, new RegExp(INJECTION_MARKER));
+        assert.equal(mutated.startsWith('import { createRequire'), entry.esm);
+        assert.equal(mutated.endsWith(source), true);
+    }
+});
+
+test('resolved negative-control entries cannot escape to checkout by path or extensionless symlink', (context) => {
+    const root = temporaryDirectory(context);
+    const installed = path.join(root, 'installed');
+    const checkout = path.join(root, 'checkout');
+    fs.mkdirSync(installed);
+    fs.mkdirSync(checkout);
+    fs.writeFileSync(path.join(installed, 'package.json'), '{}');
+    const external = path.join(checkout, 'main.js');
+    const original = 'module.exports = {};\n';
+    fs.writeFileSync(external, original);
+    fs.symlinkSync(external, path.join(installed, 'linked.js'), 'file');
+    for (const main of ['./linked', '../checkout/main']) {
+        assert.throws(() => injectSwallowedError(installed, { main }), /outside the installed VSIX/);
+        assert.equal(fs.readFileSync(external, 'utf8'), original);
+    }
 });
 
 test('catches swallowed telemetry failures logged at info severity and optional startup failures', () => {
@@ -348,9 +388,9 @@ function fixture(context, behavior = {}) {
                     const installed = path.join(extensionsDir, 'ms-azuretools.vscode-documentdb-0.10.2');
                     fs.mkdirSync(installed);
                     fs.writeFileSync(path.join(installed, 'package.json'), JSON.stringify({
-                        publisher: 'ms-azuretools', name: 'vscode-documentdb', main: './main.cjs',
+                        publisher: 'ms-azuretools', name: 'vscode-documentdb', main: './main',
                     }));
-                    fs.writeFileSync(path.join(installed, 'main.cjs'), `
+                    fs.writeFileSync(path.join(installed, 'main.js'), `
 const vscode = require("vscode");
 module.exports.activate = async function () {
     try {
@@ -383,7 +423,7 @@ module.exports.activate = async function () {
                     },
                     window: { output: { appendLog: (message) => output.push(message) } },
                 };
-                vm.runInNewContext(fs.readFileSync(path.join(installed, 'main.cjs'), 'utf8'), {
+                vm.runInNewContext(fs.readFileSync(path.join(installed, 'main.js'), 'utf8'), {
                     module: extensionModule,
                     require: (name) => {
                         assert.equal(name, 'vscode');
