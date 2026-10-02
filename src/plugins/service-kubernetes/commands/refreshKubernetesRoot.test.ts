@@ -3,14 +3,16 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-const mockGetChildren = jest.fn();
-const mockFindChildById = jest.fn();
-const mockResetNodeErrorState = jest.fn();
-const mockRefresh = jest.fn();
-const mockReveal = jest.fn();
-const mockWarn = jest.fn();
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-jest.mock('../../../extensionVariables', () => ({
+const mockGetChildren = vi.fn();
+const mockFindChildById = vi.fn();
+const mockResetNodeErrorState = vi.fn();
+const mockRefresh = vi.fn();
+const mockReveal = vi.fn();
+const mockWarn = vi.fn();
+
+vi.mock('../../../extensionVariables', () => ({
     ext: {
         discoveryBranchDataProvider: {
             getChildren: (...args: unknown[]) => mockGetChildren(...args),
@@ -31,7 +33,7 @@ import { KUBERNETES_ROOT_NODE_ID, refreshKubernetesRoot, revealKubernetesSource 
 
 describe('refreshKubernetesRoot', () => {
     beforeEach(() => {
-        jest.clearAllMocks();
+        vi.clearAllMocks();
     });
 
     it('clears cached errors and refreshes the discovery tree', () => {
@@ -44,7 +46,7 @@ describe('refreshKubernetesRoot', () => {
 
 describe('revealKubernetesSource', () => {
     beforeEach(() => {
-        jest.clearAllMocks();
+        vi.clearAllMocks();
     });
 
     it('discovers the Kubernetes root before finding and revealing the source', async () => {

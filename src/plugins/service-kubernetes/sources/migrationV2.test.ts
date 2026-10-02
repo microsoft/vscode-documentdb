@@ -3,20 +3,22 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+
 const globalStateBacking = new Map<string, unknown>();
 const secretStorageBacking = new Map<string, string>();
-const outputWarn = jest.fn();
+const outputWarn = vi.fn();
 
-jest.mock('vscode', () => ({
+vi.mock('vscode', () => ({
     ThemeIcon: class ThemeIcon {
         constructor(public readonly id: string) {}
     },
     l10n: {
-        t: jest.fn((message: string) => message),
+        t: vi.fn((message: string) => message),
     },
 }));
 
-jest.mock('../../../extensionVariables', () => ({
+vi.mock('../../../extensionVariables', () => ({
     ext: {
         context: {
             extension: { id: 'test-extension' },
@@ -49,14 +51,14 @@ jest.mock('../../../extensionVariables', () => ({
         },
         outputChannel: {
             warn: (...args: unknown[]) => outputWarn(...args) as unknown,
-            appendLine: jest.fn(),
-            error: jest.fn(),
+            appendLine: vi.fn(),
+            error: vi.fn(),
         },
     },
 }));
 
-jest.mock('../kubernetesClient', () => ({
-    defaultKubeconfigExists: jest.fn(() => true),
+vi.mock('../kubernetesClient', () => ({
+    defaultKubeconfigExists: vi.fn(() => true),
 }));
 
 import {
@@ -86,7 +88,7 @@ beforeEach(() => {
     globalStateBacking.clear();
     secretStorageBacking.clear();
     outputWarn.mockClear();
-    jest.mocked(defaultKubeconfigExists).mockReturnValue(true);
+    vi.mocked(defaultKubeconfigExists).mockReturnValue(true);
     _resetMigrationGuardForTests();
     resetSourceStoreCacheForMigration();
 });
@@ -126,7 +128,7 @@ describe('ensureMigration', () => {
     });
 
     it('does not seed the default source when no kubeconfig exists on disk', async () => {
-        jest.mocked(defaultKubeconfigExists).mockReturnValue(false);
+        vi.mocked(defaultKubeconfigExists).mockReturnValue(false);
 
         await ensureMigration();
 

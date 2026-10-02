@@ -3,6 +3,9 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from 'vitest';
+
+import { type CoreV1Api, type KubeConfig } from '@kubernetes/client-node';
 import * as path from 'path';
 import {
     CREDENTIAL_SECRET_ANNOTATION,
@@ -12,51 +15,66 @@ import {
     type KubeconfigSourceRecord,
 } from './config';
 import {
+    buildPortForwardConnectionString,
     describeDefaultKubeconfigPath,
     getContexts,
     inferClusterProvider,
     isValidKubernetesSecretName,
+    listDocumentDBServices,
+    listNamespaces,
+    loadConfiguredKubeConfig,
+    loadKubeConfig,
+    resolveDocumentDBCredentials,
+    resolveGenericServiceCredentials,
+    resolveServiceEndpoint,
     type KubeServiceEndpoint,
     type KubeServiceInfo,
 } from './kubernetesClient';
 
 // Mock @kubernetes/client-node
-const mockLoadFromFile = jest.fn();
-const mockLoadFromString = jest.fn();
-const mockGetContexts = jest.fn();
-const mockGetCluster = jest.fn();
-const mockGetClusters = jest.fn();
-const mockGetUsers = jest.fn();
-const mockGetCurrentContext = jest.fn();
-const mockSetCurrentContext = jest.fn();
-const mockMakeApiClient = jest.fn();
+const mockLoadFromFile = vi.fn();
+const mockLoadFromString = vi.fn();
+const mockGetContexts = vi.fn();
+const mockGetCluster = vi.fn();
+const mockGetClusters = vi.fn();
+const mockGetUsers = vi.fn();
+const mockGetCurrentContext = vi.fn();
+const mockSetCurrentContext = vi.fn();
+const mockMakeApiClient = vi.fn();
 
-const mockLoadFromDefault = jest.fn();
-const mockGetSource = jest.fn<KubeconfigSourceRecord | undefined, [string]>();
-const mockReadInlineYaml = jest.fn<Promise<string | undefined>, [KubeconfigSourceRecord]>();
+const mockLoadFromDefault = vi.fn();
+const mockGetSource = vi.fn<(...args: [string]) => KubeconfigSourceRecord | undefined>();
+const mockReadInlineYaml = vi.fn<(...args: [KubeconfigSourceRecord]) => Promise<string | undefined>>();
 
-jest.mock('./sources/sourceStore', () => ({
+vi.mock('./sources/sourceStore', () => ({
     getSource: (id: string) => mockGetSource(id),
     readInlineYaml: (record: KubeconfigSourceRecord) => mockReadInlineYaml(record),
 }));
 
-jest.mock('@kubernetes/client-node', () => ({
-    KubeConfig: jest.fn().mockImplementation(() => ({
-        loadFromFile: mockLoadFromFile,
-        loadFromString: mockLoadFromString,
-        loadFromDefault: mockLoadFromDefault,
-        getContexts: mockGetContexts,
-        getCluster: mockGetCluster,
-        getClusters: mockGetClusters,
-        getUsers: mockGetUsers,
-        getCurrentContext: mockGetCurrentContext,
-        setCurrentContext: mockSetCurrentContext,
-        makeApiClient: mockMakeApiClient,
-    })),
-    CoreV1Api: jest.fn(),
-    CustomObjectsApi: jest.fn(),
+vi.mock('@kubernetes/client-node', () => ({
+    default: undefined,
+    KubeConfig: vi.fn().mockImplementation(function () {
+        return {
+            loadFromFile: mockLoadFromFile,
+            loadFromString: mockLoadFromString,
+            loadFromDefault: mockLoadFromDefault,
+            getContexts: mockGetContexts,
+            getCluster: mockGetCluster,
+            getClusters: mockGetClusters,
+            getUsers: mockGetUsers,
+            getCurrentContext: mockGetCurrentContext,
+            setCurrentContext: mockSetCurrentContext,
+            makeApiClient: mockMakeApiClient,
+        };
+    }),
+    CoreV1Api: vi.fn(),
+    CustomObjectsApi: vi.fn(),
     ActionOnInvalid: { THROW: 'throw', FILTER: 'filter' },
 }));
+
+function createPartialMock<T>(members: Partial<T>): T {
+    return members as T;
+}
 
 function createServiceInfo(overrides: Partial<KubeServiceInfo>): KubeServiceInfo {
     const serviceName = overrides.serviceName ?? overrides.name ?? 'documentdb-service-sample';
@@ -80,7 +98,7 @@ function createApiExceptionLike(statusCode: number, message: string): Error & { 
 
 describe('kubernetesClient', () => {
     beforeEach(() => {
-        jest.clearAllMocks();
+        vi.clearAllMocks();
         mockGetSource.mockReset();
         mockReadInlineYaml.mockReset();
         mockGetContexts.mockReturnValue([{ name: 'ctx', cluster: 'cluster', user: 'user' }]);
@@ -96,9 +114,6 @@ describe('kubernetesClient', () => {
     });
 
     describe('loadKubeConfig', () => {
-        // eslint-disable-next-line @typescript-eslint/no-require-imports
-        const { loadKubeConfig } = require('./kubernetesClient');
-
         it('should load kubeconfig from default path', async () => {
             mockLoadFromDefault.mockImplementation(() => {
                 /* success */
@@ -194,9 +209,6 @@ describe('kubernetesClient', () => {
     });
 
     describe('loadConfiguredKubeConfig (v2 multi-source)', () => {
-        // eslint-disable-next-line @typescript-eslint/no-require-imports
-        const { loadConfiguredKubeConfig } = require('./kubernetesClient');
-
         it('loads the platform default kubeconfig for the default source', async () => {
             mockGetSource.mockReturnValue({
                 id: DEFAULT_SOURCE_ID,
@@ -299,11 +311,11 @@ describe('kubernetesClient', () => {
     describe('getContexts', () => {
         it('should return context info from kubeconfig', () => {
             const mockKubeConfig = {
-                getContexts: jest.fn().mockReturnValue([
+                getContexts: vi.fn().mockReturnValue([
                     { name: 'ctx-1', cluster: 'cluster-1', user: 'user-1' },
                     { name: 'ctx-2', cluster: 'cluster-2', user: 'user-2' },
                 ]),
-                getCluster: jest.fn().mockImplementation((name: string) => {
+                getCluster: vi.fn().mockImplementation((name: string) => {
                     if (name === 'cluster-1') return { server: 'https://k8s-1.example.com' };
                     if (name === 'cluster-2') return { server: 'https://k8s-2.example.com' };
                     return null;
@@ -324,8 +336,8 @@ describe('kubernetesClient', () => {
 
         it('should handle missing cluster server gracefully', () => {
             const mockKubeConfig = {
-                getContexts: jest.fn().mockReturnValue([{ name: 'ctx-1', cluster: 'unknown-cluster', user: 'user-1' }]),
-                getCluster: jest.fn().mockReturnValue(null),
+                getContexts: vi.fn().mockReturnValue([{ name: 'ctx-1', cluster: 'unknown-cluster', user: 'user-1' }]),
+                getCluster: vi.fn().mockReturnValue(null),
             };
 
             // eslint-disable-next-line @typescript-eslint/no-unsafe-argument, @typescript-eslint/no-explicit-any
@@ -337,12 +349,9 @@ describe('kubernetesClient', () => {
     });
 
     describe('listDocumentDBServices', () => {
-        // eslint-disable-next-line @typescript-eslint/no-require-imports
-        const { listDocumentDBServices } = require('./kubernetesClient');
-
         it('should return DKO targets first and then generic DocumentDB fallback targets', async () => {
-            const mockCoreApi = {
-                listNamespacedService: jest.fn().mockResolvedValue({
+            const mockCoreApi = createPartialMock<CoreV1Api>({
+                listNamespacedService: vi.fn<CoreV1Api['listNamespacedService']>().mockResolvedValue({
                     items: [
                         {
                             metadata: { name: 'documentdb-service-mydb', namespace: 'default' },
@@ -371,10 +380,10 @@ describe('kubernetesClient', () => {
                         },
                     ],
                 }),
-            };
-            const mockKubeConfig = {
-                makeApiClient: jest.fn().mockReturnValue({
-                    listNamespacedCustomObject: jest.fn().mockResolvedValue({
+            });
+            const mockKubeConfig = createPartialMock<KubeConfig>({
+                makeApiClient: vi.fn<KubeConfig['makeApiClient']>().mockReturnValue({
+                    listNamespacedCustomObject: vi.fn().mockResolvedValue({
                         items: [
                             {
                                 metadata: { name: 'mydb' },
@@ -386,8 +395,8 @@ describe('kubernetesClient', () => {
                             },
                         ],
                     }),
-                }),
-            };
+                }) as KubeConfig['makeApiClient'],
+            });
 
             const services: KubeServiceInfo[] = await listDocumentDBServices(mockCoreApi, 'default', mockKubeConfig);
 
@@ -411,8 +420,8 @@ describe('kubernetesClient', () => {
         });
 
         it('should fall back to generic DocumentDB discovery when the DKO CRD is unavailable', async () => {
-            const mockCoreApi = {
-                listNamespacedService: jest.fn().mockResolvedValue({
+            const mockCoreApi = createPartialMock<CoreV1Api>({
+                listNamespacedService: vi.fn<CoreV1Api['listNamespacedService']>().mockResolvedValue({
                     items: [
                         {
                             metadata: { name: 'manual-documentdb', namespace: 'default' },
@@ -428,12 +437,12 @@ describe('kubernetesClient', () => {
                         },
                     ],
                 }),
-            };
-            const mockKubeConfig = {
-                makeApiClient: jest.fn().mockReturnValue({
-                    listNamespacedCustomObject: jest.fn().mockRejectedValue(createApiExceptionLike(404, 'Not Found')),
-                }),
-            };
+            });
+            const mockKubeConfig = createPartialMock<KubeConfig>({
+                makeApiClient: vi.fn<KubeConfig['makeApiClient']>().mockReturnValue({
+                    listNamespacedCustomObject: vi.fn().mockRejectedValue(createApiExceptionLike(404, 'Not Found')),
+                }) as KubeConfig['makeApiClient'],
+            });
 
             const services: KubeServiceInfo[] = await listDocumentDBServices(mockCoreApi, 'default', mockKubeConfig);
             expect(services).toHaveLength(1);
@@ -443,8 +452,8 @@ describe('kubernetesClient', () => {
         });
 
         it('should surface DKO permission errors instead of silently falling back to generic discovery', async () => {
-            const mockCoreApi = {
-                listNamespacedService: jest.fn().mockResolvedValue({
+            const mockCoreApi = createPartialMock<CoreV1Api>({
+                listNamespacedService: vi.fn<CoreV1Api['listNamespacedService']>().mockResolvedValue({
                     items: [
                         {
                             metadata: { name: 'manual-documentdb', namespace: 'default' },
@@ -455,12 +464,12 @@ describe('kubernetesClient', () => {
                         },
                     ],
                 }),
-            };
-            const mockKubeConfig = {
-                makeApiClient: jest.fn().mockReturnValue({
-                    listNamespacedCustomObject: jest.fn().mockRejectedValue(createApiExceptionLike(403, 'Forbidden')),
-                }),
-            };
+            });
+            const mockKubeConfig = createPartialMock<KubeConfig>({
+                makeApiClient: vi.fn<KubeConfig['makeApiClient']>().mockReturnValue({
+                    listNamespacedCustomObject: vi.fn().mockRejectedValue(createApiExceptionLike(403, 'Forbidden')),
+                }) as KubeConfig['makeApiClient'],
+            });
 
             await expect(listDocumentDBServices(mockCoreApi, 'default', mockKubeConfig)).rejects.toThrow(
                 /Failed to list DKO resources.*Forbidden/,
@@ -468,8 +477,8 @@ describe('kubernetesClient', () => {
         });
 
         it('should surface DKO network errors instead of silently falling back to generic discovery', async () => {
-            const mockCoreApi = {
-                listNamespacedService: jest.fn().mockResolvedValue({
+            const mockCoreApi = createPartialMock<CoreV1Api>({
+                listNamespacedService: vi.fn<CoreV1Api['listNamespacedService']>().mockResolvedValue({
                     items: [
                         {
                             metadata: { name: 'manual-documentdb', namespace: 'default' },
@@ -480,12 +489,12 @@ describe('kubernetesClient', () => {
                         },
                     ],
                 }),
-            };
-            const mockKubeConfig = {
-                makeApiClient: jest.fn().mockReturnValue({
-                    listNamespacedCustomObject: jest.fn().mockRejectedValue(new Error('ECONNRESET')),
-                }),
-            };
+            });
+            const mockKubeConfig = createPartialMock<KubeConfig>({
+                makeApiClient: vi.fn<KubeConfig['makeApiClient']>().mockReturnValue({
+                    listNamespacedCustomObject: vi.fn().mockRejectedValue(new Error('ECONNRESET')),
+                }) as KubeConfig['makeApiClient'],
+            });
 
             await expect(listDocumentDBServices(mockCoreApi, 'default', mockKubeConfig)).rejects.toThrow(
                 /Failed to list DKO resources.*ECONNRESET/,
@@ -493,18 +502,17 @@ describe('kubernetesClient', () => {
         });
 
         it('should throw on RBAC error', async () => {
-            const mockCoreApi = {
-                listNamespacedService: jest.fn().mockRejectedValue(new Error('Forbidden')),
-            };
+            const mockCoreApi = createPartialMock<CoreV1Api>({
+                listNamespacedService: vi
+                    .fn<CoreV1Api['listNamespacedService']>()
+                    .mockRejectedValue(new Error('Forbidden')),
+            });
 
             await expect(listDocumentDBServices(mockCoreApi, 'default')).rejects.toThrow(/Failed to list services/);
         });
     });
 
     describe('resolveServiceEndpoint', () => {
-        // eslint-disable-next-line @typescript-eslint/no-require-imports
-        const { resolveServiceEndpoint } = require('./kubernetesClient');
-
         it('should resolve LoadBalancer with external IP', async () => {
             const service = createServiceInfo({
                 name: 'mongo-lb',
@@ -516,7 +524,10 @@ describe('kubernetesClient', () => {
                 externalAddress: '1.2.3.4',
             });
 
-            const endpoint: KubeServiceEndpoint = await resolveServiceEndpoint(service, {});
+            const endpoint: KubeServiceEndpoint = await resolveServiceEndpoint(
+                service,
+                createPartialMock<CoreV1Api>({}),
+            );
             expect(endpoint.kind).toBe('ready');
             if (endpoint.kind === 'ready') {
                 expect(endpoint.connectionString).toBe('mongodb://1.2.3.4:27017/');
@@ -534,7 +545,10 @@ describe('kubernetesClient', () => {
                 externalAddress: undefined,
             });
 
-            const endpoint: KubeServiceEndpoint = await resolveServiceEndpoint(service, {});
+            const endpoint: KubeServiceEndpoint = await resolveServiceEndpoint(
+                service,
+                createPartialMock<CoreV1Api>({}),
+            );
             expect(endpoint.kind).toBe('pending');
             if (endpoint.kind === 'pending') {
                 expect(endpoint.reason).toContain('not yet assigned');
@@ -553,8 +567,8 @@ describe('kubernetesClient', () => {
                 nodePort: 30192,
             });
 
-            const mockCoreApi = {
-                listNode: jest.fn().mockResolvedValue({
+            const mockCoreApi = createPartialMock<CoreV1Api>({
+                listNode: vi.fn<CoreV1Api['listNode']>().mockResolvedValue({
                     items: [
                         {
                             status: {
@@ -563,7 +577,7 @@ describe('kubernetesClient', () => {
                         },
                     ],
                 }),
-            };
+            });
 
             const endpoint: KubeServiceEndpoint = await resolveServiceEndpoint(service, mockCoreApi);
             expect(endpoint.kind).toBe('ready');
@@ -583,8 +597,8 @@ describe('kubernetesClient', () => {
                 nodePort: 30017,
             });
 
-            const mockCoreApi = {
-                listNode: jest.fn().mockResolvedValue({
+            const mockCoreApi = createPartialMock<CoreV1Api>({
+                listNode: vi.fn<CoreV1Api['listNode']>().mockResolvedValue({
                     items: [
                         {
                             status: {
@@ -593,7 +607,7 @@ describe('kubernetesClient', () => {
                         },
                     ],
                 }),
-            };
+            });
 
             const endpoint: KubeServiceEndpoint = await resolveServiceEndpoint(service, mockCoreApi);
             expect(endpoint.kind).toBe('ready');
@@ -613,7 +627,10 @@ describe('kubernetesClient', () => {
                 clusterIP: '10.0.0.1',
             });
 
-            const endpoint: KubeServiceEndpoint = await resolveServiceEndpoint(service, {});
+            const endpoint: KubeServiceEndpoint = await resolveServiceEndpoint(
+                service,
+                createPartialMock<CoreV1Api>({}),
+            );
             expect(endpoint.kind).toBe('needsPortForward');
             if (endpoint.kind === 'needsPortForward') {
                 expect(endpoint.serviceName).toBe('mongo-cip');
@@ -633,7 +650,10 @@ describe('kubernetesClient', () => {
                 port: 27017,
             });
 
-            const endpoint: KubeServiceEndpoint = await resolveServiceEndpoint(service, {});
+            const endpoint: KubeServiceEndpoint = await resolveServiceEndpoint(
+                service,
+                createPartialMock<CoreV1Api>({}),
+            );
             expect(endpoint.kind).toBe('unreachable');
             if (endpoint.kind === 'unreachable') {
                 expect(endpoint.reason).toContain('ExternalName');
@@ -650,7 +670,10 @@ describe('kubernetesClient', () => {
                 port: 27017,
             });
 
-            const endpoint: KubeServiceEndpoint = await resolveServiceEndpoint(service, {});
+            const endpoint: KubeServiceEndpoint = await resolveServiceEndpoint(
+                service,
+                createPartialMock<CoreV1Api>({}),
+            );
             expect(endpoint.kind).toBe('unreachable');
             if (endpoint.kind === 'unreachable') {
                 expect(endpoint.reason).toContain('Headless');
@@ -668,7 +691,10 @@ describe('kubernetesClient', () => {
                 // nodePort intentionally omitted
             });
 
-            const endpoint: KubeServiceEndpoint = await resolveServiceEndpoint(service, {});
+            const endpoint: KubeServiceEndpoint = await resolveServiceEndpoint(
+                service,
+                createPartialMock<CoreV1Api>({}),
+            );
             expect(endpoint.kind).toBe('unreachable');
             if (endpoint.kind === 'unreachable') {
                 expect(endpoint.reason).toContain('node address');
@@ -686,11 +712,11 @@ describe('kubernetesClient', () => {
                 nodePort: 30017,
             });
 
-            const mockCoreApi = {
-                listNode: jest.fn().mockResolvedValue({
+            const mockCoreApi = createPartialMock<CoreV1Api>({
+                listNode: vi.fn<CoreV1Api['listNode']>().mockResolvedValue({
                     items: [],
                 }),
-            };
+            });
 
             const endpoint: KubeServiceEndpoint = await resolveServiceEndpoint(service, mockCoreApi);
             expect(endpoint.kind).toBe('unreachable');
@@ -701,28 +727,25 @@ describe('kubernetesClient', () => {
     });
 
     describe('listNamespaces', () => {
-        // eslint-disable-next-line @typescript-eslint/no-require-imports
-        const { listNamespaces } = require('./kubernetesClient');
-
         it('should return sorted namespace names', async () => {
-            const mockCoreApi = {
-                listNamespace: jest.fn().mockResolvedValue({
+            const mockCoreApi = createPartialMock<CoreV1Api>({
+                listNamespace: vi.fn<CoreV1Api['listNamespace']>().mockResolvedValue({
                     items: [
                         { metadata: { name: 'staging' } },
                         { metadata: { name: 'default' } },
                         { metadata: { name: 'production' } },
                     ],
                 }),
-            };
+            });
 
             const namespaces: string[] = await listNamespaces(mockCoreApi);
             expect(namespaces).toEqual(['default', 'production', 'staging']);
         });
 
         it('should throw on RBAC denied', async () => {
-            const mockCoreApi = {
-                listNamespace: jest.fn().mockRejectedValue(new Error('Forbidden')),
-            };
+            const mockCoreApi = createPartialMock<CoreV1Api>({
+                listNamespace: vi.fn<CoreV1Api['listNamespace']>().mockRejectedValue(new Error('Forbidden')),
+            });
 
             await expect(listNamespaces(mockCoreApi)).rejects.toThrow(/Failed to list namespaces/);
         });
@@ -731,9 +754,6 @@ describe('kubernetesClient', () => {
     describe('buildConnectionString (via resolveServiceEndpoint)', () => {
         // buildConnectionString is private — tested indirectly through resolveServiceEndpoint.
         // LoadBalancer with external IP is the simplest path to exercise it.
-        // eslint-disable-next-line @typescript-eslint/no-require-imports
-        const { resolveServiceEndpoint } = require('./kubernetesClient');
-
         it('should include allowed connection parameters in the connection string', async () => {
             const service = createServiceInfo({
                 name: 'mongo-lb',
@@ -746,7 +766,10 @@ describe('kubernetesClient', () => {
                 connectionParams: 'directConnection=true&tls=true',
             });
 
-            const endpoint: KubeServiceEndpoint = await resolveServiceEndpoint(service, {});
+            const endpoint: KubeServiceEndpoint = await resolveServiceEndpoint(
+                service,
+                createPartialMock<CoreV1Api>({}),
+            );
             expect(endpoint.kind).toBe('ready');
             if (endpoint.kind === 'ready') {
                 expect(endpoint.connectionString).toBe('mongodb://1.2.3.4:27017/?directConnection=true&tls=true');
@@ -765,7 +788,10 @@ describe('kubernetesClient', () => {
                 connectionParams: 'foo=bar&password=leaked',
             });
 
-            const endpoint: KubeServiceEndpoint = await resolveServiceEndpoint(service, {});
+            const endpoint: KubeServiceEndpoint = await resolveServiceEndpoint(
+                service,
+                createPartialMock<CoreV1Api>({}),
+            );
             expect(endpoint.kind).toBe('ready');
             if (endpoint.kind === 'ready') {
                 expect(endpoint.connectionString).toBe('mongodb://1.2.3.4:27017/');
@@ -787,7 +813,10 @@ describe('kubernetesClient', () => {
                 connectionParams: 'tls=true&evil=inject&replicaSet=rs0&password=secret',
             });
 
-            const endpoint: KubeServiceEndpoint = await resolveServiceEndpoint(service, {});
+            const endpoint: KubeServiceEndpoint = await resolveServiceEndpoint(
+                service,
+                createPartialMock<CoreV1Api>({}),
+            );
             expect(endpoint.kind).toBe('ready');
             if (endpoint.kind === 'ready') {
                 expect(endpoint.connectionString).toContain('tls=true');
@@ -810,7 +839,10 @@ describe('kubernetesClient', () => {
                 connectionParams: '',
             });
 
-            const endpoint: KubeServiceEndpoint = await resolveServiceEndpoint(service, {});
+            const endpoint: KubeServiceEndpoint = await resolveServiceEndpoint(
+                service,
+                createPartialMock<CoreV1Api>({}),
+            );
             expect(endpoint.kind).toBe('ready');
             if (endpoint.kind === 'ready') {
                 expect(endpoint.connectionString).toBe('mongodb://1.2.3.4:27017/');
@@ -830,7 +862,10 @@ describe('kubernetesClient', () => {
                 connectionParams: 'badKey=badValue&anotherBad=true',
             });
 
-            const endpoint: KubeServiceEndpoint = await resolveServiceEndpoint(service, {});
+            const endpoint: KubeServiceEndpoint = await resolveServiceEndpoint(
+                service,
+                createPartialMock<CoreV1Api>({}),
+            );
             expect(endpoint.kind).toBe('ready');
             if (endpoint.kind === 'ready') {
                 expect(endpoint.connectionString).toBe('mongodb://1.2.3.4:27017/');
@@ -862,7 +897,10 @@ describe('kubernetesClient', () => {
                 connectionParams: allAllowed,
             });
 
-            const endpoint: KubeServiceEndpoint = await resolveServiceEndpoint(service, {});
+            const endpoint: KubeServiceEndpoint = await resolveServiceEndpoint(
+                service,
+                createPartialMock<CoreV1Api>({}),
+            );
             expect(endpoint.kind).toBe('ready');
             if (endpoint.kind === 'ready') {
                 const url = endpoint.connectionString;
@@ -890,7 +928,10 @@ describe('kubernetesClient', () => {
                 // connectionParams intentionally omitted (undefined)
             });
 
-            const endpoint: KubeServiceEndpoint = await resolveServiceEndpoint(service, {});
+            const endpoint: KubeServiceEndpoint = await resolveServiceEndpoint(
+                service,
+                createPartialMock<CoreV1Api>({}),
+            );
             expect(endpoint.kind).toBe('ready');
             if (endpoint.kind === 'ready') {
                 expect(endpoint.connectionString).toBe('mongodb://1.2.3.4:27017/');
@@ -900,16 +941,16 @@ describe('kubernetesClient', () => {
     });
 
     describe('resolveDocumentDBCredentials', () => {
-        // eslint-disable-next-line @typescript-eslint/no-require-imports
-        const { resolveDocumentDBCredentials } = require('./kubernetesClient');
-
-        const createMockKubeConfig = (customApiMock: Record<string, jest.Mock>) => ({
-            makeApiClient: jest.fn().mockReturnValue(customApiMock),
-        });
+        const createMockKubeConfig = (customApiMock: Record<string, Mock>): KubeConfig =>
+            createPartialMock<KubeConfig>({
+                makeApiClient: vi
+                    .fn<KubeConfig['makeApiClient']>()
+                    .mockReturnValue(customApiMock) as KubeConfig['makeApiClient'],
+            });
 
         it('should return credentials when matching CR and secret are found', async () => {
             const mockCustomApi = {
-                listNamespacedCustomObject: jest.fn().mockResolvedValue({
+                listNamespacedCustomObject: vi.fn().mockResolvedValue({
                     items: [
                         {
                             metadata: { name: 'mydb' },
@@ -918,14 +959,14 @@ describe('kubernetesClient', () => {
                     ],
                 }),
             };
-            const mockCoreApi = {
-                readNamespacedSecret: jest.fn().mockResolvedValue({
+            const mockCoreApi = createPartialMock<CoreV1Api>({
+                readNamespacedSecret: vi.fn<CoreV1Api['readNamespacedSecret']>().mockResolvedValue({
                     data: {
                         username: Buffer.from('admin').toString('base64'),
                         password: Buffer.from('s3cret!').toString('base64'),
                     },
                 }),
-            };
+            });
             const mockKubeConfig = createMockKubeConfig(mockCustomApi);
 
             const result = await resolveDocumentDBCredentials(
@@ -947,13 +988,13 @@ describe('kubernetesClient', () => {
 
         it('should return undefined when no CRs exist (empty items)', async () => {
             const mockCustomApi = {
-                listNamespacedCustomObject: jest.fn().mockResolvedValue({
+                listNamespacedCustomObject: vi.fn().mockResolvedValue({
                     items: [],
                 }),
             };
-            const mockCoreApi = {
-                readNamespacedSecret: jest.fn(),
-            };
+            const mockCoreApi = createPartialMock<CoreV1Api>({
+                readNamespacedSecret: vi.fn<CoreV1Api['readNamespacedSecret']>(),
+            });
             const mockKubeConfig = createMockKubeConfig(mockCustomApi);
 
             const result = await resolveDocumentDBCredentials(
@@ -969,7 +1010,7 @@ describe('kubernetesClient', () => {
 
         it('should return undefined when no CR matches the service name', async () => {
             const mockCustomApi = {
-                listNamespacedCustomObject: jest.fn().mockResolvedValue({
+                listNamespacedCustomObject: vi.fn().mockResolvedValue({
                     items: [
                         {
                             metadata: { name: 'otherdb' },
@@ -978,9 +1019,9 @@ describe('kubernetesClient', () => {
                     ],
                 }),
             };
-            const mockCoreApi = {
-                readNamespacedSecret: jest.fn(),
-            };
+            const mockCoreApi = createPartialMock<CoreV1Api>({
+                readNamespacedSecret: vi.fn<CoreV1Api['readNamespacedSecret']>(),
+            });
             const mockKubeConfig = createMockKubeConfig(mockCustomApi);
 
             const result = await resolveDocumentDBCredentials(
@@ -996,7 +1037,7 @@ describe('kubernetesClient', () => {
 
         it('should return undefined when secret does not have username/password fields', async () => {
             const mockCustomApi = {
-                listNamespacedCustomObject: jest.fn().mockResolvedValue({
+                listNamespacedCustomObject: vi.fn().mockResolvedValue({
                     items: [
                         {
                             metadata: { name: 'mydb' },
@@ -1005,13 +1046,13 @@ describe('kubernetesClient', () => {
                     ],
                 }),
             };
-            const mockCoreApi = {
-                readNamespacedSecret: jest.fn().mockResolvedValue({
+            const mockCoreApi = createPartialMock<CoreV1Api>({
+                readNamespacedSecret: vi.fn<CoreV1Api['readNamespacedSecret']>().mockResolvedValue({
                     data: {
                         token: Buffer.from('some-token').toString('base64'),
                     },
                 }),
-            };
+            });
             const mockKubeConfig = createMockKubeConfig(mockCustomApi);
 
             const result = await resolveDocumentDBCredentials(
@@ -1026,11 +1067,11 @@ describe('kubernetesClient', () => {
 
         it('should return undefined when CRD API call fails (RBAC or CRD not installed)', async () => {
             const mockCustomApi = {
-                listNamespacedCustomObject: jest.fn().mockRejectedValue(new Error('Forbidden')),
+                listNamespacedCustomObject: vi.fn().mockRejectedValue(new Error('Forbidden')),
             };
-            const mockCoreApi = {
-                readNamespacedSecret: jest.fn(),
-            };
+            const mockCoreApi = createPartialMock<CoreV1Api>({
+                readNamespacedSecret: vi.fn<CoreV1Api['readNamespacedSecret']>(),
+            });
             const mockKubeConfig = createMockKubeConfig(mockCustomApi);
 
             const result = await resolveDocumentDBCredentials(
@@ -1046,7 +1087,7 @@ describe('kubernetesClient', () => {
 
         it('should return undefined when secret read fails', async () => {
             const mockCustomApi = {
-                listNamespacedCustomObject: jest.fn().mockResolvedValue({
+                listNamespacedCustomObject: vi.fn().mockResolvedValue({
                     items: [
                         {
                             metadata: { name: 'mydb' },
@@ -1055,9 +1096,11 @@ describe('kubernetesClient', () => {
                     ],
                 }),
             };
-            const mockCoreApi = {
-                readNamespacedSecret: jest.fn().mockRejectedValue(new Error('Not Found')),
-            };
+            const mockCoreApi = createPartialMock<CoreV1Api>({
+                readNamespacedSecret: vi
+                    .fn<CoreV1Api['readNamespacedSecret']>()
+                    .mockRejectedValue(new Error('Not Found')),
+            });
             const mockKubeConfig = createMockKubeConfig(mockCustomApi);
 
             const result = await resolveDocumentDBCredentials(
@@ -1075,7 +1118,7 @@ describe('kubernetesClient', () => {
             const rawPassword = 'p@$$w0rd/with+special=chars';
 
             const mockCustomApi = {
-                listNamespacedCustomObject: jest.fn().mockResolvedValue({
+                listNamespacedCustomObject: vi.fn().mockResolvedValue({
                     items: [
                         {
                             metadata: { name: 'mydb' },
@@ -1084,14 +1127,14 @@ describe('kubernetesClient', () => {
                     ],
                 }),
             };
-            const mockCoreApi = {
-                readNamespacedSecret: jest.fn().mockResolvedValue({
+            const mockCoreApi = createPartialMock<CoreV1Api>({
+                readNamespacedSecret: vi.fn<CoreV1Api['readNamespacedSecret']>().mockResolvedValue({
                     data: {
                         username: Buffer.from(rawUsername).toString('base64'),
                         password: Buffer.from(rawPassword).toString('base64'),
                     },
                 }),
-            };
+            });
             const mockKubeConfig = createMockKubeConfig(mockCustomApi);
 
             const result = await resolveDocumentDBCredentials(
@@ -1108,7 +1151,7 @@ describe('kubernetesClient', () => {
 
         it('should use default secret name when CR does not specify one', async () => {
             const mockCustomApi = {
-                listNamespacedCustomObject: jest.fn().mockResolvedValue({
+                listNamespacedCustomObject: vi.fn().mockResolvedValue({
                     items: [
                         {
                             metadata: { name: 'mydb' },
@@ -1117,14 +1160,14 @@ describe('kubernetesClient', () => {
                     ],
                 }),
             };
-            const mockCoreApi = {
-                readNamespacedSecret: jest.fn().mockResolvedValue({
+            const mockCoreApi = createPartialMock<CoreV1Api>({
+                readNamespacedSecret: vi.fn<CoreV1Api['readNamespacedSecret']>().mockResolvedValue({
                     data: {
                         username: Buffer.from('user1').toString('base64'),
                         password: Buffer.from('pass1').toString('base64'),
                     },
                 }),
-            };
+            });
             const mockKubeConfig = createMockKubeConfig(mockCustomApi);
 
             const result = await resolveDocumentDBCredentials(
@@ -1143,9 +1186,6 @@ describe('kubernetesClient', () => {
     });
 
     describe('buildPortForwardConnectionString', () => {
-        // eslint-disable-next-line @typescript-eslint/no-require-imports
-        const { buildPortForwardConnectionString } = require('./kubernetesClient');
-
         it('should use 127.0.0.1 instead of localhost', () => {
             const service = createServiceInfo({
                 name: 'svc',
@@ -1308,12 +1348,9 @@ describe('kubernetesClient', () => {
     // service-discovery-heuristics
     // -------------------------------------------------------------------------
     describe('listDocumentDBServices - service discovery heuristics', () => {
-        // eslint-disable-next-line @typescript-eslint/no-require-imports
-        const { listDocumentDBServices } = require('./kubernetesClient');
-
         it('should include an annotated service on a non-standard port', async () => {
-            const mockCoreApi = {
-                listNamespacedService: jest.fn().mockResolvedValue({
+            const mockCoreApi = createPartialMock<CoreV1Api>({
+                listNamespacedService: vi.fn<CoreV1Api['listNamespacedService']>().mockResolvedValue({
                     items: [
                         {
                             metadata: {
@@ -1329,7 +1366,7 @@ describe('kubernetesClient', () => {
                         },
                     ],
                 }),
-            };
+            });
             const services: KubeServiceInfo[] = await listDocumentDBServices(mockCoreApi, 'default');
             expect(services).toHaveLength(1);
             expect(services[0].name).toBe('custom-docdb');
@@ -1338,8 +1375,8 @@ describe('kubernetesClient', () => {
         });
 
         it('should include a service labelled for discovery on a non-standard port', async () => {
-            const mockCoreApi = {
-                listNamespacedService: jest.fn().mockResolvedValue({
+            const mockCoreApi = createPartialMock<CoreV1Api>({
+                listNamespacedService: vi.fn<CoreV1Api['listNamespacedService']>().mockResolvedValue({
                     items: [
                         {
                             metadata: {
@@ -1355,7 +1392,7 @@ describe('kubernetesClient', () => {
                         },
                     ],
                 }),
-            };
+            });
             const services: KubeServiceInfo[] = await listDocumentDBServices(mockCoreApi, 'default');
             expect(services).toHaveLength(1);
             expect(services[0].name).toBe('labelled-docdb');
@@ -1363,8 +1400,8 @@ describe('kubernetesClient', () => {
         });
 
         it('should include a service on port 27017 without opt-in annotation', async () => {
-            const mockCoreApi = {
-                listNamespacedService: jest.fn().mockResolvedValue({
+            const mockCoreApi = createPartialMock<CoreV1Api>({
+                listNamespacedService: vi.fn<CoreV1Api['listNamespacedService']>().mockResolvedValue({
                     items: [
                         {
                             metadata: { name: 'mongo-27017', namespace: 'default' },
@@ -1375,7 +1412,7 @@ describe('kubernetesClient', () => {
                         },
                     ],
                 }),
-            };
+            });
             const services: KubeServiceInfo[] = await listDocumentDBServices(mockCoreApi, 'default');
             expect(services).toHaveLength(1);
             expect(services[0].name).toBe('mongo-27017');
@@ -1383,8 +1420,8 @@ describe('kubernetesClient', () => {
         });
 
         it('should preserve the service port name for generic remapped ClusterIP services', async () => {
-            const mockCoreApi = {
-                listNamespacedService: jest.fn().mockResolvedValue({
+            const mockCoreApi = createPartialMock<CoreV1Api>({
+                listNamespacedService: vi.fn<CoreV1Api['listNamespacedService']>().mockResolvedValue({
                     items: [
                         {
                             metadata: { name: 'generic-docdb', namespace: 'default' },
@@ -1398,7 +1435,7 @@ describe('kubernetesClient', () => {
                         },
                     ],
                 }),
-            };
+            });
 
             const services: KubeServiceInfo[] = await listDocumentDBServices(mockCoreApi, 'default');
             expect(services).toHaveLength(1);
@@ -1411,8 +1448,8 @@ describe('kubernetesClient', () => {
         });
 
         it('should include a service on port 27018 without opt-in annotation', async () => {
-            const mockCoreApi = {
-                listNamespacedService: jest.fn().mockResolvedValue({
+            const mockCoreApi = createPartialMock<CoreV1Api>({
+                listNamespacedService: vi.fn<CoreV1Api['listNamespacedService']>().mockResolvedValue({
                     items: [
                         {
                             metadata: { name: 'mongo-27018', namespace: 'default' },
@@ -1423,15 +1460,15 @@ describe('kubernetesClient', () => {
                         },
                     ],
                 }),
-            };
+            });
             const services: KubeServiceInfo[] = await listDocumentDBServices(mockCoreApi, 'default');
             expect(services).toHaveLength(1);
             expect(services[0].name).toBe('mongo-27018');
         });
 
         it('should include a service on port 27019 without opt-in annotation', async () => {
-            const mockCoreApi = {
-                listNamespacedService: jest.fn().mockResolvedValue({
+            const mockCoreApi = createPartialMock<CoreV1Api>({
+                listNamespacedService: vi.fn<CoreV1Api['listNamespacedService']>().mockResolvedValue({
                     items: [
                         {
                             metadata: { name: 'mongo-27019', namespace: 'default' },
@@ -1442,15 +1479,15 @@ describe('kubernetesClient', () => {
                         },
                     ],
                 }),
-            };
+            });
             const services: KubeServiceInfo[] = await listDocumentDBServices(mockCoreApi, 'default');
             expect(services).toHaveLength(1);
             expect(services[0].name).toBe('mongo-27019');
         });
 
         it('should exclude an unrelated service on port 80 without opt-in', async () => {
-            const mockCoreApi = {
-                listNamespacedService: jest.fn().mockResolvedValue({
+            const mockCoreApi = createPartialMock<CoreV1Api>({
+                listNamespacedService: vi.fn<CoreV1Api['listNamespacedService']>().mockResolvedValue({
                     items: [
                         {
                             metadata: { name: 'nginx', namespace: 'default' },
@@ -1461,14 +1498,14 @@ describe('kubernetesClient', () => {
                         },
                     ],
                 }),
-            };
+            });
             const services: KubeServiceInfo[] = await listDocumentDBServices(mockCoreApi, 'default');
             expect(services).toHaveLength(0);
         });
 
         it('should not duplicate a DKO-backed service through generic fallback even when port matches', async () => {
-            const mockCoreApi = {
-                listNamespacedService: jest.fn().mockResolvedValue({
+            const mockCoreApi = createPartialMock<CoreV1Api>({
+                listNamespacedService: vi.fn<CoreV1Api['listNamespacedService']>().mockResolvedValue({
                     items: [
                         {
                             // This is the DKO backing service — must not appear as generic too.
@@ -1480,22 +1517,22 @@ describe('kubernetesClient', () => {
                         },
                     ],
                 }),
-            };
-            const mockKubeConfig = {
-                makeApiClient: jest.fn().mockReturnValue({
-                    listNamespacedCustomObject: jest.fn().mockResolvedValue({
+            });
+            const mockKubeConfig = createPartialMock<KubeConfig>({
+                makeApiClient: vi.fn<KubeConfig['makeApiClient']>().mockReturnValue({
+                    listNamespacedCustomObject: vi.fn().mockResolvedValue({
                         items: [{ metadata: { name: 'mydb' }, spec: {}, status: {} }],
                     }),
-                }),
-            };
+                }) as KubeConfig['makeApiClient'],
+            });
             const services: KubeServiceInfo[] = await listDocumentDBServices(mockCoreApi, 'default', mockKubeConfig);
             expect(services).toHaveLength(1);
             expect(services[0].sourceKind).toBe('dko');
         });
 
         it('should store credentialSecretName from annotation on a generic service', async () => {
-            const mockCoreApi = {
-                listNamespacedService: jest.fn().mockResolvedValue({
+            const mockCoreApi = createPartialMock<CoreV1Api>({
+                listNamespacedService: vi.fn<CoreV1Api['listNamespacedService']>().mockResolvedValue({
                     items: [
                         {
                             metadata: {
@@ -1513,15 +1550,15 @@ describe('kubernetesClient', () => {
                         },
                     ],
                 }),
-            };
+            });
             const services: KubeServiceInfo[] = await listDocumentDBServices(mockCoreApi, 'prod');
             expect(services).toHaveLength(1);
             expect(services[0].credentialSecretName).toBe('my-db-secret');
         });
 
         it('should not store credentialSecretName when the annotation value is not a valid Kubernetes name', async () => {
-            const mockCoreApi = {
-                listNamespacedService: jest.fn().mockResolvedValue({
+            const mockCoreApi = createPartialMock<CoreV1Api>({
+                listNamespacedService: vi.fn<CoreV1Api['listNamespacedService']>().mockResolvedValue({
                     items: [
                         {
                             metadata: {
@@ -1539,7 +1576,7 @@ describe('kubernetesClient', () => {
                         },
                     ],
                 }),
-            };
+            });
             const services: KubeServiceInfo[] = await listDocumentDBServices(mockCoreApi, 'default');
             expect(services).toHaveLength(1);
             expect(services[0].credentialSecretName).toBeUndefined();
@@ -1547,8 +1584,8 @@ describe('kubernetesClient', () => {
 
         it('should exclude an annotated service whose only port is UDP', async () => {
             // UDP ports must be ignored; if no TCP port remains the service is excluded.
-            const mockCoreApi = {
-                listNamespacedService: jest.fn().mockResolvedValue({
+            const mockCoreApi = createPartialMock<CoreV1Api>({
+                listNamespacedService: vi.fn<CoreV1Api['listNamespacedService']>().mockResolvedValue({
                     items: [
                         {
                             metadata: {
@@ -1563,15 +1600,15 @@ describe('kubernetesClient', () => {
                         },
                     ],
                 }),
-            };
+            });
             const services: KubeServiceInfo[] = await listDocumentDBServices(mockCoreApi, 'default');
             expect(services).toHaveLength(0);
         });
 
         it('should exclude a port-matched service whose only port is UDP (no annotation)', async () => {
             // A service on a known port but with UDP protocol must be excluded from heuristic discovery.
-            const mockCoreApi = {
-                listNamespacedService: jest.fn().mockResolvedValue({
+            const mockCoreApi = createPartialMock<CoreV1Api>({
+                listNamespacedService: vi.fn<CoreV1Api['listNamespacedService']>().mockResolvedValue({
                     items: [
                         {
                             metadata: { name: 'udp-27017', namespace: 'default' },
@@ -1582,15 +1619,15 @@ describe('kubernetesClient', () => {
                         },
                     ],
                 }),
-            };
+            });
             const services: KubeServiceInfo[] = await listDocumentDBServices(mockCoreApi, 'default');
             expect(services).toHaveLength(0);
         });
 
         it('should include a service where one port is TCP 27017 and another is UDP', async () => {
             // When a service has mixed protocols, the TCP port should still qualify it for discovery.
-            const mockCoreApi = {
-                listNamespacedService: jest.fn().mockResolvedValue({
+            const mockCoreApi = createPartialMock<CoreV1Api>({
+                listNamespacedService: vi.fn<CoreV1Api['listNamespacedService']>().mockResolvedValue({
                     items: [
                         {
                             metadata: { name: 'mixed-proto-svc', namespace: 'default' },
@@ -1604,7 +1641,7 @@ describe('kubernetesClient', () => {
                         },
                     ],
                 }),
-            };
+            });
             const services: KubeServiceInfo[] = await listDocumentDBServices(mockCoreApi, 'default');
             expect(services).toHaveLength(1);
             expect(services[0].name).toBe('mixed-proto-svc');
@@ -1615,18 +1652,15 @@ describe('kubernetesClient', () => {
     // credential-secret-resolution (generic services)
     // -------------------------------------------------------------------------
     describe('resolveGenericServiceCredentials', () => {
-        // eslint-disable-next-line @typescript-eslint/no-require-imports
-        const { resolveGenericServiceCredentials } = require('./kubernetesClient');
-
         it('should resolve credentials from a valid secret', async () => {
-            const mockCoreApi = {
-                readNamespacedSecret: jest.fn().mockResolvedValue({
+            const mockCoreApi = createPartialMock<CoreV1Api>({
+                readNamespacedSecret: vi.fn<CoreV1Api['readNamespacedSecret']>().mockResolvedValue({
                     data: {
                         username: Buffer.from('admin').toString('base64'),
                         password: Buffer.from('pass123').toString('base64'),
                     },
                 }),
-            };
+            });
             const result = await resolveGenericServiceCredentials(mockCoreApi, 'default', 'my-secret');
             expect(result).toBeDefined();
             expect(result!.username).toBe('admin');
@@ -1635,14 +1669,14 @@ describe('kubernetesClient', () => {
         });
 
         it('should read the secret from the namespace provided (same-namespace enforcement)', async () => {
-            const mockCoreApi = {
-                readNamespacedSecret: jest.fn().mockResolvedValue({
+            const mockCoreApi = createPartialMock<CoreV1Api>({
+                readNamespacedSecret: vi.fn<CoreV1Api['readNamespacedSecret']>().mockResolvedValue({
                     data: {
                         username: Buffer.from('user').toString('base64'),
                         password: Buffer.from('pwd').toString('base64'),
                     },
                 }),
-            };
+            });
             await resolveGenericServiceCredentials(mockCoreApi, 'prod-namespace', 'my-secret');
             expect(mockCoreApi.readNamespacedSecret).toHaveBeenCalledWith({
                 name: 'my-secret',
@@ -1651,34 +1685,38 @@ describe('kubernetesClient', () => {
         });
 
         it('should return undefined and skip API call for an invalid secret name', async () => {
-            const mockCoreApi = { readNamespacedSecret: jest.fn() };
+            const mockCoreApi = createPartialMock<CoreV1Api>({
+                readNamespacedSecret: vi.fn<CoreV1Api['readNamespacedSecret']>(),
+            });
             const result = await resolveGenericServiceCredentials(mockCoreApi, 'default', 'Invalid Name!');
             expect(result).toBeUndefined();
             expect(mockCoreApi.readNamespacedSecret).not.toHaveBeenCalled();
         });
 
         it('should return undefined when the secret is not found', async () => {
-            const mockCoreApi = {
-                readNamespacedSecret: jest.fn().mockRejectedValue(new Error('Not Found')),
-            };
+            const mockCoreApi = createPartialMock<CoreV1Api>({
+                readNamespacedSecret: vi
+                    .fn<CoreV1Api['readNamespacedSecret']>()
+                    .mockRejectedValue(new Error('Not Found')),
+            });
             const result = await resolveGenericServiceCredentials(mockCoreApi, 'default', 'missing-secret');
             expect(result).toBeUndefined();
         });
 
         it('should return undefined when the secret lacks username or password', async () => {
-            const mockCoreApi = {
-                readNamespacedSecret: jest.fn().mockResolvedValue({
+            const mockCoreApi = createPartialMock<CoreV1Api>({
+                readNamespacedSecret: vi.fn<CoreV1Api['readNamespacedSecret']>().mockResolvedValue({
                     data: { token: Buffer.from('abc').toString('base64') },
                 }),
-            };
+            });
             const result = await resolveGenericServiceCredentials(mockCoreApi, 'default', 'incomplete-secret');
             expect(result).toBeUndefined();
         });
 
         it('should return undefined when the secret data is empty', async () => {
-            const mockCoreApi = {
-                readNamespacedSecret: jest.fn().mockResolvedValue({ data: {} }),
-            };
+            const mockCoreApi = createPartialMock<CoreV1Api>({
+                readNamespacedSecret: vi.fn<CoreV1Api['readNamespacedSecret']>().mockResolvedValue({ data: {} }),
+            });
             const result = await resolveGenericServiceCredentials(mockCoreApi, 'default', 'empty-secret');
             expect(result).toBeUndefined();
         });
@@ -1755,13 +1793,10 @@ describe('kubernetesClient', () => {
     // nodeport-loadbalancer-safety
     // -------------------------------------------------------------------------
     describe('resolveServiceEndpoint - NodePort and LoadBalancer address safety', () => {
-        // eslint-disable-next-line @typescript-eslint/no-require-imports
-        const { resolveServiceEndpoint } = require('./kubernetesClient');
-
         it('should resolve NodePort with ExternalIP and no warning', async () => {
             const service = createServiceInfo({ type: 'NodePort', port: 27017, nodePort: 30017 });
-            const mockCoreApi = {
-                listNode: jest.fn().mockResolvedValue({
+            const mockCoreApi = createPartialMock<CoreV1Api>({
+                listNode: vi.fn<CoreV1Api['listNode']>().mockResolvedValue({
                     items: [
                         {
                             status: {
@@ -1773,7 +1808,7 @@ describe('kubernetesClient', () => {
                         },
                     ],
                 }),
-            };
+            });
             const endpoint: KubeServiceEndpoint = await resolveServiceEndpoint(service, mockCoreApi);
             expect(endpoint.kind).toBe('ready');
             if (endpoint.kind === 'ready') {
@@ -1784,11 +1819,11 @@ describe('kubernetesClient', () => {
 
         it('should resolve NodePort with InternalIP and include an uncertainty warning', async () => {
             const service = createServiceInfo({ type: 'NodePort', port: 27017, nodePort: 30017 });
-            const mockCoreApi = {
-                listNode: jest.fn().mockResolvedValue({
+            const mockCoreApi = createPartialMock<CoreV1Api>({
+                listNode: vi.fn<CoreV1Api['listNode']>().mockResolvedValue({
                     items: [{ status: { addresses: [{ type: 'InternalIP', address: '10.0.0.1' }] } }],
                 }),
-            };
+            });
             const endpoint: KubeServiceEndpoint = await resolveServiceEndpoint(service, mockCoreApi);
             expect(endpoint.kind).toBe('ready');
             if (endpoint.kind === 'ready') {
@@ -1800,8 +1835,8 @@ describe('kubernetesClient', () => {
 
         it('should prefer ExternalIP over InternalIP across different nodes', async () => {
             const service = createServiceInfo({ type: 'NodePort', port: 27017, nodePort: 30017 });
-            const mockCoreApi = {
-                listNode: jest.fn().mockResolvedValue({
+            const mockCoreApi = createPartialMock<CoreV1Api>({
+                listNode: vi.fn<CoreV1Api['listNode']>().mockResolvedValue({
                     items: [
                         { status: { addresses: [{ type: 'InternalIP', address: '10.0.0.1' }] } },
                         {
@@ -1814,7 +1849,7 @@ describe('kubernetesClient', () => {
                         },
                     ],
                 }),
-            };
+            });
             const endpoint: KubeServiceEndpoint = await resolveServiceEndpoint(service, mockCoreApi);
             expect(endpoint.kind).toBe('ready');
             if (endpoint.kind === 'ready') {
@@ -1830,11 +1865,11 @@ describe('kubernetesClient', () => {
                 externalAddress: undefined,
                 nodePort: 30192,
             });
-            const mockCoreApi = {
-                listNode: jest.fn().mockResolvedValue({
+            const mockCoreApi = createPartialMock<CoreV1Api>({
+                listNode: vi.fn<CoreV1Api['listNode']>().mockResolvedValue({
                     items: [{ status: { addresses: [{ type: 'InternalIP', address: '172.18.0.2' }] } }],
                 }),
-            };
+            });
             const endpoint: KubeServiceEndpoint = await resolveServiceEndpoint(service, mockCoreApi);
             expect(endpoint.kind).toBe('ready');
             if (endpoint.kind === 'ready') {
@@ -1851,8 +1886,8 @@ describe('kubernetesClient', () => {
                 externalAddress: undefined,
                 nodePort: 30192,
             });
-            const mockCoreApi = {
-                listNode: jest.fn().mockResolvedValue({
+            const mockCoreApi = createPartialMock<CoreV1Api>({
+                listNode: vi.fn<CoreV1Api['listNode']>().mockResolvedValue({
                     items: [
                         {
                             status: {
@@ -1864,7 +1899,7 @@ describe('kubernetesClient', () => {
                         },
                     ],
                 }),
-            };
+            });
             const endpoint: KubeServiceEndpoint = await resolveServiceEndpoint(service, mockCoreApi);
             expect(endpoint.kind).toBe('ready');
             if (endpoint.kind === 'ready') {
