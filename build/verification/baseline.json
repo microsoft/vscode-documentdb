@@ -4,7 +4,7 @@
     "fraction": 0.1,
     "absoluteBytes": 4096
   },
-  "vsixBytes": 9606938,
+  "vsixBytes": 9597420,
   "files": [
     {
       "path": "[Content_Types].xml",
@@ -164,7 +164,7 @@
     },
     {
       "path": "extension/main.js",
-      "bytes": 4761155
+      "bytes": 4761367
     },
     {
       "path": "extension/main.js.LICENSE.txt",
@@ -192,7 +192,7 @@
     },
     {
       "path": "extension/playgroundWorker.js",
-      "bytes": 6555517
+      "bytes": 7443125
     },
     {
       "path": "extension/playgroundWorker.js.LICENSE.txt",

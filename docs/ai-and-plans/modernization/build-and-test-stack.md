@@ -54,9 +54,12 @@ Out of scope:
    - commit to this branch only, never to `main`, and open no separate per-stage PRs;
    - prefix commit subjects with the stage, for example `S2: convert schema-analyzer tests to Vitest`;
    - keep the PR in draft until G6; CI runs on every push through it;
-   - bring in `main` with a merge commit, not a rebase, as the branch already does. Merge `main` at the
-     start of every stage and before every gate. After Stage 2, convert any Jest tests that arrive
-     with a merge;
+   - bring in `main` with a merge commit, not a rebase. Merge `main` at the start of every stage and
+     before every gate, but only up to a commit whose lockfile is past the 7-day ADO feed
+     quarantine. If `main` carries fresher versions, merge an older `main` commit or the latest
+     release tag instead. (Operator, 2026-10-02: the branch was rebased onto `v0.11.0` once, because
+     the ADO build rejected fresh Dependabot versions that a `main` merge had brought in.) After
+     Stage 2, convert any Jest tests that arrive with a merge;
    - never hand-merge `package-lock.json` (or `l10n/bundle.l10n.json`). Take either side and
      regenerate it with the Node and npm versions from `.nvmrc`, so CI's `npm ci` accepts it;
    - maintain the mandatory inline execution record defined in ground rule 8.
@@ -238,8 +241,29 @@ plugin in a real editor; Kubernetes, Atlas and Azure discovery against real back
     - **Progress records:** `4dee490e` committed these measurements and implementation results
       inline; `a90c79ef` committed subsequent gate evidence and the stage review; `f5614a1b`
       completed the inline reasons, alternatives and final browser proof. The initial
-      baseline remains unchanged after the lifecycle fix: later artifacts are compared with the
+      baseline remained unchanged after the lifecycle fix: later artifacts were compared with the
       measured starting point rather than replacing it with a more convenient baseline.
+    - **Rebased onto `v0.11.0` and re-baselined (operator, 2026-10-02).** The operator-run ADO
+      build failed because the preparatory `main` merge had brought in Dependabot versions still
+      inside the 7-day feed quarantine (#983 to #989). The operator chose to rebase onto the
+      `v0.11.0` tag. The branch's own 22 commits were replayed unchanged; the resulting tree differs
+      from the pre-rebase head `051ab71a` only in `package-lock.json` and two release-pipeline
+      renames from `main`. L1 then failed against the old baseline, correctly:
+      `playgroundWorker.js` grew from 6,555,517 to 7,443,125 bytes (+13.5%), because the older
+      `caniuse-lite` (1.0.30001790, via webpack's `browserslist` 4.28.2) is 0.88 MB larger than
+      1.0.30001814, and `caniuse-lite` is bundled into the playground worker. There was no product
+      change. `baseline.json` and `measurements.json` were regenerated on the `v0.11.0` lockfile
+      and are now the Stage 0 reference; the numbers above are the first measurement on `main`'s
+      lockfile. Side finding for the Stage 5 externals audit: about 2.3 MB of browser-compatibility
+      data ships inside a Node worker; the importing module has not been traced yet.
+    - **Re-measured on `v0.11.0` (2026-10-02, Node 22.21.1, npm 10.9.3):** production builds
+      **120.796 / 119.535 / 120.139 seconds**; Jest **44.531 / 42.205 / 41.875 seconds**, median
+      **42.205 seconds**, all three passing **291 suites, 4,564 tests, four snapshots**;
+      **1,836** installed packages. `dist`: **32,628,226 bytes across 123 files**; `views.js`
+      **6,490,321**, `main.js` **4,761,367**, `playgroundWorker.js` **7,443,125 bytes**. VSIX
+      **9,597,420 bytes**, SHA-256
+      `cc7118461d1d327089871b5ec3bee78d00b7bc6a9500f27955977601aee66785`. L1 and its four repacked
+      negative controls passed against the regenerated baseline.
   - Re-enable the webpack bundle analyzer (installed, currently commented out in
     `webpack.config.views.js`) behind a `BUNDLE_ANALYZE` environment variable.
     - **Landed in `e100be7d`.** `BUNDLE_ANALYZE=true` writes a static `views.html` report without
@@ -251,6 +275,13 @@ plugin in a real editor; Kubernetes, Atlas and Azure discovery against real back
       grouped/filtered stats omitted dependent modules; complete reporting prevents false counts.
       A visual report alone and reports shipped inside the VSIX were not used: the former cannot
       support these assertions, and the latter would change the artifact being measured.
+    - **Known limitation, accepted by the operator on 2026-10-02:** `BundleReportPlugin` also runs
+      in development builds and reads the emitted files from disk. `watch:views` is `webpack serve`,
+      which builds in memory: without an existing `dist/views.js` it fails with
+      `ENOENT ... dist/views.js` from `BundleReportPlugin.cjs`; with an older `dist/` it hashes
+      stale files. It disappears with webpack (views in Stage 4, host in Stage 6). Until then, run
+      `npm run webpack-dev-wv` once before `watch:views`, and never give L1 reports from a dev or
+      watch build: regenerate them with `npm run package`.
   - Build L1 with its baseline manifest. Add it to a GitHub Actions job and to the ADO build, before
     the signing step.
     - **Landed in `e100be7d`.** `npm run verify:vsix -- <vsix>` inspects the packaged archive
@@ -263,6 +294,10 @@ plugin in a real editor; Kubernetes, Atlas and Azure discovery against real back
       metadata files without relaxing the exact file list. The ZIP reader uses Node built-ins
       with checksum, size and path validation: adding an unzip dependency or relying on a
       transitive-only package was avoided to keep L1 offline and avoid new feed/quarantine inputs.
+    - **Operator direction, 2026-10-02:** a PR that adds or removes assets must not fail L1. The
+      exact file list and per-file size tolerance are a candidate for replacement by a PR report
+      (added/removed files, size deltas, per-view sizes), keeping the invariant assertions as hard
+      failures. The design is not decided; until it is, the exact list stays as implemented.
     - **Plan discrepancy requiring G0 confirmation:** today's host and playground worker each
       include one BSON implementation, but all five browser graphs include **zero**. Requiring one
       everywhere would fail the unchanged baseline; adding BSON solely to satisfy the checker
@@ -271,6 +306,8 @@ plugin in a real editor; Kubernetes, Atlas and Azure discovery against real back
       Clarification was requested, but the operator was unavailable; this is an explicit pragmatic
       deviation, not an approved design decision. All five views currently record the same heavy
       graph; the lightweight-view assertion remains opt-in until Stage 4.
+      **Accepted by the operator at G0 (2026-10-02):** browser graphs may contain zero or one BSON
+      implementation; host graphs exactly one; duplicates always fail.
     - **Review correction landed in `c1d29535`:** numeric webpack chunk references now resolve only
       within the referencing file's owning compilation. A collision/ambiguous-owner regression
       test was added; six inspector tests and the final-VSIX positive/negative checks passed.
@@ -349,6 +386,8 @@ plugin in a real editor; Kubernetes, Atlas and Azure discovery against real back
       fix preserves intended cleanup rather than relaxing the gate. Ignoring teardown errors was
       rejected because the exception demonstrably skipped cleanup. Leaving the required baseline
       gate permanently failing was the other alternative.
+      **Operator, 2026-10-02:** the fix stays on this branch and reaches `main` with the PR; no
+      separate fix to `main`.
     - The corrected local production artifact is **9,607,031 bytes**, SHA-256
       `1a9ed2a78bbbfc5221221d65c2a2495c98a4a37668b048e8dcdd9cb4c966a541`.
       L1 and its repacked negative controls passed against the **unchanged initial baseline**.
@@ -411,6 +450,13 @@ plugin in a real editor; Kubernetes, Atlas and Azure discovery against real back
     checklist, and confirmation of the BSON deviation remain outstanding. PR #880 stays draft;
     Stage 1 must not start yet. This is Case 1; the full Case 2 checks, including `prettier-fix` and
     the final ready-for-review pre-review, remain deferred.
+  - **G0 progress (operator, 2026-10-02):** CI green at `051ab71a`, with L1 and L3 run and their
+    proofs logged (four L1 rejections, `L3 PASS`, `L3 PROOF PASS`). The installed-VSIX manual
+    checklist passed; the harness is confirmed absent from the VSIX; the BSON rule is accepted; the
+    SchemaStore fix stays on the branch. The ADO build failed on quarantined dependencies, which
+    led to the `v0.11.0` rebase recorded under the baseline task. **Still open:** the ADO build
+    on the rebased branch, and the L1 manifest design (operator direction recorded under the L1
+    task).
 
 ### Stage 1: remove the legacy test harness
 
@@ -448,6 +494,8 @@ plugin in a real editor; Kubernetes, Atlas and Azure discovery against real back
     files.
   - Keep root `main.js` and the "Launch Extension + Host" configuration for now; Stage 5 replaces
     them.
+  - Dev loop: `watch:views` fails on a tree without `dist/views.js`. Run `npm run webpack-dev-wv`
+    once first (see the known limitation under Stage 0).
 - **Automated verification:** L0; L1 (the VSIX contents must not change); L3.
 - **Operator gate G1:** review the dependency and CI diff. No manual UI check is needed.
 
@@ -484,6 +532,13 @@ plugin in a real editor; Kubernetes, Atlas and Azure discovery against real back
   - In the same stage, update every place that names the Jest commands:
     `.github/copilot-instructions.md` (the Case 1 and Case 2 lists), `CONTRIBUTING.md`, the backport
     skill, the `jesttest` step in `.github/workflows/main.yml`, and the `test` script.
+  - **Convert the Stage 0 harness tests too.** `npm run test:verification` runs
+    `build/verification/browser/*.test.ts` under Jest with `@swc/jest`
+    (`build/verification/browser/jest.config.cjs`, `jest.*` calls, `types: ["jest"]` in its
+    `tsconfig.json`). Convert them with the rest; `runtime.test.ts` needs the jsdom environment.
+    The `node --test` half stays. These 45 tests count toward the preserved total. The CI L1 job
+    runs `test:verification`, so a missed conversion fails there, not in the unit-test job.
+  - Dev loop: see the `watch:views` limitation under Stage 0.
 - **Automated verification:** the same test count as before, give or take documented deletions;
   wall time compared with the Stage 0 baseline; L0. The shipped artifact does not change, so L1 to L3
   are a formality.
@@ -544,6 +599,15 @@ plugin in a real editor; Kubernetes, Atlas and Azure discovery against real back
        worker). Prove the check by adding a second copy on purpose and watching it fail.
   8. Remove the Stage 2 Vitest setting for `vscode-ext-webview` once the tests pass without it.
      Remove the fluentui one only if its own consumer test passes without it.
+  9. **Stage 0 tooling that depends on this stage:**
+     - `prepare:browser-check` and `serve:browser-check` run on `ts-node`. Move them to `tsx`
+       together with the package scripts, before dropping `ts-node`.
+     - `build/verification/browser/template.ts` transpiles
+       `packages/vscode-ext-webview/src/host/WebviewController.ts` to CommonJS and `require`s it,
+       so L2 uses the real production template and CSP. Once the package is ESM with `.js`
+       relative imports, check that this still loads, or import the built package instead. Do not
+       copy the template by hand: L2's value is that it uses the real one.
+     - Rerun L2 before G3 to prove both.
 - **Automated verification:**
   - Per package, on the packed tarball: `publint` and `@arethetypeswrong/cli`; then `require()` it
     (exercises `require(esm)`), `import` it, import it under Vitest (with the `vscode` alias for
@@ -588,6 +652,30 @@ plugin in a real editor; Kubernetes, Atlas and Azure discovery against real back
   - Point `watch:views` at the Vite dev server. Pre-bundle Fluent / Griffel with `optimizeDeps` and
     warm up the webview sources if the first panel opens slowly.
   - Decide whether Monaco still needs the `sql` language.
+  - **Port L1 to Vite output before the flip.** L1's graph, lazy-chunk and BSON checks read webpack
+    stats only (`BundleReportPlugin.cjs`; `entryGraph` and the `.e(chunkId)` check in
+    `inspect.cjs`), and `inspect()` requires both `host.json` and `views.json` in that format. In
+    this stage the views come from Vite while the host is still webpack:
+    - add a Vite report plugin (`generateBundle`: per chunk `isEntry`, `imports`, `dynamicImports`,
+      `moduleIds`, size, and the SHA-256 of the emitted bytes). Cosmos DB's
+      `plugins/vite-plugin-bundle-report.mjs` is the starting point; it lacks module IDs and hashes;
+    - make `inspect.cjs` read a bundler-neutral graph, so it accepts a webpack host report next to
+      a Vite views report;
+    - define the per-view graph explicitly: the entry's static imports plus that view's lazy chunk
+      and its static imports, **not** every dynamic child of the entry. Falling back to the whole
+      `views` entry puts Monaco in every view, and the lightweight-view assertion then fails for
+      the wrong reason;
+    - `import()` with a non-literal specifier fails L1. If Vite output contains one, add a
+      reviewed, named allowlist entry; do not drop the check;
+    - prove the ported checks fail (missing lazy chunk, Monaco in Local Quick Start, duplicate
+      BSON) before relying on them.
+  - Keep `entryFileNames: 'views.js'`. How chunk names meet L1's file list depends on the pending
+    L1 manifest decision under Stage 0. With `[name]-[hash].js` chunks (Cosmos DB's choice), any
+    file-list comparison must strip the hash.
+  - Adapt L2's CSS-negative control: it suppresses webpack's style-loader injection, and the
+    inline-CSS plugin injects differently.
+  - The Vite views build does not use `BundleReportPlugin`, which ends the Stage 0 `watch:views`
+    limitation.
 - **Automated verification:** L1, now enforcing the per-view graph assertions and recording sizes;
   **L2 is the main gate** (all five views settled on their fixtures, styled, CSP clean, no preload
   errors, worker round-trips complete); L3.
@@ -626,6 +714,14 @@ plugin in a real editor; Kubernetes, Atlas and Azure discovery against real back
     mapping.
   - If the host build turns out to be painful (the 18 externals, three entries, CommonJS interop),
     fall back to esbuild **for the host only**. The webviews stay on Vite.
+  - **Port the host side of L1:** the Stage 4 report plugin for `main`, `playgroundWorker` and
+    `playgroundTsPlugin`, so the one-BSON-per-host-graph check reads Vite module IDs. With the
+    esbuild fallback, produce the same neutral report from its metafile.
+  - Stage 0 tooling under `"type": "module"`: the `build/verification/**/*.cjs` files keep working.
+    Check that the browser harness TypeScript still runs under `tsx` with the new root
+    `tsconfig.json`, which its own `tsconfig.json` extends. If the webpack configs are renamed to
+    `.cjs`, update their `require` of `BundleReportPlugin.cjs` and the `import/no-internal-modules`
+    allowance in `eslint.config.mjs`.
 - **Automated verification:** **L3 is the main gate** (activation, late commands, clean logs); L1
   (entry files, chunks, externals present or absent as intended, the TS plugin as `.cjs` at its
   path, one `bson` per entry graph); L2 (views unchanged); L0.
@@ -653,6 +749,10 @@ plugin in a real editor; Kubernetes, Atlas and Azure discovery against real back
     explains every non-obvious Vite setting (`base`, workers, CSS inlining, chunking, CSP).
   - Bump TypeScript to 6.x with feed-safe versions. Keep the packages' `NodeNext` configurations and
     run every package build.
+  - Remove the webpack-only Stage 0 tooling: `BundleReportPlugin.cjs`, the `.e(chunkId)` branch in
+    `inspect.cjs` and its tests, and the ESLint allowance. Rerun `npm run prove:vsix` afterwards.
+  - Apply the L1 manifest decision recorded under Stage 0 (PR report or gate) before L1 runs on
+    PRs to `main`.
 - **Automated verification:** L0 to L3, plus a comparison with the Stage 0 baselines, recorded in
   this document.
 - **Operator gate G6:** the full manual checklist on Windows or macOS as well as Linux. Then:

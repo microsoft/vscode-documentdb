@@ -1,22 +1,22 @@
 {
-  "node": "v22.18.0",
+  "node": "v22.21.1",
   "npm": "10.9.3",
   "webpackSeconds": [
-    125.167343076,
-    122.616220843,
-    120.086719517
+    120.796351656,
+    119.535046532,
+    120.139124969
   ],
   "unitTestSeconds": [
-    61.783702462,
-    41.721494685,
-    43.030891544
+    44.531310977,
+    42.20505408,
+    41.874565911
   ],
-  "unitTestMedianSeconds": 43.030891544,
+  "unitTestMedianSeconds": 42.20505408,
   "installedPackageCount": 1836,
   "distFiles": [
     {
       "path": ".vscodeignore",
-      "bytes": 616
+      "bytes": 594
     },
     {
       "path": "219.js",
@@ -184,7 +184,7 @@
     },
     {
       "path": "main.js",
-      "bytes": 4761155
+      "bytes": 4761367
     },
     {
       "path": "main.js.LICENSE.txt",
@@ -192,7 +192,7 @@
     },
     {
       "path": "package.json",
-      "bytes": 95353
+      "bytes": 96079
     },
     {
       "path": "package.nls.json",
@@ -208,7 +208,7 @@
     },
     {
       "path": "playgroundWorker.js",
-      "bytes": 6555517
+      "bytes": 7443125
     },
     {
       "path": "playgroundWorker.js.LICENSE.txt",
