@@ -23,8 +23,9 @@ export function hostTemplate(repository: string, assetRoot: string, origin: stri
                 Uri: { file: (fsPath: string): { fsPath: string } => ({ fsPath }) },
                 l10n: { bundle: {} },
             };
-            case './attachTrpc':
-            case './middleware/logging': return {};
+            // The package is ESM with NodeNext resolution, so relative imports carry `.js`.
+            case './attachTrpc.js':
+            case './middleware/logging.js': return {};
             case 'path':
             case 'crypto': return nativeRequire(name);
             default: throw new Error(`Unexpected host-template dependency: ${name}`);
