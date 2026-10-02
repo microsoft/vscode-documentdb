@@ -3,11 +3,13 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
 import * as vscode from 'vscode';
 import { CopyPasteBufferService, type CopiedIndexScope, type CopiedIndexSelection } from './CopyPasteBufferService';
 
-jest.mock('vscode', () => ({
-    commands: { executeCommand: jest.fn().mockResolvedValue(undefined) },
+vi.mock('vscode', () => ({
+    commands: { executeCommand: vi.fn().mockResolvedValue(undefined) },
 }));
 
 function createSelection(scope: CopiedIndexScope): CopiedIndexSelection {
@@ -25,7 +27,7 @@ function createSelection(scope: CopiedIndexScope): CopiedIndexSelection {
 describe('CopyPasteBufferService', () => {
     beforeEach(async () => {
         await CopyPasteBufferService.resetForTests();
-        jest.mocked(vscode.commands.executeCommand).mockClear();
+        vi.mocked(vscode.commands.executeCommand).mockClear();
     });
 
     afterEach(async () => {

@@ -3,12 +3,14 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+
 import { type IActionContext, UserCancelledError } from '@microsoft/vscode-azext-utils';
 
 // Mock vscode-azext-utils — the real `callWithTelemetryAndErrorHandling`
 // returns `undefined` for unhandled errors; we simulate the success path and
 // re-throw on errors so the streaming code's reject path is exercised.
-jest.mock('@microsoft/vscode-azext-utils', () => {
+vi.mock('@microsoft/vscode-azext-utils', () => {
     class MockUserCancelledError extends Error {
         constructor(message?: string) {
             super(message ?? 'User cancelled');
@@ -17,7 +19,7 @@ jest.mock('@microsoft/vscode-azext-utils', () => {
     }
     return {
         UserCancelledError: MockUserCancelledError,
-        callWithTelemetryAndErrorHandling: jest.fn(
+        callWithTelemetryAndErrorHandling: vi.fn(
             async (_callbackId: string, callback: (context: IActionContext) => Promise<unknown>): Promise<unknown> => {
                 const context = {
                     telemetry: { properties: {}, measurements: {} },
@@ -40,15 +42,15 @@ jest.mock('@microsoft/vscode-azext-utils', () => {
 
 // Mock the extension variables module so the trace calls inside the service
 // do not require a real extension host.
-jest.mock('../extensionVariables', () => ({
+vi.mock('../extensionVariables', () => ({
     ext: {
         outputChannel: {
-            appendLog: jest.fn(),
-            trace: jest.fn(),
-            debug: jest.fn(),
-            info: jest.fn(),
-            warn: jest.fn(),
-            error: jest.fn(),
+            appendLog: vi.fn(),
+            trace: vi.fn(),
+            debug: vi.fn(),
+            info: vi.fn(),
+            warn: vi.fn(),
+            error: vi.fn(),
         },
     },
 }));
@@ -56,10 +58,10 @@ jest.mock('../extensionVariables', () => ({
 // Override the global `__mocks__/vscode.js` for this suite so we can wire up
 // the `lm.selectChatModels` entry point the service relies on (jest-mock-vscode
 // does not provide a `lm` namespace today).
-const selectChatModelsMock = jest.fn();
-jest.mock('vscode', () => {
+const selectChatModelsMock = vi.fn();
+vi.mock('vscode', () => {
     class CancellationTokenSource {
-        token = { isCancellationRequested: false, onCancellationRequested: jest.fn() };
+        token = { isCancellationRequested: false, onCancellationRequested: vi.fn() };
         cancel(): void {
             this.token.isCancellationRequested = true;
         }
@@ -68,8 +70,9 @@ jest.mock('vscode', () => {
         }
     }
     return {
+        env: undefined,
         l10n: {
-            t: jest.fn((message: string, ...args: unknown[]) => {
+            t: vi.fn((message: string, ...args: unknown[]) => {
                 let result = message;
                 args.forEach((arg, index) => {
                     result = result.replace(`{${index}}`, String(arg));
@@ -102,7 +105,7 @@ function makeUserMessage(content: string): { role: number; content: string } {
  * usage-on-completion assertion has stable expected values.
  */
 function makeFakeModel(fragments: string[]): unknown {
-    const sendRequest = jest.fn(async () => {
+    const sendRequest = vi.fn(async () => {
         const text = (async function* () {
             for (const fragment of fragments) {
                 // Yield on a microtask so consumers can interleave aborts.
@@ -120,7 +123,7 @@ function makeFakeModel(fragments: string[]): unknown {
         version: '1.0',
         maxInputTokens: 1000,
         sendRequest,
-        countTokens: jest.fn(async (input: unknown) => {
+        countTokens: vi.fn(async (input: unknown) => {
             const text = typeof input === 'string' ? input : JSON.stringify(input);
             return text.length;
         }),
