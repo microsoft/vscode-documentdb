@@ -1,6 +1,6 @@
 ---
 kind: review
-status: active
+status: historical
 ---
 
 # Stage 0 AI review
@@ -30,16 +30,23 @@ URL and called `doValidation` directly. That proved the worker could respond, bu
 rendered editor started or communicated with its configured worker. A disconnected editor could
 still pass.
 
-**Resolution:** the rendered-editor implementation landed in `c1d29535`; the final reliable all-five
-browser rerun is in progress. The standalone worker is removed. The helper edits each rendered
+**Resolution: completed in `c1d29535` and `0be05e8c`.** The standalone worker is removed. The helper edits each rendered
 Monaco textbox, reconstructs the production worker's synchronized model, and requires a correlated
 response for that model containing the probe text. Collection View uses its actual editor-worker
 Unicode-highlighting response; its main-thread query validator is not counted as worker proof.
 Document View requires a configured JSON-worker validation response with diagnostics.
 
 The original browser passes are evidence for rendering, CSS, and packaged worker capability, but
-are superseded as proof of editor-worker integration. Focused unit/type checks passed; a parent
-all-five rerun exposed navigation/readiness timeouts that must be resolved without masking errors.
+are superseded as proof of editor-worker integration. Parent reruns exposed navigation/readiness
+failures; `0be05e8c` activates the page, waits for bounded actual readiness, focuses the editor and
+verifies selection before entering the probe, without changing CSP/product code or skipping errors.
+
+The final all-five run passed on the corrected VSIX
+`1a9ed2a78bbbfc5221221d65c2a2495c98a4a37668b048e8dcdd9cb4c966a541` at 2026-10-02 08:21 UTC.
+Both editor-originated round-trips passed; the CSS-negative case produced seven expected failures
+with otherwise clean diagnostics. The final local build, 30 native tests and 45 browser Jest tests
+passed. Compact metadata and six reports persist in the execution session's
+`s0-l2-final-vsix-1a9e` directory.
 
 ## Verification limits and outstanding gates
 

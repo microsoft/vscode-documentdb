@@ -193,6 +193,10 @@ plugin in a real editor; Kubernetes, Atlas and Azure discovery against real back
 - **Models:** author **Claude Opus 5.5**, reviewer **GPT-6 Sol**. Open-ended tool building needs
   strong agentic recovery; GPT-6 Sol is a low-cost reviewer with a published model card. Optional:
   build the L1 script head-to-head with GPT-6.1 Sol or GPT-6 Astra as a model trial.
+  - **Execution note:** authoring retained the existing session/subagent defaults rather than
+    explicitly pinning the author model; the actual author family is not asserted here. GPT-6 Sol
+    was explicitly selected for the stage review. No optional model comparison was run, so no
+    comparative-model result or operator-approved substitution is claimed.
 - **Goal:** measure today's stack and build the checks every later stage relies on, before anything
   changes.
 - **Tasks:**
@@ -213,12 +217,21 @@ plugin in a real editor; Kubernetes, Atlas and Azure discovery against real back
       Timing runs were sequential, without concurrent production builds/full test suites. The
       workspace lockfile arrived through the preparatory `main` merge (`35622214`); `npm ci`
       succeeded. No dependency versions were added or changed by Stage 0.
+    - **Progress records:** `4dee490e` committed these measurements and implementation results
+      inline; `a90c79ef` committed subsequent gate evidence and the stage review. The initial
+      baseline remains unchanged after the lifecycle fix: later artifacts are compared with the
+      measured starting point rather than replacing it with a more convenient baseline.
   - Re-enable the webpack bundle analyzer (installed, currently commented out in
     `webpack.config.views.js`) behind a `BUNDLE_ANALYZE` environment variable.
     - **Landed in `e100be7d`.** `BUNDLE_ANALYZE=true` writes a static `views.html` report without
       opening a browser/server. Both production configs also write complete module/chunk reports,
       tied to the actual JavaScript bytes with SHA-256. Reports stay outside `dist` and are ignored
       by Git. The opt-in analyzer build passed.
+    - **Reason/addition:** machine-readable reports accompany the visual analyzer because L1
+      needs complete entry/module/chunk graphs and provenance, not just a treemap. Default
+      grouped/filtered stats omitted dependent modules; complete reporting prevents false counts.
+      A visual report alone and reports shipped inside the VSIX were not used: the former cannot
+      support these assertions, and the latter would change the artifact being measured.
   - Build L1 with its baseline manifest. Add it to a GitHub Actions job and to the ADO build, before
     the signing step.
     - **Landed in `e100be7d`.** `npm run verify:vsix -- <vsix>` inspects the packaged archive
@@ -226,6 +239,11 @@ plugin in a real editor; Kubernetes, Atlas and Azure discovery against real back
       matching reports. ADO invokes the same check before signing and stages its matching reports
       for operator/release inspection. The operator approved an exact file list and a per-file
       size tolerance of **10% or 4 KiB, whichever is greater**.
+    - **Alternatives/reason:** exact sizes and a looser 20%/8 KiB allowance were offered; the
+      operator selected 10%/4 KiB. The relative allowance plus an absolute floor handles small
+      metadata files without relaxing the exact file list. The ZIP reader uses Node built-ins
+      with checksum, size and path validation: adding an unzip dependency or relying on a
+      transitive-only package was avoided to keep L1 offline and avoid new feed/quarantine inputs.
     - **Plan discrepancy requiring G0 confirmation:** today's host and playground worker each
       include one BSON implementation, but all five browser graphs include **zero**. Requiring one
       everywhere would fail the unchanged baseline; adding BSON solely to satisfy the checker
@@ -237,6 +255,8 @@ plugin in a real editor; Kubernetes, Atlas and Azure discovery against real back
     - **Review correction landed in `c1d29535`:** numeric webpack chunk references now resolve only
       within the referencing file's owning compilation. A collision/ambiguous-owner regression
       test was added; six inspector tests and the final-VSIX positive/negative checks passed.
+      The combined-ID map was rejected because webpack IDs are only unique within a compilation;
+      changing the bundler's chunk IDs solely for the checker was unnecessary.
   - Build L2: the page generator and typed fixtures for the five views. Exclude the harness from the
     VSIX through `.vscodeignore`.
     - **Landed in `e100be7d`.** All five registry views have typed fixtures and query-free pages
@@ -247,9 +267,33 @@ plugin in a real editor; Kubernetes, Atlas and Azure discovery against real back
       CSP/preload/network errors, matching computed styles, and recorded fetched chunks. Collection
       and Document views completed standalone packaged-worker round-trips, but **review F02
       superseded that worker evidence**: it did not prove the editors used their configured workers.
-      The rendered-editor correction landed in `c1d29535`; its final all-five browser reliability
-      rerun remains in progress. This is a static-browser artifact check, not real
+      The rendered-editor correction landed in `c1d29535`; the final reliable proof is recorded
+      below. This is a static-browser artifact check, not real
       `vscode-webview://` behavior. See [the stage review](./iterations/00-stage0-review.md).
+    - **Reason/deviation:** construction or a standalone validation reply was insufficient
+      evidence of editor integration, so it was replaced rather than retained as a passing proxy.
+      Collection View's custom query validator runs on the main thread; its proof uses the actual
+      editor worker's Unicode-highlighting response. Document View requires an actual JSON-worker
+      validation response. Both correlate the response with the edited model. Product test hooks
+      and weaker CSP were avoided; the harness observes production-created workers instead.
+    - **Readiness correction landed in `0be05e8c`:** parent reruns exposed hidden-page/layout
+      failures, a navigation timeout, and incomplete editor selection. The helper now activates
+      the page, waits for visibility, uses bounded `domcontentloaded` navigation, and waits for
+      settled content, fonts and editor geometry. It explicitly focuses the editor, uses the
+      browser's platform modifier and verifies an empty editor before inserting the probe.
+      Keeping `networkidle` or merely increasing that timeout was rejected in favor of checking
+      the actual ready state. Viewport overrides, skipped geometry checks and waived diagnostics
+      were not used; failed phases remain explicit.
+    - **Final L2 proof passed at 2026-10-02 08:21 UTC on the first final-artifact attempt:** all
+      five views verified with no unexpected diagnostics or non-2xx responses. Collection View
+      completed its rendered-editor `$computeUnicodeHighlights` round-trip; Document View
+      completed rendered-editor JSON `doValidation`. The CSS-negative case retained seven
+      expected CSS/layout failures, a genuine editor-worker response and no unexpected errors.
+      The exact VSIX was **9,607,031 bytes**, SHA-256
+      `1a9ed2a78bbbfc5221221d65c2a2495c98a4a37668b048e8dcdd9cb4c966a541`.
+      Six reports and compact `proof-summary.json` persist in the execution session's
+      `s0-l2-final-vsix-1a9e` directory. This supersedes the older artifact/standalone-worker proof.
+      The final local build and **30 native harness tests plus 45 browser Jest tests** passed.
   - Build L3: `npm run test:vsix [path-to-vsix]`, the probe extension, and a GitHub Actions job with
     a cached `.vscode-test/` folder.
     - **Landed in `e100be7d`.** The runner pins VS Code to minimum engine **1.105.0**, installs the
@@ -261,6 +305,8 @@ plugin in a real editor; Kubernetes, Atlas and Azure discovery against real back
       sets `DONT_PROMPT_WSL_INSTALL=1`, with a regression assertion. No Xvfb/system dependencies
       were installed. A display-enabled GitHub run must prove actual activation and injected-error
       rejection; the **19 offline activation tests are not a substitute**.
+      The prompt was fixed instead of treating installation failure as a negative-control pass;
+      installing system display packages locally was left to the operator, as planned.
     - **Actions launch correction landed in `afc08faa`:** the third CI run passed code quality,
       product tests, packaging and **L1 on the GitHub-built artifact**, then the installed-host
       job hit Electron's SUID sandbox restriction after successfully installing the VSIX.
@@ -268,6 +314,8 @@ plugin in a real editor; Kubernetes, Atlas and Azure discovery against real back
       local launches or generic CI; **20 offline activation tests** cover that scope. Failed-host
       logs are uploaded as diagnostic artifacts. The next push must still prove real activation
       and the injected-error control; a host launch failure is not a successful negative proof.
+      Broadly disabling the sandbox for every platform/local run or changing system helper
+      ownership/permissions was not used; the correction is confined to the Linux Actions probe.
     - **Baseline-blocking lifecycle correction landed in `ffac8111`:** the fourth CI run did
       activate the installed VSIX and complete the late-command probe. Its logs exposed one
       classifier false positive (`[trace] initData` manifest metadata) and a real pre-existing
@@ -299,6 +347,9 @@ plugin in a real editor; Kubernetes, Atlas and Azure discovery against real back
       real logs rejected `L3_INJECTED_SWALLOWED_ACTIVATION_ERROR`. No activation or shutdown
       errors were waived. The legacy integration step remains disabled; its enclosing job's
       success is not an E2E/integration-test claim.
+      Node resolution was chosen over assuming a `.js` suffix because the manifest can use an
+      extensionless entry, explicit CJS/ESM files or module-typed JavaScript; the installed-directory
+      realpath guard still rejects checkout paths and symlink escapes.
   - Prove each check can fail, as described above.
     - **Landed in `e100be7d`; local proof passed where runnable.** L1 rejected actual repacked
       variants with renamed `render`, missing dynamic-import target, a dev-server string, and a
@@ -306,7 +357,9 @@ plugin in a real editor; Kubernetes, Atlas and Azure discovery against real back
       without changing the CSP or adding override styles: **seven CSS/layout assertions failed**
       while runtime/network diagnostics and the worker round-trip remained clean. This control
       must be adapted when Stage 4 extracts CSS into linked files. L3's partial-activation mutation
-      and proof runner are implemented and tested offline; the real-host negative proof awaits CI.
+      and proof runner initially passed offline; the actual host rejection subsequently passed in
+      run `36979370550`, as recorded under L3. CSS suppression was chosen to remove the current
+      style-loader output; injecting unrelated override styles would not prove lost production CSS.
     - Local Case 1 verification passed: `npm run build`, the three baseline product Jest runs,
       browser-fixture type-check, initially **24 native harness tests** and **27 scoped browser Jest tests**.
       Pipeline YAML parsing and patch whitespace checks passed. Local lint, localization,
@@ -324,14 +377,21 @@ plugin in a real editor; Kubernetes, Atlas and Azure discovery against real back
   - Optional, time-boxed: the L4 follow-up (B3 lists what to try).
     - **Not attempted.** L4 is optional and does not gate G0; effort stayed on L1 to L3.
 - **Automated verification:** L0 to L3 pass on the current VSIX; the broken variants fail.
+  - **Recorded result:** local L1/L2 and their negative controls passed on the corrected production
+    artifact; actual GitHub-built L1/L3 and their negative controls passed at `a6689e76`.
+    The documentation/review push `a90c79ef` also passed all PR checks. The final browser-helper
+    correction is `0be05e8c`, validated by the local build, scoped tests and final-artifact browser
+    proof; the next PR push will rerun CI on that commit and this documentation update.
 - **Operator gate G0:** install the current VSIX and run the manual checklist once, as the baseline.
   Install Xvfb locally if L3 should run on the dev machine. Confirm the harness is not in the VSIX.
 - **Exit:** baselines are committed. L1 and L3 run as GitHub Actions jobs on PRs that touch build
   config, `package.json` or lockfiles, entry points or assets. L2 results are recorded at each gate.
   - **Current status:** implementation/baselines are committed; L1 and L3 are wired on PRs
-    (including all relevant changes, without a path-filter bypass). G0 is **not passed**: the final
-    rendered-editor L2 pass, the operator-run ADO build, the installed-VSIX manual checklist, and confirmation
-    of the BSON deviation remain outstanding. PR #880 stays draft; Stage 1 must not start yet.
+    (including all relevant changes, without a path-filter bypass). The final rendered-editor L2
+    proof is complete. G0 is **not passed**: the operator-run ADO build, the installed-VSIX manual
+    checklist, and confirmation of the BSON deviation remain outstanding. PR #880 stays draft;
+    Stage 1 must not start yet. This is Case 1; the full Case 2 checks, including `prettier-fix` and
+    the final ready-for-review pre-review, remain deferred.
 
 ### Stage 1: remove the legacy test harness
 
