@@ -3,7 +3,7 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { afterEach, beforeEach, describe, expect, test } from '@jest/globals';
+import { afterEach, beforeEach, describe, expect, test } from 'vitest';
 
 import { generateAdaptiveDarkTheme, generateAdaptiveLightTheme, getBrandTokensFromPalette } from './themeGenerator.js';
 

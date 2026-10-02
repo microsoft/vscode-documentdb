@@ -3,6 +3,8 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+import { afterEach, describe, expect, it } from 'vitest';
+
 import { MONACO_COLOR_IDS } from './core/colorIds';
 import { createVSCodeMonacoTheme, DEFAULT_MONACO_THEME_NAME } from './core/createVSCodeMonacoTheme';
 import { MONACO_COLOR_FALLBACKS, MONACO_FALLBACK_SOURCES } from './core/fallbackChains';
