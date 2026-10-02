@@ -199,21 +199,87 @@ plugin in a real editor; Kubernetes, Atlas and Azure discovery against real back
   - Record baselines on today's stack and commit them in this document: `webpack-prod` time (three
     runs), per-file `dist` sizes, VSIX size and file manifest, installed package count, unit-test wall
     time (three runs, median).
+    - **Landed in `e100be7d`.** Node 22.18.0, npm 10.9.3; production-build wall times:
+      **125.167 / 122.616 / 120.087 seconds**. Jest wall times:
+      **61.784 / 41.721 / 43.031 seconds**, median **43.031 seconds**. All three runs passed:
+      **291 suites, 4,562 tests, four snapshots**. Package inventory: **1,836 installed locations**
+      from `npm ls --all --parseable`, excluding the repository root.
+    - Measured `dist`: **31,739,702 bytes across 123 files**; `views.js`: **6,490,321 bytes**;
+      `main.js`: **4,761,155 bytes**. The complete per-file inventory and raw timings are committed
+      in [measurements.json](../../../build/verification/measurements.json).
+    - The final production VSIX is **9,606,938 bytes, 124 archive files**; its file/size manifest and
+      entry graphs are committed in [baseline.json](../../../build/verification/baseline.json).
+      SHA-256: `aee1a0591f3342adbf439831b007178babd3bc96d8f0cb65c25c0ef2678abe42`.
+      Timing runs were sequential, without concurrent production builds/full test suites. The
+      workspace lockfile arrived through the preparatory `main` merge (`35622214`); `npm ci`
+      succeeded. No dependency versions were added or changed by Stage 0.
   - Re-enable the webpack bundle analyzer (installed, currently commented out in
     `webpack.config.views.js`) behind a `BUNDLE_ANALYZE` environment variable.
+    - **Landed in `e100be7d`.** `BUNDLE_ANALYZE=true` writes a static `views.html` report without
+      opening a browser/server. Both production configs also write complete module/chunk reports,
+      tied to the actual JavaScript bytes with SHA-256. Reports stay outside `dist` and are ignored
+      by Git. The opt-in analyzer build passed.
   - Build L1 with its baseline manifest. Add it to a GitHub Actions job and to the ADO build, before
     the signing step.
+    - **Landed in `e100be7d`.** `npm run verify:vsix -- <vsix>` inspects the packaged archive
+      offline. GitHub Actions has a separate inspection job consuming the package job's VSIX and
+      matching reports. ADO invokes the same check before signing and stages its matching reports
+      for operator/release inspection. The operator approved an exact file list and a per-file
+      size tolerance of **10% or 4 KiB, whichever is greater**.
+    - **Plan discrepancy requiring G0 confirmation:** today's host and playground worker each
+      include one BSON implementation, but all five browser graphs include **zero**. Requiring one
+      everywhere would fail the unchanged baseline; adding BSON solely to satisfy the checker
+      would change the shipped artifact during a baseline stage. The implemented rule requires one
+      in both host graphs and permits zero in browser graphs, while always rejecting duplicates.
+      Clarification was requested, but the operator was unavailable; this is an explicit pragmatic
+      deviation, not an approved design decision. All five views currently record the same heavy
+      graph; the lightweight-view assertion remains opt-in until Stage 4.
   - Build L2: the page generator and typed fixtures for the five views. Exclude the harness from the
     VSIX through `.vscodeignore`.
+    - **Landed in `e100be7d`.** All five registry views have typed fixtures and query-free pages
+      beneath `/stage0/l2/`, generated from the extracted VSIX using the unchanged production host
+      template/CSP. Existing `build/**` exclusion already covers every harness file; archive
+      inspection confirmed **zero packaged harness/probe files**.
+    - **Final-VSIX browser proof passed:** five settled fixture views, no unexpected console/page/
+      CSP/preload/network errors, matching computed styles, and recorded fetched chunks. Collection
+      and Document views both completed packaged JSON-worker `doValidation` round-trips and
+      returned validation markers. Evidence is persisted in the execution session's
+      `s0-l2-final-vsix` directory. This proves a static-browser artifact pass, not real
+      `vscode-webview://` behavior.
   - Build L3: `npm run test:vsix [path-to-vsix]`, the probe extension, and a GitHub Actions job with
     a cached `.vscode-test/` folder.
+    - **Landed in `e100be7d`.** The runner pins VS Code to minimum engine **1.105.0**, installs the
+      artifact in isolated temporary directories, launches only the development probe, verifies
+      installed path/late commands, and checks real post-exit logs for swallowed activation errors.
+      The GitHub job runs both positive and negative controls under Xvfb with a VS Code cache.
+    - **Real-host verification remains blocked locally.** The attempted run downloaded VS Code,
+      then hit its WSL installation prompt before launching the host. The runner now explicitly
+      sets `DONT_PROMPT_WSL_INSTALL=1`, with a regression assertion. No Xvfb/system dependencies
+      were installed. A display-enabled GitHub run must prove actual activation and injected-error
+      rejection; the **19 offline activation tests are not a substitute**.
   - Prove each check can fail, as described above.
+    - **Landed in `e100be7d`; local proof passed where runnable.** L1 rejected actual repacked
+      variants with renamed `render`, missing dynamic-import target, a dev-server string, and a
+      missing baseline file. L2's negative page suppresses the production bundle's inserted CSS,
+      without changing the CSP or adding override styles: **seven CSS/layout assertions failed**
+      while runtime/network diagnostics and the worker round-trip remained clean. This control
+      must be adapted when Stage 4 extracts CSS into linked files. L3's partial-activation mutation
+      and proof runner are implemented and tested offline; the real-host negative proof awaits CI.
+    - Local Case 1 verification passed: `npm run build`, the three baseline product Jest runs,
+      browser-fixture type-check, **24 native harness tests** and **27 scoped browser Jest tests**.
+      Pipeline YAML parsing and patch whitespace checks passed. Local lint, localization,
+      `prettier-fix`, and the full Case 2 handover suite were not run; CI retains its existing checks.
   - Optional, time-boxed: the L4 follow-up (B3 lists what to try).
+    - **Not attempted.** L4 is optional and does not gate G0; effort stayed on L1 to L3.
 - **Automated verification:** L0 to L3 pass on the current VSIX; the broken variants fail.
 - **Operator gate G0:** install the current VSIX and run the manual checklist once, as the baseline.
   Install Xvfb locally if L3 should run on the dev machine. Confirm the harness is not in the VSIX.
 - **Exit:** baselines are committed. L1 and L3 run as GitHub Actions jobs on PRs that touch build
   config, `package.json` or lockfiles, entry points or assets. L2 results are recorded at each gate.
+  - **Current status:** implementation/baselines are committed; L1 and L3 are wired on PRs
+    (including all relevant changes, without a path-filter bypass). G0 is **not passed**: GitHub
+    real-host L3, the operator-run ADO build, the installed-VSIX manual checklist, and confirmation
+    of the BSON deviation remain outstanding. PR #880 stays draft; Stage 1 must not start yet.
 
 ### Stage 1: remove the legacy test harness
 
