@@ -3,6 +3,8 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+import { describe, expect, it } from 'vitest';
+
 import { type BaseRouterContext } from '../../shared/BaseRouterContext';
 import { initWebviewTrpc } from '../../shared/initWebviewTrpc';
 import { loggingMiddlewareBody, type ProcedureLogEntry, type ProcedureLogger } from './logging';

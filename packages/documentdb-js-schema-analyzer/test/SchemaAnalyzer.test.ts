@@ -3,6 +3,8 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+import { describe, expect, it } from 'vitest';
+
 import { type JSONSchema, type JSONSchemaMap, type JSONSchemaRef } from '../src/JSONSchema';
 import { getPropertyNamesAtLevel, SchemaAnalyzer } from '../src/SchemaAnalyzer';
 import {
