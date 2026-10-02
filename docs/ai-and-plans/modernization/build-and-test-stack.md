@@ -927,6 +927,13 @@ plugin in a real editor; Kubernetes, Atlas and Azure discovery against real back
       ESLint passed. AST comparison confirmed **752** assertions and all non-runner code unchanged.
       Leftovers: **none**; recipe deviations: **none**; no alternatives needed beyond the codemod.
       No dependency changes, push, CI activity or stage review; CI remains deferred to the orchestrator.
+    - **Phase B B08, `4638d551`:** converted all **20** listed `src/plugins` test files
+      (Atlas, Azure vCore and Kubernetes); Vitest **20 files / 211 tests**, remaining Jest
+      **137 suites / 2,174 tests**, build and targeted Prettier / ESLint passed. AST comparison
+      confirmed assertions and non-runner code unchanged except `env: undefined` in atlasTree's
+      VS Code mock, preserving Jest's missing-export value per recipe step 8.
+      Leftovers: **none**; recipe deviations: **none**; no other alternatives needed.
+      No dependency changes, push, CI activity or stage review; CI remains deferred to the orchestrator.
     - **Phase A follow-up (shared-harness gaps), `86baf001`, `73046b44`, `df9a8e1a`:**
       - **Diagnosis:** CommonJS packages in `node_modules` call Node's own `require('vscode')`,
         which Vite's alias never sees: `@vscode/extension-telemetry` (reached through the
