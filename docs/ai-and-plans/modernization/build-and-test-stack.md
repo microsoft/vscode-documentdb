@@ -1415,9 +1415,9 @@ for the expected reason`, and `PASS: missing-file rejected for the expected reas
     `f2ddb288` (`ts-node` dropped), `befa8e49` + `fd4085b6` (package checks), `197532c2` (record).
   - **Phase B status: completed.** Commits: `657df178` (task 9, `template.ts`), `089afba3`
     (task 7, `bson` alias and identity check), `39046f89` (task 8, Vitest settings), `dd8202bd`
-    (L1 `import.meta` check) + `471be2e2` (Prettier, format only), plus this record. Details under
-    each task and under "Automated verification". **CI: pending**; the orchestrator verifies the
-    pushed head.
+    (L1 `import.meta` check), `471be2e2` and `3ccd5a06` (Prettier on the L1 scripts and on
+    `template.ts`, format only), `e8568718` and a follow-up (this record). Details under each task
+    and under "Automated verification". **CI: pending**; the orchestrator verifies the pushed head.
 - **Goal:** all six workspace packages ship as **ESM-only**, not as dual ESM + CJS builds.
 - **Why ESM-only:**
   - Dual packages load two module instances. This repo has been bitten by exactly that: `bson`
@@ -1784,7 +1784,10 @@ for the expected reason`, and `PASS: missing-file rejected for the expected reas
       declares no `engines.node` (browser-only), which departs from "the packages declare the
       same floor".
   - **Phase B results (local, Node 22.21.1 / npm 10.9.3, tree at `471be2e2`; the VSIX was
-    packaged at `dd8202bd`, and `471be2e2` only reformats `build/` scripts that are not shipped):**
+    packaged at `dd8202bd`, and `471be2e2` only reformats `build/` scripts that are not shipped.
+    After `3ccd5a06` (format only) the browser-harness Vitest tests passed again (45 / 45), lint
+    passed, and `prepare:browser-check` produced the same six pages apart from their random
+    nonces):**
     - **L0:** `npm run build` passed; full Vitest **296 files / 4,588 tests** (unchanged; no test
       added or removed, two `vi.mock` factories simplified under task 8); `npm run lint` passed.
       `npm run test:verification`: **35** Node tests (32 + the 2 `bson` identity tests + the
@@ -1826,7 +1829,11 @@ for the expected reason`, and `PASS: missing-file rejected for the expected reas
       lockfile change in Phase B.
     - **`TDD:` suites:** none changed in Phase B.
     - **Formatting:** Prettier on every file changed in Phase B except this plan (hand-formatted,
-      as in Phase A); for the three L1 scripts, as a separate format-only commit (task 3 note).
+      as in Phase A). Four of those files were not Prettier-clean before Phase B (the
+      repository's `prettier` script does not cover `build/`): `inspect.cjs`,
+      `inspect.test.cjs`, `prove-inspection.cjs` and `browser/template.ts`. They were formatted
+      in separate format-only commits (`471be2e2`, `3ccd5a06`), so the behavior commits stay
+      readable.
 - **Operator gate G3:** decide the version bumps. Publish the packages only after the PR has merged,
   from `main`: publishing is irreversible, and a package should not ship from an unmerged branch.
   This repo uses the workspace copies, so no stage waits on publishing. Decided at the combined
