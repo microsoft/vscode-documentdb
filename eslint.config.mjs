@@ -59,7 +59,7 @@ export default ts.config(
                         'antlr4ts/**',
                         'yaml/types',
                         '**/components/**/*.scss',
-                        './build/verification/BundleReportPlugin.cjs',
+                        'build/verification/BundleReportPlugin.cjs',
                     ],
                 },
             ],
