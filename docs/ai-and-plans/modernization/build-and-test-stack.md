@@ -899,6 +899,61 @@ plugin in a real editor; Kubernetes, Atlas and Azure discovery against real back
       static import, and an explicit undefined export preserving Jest's fixture value. Initial
       Vitest/lint failures were resolved or left on green Jest. No dependency changes, push,
       CI activity or stage review; CI remains deferred to the orchestrator.
+    - **Phase A follow-up (shared-harness gaps), `86baf001`, `73046b44`, `df9a8e1a`:**
+      - **Diagnosis:** CommonJS packages in `node_modules` call Node's own `require('vscode')`,
+        which Vite's alias never sees: `@vscode/extension-telemetry` (reached through the
+        inlined ESM build of `@microsoft/vscode-azext-utils`), `@microsoft/vscode-azext-azureauth`,
+        `@microsoft/vscode-azureresources-api`, `vscode-languageclient` and `vscode-tas-client`.
+        Jest mapped every `require` to the manual mock.
+      - **Fix (`86baf001`):** a setup file for the `extension` project, `test/vitest/setup.ts`,
+        imports the aliased mock and wraps Node's `Module._load`, so `require('vscode')` returns
+        that same object. ESM and CommonJS importers share one instance (a probe asserted
+        `require('vscode').window === vscode.window`). A probe also confirmed that every test file
+        runs in its own worker process, so the require cache, and with it the mock, is per file,
+        as under Jest. Limitation: a test's `vi.mock('vscode', factory)` replaces the module for
+        ESM importers only; CommonJS dependencies keep the default mock.
+      - **Alternatives rejected:** (a) `server.deps.inline` for those packages. Inlined CommonJS
+        still runs Node's `require`, so the alias does not apply. (b) Adding them to
+        `deps.optimizer.ssr` pre-bundling. That needs a list of every current and future
+        CommonJS consumer, and could bundle a second copy of the mock into the pre-bundle.
+        (c) `module.registerHooks` (Node ≥ 22.15). It is still marked active development, and
+        would need a virtual module plus a global to share the instance.
+      - **B03 leftovers (`73046b44`):** all **8** files converted mechanically, assertions
+        unchanged: **8 files / 62 tests**, equal to their Jest baseline. Beyond the codemod,
+        three `requireActual` sites became `vi.importActual`. Two `jest.fn<R, A>` generics became
+        `vi.fn<(...args: A) => R>`, a rule now in the codemod for `vi.fn`, `Mock` and
+        `MockInstance`.
+      - **Dry run of the remaining 227 files (codemod only, reverted afterwards):** 189 passed
+        unchanged. The run surfaced three more shared gaps, fixed in `df9a8e1a`:
+        1. Two `bson` copies: the ESM build for imports and the CommonJS build for the driver and
+           shell-bson-parser, which broke `instanceof Binary` in `toFilterQuery.test.ts`. The
+           extension project now aliases `bson` to its CommonJS build, giving one copy as under
+           Jest.
+        2. `vi.resetModules()` does not reload packages Node loads directly. The managed-identity
+           endpoint harness depends on re-importing them, so `@azure/identity` and
+           `@azure/msal-node` are now inlined. Both are required; either alone fails 4 of 6 tests.
+        3. `testTimeout` raised to **15 s** in every project, as in Cosmos DB. Jest never timed out
+           synchronous tests (two shell tests take 7.5 to 8.8 s). Vite's cold transform of the
+           fluentui component tree takes about 7 s, against 0.8 s under Jest, and already failed
+           B02's `components.test.ts` consistently at 5 s. That failure reproduced with B02's own
+           config, so it was not caused by this follow-up.
+
+        Also dropped: Vite's missing-source-map warning for `node_modules` files (about 190 lines
+        per run from `azext-utils`), via a small plugin, because Vitest replaces `customLogger`.
+        After these fixes the dry run passed 191 of 227 files. Every remaining failure is
+        recipe-level: constructor arrows, `requireActual`/`requireMock`, missing factory exports,
+        relative `require` in tests, and slow synchronous tests.
+
+      - **Verification:** `npx vitest run` passed **69 files / 905 tests** (25.1 s wall).
+        `npx jest` passed **227 suites / 3,683 tests** (26.6 s). Together that is 296 files and
+        **4,588 = 4,582 + 6** tests. `npm run build` passed, as did Prettier and ESLint on the
+        changed files. No dependency change, so no freshness scan was needed. No push and no CI.
+      - **Recipe:** the session file `s2-recipe.md` (16 lines) supersedes the list below for
+        Phase B. It adds the harness facts, two-argument generics, `import type` for
+        `importActual` typing, static imports for tests' own `require` calls, explicit
+        `undefined` factory exports, the 15 s / synchronous-test timeout rule and the
+        `resetModules` escalation rule.
+
     - **Conversion recipe for Phase B** (also the batch lists' reference):
       1. Take a batch from the batch list; never touch config files. A file moves from Jest to
          Vitest when it imports from `'vitest'`: Jest ignores it from then on and Vitest
@@ -932,6 +987,7 @@ plugin in a real editor; Kubernetes, Atlas and Azure discovery against real back
           change in the commit message for the plan. Vite's Oxc transform warns about
           `export let` in `namespace ext` (`src/extensionVariables.ts`); ignore it (see the open
           items).
+
   - Replace the separate jsdom Jest project with a per-file `// @vitest-environment jsdom` docblock.
     - **Phase A, `2c54aacf` / `56c4ff9d`:** the `extension` Vitest project defaults to node.
       The two converted `src/webviews/**/*.test.tsx` pilots carry the docblock and pass under jsdom.
@@ -1010,6 +1066,7 @@ plugin in a real editor; Kubernetes, Atlas and Azure discovery against real back
     - **Deferred to Phase C.** Unchanged in Phase A; `test:verification` still passes
       (**32** node tests; **3 Jest suites / 45 tests**).
   - Dev loop: see the `watch:views` limitation under Stage 0.
+
 - **Automated verification:** the same test count as before, give or take documented deletions;
   wall time compared with the Stage 0 baseline; L0. The shipped artifact does not change, so L1 to L3
   are a formality.
