@@ -3,27 +3,29 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+import { beforeEach, describe, expect, it, vi, type MockedFunction } from 'vitest';
+
 import { StorageZone } from '../../services/connectionStorageService';
 import { buildFullTreePath } from './connectionsViewHelpers';
 import { isQuickStartClusterId, resolveQuickStartClusterTreeId } from './LocalQuickStart/quickStartTreeIdentity';
 import { resolveConnectionsClusterTreeId } from './resolveConnectionsClusterTreeId';
 
-jest.mock('./connectionsViewHelpers', () => ({
-    buildFullTreePath: jest.fn(),
+vi.mock('./connectionsViewHelpers', () => ({
+    buildFullTreePath: vi.fn(),
 }));
-jest.mock('./LocalQuickStart/quickStartTreeIdentity', () => ({
-    isQuickStartClusterId: jest.fn(),
-    resolveQuickStartClusterTreeId: jest.fn(),
+vi.mock('./LocalQuickStart/quickStartTreeIdentity', () => ({
+    isQuickStartClusterId: vi.fn(),
+    resolveQuickStartClusterTreeId: vi.fn(),
 }));
 
-const buildStoredTreePath = buildFullTreePath as jest.MockedFunction<typeof buildFullTreePath>;
-const ownsQuickStartClusterId = isQuickStartClusterId as jest.MockedFunction<typeof isQuickStartClusterId>;
-const resolveQuickStartTreePath = resolveQuickStartClusterTreeId as jest.MockedFunction<
+const buildStoredTreePath = buildFullTreePath as MockedFunction<typeof buildFullTreePath>;
+const ownsQuickStartClusterId = isQuickStartClusterId as MockedFunction<typeof isQuickStartClusterId>;
+const resolveQuickStartTreePath = resolveQuickStartClusterTreeId as MockedFunction<
     typeof resolveQuickStartClusterTreeId
 >;
 
 describe('resolveConnectionsClusterTreeId', () => {
-    beforeEach(() => jest.clearAllMocks());
+    beforeEach(() => vi.clearAllMocks());
 
     it('uses the Quick Start-owned synthetic tree path when the managed instance matches', async () => {
         ownsQuickStartClusterId.mockReturnValue(true);

@@ -3,8 +3,11 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+import { beforeEach, describe, expect, it, vi, type Mock } from 'vitest';
+
+import { UserCancelledError } from '@microsoft/vscode-azext-utils';
 import * as vscode from 'vscode';
-import { type ClustersClient, type DatabaseItemModel } from '../../documentdb/ClustersClient';
+import { ClustersClient, type DatabaseItemModel } from '../../documentdb/ClustersClient';
 import { ShellCommandIds } from '../../documentdb/shell/constants';
 import { type Experience } from '../../DocumentDBExperiences';
 import { type BaseClusterModel, type TreeCluster } from '../models/BaseClusterModel';
@@ -15,9 +18,9 @@ import { ClusterItemBase, type EphemeralClusterCredentials } from './ClusterItem
 const mockTelemetryEvents: Array<{ eventName: string; properties: Record<string, string>; suppressDisplay?: boolean }> =
     [];
 
-jest.mock('@microsoft/vscode-azext-utils', () => ({
+vi.mock('@microsoft/vscode-azext-utils', () => ({
     UserCancelledError: class UserCancelledError extends Error {},
-    callWithTelemetryAndErrorHandling: jest.fn(
+    callWithTelemetryAndErrorHandling: vi.fn(
         async (
             eventName: string,
             callback: (ctx: {
@@ -47,41 +50,41 @@ jest.mock('@microsoft/vscode-azext-utils', () => ({
     createGenericElement: (opts: Record<string, unknown>) => ({ id: opts.id, label: opts.label }),
 }));
 
-jest.mock('../api/createGenericElementWithContext', () => ({
+vi.mock('../api/createGenericElementWithContext', () => ({
     createGenericElementWithContext: (opts: Record<string, unknown>) => ({ ...opts }),
 }));
 
-const mockHasCredentials = jest.fn().mockReturnValue(false);
-const mockGetSetting = jest.fn().mockReturnValue(false);
-jest.mock('../../documentdb/CredentialCache', () => ({
+const mockHasCredentials = vi.fn().mockReturnValue(false);
+const mockGetSetting = vi.fn().mockReturnValue(false);
+vi.mock('../../documentdb/CredentialCache', () => ({
     CredentialCache: {
         hasCredentials: (...args: unknown[]) => mockHasCredentials(...args),
     },
 }));
 
-jest.mock('../../documentdb/ClustersClient', () => ({
-    ClustersClient: { getClient: jest.fn(), exists: jest.fn().mockReturnValue(false) },
+vi.mock('../../documentdb/ClustersClient', () => ({
+    ClustersClient: { getClient: vi.fn(), exists: vi.fn().mockReturnValue(false) },
 }));
 
-jest.mock('../../extensionVariables', () => ({
+vi.mock('../../extensionVariables', () => ({
     ext: {
         settingsKeys: {
             showDashboardOnConnect: 'documentDB.userInterface.showDashboardOnConnect',
         },
         outputChannel: {
-            appendLine: jest.fn(),
-            debug: jest.fn(),
+            appendLine: vi.fn(),
+            debug: vi.fn(),
         },
     },
 }));
 
-jest.mock('../../services/SettingsService', () => ({
+vi.mock('../../services/SettingsService', () => ({
     SettingsService: {
         getSetting: (...args: unknown[]) => mockGetSetting(...args),
     },
 }));
 
-jest.mock('./DatabaseItem', () => ({
+vi.mock('./DatabaseItem', () => ({
     DatabaseItem: class {
         public id: string;
         public constructor(_cluster: unknown, database: { name: string }) {
@@ -120,22 +123,23 @@ function makeCluster(): TreeCluster<BaseClusterModel> {
     } as unknown as TreeCluster<BaseClusterModel>;
 }
 
-function makeClient(listDatabases: jest.Mock): ClustersClient {
+const ClustersClientMock = vi.mocked(ClustersClient);
+
+function makeClient(listDatabases: Mock): ClustersClient {
     return { listDatabases } as unknown as ClustersClient;
 }
 
 describe('ClusterItemBase.getChildren — listDatabases failure handling', () => {
     beforeEach(() => {
-        jest.clearAllMocks();
+        vi.clearAllMocks();
         mockTelemetryEvents.length = 0;
         mockHasCredentials.mockReturnValue(false);
         mockGetSetting.mockReturnValue(false);
-        const { ClustersClient: ClustersClientMock } = jest.requireMock('../../documentdb/ClustersClient');
         ClustersClientMock.exists.mockReturnValue(false);
     });
 
     it('returns a retry node (and records telemetry) when listDatabases is rejected', async () => {
-        const listDatabases = jest
+        const listDatabases = vi
             .fn()
             .mockRejectedValue(
                 new Error('Command listDatabases is not allowed as the connection is not authenticated yet'),
@@ -161,7 +165,7 @@ describe('ClusterItemBase.getChildren — listDatabases failure handling', () =>
     });
 
     it('surfaces the failure as a modal dialog and suppresses the default non-modal notification', async () => {
-        const listDatabases = jest.fn().mockRejectedValue(new Error('not authenticated'));
+        const listDatabases = vi.fn().mockRejectedValue(new Error('not authenticated'));
         const item = new TestClusterItem(makeCluster(), makeClient(listDatabases));
 
         await item.getChildren();
@@ -175,7 +179,7 @@ describe('ClusterItemBase.getChildren — listDatabases failure handling', () =>
     });
 
     it('records failure telemetry with the expected properties', async () => {
-        const listDatabases = jest.fn().mockRejectedValue(new Error('not authenticated'));
+        const listDatabases = vi.fn().mockRejectedValue(new Error('not authenticated'));
         const item = new TestClusterItem(makeCluster(), makeClient(listDatabases));
 
         await item.getChildren();
@@ -191,7 +195,7 @@ describe('ClusterItemBase.getChildren — listDatabases failure handling', () =>
     });
 
     it('returns database items and no telemetry/retry node on success', async () => {
-        const listDatabases = jest.fn().mockResolvedValue([{ name: 'beta' }, { name: 'alpha' }] as DatabaseItemModel[]);
+        const listDatabases = vi.fn().mockResolvedValue([{ name: 'beta' }, { name: 'alpha' }] as DatabaseItemModel[]);
         const item = new TestClusterItem(makeCluster(), makeClient(listDatabases));
 
         const children = (await item.getChildren()) as Array<TreeElement & Record<string, unknown>>;
@@ -205,7 +209,7 @@ describe('ClusterItemBase.getChildren — listDatabases failure handling', () =>
 
     it('opens the dashboard after connecting through tree expansion when enabled', async () => {
         mockGetSetting.mockReturnValue(true);
-        const listDatabases = jest.fn().mockResolvedValue([{ name: 'database' }] as DatabaseItemModel[]);
+        const listDatabases = vi.fn().mockResolvedValue([{ name: 'database' }] as DatabaseItemModel[]);
         const item = new TestClusterItem(makeCluster(), makeClient(listDatabases));
 
         await item.getChildren();
@@ -221,7 +225,7 @@ describe('ClusterItemBase.getChildren — listDatabases failure handling', () =>
 
     it('opens the dashboard by default when the setting is unavailable', async () => {
         mockGetSetting.mockReturnValue(undefined);
-        const listDatabases = jest.fn().mockResolvedValue([{ name: 'database' }] as DatabaseItemModel[]);
+        const listDatabases = vi.fn().mockResolvedValue([{ name: 'database' }] as DatabaseItemModel[]);
         const item = new TestClusterItem(makeCluster(), makeClient(listDatabases));
 
         await item.getChildren();
@@ -236,8 +240,7 @@ describe('ClusterItemBase.getChildren — listDatabases failure handling', () =>
 
     it('does not reopen the dashboard on refresh or when the tree node is recreated', async () => {
         mockGetSetting.mockReturnValue(true);
-        const { ClustersClient: ClustersClientMock } = jest.requireMock('../../documentdb/ClustersClient');
-        const client = makeClient(jest.fn().mockResolvedValue([{ name: 'database' }]));
+        const client = makeClient(vi.fn().mockResolvedValue([{ name: 'database' }]));
         ClustersClientMock.getClient.mockResolvedValue(client);
         const item = new TestClusterItem(makeCluster(), client);
 
@@ -254,8 +257,7 @@ describe('ClusterItemBase.getChildren — listDatabases failure handling', () =>
     it('opens the dashboard again after the cached client is removed', async () => {
         mockGetSetting.mockReturnValue(true);
         mockHasCredentials.mockReturnValue(true);
-        const { ClustersClient: ClustersClientMock } = jest.requireMock('../../documentdb/ClustersClient');
-        const client = makeClient(jest.fn().mockResolvedValue([{ name: 'database' }]));
+        const client = makeClient(vi.fn().mockResolvedValue([{ name: 'database' }]));
         ClustersClientMock.getClient.mockResolvedValue(client);
         ClustersClientMock.exists.mockReturnValueOnce(true).mockReturnValueOnce(false);
         const item = new TestClusterItem(makeCluster(), client);
@@ -269,7 +271,7 @@ describe('ClusterItemBase.getChildren — listDatabases failure handling', () =>
 
     it('does not open the dashboard when connecting through tree expansion is disabled', async () => {
         mockGetSetting.mockReturnValue(false);
-        const listDatabases = jest.fn().mockResolvedValue([{ name: 'database' }] as DatabaseItemModel[]);
+        const listDatabases = vi.fn().mockResolvedValue([{ name: 'database' }] as DatabaseItemModel[]);
         const item = new TestClusterItem(makeCluster(), makeClient(listDatabases));
 
         await item.getChildren();
@@ -283,7 +285,7 @@ describe('ClusterItemBase.getChildren — listDatabases failure handling', () =>
     });
 
     it('returns the "Create Database…" node when the cluster has no databases', async () => {
-        const listDatabases = jest.fn().mockResolvedValue([] as DatabaseItemModel[]);
+        const listDatabases = vi.fn().mockResolvedValue([] as DatabaseItemModel[]);
         const item = new TestClusterItem(makeCluster(), makeClient(listDatabases));
 
         const children = (await item.getChildren()) as Array<TreeElement & Record<string, unknown>>;
@@ -297,30 +299,29 @@ describe('ClusterItemBase.getChildren — listDatabases failure handling', () =>
 
 describe('ClusterItemBase.getChildren — cached client connection failure handling', () => {
     beforeEach(() => {
-        jest.clearAllMocks();
+        vi.clearAllMocks();
         mockTelemetryEvents.length = 0;
         // Simulate cached credentials so getChildren() takes the "reuse cached client" path.
         mockHasCredentials.mockReturnValue(true);
 
-        // jest-mock-vscode's withProgress is a no-op jest.fn(); make it actually run the task so
+        // jest-mock-vscode's withProgress is a no-op vi.fn(); make it actually run the task so
         // getClientWithProgress() exercises ClustersClient.getClient() and surfaces its rejection.
-        (vscode.window.withProgress as unknown as jest.Mock).mockImplementation(
+        (vscode.window.withProgress as unknown as Mock).mockImplementation(
             (
                 _options: unknown,
                 task: (
                     progress: unknown,
-                    token: { isCancellationRequested: boolean; onCancellationRequested: jest.Mock },
+                    token: { isCancellationRequested: boolean; onCancellationRequested: Mock },
                 ) => unknown,
-            ) => task({ report: jest.fn() }, { isCancellationRequested: false, onCancellationRequested: jest.fn() }),
+            ) => task({ report: vi.fn() }, { isCancellationRequested: false, onCancellationRequested: vi.fn() }),
         );
     });
 
     it('returns a retry node when reusing the cached client fails (without listing databases)', async () => {
-        const { ClustersClient: ClustersClientMock } = jest.requireMock('../../documentdb/ClustersClient');
-        (ClustersClientMock.getClient as jest.Mock).mockRejectedValue(new Error('server down'));
+        (ClustersClientMock.getClient as Mock).mockRejectedValue(new Error('server down'));
 
         // listDatabases must never be reached when the cached client cannot connect.
-        const listDatabases = jest.fn();
+        const listDatabases = vi.fn();
         const item = new TestClusterItem(makeCluster(), makeClient(listDatabases));
 
         const children = (await item.getChildren()) as Array<TreeElement & Record<string, unknown>>;
@@ -335,10 +336,9 @@ describe('ClusterItemBase.getChildren — cached client connection failure handl
     });
 
     it('surfaces a modal and records telemetry with failurePhase=cachedClientConnect', async () => {
-        const { ClustersClient: ClustersClientMock } = jest.requireMock('../../documentdb/ClustersClient');
-        (ClustersClientMock.getClient as jest.Mock).mockRejectedValue(new Error('server down'));
+        (ClustersClientMock.getClient as Mock).mockRejectedValue(new Error('server down'));
 
-        const item = new TestClusterItem(makeCluster(), makeClient(jest.fn()));
+        const item = new TestClusterItem(makeCluster(), makeClient(vi.fn()));
 
         await item.getChildren();
 
@@ -359,11 +359,9 @@ describe('ClusterItemBase.getChildren — cached client connection failure handl
     });
 
     it('returns an empty array (no retry node) when the user cancels the cached connection', async () => {
-        const { UserCancelledError } = jest.requireMock('@microsoft/vscode-azext-utils');
-        const { ClustersClient: ClustersClientMock } = jest.requireMock('../../documentdb/ClustersClient');
-        (ClustersClientMock.getClient as jest.Mock).mockRejectedValue(new UserCancelledError());
+        (ClustersClientMock.getClient as Mock).mockRejectedValue(new UserCancelledError());
 
-        const item = new TestClusterItem(makeCluster(), makeClient(jest.fn()));
+        const item = new TestClusterItem(makeCluster(), makeClient(vi.fn()));
 
         const children = await item.getChildren();
 
@@ -422,27 +420,26 @@ describe('ClusterItemBase.connect', () => {
     }
 
     beforeEach(() => {
-        jest.clearAllMocks();
+        vi.clearAllMocks();
         mockTelemetryEvents.length = 0;
 
-        // jest-mock-vscode's withProgress is a no-op jest.fn(); make it run the task so the
+        // jest-mock-vscode's withProgress is a no-op vi.fn(); make it run the task so the
         // cached path actually reaches ClustersClient.getClient().
-        (vscode.window.withProgress as unknown as jest.Mock).mockImplementation(
+        (vscode.window.withProgress as unknown as Mock).mockImplementation(
             (
                 _options: unknown,
                 task: (
                     progress: unknown,
-                    token: { isCancellationRequested: boolean; onCancellationRequested: jest.Mock },
+                    token: { isCancellationRequested: boolean; onCancellationRequested: Mock },
                 ) => unknown,
-            ) => task({ report: jest.fn() }, { isCancellationRequested: false, onCancellationRequested: jest.fn() }),
+            ) => task({ report: vi.fn() }, { isCancellationRequested: false, onCancellationRequested: vi.fn() }),
         );
     });
 
     it('reuses the cached client, and does not re-authenticate, when credentials are cached', async () => {
         mockHasCredentials.mockReturnValue(true);
-        const cached = makeClient(jest.fn());
-        const { ClustersClient: ClustersClientMock } = jest.requireMock('../../documentdb/ClustersClient');
-        (ClustersClientMock.getClient as jest.Mock).mockResolvedValue(cached);
+        const cached = makeClient(vi.fn());
+        (ClustersClientMock.getClient as Mock).mockResolvedValue(cached);
 
         const item = new ConnectTestClusterItem(makeCluster(), null);
 
@@ -455,9 +452,8 @@ describe('ClusterItemBase.connect', () => {
 
     it('keys the credential cache and the client on clusterId, never on the tree position', async () => {
         mockHasCredentials.mockReturnValue(true);
-        const cached = makeClient(jest.fn());
-        const { ClustersClient: ClustersClientMock } = jest.requireMock('../../documentdb/ClustersClient');
-        (ClustersClientMock.getClient as jest.Mock).mockResolvedValue(cached);
+        const cached = makeClient(vi.fn());
+        (ClustersClientMock.getClient as Mock).mockResolvedValue(cached);
 
         const cluster = makeMovedCluster();
         const item = new ConnectTestClusterItem(cluster, null);
@@ -473,9 +469,7 @@ describe('ClusterItemBase.connect', () => {
 
     it('authenticates when no credentials are cached, without preparing a cached client', async () => {
         mockHasCredentials.mockReturnValue(false);
-        const fresh = makeClient(jest.fn());
-        const { ClustersClient: ClustersClientMock } = jest.requireMock('../../documentdb/ClustersClient');
-
+        const fresh = makeClient(vi.fn());
         const item = new ConnectTestClusterItem(makeCluster(), fresh);
 
         await expect(item.connect()).resolves.toBe(fresh);
@@ -486,9 +480,7 @@ describe('ClusterItemBase.connect', () => {
 
     it('returns null when the user cancels the progress notification on the cached path', async () => {
         mockHasCredentials.mockReturnValue(true);
-        const { UserCancelledError } = jest.requireMock('@microsoft/vscode-azext-utils');
-        const { ClustersClient: ClustersClientMock } = jest.requireMock('../../documentdb/ClustersClient');
-        (ClustersClientMock.getClient as jest.Mock).mockRejectedValue(new UserCancelledError());
+        (ClustersClientMock.getClient as Mock).mockRejectedValue(new UserCancelledError());
 
         const item = new ConnectTestClusterItem(makeCluster(), null);
 
@@ -499,8 +491,7 @@ describe('ClusterItemBase.connect', () => {
 
     it('propagates a genuine failure on the cached path so the command can report it', async () => {
         mockHasCredentials.mockReturnValue(true);
-        const { ClustersClient: ClustersClientMock } = jest.requireMock('../../documentdb/ClustersClient');
-        (ClustersClientMock.getClient as jest.Mock).mockRejectedValue(new Error('server down'));
+        (ClustersClientMock.getClient as Mock).mockRejectedValue(new Error('server down'));
 
         const item = new ConnectTestClusterItem(makeCluster(), null);
 

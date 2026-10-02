@@ -3,13 +3,15 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+import { describe, expect, it, vi } from 'vitest';
+
 import { CollectionItem } from './CollectionItem';
 
-jest.mock('@vscode/l10n', () => ({
-    t: jest.fn((message: string) => message),
+vi.mock('@vscode/l10n', () => ({
+    t: vi.fn((message: string) => message),
 }));
 
-jest.mock('vscode', () => ({
+vi.mock('vscode', () => ({
     ThemeIcon: class ThemeIcon {
         constructor(public readonly id: string) {}
     },
@@ -32,9 +34,9 @@ jest.mock('vscode', () => ({
     },
 }));
 
-jest.mock('@microsoft/vscode-azext-utils', () => ({
+vi.mock('@microsoft/vscode-azext-utils', () => ({
     createContextValue: (parts: string[]) => parts.join(';'),
-    callWithTelemetryAndErrorHandling: jest.fn(async (_callbackId: string, callback: (context: unknown) => unknown) => {
+    callWithTelemetryAndErrorHandling: vi.fn(async (_callbackId: string, callback: (context: unknown) => unknown) => {
         const context = {
             telemetry: { properties: {}, measurements: {} },
             errorHandling: { suppressDisplay: false, rethrow: false },
@@ -45,17 +47,17 @@ jest.mock('@microsoft/vscode-azext-utils', () => ({
     }),
 }));
 
-jest.mock('../../extensionVariables', () => ({
+vi.mock('../../extensionVariables', () => ({
     ext: {
         state: {
-            notifyChildrenChanged: jest.fn(),
+            notifyChildrenChanged: vi.fn(),
         },
     },
 }));
 
-jest.mock('../../documentdb/ClustersClient', () => ({
+vi.mock('../../documentdb/ClustersClient', () => ({
     ClustersClient: {
-        getClient: jest.fn(),
+        getClient: vi.fn(),
     },
 }));
 

@@ -3,6 +3,8 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+import { beforeEach, describe, expect, it, vi, type Mock } from 'vitest';
+
 import { type IActionContext } from '@microsoft/vscode-azext-utils';
 import { resetDiscoveryProviderVisibilityCacheForTests } from '../../services/discoveryProviderVisibility';
 import { DiscoveryService } from '../../services/discoveryServices';
@@ -12,26 +14,26 @@ const telemetryContextMock = {
     telemetry: { properties: {}, measurements: {} },
     errorHandling: { issueProperties: {} },
     ui: {
-        showWarningMessage: jest.fn(),
-        onDidFinishPrompt: jest.fn(),
-        showQuickPick: jest.fn(),
-        showInputBox: jest.fn(),
-        showOpenDialog: jest.fn(),
-        showWorkspaceFolderPick: jest.fn(),
+        showWarningMessage: vi.fn(),
+        onDidFinishPrompt: vi.fn(),
+        showQuickPick: vi.fn(),
+        showInputBox: vi.fn(),
+        showOpenDialog: vi.fn(),
+        showWorkspaceFolderPick: vi.fn(),
     },
     valuesToMask: [],
 };
 
-jest.mock('@microsoft/vscode-azext-utils', () => ({
-    callWithTelemetryAndErrorHandling: jest.fn(
+vi.mock('@microsoft/vscode-azext-utils', () => ({
+    callWithTelemetryAndErrorHandling: vi.fn(
         async (_eventName, callback: (context: IActionContext) => Promise<unknown>) => {
             return await callback(telemetryContextMock);
         },
     ),
-    createContextValue: jest.fn((values: string[]) => values.join(';')),
+    createContextValue: vi.fn((values: string[]) => values.join(';')),
 }));
 
-jest.mock('vscode', () => ({
+vi.mock('vscode', () => ({
     Disposable: class Disposable {
         dispose(): void {
             // Mock dispose
@@ -41,8 +43,8 @@ jest.mock('vscode', () => ({
         fire(): void {
             // Mock fire
         }
-        get event(): jest.Mock {
-            return jest.fn();
+        get event(): Mock {
+            return vi.fn();
         }
     },
     TreeItemCollapsibleState: {
@@ -51,14 +53,14 @@ jest.mock('vscode', () => ({
         Expanded: 2,
     },
     l10n: {
-        t: jest.fn((str: string) => str),
+        t: vi.fn((str: string) => str),
     },
 }));
 
-const mockGlobalStateGet = jest.fn();
-const mockGlobalStateUpdate = jest.fn();
+const mockGlobalStateGet = vi.fn();
+const mockGlobalStateUpdate = vi.fn();
 
-jest.mock('../../extensionVariables', () => ({
+vi.mock('../../extensionVariables', () => ({
     ext: {
         context: {
             globalState: {
@@ -67,19 +69,19 @@ jest.mock('../../extensionVariables', () => ({
             },
         },
         state: {
-            wrapItemInStateHandling: jest.fn((item) => item),
+            wrapItemInStateHandling: vi.fn((item) => item),
         },
         outputChannel: {
-            trace: jest.fn(),
-            warn: jest.fn(),
+            trace: vi.fn(),
+            warn: vi.fn(),
         },
     },
 }));
 
-jest.mock('../../services/discoveryServices', () => ({
+vi.mock('../../services/discoveryServices', () => ({
     DiscoveryService: {
-        listProviders: jest.fn(),
-        getProvider: jest.fn(),
+        listProviders: vi.fn(),
+        getProvider: vi.fn(),
     },
 }));
 
@@ -91,17 +93,17 @@ interface MockTreeElement {
     getChildren?(): Promise<MockTreeElement[]>;
 }
 
-const listProvidersMock = DiscoveryService.listProviders as jest.Mock;
-const getProviderMock = DiscoveryService.getProvider as jest.Mock;
+const listProvidersMock = DiscoveryService.listProviders as Mock;
+const getProviderMock = DiscoveryService.getProvider as Mock;
 
 function createRootProvider(id: string): unknown {
     return {
         id,
         label: `Provider ${id}`,
-        getDiscoveryTreeRootItem: jest.fn().mockReturnValue({
+        getDiscoveryTreeRootItem: vi.fn().mockReturnValue({
             id: `discoveryView/${id}`,
-            getTreeItem: jest.fn().mockResolvedValue({ contextValue: 'rootItem' }),
-            getChildren: jest.fn().mockResolvedValue([]),
+            getTreeItem: vi.fn().mockResolvedValue({ contextValue: 'rootItem' }),
+            getChildren: vi.fn().mockResolvedValue([]),
         }),
     };
 }
@@ -116,7 +118,7 @@ describe('DiscoveryBranchDataProvider - provider visibility', () => {
     let dataProvider: DiscoveryBranchDataProvider;
 
     beforeEach(() => {
-        jest.clearAllMocks();
+        vi.clearAllMocks();
         resetDiscoveryProviderVisibilityCacheForTests();
         telemetryContextMock.telemetry = { properties: {}, measurements: {} };
         mockGlobalStateUpdate.mockResolvedValue(undefined);
@@ -162,7 +164,7 @@ describe('DiscoveryBranchDataProvider - Cluster ID Validation', () => {
     let dataProvider: DiscoveryBranchDataProvider;
 
     beforeEach(() => {
-        jest.clearAllMocks();
+        vi.clearAllMocks();
         resetDiscoveryProviderVisibilityCacheForTests();
         dataProvider = new DiscoveryBranchDataProvider();
     });
@@ -173,7 +175,7 @@ describe('DiscoveryBranchDataProvider - Cluster ID Validation', () => {
         const mockClusterElement: MockTreeElement = {
             id: 'cluster-element-id',
             contextValue: 'treeItem_documentdbcluster;experience_MongoDB',
-            getTreeItem: jest.fn().mockResolvedValue({ contextValue: 'treeItem_documentdbcluster' }),
+            getTreeItem: vi.fn().mockResolvedValue({ contextValue: 'treeItem_documentdbcluster' }),
             cluster: {
                 clusterId: prefixedClusterId,
                 name: 'Test Cluster',
@@ -182,8 +184,8 @@ describe('DiscoveryBranchDataProvider - Cluster ID Validation', () => {
 
         const mockParentElement: MockTreeElement = {
             id: 'discoveryView/azure-mongo-vcore-discovery/subscription1',
-            getTreeItem: jest.fn().mockResolvedValue({ contextValue: 'subscription' }),
-            getChildren: jest.fn().mockResolvedValue([mockClusterElement]),
+            getTreeItem: vi.fn().mockResolvedValue({ contextValue: 'subscription' }),
+            getChildren: vi.fn().mockResolvedValue([mockClusterElement]),
         };
 
         const children = await dataProvider.getChildren(mockParentElement);
@@ -196,7 +198,7 @@ describe('DiscoveryBranchDataProvider - Cluster ID Validation', () => {
         const mockClusterElement: MockTreeElement = {
             id: 'cluster-element-id',
             contextValue: 'treeItem_documentdbcluster;experience_MongoDB',
-            getTreeItem: jest.fn().mockResolvedValue({ contextValue: 'treeItem_documentdbcluster' }),
+            getTreeItem: vi.fn().mockResolvedValue({ contextValue: 'treeItem_documentdbcluster' }),
             cluster: {
                 clusterId:
                     '_subscriptions_sub1_resourceGroups_rg1_providers_Microsoft.DocumentDB_mongoClusters_cluster1',
@@ -206,8 +208,8 @@ describe('DiscoveryBranchDataProvider - Cluster ID Validation', () => {
 
         const mockParentElement: MockTreeElement = {
             id: 'discoveryView/azure-mongo-vcore-discovery/subscription1',
-            getTreeItem: jest.fn().mockResolvedValue({ contextValue: 'subscription' }),
-            getChildren: jest.fn().mockResolvedValue([mockClusterElement]),
+            getTreeItem: vi.fn().mockResolvedValue({ contextValue: 'subscription' }),
+            getChildren: vi.fn().mockResolvedValue([mockClusterElement]),
         };
 
         await expect(dataProvider.getChildren(mockParentElement)).rejects.toThrow(/must start with provider ID/i);
@@ -218,7 +220,7 @@ describe('DiscoveryBranchDataProvider - Cluster ID Validation', () => {
         const mockClusterElement: MockTreeElement = {
             id: 'cluster-element-id',
             contextValue: 'treeItem_documentdbcluster;experience_MongoDB',
-            getTreeItem: jest.fn().mockResolvedValue({ contextValue: 'treeItem_documentdbcluster' }),
+            getTreeItem: vi.fn().mockResolvedValue({ contextValue: 'treeItem_documentdbcluster' }),
             cluster: {
                 clusterId: nonPrefixedClusterId,
                 name: 'Test Cluster',
@@ -227,8 +229,8 @@ describe('DiscoveryBranchDataProvider - Cluster ID Validation', () => {
 
         const mockParentElement: MockTreeElement = {
             id: 'invalid-tree-id-format',
-            getTreeItem: jest.fn().mockResolvedValue({ contextValue: 'unknown' }),
-            getChildren: jest.fn().mockResolvedValue([mockClusterElement]),
+            getTreeItem: vi.fn().mockResolvedValue({ contextValue: 'unknown' }),
+            getChildren: vi.fn().mockResolvedValue([mockClusterElement]),
         };
 
         const children = await dataProvider.getChildren(mockParentElement);
