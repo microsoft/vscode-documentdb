@@ -9,9 +9,9 @@
 //
 // Rewrites the files in place and prints, per file, every `jest.` reference it could not rewrite.
 // Those (requireActual, requireMock, factories that read outer variables eagerly, ...) need the
-// manual steps in the Stage 2 recipe. Adding the `import ... from 'vitest'` line is what moves a
-// file from Jest to Vitest (see build/test-migration/runnerRouting.cjs). Delete this script when
-// Jest is removed.
+// manual steps in the Stage 2 conversion recipe (docs/ai-and-plans/modernization/build-and-test-stack.md).
+// Jest is gone from this branch; the script stays so Jest tests arriving with later `main` merges
+// can be converted (ground rule 1). Delete it once the modernization PR has merged into `main`.
 
 import { readFileSync, writeFileSync } from 'node:fs';
 import ts from 'typescript';

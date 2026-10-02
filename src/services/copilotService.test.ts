@@ -55,7 +55,7 @@ vi.mock('../extensionVariables', () => ({
     },
 }));
 
-// Override the global `__mocks__/vscode.js` for this suite so we can wire up
+// Override the shared `vscode` mock (test/vitest/vscode.ts) for this suite so we can wire up
 // the `lm.selectChatModels` entry point the service relies on (jest-mock-vscode
 // does not provide a `lm` namespace today).
 const selectChatModelsMock = vi.fn();

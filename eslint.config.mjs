@@ -5,7 +5,6 @@
 
 import js from '@eslint/js';
 import importPlugin from 'eslint-plugin-import';
-import jest from 'eslint-plugin-jest';
 import jsxA11y from 'eslint-plugin-jsx-a11y';
 import licenseHeader from 'eslint-plugin-license-header';
 import react from 'eslint-plugin-react';
@@ -24,10 +23,7 @@ export default ts.config(
             '**/dist',
             '**/out',
             '**/node_modules',
-            '**/__mocks__/**/*',
             '**/*.d.ts',
-            '**/jest.config.js',
-            '**/jest.config.cjs',
             '**/main.js',
         ],
     },
@@ -59,8 +55,6 @@ export default ts.config(
                         'yaml/types',
                         '**/components/**/*.scss',
                         'build/verification/BundleReportPlugin.cjs',
-                        // TEMPORARY (modernization Stage 2): Jest/Vitest coexistence routing.
-                        'build/test-migration/runnerRouting.cjs',
                     ],
                 },
             ],
@@ -183,21 +177,19 @@ export default ts.config(
             'react/prop-types': 'off', // TypeScript handles prop validation
         },
     },
-    // Jest unit tests in src/
+    // Vitest unit tests in src/ (they import their test API from 'vitest'; no test globals)
     {
-        files: ['src/**/*.test.ts', '**/__mocks__/**/*.js'],
+        files: ['src/**/*.test.ts'],
 
-        extends: [ts.configs.recommendedTypeChecked, jest.configs['flat/recommended']],
+        extends: [ts.configs.recommendedTypeChecked],
 
         plugins: {
             '@typescript-eslint': ts.plugin,
-            jest: jest,
         },
 
         languageOptions: {
             globals: {
                 ...globals.node,
-                ...globals.jest,
             },
 
             parser: ts.parser,
@@ -225,8 +217,6 @@ export default ts.config(
             '@typescript-eslint/unbound-method': 'off',
             'no-dupe-else-if': 'off',
             'no-empty': 'off',
-            'jest/expect-expect': 'off',
-            'jest/no-conditional-expect': 'off',
         },
     },
     // The fluentui package keeps its hooks in .ts files — they contain no JSX — so the repo's

@@ -3,10 +3,9 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-// Vitest counterpart of src/__mocks__/vscode.js. vitest.config.mts aliases `vscode` to this file for
-// the extension project, so every test (and every source module it loads) gets a fresh mock per
-// test file without calling vi.mock('vscode'). It lives outside `__mocks__/` so Jest's haste map
-// does not see a second manual mock for `vscode` while both runners coexist.
+// The shared `vscode` mock (it replaced Jest's src/__mocks__/vscode.js). vitest.config.ts aliases
+// `vscode` to this file for the extension project, so every test (and every source module it loads)
+// gets a fresh mock per test file without calling vi.mock('vscode').
 //
 // The module is ESM, so the members are exported by name below; `import * as vscode from 'vscode'`
 // and `import { window } from 'vscode'` both resolve against that list. Add a name here when a

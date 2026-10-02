@@ -8,7 +8,7 @@ import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from 'vite
 import { PlaygroundService } from './PlaygroundService';
 import { type PlaygroundConnection } from './types';
 
-// Access the vscode mock (auto-mock from __mocks__/vscode.js)
+// Access the vscode mock (aliased to test/vitest/vscode.ts)
 import * as vscode from 'vscode';
 
 import { CredentialCache } from '../CredentialCache';

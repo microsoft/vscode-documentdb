@@ -79,8 +79,8 @@ jobs:
               continue-on-error: true
               run: npm run prettier
 
-            - name: 🧪 Run Unit Tests (Jest)
-              run: npm run jesttest
+            - name: 🧪 Run Unit Tests (Vitest)
+              run: npm test
 
             - name: 💬 Post PR Code Quality Report
               if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository

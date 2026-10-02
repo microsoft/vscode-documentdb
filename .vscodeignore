@@ -36,7 +36,6 @@ testWorkspace/**
 .travis.yml
 eslint.config.mjs
 extension.bundle.ts
-jest.config.js
 main.ts
 prettier.config.mjs
 progress.md

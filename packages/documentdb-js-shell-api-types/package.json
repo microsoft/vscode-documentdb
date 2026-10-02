@@ -11,7 +11,7 @@
   "scripts": {
     "build": "tsc -p . && tsc -p tsconfig.scripts.json --noEmit",
     "clean": "rimraf dist tsconfig.tsbuildinfo",
-    "test": "jest --config jest.config.js",
+    "test": "vitest run --config ../../vitest.config.ts --project documentdb-js-shell-api-types",
     "prettier-fix": "prettier -w \"(scripts|src)/**/*.@(js|ts|jsx|tsx|json|md)\" \"./*.@(js|ts|jsx|tsx|json|md)\"",
     "verify": "ts-node scripts/verify-compatibility.ts"
   },

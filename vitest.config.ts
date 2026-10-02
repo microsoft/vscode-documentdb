@@ -5,10 +5,6 @@
 
 import * as path from 'path';
 import { defineConfig } from 'vitest/config';
-// TEMPORARY (modernization Stage 2): while Jest and Vitest coexist, each project only includes the
-// test files that already import from 'vitest'. When Jest is removed, replace every
-// `vitestFiles(root, dir)` call with the matching `${dir}/**/*.test.{ts,tsx}` glob.
-import { vitestFiles } from './build/test-migration/runnerRouting.cjs';
 
 const repoRoot = __dirname;
 
@@ -41,7 +37,7 @@ const packageRoot = (name: string): string => path.join(repoRoot, 'packages', na
 
 export default defineConfig({
     test: {
-        // Same worker cap as the Jest root config, so wall times stay comparable.
+        // Same worker cap as the former Jest root config, so wall times stay comparable.
         maxWorkers: '25%',
         projects: [
             {
@@ -63,7 +59,7 @@ export default defineConfig({
                     root: repoRoot,
                     testTimeout,
                     environment: 'node',
-                    include: vitestFiles(repoRoot, 'src'),
+                    include: ['src/**/*.test.{ts,tsx}'],
                     // Lets CommonJS dependencies `require('vscode')` and get the aliased mock above.
                     setupFiles: [path.join(repoRoot, 'test/vitest/setup.ts')],
                     server: {
@@ -105,7 +101,7 @@ export default defineConfig({
                     root: packageRoot('documentdb-js-schema-analyzer'),
                     testTimeout,
                     environment: 'node',
-                    include: vitestFiles(packageRoot('documentdb-js-schema-analyzer'), 'test'),
+                    include: ['test/**/*.test.{ts,tsx}'],
                 },
             },
             {
@@ -114,17 +110,17 @@ export default defineConfig({
                     root: packageRoot('documentdb-js-operator-registry'),
                     testTimeout,
                     environment: 'node',
-                    include: vitestFiles(packageRoot('documentdb-js-operator-registry'), 'src'),
+                    include: ['src/**/*.test.{ts,tsx}'],
                 },
             },
             {
-                // Not part of the Jest root projects (it only ran through the package's own `npm test`).
+                // Not part of the former Jest root projects (it only ran through the package's own `npm test`).
                 test: {
                     name: 'documentdb-js-shell-api-types',
                     root: packageRoot('documentdb-js-shell-api-types'),
                     testTimeout,
                     environment: 'node',
-                    include: vitestFiles(packageRoot('documentdb-js-shell-api-types'), 'src'),
+                    include: ['src/**/*.test.{ts,tsx}'],
                 },
             },
             {
@@ -133,7 +129,7 @@ export default defineConfig({
                     root: packageRoot('documentdb-js-shell-runtime'),
                     testTimeout,
                     environment: 'node',
-                    include: vitestFiles(packageRoot('documentdb-js-shell-runtime'), 'src'),
+                    include: ['src/**/*.test.{ts,tsx}'],
                 },
             },
             {
@@ -151,7 +147,7 @@ export default defineConfig({
                     root: packageRoot('vscode-ext-webview'),
                     testTimeout,
                     environment: 'node',
-                    include: vitestFiles(packageRoot('vscode-ext-webview'), 'src'),
+                    include: ['src/**/*.test.{ts,tsx}'],
                 },
             },
             {
@@ -162,7 +158,7 @@ export default defineConfig({
                     root: packageRoot('vscode-ext-webview-fluentui'),
                     testTimeout,
                     environment: 'jsdom',
-                    include: vitestFiles(packageRoot('vscode-ext-webview-fluentui'), 'src'),
+                    include: ['src/**/*.test.{ts,tsx}'],
                 },
             },
         ],

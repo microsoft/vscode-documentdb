@@ -40,9 +40,7 @@ for (let index = 1; index <= 3; index++) {
     fs.writeFileSync(path.join(outputDirectory, 'measurements.json'), JSON.stringify(measurements, null, 2));
 }
 for (let index = 1; index <= 3; index++) {
-    measurements.unitTestSeconds.push(
-        run('node', ['node_modules/jest/bin/jest.js', '--no-coverage'], `unit-tests-${index}`),
-    );
+    measurements.unitTestSeconds.push(run('node', ['node_modules/vitest/vitest.mjs', 'run'], `unit-tests-${index}`));
     fs.writeFileSync(path.join(outputDirectory, 'measurements.json'), JSON.stringify(measurements, null, 2));
 }
 measurements.unitTestMedianSeconds = [...measurements.unitTestSeconds].sort((left, right) => left - right)[1];

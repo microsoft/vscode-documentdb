@@ -11,7 +11,7 @@
   "scripts": {
     "build": "tsc -p .",
     "clean": "rimraf dist tsconfig.tsbuildinfo",
-    "test": "jest --config jest.config.js"
+    "test": "vitest run --config ../../vitest.config.ts --project documentdb-js-schema-analyzer"
   },
   "repository": {
     "type": "git",

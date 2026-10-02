@@ -4,12 +4,12 @@
  *--------------------------------------------------------------------------------------------*/
 
 /**
- * Minimal runtime stub of the `vscode` module for the package's Jest tests.
+ * Minimal runtime stub of the `vscode` module for the package's unit tests.
  *
  * The package's production code imports `vscode` only in the host facade
  * ({@link WebviewController} / {@link openWebview}); every other module keeps
  * `vscode` as a type-only import. Tests resolve `vscode` to this file via the
- * `moduleNameMapper` entry in `jest.config.js`. Type-checking still uses the
+ * `vscode` alias of its project in the root `vitest.config.ts`. Type-checking still uses the
  * real `@types/vscode`; this only supplies the runtime values the facade reads.
  */
 

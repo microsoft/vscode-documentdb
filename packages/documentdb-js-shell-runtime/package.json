@@ -10,7 +10,7 @@
   "scripts": {
     "build": "tsc -p .",
     "clean": "rimraf dist tsconfig.tsbuildinfo",
-    "test": "jest --config jest.config.js",
+    "test": "vitest run --config ../../vitest.config.ts --project documentdb-js-shell-runtime",
     "prettier-fix": "prettier -w \"src/**/*.@(js|ts|jsx|tsx|json|md)\" \"./*.@(js|ts|jsx|tsx|json|md)\""
   },
   "repository": {
