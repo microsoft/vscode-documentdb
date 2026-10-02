@@ -90,6 +90,11 @@ function logEntries(contents) {
 
 /** @param {string} text @returns {boolean} */
 function isError(text) {
+    const firstLine = text.split(/\r?\n/, 1)[0];
+    const severity = /^(?:\d{4}-\d{2}-\d{2}[ T]\S+\s+)?\[(trace|debug|info|warn|error|critical)\]/i.exec(firstLine);
+    if (severity && /^(trace|debug)$/i.test(severity[1])) {
+        return false;
+    }
     // appendLog from callWithTelemetryAndErrorHandling writes "[info] Error: ...", not "[error]".
     return /\[(?:error|critical)\]|\b(?:error|exception|failed|failure|uncaught|unhandled)\b|\b(?:TypeError|ReferenceError|SyntaxError|RangeError):/i.test(text);
 }

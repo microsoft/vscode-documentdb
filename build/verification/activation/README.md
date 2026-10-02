@@ -45,10 +45,19 @@ failure, the runner reads all actual extension-host and DocumentDB output-channe
 log files beneath temporary user data. Both kinds of logs must exist.
 `callWithTelemetryAndErrorHandling`'s `[info] Error: ...` records fail the check,
 not just `[error]` severity. Stack continuations are included for attribution.
+Trace/debug records such as `initData` contain manifest descriptions and command
+metadata; generic error words in those records are not errors. An error record
+is not suppressed merely because its message quotes a trace/debug label.
 DocumentDB output errors always fail. Host errors mentioning the target ID or its
 installed path fail; unrelated/unattributed host errors are explicitly printed
 and saved separately in `log-report.json`. Renderer/network/GPU errors outside
 those logs are not asserted by this activation-only check.
+
+There is no blanket shutdown or `Channel has been closed` exclusion. Captured
+VS Code 1.105.0 logs show that message after `SchemaStore.dispose` logs to an
+already disposed output channel, a product lifecycle failure rather than an
+IPC-only test teardown artifact. Those errors remain blocking and require a
+separate product fix/triage; the activation harness does not change product code.
 
 `--inject-error` modifies **only the temporary installed entry point**, never the
 input VSIX or product source. It intercepts the final command registration and

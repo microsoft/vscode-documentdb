@@ -187,6 +187,62 @@ describe('SchemaStore', () => {
         expect(after).not.toBe(before);
     });
 
+    describe('disposal registration', () => {
+        it('keeps logging alive through schema teardown and preserves other subscription ordering', () => {
+            jest.useFakeTimers();
+            store.addDocuments(clusterId, db, coll, makeDocs([{ name: 'teardown' }]));
+            const order: string[] = [];
+            let outputDisposed = false;
+            const before = {
+                dispose: (): void => {
+                    order.push('before');
+                },
+            };
+            const after = {
+                dispose: (): void => {
+                    order.push('after');
+                },
+            };
+            const outputChannel = {
+                dispose: (): void => {
+                    outputDisposed = true;
+                    order.push('output');
+                },
+            };
+            const subscriptions = [before, outputChannel, after];
+            const logStats = jest.spyOn(store, 'logStats').mockImplementation((): void => {
+                if (outputDisposed) {
+                    throw new Error('Channel has been closed');
+                }
+                order.push('statistics');
+            });
+            try {
+                SchemaStore.registerForDisposal(subscriptions, outputChannel);
+                expect(subscriptions).toEqual([before, after, store, outputChannel]);
+                for (const disposable of subscriptions) {
+                    disposable.dispose();
+                }
+                expect(order).toEqual(['before', 'after', 'statistics', 'output']);
+                expect(store.getStats().collectionCount).toBe(0);
+                expect(jest.getTimerCount()).toBe(0);
+                expect(SchemaStore.getInstance()).not.toBe(store);
+            } finally {
+                logStats.mockRestore();
+            }
+        });
+
+        it('rejects an unregistered output channel without changing subscriptions', () => {
+            const disposable = { dispose: jest.fn() };
+            const outputChannel = { dispose: jest.fn() };
+            const subscriptions = [disposable];
+            expect(() => SchemaStore.registerForDisposal(subscriptions, outputChannel)).toThrow(
+                'outputChannel subscription',
+            );
+            expect(subscriptions).toEqual([disposable]);
+            expect(SchemaStore.getInstance()).toBe(store);
+        });
+    });
+
     // ── LRU eviction (memory ceiling, issue #604) ──
 
     describe('LRU eviction', () => {

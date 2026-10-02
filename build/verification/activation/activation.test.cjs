@@ -100,6 +100,50 @@ test('catches swallowed telemetry failures logged at info severity and optional 
     assert.doesNotThrow(() => assertCleanLogs(recognized('2026-10-01 12:00:00 [info] Showing welcome screen...')));
 });
 
+test('trace initData manifest and debug diagnostic error words are metadata, not error records', () => {
+    const manifest = JSON.stringify({
+        extensions: [{
+            identifier: TARGET_ID,
+            description: 'Error reporting and failure diagnostics',
+            commands: ['documentdb.error', 'documentdb.failure'],
+        }],
+    });
+    for (const severity of ['trace', 'debug']) {
+        const report = recognized(`2026-10-02 06:59:45.329 [${severity}] initData ${manifest}`, 'exthost.log');
+        assert.deepEqual(report.errors, []);
+        assert.deepEqual(report.unrelatedHostErrors, []);
+    }
+    const actual = recognized(`2026-10-02 06:59:46.000 [error] ${TARGET_ID} failed; diagnostic text "[trace]"`, 'exthost.log');
+    assert.equal(actual.errors.length, 1);
+    assert.throws(() => assertCleanLogs(recognized(`2026-10-02 06:59:46.000 [info] Error: ${INJECTION_MARKER}`)), /DocumentDB activation errors/);
+});
+
+test('captured successful-run teardown retains the real SchemaStore disposed-channel lifecycle error', () => {
+    const host = [
+        '2026-10-02 06:59:47.779 [info] Test runner finished successfully.',
+        '2026-10-02 06:59:47.783 [info] Extension host terminating: renderer closed the MessagePort',
+        `2026-10-02 06:59:47.797 [error] An error occurred when disposing the subscriptions for extension '${TARGET_ID}':`,
+        '2026-10-02 06:59:47.797 [error] Error: Channel has been closed',
+        '    at Object.appendLine (file:///cache/resources/app/out/vs/workbench/api/node/extensionHostProcess.js:121:2570)',
+        `    at AzExtLogOutputChannel.appendLine (/isolated/extensions/${TARGET_ID}-0.11.0/main.js:2:362407)`,
+        `    at SchemaStore.logStats (/isolated/extensions/${TARGET_ID}-0.11.0/main.js:2:2174191)`,
+        `    at SchemaStore.dispose (/isolated/extensions/${TARGET_ID}-0.11.0/main.js:2:2177230)`,
+        '    at SZ.terminate (file:///cache/resources/app/out/vs/workbench/api/node/extensionHostProcess.js:118:10178)',
+        '2026-10-02 06:59:47.798 [info] Extension host with pid 3337 exiting with code 0',
+    ].join('\n');
+    const report = recognizeLogs([
+        { file: 'exthost.log', contents: host },
+        { file: 'DocumentDB for VS Code.log', contents: '2026-10-02 06:59:46.280 [info] Showing welcome screen...' },
+    ], `/isolated/extensions/${TARGET_ID}-0.11.0`);
+    assert.equal(report.errors.length, 2);
+    assert.equal(report.errors[0].line, 3);
+    assert.match(report.errors[1].text, /SchemaStore.dispose/);
+    assert.throws(() => assertCleanLogs(report), /Channel has been closed/);
+
+    const activation = recognized(host.split('\n').slice(2).join('\n'), 'exthost.log');
+    assert.equal(activation.errors.length, 2, 'the same error before termination must also remain blocking');
+});
+
 test('attributes multiline host stacks, Windows paths, and activation errors without an installed path', () => {
     for (const text of [
         '2026-10-01 12:00:00 [error] TypeError: cannot initialize\n    at /isolated/extensions/ms-azuretools.vscode-documentdb-0.10.2/dist/main.js:1:2',
