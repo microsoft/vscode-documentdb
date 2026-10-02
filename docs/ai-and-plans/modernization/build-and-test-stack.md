@@ -914,6 +914,13 @@ plugin in a real editor; Kubernetes, Atlas and Azure discovery against real back
       Leftovers: **none**. Recipe typing deviation: retained azext-utils' existing named-export
       type shape for `vi.importActual`, avoiding its restricted namespace import. No dependency
       changes, push, CI activity or stage review; CI remains deferred to the orchestrator.
+    - **Phase B B06, `6ace560f`:** converted all **19** listed `src/documentdb` test files
+      (playground, completions, query insights and shell); Vitest **19 files / 528 tests**,
+      remaining Jest **174 suites / 2,863 tests**, build and targeted Prettier / ESLint passed.
+      Assertions unchanged; leftovers: **none**. Recipe typing deviation: azext-utils uses a
+      named-export type shape for `vi.importActual` after its namespace type import failed
+      ESLint, following B05; runtime mock behavior is unchanged. No dependency changes, push,
+      CI activity or stage review; CI remains deferred to the orchestrator.
     - **Phase A follow-up (shared-harness gaps), `86baf001`, `73046b44`, `df9a8e1a`:**
       - **Diagnosis:** CommonJS packages in `node_modules` call Node's own `require('vscode')`,
         which Vite's alias never sees: `@vscode/extension-telemetry` (reached through the
