@@ -59,8 +59,7 @@ Out of scope:
      with a merge;
    - never hand-merge `package-lock.json` (or `l10n/bundle.l10n.json`). Take either side and
      regenerate it with the Node and npm versions from `.nvmrc`, so CI's `npm ci` accepts it;
-   - record progress inline in this document, under the stage it belongs to, when the work is
-     committed: what landed, in which commits, and any deviation with the alternatives considered.
+   - maintain the mandatory inline execution record defined in ground rule 8.
 2. **Sequential.** Each stage is one stretch of autonomous agent work followed by one operator gate.
    A stage starts only after the previous gate passes. Every stage ends with the branch building and
    passing its checks.
@@ -92,6 +91,24 @@ Out of scope:
    [comparison](https://docs.github.com/en/copilot/reference/ai-models/model-comparison),
    [pricing](https://docs.github.com/en/copilot/reference/copilot-billing/models-and-pricing),
    2026-09-30), not from runs in this repo. Revisit them when the model list changes.
+8. **Mandatory inline execution record — part of stage completion, not optional housekeeping.**
+   Read these ground rules and the stage's existing notes before starting work. For every stage:
+   - **Update this plan as work is committed**, directly beneath the task or step concerned. Use
+     brief summaries, not a separate work-log section, an end-of-stage reconstruction, or only a
+     chat/PR comment. A prompt follow-up documentation commit may cite the implementation hash.
+   - **Reference the actual implementation commits** and state what landed. Mark each task as
+     completed, deferred, skipped or blocked; distinguish committed work from uncommitted work
+     and operator-only steps.
+   - **Record deviations and additions with their reasons.** Include alternatives actually
+     considered and why they were rejected. If none were evaluated, say so; do not invent an
+     operator's rationale or imply that an unavailable operator approved a decision.
+   - **Record verification results and limitations inline**, including failures and their
+     resolutions, pending checks, and the status of required operator approvals. Do not turn an
+     implementation or offline test into a claim that its real-artifact gate passed.
+   - **Before declaring stage work complete or handing it to the operator gate**, reconcile the
+     stage notes against its commit history and actual check results. Missing summaries, commit
+     references, reasons or considered alternatives must be filled in first. A final chat summary
+     does not satisfy this requirement, and an updated record does not itself pass the gate.
 
 ```mermaid
 flowchart LR
@@ -218,7 +235,8 @@ plugin in a real editor; Kubernetes, Atlas and Azure discovery against real back
       workspace lockfile arrived through the preparatory `main` merge (`35622214`); `npm ci`
       succeeded. No dependency versions were added or changed by Stage 0.
     - **Progress records:** `4dee490e` committed these measurements and implementation results
-      inline; `a90c79ef` committed subsequent gate evidence and the stage review. The initial
+      inline; `a90c79ef` committed subsequent gate evidence and the stage review; `f5614a1b`
+      completed the inline reasons, alternatives and final browser proof. The initial
       baseline remains unchanged after the lifecycle fix: later artifacts are compared with the
       measured starting point rather than replacing it with a more convenient baseline.
   - Re-enable the webpack bundle analyzer (installed, currently commented out in
