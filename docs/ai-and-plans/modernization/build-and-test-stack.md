@@ -952,6 +952,15 @@ plugin in a real editor; Kubernetes, Atlas and Azure discovery against real back
       `ClusterItemBase.test.ts` mocked-module lookups became typed static imports.
       Leftovers: **none**. Full Jest omitted per the orchestrator deviation above; no other
       recipe deviations, dependency changes, push, CI activity or stage review.
+    - **Phase B B13, `0c8cb788`:** converted all **24** listed files (**22** `src/utils` tests,
+      including Stage 1's four new tests, plus `settingsContributions` and `vscodeUriHandler`);
+      Vitest **24 files / 275 tests**, `npm run build` and targeted Prettier / ESLint passed.
+      AST comparison confirmed **399** assertions and **258** test/suite names unchanged.
+      Leftovers: **none**. Recipe adjustment: two async `vi.importActual` factories load the
+      existing aliased Vitest VS Code mock instead of the Jest-only relative mock, resolving the
+      initial `jest is not defined` failures; static mocked-module import and explicit
+      `process.env` restoration follow the recipe. No other alternatives needed. Full Jest
+      omitted per the orchestrator deviation above; no dependency changes, push, CI or stage review.
     - **Phase A follow-up (shared-harness gaps), `86baf001`, `73046b44`, `df9a8e1a`:**
       - **Diagnosis:** CommonJS packages in `node_modules` call Node's own `require('vscode')`,
         which Vite's alias never sees: `@vscode/extension-telemetry` (reached through the
