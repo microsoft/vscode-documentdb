@@ -49,6 +49,7 @@ function inspectJavaScript(files, reports) {
         }
         const source = data.toString('utf8');
         const compilations = reports.filter((report) => Object.hasOwn(report.assetHashes || {}, filename.slice('extension/'.length)));
+        const commonJs = compilations.some((report) => report.chunkFormat === 'commonjs');
         assert.ok(!/127\.0\.0\.1:18080|DEVSERVER/.test(source), `${filename}: development-server string in production`);
         const tree = parse(source, { ecmaVersion: 'latest', sourceType: 'module', allowReturnOutsideFunction: true });
         if (filename === 'extension/views.js') {
@@ -60,6 +61,10 @@ function inspectJavaScript(files, reports) {
             'views.js does not export render');
         }
         simple(tree, {
+            MetaProperty(node) {
+                // A CommonJS bundle that contains `import.meta` throws a SyntaxError when `require`d.
+                assert.ok(!(commonJs && node.meta.name === 'import'), `${filename}: import.meta in a CommonJS bundle`);
+            },
             ImportExpression(node) {
                 assert.ok(node.source.type === 'Literal' && typeof node.source.value === 'string', `${filename}: nonliteral dynamic import cannot be verified`);
                 resolveAsset(files, filename, node.source.value);
@@ -139,6 +144,9 @@ function inspect(filename, options = {}) {
     const files = readVsix(filename);
     const directory = options.reports || path.join(__dirname, 'reports');
     const reports = ['host', 'views'].map((name) => JSON.parse(fs.readFileSync(path.join(directory, `${name}.json`), 'utf8')));
+    for (const report of reports) {
+        assert.ok(['commonjs', 'module'].includes(report.chunkFormat), `Bundle report has unknown chunk format ${report.chunkFormat}; regenerate it`);
+    }
     inspectJavaScript(files, reports);
     const graphs = {
         main: entryGraph(reports[0], 'main', files),

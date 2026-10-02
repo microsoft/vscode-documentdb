@@ -31,6 +31,9 @@ try {
         ['missing-file', (files) => {
             files.delete('extension/resources/vscode-documentdb-marketplace-logo.png');
         }, /file list/],
+        ['import-meta-in-commonjs', (files) => {
+            files.set('extension/main.js', Buffer.concat([files.get('extension/main.js'), Buffer.from('\nmodule.exports.proof = import.meta.dirname;')]));
+        }, /main\.js: import\.meta in a CommonJS bundle/],
     ];
     for (const [name, mutate, expected] of variants) {
         const files = readVsix(filename);

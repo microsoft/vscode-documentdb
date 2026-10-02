@@ -46,6 +46,7 @@ class BundleReportPlugin {
                 groupAssetsByPath: false,
                 groupAssetsByExtension: false,
             });
+            report.chunkFormat = compiler.options.output.chunkFormat;
             report.assetHashes = Object.fromEntries(
                 report.assets
                     .filter((asset) => asset.name?.endsWith('.js'))

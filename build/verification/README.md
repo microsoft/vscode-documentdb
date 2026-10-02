@@ -17,8 +17,12 @@ npm run test:verification
 ```
 
 Inspection checks the exact archive file list, per-file size tolerance, the named `render` export,
-literal dynamic imports, webpack lazy-chunk references, development-server strings, and reachable
-BSON implementations. Reports must match the packaged JavaScript hashes. Host and playground graphs
+literal dynamic imports, webpack lazy-chunk references, development-server strings, `import.meta` in
+CommonJS bundles, and reachable BSON implementations. Reports must match the packaged JavaScript
+hashes and record each compilation's `chunkFormat`; every JavaScript file of a `commonjs`
+compilation (today `main.js`, `playgroundWorker.js`, `playgroundTsPlugin.js` and their chunks) is
+parsed and rejected if it contains `import.meta`, which a `require` cannot load (Stage 3 found
+webpack leaving `import.meta.dirname` in `main.js`). Host and playground graphs
 require one BSON implementation; browser graphs allow zero because today's webviews do not bundle
 BSON, but reject duplicates. Each view records its graph even while the views share one bundle.
 Once Stage 4 introduces separate entries, use `--require-lightweight-views` to require Local Quick

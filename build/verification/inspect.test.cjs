@@ -107,6 +107,17 @@ test('webpack chunk IDs cannot resolve against another compilation', () => {
     assert.throws(() => inspectJavaScript(bundled, [host, views]), /ambiguous webpack compilation/);
 });
 
+test('import.meta is rejected in CommonJS bundles only, by syntax rather than text', () => {
+    const bundled = new Map([...files, ['extension/main.js', Buffer.from('module.exports.dir = import.meta.dirname;')]]);
+    const host = { chunkFormat: 'commonjs', assetHashes: { 'main.js': 'fixture' }, chunks: [] };
+    const views = { chunkFormat: 'module', assetHashes: { 'views.js': 'fixture' }, chunks: [] };
+    assert.throws(() => inspectJavaScript(bundled, [host, views]), /main\.js: import\.meta in a CommonJS bundle/);
+    bundled.set('extension/main.js', Buffer.from('module.exports.text = "import.meta.dirname";'));
+    inspectJavaScript(bundled, [host, views]);
+    bundled.set('extension/views.js', Buffer.from('export function render() { return import.meta.url; }'));
+    inspectJavaScript(bundled, [host, views]);
+});
+
 test('entry graph follows lazy chunks and catches duplicate BSON implementations', () => {
     const report = {
         entrypoints: { main: { chunks: [1] } },
