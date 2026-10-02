@@ -968,6 +968,13 @@ plugin in a real editor; Kubernetes, Atlas and Azure discovery against real back
       shapes for the existing `/host` and `/react` pre-bundles (initial missing `/react` default
       resolved); fluentui stubs retained for Phase C. No other alternatives needed. Full Jest
       omitted per the orchestrator deviation above; no dependency changes, push, CI or stage review.
+    - **Phase B B15, `1b06cf46`:** converted all **16** listed `src/webviews` files
+      (Local Quick Start, query-language support and utilities); Vitest **16 files / 387 tests**,
+      `npm run build` and targeted Prettier / ESLint passed. AST comparison confirmed **619**
+      assertions, **408** test/suite names and all non-runner code unchanged.
+      Leftovers: **none**; codemod only, no alternatives needed. Full Jest omitted per the
+      orchestrator deviation above; no other recipe deviations, dependency changes, push, CI or
+      stage review.
     - **Phase A follow-up (shared-harness gaps), `86baf001`, `73046b44`, `df9a8e1a`:**
       - **Diagnosis:** CommonJS packages in `node_modules` call Node's own `require('vscode')`,
         which Vite's alias never sees: `@vscode/extension-telemetry` (reached through the
