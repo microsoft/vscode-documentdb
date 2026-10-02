@@ -384,6 +384,34 @@ test('runner pins download, installs isolated VSIX, launches only probe, and rea
     assert.ok(fs.existsSync(path.join(data.artifact(), 'log-report.json')));
 });
 
+test('only Linux GitHub Actions explicitly disables the Electron sandbox, for main and proof', async (context) => {
+    for (const [platform, environment, expected] of [
+        ['linux', {}, false],
+        ['linux', { CI: 'true' }, false],
+        ['linux', { GITHUB_ACTIONS: 'false' }, false],
+        ['linux', { GITHUB_ACTIONS: '1' }, false],
+        ['linux', { GITHUB_ACTIONS: 'true' }, true],
+        ['darwin', { GITHUB_ACTIONS: 'true' }, false],
+        ['win32', { GITHUB_ACTIONS: 'true' }, false],
+    ]) {
+        const data = fixture(context);
+        data.dependencies.platform = platform;
+        data.dependencies.env = { ...data.dependencies.env, ...environment };
+        const process = data.dependencies.process;
+        data.dependencies.process = async (executable, args, options) => {
+            assert.equal(options.env.GITHUB_ACTIONS, environment.GITHUB_ACTIONS);
+            assert.equal(options.env.CI, environment.CI);
+            const sandboxArgs = args.filter((arg) => arg.startsWith('--') && arg.includes('sandbox'));
+            assert.deepEqual(sandboxArgs, !executable.endsWith('/bin/code') && expected ? ['--no-sandbox'] : []);
+            await process(executable, args, options);
+        };
+        await runActivation({ ...data.options, keepArtifacts: false }, data.dependencies);
+        if (expected) {
+            await runProof(data.options, data.dependencies);
+        }
+    }
+});
+
 test('negative mutation registers all late commands and returns API, but swallowed error fails log gate', async (context) => {
     const data = fixture(context);
     await assert.rejects(

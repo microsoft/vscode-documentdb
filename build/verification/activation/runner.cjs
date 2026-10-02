@@ -295,6 +295,9 @@ async function runActivation(options, dependencies) {
         ];
         if (dependencies.platform === 'linux') {
             args.push('--ozone-platform=x11', '--disable-gpu');
+            if (dependencies.env.GITHUB_ACTIONS === 'true') {
+                args.push('--no-sandbox');
+            }
         }
         const failures = [];
         let probePassed = false;

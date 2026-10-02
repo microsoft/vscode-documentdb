@@ -204,11 +204,23 @@ jobs:
                   name: Artifacts-${{ github.run_id }}
                   path: verification-artifacts
             - name: Activate installed VSIX and prove partial-activation failure
+              env:
+                  TMPDIR: ${{ runner.temp }}
               run: |
                   mapfile -t packages < <(find verification-artifacts -name '*.vsix' -type f)
                   test "${#packages[@]}" -eq 1
                   xvfb-run -a npm run test:vsix -- "${packages[0]}"
                   xvfb-run -a npm run prove:activation -- "${packages[0]}"
+
+            - name: Upload activation failure diagnostics
+              if: failure()
+              uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+              with:
+                  name: Activation-diagnostics-${{ github.run_id }}
+                  path: |
+                      ${{ runner.temp }}/documentdb-l3-*/**/*.log
+                      ${{ runner.temp }}/documentdb-l3-*/log-report.json
+                  if-no-files-found: warn
 
     integration-tests:
         name: Integration Tests

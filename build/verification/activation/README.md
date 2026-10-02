@@ -75,7 +75,13 @@ with a simulated host; they are not a substitute for running both controls again
 the production VSIX in a real extension host.
 
 Linux requires a reachable X11 server (`DISPLAY`); Electron is forced to X11 so
-`xvfb-run` is deterministic. The harness never installs system packages. If the
+`xvfb-run` is deterministic. Only on Linux with `GITHUB_ACTIONS=true`, the test
+Electron launch also uses `--no-sandbox`, following `@vscode/test-electron`'s
+launch flag to avoid the downloaded SUID helper's ownership/mode restrictions.
+This is scoped to the trusted activation probe and VSIX in ephemeral user data;
+it does not change product packaging or system permissions. Normal local launches,
+generic `CI=true`, and non-Linux platforms retain the sandbox. Both main and proof
+use this same guarded launch. The harness never installs system packages. If the
 local display is unavailable, run the offline tests and defer both real-host
 controls to CI. Workers, native optional modules, the TS server plugin, webviews,
 and real backend integrations remain outside L3.
