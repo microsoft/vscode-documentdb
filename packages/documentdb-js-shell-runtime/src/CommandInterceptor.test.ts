@@ -5,7 +5,7 @@
 
 import { beforeEach, describe, expect, it } from 'vitest';
 
-import { CommandInterceptor } from './CommandInterceptor';
+import { CommandInterceptor } from './CommandInterceptor.js';
 
 describe('CommandInterceptor', () => {
     let interceptor: CommandInterceptor;

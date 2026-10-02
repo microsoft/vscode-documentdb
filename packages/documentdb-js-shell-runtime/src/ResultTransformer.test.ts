@@ -5,7 +5,7 @@
 
 import { beforeEach, describe, expect, it } from 'vitest';
 
-import { ResultTransformer, type ShellResultLike } from './ResultTransformer';
+import { ResultTransformer, type ShellResultLike } from './ResultTransformer.js';
 
 describe('ResultTransformer', () => {
     let transformer: ResultTransformer;

@@ -1,9 +1,17 @@
 {
   "name": "@documentdb-js/shell-runtime",
-  "version": "0.8.1",
+  "version": "0.9.0",
   "description": "Sandboxed JavaScript evaluation engine for DocumentDB — shell command handling, result transformation, and help generation",
+  "type": "module",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./package.json": "./package.json"
+  },
   "files": [
     "dist"
   ],
@@ -29,5 +37,8 @@
     "@mongosh/service-provider-node-driver": "^5.0.6",
     "@mongosh/shell-api": "^5.1.4",
     "@mongosh/shell-evaluator": "^5.1.4"
+  },
+  "engines": {
+    "node": ">=22.18.0"
   }
 }

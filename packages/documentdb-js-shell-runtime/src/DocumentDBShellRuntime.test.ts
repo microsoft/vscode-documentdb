@@ -6,8 +6,8 @@
 import { beforeEach, describe, expect, it, vi, type MockedFunction } from 'vitest';
 
 import { type MongoClient } from 'mongodb';
-import { DocumentDBServiceProvider } from './DocumentDBServiceProvider';
-import { DocumentDBShellRuntime, normalizeDirectCommands } from './DocumentDBShellRuntime';
+import { DocumentDBServiceProvider } from './DocumentDBServiceProvider.js';
+import { DocumentDBShellRuntime, normalizeDirectCommands } from './DocumentDBShellRuntime.js';
 
 // Mock @mongosh modules to avoid needing a real database connection
 vi.mock('@mongosh/shell-api', () => ({
@@ -32,7 +32,7 @@ vi.mock('@mongosh/shell-evaluator', () => ({
     }),
 }));
 
-vi.mock('./DocumentDBServiceProvider', () => ({
+vi.mock('./DocumentDBServiceProvider.js', () => ({
     DocumentDBServiceProvider: {
         createForDocumentDB: vi.fn().mockReturnValue({
             serviceProvider: {},

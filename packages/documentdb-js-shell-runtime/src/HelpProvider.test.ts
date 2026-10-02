@@ -5,7 +5,7 @@
 
 import { beforeEach, describe, expect, it } from 'vitest';
 
-import { HelpProvider, SHELL_HELP_DOCUMENT_KIND, type ShellHelpDocument } from './HelpProvider';
+import { HelpProvider, SHELL_HELP_DOCUMENT_KIND, type ShellHelpDocument } from './HelpProvider.js';
 
 describe('HelpProvider', () => {
     describe('playground surface (default)', () => {
