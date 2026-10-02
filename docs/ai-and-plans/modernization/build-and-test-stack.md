@@ -91,6 +91,7 @@ Out of scope:
    [comparison](https://docs.github.com/en/copilot/reference/ai-models/model-comparison),
    [pricing](https://docs.github.com/en/copilot/reference/copilot-billing/models-and-pricing),
    2026-09-30), not from runs in this repo. Revisit them when the model list changes.
+
 8. **Mandatory inline execution record — part of stage completion, not optional housekeeping.**
    Read these ground rules and the stage's existing notes before starting work. For every stage:
    - **Update this plan as work is committed**, directly beneath the task or step concerned. Use
