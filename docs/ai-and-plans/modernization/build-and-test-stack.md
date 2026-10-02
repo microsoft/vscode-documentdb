@@ -912,12 +912,45 @@ plugin in a real editor; Kubernetes, Atlas and Azure discovery against real back
         runs in its own worker process, so the require cache, and with it the mock, is per file,
         as under Jest. Limitation: a test's `vi.mock('vscode', factory)` replaces the module for
         ESM importers only; CommonJS dependencies keep the default mock.
-      - **Alternatives rejected:** (a) `server.deps.inline` for those packages. Inlined CommonJS
-        still runs Node's `require`, so the alias does not apply. (b) Adding them to
-        `deps.optimizer.ssr` pre-bundling. That needs a list of every current and future
-        CommonJS consumer, and could bundle a second copy of the mock into the pre-bundle.
-        (c) `module.registerHooks` (Node ≥ 22.15). It is still marked active development, and
-        would need a virtual module plus a global to share the instance.
+      - **Cosmos DB comparison (orchestrator input, 2026-10-02).** `microsoft/vscode-cosmosdb`
+        (`main`) has no azext-specific setting. It uses a CommonJS `src/__mocks__/vscode.ts` behind
+        the `vscode` alias, `globals: true`, the same two interop settings, and a setup file with
+        jsdom stubs. Its azext dependencies are newer, mostly dual ESM/CommonJS:
+        `vscode-azext-azureauth` ~5.1.1 and `vscode-azureresources-api` ~3.1.0. Ours are
+        CommonJS-only 4.1.1 and 2.5.1, so Node `require`s `vscode` directly.
+      - **Approaches measured** (throwaway probes, hook disabled, then reverted):
+        - (a) `server.deps.inline: [/@microsoft\/vscode-az/]` **fails**. Azureauth is served
+          inlined (`?v=` URL), but its `require('vscode')` still goes to Node:
+          `Cannot find module 'vscode'`. It also misses non-azext consumers
+          (`@vscode/extension-telemetry`, `vscode-languageclient`, `vscode-tas-client`).
+        - (b) Adding the four azext packages to `deps.optimizer.ssr.include` (the Cosmos DB
+          approach for `vscode-ext-webview`) **fails**. Alone, Vitest still externalizes them.
+          Combined with inlining, the raw files are still served. Before that, the pre-bundle
+          step rejects names our ESM mock does not export (`env`, `TelemetryTrustedValue`,
+          `QuickInputButtons`). Worse, the pre-bundle **embeds its own copy** of the mock
+          (`deps_ssr/vscode-*.js`, containing `jest-mock-vscode`), so it would not share
+          one instance.
+        - (c) The `Module._load` hook (chosen) passes. A probe asserted that `require('vscode')`
+          issued from azureauth's directory returns the test's own `vscode.window`, and that a
+          `mockResolvedValue` set by the test is visible to it.
+        - Also rejected: `module.registerHooks` (Node ≥ 22.15; still in active development, and
+          needs a virtual module plus a global to share the instance).
+        - Also rejected: upgrading the azext dependencies to Cosmos DB's versions (orchestrator
+          decision). Stage 2 must not change the shipped VSIX, and azureauth 4→5 and
+          resources-api 2→3 are major bumps that touch product code, which this plan does not
+          decide.
+      - **Finding on the plan's own `vscode-ext-webview` pre-bundle:** the
+        `@microsoft/vscode-ext-webview/host` pre-bundle already embeds a second copy of
+        `jest-mock-vscode`, so code reached through `/host` sees a different mock from the test.
+        It also makes `vi.mock('@microsoft/vscode-ext-webview/host', …)` factories need a
+        `default` key. A dry-converted `rpcConcurrencyLogger.test.ts` fails with the pre-bundle
+        and passes without it (2 files: 10 vs 14 tests). With the hook, the pre-bundle's stated
+        reason (the host entry's `require('vscode')`) no longer applies. It is **kept**, because
+        this task lists it; removal is recommended at G1-3 or in Phase C (open item below).
+      - **jsdom stubs:** Cosmos DB's ResizeObserver, matchMedia and canvas `getContext` stubs
+        were not adopted. Jest had none; every converted jsdom test passes; no remaining test
+        references those APIs. The only remaining `src/webviews/**/*.test.tsx` fails only on a
+        `requireActual`. `@testing-library/jest-dom` is not used.
       - **B03 leftovers (`73046b44`):** all **8** files converted mechanically, assertions
         unchanged: **8 files / 62 tests**, equal to their Jest baseline. Beyond the codemod,
         three `requireActual` sites became `vi.importActual`. Two `jest.fn<R, A>` generics became
@@ -1099,6 +1132,15 @@ plugin in a real editor; Kubernetes, Atlas and Azure discovery against real back
   - **Phase B batches:** the 270 remaining non-`TDD:` files are in 15 batches of 15 to 24 files,
     each within one folder. The six `TDD:` suites and the three browser harness tests are held for
     Phase C. The lists are in the orchestrator's session files (`s2-batches.md`), not committed.
+  - **Open item for G1-3 (azext versions):** azext packages are behind Cosmos DB
+    (azureauth 4.1.1→5.1.1, resources-api 2.5.1→3.1.1, azureutils 4.2.0→4.3.0,
+    utils 4.1.0→4.1.1). A candidate upgrade, ideally before Stage 5 (ESM host). It would let the
+    Vitest CommonJS `require('vscode')` workaround (`test/vitest/setup.ts`) be removed. All four
+    latest versions are older than 7 days.
+  - **Open item for G1-3 (`vscode-ext-webview` pre-bundle):** with the setup hook, the
+    `deps.optimizer.ssr` pre-bundle for `@microsoft/vscode-ext-webview` is redundant. It embeds
+    a second `vscode` mock copy, and its factories need `default`. Recommend removing it in
+    Phase C, after a full-suite run without it.
   - **Open item for the operator:** Vite 8's Oxc transform does not support non-`const` exports in
     TypeScript namespaces and warns 19 times for `export namespace ext` in
     `src/extensionVariables.ts`. The output is equivalent today, because no `export let` there has

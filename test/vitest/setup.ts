@@ -15,6 +15,11 @@
 // Every test file runs in its own worker process (`isolate: true`), so Node's `require` cache, and
 // with it this hook and the mock it hands out, is per test file, as it was under Jest.
 //
+// Inlining these packages (`server.deps.inline`) or pre-bundling them (`deps.optimizer.ssr`) was
+// measured and does not work: Node still resolves their `require`, and pre-bundling embeds a second
+// copy of the mock. Newer, dual-format azext releases would make this hook unnecessary (see the
+// Stage 2 record in docs/ai-and-plans/modernization/build-and-test-stack.md).
+//
 // A test-level `vi.mock('vscode', factory)` replaces the module for ESM importers only. CommonJS
 // dependencies keep seeing the shared default mock below.
 
