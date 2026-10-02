@@ -3,9 +3,11 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-jest.mock('../../extensionVariables', () => ({
+import { describe, expect, it, vi } from 'vitest';
+
+vi.mock('../../extensionVariables', () => ({
     ext: {
-        outputChannel: { trace: jest.fn(), info: jest.fn(), warn: jest.fn(), error: jest.fn(), appendLine: jest.fn() },
+        outputChannel: { trace: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn(), appendLine: vi.fn() },
     },
 }));
 
@@ -16,7 +18,7 @@ describe('formatMs', () => {
         // Observed live: an NTP correction landed mid-request and the log filled with lines like
         // "GET /orgs -> 200 in -157ms", which discredits every other number on the line.
         const startedAt = monotonicNow();
-        const wallClock = jest.spyOn(Date, 'now').mockReturnValue(0);
+        const wallClock = vi.spyOn(Date, 'now').mockReturnValue(0);
         try {
             expect(formatMs(startedAt)).toMatch(/^\d+ms$/);
         } finally {
@@ -27,7 +29,7 @@ describe('formatMs', () => {
     it('measures elapsed time from a monotonic reading', () => {
         const realNow = performance.now.bind(performance);
         const startedAt = realNow();
-        const advanced = jest.spyOn(performance, 'now').mockImplementation(() => startedAt + 250);
+        const advanced = vi.spyOn(performance, 'now').mockImplementation(() => startedAt + 250);
         try {
             expect(formatMs(startedAt)).toBe('250ms');
         } finally {

@@ -3,10 +3,12 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+import { beforeEach, describe, expect, it, vi, type Mock } from 'vitest';
+
 const globalStateBacking = new Map<string, unknown>();
 const secretStorageBacking = new Map<string, string>();
 
-jest.mock('vscode', () => ({
+vi.mock('vscode', () => ({
     TreeItemCollapsibleState: { None: 0, Collapsed: 1, Expanded: 2 },
     ThemeIcon: class ThemeIcon {
         constructor(public readonly id: string) {}
@@ -23,22 +25,23 @@ jest.mock('vscode', () => ({
         public fire(): void {
             // no-op
         }
-        public get event(): jest.Mock {
-            return jest.fn();
+        public get event(): Mock {
+            return vi.fn();
         }
         public dispose(): void {
             // no-op
         }
     },
-    window: { showErrorMessage: jest.fn(), showWarningMessage: jest.fn() },
+    window: { showErrorMessage: vi.fn(), showWarningMessage: vi.fn() },
+    env: undefined,
     l10n: {
-        t: jest.fn((template: string, ...args: unknown[]) =>
+        t: vi.fn((template: string, ...args: unknown[]) =>
             template.replace(/\{(\d+)\}/g, (_match: string, index: string) => String(args[Number(index)])),
         ),
     },
 }));
 
-jest.mock('../../../extensionVariables', () => ({
+vi.mock('../../../extensionVariables', () => ({
     ext: {
         context: {
             extension: { id: 'test-extension' },
@@ -69,12 +72,12 @@ jest.mock('../../../extensionVariables', () => ({
             },
             onDidChange: (): { dispose: () => void } => ({ dispose: (): void => {} }),
         },
-        discoveryBranchDataProvider: { refresh: jest.fn(), resetNodeErrorState: jest.fn() },
-        outputChannel: { trace: jest.fn(), info: jest.fn(), warn: jest.fn(), error: jest.fn(), appendLine: jest.fn() },
+        discoveryBranchDataProvider: { refresh: vi.fn(), resetNodeErrorState: vi.fn() },
+        outputChannel: { trace: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn(), appendLine: vi.fn() },
     },
 }));
 
-jest.mock('./AtlasClusterItem', () => ({
+vi.mock('./AtlasClusterItem', () => ({
     AtlasClusterItem: class AtlasClusterItem {
         constructor(
             public readonly journeyCorrelationId: string,
@@ -84,13 +87,13 @@ jest.mock('./AtlasClusterItem', () => ({
     },
 }));
 
-jest.mock('../../../tree/api/createGenericElementWithContext', () => ({
-    createGenericElementWithContext: jest.fn((options: Record<string, unknown>) => ({ ...options })),
+vi.mock('../../../tree/api/createGenericElementWithContext', () => ({
+    createGenericElementWithContext: vi.fn((options: Record<string, unknown>) => ({ ...options })),
 }));
 
 // The azext-utils entry point evaluates VS Code APIs at module load time, so the whole package is
 // stubbed here (matching the other tree-item test suites) instead of widening the `vscode` mock.
-jest.mock('@microsoft/vscode-azext-utils', () => ({
+vi.mock('@microsoft/vscode-azext-utils', () => ({
     createContextValue: (values: string[]) => Array.from(new Set(values)).sort().join(';'),
 }));
 
@@ -144,16 +147,16 @@ function snapshotOf(overrides: Partial<AtlasDiscoverySnapshot> = {}): AtlasDisco
 
 function serviceStub(snapshot: AtlasDiscoverySnapshot): AtlasDiscoveryService {
     return {
-        listAll: jest.fn().mockResolvedValue(snapshot),
-        refreshAll: jest.fn().mockResolvedValue(snapshot),
-        invalidate: jest.fn(),
-        reset: jest.fn(),
-        retryCredential: jest.fn(),
+        listAll: vi.fn().mockResolvedValue(snapshot),
+        refreshAll: vi.fn().mockResolvedValue(snapshot),
+        invalidate: vi.fn(),
+        reset: vi.fn(),
+        retryCredential: vi.fn(),
         sessionRegistry: {
-            getSession: jest.fn(),
-            refresherFor: jest.fn(),
-            invalidate: jest.fn(),
-            refreshSession: jest.fn(),
+            getSession: vi.fn(),
+            refresherFor: vi.fn(),
+            invalidate: vi.fn(),
+            refreshSession: vi.fn(),
         },
     } as unknown as AtlasDiscoveryService;
 }

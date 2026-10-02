@@ -3,36 +3,38 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+import { beforeEach, describe, expect, it, vi, type Mock } from 'vitest';
+
 import { type IActionContext, type IAzureQuickPickItem } from '@microsoft/vscode-azext-utils';
 
-const mockShowWarningMessage = jest.fn();
-const mockShowInformationMessage = jest.fn();
-const mockShowErrorMessage = jest.fn();
-const mockShowOpenDialog = jest.fn();
-const mockShowTextDocument = jest.fn();
-const mockOpenTextDocument = jest.fn();
-const mockReadText = jest.fn(async (): Promise<string> => '');
-const mockDescribeDefaultKubeconfigPath = jest.fn(() => '~/.kube/config');
-const mockResolveKubeconfigPath = jest.fn(() => '/home/test/.kube/config');
-const mockLoadKubeConfig = jest.fn();
-const mockGetContexts = jest.fn((): { name: string }[] => []);
-const mockTryAddDefaultSource = jest.fn();
-const mockTryAddFileSource = jest.fn();
-const mockTryAddInlineSource = jest.fn();
-const mockExistsSync = jest.fn();
-const mockHomedir = jest.fn(() => '/home/test');
-const mockRefreshKubernetesRoot = jest.fn();
-const mockRevealKubernetesSource = jest.fn();
+const mockShowWarningMessage = vi.fn();
+const mockShowInformationMessage = vi.fn();
+const mockShowErrorMessage = vi.fn();
+const mockShowOpenDialog = vi.fn();
+const mockShowTextDocument = vi.fn();
+const mockOpenTextDocument = vi.fn();
+const mockReadText = vi.fn(async (): Promise<string> => '');
+const mockDescribeDefaultKubeconfigPath = vi.fn(() => '~/.kube/config');
+const mockResolveKubeconfigPath = vi.fn(() => '/home/test/.kube/config');
+const mockLoadKubeConfig = vi.fn();
+const mockGetContexts = vi.fn((): { name: string }[] => []);
+const mockTryAddDefaultSource = vi.fn();
+const mockTryAddFileSource = vi.fn();
+const mockTryAddInlineSource = vi.fn();
+const mockExistsSync = vi.fn();
+const mockHomedir = vi.fn(() => '/home/test');
+const mockRefreshKubernetesRoot = vi.fn();
+const mockRevealKubernetesSource = vi.fn();
 
-jest.mock('vscode', () => ({
+vi.mock('vscode', () => ({
     Uri: {
-        file: jest.fn((fsPath: string) => ({ fsPath, scheme: 'file' })),
+        file: vi.fn((fsPath: string) => ({ fsPath, scheme: 'file' })),
     },
     ThemeIcon: class ThemeIcon {
         constructor(public readonly id: string) {}
     },
     l10n: {
-        t: jest.fn((message: string, ...values: string[]) =>
+        t: vi.fn((message: string, ...values: string[]) =>
             values.reduce<string>((acc, v, i) => acc.replace(`{${String(i)}}`, v), message),
         ),
     },
@@ -53,42 +55,42 @@ jest.mock('vscode', () => ({
     },
 }));
 
-jest.mock('fs', () => ({
+vi.mock('fs', () => ({
     existsSync: (...args: unknown[]) => mockExistsSync(...args),
 }));
 
-jest.mock('os', () => ({
+vi.mock('os', () => ({
     homedir: () => mockHomedir(),
 }));
 
-jest.mock('@microsoft/vscode-azext-utils', () => ({
+vi.mock('@microsoft/vscode-azext-utils', () => ({
     UserCancelledError: class UserCancelledError extends Error {},
 }));
 
-jest.mock('../../../extensionVariables', () => ({
+vi.mock('../../../extensionVariables', () => ({
     ext: {
         outputChannel: {
-            appendLine: jest.fn(),
-            error: jest.fn(),
-            warn: jest.fn(),
+            appendLine: vi.fn(),
+            error: vi.fn(),
+            warn: vi.fn(),
         },
     },
 }));
 
-jest.mock('../kubernetesClient', () => ({
+vi.mock('../kubernetesClient', () => ({
     describeDefaultKubeconfigPath: () => mockDescribeDefaultKubeconfigPath(),
     resolveKubeconfigPath: () => mockResolveKubeconfigPath(),
     loadKubeConfig: (...args: unknown[]) => mockLoadKubeConfig(...args),
     getContexts: (...args: unknown[]) => mockGetContexts(...(args as [])),
 }));
 
-jest.mock('../sources/sourceStore', () => ({
+vi.mock('../sources/sourceStore', () => ({
     tryAddDefaultSource: () => mockTryAddDefaultSource(),
     tryAddFileSource: (...args: unknown[]) => mockTryAddFileSource(...args),
     tryAddInlineSource: (...args: unknown[]) => mockTryAddInlineSource(...args),
 }));
 
-jest.mock('./refreshKubernetesRoot', () => ({
+vi.mock('./refreshKubernetesRoot', () => ({
     refreshKubernetesRoot: () => mockRefreshKubernetesRoot(),
     revealKubernetesSource: (...args: unknown[]) => mockRevealKubernetesSource(...args),
 }));
@@ -100,7 +102,7 @@ import { addKubeconfigSource } from './addKubeconfigSource';
 type AddBranch = 'default' | 'file' | 'inline';
 
 interface MockUi {
-    readonly showQuickPick: jest.Mock;
+    readonly showQuickPick: Mock;
 }
 
 function makeContext(ui: MockUi): IActionContext {
@@ -116,7 +118,7 @@ let capturedPicks: IAzureQuickPickItem<AddBranch>[] = [];
 
 function createCapturingUi(): MockUi {
     return {
-        showQuickPick: jest.fn((picks: IAzureQuickPickItem<AddBranch>[]) => {
+        showQuickPick: vi.fn((picks: IAzureQuickPickItem<AddBranch>[]) => {
             capturedPicks = picks;
             throw new UserCancelledError();
         }),
@@ -125,7 +127,7 @@ function createCapturingUi(): MockUi {
 
 beforeEach(() => {
     capturedPicks = [];
-    jest.clearAllMocks();
+    vi.clearAllMocks();
     mockDescribeDefaultKubeconfigPath.mockReturnValue('~/.kube/config');
     mockResolveKubeconfigPath.mockReturnValue('/home/test/.kube/config');
     mockHomedir.mockReturnValue('/home/test');
@@ -196,7 +198,7 @@ describe('addKubeconfigSource pickBranch picker items', () => {
 
 function createInlineSelectingUi(): MockUi {
     return {
-        showQuickPick: jest.fn((picks: IAzureQuickPickItem<AddBranch>[]) => {
+        showQuickPick: vi.fn((picks: IAzureQuickPickItem<AddBranch>[]) => {
             const inlineItem = picks.find((p: IAzureQuickPickItem<AddBranch>) => p.data === 'inline');
             return inlineItem;
         }),
@@ -205,7 +207,7 @@ function createInlineSelectingUi(): MockUi {
 
 function createFileSelectingUi(): MockUi {
     return {
-        showQuickPick: jest.fn((picks: IAzureQuickPickItem<AddBranch>[]) => {
+        showQuickPick: vi.fn((picks: IAzureQuickPickItem<AddBranch>[]) => {
             const fileItem = picks.find((p: IAzureQuickPickItem<AddBranch>) => p.data === 'file');
             return fileItem;
         }),
@@ -214,7 +216,7 @@ function createFileSelectingUi(): MockUi {
 
 function createDefaultSelectingUi(): MockUi {
     return {
-        showQuickPick: jest.fn((picks: IAzureQuickPickItem<AddBranch>[]) => {
+        showQuickPick: vi.fn((picks: IAzureQuickPickItem<AddBranch>[]) => {
             const defaultItem = picks.find((p: IAzureQuickPickItem<AddBranch>) => p.data === 'default');
             return defaultItem;
         }),
