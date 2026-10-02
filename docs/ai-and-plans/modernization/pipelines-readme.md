@@ -45,6 +45,11 @@ the operator-run ADO build and the G0 manual checklist remain outstanding.
 
 All of them install from **public npmjs**: there is no `.npmrc` at the repository root.
 
+Stage 1 temporarily makes every checkout in `main.yml` use the PR head SHA (or `github.sha`
+for push/manual runs), not GitHub's synthetic PR merge ref. This keeps the packaged artifact
+and L1 baseline on the same `v0.11.0` lockfile as local/ADO builds. The orchestrator made this
+decision while the operator was unavailable; review it at G1-3 and revisit it before G6.
+
 ### Azure DevOps (`.azure-pipelines/`)
 
 All four extend the OneBranch governed templates (`v2/OneBranch.Official.CrossPlat.yml`, or the

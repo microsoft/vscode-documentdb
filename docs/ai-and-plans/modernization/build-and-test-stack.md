@@ -609,6 +609,9 @@ plugin in a real editor; Kubernetes, Atlas and Azure discovery against real back
       lockfile regeneration again found **0 fresh** (root **1,745 / 1,580**, API **116 / 106**),
       both exit 0, with no lookup failures. One existing root git/private/unpublished entry has
       no registry publish time. No pins or overrides were needed; the API lockfile is unchanged.
+      The resumed-stage rescan also passed at **2026-10-02 12:52 UTC**, with the same
+      **1,745 / 1,580** root and **116 / 106** API counts and **0 fresh**; no dependency manifest
+      or lockfile changed for the checkout fix.
   - Point `npm test` at the unit tests.
     - **Completed in `521fb828`:** delegates
       to `npm run jesttest --`, preserving its
@@ -627,6 +630,51 @@ plugin in a real editor; Kubernetes, Atlas and Azure discovery against real back
   - Dev loop: `watch:views` fails on a tree without `dist/views.js`. Run `npm run webpack-dev-wv`
     once first (see the known limitation under Stage 0).
     - **Skipped:** no dev watch or UI loop was needed for this harness-only stage.
+  - **Additional Stage 1 task: build the PR head in CI, not the merge ref.**
+    - **Temporary deviation decided by the orchestrator (2026-10-02; operator unavailable):**
+      every `actions/checkout` in `.github/workflows/main.yml` uses
+      `ref: ${{ github.event.pull_request.head.sha || github.sha }}`. This aligns code-quality,
+      package, L1 and L3 jobs with the branch tree, its baseline and the ADO build; push/manual
+      runs still use `github.sha`. This is not operator approval: **flag for G1-3**.
+    - **Evidence supplied by the orchestrator:** after the `v0.11.0` re-baseline at `266aa693`,
+      CI runs [37000503342](https://github.com/microsoft/vscode-documentdb/actions/runs/37000503342),
+      [37001468831](https://github.com/microsoft/vscode-documentdb/actions/runs/37001468831) and
+      [37004033067](https://github.com/microsoft/vscode-documentdb/actions/runs/37004033067) all
+      failed L1 with `extension/playgroundWorker.js: size 6555531 differs from 7443125`.
+      PR CI checked out GitHub's `refs/pull/880/merge`, installing `main`'s Dependabot
+      `browserslist` **4.29.3** and `caniuse-lite` **1.0.30001814** from #989. Local verification,
+      the baseline and ADO use the branch's `v0.11.0` lockfile and `caniuse-lite`
+      **1.0.30001790**, which bundles the larger worker. Stage 1 run `37007434324` reproduced
+      the same merge-ref mismatch with its own slightly smaller worker, recorded below.
+    - **Alternatives considered and rejected:** (a) regenerate the baseline from CI's merge-ref
+      artifact, rejected because local/ADO verification would then fail and the baseline would
+      track `main`'s unquarantined lockfile; (b) wait until the Dependabot versions leave quarantine
+      on **2026-10-07**, rejected because it blocks Stages 1 to 3. No baseline or tolerance change
+      is allowed or made.
+    - **Scope check:** inspected all seven workflows. Only `main.yml` runs L1/L3 or uses the
+      packaged-artifact baseline. `seed-build-cache.yml` has a separate build-size cache
+      comparison, runs only on manual dispatch and already uses the selected branch; it needs
+      no change. The five other workflows do not run these artifact checks. No other workflow
+      is changed.
+    - **Completed in the dedicated checkout-policy commit (hash follows in the record commit):**
+      all four CI checkouts now select the same PR
+      head. Verification and pushed-head CI proof confirmation follow below. **Revisit before
+      G6**, when the branch takes `main`'s lockfile; this is a temporary checkout policy, not a
+      decision to drop merge-integration checks permanently. This does not authorize merging or
+      rebasing onto `main` during this run.
+    - **Local verification passed:** parsed the old/new YAML and asserted that all four checkout
+      refs equal the requested expression, with the entire remaining workflow unchanged.
+      The first probe could not resolve `yaml`; reran successfully using already-installed
+      `js-yaml`, without adding dependencies. Confirmed the branch lockfile still has
+      `browserslist` **4.28.2** and `caniuse-lite` **1.0.30001790**.
+      Reran `npm run build`, full Jest (**295 suites / 4,582 tests / 4 snapshots**, 38.021 s),
+      `npm run package`, L1 inspection and all four failure proofs, plus `npm run test:verification`
+      (**32 Node tests; 3 Jest suites / 45 tests**). All passed on Node 22.18.0 / npm 10.9.3;
+      production webpack retained its existing performance warnings. Changed-file Prettier and
+      lint passed. The VSIX still has **124 files** and passes the original size tolerance;
+      no baseline, tolerance, verification-tooling or production-source file changed for this fix.
+      **Pending:** normally push and confirm CI actually checks out the pushed head and logs all
+      four L1 rejection proofs plus `L3 PASS` and `L3 PROOF PASS`.
 - **Automated verification:** L0; L1 (the VSIX contents must not change); L3.
   - **Local L0 passed:** `npm run build` passed before and after dependency pruning.
     Post-change full Jest passed **295 suites / 4,582 tests / 4 snapshots** (Node 22.18.0,
@@ -635,16 +683,17 @@ plugin in a real editor; Kubernetes, Atlas and Azure discovery against real back
     suppression or TypeScript upgrade was added (Stage 6 owns that).
     A final build/full Jest rerun after the lint fix also passed **295 suites / 4,582 tests /
     4 snapshots** (38.199 s).
-  - **Local artifact checks passed:** `npm run package`, `npm run verify:vsix --
-vscode-documentdb-0.11.0.vsix`, `npm run prove:vsix -- vscode-documentdb-0.11.0.vsix` and
-    `npm run test:verification`. The archive file list is identical: **124 entries**; VSIX
+  - **Local artifact checks passed:** `npm run package`, `npm run verify:vsix` and
+    `npm run prove:vsix` with `vscode-documentdb-0.11.0.vsix`, and `npm run test:verification`.
+    The archive file list is identical: **124 entries**; VSIX
     **9,597,420 -> 9,596,077 bytes**. Only `extension/main.js` (**4,761,367 -> 4,757,299**),
     `extension/package.json` (**96,079 -> 95,636**) and `extension/playgroundWorker.js`
     (**7,443,125 -> 7,440,948**) changed size, all within L1 tolerance. No baseline or check changed.
     SHA-256: `e133f0167a2bee2327636cfdacd06a5194c0ed806f221f870ced2202fd72b16b`.
     The four local proof lines are `PASS: render-renamed rejected for the expected reason`,
-    `PASS: missing-import rejected for the expected reason`, `PASS: dev-server rejected for the
-expected reason`, `PASS: missing-file rejected for the expected reason`.
+    `PASS: missing-import rejected for the expected reason`,
+    `PASS: dev-server rejected for the expected reason`,
+    `PASS: missing-file rejected for the expected reason`.
     Verification tooling passed **32 Node tests** and **3 Jest suites / 45 tests**.
     Production webpack emitted its existing bundle-size/performance warnings.
   - **Pre-push checks:** changed-file `npx prettier --write` ran. Initial `npm run lint` failed
@@ -680,11 +729,12 @@ expected reason`, `PASS: missing-file rejected for the expected reason`.
       Stage 1; weakening tolerance is forbidden. An exact-head/manual CI run would not resolve
       the failed PR merge-ref artifact check, and changing the workflow's checkout policy needs
       an operator decision not made by this plan. None was executed.
-    - **Completion status:** all implementation tasks and local checks are complete; Stage 1's
-      CI gate is **blocked**, not passed. This documentation-only stop record is committed
-      locally, not pushed, leaving `0bcb9e7e` as the pushed and inspected head. No Stage 2 work,
-      stage review file or PR readiness change follows. The operator must resolve the CI artifact
-      mismatch without weakening L1 before resuming.
+    - **Status at the stop:** all original implementation tasks and local checks were complete;
+      Stage 1's CI gate was **blocked**, not passed. Stop record `299ac50f` and operator
+      clarification `e76e7831` were committed locally, initially unpushed. **Resumed** under the
+      orchestrator's temporary PR-head checkout decision above; the successful rerun must be
+      recorded before Stage 1 is complete. No Stage 2 work, stage review file or PR readiness
+      change is part of this agent's task.
 - **Operator gate G1:** review the dependency and CI diff. No manual UI check is needed. Reviewed
   at the combined checkpoint G1-3 after Stage 3.
 
