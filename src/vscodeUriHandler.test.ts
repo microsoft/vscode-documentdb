@@ -3,16 +3,18 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+import { beforeEach, describe, expect, it, vi, type Mock } from 'vitest';
+
 import * as vscode from 'vscode';
 import { globalUriHandler } from './vscodeUriHandler';
 
 /** Telemetry recorded by the mocked azext wrapper, so routing decisions can be asserted. */
 let lastTelemetry: Record<string, string> = {};
 let showUrlHandlingConfirmations = true;
-const mockGetAllConnections = jest.fn().mockResolvedValue([]);
+const mockGetAllConnections = vi.fn().mockResolvedValue([]);
 
-jest.mock('@microsoft/vscode-azext-utils', () => ({
-    callWithTelemetryAndErrorHandling: jest.fn(
+vi.mock('@microsoft/vscode-azext-utils', () => ({
+    callWithTelemetryAndErrorHandling: vi.fn(
         async (
             _eventName: string,
             callback: (ctx: { telemetry: { properties: Record<string, string> }; valuesToMask: string[] }) => unknown,
@@ -31,28 +33,28 @@ jest.mock('@microsoft/vscode-azext-utils', () => ({
     parseError: (error: unknown) => ({ message: error instanceof Error ? error.message : String(error) }),
 }));
 
-const mockOpenLocalQuickStart = jest.fn().mockResolvedValue(undefined);
-jest.mock('./commands/localQuickStart/openLocalQuickStart', () => ({
+const mockOpenLocalQuickStart = vi.fn().mockResolvedValue(undefined);
+vi.mock('./commands/localQuickStart/openLocalQuickStart', () => ({
     openLocalQuickStart: (...args: unknown[]) => mockOpenLocalQuickStart(...args),
 }));
 
 // The connect path pulls in storage, the tree, and the collection view. None of it is reached by
 // these tests — `connect` is asserted by the point at which it refuses, which is parameter
 // validation — but the imports still have to resolve.
-jest.mock('./commands/openCollectionView/openCollectionView', () => ({ openCollectionViewInternal: jest.fn() }));
-jest.mock('./services/connectionStorageService', () => ({
+vi.mock('./commands/openCollectionView/openCollectionView', () => ({ openCollectionViewInternal: vi.fn() }));
+vi.mock('./services/connectionStorageService', () => ({
     ConnectionStorageService: { getAll: (...args: unknown[]) => mockGetAllConnections(...args) },
     ConnectionType: { Clusters: 'clusters', Emulators: 'emulators' },
     ItemType: { Cluster: 'cluster' },
 }));
-jest.mock('./services/legacyEmulatorMigration', () => ({ isLegacyEmulatorMigrationComplete: () => true }));
-jest.mock('./tree/connections-view/connectionsViewHelpers', () => ({
-    buildConnectionsViewTreePath: jest.fn(),
-    revealInConnectionsView: jest.fn(),
-    waitForConnectionsViewReady: jest.fn(),
-    withConnectionsViewProgress: jest.fn(),
+vi.mock('./services/legacyEmulatorMigration', () => ({ isLegacyEmulatorMigrationComplete: () => true }));
+vi.mock('./tree/connections-view/connectionsViewHelpers', () => ({
+    buildConnectionsViewTreePath: vi.fn(),
+    revealInConnectionsView: vi.fn(),
+    waitForConnectionsViewReady: vi.fn(),
+    withConnectionsViewProgress: vi.fn(),
 }));
-jest.mock('./extensionVariables', () => ({
+vi.mock('./extensionVariables', () => ({
     ext: { settingsKeys: { showUrlHandlingConfirmations: 'showUrlHandlingConfirmations' } },
 }));
 
@@ -71,14 +73,14 @@ async function runHandler(path: string, query: string = ''): Promise<Error | und
 }
 
 beforeEach(() => {
-    jest.clearAllMocks();
+    vi.clearAllMocks();
     lastTelemetry = {};
     showUrlHandlingConfirmations = true;
     mockGetAllConnections.mockResolvedValue([]);
-    (vscode.workspace.getConfiguration as jest.Mock).mockReturnValue({
-        get: jest.fn(() => showUrlHandlingConfirmations),
+    (vscode.workspace.getConfiguration as Mock).mockReturnValue({
+        get: vi.fn(() => showUrlHandlingConfirmations),
     });
-    (vscode.window.showInformationMessage as jest.Mock).mockResolvedValue('Open setup');
+    (vscode.window.showInformationMessage as Mock).mockResolvedValue('Open setup');
 });
 
 describe('globalUriHandler — route parsing', () => {
@@ -172,7 +174,7 @@ describe('globalUriHandler — local confirmation', () => {
     });
 
     it('does not open the setup wizard when the confirmation is dismissed', async () => {
-        (vscode.window.showInformationMessage as jest.Mock).mockResolvedValue(undefined);
+        (vscode.window.showInformationMessage as Mock).mockResolvedValue(undefined);
 
         const error = await runHandler('/local');
 
@@ -193,7 +195,7 @@ describe('globalUriHandler — local confirmation', () => {
 
 describe('globalUriHandler — connection confirmation', () => {
     it('identifies a new target using separate lines without exposing its password', async () => {
-        (vscode.window.showInformationMessage as jest.Mock).mockResolvedValue(undefined);
+        (vscode.window.showInformationMessage as Mock).mockResolvedValue(undefined);
         const connectionString = encodeURIComponent('mongodb://user:secret@alpha.example:27017/sales');
 
         await runHandler('/connect', `connectionString=${connectionString}&collection=orders`);
@@ -212,7 +214,7 @@ describe('globalUriHandler — connection confirmation', () => {
             },
             'Yes, continue',
         );
-        expect(JSON.stringify((vscode.window.showInformationMessage as jest.Mock).mock.calls)).not.toContain('secret');
+        expect(JSON.stringify((vscode.window.showInformationMessage as Mock).mock.calls)).not.toContain('secret');
     });
 
     it('identifies an existing connection by its saved name with destination lines', async () => {
@@ -224,7 +226,7 @@ describe('globalUriHandler — connection confirmation', () => {
                 secrets: { connectionString },
             },
         ]);
-        (vscode.window.showInformationMessage as jest.Mock).mockResolvedValue(undefined);
+        (vscode.window.showInformationMessage as Mock).mockResolvedValue(undefined);
 
         await runHandler('/connect', `connectionString=${encodeURIComponent(connectionString)}&collection=orders`);
 
@@ -236,7 +238,7 @@ describe('globalUriHandler — connection confirmation', () => {
             }),
             'Yes, open connection',
         );
-        expect(JSON.stringify((vscode.window.showInformationMessage as jest.Mock).mock.calls)).not.toContain('secret');
+        expect(JSON.stringify((vscode.window.showInformationMessage as Mock).mock.calls)).not.toContain('secret');
     });
 });
 
@@ -253,7 +255,7 @@ describe('globalUriHandler — connection target validation', () => {
     });
 
     it('accepts the database in the connection-string path as the collection dependency', async () => {
-        (vscode.window.showInformationMessage as jest.Mock).mockResolvedValue(undefined);
+        (vscode.window.showInformationMessage as Mock).mockResolvedValue(undefined);
         const connectionString = encodeURIComponent('mongodb://alpha.example:27017/sales');
 
         const error = await runHandler('/connect', `connectionString=${connectionString}&collection=orders`);

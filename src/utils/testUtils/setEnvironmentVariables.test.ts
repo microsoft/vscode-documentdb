@@ -3,15 +3,20 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
 import { setEnvironmentVariables } from './setEnvironmentVariables';
 
 describe('setEnvironmentVariables', () => {
+    const originalEnvironment = process.env;
+
     beforeEach(() => {
-        jest.replaceProperty(process, 'env', { ...process.env, DOCUMENTDB_TEST_EXISTING: 'original' });
+        process.env = { ...process.env, DOCUMENTDB_TEST_EXISTING: 'original' };
     });
 
     afterEach(() => {
-        jest.restoreAllMocks();
+        process.env = originalEnvironment;
+        vi.restoreAllMocks();
     });
 
     it('temporarily replaces an existing value and restores it on disposal', () => {

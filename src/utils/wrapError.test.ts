@@ -3,12 +3,14 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+import { describe, expect, it, vi } from 'vitest';
+
 import * as os from 'os';
 import type * as vscode from 'vscode';
 import { wrapError } from './wrapError';
 
-jest.mock('vscode', () => ({
-    ...jest.requireActual<typeof vscode>('../__mocks__/vscode'),
+vi.mock('vscode', async () => ({
+    ...(await vi.importActual<typeof vscode>('vscode')),
     CancellationError: class extends Error {},
 }));
 

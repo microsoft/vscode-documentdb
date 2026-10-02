@@ -3,28 +3,30 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+import { afterEach, describe, expect, it, vi } from 'vitest';
+
 import * as vscode from 'vscode';
 import { settingsKeys } from '../../settingsKeys';
 import { getConfirmationAsInSettings, resolveConfirmationWord } from './getConfirmation';
 
 describe('getConfirmationAsInSettings', () => {
     afterEach(() => {
-        jest.restoreAllMocks();
-        jest.clearAllMocks();
+        vi.restoreAllMocks();
+        vi.clearAllMocks();
     });
 
     it.each([undefined, 'buttonConfirmation'])('reads only the current key with value %s', async (configuredValue) => {
-        const get = jest.fn((key: string, fallback?: unknown): unknown => {
+        const get = vi.fn((key: string, fallback?: unknown): unknown => {
             if (key === settingsKeys.confirmationStyle && configuredValue !== undefined) {
                 return configuredValue;
             }
             return fallback;
         });
-        jest.spyOn(vscode.workspace, 'getConfiguration').mockReturnValue({
+        vi.spyOn(vscode.workspace, 'getConfiguration').mockReturnValue({
             get,
         } as unknown as vscode.WorkspaceConfiguration);
-        const showInputBox = jest.spyOn(vscode.window, 'showInputBox').mockResolvedValue('collection');
-        const showWarningMessage = jest.spyOn(vscode.window, 'showWarningMessage').mockResolvedValue(undefined);
+        const showInputBox = vi.spyOn(vscode.window, 'showInputBox').mockResolvedValue('collection');
+        const showWarningMessage = vi.spyOn(vscode.window, 'showWarningMessage').mockResolvedValue(undefined);
 
         await getConfirmationAsInSettings('Delete collection', 'Confirm deletion', 'collection');
 

@@ -3,11 +3,13 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+
 import { type sendRequestWithTimeout } from '@microsoft/vscode-azext-azureutils';
 import { type IActionContext } from '@microsoft/vscode-azext-utils';
 import { getPublicIpv4, isIpInRanges } from './getIp';
 
-jest.mock('@microsoft/vscode-azext-azureutils', () => ({
+vi.mock('@microsoft/vscode-azext-azureutils', () => ({
     sendRequestWithTimeout: (...args: Parameters<typeof sendRequestWithTimeout>): Promise<{ bodyAsText?: string }> =>
         request(...args),
 }));
@@ -17,15 +19,15 @@ const context: IActionContext = {
     errorHandling: { issueProperties: {} },
     valuesToMask: [],
     ui: {
-        onDidFinishPrompt: jest.fn(),
-        showQuickPick: jest.fn(),
-        showInputBox: jest.fn(),
-        showWarningMessage: jest.fn(),
-        showOpenDialog: jest.fn(),
-        showWorkspaceFolderPick: jest.fn(),
+        onDidFinishPrompt: vi.fn(),
+        showQuickPick: vi.fn(),
+        showInputBox: vi.fn(),
+        showWarningMessage: vi.fn(),
+        showOpenDialog: vi.fn(),
+        showWorkspaceFolderPick: vi.fn(),
     },
 };
-const request = jest.fn<Promise<{ bodyAsText?: string }>, Parameters<typeof sendRequestWithTimeout>>();
+const request = vi.fn<(...args: Parameters<typeof sendRequestWithTimeout>) => Promise<{ bodyAsText?: string }>>();
 
 describe('getIp', () => {
     beforeEach(() => {
