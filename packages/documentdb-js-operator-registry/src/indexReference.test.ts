@@ -10,7 +10,7 @@ import { describe, expect, test } from 'vitest';
  * page's "Index types" and "Index properties" tables).
  */
 
-import { INDEX_PROPERTIES, INDEX_TYPES } from './index';
+import { INDEX_PROPERTIES, INDEX_TYPES } from './index.js';
 
 describe('index reference', () => {
     test('exposes the documented index types', () => {

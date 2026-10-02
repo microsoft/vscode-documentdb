@@ -10,7 +10,7 @@
  * and optional BSON type constraints.
  */
 
-import { type CompletionFilter, type OperatorEntry } from './types';
+import { type CompletionFilter, type OperatorEntry } from './types.js';
 
 /**
  * Internal registry of all operator entries. Populated by the

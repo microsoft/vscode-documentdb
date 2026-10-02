@@ -1,20 +1,28 @@
 {
   "name": "@documentdb-js/operator-registry",
-  "version": "0.8.1",
+  "version": "0.9.0",
   "description": "Static operator metadata for DocumentDB-supported operators, stages, accumulators, and BSON constructors",
+  "type": "module",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./package.json": "./package.json"
+  },
   "files": [
     "dist"
   ],
   "scripts": {
-    "build": "tsc -p . && tsc -p tsconfig.scripts.json --noEmit",
+    "build": "tsc -p . && tsc -p scripts --noEmit",
     "clean": "rimraf dist tsconfig.tsbuildinfo",
     "test": "vitest run --config ../../vitest.config.ts --project documentdb-js-operator-registry",
     "prettier-fix": "prettier -w \"(scripts|src)/**/*.@(js|ts|jsx|tsx|json|md)\" \"./*.@(js|ts|jsx|tsx|json|md)\"",
-    "scrape": "ts-node scripts/scrape-operator-docs.ts && prettier --write resources/scraped/operator-reference.md resources/scraped/index-reference.md",
-    "generate": "ts-node scripts/generate-from-reference.ts",
-    "evaluate": "ts-node scripts/evaluate-overrides.ts"
+    "scrape": "tsx scripts/scrape-operator-docs.ts && prettier --write resources/scraped/operator-reference.md resources/scraped/index-reference.md",
+    "generate": "tsx scripts/generate-from-reference.ts",
+    "evaluate": "tsx scripts/evaluate-overrides.ts"
   },
   "repository": {
     "type": "git",
@@ -24,5 +32,8 @@
   "license": "MIT",
   "publishConfig": {
     "access": "public"
+  },
+  "engines": {
+    "node": ">=22.18.0"
   }
 }

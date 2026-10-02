@@ -9,7 +9,7 @@ import { describe, expect, test } from 'vitest';
  * Unit tests for the parseOperatorReference helper.
  */
 
-import { parseOperatorReference } from './parseOperatorReference';
+import { parseOperatorReference } from './parseOperatorReference.js';
 
 describe('parseOperatorReference', () => {
     test('parses a minimal dump with one category and one operator', () => {

@@ -12,10 +12,10 @@
 //
 // To change operator data, edit the overrides/snippets files and re-run the generator.
 
-import { getDocLink } from './docLinks';
-import { registerOperators } from './getFilteredCompletions';
-import { META_ACCUMULATOR } from './metaTags';
-import { type OperatorEntry } from './types';
+import { getDocLink } from './docLinks.js';
+import { registerOperators } from './getFilteredCompletions.js';
+import { META_ACCUMULATOR } from './metaTags.js';
+import { type OperatorEntry } from './types.js';
 
 // ---------------------------------------------------------------------------
 // Accumulators ($group, $bucket, $bucketAuto, $setWindowFields)

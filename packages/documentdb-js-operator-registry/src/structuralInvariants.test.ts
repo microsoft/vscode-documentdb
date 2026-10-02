@@ -12,7 +12,7 @@ import { describe, expect, test } from 'vitest';
  * consistent meta tags, and reasonable values.
  */
 
-import { ALL_META_TAGS, getAllCompletions, type OperatorEntry } from './index';
+import { ALL_META_TAGS, getAllCompletions, type OperatorEntry } from './index.js';
 
 const allOperators = getAllCompletions();
 

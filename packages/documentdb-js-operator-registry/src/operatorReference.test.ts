@@ -18,10 +18,10 @@ import { describe, expect, test } from 'vitest';
 
 import * as fs from 'fs';
 import * as path from 'path';
-import { getAllCompletions } from './index';
-import { parseOperatorReference } from './parseOperatorReference';
+import { getAllCompletions } from './index.js';
+import { parseOperatorReference } from './parseOperatorReference.js';
 
-const dumpPath = path.join(__dirname, '..', 'resources', 'scraped', 'operator-reference.md');
+const dumpPath = path.join(import.meta.dirname, '..', 'resources', 'scraped', 'operator-reference.md');
 const dumpContent = fs.readFileSync(dumpPath, 'utf-8');
 const parsed = parseOperatorReference(dumpContent);
 const referenceOperators = parsed.operators;
@@ -150,7 +150,7 @@ describe('operator reference verification', () => {
 //   - An override targets a non-existent operator
 // ---------------------------------------------------------------------------
 
-const overridesPath = path.join(__dirname, '..', 'resources', 'overrides', 'operator-overrides.md');
+const overridesPath = path.join(import.meta.dirname, '..', 'resources', 'overrides', 'operator-overrides.md');
 const overridesContent = fs.readFileSync(overridesPath, 'utf-8');
 const parsedOverrides = parseOperatorReference(overridesContent);
 const overrideOperators = parsedOverrides.operators;

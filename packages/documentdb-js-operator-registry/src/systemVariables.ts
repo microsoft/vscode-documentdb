@@ -12,9 +12,9 @@
 //
 // To change operator data, edit the overrides/snippets files and re-run the generator.
 
-import { registerOperators } from './getFilteredCompletions';
-import { META_VARIABLE } from './metaTags';
-import { type OperatorEntry } from './types';
+import { registerOperators } from './getFilteredCompletions.js';
+import { META_VARIABLE } from './metaTags.js';
+import { type OperatorEntry } from './types.js';
 
 // ---------------------------------------------------------------------------
 // Variables in Aggregation Expressions

@@ -23,7 +23,7 @@
     },
     "jsx": "react-jsx"
   },
-  "exclude": ["node_modules", ".vscode-test", "packages/*/dist"],
+  "exclude": ["node_modules", ".vscode-test", "packages/*/dist", "packages/documentdb-js-operator-registry/scripts"],
   "references": [
     { "path": "packages/documentdb-js-schema-analyzer" },
     { "path": "packages/documentdb-js-operator-registry" },

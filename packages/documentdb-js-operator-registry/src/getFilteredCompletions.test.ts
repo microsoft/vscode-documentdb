@@ -20,7 +20,7 @@ import {
     getAllCompletions,
     getFilteredCompletions,
     loadOperators,
-} from './index';
+} from './index.js';
 
 describe('getFilteredCompletions', () => {
     test('returns all operators when filtering by all top-level meta prefixes', () => {

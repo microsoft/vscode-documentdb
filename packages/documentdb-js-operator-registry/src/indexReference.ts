@@ -10,7 +10,7 @@
 //
 // To change index data, re-run the scraper (npm run scrape) then the generator.
 
-import { type IndexReferenceEntry } from './types';
+import { type IndexReferenceEntry } from './types.js';
 
 export const INDEX_TYPES: readonly IndexReferenceEntry[] = [
     { name: 'Single Field', description: 'Indexes a single field for faster lookups.', supported: true },
