@@ -647,15 +647,41 @@ expected reason`, `PASS: missing-file rejected for the expected reason`.
   - **Pre-push checks:** changed-file `npx prettier --write` ran. Initial `npm run lint` failed
     on two inline `import()` type annotations in the new mocks; switched them to namespace type
     imports. Lint and the **8-suite / 89-test** targeted rerun then passed.
-  - **Pending:** pushed-head CI L1/L3 proof confirmation. A preceding Stage 0 run
+  - **Preceding CI limitation:** a preceding Stage 0 run
     [37004033067](https://github.com/microsoft/vscode-documentdb/actions/runs/37004033067)
     failed L1: `extension/playgroundWorker.js` was **6,555,531 bytes**, versus the committed
     **7,443,125-byte** baseline (allowed delta **744,313**); L3 passed. This is not claimed as
     Stage 1 evidence, and no speculative fix or baseline regeneration was attempted.
-    Any Stage 1 L1 failure stops this stage. No L2 UI pass is required by this stage, and none
+    No L2 UI pass is required by this stage, and none
     is claimed. Case 1 plus the requested stage checks applies; full Case 2 (including
     repository-wide `prettier-fix`) remains deferred until ready for review. No localization
     strings changed; `npm run l10n` was not run.
+  - **STOPPED on CI L1 (2026-10-02):** implementation `521fb828` and inline-record follow-up
+    `0bcb9e7e` were normally pushed; `gh run watch --exit-status` returned 1 for
+    [37007434324](https://github.com/microsoft/vscode-documentdb/actions/runs/37007434324),
+    whose reported head is `0bcb9e7e1c978fb5b92e692eeffabb7a5b1d9fc8`.
+    Code quality (including lint/Prettier), **295 Jest suites / 4,582 tests**, packaging and L3
+    passed. L1 verification tooling passed, but artifact inspection failed:
+    `extension/playgroundWorker.js: size 6553354 differs from 7443125 by more than 744313 bytes`.
+    The delta is **-889,771 bytes**, outside the existing tolerance. No L1 baseline was regenerated.
+    The four L1 expected-rejection proof lines are **absent**: inspection failed before
+    `prove:vsix` ran. The two actual L3 log lines are:
+    - `L3 PASS: installed VSIX activated, final commands registered, and DocumentDB activation logs are clean.`
+    - `L3 PROOF PASS: activation and final commands passed; actual logs rejected L3_INJECTED_SWALLOWED_ACTIVATION_ERROR.`
+    - **Observed artifact difference, not a waiver:** CI's checkout log shows synthetic PR merge
+      `b565cbfecd3ffc770bd8888648fbb6a81ea1c6c8` at `refs/remotes/pull/880/merge`, rather than
+      the branch checkout used for the passing local L1 run. The run API records PR base
+      `1380b7582a4d1dbd2861db6ba6ee8aac1c0596c6`. The agent did not merge `main` locally.
+      No checkout change or dependency change was attempted to resolve this mismatch.
+    - **Alternatives considered:** regenerating the L1 baseline is explicitly forbidden in
+      Stage 1; weakening tolerance is forbidden. An exact-head/manual CI run would not resolve
+      the failed PR merge-ref artifact check, and changing the workflow's checkout policy needs
+      an operator decision not made by this plan. None was executed.
+    - **Completion status:** all implementation tasks and local checks are complete; Stage 1's
+      CI gate is **blocked**, not passed. This documentation-only stop record is committed
+      locally, not pushed, leaving `0bcb9e7e` as the pushed and inspected head. No Stage 2 work,
+      stage review file or PR readiness change follows. The operator must resolve the CI artifact
+      mismatch without weakening L1 before resuming.
 - **Operator gate G1:** review the dependency and CI diff. No manual UI check is needed. Reviewed
   at the combined checkpoint G1-3 after Stage 3.
 
