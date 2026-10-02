@@ -884,6 +884,21 @@ plugin in a real editor; Kubernetes, Atlas and Azure discovery against real back
       `npm run build` and targeted Prettier / ESLint passed; assertions unchanged.
       Leftovers: **none**; recipe deviations: **none**. No dependency changes, push, CI activity
       or stage review; CI remains deferred to the orchestrator.
+    - **Phase B B03, `e0a5307a`:** converted **8** `src/commands` tests: no-auth migration,
+      deleteFolder integration, moveItems target-folder prompt, copyConnectionString, copyIndexes
+      manifest, Local Quick Start contributions/commands, and localEndpoint. Vitest **8 files /
+      105 tests**, remaining Jest **235 suites / 3,745 tests**, build and targeted Prettier /
+      ESLint passed; **192** assertions verified unchanged. **8 leftovers**, restored byte-for-byte
+      to Jest: `addConnectionFromRegistry/addConnectionFromRegistry.test.ts`,
+      `addDiscoveryRegistry/ExecuteStep.test.ts`, `connections-view/deleteFolder/VerifyNoConflictsStep.test.ts`,
+      `connections-view/moveItems/VerifyNoConflictsStep.test.ts`, `copyIndexes/copyIndexes.test.ts`,
+      `localQuickStart/openLocalQuickStart.test.ts`, and `newConnection/{ExecuteStep,PromptConnectionStringStep}.test.ts`.
+      All are **other: CommonJS dependencies require `vscode` outside Vitest's alias**; new dependency
+      stubs would alter mock coverage, and shared-harness/config changes are outside Phase B.
+      Mechanical additions to the recipe: typed `vi.fn` signature, mocked-module `require` →
+      static import, and an explicit undefined export preserving Jest's fixture value. Initial
+      Vitest/lint failures were resolved or left on green Jest. No dependency changes, push,
+      CI activity or stage review; CI remains deferred to the orchestrator.
     - **Conversion recipe for Phase B** (also the batch lists' reference):
       1. Take a batch from the batch list; never touch config files. A file moves from Jest to
          Vitest when it imports from `'vitest'`: Jest ignores it from then on and Vitest
