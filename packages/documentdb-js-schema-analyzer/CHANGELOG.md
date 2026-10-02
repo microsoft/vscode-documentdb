@@ -1,5 +1,18 @@
 # Changelog
 
+## 2.0.0
+
+The package is now ESM-only. No API signatures changed.
+
+### Breaking changes
+
+- **ESM-only.** The package declares `"type": "module"` and ships ES modules only, with an `exports` map. Deep imports into `dist/` are no longer allowed; import from `@documentdb-js/schema-analyzer`.
+- **Node.js 22.18 or later.** CommonJS consumers can still `require()` the package: Node supports `require()` of ES modules from 20.19 and 22.12, and the package uses no top-level `await`. The package declares `engines.node` `>=22.18.0`, the floor of the extension that develops it.
+
+### Changed
+
+- Published sourcemaps embed their sources (`inlineSources`).
+
 ## 1.0.0
 
 First release with a stability commitment. The package has been on npm since 0.8.0; from this version on, breaking changes come with a major version bump.

@@ -22,7 +22,7 @@ import {
     UUID,
 } from 'mongodb';
 import { runInNewContext } from 'node:vm';
-import { BSONTypes } from '../src/BSONTypes';
+import { BSONTypes } from '../src/BSONTypes.js';
 
 /**
  * Builds a stand-in for a value created by a second copy of the `bson` package: every

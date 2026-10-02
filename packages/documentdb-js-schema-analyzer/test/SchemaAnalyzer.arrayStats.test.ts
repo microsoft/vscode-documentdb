@@ -6,8 +6,8 @@
 import { describe, expect, it } from 'vitest';
 
 import { ObjectId, type Document, type WithId } from 'mongodb';
-import { type JSONSchema } from '../src/JSONSchema';
-import { SchemaAnalyzer } from '../src/SchemaAnalyzer';
+import { type JSONSchema } from '../src/JSONSchema.js';
+import { SchemaAnalyzer } from '../src/SchemaAnalyzer.js';
 
 /**
  * This test file investigates the array element occurrence/stats problem.
