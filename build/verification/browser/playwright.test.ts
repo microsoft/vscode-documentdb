@@ -10,6 +10,8 @@ interface LocatorFixture {
     click(): Promise<void>;
     fill(value: string): Promise<void>;
     press(key: string): Promise<void>;
+    focus(): Promise<void>;
+    first(): LocatorFixture;
     last(): LocatorFixture;
 }
 
@@ -17,15 +19,18 @@ function fixturePage(report: BrowserReport): IntegratedPage {
     const locator: LocatorFixture = {
         click: jest.fn(async (): Promise<void> => {}), fill: jest.fn(async (): Promise<void> => {}),
         press: jest.fn(async (): Promise<void> => {}),
+        focus: jest.fn(async (): Promise<void> => {}),
+        first: (): LocatorFixture => locator,
         last: (): LocatorFixture => locator,
     };
     return {
-        on: jest.fn(), off: jest.fn(), goto: jest.fn(), waitForFunction: jest.fn(),
+        on: jest.fn(), off: jest.fn(), bringToFront: jest.fn(), goto: jest.fn(), waitForFunction: jest.fn(),
         keyboard: { insertText: jest.fn(async (): Promise<void> => {}) },
         getByRole: jest.fn((): LocatorFixture => locator),
         locator: jest.fn((): LocatorFixture => locator),
         evaluate: jest.fn().mockImplementation(async (operation: () => unknown): Promise<unknown> => {
-            return operation.toString().includes('beginEditorProbe') ? undefined :
+            return operation.toString().includes('navigator.platform') ? 'Control' :
+                operation.toString().includes('beginEditorProbe') ? undefined :
                 operation.toString().includes('stage0Harness.check') ? report : undefined;
         }),
     };
@@ -43,15 +48,19 @@ describe('Stage 0 L2 integrated browser helper', (): void => {
         const page = fixturePage(good);
         const report = await runIntegratedCheck(page, 'http://localhost/stage0/l2/pages/collectionView.html');
         expect(report.verified).toBe(true);
-        expect(page.evaluate).toHaveBeenCalledTimes(3);
+        expect(page.evaluate).toHaveBeenCalledTimes(4);
         expect(page.on).toHaveBeenCalledTimes(4);
         expect(page.off).toHaveBeenCalledTimes(4);
+        expect(page.bringToFront).toHaveBeenCalledTimes(2);
+        expect(page.goto).toHaveBeenCalledWith('http://localhost/stage0/l2/pages/collectionView.html', {
+            waitUntil: 'domcontentloaded', timeout: 60000,
+        });
     });
 
     it('persists and rejects a normal run with CSS regression', async (): Promise<void> => {
         const page = fixturePage({ ...good, errors: ['Style .slick-cell position: expected absolute, got static'] });
         await expect(runIntegratedCheck(page, 'http://localhost/stage0/l2/pages/collectionView.html')).rejects.toThrow('L2 collectionView failed');
-        expect(page.evaluate).toHaveBeenCalledTimes(3);
+        expect(page.evaluate).toHaveBeenCalledTimes(4);
         expect(page.off).toHaveBeenCalledTimes(4);
     });
 
@@ -95,7 +104,8 @@ describe('Stage 0 L2 integrated browser helper', (): void => {
             name: view === 'documentView' ? 'Document Editor: Edit the document in JSON format' : 'Filter: Enter the DocumentDB query filter',
             exact: true,
         });
-        expect(page.waitForFunction).toHaveBeenCalledTimes(3);
+        expect(page.waitForFunction).toHaveBeenCalledTimes(7);
+        expect(page.locator).toHaveBeenCalledWith('.monaco-editor');
         if (view === 'documentView') {
             expect(page.getByRole).toHaveBeenCalledWith('button', { name: 'Reload document from the database', exact: true });
         } else {
@@ -107,5 +117,14 @@ describe('Stage 0 L2 integrated browser helper', (): void => {
         const page = fixturePage({ ...good, worker: undefined });
         await expect(runIntegratedCheck(page, 'http://localhost/stage0/l2/pages/collectionView.html'))
             .rejects.toThrow('Rendered Monaco editor worker proof missing or mismatched');
+    });
+
+    it('preserves an activation or readiness timeout as a failure rather than reporting a passing fixture', async (): Promise<void> => {
+        const page = fixturePage(good);
+        jest.mocked(page.waitForFunction).mockRejectedValueOnce(new Error('Page never became visible'));
+        await expect(runIntegratedCheck(page, 'http://localhost/stage0/l2/pages/collectionView.html'))
+            .rejects.toThrow('settling (activating the browser page): Page never became visible');
+        expect(page.goto).not.toHaveBeenCalled();
+        expect(page.off).toHaveBeenCalledTimes(4);
     });
 });

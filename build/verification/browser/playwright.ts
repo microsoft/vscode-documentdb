@@ -18,9 +18,11 @@ interface BrowserConsole {
     text(): string;
 }
 interface BrowserLocator {
-    click(): Promise<void>;
-    fill(value: string): Promise<void>;
-    press(key: string): Promise<void>;
+    click(options?: { timeout: number }): Promise<void>;
+    fill(value: string, options?: { timeout: number }): Promise<void>;
+    press(key: string, options?: { timeout: number }): Promise<void>;
+    focus(options?: { timeout: number }): Promise<void>;
+    first(): BrowserLocator;
     last(): BrowserLocator;
 }
 
@@ -33,11 +35,12 @@ export interface IntegratedPage {
     off(event: 'pageerror', listener: (error: Error) => void): void;
     off(event: 'requestfailed', listener: (request: BrowserRequest) => void): void;
     off(event: 'response', listener: (response: BrowserResponse) => void): void;
-    goto(url: string, options: { waitUntil: 'networkidle' }): Promise<unknown>;
+    bringToFront(): Promise<void>;
+    goto(url: string, options: { waitUntil: 'domcontentloaded'; timeout: number }): Promise<unknown>;
     getByRole(role: string, options: { name: string; exact?: boolean }): BrowserLocator;
     locator(selector: string): BrowserLocator;
     readonly keyboard: { insertText: (text: string) => Promise<void> };
-    waitForFunction(predicate: () => boolean, argument: undefined, options: { timeout: number }): Promise<unknown>;
+    waitForFunction<A>(predicate: (argument: A) => boolean, argument: A, options: { timeout: number }): Promise<unknown>;
     evaluate<T>(operation: () => T | Promise<T>): Promise<T>;
     evaluate<T, A>(operation: (argument: A) => T | Promise<T>, argument: A): Promise<T>;
 }
@@ -52,6 +55,7 @@ export interface IntegratedReport extends BrowserReport {
 export async function runIntegratedCheck(page: IntegratedPage, url: string, expectedFailure = false): Promise<IntegratedReport> {
     const errors: string[] = [];
     const responses: { url: string; status: number }[] = [];
+    let phase = 'activating the browser page';
     const onConsole = (message: BrowserConsole): void => {
         if (message.type() === 'error' ||
             (message.type() === 'warning' && /worker|preload|content.security|csp/i.test(message.text()))) {
@@ -74,37 +78,82 @@ export async function runIntegratedCheck(page: IntegratedPage, url: string, expe
     page.on('response', onResponse);
     try {
         try {
-            await page.goto(url, { waitUntil: 'networkidle' });
+            const monacoView = url.endsWith('/collectionView.html') || url.endsWith('/documentView.html') ||
+                url.endsWith('/collectionView-broken-css.html');
+            await page.bringToFront();
+            await page.waitForFunction((): boolean => document.visibilityState === 'visible',
+                undefined, { timeout: 60000 });
+            phase = 'loading the production page';
+            await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 60000 });
+            await page.bringToFront();
+            await page.waitForFunction((): boolean => document.visibilityState === 'visible' &&
+                window.stage0Harness !== undefined, undefined, { timeout: 60000 });
+            phase = 'settling fixture content and editor geometry';
             if (url.endsWith('/localQuickStart.html')) {
-                await page.getByRole('button', { name: 'Continue', exact: true }).click();
+                await page.getByRole('button', { name: 'Continue', exact: true }).click({ timeout: 60000 });
             }
             if (url.endsWith('/atlasCredentials.html')) {
-                await page.getByRole('textbox', { name: 'Public Key', exact: true }).fill('stage0-public-key');
-                await page.getByRole('textbox', { name: 'Private Key', exact: true }).fill('stage0-private-key');
-                await page.getByRole('button', { name: 'Verify & Save', exact: true }).click();
+                await page.getByRole('textbox', { name: 'Public Key', exact: true }).fill('stage0-public-key', { timeout: 60000 });
+                await page.getByRole('textbox', { name: 'Private Key', exact: true }).fill('stage0-private-key', { timeout: 60000 });
+                await page.getByRole('button', { name: 'Verify & Save', exact: true }).click({ timeout: 60000 });
             }
-            await page.waitForFunction((): boolean => window.stage0Harness?.ready() === true, undefined, { timeout: 30000 });
-            if (url.endsWith('/collectionView.html') || url.endsWith('/documentView.html') || url.endsWith('/collectionView-broken-css.html')) {
+            await page.waitForFunction((options: { editor: boolean; cssNegative: boolean }): boolean => {
+                if (document.visibilityState !== 'visible' || !window.stage0Harness.ready() || document.fonts.status !== 'loaded') {
+                    return false;
+                }
+                if (!options.editor) {
+                    return true;
+                }
+                const editor = document.querySelector('.monaco-editor');
+                const lines = document.querySelector('.monaco-editor .view-lines');
+                if (!editor || !lines) {
+                    return false;
+                }
+                // Missing CSS is deliberate only in the negative control; normal editor
+                // input must wait for real, nonzero layout rather than an offscreen mount.
+                return options.cssNegative || [editor, lines].every((element): boolean => {
+                    const box = element.getBoundingClientRect();
+                    return box.width > 0 && box.height > 0;
+                });
+            }, { editor: monacoView, cssNegative: expectedFailure }, { timeout: 60000 });
+            if (monacoView) {
                 const documentView = url.endsWith('/documentView.html');
+                const label = documentView ? 'Document Editor: Edit the document in JSON format' : 'Filter: Enter the DocumentDB query filter';
                 const editor = page.getByRole('textbox', {
-                    name: documentView ? 'Document Editor: Edit the document in JSON format' : 'Filter: Enter the DocumentDB query filter',
+                    name: label,
                     exact: true,
                 });
+                const modifier = await page.evaluate((): 'Meta' | 'Control' => /mac/i.test(navigator.platform) ? 'Meta' : 'Control');
+                phase = 'focusing the rendered editor';
+                if (!expectedFailure) {
+                    await page.locator('.monaco-editor').first().click({ timeout: 60000 });
+                }
+                await editor.focus({ timeout: 60000 });
+                await page.waitForFunction((name: string): boolean => document.visibilityState === 'visible' &&
+                    document.hasFocus() && document.activeElement?.getAttribute('aria-label') === name,
+                label, { timeout: 60000 });
+                phase = 'clearing the rendered editor before the probe';
+                await editor.press(`${modifier}+A`, { timeout: 60000 });
+                await editor.press('Backspace', { timeout: 60000 });
+                await page.waitForFunction((): boolean =>
+                    document.querySelector('.monaco-editor .view-lines')?.textContent?.trim() === '',
+                undefined, { timeout: 60000 });
+                phase = 'awaiting the editor-originated worker response';
                 await page.evaluate((): void => window.stage0Harness.beginEditorProbe('stage0_worker_probe'));
-                await editor.press('ControlOrMeta+A');
                 await page.keyboard.insertText('{ "stage0_worker_probe": "left\u200bright", "invalid": }');
-                await page.waitForFunction((): boolean => window.stage0Harness.editorProbeReady(), undefined, { timeout: 15000 });
+                await page.waitForFunction((): boolean => window.stage0Harness.editorProbeReady(), undefined, { timeout: 60000 });
+                phase = 'restoring settled fixture content';
                 if (documentView) {
-                    await page.getByRole('button', { name: 'Reload document from the database', exact: true }).click();
+                    await page.getByRole('button', { name: 'Reload document from the database', exact: true }).click({ timeout: 60000 });
                 } else {
-                    await page.locator('.queryEditorActions button').last().click();
+                    await page.locator('.queryEditorActions button').last().click({ timeout: 60000 });
                 }
                 await page.waitForFunction((): boolean => window.stage0Harness.ready() &&
                     !document.querySelector('.monaco-editor .view-lines')?.textContent?.includes('stage0_worker_probe'),
-                undefined, { timeout: 15000 });
+                undefined, { timeout: 60000 });
             }
         } catch (error) {
-            errors.push(`settling: ${error instanceof Error ? error.message : String(error)}`);
+            errors.push(`settling (${phase}): ${error instanceof Error ? error.message : String(error)}`);
         }
         const browser = await page.evaluate(async (): Promise<BrowserReport> => {
             if (!window.stage0Harness) {
