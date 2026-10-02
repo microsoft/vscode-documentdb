@@ -3,6 +3,8 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+import { describe, expect, it, vi } from 'vitest';
+
 import { SSRProvider } from '@fluentui/react-components';
 import { createElement, type Dispatch, type SetStateAction } from 'react';
 // eslint-disable-next-line import/no-internal-modules -- React DOM exposes server rendering through this public subpath.
@@ -14,21 +16,22 @@ import {
 } from '../../collectionViewContext';
 import { CollectionQueryActionBar, type CollectionQueryActionBarProps } from './CollectionQueryActionBar';
 
-jest.mock('@microsoft/vscode-ext-webview/react', () => ({
-    useConfiguration: () => ({ enableAIQueryGeneration: true }),
-}));
+vi.mock('@microsoft/vscode-ext-webview/react', () => {
+    const useConfiguration = (): { enableAIQueryGeneration: boolean } => ({ enableAIQueryGeneration: true });
+    return { useConfiguration, default: { useConfiguration } };
+});
 
-jest.mock('@vscode/l10n', () => ({
+vi.mock('@vscode/l10n', () => ({
     t: (message: string, ...args: unknown[]): string =>
         args.reduce<string>((result, arg, index) => result.replace(`{${index}}`, String(arg)), message),
 }));
 
-jest.mock('../../../../_integration/useTrpcClient', () => ({
+vi.mock('../../../../_integration/useTrpcClient', () => ({
     useTrpcClient: () => ({}),
 }));
 
 function renderActionBar(variant: CollectionQueryActionBarProps['variant']): string {
-    const setContext = jest.fn() as Dispatch<SetStateAction<CollectionViewContextType>>;
+    const setContext = vi.fn() as Dispatch<SetStateAction<CollectionViewContextType>>;
     return renderToStaticMarkup(
         createElement(
             SSRProvider,

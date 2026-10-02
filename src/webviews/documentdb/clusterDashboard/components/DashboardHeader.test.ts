@@ -3,6 +3,8 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+import { describe, expect, it, vi } from 'vitest';
+
 import { SSRProvider } from '@fluentui/react-components';
 import type * as React from 'react';
 import { createElement, type ReactNode } from 'react';
@@ -13,15 +15,15 @@ import { type ClusterDashboardInfo } from '../clusterDashboardRouter';
 import { buildDetailGroups } from './DashboardDetails';
 import { collectResilienceBadges, DashboardHeader } from './DashboardHeader';
 
-jest.mock('@microsoft/vscode-ext-webview-fluentui/components', () => {
-    const react = jest.requireActual<typeof React>('react');
+vi.mock('@microsoft/vscode-ext-webview-fluentui/components', async () => {
+    const react = await vi.importActual<typeof React>('react');
     return {
         FocusableBadge: ({ children, ...props }: { children: ReactNode; className?: string }): ReactNode =>
             react.createElement('span', { ...props, role: 'group', tabIndex: 0 }, children),
     };
 });
 
-jest.mock('@vscode/l10n', () => ({
+vi.mock('@vscode/l10n', () => ({
     t: (message: string, ...args: unknown[]): string => {
         const substitutions = args[0];
         if (typeof substitutions === 'object' && substitutions !== null) {

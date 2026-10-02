@@ -3,6 +3,8 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+import { describe, expect, it, vi } from 'vitest';
+
 import { createElement, type ReactNode } from 'react';
 // eslint-disable-next-line import/no-internal-modules -- React DOM exposes server rendering through this public subpath.
 import { renderToStaticMarkup } from 'react-dom/server';
@@ -10,17 +12,17 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { type ClusterStorageStats } from '../../../../documentdb/utils/getClusterHealth';
 import { StatusStrip } from './StatusStrip';
 
-jest.mock('@microsoft/vscode-ext-webview-fluentui/components', () => ({
+vi.mock('@microsoft/vscode-ext-webview-fluentui/components', () => ({
     MetricGrid: ({ children }: { children: ReactNode }): ReactNode => children,
 }));
 
-jest.mock('../../collectionView/queryInsightsTab/components/metricsRow', () => {
+vi.mock('../../collectionView/queryInsightsTab/components/metricsRow', () => {
     const metric = ({ label, value }: { label: string; value: string | number | null | undefined }): string =>
         `${label}=${value === null ? 'null' : String(value)};`;
     return { GenericMetric: metric, CountMetric: metric };
 });
 
-jest.mock('@vscode/l10n', () => ({
+vi.mock('@vscode/l10n', () => ({
     t: (message: string, substitutions?: Record<string, unknown>): string =>
         Object.entries(substitutions ?? {}).reduce(
             (result, [key, value]) => result.replace(`{${key}}`, String(value)),

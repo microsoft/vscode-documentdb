@@ -3,14 +3,16 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+import { afterEach, beforeEach, describe, expect, it, vi, type MockInstance } from 'vitest';
+
 import { reportObserverError } from './reportObserverError';
 
 describe('reportObserverError (R766-N05)', () => {
-    let consoleErr: jest.SpyInstance;
+    let consoleErr: MockInstance;
     let originalReportError: unknown;
 
     beforeEach(() => {
-        consoleErr = jest.spyOn(console, 'error').mockImplementation(() => {});
+        consoleErr = vi.spyOn(console, 'error').mockImplementation(() => {});
         originalReportError = (globalThis as { reportError?: unknown }).reportError;
     });
 
@@ -20,7 +22,7 @@ describe('reportObserverError (R766-N05)', () => {
     });
 
     it('logs structured path/phase context and elevates to reportError() when available', () => {
-        const reportError = jest.fn();
+        const reportError = vi.fn();
         (globalThis as { reportError?: unknown }).reportError = reportError;
         const boom = new Error('observer boom');
 
