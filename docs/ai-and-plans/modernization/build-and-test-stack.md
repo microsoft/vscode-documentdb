@@ -68,12 +68,18 @@ Out of scope:
    passing its checks.
    - **Exception: Stages 1 to 3 run back to back (operator decision, 2026-10-02).** G1, G2 and G3
      are combined into one checkpoint, **G1-3**, after Stage 3. Each of the three stages still ends
-     with the branch building and passing its checks, its own AI review file and its inline record
-     before the next one starts, so the checkpoint reviews three separable stages. Each stage runs
-     in its own agent session with its own author and reviewer models. The agent stops before G1-3
+     with the branch building and passing its checks and its inline record before the next one
+     starts, so the checkpoint reviews three separable stages. The agent stops before G1-3
      only when L1, L2 or L3 fails and the only fix would weaken a check, when ground rule 6 cannot
      be satisfied, or when a decision is needed that this plan does not make. Stage 4 starts only
      after G1-3 passes.
+   - **How Stages 1 to 3 are executed (operator decision, 2026-10-02).** One orchestrating session
+     (Claude Opus 5.5) runs each stage through subagents and keeps only their reports, to save
+     context. Authors: Stage 1 GPT-6.1 Sol; Stage 2 Claude Opus 5.5, with GPT-6.1 Sol subagents for
+     the bulk test conversion; Stage 3 Claude Opus 5.5. These replace the picks under each stage.
+     The three AI reviews are written after Stage 3, one file per stage, by a separate Claude Opus
+     5.5 session. For Stages 2 and 3, author and reviewer are then the same model family, which
+     departs from ground rule 7; the operator chose this setup.
    - **`TDD:` suites may change in this work (operator decision, 2026-10-02).** This overrides, for
      this branch only, the repository rule to stop and ask before changing a `TDD:` suite. Every
      such change is recorded under its stage's task: the suite and file, whether the behavior
