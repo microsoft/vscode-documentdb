@@ -79,7 +79,9 @@ Out of scope:
      the bulk test conversion; Stage 3 Claude Opus 5.5. These replace the picks under each stage.
      The three AI reviews are written after Stage 3, one file per stage, by a separate Claude Opus
      5.5 session. For Stages 2 and 3, author and reviewer are then the same model family, which
-     departs from ground rule 7; the operator chose this setup.
+     departs from ground rule 7; the operator chose this setup. Where a model offers several context
+     sizes, the orchestrator and every subagent use the largest one, which overrides the
+     default-context guidance in ground rule 7 and Stage 2.
    - **`TDD:` suites may change in this work (operator decision, 2026-10-02).** This overrides, for
      this branch only, the repository rule to stop and ask before changing a `TDD:` suite. Every
      such change is recorded under its stage's task: the suite and file, whether the behavior
@@ -569,7 +571,7 @@ plugin in a real editor; Kubernetes, Atlas and Azure discovery against real back
 - **Models:** author **Claude Sonnet 5.5** for the codemod and the bulk sweep (alternative:
   GPT-5.3-Codex). Hand mock-hoisting failures and every `TDD:` suite to **Claude Opus 5.5**.
   Reviewer **GPT-6 Sol**. Work in batches of test files rather than switching to the 1M-token
-  context.
+  context. (Superseded for this run by ground rule 2: largest context, still in batches.)
 - **Goal:** one test runner that shares Vite's transform pipeline and loads ESM natively.
 - **Why now:**
   - Vitest does not need Vite as the bundler. With it in place, Stages 3 to 5 have a fast,
