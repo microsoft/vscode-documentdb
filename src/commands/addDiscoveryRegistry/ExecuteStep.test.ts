@@ -3,17 +3,19 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+
 import { UserCancelledError } from '@microsoft/vscode-azext-utils';
 import { resetDiscoveryProviderVisibilityCacheForTests } from '../../services/discoveryProviderVisibility';
 import { ExecuteStep } from './ExecuteStep';
 
-const mockGlobalStateGet = jest.fn();
-const mockGlobalStateUpdate = jest.fn();
-const mockRefresh = jest.fn();
-const mockGetProvider = jest.fn();
-const mockListProviders = jest.fn();
+const mockGlobalStateGet = vi.fn();
+const mockGlobalStateUpdate = vi.fn();
+const mockRefresh = vi.fn();
+const mockGetProvider = vi.fn();
+const mockListProviders = vi.fn();
 
-jest.mock('../../extensionVariables', () => ({
+vi.mock('../../extensionVariables', () => ({
     ext: {
         context: {
             globalState: {
@@ -27,7 +29,7 @@ jest.mock('../../extensionVariables', () => ({
     },
 }));
 
-jest.mock('../../services/discoveryServices', () => ({
+vi.mock('../../services/discoveryServices', () => ({
     DiscoveryService: {
         getProvider: (...args: unknown[]) => mockGetProvider(...args),
         listProviders: (...args: unknown[]) => mockListProviders(...args),
@@ -53,7 +55,7 @@ function getHiddenProviderUpdateCalls(): unknown[][] {
 
 describe('addDiscoveryRegistry ExecuteStep', () => {
     beforeEach(() => {
-        jest.clearAllMocks();
+        vi.clearAllMocks();
         resetDiscoveryProviderVisibilityCacheForTests();
         mockGlobalStateUpdate.mockResolvedValue(undefined);
         mockListProviders.mockReturnValue([
@@ -66,7 +68,7 @@ describe('addDiscoveryRegistry ExecuteStep', () => {
 
     describe('providers with configureCredentialsOnActivation', () => {
         it('calls configureCredentials first, then shows provider on success, then refreshes', async () => {
-            const mockConfigureCredentials = jest.fn().mockResolvedValue(undefined);
+            const mockConfigureCredentials = vi.fn().mockResolvedValue(undefined);
             mockGetProvider.mockReturnValue({
                 configureCredentialsOnActivation: true,
                 configureCredentials: mockConfigureCredentials,
@@ -98,7 +100,7 @@ describe('addDiscoveryRegistry ExecuteStep', () => {
 
         it('does not show provider and re-throws on UserCancelledError', async () => {
             const cancellation = new UserCancelledError();
-            const mockConfigureCredentials = jest.fn().mockRejectedValue(cancellation);
+            const mockConfigureCredentials = vi.fn().mockRejectedValue(cancellation);
             mockGetProvider.mockReturnValue({
                 configureCredentialsOnActivation: true,
                 configureCredentials: mockConfigureCredentials,
@@ -115,7 +117,7 @@ describe('addDiscoveryRegistry ExecuteStep', () => {
 
         it('does not show provider and propagates unexpected errors', async () => {
             const unexpectedError = new Error('network timeout');
-            const mockConfigureCredentials = jest.fn().mockRejectedValue(unexpectedError);
+            const mockConfigureCredentials = vi.fn().mockRejectedValue(unexpectedError);
             mockGetProvider.mockReturnValue({
                 configureCredentialsOnActivation: true,
                 configureCredentials: mockConfigureCredentials,
@@ -151,7 +153,7 @@ describe('addDiscoveryRegistry ExecuteStep', () => {
             setHiddenProviders(['azure-cosmos-nosql-discovery']);
             mockGetProvider.mockReturnValue({
                 configureCredentialsOnActivation: true,
-                configureCredentials: jest.fn(),
+                configureCredentials: vi.fn(),
             });
 
             const step = new ExecuteStep();
