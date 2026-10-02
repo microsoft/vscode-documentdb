@@ -92,3 +92,37 @@ npm run prove:activation -- <vsix>
 GitHub Actions runs these under Xvfb and caches `.vscode-test/`. The isolated ADO build runs only L1
 before signing; it must not download VS Code. Local L3 requires a display or operator-provided Xvfb.
 The operator must still complete G0 using the installed production VSIX.
+
+## Workspace packages: packed-tarball checks
+
+Stage 3 made the six workspace packages ESM-only. These checks run on what `npm pack` produces,
+not on the workspace sources:
+
+```bash
+npm run verify:packages                      # builds the workspaces first
+npm run verify:packages -- --no-build --keep --report <file.json>
+```
+
+[`package-checks/check-packages.mjs`](./package-checks/check-packages.mjs) packs every workspace
+into a temp directory outside the repository and, for each tarball, runs:
+
+- `publint --strict` and `@arethetypeswrong/cli` (pinned versions, through `npx`; they are not
+  dependencies). The only accepted ATTW finding is `CJSResolvesToESM` for TypeScript's node16
+  CommonJS resolution, which is inherent to an ESM-only package; the CommonJS probe below shows
+  that Node's `require(esm)` loads it;
+- a top-level-await scan of every shipped `.js` file
+  ([`top-level-await.mjs`](./package-checks/top-level-await.mjs)), because `require(esm)` rejects a
+  graph that contains one;
+- a CommonJS probe (`require()`), an ESM probe (`import()`) and a Vitest probe, in throwaway
+  consumer projects that unpack the tarballs into `node_modules` and link every other dependency
+  from this repository's `node_modules` (no network). Each probe makes the representative calls in
+  [`calls.mjs`](./package-checks/calls.mjs) on every entry point, for example reading the shell API
+  `.d.ts`, analysing a document with driver `bson` values, and a tRPC round trip between
+  `vscode-ext-webview/webview` and `/host`. The Vitest probe aliases `vscode` to
+  [`vscode-stub.cjs`](./package-checks/vscode-stub.cjs) and runs the Fluent calls under jsdom.
+
+Expected and enforced: plain Node cannot load `vscode-ext-webview-fluentui` and its `/components`
+entry, because of Fluent UI's own packaging (see that package's README), so the Node probes require
+exactly that failure. A control run of the Vitest probe without inlining must fail for the same
+reason and for the host entry's bare `vscode` import. Rerun this after any change to a package's
+`package.json`, `tsconfig` or entry points.
