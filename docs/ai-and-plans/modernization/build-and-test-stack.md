@@ -907,6 +907,13 @@ plugin in a real editor; Kubernetes, Atlas and Azure discovery against real back
       with inferred types because its namespace type import failed `no-restricted-imports`;
       mock behavior is unchanged. No dependency changes, push, CI activity or stage review;
       CI remains deferred to the orchestrator.
+    - **Phase B B05, `4d23e9d7`:** converted all **19** listed `src/documentdb` test files
+      (clients/cache, authentication, schema feeding, connection strings and playground);
+      Vitest **19 files / 222 tests**, remaining Jest **193 suites / 3,391 tests**, build and
+      targeted Prettier / ESLint passed; **403** assertions unchanged apart from runner names.
+      Leftovers: **none**. Recipe typing deviation: retained azext-utils' existing named-export
+      type shape for `vi.importActual`, avoiding its restricted namespace import. No dependency
+      changes, push, CI activity or stage review; CI remains deferred to the orchestrator.
     - **Phase A follow-up (shared-harness gaps), `86baf001`, `73046b44`, `df9a8e1a`:**
       - **Diagnosis:** CommonJS packages in `node_modules` call Node's own `require('vscode')`,
         which Vite's alias never sees: `@vscode/extension-telemetry` (reached through the
