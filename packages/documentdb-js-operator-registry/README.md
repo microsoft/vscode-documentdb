@@ -67,7 +67,7 @@ The scraper:
 3. **Fetches** per-operator documentation (descriptions, syntax) with a global file index fallback for operators filed in unexpected directories
 4. **Generates** `resources/scraped/operator-reference.md` in a structured heading format (`### $operator` with description, syntax, and doc link)
 
-The dump serves as the authoritative reference for the TypeScript implementation. A Jest test (`src/operatorReference.test.ts`) validates that the implementation matches the dump.
+The dump serves as the authoritative reference for the TypeScript implementation. A unit test (`src/operatorReference.test.ts`) validates that the implementation matches the dump.
 
 ## Structure
 

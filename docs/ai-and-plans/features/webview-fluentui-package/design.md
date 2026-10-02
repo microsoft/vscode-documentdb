@@ -119,7 +119,6 @@ makes their output agree; it is the whole mechanism behind unified colours. It i
 packages/vscode-ext-webview-fluentui/
 ├── package.json                    # type: module, three exports, sideEffects: ["./dist/index.js"]
 ├── tsconfig.json                   # esnext + bundler resolution, jsx react-jsx, declaration
-├── jest.config.cjs                 # .cjs - "type": "module" would break module.exports
 ├── README.md  LICENSE               # no ADVANCED.md or MIGRATION.md in v1 - nothing to migrate from yet
 ├── scripts/
 │   ├── build-styles.mjs            # scss → src/styles/generated.ts
@@ -224,10 +223,10 @@ latitude to finalize the API before wider adoption.
 
 ## 8. Testing
 
-Package tests run under the package's own jest project, registered in the root `jest.config.js`
-`projects` array: jsdom environment, `@swc/jest` transform, CommonJS output (0006).
+Package tests run as the `vscode-ext-webview-fluentui` project of the root `vitest.config.ts`,
+under jsdom (modernization Stage 2; this superseded the Jest project of 0006).
 
-Type safety is **not** provided by the test run - SWC does not type-check. It comes from
+Type safety is **not** provided by the test run - Vite's transform does not type-check. It comes from
 `tsc -p .` via `npm run build`.
 
 Tests that move with the code: `themeGenerator.test.ts`, and `fluentOverrides.test.ts` with its

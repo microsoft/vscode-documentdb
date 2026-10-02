@@ -27,7 +27,6 @@
   "vscode-nmake-tools.workspaceBuildDirectories": ["."],
   "vscode-nmake-tools.installOsRepoRustHelperExtension": false,
   "sarif-viewer.connectToGithubCodeScanning": "off",
-  "jest.runMode": "deferred",
   "testing.automaticallyOpenTestResults": "neverOpen"
   // "eslint.workingDirectories": [
   //     ".", "src"

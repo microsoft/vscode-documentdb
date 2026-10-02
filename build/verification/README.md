@@ -36,8 +36,9 @@ Downloaded artifacts need their matching bundle reports, not reports from an unr
 GitHub Actions uploads them separately; ADO stages `build/verification/reports/*.json` alongside the
 release artifacts. Pass `--reports <downloaded-report-directory>` when inspecting a downloaded VSIX.
 
-The [measurements](./measurements.json) record three production builds, three Jest runs, the median
-test time, installed package count, and every measured `dist/` file size. Reproduce them with:
+The [measurements](./measurements.json) record three production builds, three unit-test runs (Jest
+at Stage 0; the script now runs Vitest), the median test time, installed package count, and every
+measured `dist/` file size. Reproduce them with:
 
 ```bash
 node build/verification/measure.cjs <output-directory>

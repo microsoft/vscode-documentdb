@@ -1,6 +1,6 @@
 # GitHub Copilot Instructions for vscode-documentdb
 
-VS Code Extension for Azure Cosmos DB and the MongoDB API. TypeScript (strict mode), React webviews, Jest testing.
+VS Code Extension for Azure Cosmos DB and the MongoDB API. TypeScript (strict mode), React webviews, Vitest testing.
 
 ## Critical Build Commands
 
@@ -29,7 +29,7 @@ Any commit, any push, opening or updating a **draft** PR.
 
 ```bash
 npm run build                     # catches type errors
-npx jest --no-coverage <path>     # only the tests covering what you touched
+npx vitest run <path>             # only the tests covering what you touched
 ```
 
 Nothing else. Do **not** run `l10n`, `prettier-fix`, `lint`, or `package` here.
@@ -45,7 +45,7 @@ and the other requirements are satisfied. If there is no PR, stay on Case 1.
 npm run l10n            # only if a vscode.l10n.t() string was added, changed, or removed
 npm run prettier-fix
 npm run lint
-npx jest --no-coverage  # full suite
+npx vitest run          # full suite
 npm run build
 npm run package         # catches bundling and missing-asset failures
 ```
@@ -99,7 +99,7 @@ PR handoff to reconstruct it. Minor implementation choices do not need this chec
 | `src/tree/`                                          | Tree view data providers                   |
 | `api/`                                               | Separate Node.js project for extension API |
 | `l10n/`                                              | Localization files                         |
-| `src/**/*.test.ts`, `src/**/*.test.tsx`, `packages/` | Jest unit tests                            |
+| `src/**/*.test.ts`, `src/**/*.test.tsx`, `packages/` | Vitest unit tests                          |
 
 ## Branching
 

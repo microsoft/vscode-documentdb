@@ -219,7 +219,7 @@ A draft PR is **not** a hand-over. It exists to hold commits, CI, and discussion
 
 ```bash
 npm run build                     # catches type errors
-npx jest --no-coverage <path>     # only the tests covering what you touched
+npx vitest run <path>             # only the tests covering what you touched
 ```
 
 Nothing else. `l10n`, `prettier-fix`, `lint`, and `package` each cost minutes and say nothing about whether the change is correct.
@@ -232,7 +232,7 @@ All of these must pass locally. The same checks run in CI, so catching failures 
 npm run l10n            # only if a vscode.l10n.t() string was added, changed, or removed
 npm run prettier-fix
 npm run lint
-npx jest --no-coverage  # full suite
+npx vitest run          # full suite
 npm run build
 npm run package         # catches bundling and missing-asset failures
 ```
