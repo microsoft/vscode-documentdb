@@ -16,12 +16,18 @@ const viewNames = ['collectionView', 'documentView', 'localQuickStart', 'atlasCr
 const sizeExempt = new Set(['extension/NOTICE.html']);
 
 function manifest(files) {
-    return [...files].map(([name, data]) => ({ path: name, bytes: data.length })).sort((left, right) => left.path.localeCompare(right.path));
+    return [...files]
+        .map(([name, data]) => ({ path: name, bytes: data.length }))
+        .sort((left, right) => left.path.localeCompare(right.path));
 }
 
 function compareManifest(files, baseline) {
     assert.equal(baseline.version, 1, 'Unsupported VSIX baseline version');
-    assert.deepEqual(manifest(files).map((entry) => entry.path), baseline.files.map((entry) => entry.path), 'VSIX file list differs from baseline');
+    assert.deepEqual(
+        manifest(files).map((entry) => entry.path),
+        baseline.files.map((entry) => entry.path),
+        'VSIX file list differs from baseline',
+    );
     const mismatches = [];
     for (const entry of baseline.files) {
         if (sizeExempt.has(entry.path)) {
@@ -30,7 +36,9 @@ function compareManifest(files, baseline) {
         const actual = files.get(entry.path).length;
         const tolerance = Math.max(baseline.tolerance.absoluteBytes, entry.bytes * baseline.tolerance.fraction);
         if (Math.abs(actual - entry.bytes) > tolerance) {
-            mismatches.push(`${entry.path}: size ${actual} differs from ${entry.bytes} by more than ${Math.round(tolerance)} bytes`);
+            mismatches.push(
+                `${entry.path}: size ${actual} differs from ${entry.bytes} by more than ${Math.round(tolerance)} bytes`,
+            );
         }
     }
     assert.equal(mismatches.length, 0, mismatches.join('\n'));
@@ -48,17 +56,25 @@ function inspectJavaScript(files, reports) {
             continue;
         }
         const source = data.toString('utf8');
-        const compilations = reports.filter((report) => Object.hasOwn(report.assetHashes || {}, filename.slice('extension/'.length)));
+        const compilations = reports.filter((report) =>
+            Object.hasOwn(report.assetHashes || {}, filename.slice('extension/'.length)),
+        );
         const commonJs = compilations.some((report) => report.chunkFormat === 'commonjs');
         assert.ok(!/127\.0\.0\.1:18080|DEVSERVER/.test(source), `${filename}: development-server string in production`);
         const tree = parse(source, { ecmaVersion: 'latest', sourceType: 'module', allowReturnOutsideFunction: true });
         if (filename === 'extension/views.js') {
-            assert.ok(tree.body.some((node) =>
-                node.type === 'ExportNamedDeclaration' &&
-                (node.specifiers.some((specifier) => (specifier.exported.name || specifier.exported.value) === 'render') ||
-                    node.declaration?.id?.name === 'render' ||
-                    node.declaration?.declarations?.some((declaration) => declaration.id.name === 'render'))),
-            'views.js does not export render');
+            assert.ok(
+                tree.body.some(
+                    (node) =>
+                        node.type === 'ExportNamedDeclaration' &&
+                        (node.specifiers.some(
+                            (specifier) => (specifier.exported.name || specifier.exported.value) === 'render',
+                        ) ||
+                            node.declaration?.id?.name === 'render' ||
+                            node.declaration?.declarations?.some((declaration) => declaration.id.name === 'render')),
+                ),
+                'views.js does not export render',
+            );
         }
         simple(tree, {
             MetaProperty(node) {
@@ -66,7 +82,10 @@ function inspectJavaScript(files, reports) {
                 assert.ok(!(commonJs && node.meta.name === 'import'), `${filename}: import.meta in a CommonJS bundle`);
             },
             ImportExpression(node) {
-                assert.ok(node.source.type === 'Literal' && typeof node.source.value === 'string', `${filename}: nonliteral dynamic import cannot be verified`);
+                assert.ok(
+                    node.source.type === 'Literal' && typeof node.source.value === 'string',
+                    `${filename}: nonliteral dynamic import cannot be verified`,
+                );
                 resolveAsset(files, filename, node.source.value);
             },
             ImportDeclaration(node) {
@@ -81,9 +100,18 @@ function inspectJavaScript(files, reports) {
             },
             CallExpression(node) {
                 // webpack lowers import() to its runtime's .e(chunkId) loader.
-                if (node.callee.type === 'MemberExpression' && node.callee.property.name === 'e' &&
-                    node.arguments.length === 1 && node.arguments[0].type === 'Literal' && typeof node.arguments[0].value === 'number') {
-                    assert.equal(compilations.length, 1, `${filename}: missing or ambiguous webpack compilation provenance`);
+                if (
+                    node.callee.type === 'MemberExpression' &&
+                    node.callee.property.name === 'e' &&
+                    node.arguments.length === 1 &&
+                    node.arguments[0].type === 'Literal' &&
+                    typeof node.arguments[0].value === 'number'
+                ) {
+                    assert.equal(
+                        compilations.length,
+                        1,
+                        `${filename}: missing or ambiguous webpack compilation provenance`,
+                    );
                     const id = String(node.arguments[0].value);
                     const chunk = compilations[0].chunks.find((candidate) => String(candidate.id) === id);
                     assert.ok(chunk, `${filename}: missing webpack chunk ${id} in its compilation report`);
@@ -127,7 +155,9 @@ function entryGraph(report, entryName, files, { allowAbsentBson = false } = {}) 
         collectModules(chunk.modules, modules);
         pending.push(...(chunk.children || []), ...Object.values(chunk.childrenByOrder || {}).flat());
     }
-    const bsonModules = [...modules].filter((identifier) => /\/node_modules\/bson\/lib\/bson(?:\.bundle)?\.(?:mjs|cjs|js)(?:$|\?)/.test(identifier));
+    const bsonModules = [...modules].filter((identifier) =>
+        /\/node_modules\/bson\/lib\/bson(?:\.bundle)?\.(?:mjs|cjs|js)(?:$|\?)/.test(identifier),
+    );
     assert.ok(
         bsonModules.length === 1 || (allowAbsentBson && bsonModules.length === 0),
         `${entryName}: expected ${allowAbsentBson ? 'at most' : 'exactly'} one BSON module, got ${bsonModules.length}: ${bsonModules.join(', ')}`,
@@ -143,9 +173,14 @@ function entryGraph(report, entryName, files, { allowAbsentBson = false } = {}) 
 function inspect(filename, options = {}) {
     const files = readVsix(filename);
     const directory = options.reports || path.join(__dirname, 'reports');
-    const reports = ['host', 'views'].map((name) => JSON.parse(fs.readFileSync(path.join(directory, `${name}.json`), 'utf8')));
+    const reports = ['host', 'views'].map((name) =>
+        JSON.parse(fs.readFileSync(path.join(directory, `${name}.json`), 'utf8')),
+    );
     for (const report of reports) {
-        assert.ok(['commonjs', 'module'].includes(report.chunkFormat), `Bundle report has unknown chunk format ${report.chunkFormat}; regenerate it`);
+        assert.ok(
+            ['commonjs', 'module'].includes(report.chunkFormat),
+            `Bundle report has unknown chunk format ${report.chunkFormat}; regenerate it`,
+        );
     }
     inspectJavaScript(files, reports);
     const graphs = {
@@ -153,7 +188,9 @@ function inspect(filename, options = {}) {
         playgroundWorker: entryGraph(reports[0], 'playgroundWorker', files),
     };
     for (const name of viewNames) {
-        graphs[name] = entryGraph(reports[1], reports[1].entrypoints[name] ? name : 'views', files, { allowAbsentBson: true });
+        graphs[name] = entryGraph(reports[1], reports[1].entrypoints[name] ? name : 'views', files, {
+            allowAbsentBson: true,
+        });
     }
     if (options.requireLightweightViews) {
         for (const name of ['localQuickStart', 'atlasCredentials']) {
@@ -164,7 +201,13 @@ function inspect(filename, options = {}) {
         assert.ok(Object.keys(report.assetHashes).length > 0, 'Bundle report has no asset provenance');
         for (const [asset, hash] of Object.entries(report.assetHashes)) {
             assert.ok(files.has(`extension/${asset}`), `Bundle report references absent asset ${asset}`);
-            assert.equal(createHash('sha256').update(files.get(`extension/${asset}`)).digest('hex'), hash, `${asset}: bundle report does not match packaged JavaScript`);
+            assert.equal(
+                createHash('sha256')
+                    .update(files.get(`extension/${asset}`))
+                    .digest('hex'),
+                hash,
+                `${asset}: bundle report does not match packaged JavaScript`,
+            );
         }
     }
     const result = {
@@ -184,7 +227,9 @@ if (require.main === module) {
     const args = process.argv.slice(2);
     const filename = args.shift();
     if (!filename) {
-        throw new Error('Usage: node build/verification/inspect.cjs <vsix> [--write-baseline <file>] [--baseline <file>] [--reports <directory>] [--require-lightweight-views]');
+        throw new Error(
+            'Usage: node build/verification/inspect.cjs <vsix> [--write-baseline <file>] [--baseline <file>] [--reports <directory>] [--require-lightweight-views]',
+        );
     }
     const options = { baseline: path.join(__dirname, 'baseline.json') };
     let output;

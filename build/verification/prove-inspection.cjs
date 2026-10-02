@@ -17,23 +17,65 @@ inspect(filename, { baseline });
 const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'documentdb-broken-vsix-'));
 try {
     const variants = [
-        ['render-renamed', (files) => {
-            const source = files.get('extension/views.js').toString('utf8');
-            assert.match(source, /(?:as\s+render\b|function\s+render\b)/);
-            files.set('extension/views.js', Buffer.from(source.replace(/as\s+render\b/, 'as renamedRender').replace(/function\s+render\b/, 'function renamedRender')));
-        }, /does not export render/],
-        ['missing-import', (files) => {
-            files.set('extension/views.js', Buffer.concat([files.get('extension/views.js'), Buffer.from('\nimport("./missing-proof-chunk.js");')]));
-        }, /missing dynamic import/],
-        ['dev-server', (files) => {
-            files.set('extension/views.js', Buffer.concat([files.get('extension/views.js'), Buffer.from('\nconsole.log("127.0.0.1:18080");')]));
-        }, /development-server/],
-        ['missing-file', (files) => {
-            files.delete('extension/resources/vscode-documentdb-marketplace-logo.png');
-        }, /file list/],
-        ['import-meta-in-commonjs', (files) => {
-            files.set('extension/main.js', Buffer.concat([files.get('extension/main.js'), Buffer.from('\nmodule.exports.proof = import.meta.dirname;')]));
-        }, /main\.js: import\.meta in a CommonJS bundle/],
+        [
+            'render-renamed',
+            (files) => {
+                const source = files.get('extension/views.js').toString('utf8');
+                assert.match(source, /(?:as\s+render\b|function\s+render\b)/);
+                files.set(
+                    'extension/views.js',
+                    Buffer.from(
+                        source
+                            .replace(/as\s+render\b/, 'as renamedRender')
+                            .replace(/function\s+render\b/, 'function renamedRender'),
+                    ),
+                );
+            },
+            /does not export render/,
+        ],
+        [
+            'missing-import',
+            (files) => {
+                files.set(
+                    'extension/views.js',
+                    Buffer.concat([
+                        files.get('extension/views.js'),
+                        Buffer.from('\nimport("./missing-proof-chunk.js");'),
+                    ]),
+                );
+            },
+            /missing dynamic import/,
+        ],
+        [
+            'dev-server',
+            (files) => {
+                files.set(
+                    'extension/views.js',
+                    Buffer.concat([files.get('extension/views.js'), Buffer.from('\nconsole.log("127.0.0.1:18080");')]),
+                );
+            },
+            /development-server/,
+        ],
+        [
+            'missing-file',
+            (files) => {
+                files.delete('extension/resources/vscode-documentdb-marketplace-logo.png');
+            },
+            /file list/,
+        ],
+        [
+            'import-meta-in-commonjs',
+            (files) => {
+                files.set(
+                    'extension/main.js',
+                    Buffer.concat([
+                        files.get('extension/main.js'),
+                        Buffer.from('\nmodule.exports.proof = import.meta.dirname;'),
+                    ]),
+                );
+            },
+            /main\.js: import\.meta in a CommonJS bundle/,
+        ],
     ];
     for (const [name, mutate, expected] of variants) {
         const files = readVsix(filename);

@@ -24,7 +24,10 @@ test('VSIX round-trip and extraction preserve files and exclude archive metadata
         writeVsix(filename, input);
         assert.deepEqual(readVsix(filename), input);
         extractVsix(filename, path.join(directory, 'extracted'));
-        assert.equal(fs.readFileSync(path.join(directory, 'extracted/views.js'), 'utf8'), 'export function render() {}');
+        assert.equal(
+            fs.readFileSync(path.join(directory, 'extracted/views.js'), 'utf8'),
+            'export function render() {}',
+        );
         assert.equal(fs.existsSync(path.join(directory, 'extracted/extension.vsixmanifest')), false);
         const corrupt = fs.readFileSync(filename);
         corrupt[30 + 'extension/package.json'.length] ^= 1;
@@ -66,7 +69,10 @@ test('pipeline-generated NOTICE.html must exist but its size is not compared', (
 test('every size mismatch is reported, not only the first', () => {
     const baseline = { version: 1, tolerance: { fraction: 0.1, absoluteBytes: 4096 }, files: manifest(files) };
     const changed = new Map([...files].map(([name]) => [name, Buffer.alloc(10_000)]));
-    assert.throws(() => compareManifest(changed, baseline), (error) => /package\.json/.test(error.message) && /views\.js/.test(error.message));
+    assert.throws(
+        () => compareManifest(changed, baseline),
+        (error) => /package\.json/.test(error.message) && /views\.js/.test(error.message),
+    );
 });
 
 test('production render export, native imports and webpack lazy chunks are checked', () => {
@@ -85,7 +91,10 @@ test('production render export, native imports and webpack lazy chunks are check
         assert.throws(() => inspectJavaScript(broken, []), error);
     }
     const split = new Map(files);
-    split.set('extension/views.js', Buffer.from('function render() {}; export {render}; import("./chunk.js"); r.e(789)'));
+    split.set(
+        'extension/views.js',
+        Buffer.from('function render() {}; export {render}; import("./chunk.js"); r.e(789)'),
+    );
     split.set('extension/chunk.js', Buffer.from('export const value = 1'));
     const reports = [{ assetHashes: { 'views.js': 'fixture' }, chunks: [{ id: 789, files: ['chunk.js'] }] }];
     inspectJavaScript(split, reports);
@@ -94,13 +103,13 @@ test('production render export, native imports and webpack lazy chunks are check
 });
 
 test('webpack chunk IDs cannot resolve against another compilation', () => {
-    const bundled = new Map([
-        ...files,
-        ['extension/main.js', Buffer.from('r.e(789)')],
-    ]);
+    const bundled = new Map([...files, ['extension/main.js', Buffer.from('r.e(789)')]]);
     const host = { assetHashes: { 'main.js': 'fixture' }, chunks: [] };
     const views = { assetHashes: { 'views.js': 'fixture' }, chunks: [{ id: 789, files: ['views.js'] }] };
-    assert.throws(() => inspectJavaScript(bundled, [host, views]), /main.js: missing webpack chunk 789 in its compilation/);
+    assert.throws(
+        () => inspectJavaScript(bundled, [host, views]),
+        /main.js: missing webpack chunk 789 in its compilation/,
+    );
     host.chunks.push({ id: 789, files: ['main.js'] });
     inspectJavaScript(bundled, [host, views]);
     views.assetHashes['main.js'] = 'ambiguous';
@@ -108,7 +117,10 @@ test('webpack chunk IDs cannot resolve against another compilation', () => {
 });
 
 test('import.meta is rejected in CommonJS bundles only, by syntax rather than text', () => {
-    const bundled = new Map([...files, ['extension/main.js', Buffer.from('module.exports.dir = import.meta.dirname;')]]);
+    const bundled = new Map([
+        ...files,
+        ['extension/main.js', Buffer.from('module.exports.dir = import.meta.dirname;')],
+    ]);
     const host = { chunkFormat: 'commonjs', assetHashes: { 'main.js': 'fixture' }, chunks: [] };
     const views = { chunkFormat: 'module', assetHashes: { 'views.js': 'fixture' }, chunks: [] };
     assert.throws(() => inspectJavaScript(bundled, [host, views]), /main\.js: import\.meta in a CommonJS bundle/);
@@ -122,7 +134,12 @@ test('entry graph follows lazy chunks and catches duplicate BSON implementations
     const report = {
         entrypoints: { main: { chunks: [1] } },
         chunks: [
-            { id: 1, files: ['views.js'], children: [2], modules: [{ modules: [{ identifier: '/repo/node_modules/bson/lib/bson.mjs' }] }] },
+            {
+                id: 1,
+                files: ['views.js'],
+                children: [2],
+                modules: [{ modules: [{ identifier: '/repo/node_modules/bson/lib/bson.mjs' }] }],
+            },
             { id: 2, files: ['chunk.js'], modules: [{ identifier: '/repo/node_modules/monaco-editor/index.js' }] },
         ],
     };
@@ -136,7 +153,10 @@ test('entry graph follows lazy chunks and catches duplicate BSON implementations
     report.chunks[0].modules = [];
     assert.throws(() => entryGraph(report, 'main', bundled), /exactly one BSON/);
     assert.deepEqual(entryGraph(report, 'main', bundled, { allowAbsentBson: true }).bsonModules, []);
-    report.chunks[0].modules = [{ identifier: '/repo/node_modules/bson/lib/bson.cjs' }, { identifier: '/repo/node_modules/bson/lib/bson.mjs' }];
+    report.chunks[0].modules = [
+        { identifier: '/repo/node_modules/bson/lib/bson.cjs' },
+        { identifier: '/repo/node_modules/bson/lib/bson.mjs' },
+    ];
     assert.throws(() => entryGraph(report, 'main', bundled, { allowAbsentBson: true }), /at most one BSON/);
     report.chunks[0].modules.pop();
     bundled.delete('extension/chunk.js');
