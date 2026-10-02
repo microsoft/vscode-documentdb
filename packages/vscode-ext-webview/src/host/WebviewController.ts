@@ -7,10 +7,10 @@ import { type AnyRouter } from '@trpc/server';
 import { randomBytes } from 'crypto';
 import * as path from 'path';
 import * as vscode from 'vscode';
-import { type BaseRouterContext } from '../shared/BaseRouterContext';
-import { type WebviewTrpc } from '../shared/initWebviewTrpc';
-import { attachTrpc, type WebviewCallerFactory } from './attachTrpc';
-import { consoleProcedureLogger, type ProcedureLogger } from './middleware/logging';
+import { type BaseRouterContext } from '../shared/BaseRouterContext.js';
+import { type WebviewTrpc } from '../shared/initWebviewTrpc.js';
+import { attachTrpc, type WebviewCallerFactory } from './attachTrpc.js';
+import { consoleProcedureLogger, type ProcedureLogger } from './middleware/logging.js';
 
 /**
  * Describes where the bundled webview JavaScript lives on disk relative to the

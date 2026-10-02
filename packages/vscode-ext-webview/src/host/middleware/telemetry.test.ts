@@ -5,10 +5,10 @@
 
 import { describe, expect, it } from 'vitest';
 
-import { type BaseRouterContext } from '../../shared/BaseRouterContext';
-import { initWebviewTrpc } from '../../shared/initWebviewTrpc';
-import { telemetryMiddlewareBody, type ProcedureTelemetry, type TelemetryRunner } from './telemetry';
-import { getInvocationSignal } from './types';
+import { type BaseRouterContext } from '../../shared/BaseRouterContext.js';
+import { initWebviewTrpc } from '../../shared/initWebviewTrpc.js';
+import { telemetryMiddlewareBody, type ProcedureTelemetry, type TelemetryRunner } from './telemetry.js';
+import { getInvocationSignal } from './types.js';
 
 /**
  * Enrichment shape used by these tests. The runner contributes a plain

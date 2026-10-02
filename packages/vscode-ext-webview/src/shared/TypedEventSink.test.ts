@@ -5,7 +5,7 @@
 
 import { describe, expect, it } from 'vitest';
 
-import { TypedEventSink } from './TypedEventSink';
+import { TypedEventSink } from './TypedEventSink.js';
 
 type TestEvent =
     | { type: 'progress'; percent: number }

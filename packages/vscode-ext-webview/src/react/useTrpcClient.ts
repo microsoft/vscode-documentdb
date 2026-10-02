@@ -6,8 +6,8 @@
 import { type CreateTRPCClient } from '@trpc/client';
 import { type AnyRouter } from '@trpc/server';
 import { useContext } from 'react';
-import { getWebviewConnection } from './connection';
-import { WebviewContext } from './WebviewContext';
+import { getWebviewConnection } from './connection.js';
+import { WebviewContext } from './WebviewContext.js';
 
 /**
  * Convenience alias for a fully-typed tRPC client for a given application router.

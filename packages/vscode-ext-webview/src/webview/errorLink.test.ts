@@ -8,7 +8,7 @@ import { describe, expect, it, vi, type MockedFunction } from 'vitest';
 import { type AnyRouter } from '@trpc/server';
 // eslint-disable-next-line import/no-internal-modules -- tRPC's own link examples import from /server/observable: https://trpc.io/docs/client/links#example
 import { observable } from '@trpc/server/observable';
-import { errorLink, type ErrorHandler } from './errorLink';
+import { errorLink, type ErrorHandler } from './errorLink.js';
 
 /**
  * Build a downstream link that emits one of: `next` value, `error`, or

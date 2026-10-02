@@ -470,7 +470,7 @@ extensions are working examples of that layout against this package.
 
 ## Status
 
-`0.10.1`. APIs are subject to change while the package is in preview. See
+`0.11.0` (ESM-only). APIs are subject to change while the package is in preview. See
 [ADVANCED.md](./ADVANCED.md) for the full set of primitives and patterns.
 
 ## Contributors

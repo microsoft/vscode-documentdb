@@ -5,9 +5,9 @@
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { initWebviewTrpc } from '../shared/initWebviewTrpc';
-import { type VsCodeLinkResponseMessage } from '../shared/wireProtocol';
-import { connectTrpc, type VsCodeApiLike } from './connectTrpc';
+import { initWebviewTrpc } from '../shared/initWebviewTrpc.js';
+import { type VsCodeLinkResponseMessage } from '../shared/wireProtocol.js';
+import { connectTrpc, type VsCodeApiLike } from './connectTrpc.js';
 
 // A router whose *type* parametrizes the client; the resolver bodies are never
 // executed (the client side only proxies calls over the transport).

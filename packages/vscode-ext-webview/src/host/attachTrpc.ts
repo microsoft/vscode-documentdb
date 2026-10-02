@@ -20,11 +20,11 @@
 
 import { getTRPCErrorFromUnknown, type AnyRouter } from '@trpc/server';
 import { type Disposable, type WebviewPanel } from 'vscode';
-import { type BaseRouterContext } from '../shared/BaseRouterContext';
-import { createCallerFactory as defaultCreateCallerFactory } from '../shared/initWebviewTrpc';
-import { type VsCodeLinkRequestMessage } from '../shared/wireProtocol';
-import { type ProcedureLogEntry, type ProcedureLogger, type ProcedureStartEntry } from './middleware/logging';
-import { type ProcedureType } from './middleware/types';
+import { type BaseRouterContext } from '../shared/BaseRouterContext.js';
+import { createCallerFactory as defaultCreateCallerFactory } from '../shared/initWebviewTrpc.js';
+import { type VsCodeLinkRequestMessage } from '../shared/wireProtocol.js';
+import { type ProcedureLogEntry, type ProcedureLogger, type ProcedureStartEntry } from './middleware/logging.js';
+import { type ProcedureType } from './middleware/types.js';
 
 /**
  * A tracked subscription: its per-operation `AbortController` plus the live

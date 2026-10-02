@@ -13,7 +13,12 @@
  */
 
 export { type AnyRouter } from '@trpc/server';
-export { type BaseRouterContext } from './BaseRouterContext';
-export { initWebviewTrpc, mergeRouters, publicProcedure, router, type WebviewTrpc } from './initWebviewTrpc';
-export { TypedEventSink, type DiscriminatedEvent, type EventOfType, type UntypedEventEmitter } from './TypedEventSink';
-export { type StopOperation, type VsCodeLinkRequestMessage, type VsCodeLinkResponseMessage } from './wireProtocol';
+export { type BaseRouterContext } from './BaseRouterContext.js';
+export { initWebviewTrpc, mergeRouters, publicProcedure, router, type WebviewTrpc } from './initWebviewTrpc.js';
+export {
+    TypedEventSink,
+    type DiscriminatedEvent,
+    type EventOfType,
+    type UntypedEventEmitter,
+} from './TypedEventSink.js';
+export { type StopOperation, type VsCodeLinkRequestMessage, type VsCodeLinkResponseMessage } from './wireProtocol.js';

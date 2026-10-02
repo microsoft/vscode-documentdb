@@ -6,7 +6,7 @@
 import type * as React from 'react';
 import { createContext } from 'react';
 import { type WebviewApi } from 'vscode-webview';
-import { type ObserverErrorHandler } from '../webview/events';
+import { type ObserverErrorHandler } from '../webview/events.js';
 
 export type WebviewState = object;
 

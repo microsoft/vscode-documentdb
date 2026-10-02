@@ -7,7 +7,7 @@ import { describe, expect, it, vi } from 'vitest';
 
 import { TRPCClientError } from '@trpc/client';
 import { type AnyRouter } from '@trpc/server';
-import { vscodeLink, type VsCodeLinkRequestMessage, type VsCodeLinkResponseMessage } from './vscodeLink';
+import { vscodeLink, type VsCodeLinkRequestMessage, type VsCodeLinkResponseMessage } from './vscodeLink.js';
 
 /**
  * Creates a mock Operation object for testing.

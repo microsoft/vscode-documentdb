@@ -6,6 +6,25 @@ changes; each is listed here with a copyable before/after.
 
 ---
 
+## `0.10.x` → `0.11.0`
+
+The package is now **ESM-only**. No API, wire-protocol or behaviour changes.
+
+- It declares `"type": "module"` and ships ES modules only. Import through the
+  documented entry points (`.`, `./host`, `./webview`, `./react`); deep imports
+  into `dist/` are blocked by the `exports` map.
+- CommonJS code can still `require()` it on Node.js 20.19 / 22.12 or later
+  (`require(esm)`); the package has no top-level `await`. It declares
+  `engines.node` `>=22.18.0`; VS Code 1.105 and later ship Node.js 22.19 or newer.
+- Bundlers resolve it as before. `./host` imports `vscode` with a static
+  `import`, so keep `vscode` external in the extension-host bundle.
+- Test runners: the host entry is no longer CommonJS, so a `vscode` alias in
+  your test runner (for example Vitest's `resolve.alias`) applies to its
+  `import` of `vscode` as well.
+- Published sourcemaps now embed their sources (`inlineSources`).
+
+---
+
 ## `0.9.1` → `0.10.0`
 
 This release makes the **telemetry middleware a thin delegator** and the

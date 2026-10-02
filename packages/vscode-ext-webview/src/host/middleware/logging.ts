@@ -19,7 +19,7 @@ import {
     type ProcedureErrorLike,
     type ProcedureInvocation,
     type ProcedureType,
-} from './types';
+} from './types.js';
 
 /** One structured log entry describing a completed procedure invocation. */
 export interface ProcedureLogEntry {

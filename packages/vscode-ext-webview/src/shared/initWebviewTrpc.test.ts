@@ -5,8 +5,8 @@
 
 import { describe, expect, it } from 'vitest';
 
-import { type BaseRouterContext } from './BaseRouterContext';
-import { initWebviewTrpc } from './initWebviewTrpc';
+import { type BaseRouterContext } from './BaseRouterContext.js';
+import { initWebviewTrpc } from './initWebviewTrpc.js';
 
 type TestContext = BaseRouterContext & {
     workspaceRoot: string;

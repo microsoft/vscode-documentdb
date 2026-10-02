@@ -23,7 +23,7 @@ import {
     type ConnectTrpcOptions,
     type ConnectTrpcResult,
     type VsCodeApiLike,
-} from '../webview/connectTrpc';
+} from '../webview/connectTrpc.js';
 
 const connections = new WeakMap<VsCodeApiLike, ConnectTrpcResult<AnyRouter>>();
 

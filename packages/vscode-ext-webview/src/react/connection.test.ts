@@ -5,8 +5,8 @@
 
 import { describe, expect, it } from 'vitest';
 
-import { type VsCodeApiLike } from '../webview/connectTrpc';
-import { getWebviewConnection } from './connection';
+import { type VsCodeApiLike } from '../webview/connectTrpc.js';
+import { getWebviewConnection } from './connection.js';
 
 /**
  * Build a minimal fake `vscodeApi`. Each call returns a distinct object so it

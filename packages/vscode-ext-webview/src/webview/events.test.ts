@@ -5,7 +5,7 @@
 
 import { describe, expect, it, vi } from 'vitest';
 
-import { type CallInfo, createEventChannel } from './events';
+import { type CallInfo, createEventChannel } from './events.js';
 
 const queryInfo: CallInfo = { type: 'query', path: 'demo.find', id: 1 };
 

@@ -5,9 +5,9 @@
 
 import { describe, expect, it } from 'vitest';
 
-import { type BaseRouterContext } from '../../shared/BaseRouterContext';
-import { initWebviewTrpc } from '../../shared/initWebviewTrpc';
-import { loggingMiddlewareBody, type ProcedureLogEntry, type ProcedureLogger } from './logging';
+import { type BaseRouterContext } from '../../shared/BaseRouterContext.js';
+import { initWebviewTrpc } from '../../shared/initWebviewTrpc.js';
+import { loggingMiddlewareBody, type ProcedureLogEntry, type ProcedureLogger } from './logging.js';
 
 function createCapturingLogger(): { logger: ProcedureLogger; entries: ProcedureLogEntry[] } {
     const entries: ProcedureLogEntry[] = [];
