@@ -961,6 +961,13 @@ plugin in a real editor; Kubernetes, Atlas and Azure discovery against real back
       initial `jest is not defined` failures; static mocked-module import and explicit
       `process.env` restoration follow the recipe. No other alternatives needed. Full Jest
       omitted per the orchestrator deviation above; no dependency changes, push, CI or stage review.
+    - **Phase B B14, `96f4fc64`:** converted all **17** listed `src/webviews` files; Vitest
+      **17 files / 211 tests**, `npm run build` and targeted Prettier / ESLint passed.
+      AST comparison confirmed **351** assertions and **161** test/suite names unchanged.
+      Leftovers: **none**. Recipe fixes: four async `vi.importActual` factories and default-export
+      shapes for the existing `/host` and `/react` pre-bundles (initial missing `/react` default
+      resolved); fluentui stubs retained for Phase C. No other alternatives needed. Full Jest
+      omitted per the orchestrator deviation above; no dependency changes, push, CI or stage review.
     - **Phase A follow-up (shared-harness gaps), `86baf001`, `73046b44`, `df9a8e1a`:**
       - **Diagnosis:** CommonJS packages in `node_modules` call Node's own `require('vscode')`,
         which Vite's alias never sees: `@vscode/extension-telemetry` (reached through the
