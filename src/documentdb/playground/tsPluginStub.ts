@@ -3,6 +3,7 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+import { randomUUID } from 'crypto';
 import * as fs from 'fs';
 import * as path from 'path';
 
@@ -47,12 +48,29 @@ function readFileIfExists(filePath: string): string | undefined {
     }
 }
 
+function writeFileAtomically(filePath: string, content: string): void {
+    const temporaryPath = `${filePath}.${process.pid}.${randomUUID()}.tmp`;
+    try {
+        fs.writeFileSync(temporaryPath, content, { flag: 'wx' });
+        fs.renameSync(temporaryPath, filePath);
+    } catch (error) {
+        try {
+            fs.rmSync(temporaryPath, { force: true });
+        } catch {
+            // Cleanup is best effort; preserve the original publication error for the caller.
+        }
+        throw error;
+    }
+}
+
 /**
  * Makes sure the TS server can load the plugin from `<extensionPath>/node_modules`.
  *
  * vsce always leaves `node_modules/**` out of the VSIX, so the stub cannot ship in it and is
- * written at runtime instead. Throws the file system error (for example `EACCES` or `EROFS` on a
- * read-only install) when the stub has to be written and cannot be.
+ * written at runtime instead. Each changed file is published by a same-directory rename,
+ * entry before manifest, so concurrent readers see complete old or new files.
+ * Throws the original file system error (for example `EACCES` or `EROFS` on a read-only install,
+ * or Windows `EPERM`/`EBUSY` when a target cannot be replaced due to file sharing).
  */
 export function ensureTsPluginStub(extensionPath: string): TsPluginStubResult {
     const stubDir = path.join(extensionPath, 'node_modules', TS_PLUGIN_PACKAGE_NAME);
@@ -74,7 +92,7 @@ export function ensureTsPluginStub(extensionPath: string): TsPluginStubResult {
     // `index.cjs` first: `package.json` points the TS server at it.
     for (const file of current) {
         if (file.existing !== file.content) {
-            fs.writeFileSync(file.filePath, file.content);
+            writeFileAtomically(file.filePath, file.content);
         }
     }
     if (legacyEntryExists) {
