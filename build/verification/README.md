@@ -47,6 +47,11 @@ that view's lazy chunk and its static import closure, never every dynamic child.
 Local Quick Start and Atlas Credentials must exclude Monaco and SlickGrid by default for Vite;
 `--require-lightweight-views` forces the same assertion for webpack.
 
+The packaged manifest's top-level icon and local file paths under `contributes` are required,
+with missing paths reported alongside their JSON pointers; URLs, substitutions and codicons are excluded.
+An explicit `runtimeAssets` list also requires shipped files read without manifest declarations
+(shell declarations, prompts, runtime icons and Query Insights debug overrides), with a reason per file.
+
 Nonliteral imports fail except for `monacoModuleLoaderImports`, which permits one-expression,
 empty-quasi templates wrapping `asBrowserUri(...).toString(...)` calls in Vite-owned
 `monaco-<hash>.js` (maximum one) or `editor.worker-<hash>.js` / `json.worker-<hash>.js` (maximum two),
@@ -84,7 +89,8 @@ tolerance are informational, with content hashes normalized when pairing renamed
 webpack chunks remain distinct). The JSON result includes `manifestReport`: `added`, `removed`,
 `sizeChanges`, total `vsixBytes` delta and `graphAssetBytes` sums. A short summary goes to stderr;
 stdout stays JSON. `--manifest-report <file>` writes just the report; CI uploads it separately.
-The proof has six rejection controls and one positive asset-change reporting control. Vite adds
+The proof has eight rejection controls (including missing contributed grammar and runtime shell declarations)
+and one positive, unrelated README-image asset-change reporting control. Vite adds
 `missing-lazy-chunk` (the entry's missing dynamic import fires first),
 `monaco-in-local-quick-start`, `duplicate-bson` and `nonliteral-import`; webpack prints `SKIP` for
 these four. Report mutations use temporary copies, never the supplied reports.

@@ -74,6 +74,20 @@ try {
             /missing required file: extension\/package\.nls\.json/,
         ],
         [
+            'missing-contributed-grammar',
+            (files) => {
+                assert.ok(files.delete('extension/syntaxes/documentdb-playground.tmGrammar.json'));
+            },
+            /VSIX missing manifest-declared asset: extension\/syntaxes\/documentdb-playground\.tmGrammar\.json \(\/contributes\/grammars\/0\/path\)/,
+        ],
+        [
+            'missing-runtime-asset',
+            (files) => {
+                assert.ok(files.delete('extension/typeDefs/documentdb-shell-api.d.ts'));
+            },
+            /VSIX missing runtime asset: extension\/typeDefs\/documentdb-shell-api\.d\.ts \(Playground TS plugin and getShellApiDtsContent read shell declarations\)/,
+        ],
+        [
             'unowned-script',
             (files) => {
                 files.set('extension/stray-proof.js', Buffer.from('console.log("harmless proof");'));
@@ -103,14 +117,14 @@ try {
         console.log(`PASS: ${name} rejected for the expected reason`);
     }
     const files = readVsix(filename);
-    assert.ok(files.delete('extension/resources/vscode-documentdb-marketplace-logo.png'));
+    assert.ok(files.delete('extension/resources/readme/vscode-documentdb-hero-screenshot.png'));
     files.set('extension/resources/proof-added.svg', Buffer.from('<svg xmlns="http://www.w3.org/2000/svg"/>'));
     const variant = path.join(directory, 'asset-added-and-removed-reported.vsix');
     writeVsix(variant, files);
     const { manifestReport } = inspect(variant, options);
     assert.deepEqual(
         manifestReport.removed,
-        [...originalManifestReport.removed, 'extension/resources/vscode-documentdb-marketplace-logo.png'].sort(),
+        [...originalManifestReport.removed, 'extension/resources/readme/vscode-documentdb-hero-screenshot.png'].sort(),
     );
     assert.deepEqual(
         manifestReport.added,

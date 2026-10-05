@@ -11,6 +11,10 @@ const { test } = require('node:test');
 const {
     compareManifest,
     inspectRequiredFiles,
+    manifestAssets,
+    inspectManifestAssets,
+    inspectRuntimeAssets,
+    runtimeAssets,
     inspectJavaScript,
     entryGraph,
     viteViewGraph,
@@ -184,6 +188,106 @@ test('required package files and the extensionless or explicit main entry must e
     assert.throws(() => inspectRequiredFiles(required), /main must resolve inside extension/);
     required.set('extension/package.json', Buffer.from('{}'));
     assert.throws(() => inspectRequiredFiles(required), /required main field is missing/);
+});
+
+test('manifest assets derive generic local file paths and JSON pointers, including string and object icons', () => {
+    const packageJson = {
+        icon: 'resources/marketplace.png',
+        contributes: {
+            languages: [
+                {
+                    extensions: ['.documentdb.js'],
+                    configuration: './language.json',
+                    icon: { light: './light.svg', dark: 'dark.svg' },
+                },
+            ],
+            grammars: [{ path: './syntaxes/playground.tmGrammar.json' }],
+            snippets: [{ path: './snippets.json' }],
+            commands: [{ command: 'documentDB.command.open', icon: 'icons/command.svg' }, { icon: '$(add)' }],
+            views: { explorer: [{ icon: { light: 'icons/view-light.svg', dark: 'icons/view-dark.svg' } }] },
+            viewsContainers: { activitybar: [{ icon: 'icons/container.svg' }] },
+            walkthroughs: [{ steps: [{ media: { markdown: './walkthrough.md' } }] }],
+            jsonValidation: [
+                { url: './schema.json' },
+                { url: 'https://example.test/schema.json' },
+                { url: 'file:///schema.json' },
+                { url: '//example.test/schema.json' },
+            ],
+            typescriptServerPlugins: [{ name: './plugin.js' }, { name: 'plugin-package' }],
+            configuration: {
+                properties: {
+                    'example/with~escape': { default: './defaults.json' },
+                    remote: { default: '${workspaceFolder}/config.json' },
+                },
+            },
+        },
+    };
+    assert.deepEqual(manifestAssets(packageJson), [
+        { path: 'extension/resources/marketplace.png', pointer: '/icon' },
+        { path: 'extension/language.json', pointer: '/contributes/languages/0/configuration' },
+        { path: 'extension/light.svg', pointer: '/contributes/languages/0/icon/light' },
+        { path: 'extension/dark.svg', pointer: '/contributes/languages/0/icon/dark' },
+        { path: 'extension/syntaxes/playground.tmGrammar.json', pointer: '/contributes/grammars/0/path' },
+        { path: 'extension/snippets.json', pointer: '/contributes/snippets/0/path' },
+        { path: 'extension/icons/command.svg', pointer: '/contributes/commands/0/icon' },
+        { path: 'extension/icons/view-light.svg', pointer: '/contributes/views/explorer/0/icon/light' },
+        { path: 'extension/icons/view-dark.svg', pointer: '/contributes/views/explorer/0/icon/dark' },
+        { path: 'extension/icons/container.svg', pointer: '/contributes/viewsContainers/activitybar/0/icon' },
+        { path: 'extension/walkthrough.md', pointer: '/contributes/walkthroughs/0/steps/0/media/markdown' },
+        { path: 'extension/schema.json', pointer: '/contributes/jsonValidation/0/url' },
+        { path: 'extension/plugin.js', pointer: '/contributes/typescriptServerPlugins/0/name' },
+        {
+            path: 'extension/defaults.json',
+            pointer: '/contributes/configuration/properties/example~1with~0escape/default',
+        },
+    ]);
+    assert.throws(() => manifestAssets({ icon: '../outside.svg' }), /must resolve inside extension/);
+});
+
+test('missing contributed grammar fails with the packaged path and JSON pointer', () => {
+    const grammar = 'extension/syntaxes/documentdb-playground.tmGrammar.json';
+    const bundled = new Map([
+        [
+            'extension/package.json',
+            Buffer.from(
+                JSON.stringify({
+                    contributes: { grammars: [{ path: './syntaxes/documentdb-playground.tmGrammar.json' }] },
+                }),
+            ),
+        ],
+        [grammar, Buffer.from('{}')],
+    ]);
+    inspectManifestAssets(bundled);
+    bundled.delete(grammar);
+    assert.throws(() => inspectManifestAssets(bundled), {
+        message: `VSIX missing manifest-declared asset: ${grammar} (/contributes/grammars/0/path)`,
+    });
+});
+
+test('every runtime asset is required with its reason, including the shell declarations', () => {
+    const bundled = new Map(runtimeAssets.map((asset) => [asset.path, Buffer.from('fixture')]));
+    inspectRuntimeAssets(bundled);
+    for (const asset of runtimeAssets) {
+        const missing = new Map(bundled);
+        missing.delete(asset.path);
+        assert.throws(() => inspectRuntimeAssets(missing), {
+            message: `VSIX missing runtime asset: ${asset.path} (${asset.reason})`,
+        });
+    }
+});
+
+test('unrelated informational asset removal passes the asset gates and is still reported', () => {
+    const unrelated = 'extension/resources/readme/vscode-documentdb-hero-screenshot.png';
+    const bundled = new Map([
+        ...files,
+        ...runtimeAssets.map((asset) => [asset.path, Buffer.from('fixture')]),
+        [unrelated, Buffer.from('image')],
+    ]);
+    const baseline = { version: 1, tolerance: { fraction: 0.1, absoluteBytes: 4096 }, files: manifest(bundled) };
+    bundled.delete(unrelated);
+    inspectManifestAssets(bundled);
+    inspectRuntimeAssets(bundled);
+    assert.deepEqual(compareManifest(bundled, baseline).removed, [unrelated]);
 });
 
 for (const extension of ['js', 'cjs', 'mjs']) {

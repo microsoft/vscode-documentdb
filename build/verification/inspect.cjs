@@ -35,6 +35,90 @@ const requiredFiles = [
     'extension/LICENSE.md',
     'extension/NOTICE.html',
 ];
+const runtimeAssets = [
+    {
+        path: 'extension/typeDefs/documentdb-shell-api.d.ts',
+        reason: 'Playground TS plugin and getShellApiDtsContent read shell declarations',
+    },
+    {
+        path: 'extension/resources/prompts/index-advisor-find.prompt.md',
+        reason: 'Index advisor loads the find prompt body',
+    },
+    {
+        path: 'extension/resources/prompts/index-advisor-aggregate.prompt.md',
+        reason: 'Index advisor loads the aggregate prompt body',
+    },
+    {
+        path: 'extension/resources/prompts/index-advisor-count.prompt.md',
+        reason: 'Index advisor loads the count prompt body',
+    },
+    {
+        path: 'extension/resources/icons/playground-block-active.svg',
+        reason: 'Playground block highlighter loads the dark active gutter icon',
+    },
+    {
+        path: 'extension/resources/icons/playground-block-active-light.svg',
+        reason: 'Playground block highlighter loads the light active gutter icon',
+    },
+    {
+        path: 'extension/resources/icons/playground-block-inactive.svg',
+        reason: 'Playground block highlighter loads the dark inactive gutter icon',
+    },
+    {
+        path: 'extension/resources/icons/playground-block-inactive-light.svg',
+        reason: 'Playground block highlighter loads the light inactive gutter icon',
+    },
+    { path: 'extension/resources/icons/document-view-light.svg', reason: 'Document View loads its light panel icon' },
+    { path: 'extension/resources/icons/document-view-dark.svg', reason: 'Document View loads its dark panel icon' },
+    {
+        path: 'extension/resources/icons/collection-view-light.svg',
+        reason: 'Collection View and Cluster Dashboard load their light panel icon',
+    },
+    {
+        path: 'extension/resources/icons/collection-view-dark.svg',
+        reason: 'Collection View and Cluster Dashboard load their dark panel icon',
+    },
+    {
+        path: 'extension/resources/icons/vscode-documentdb-icon-light-themes.svg',
+        reason: 'Quick Start, credentials and local connection nodes load their light icon',
+    },
+    {
+        path: 'extension/resources/icons/vscode-documentdb-icon-dark-themes.svg',
+        reason: 'Quick Start, credentials and local connection nodes load their dark icon',
+    },
+    {
+        path: 'extension/resources/icons/vscode-documentdb-cluster-light-themes.svg',
+        reason: 'Kubernetes cluster nodes load their light icon',
+    },
+    {
+        path: 'extension/resources/icons/vscode-documentdb-cluster-dark-themes.svg',
+        reason: 'Kubernetes cluster nodes load their dark icon',
+    },
+    {
+        path: 'extension/resources/icons/theme-agnostic/AzureDocumentDb.svg',
+        reason: 'Azure DocumentDB nodes and selection steps load their icon',
+    },
+    {
+        path: 'extension/resources/from_node_modules/@microsoft/vscode-azext-azureutils/resources/azureSubscription.svg',
+        reason: 'Azure subscription nodes and selection steps load their icon',
+    },
+    {
+        path: 'extension/resources/from_node_modules/@microsoft/vscode-azext-azureutils/resources/azureIcons/AzureCosmosDb.svg',
+        reason: 'Azure RU nodes and selection steps load their icon',
+    },
+    {
+        path: 'extension/resources/from_node_modules/@microsoft/vscode-azext-azureutils/resources/azureIcons/MongoClusters.svg',
+        reason: 'Azure discovery subscription nodes load their icon',
+    },
+    {
+        path: 'extension/resources/debug/query-insights-stage1.json',
+        reason: 'Query Insights reads the stage 1 debug override when present',
+    },
+    {
+        path: 'extension/resources/debug/query-insights-stage2.json',
+        reason: 'Query Insights reads the stage 2 debug override when present',
+    },
+];
 // ADO regenerates NOTICE.html (notice@0) and falls back to the committed copy if that task fails.
 const sizeExempt = new Set(['extension/NOTICE.html']);
 
@@ -71,6 +155,53 @@ function inspectRequiredFiles(files) {
         files.has(resolved) || files.has(`${resolved}.js`),
         `VSIX missing required file for package.json main: ${resolved} (or ${resolved}.js)`,
     );
+}
+
+function manifestAssets(packageJson) {
+    const assets = [];
+    function walk(value, pointer) {
+        if (typeof value === 'string') {
+            if (/^[A-Za-z][A-Za-z0-9+.-]*:|^[/\\]|\$\{|\$\(/.test(value)) {
+                return;
+            }
+            const reference = value.split(/[?#]/)[0];
+            // Bare dotted identifiers and language suffixes are not file paths; qualified paths
+            // may have multi-dot filenames (grammars, declarations), as may bare .d.ts files.
+            if (
+                !/^[^\s\\]+\.[A-Za-z][A-Za-z0-9]*$/.test(reference) ||
+                (!reference.includes('/') && !/^[^.\s]+(?:\.d)?\.[A-Za-z][A-Za-z0-9]*$/.test(reference))
+            ) {
+                return;
+            }
+            const resolved = path.posix.normalize(path.posix.join('extension', reference));
+            assert.ok(
+                resolved.startsWith('extension/'),
+                `Manifest asset must resolve inside extension/: ${value} (${pointer})`,
+            );
+            assets.push({ path: resolved, pointer });
+        } else if (value && typeof value === 'object') {
+            for (const [key, child] of Object.entries(value)) {
+                walk(child, `${pointer}/${key.replace(/~/g, '~0').replace(/\//g, '~1')}`);
+            }
+        }
+    }
+    walk(packageJson.icon, '/icon');
+    walk(packageJson.contributes, '/contributes');
+    return assets;
+}
+
+function inspectManifestAssets(files) {
+    const assets = manifestAssets(JSON.parse(files.get('extension/package.json').toString('utf8')));
+    for (const asset of assets) {
+        assert.ok(files.has(asset.path), `VSIX missing manifest-declared asset: ${asset.path} (${asset.pointer})`);
+    }
+    return assets;
+}
+
+function inspectRuntimeAssets(files) {
+    for (const asset of runtimeAssets) {
+        assert.ok(files.has(asset.path), `VSIX missing runtime asset: ${asset.path} (${asset.reason})`);
+    }
 }
 
 function compareManifest(files, baseline) {
@@ -378,6 +509,8 @@ function viewGraphs(report, files, { requireLightweightViews = false } = {}) {
 function inspect(filename, options = {}) {
     const files = readVsix(filename);
     inspectRequiredFiles(files);
+    const declaredAssets = inspectManifestAssets(files);
+    inspectRuntimeAssets(files);
     const directory = options.reports || path.join(__dirname, 'reports');
     const reports = ['host', 'views'].map((name) =>
         JSON.parse(fs.readFileSync(path.join(directory, `${name}.json`), 'utf8')),
@@ -413,6 +546,7 @@ function inspect(filename, options = {}) {
         vsixBytes: fs.statSync(filename).size,
         files: manifest(files),
         graphs,
+        requiredAssets: { manifestDeclared: declaredAssets, runtime: runtimeAssets },
     };
     const baseline = options.baseline ? JSON.parse(fs.readFileSync(options.baseline, 'utf8')) : undefined;
     result.manifestReport = {
@@ -492,6 +626,10 @@ module.exports = {
     inspect,
     compareManifest,
     inspectRequiredFiles,
+    manifestAssets,
+    inspectManifestAssets,
+    inspectRuntimeAssets,
+    runtimeAssets,
     inspectJavaScript,
     entryGraph,
     viteViewGraph,
