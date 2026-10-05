@@ -3,91 +3,90 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-// Runtime `bson` identity check. Builds small probe entries with `webpack.config.ext.cjs` (its
-// resolve aliases, loaders, externals and production mode), runs them in Node, and requires every
-// route to `ObjectId` in each graph to be the same constructor. L1 counts BSON modules in the shipped
-// graphs; this checks identity at runtime. Stage 5 moved the shipped host build to
-// vite.config.ext.mjs (same `bson` pin); until this check is ported to it, it exercises the webpack
-// configuration's equivalent pin, not the shipped bundler.
-
+// Build runtime identity probes with the shipped Vite host environment, not a parallel config.
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
-const CopyWebpackPlugin = require('copy-webpack-plugin');
-const webpack = require('webpack');
-const { BundleReportPlugin } = require('../BundleReportPlugin.cjs');
+const { pathToFileURL } = require('node:url');
 
 const repository = path.resolve(__dirname, '../../..');
-const createConfig = require(path.join(repository, 'webpack.config.ext.cjs'));
 const probes = { main: 'hostProbe.ts', playgroundWorker: 'workerProbe.ts' };
 const reference = 'mongodb';
 
-function probeConfig(outputPath, { withoutAlias }) {
-    const config = createConfig({}, { mode: 'production' });
-    assert.ok(config.resolve?.alias?.bson$, 'webpack.config.ext.cjs no longer pins bson (resolve.alias.bson$)');
-    if (withoutAlias) {
-        delete config.resolve.alias.bson$;
-    }
-    return {
+async function compile(outputPath, { withoutAlias }) {
+    const { createBuilder } = await import('vite');
+    const { default: createConfig } = await import(pathToFileURL(path.join(repository, 'vite.config.ext.mjs')));
+    const config = await createConfig({ mode: 'production', command: 'build' });
+    const bsonAlias = config.resolve.alias.find((alias) => alias.find instanceof RegExp && alias.find.test('bson'));
+    assert.ok(bsonAlias, 'vite.config.ext.mjs no longer pins bson (resolve.alias)');
+    const host = config.environments.host;
+    let chunks;
+    const builder = await createBuilder({
         ...config,
-        context: repository,
-        entry: Object.fromEntries(Object.entries(probes).map(([name, file]) => [name, path.join(__dirname, file)])),
-        output: { ...config.output, path: outputPath },
-        // The report plugin would overwrite the real bundle report; copying assets is irrelevant here.
-        plugins: config.plugins.filter(
-            (plugin) => !(plugin instanceof BundleReportPlugin) && !(plugin instanceof CopyWebpackPlugin),
-        ),
-        infrastructureLogging: { level: 'error' },
-    };
+        configFile: false,
+        mode: 'production',
+        logLevel: 'silent',
+        resolve: {
+            ...config.resolve,
+            alias: config.resolve.alias.filter((alias) => !(withoutAlias && alias === bsonAlias)),
+        },
+        environments: {
+            host: {
+                ...host,
+                build: {
+                    ...host.build,
+                    outDir: outputPath,
+                    rolldownOptions: {
+                        ...host.build.rolldownOptions,
+                        input: Object.fromEntries(
+                            Object.entries(probes).map(([name, file]) => [name, path.join(__dirname, file)]),
+                        ),
+                    },
+                },
+            },
+        },
+        builder: {
+            async buildApp(builder) {
+                await builder.build(builder.environments.host);
+            },
+        },
+        // Never copy product assets or overwrite the packaged artifact's provenance report.
+        plugins: [
+            {
+                name: 'documentdb:bson-probe-chunks',
+                generateBundle(_options, bundle) {
+                    chunks = Object.values(bundle).filter((output) => output.type === 'chunk');
+                },
+            },
+        ],
+    });
+    await builder.buildApp();
+    assert.ok(chunks, 'BSON probe build produced no chunks');
+    return chunks;
 }
 
-function compile(config) {
-    return new Promise((resolve, reject) => {
-        webpack(config, (error, stats) => {
-            if (error) {
-                reject(error);
-            } else if (stats.hasErrors()) {
-                reject(new Error(stats.toString({ all: false, errors: true })));
-            } else {
-                resolve(stats);
-            }
-        });
-    });
-}
-
-function bsonModules(stats, entryName) {
-    const json = stats.toJson({
-        all: false,
-        entrypoints: true,
-        chunks: true,
-        chunkModules: true,
-        nestedModules: true,
-        dependentModules: true,
-        ids: true,
-        chunkModulesSpace: Infinity,
-        nestedModulesSpace: Infinity,
-        groupModulesByAttributes: false,
-        groupModulesByType: false,
-        groupModulesByCacheStatus: false,
-        groupModulesByLayer: false,
-        groupModulesByPath: false,
-        groupModulesByExtension: false,
-    });
-    const chunkIds = new Set(json.entrypoints[entryName].chunks);
+function bsonModules(chunks, entryName) {
+    const entry = chunks.find((chunk) => chunk.isEntry && chunk.name === entryName);
+    assert.ok(entry, `BSON probe build missing entry ${entryName}`);
+    const pending = [entry.fileName];
+    const visited = new Set();
     const found = new Set();
-    const collect = (modules) => {
-        for (const module of modules || []) {
-            const identifier = (module.identifier || '').replaceAll('\\', '/');
-            const match = /\/node_modules\/((?:.*\/node_modules\/)?bson\/.*)$/.exec(identifier);
-            if (match) {
-                found.add(match[1]);
-            }
-            collect(module.modules);
+    while (pending.length) {
+        const filename = pending.pop();
+        if (visited.has(filename)) continue;
+        visited.add(filename);
+        const chunk = chunks.find((candidate) => candidate.fileName === filename);
+        assert.ok(chunk, `BSON probe build missing chunk ${filename}`);
+        for (const moduleId of chunk.moduleIds) {
+            const match = /\/node_modules\/((?:.*\/node_modules\/)?bson\/.*)$/.exec(moduleId.replaceAll('\\', '/'));
+            if (match) found.add(match[1]);
         }
-    };
-    for (const chunk of json.chunks.filter((candidate) => chunkIds.has(candidate.id))) {
-        collect(chunk.modules);
+        pending.push(
+            ...[...chunk.imports, ...chunk.dynamicImports].filter((name) =>
+                chunks.some((candidate) => candidate.fileName === name),
+            ),
+        );
     }
     return [...found].sort();
 }
@@ -95,12 +94,13 @@ function bsonModules(stats, entryName) {
 async function checkBsonIdentity({ withoutAlias = false } = {}) {
     const outputPath = fs.mkdtempSync(path.join(os.tmpdir(), 'documentdb-bson-identity-'));
     try {
-        const stats = await compile(probeConfig(outputPath, { withoutAlias }));
+        const chunks = await compile(outputPath, { withoutAlias });
         const results = {};
         const failures = [];
         for (const name of Object.keys(probes)) {
-            const modules = bsonModules(stats, name);
-            const routes = require(path.join(outputPath, `${name}.js`)).objectIdRoutes();
+            const modules = bsonModules(chunks, name);
+            const { objectIdRoutes } = await import(pathToFileURL(path.join(outputPath, `${name}.mjs`)));
+            const routes = objectIdRoutes();
             const expected = routes[reference];
             assert.equal(typeof expected, 'function', `${name}: ObjectId via ${reference} is not a constructor`);
             const instance = new expected();
@@ -121,15 +121,13 @@ async function checkBsonIdentity({ withoutAlias = false } = {}) {
 }
 
 async function main(args) {
-    const prove = args.includes('--prove');
     const results = await checkBsonIdentity({ withoutAlias: args.includes('--without-alias') });
     for (const [name, result] of Object.entries(results)) {
         console.log(
             `PASS: ${name}: ${result.routes.length} routes to ObjectId share one constructor (${result.bsonModules.join(', ')})`,
         );
     }
-    if (prove) {
-        // Negative control: without the alias, the ES-module route gets bson's ESM build.
+    if (args.includes('--prove')) {
         await assert.rejects(checkBsonIdentity({ withoutAlias: true }), /bson\/lib\/bson\.node\.mjs/);
         console.log('PASS: bson-alias-removed rejected for the expected reason');
     }

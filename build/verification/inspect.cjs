@@ -6,6 +6,7 @@
 const assert = require('node:assert/strict');
 const { createHash } = require('node:crypto');
 const fs = require('node:fs');
+const { builtinModules } = require('node:module');
 const path = require('node:path');
 const { parse } = require('acorn');
 const { ancestor, fullAncestor } = require('acorn-walk');
@@ -24,18 +25,32 @@ const monacoModuleLoaderImports = [
     { filename: /^extension\/monaco-[A-Za-z0-9_-]+\.js$/, maximum: 1, allowIdentifier: true },
     { filename: /^extension\/(?:editor|json)\.worker-[A-Za-z0-9_-]+\.js$/, maximum: 2, allowIdentifier: false },
 ];
+const babelConfigFileImports = {
+    moduleId: './node_modules/@babel/core/lib/config/files/import.cjs',
+    maximum: 1,
+};
+const nodeBuiltins = new Set(builtinModules);
 const requiredFiles = [
     'extension.vsixmanifest',
     '[Content_Types].xml',
     'extension/package.json',
     'extension/views.js',
-    'extension/playgroundWorker.js',
-    'extension/playgroundTsPlugin.js',
+    'extension/main.mjs',
+    'extension/playgroundWorker.mjs',
+    'extension/playgroundTsPlugin.cjs',
     'extension/package.nls.json',
     'extension/LICENSE.md',
     'extension/NOTICE.html',
 ];
 const runtimeAssets = [
+    {
+        path: 'extension/playgroundWorker.mjs',
+        reason: "Playground starts the worker from path.join(ext.context.extensionPath, 'playgroundWorker.mjs')",
+    },
+    {
+        path: 'extension/playgroundTsPlugin.cjs',
+        reason: 'Runtime node_modules/documentdb-playground-ts-plugin/{package.json,index.cjs} stub loads ../../playgroundTsPlugin.cjs',
+    },
     {
         path: 'extension/typeDefs/documentdb-shell-api.d.ts',
         reason: 'Playground TS plugin and getShellApiDtsContent read shell declarations',
@@ -406,6 +421,63 @@ function monacoModuleLoaderImportLimit(filename, node, ancestors, bindings) {
     return 0;
 }
 
+function isRuntimeExternal(reference) {
+    return reference === 'vscode' || reference.startsWith('node:') || nodeBuiltins.has(reference);
+}
+
+function isViteHostReport(report) {
+    return report.bundler === 'vite' && report.chunks?.some((chunk) => chunk.isEntry && chunk.fileName === 'main.mjs');
+}
+
+function babelConfigFileImportLimit(node, ancestors) {
+    const helper = ancestors.at(-4);
+    const assignment = ancestors.at(-5);
+    const statement = ancestors.at(-6);
+    const block = ancestors.at(-7);
+    const factory = ancestors.at(-8);
+    const call = ancestors.at(-9);
+    const declaration = ancestors.at(-10);
+    // Babel's import.cjs exports only function import_(filepath) { return import(filepath); }.
+    // Its argument is a parameter, not an arbitrary binding/template. The bundled factory and
+    // its exact body prevent another import elsewhere in the owning worker reusing this allowance.
+    return node.source.type === 'Identifier' &&
+        helper?.type === 'FunctionExpression' &&
+        helper.id?.name === 'import_' &&
+        !helper.async &&
+        !helper.generator &&
+        helper.params.length === 1 &&
+        helper.params[0].type === 'Identifier' &&
+        helper.params[0].name === node.source.name &&
+        helper.body.body.length === 1 &&
+        helper.body.body[0].type === 'ReturnStatement' &&
+        helper.body.body[0].argument === node &&
+        assignment?.type === 'AssignmentExpression' &&
+        assignment.operator === '=' &&
+        assignment.right === helper &&
+        assignment.left.type === 'MemberExpression' &&
+        !assignment.left.computed &&
+        assignment.left.property.name === 'exports' &&
+        assignment.left.object.type === 'Identifier' &&
+        factory?.type === 'ArrowFunctionExpression' &&
+        factory.params.length === 2 &&
+        factory.params[1].type === 'Identifier' &&
+        factory.params[1].name === assignment.left.object.name &&
+        block === factory.body &&
+        block.body.length === 1 &&
+        block.body[0] === statement &&
+        statement.type === 'ExpressionStatement' &&
+        call?.type === 'CallExpression' &&
+        call.arguments.length === 1 &&
+        call.arguments[0] === factory &&
+        call.callee.type === 'Identifier' &&
+        ['__commonJSMin', '__commonJS'].includes(call.callee.name) &&
+        declaration?.type === 'VariableDeclarator' &&
+        declaration.id.name === 'require_import' &&
+        declaration.init === call
+        ? babelConfigFileImports.maximum
+        : 0;
+}
+
 function inspectJavaScript(files, reports) {
     for (const [filename, data] of files) {
         if (!/\.(?:js|cjs|mjs)$/.test(filename)) {
@@ -418,10 +490,26 @@ function inspectJavaScript(files, reports) {
         if (filename.startsWith('extension/')) {
             assert.ok(compilations.length > 0, `${filename}: unowned script; no bundle report assetHashes entry`);
         }
-        const commonJs = filename.endsWith('.cjs') || compilations.some((report) => report.chunkFormat === 'commonjs');
+        const commonJs =
+            filename.endsWith('.cjs') ||
+            (!filename.endsWith('.mjs') && compilations.some((report) => report.chunkFormat === 'commonjs'));
         const viteOwned = compilations.some((report) => report.bundler === 'vite');
+        const hostOwned = compilations.some(isViteHostReport);
+        const babelOwned =
+            hostOwned &&
+            filename.endsWith('.mjs') &&
+            compilations.some(
+                (report) =>
+                    isViteHostReport(report) &&
+                    report.chunks.some(
+                        (chunk) =>
+                            `extension/${chunk.fileName}` === filename &&
+                            chunk.moduleIds.includes(babelConfigFileImports.moduleId),
+                    ),
+            );
         const webpackCompilations = compilations.filter((report) => report.bundler !== 'vite');
         let monacoModuleLoaderImportCount = 0;
+        let babelConfigFileImportCount = 0;
         assert.ok(!/127\.0\.0\.1:18080|DEVSERVER/.test(source), `${filename}: development-server string in production`);
         const tree = parse(source, { ecmaVersion: 'latest', sourceType: 'module', allowReturnOutsideFunction: true });
         const bindings =
@@ -449,6 +537,14 @@ function inspectJavaScript(files, reports) {
                 assert.ok(!(commonJs && node.meta.name === 'import'), `${filename}: import.meta in a CommonJS bundle`);
             },
             ImportExpression(node, _state, ancestors) {
+                if (babelOwned && babelConfigFileImportLimit(node, ancestors) > 0) {
+                    babelConfigFileImportCount++;
+                    assert.ok(
+                        babelConfigFileImportCount <= babelConfigFileImports.maximum,
+                        `${filename}: nonliteral dynamic import exceeds babelConfigFileImports allowlist`,
+                    );
+                    return;
+                }
                 const maximum = viteOwned ? monacoModuleLoaderImportLimit(filename, node, ancestors, bindings) : 0;
                 if (maximum > 0) {
                     monacoModuleLoaderImportCount++;
@@ -460,6 +556,7 @@ function inspectJavaScript(files, reports) {
                 }
                 const reference = literalString(node.source, viteOwned);
                 assert.ok(typeof reference === 'string', `${filename}: nonliteral dynamic import cannot be verified`);
+                if (hostOwned && filename.endsWith('.mjs') && isRuntimeExternal(reference)) return;
                 resolveAsset(files, filename, reference);
             },
             ImportDeclaration(node) {
@@ -514,6 +611,13 @@ function inspectJavaScript(files, reports) {
                 }
             },
         });
+        if (babelOwned) {
+            assert.equal(
+                babelConfigFileImportCount,
+                babelConfigFileImports.maximum,
+                `${filename}: expected exactly ${babelConfigFileImports.maximum} babelConfigFileImports allowlisted import`,
+            );
+        }
         // Inspect as a module first to retain the explicit CommonJS import.meta diagnostic.
         if (commonJs && !filename.endsWith('.mjs')) {
             parse(source, { ecmaVersion: 'latest', sourceType: 'script', allowReturnOutsideFunction: true });
@@ -571,13 +675,9 @@ function summarizeGraph(entryName, assets, modules, allowAbsentBson) {
     };
 }
 
-function viteViewGraph(report, name, files) {
-    const entry = report.chunks.find((chunk) => chunk.isEntry && chunk.fileName === 'views.js');
-    assert.ok(entry, 'Bundle report missing entry views.js');
-    const lazy = report.chunks.find((chunk) => chunk.facadeModuleId === viewModules[name]);
-    assert.ok(lazy && entry.dynamicImports.includes(lazy.fileName), `${name}: missing lazy chunk`);
+function viteChunkClosure(report, name, roots, files, { dynamic = false, host = false } = {}) {
     const chunks = new Map(report.chunks.map((chunk) => [chunk.fileName, chunk]));
-    const pending = [entry.fileName, lazy.fileName];
+    const pending = [...roots];
     const assets = new Set();
     const modules = new Set();
     while (pending.length) {
@@ -588,14 +688,50 @@ function viteViewGraph(report, name, files) {
         const chunk = chunks.get(asset);
         assert.ok(chunk, `${name}: bundle report missing chunk ${asset}`);
         assert.ok(files.has(`extension/${asset}`), `${name}: missing chunk ${asset}`);
+        if (host) {
+            assert.ok(
+                Object.hasOwn(report.assetHashes || {}, asset),
+                `${name}: host bundle report missing assetHashes ownership for chunk ${asset}`,
+            );
+        }
         assets.add(asset);
         for (const moduleId of chunk.moduleIds) {
             modules.add(moduleId.replaceAll('\\', '/'));
         }
-        // Only static edges: other views' lazy imports are not part of this view's graph.
-        pending.push(...chunk.imports);
+        const references = [...chunk.imports, ...(dynamic ? chunk.dynamicImports || [] : [])];
+        pending.push(...references.filter((reference) => !(host && isRuntimeExternal(reference))));
     }
+    return { assets, modules };
+}
+
+function viteViewGraph(report, name, files) {
+    const entry = report.chunks.find((chunk) => chunk.isEntry && chunk.fileName === 'views.js');
+    assert.ok(entry, 'Bundle report missing entry views.js');
+    const lazy = report.chunks.find((chunk) => chunk.facadeModuleId === viewModules[name]);
+    assert.ok(lazy && entry.dynamicImports.includes(lazy.fileName), `${name}: missing lazy chunk`);
+    // Other views' lazy imports are not part of this view's graph.
+    const { assets, modules } = viteChunkClosure(report, name, [entry.fileName, lazy.fileName], files);
     return summarizeGraph(name, assets, modules, true);
+}
+
+function hostGraphs(report, files) {
+    assert.equal(report.bundler, 'vite', 'Obsolete non-Vite host bundle report; regenerate with npm run package');
+    const graphs = {};
+    for (const name of ['main', 'playgroundWorker', 'playgroundTsPlugin']) {
+        const entry = report.chunks.find((chunk) => chunk.isEntry && chunk.name === name);
+        assert.ok(entry, `Bundle report missing host entry ${name}`);
+        const roots = [entry.fileName];
+        const { assets, modules } = viteChunkClosure(report, name, roots, files, { dynamic: true, host: true });
+        graphs[name] = summarizeGraph(name, assets, modules, name === 'playgroundTsPlugin');
+        if (name === 'main') {
+            const staticGraph = viteChunkClosure(report, name, roots, files, { host: true });
+            assert.ok(
+                ![...staticGraph.modules].some((id) => /\/node_modules\/@kubernetes\/client-node\//.test(id)),
+                'main: static closure must exclude @kubernetes/client-node; keep the SDK behind a dynamic import',
+            );
+        }
+    }
+    return graphs;
 }
 
 function viewGraphs(report, files, { requireLightweightViews = false } = {}) {
@@ -629,10 +765,10 @@ function inspect(filename, options = {}) {
             `Bundle report has unknown chunk format ${report.chunkFormat}; regenerate it`,
         );
     }
+    assert.equal(reports[0].bundler, 'vite', 'Obsolete non-Vite host bundle report; regenerate with npm run package');
     inspectJavaScript(files, reports);
     const graphs = {
-        main: entryGraph(reports[0], 'main', files),
-        playgroundWorker: entryGraph(reports[0], 'playgroundWorker', files),
+        ...hostGraphs(reports[0], files),
         ...viewGraphs(reports[1], files, options),
     };
     for (const report of reports) {
@@ -731,6 +867,10 @@ if (require.main === module) {
 }
 
 module.exports = {
+    babelConfigFileImports,
+    babelConfigFileImportLimit,
+    viteChunkClosure,
+    hostGraphs,
     inspect,
     compareManifest,
     inspectRequiredFiles,

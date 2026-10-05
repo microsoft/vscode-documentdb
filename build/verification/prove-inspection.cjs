@@ -4,10 +4,11 @@
  *--------------------------------------------------------------------------------------------*/
 
 const assert = require('node:assert/strict');
+const { createHash } = require('node:crypto');
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
-const { inspect } = require('./inspect.cjs');
+const { inspect, viteChunkClosure, babelConfigFileImports } = require('./inspect.cjs');
 const { readVsix, writeVsix } = require('./vsix.cjs');
 
 const args = process.argv.slice(2);
@@ -24,6 +25,7 @@ const baseline = path.join(__dirname, 'baseline.json');
 const options = { baseline, reports };
 const { manifestReport: originalManifestReport } = inspect(filename, options);
 const views = JSON.parse(fs.readFileSync(path.join(reports, 'views.json'), 'utf8'));
+const host = JSON.parse(fs.readFileSync(path.join(reports, 'host.json'), 'utf8'));
 const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'documentdb-broken-vsix-'));
 try {
     const variants = [
@@ -98,14 +100,14 @@ try {
             'import-meta-in-commonjs',
             (files) => {
                 files.set(
-                    'extension/main.js',
+                    'extension/playgroundTsPlugin.cjs',
                     Buffer.concat([
-                        files.get('extension/main.js'),
+                        files.get('extension/playgroundTsPlugin.cjs'),
                         Buffer.from('\nmodule.exports.proof = import.meta.dirname;'),
                     ]),
                 );
             },
-            /main\.js: import\.meta in a CommonJS bundle/,
+            /playgroundTsPlugin\.cjs: import\.meta in a CommonJS bundle/,
         ],
     ];
     for (const [name, mutate, expected] of variants) {
@@ -131,6 +133,92 @@ try {
         [...originalManifestReport.added, 'extension/resources/proof-added.svg'].sort(),
     );
     console.log('PASS: asset-added-and-removed-reported reported without failing');
+    const mainEntry = host.chunks.find((chunk) => chunk.isEntry && chunk.name === 'main');
+    const originalFiles = readVsix(filename);
+    const staticMain = viteChunkClosure(host, 'main', [mainEntry.fileName], originalFiles, { host: true });
+    const fullMain = viteChunkClosure(host, 'main', [mainEntry.fileName], originalFiles, { host: true, dynamic: true });
+    const lazyHostChunk = mainEntry.dynamicImports.find(
+        (file) => fullMain.assets.has(file) && !staticMain.assets.has(file),
+    );
+    assert.ok(lazyHostChunk, 'Proof requires a host chunk reachable only through dynamic imports');
+    const babelChunk = host.chunks.find((chunk) => chunk.moduleIds.includes(babelConfigFileImports.moduleId));
+    assert.ok(babelChunk, 'Proof requires Babel config-file loader chunk');
+    const kubernetesChunk = host.chunks.find((chunk) =>
+        chunk.moduleIds.some((id) => /\/node_modules\/@kubernetes\/client-node\//.test(id)),
+    );
+    assert.ok(kubernetesChunk, 'Proof requires Kubernetes SDK chunk');
+    const hostControls = [
+        [
+            'missing-host-lazy-chunk',
+            (files) => {
+                assert.ok(files.delete(`extension/${lazyHostChunk}`));
+            },
+            /main\.mjs: missing dynamic import\/asset/,
+        ],
+        [
+            'duplicate-host-bson',
+            undefined,
+            /main: expected exactly one BSON module, got 2/,
+            (report) => {
+                report.chunks
+                    .find((chunk) => chunk.name === 'main')
+                    .moduleIds.push('./node_modules/proof/node_modules/bson/lib/bson.cjs');
+            },
+        ],
+        [
+            'missing-ts-plugin',
+            (files) => {
+                assert.ok(files.delete('extension/playgroundTsPlugin.cjs'));
+            },
+            /missing required file: extension\/playgroundTsPlugin\.cjs/,
+        ],
+        [
+            'second-babel-nonliteral-import',
+            (files) => {
+                const file = `extension/${babelChunk.fileName}`;
+                files.set(
+                    file,
+                    Buffer.concat([
+                        files.get(file),
+                        Buffer.from(
+                            ';function s5Proof(){var require_import=__commonJSMin((e,m)=>{m.exports=function import_(t){return import(t)}});}',
+                        ),
+                    ]),
+                );
+            },
+            /nonliteral dynamic import exceeds babelConfigFileImports allowlist/,
+        ],
+        [
+            'kubernetes-in-main-static-closure',
+            undefined,
+            /main: static closure must exclude @kubernetes\/client-node/,
+            (report) => {
+                report.chunks.find((chunk) => chunk.name === 'main').imports.push(kubernetesChunk.fileName);
+            },
+        ],
+    ];
+    for (const [name, mutateFiles, expected, mutateReport] of hostControls) {
+        const files = readVsix(filename);
+        mutateFiles?.(files);
+        const controlReports = path.join(directory, name);
+        fs.mkdirSync(controlReports);
+        fs.copyFileSync(path.join(reports, 'views.json'), path.join(controlReports, 'views.json'));
+        const report = structuredClone(host);
+        mutateReport?.(report);
+        // Use matching hashes to model a newly built regression, not merely stale provenance.
+        for (const [asset] of Object.entries(report.assetHashes)) {
+            if (files.has(`extension/${asset}`)) {
+                report.assetHashes[asset] = createHash('sha256')
+                    .update(files.get(`extension/${asset}`))
+                    .digest('hex');
+            }
+        }
+        fs.writeFileSync(path.join(controlReports, 'host.json'), JSON.stringify(report));
+        const variant = path.join(directory, `${name}.vsix`);
+        writeVsix(variant, files);
+        assert.throws(() => inspect(variant, { ...options, reports: controlReports }), expected);
+        console.log(`PASS: ${name} rejected for the expected reason`);
+    }
     const viteControls = [
         'missing-lazy-chunk',
         'monaco-in-local-quick-start',

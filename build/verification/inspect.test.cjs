@@ -9,6 +9,7 @@ const os = require('node:os');
 const path = require('node:path');
 const { test } = require('node:test');
 const {
+    inspect,
     compareManifest,
     inspectRequiredFiles,
     manifestAssets,
@@ -17,6 +18,9 @@ const {
     runtimeAssets,
     inspectJavaScript,
     entryGraph,
+    hostGraphs,
+    viteChunkClosure,
+    babelConfigFileImports,
     viteViewGraph,
     viewGraphs,
     viewModules,
@@ -156,15 +160,15 @@ test('fractional size tolerance reports changes only beyond ten percent', () => 
     assert.throws(() => compareManifest(original, { ...baseline, version: 2 }), /Unsupported VSIX baseline version/);
 });
 
-test('required package files and the extensionless or explicit main entry must exist', () => {
+test('required ESM host entries and the resolved manifest main entry must exist', () => {
     const required = new Map([
         ...files,
         ['extension.vsixmanifest', Buffer.from('<xml/>')],
         ['[Content_Types].xml', Buffer.from('<xml/>')],
-        ['extension/package.json', Buffer.from('{"main":"./main"}')],
-        ['extension/main.js', Buffer.from('module.exports = {};')],
-        ['extension/playgroundWorker.js', Buffer.from('')],
-        ['extension/playgroundTsPlugin.js', Buffer.from('')],
+        ['extension/package.json', Buffer.from('{"main":"./main.mjs"}')],
+        ['extension/main.mjs', Buffer.from('export {};')],
+        ['extension/playgroundWorker.mjs', Buffer.from('')],
+        ['extension/playgroundTsPlugin.cjs', Buffer.from('')],
         ['extension/package.nls.json', Buffer.from('{}')],
         ['extension/LICENSE.md', Buffer.from('license')],
         ['extension/NOTICE.html', Buffer.from('notice')],
@@ -178,16 +182,211 @@ test('required package files and the extensionless or explicit main entry must e
             (error) => error.message.includes('missing required file') && error.message.includes(filename),
         );
     }
-    required.set('extension/package.json', Buffer.from('{"main":"./main.js"}'));
+    required.set('extension/package.json', Buffer.from('{"main":"./other.js"}'));
+    required.set('extension/other.js', Buffer.from(''));
     inspectRequiredFiles(required);
-    required.set('extension/package.json', Buffer.from('{"main":"./main"}'));
-    required.set('extension/main', required.get('extension/main.js'));
-    required.delete('extension/main.js');
+    required.set('extension/package.json', Buffer.from('{"main":"./other"}'));
+    inspectRequiredFiles(required);
+    required.set('extension/other', required.get('extension/other.js'));
+    required.delete('extension/other.js');
     inspectRequiredFiles(required);
     required.set('extension/package.json', Buffer.from('{"main":"../outside"}'));
     assert.throws(() => inspectRequiredFiles(required), /main must resolve inside extension/);
     required.set('extension/package.json', Buffer.from('{}'));
     assert.throws(() => inspectRequiredFiles(required), /required main field is missing/);
+});
+
+function hostFixture() {
+    const chunks = [
+        {
+            name: 'main',
+            fileName: 'main.mjs',
+            isEntry: true,
+            imports: ['runtime.mjs'],
+            dynamicImports: ['extension-AbC12345.mjs'],
+            moduleIds: ['./main.ts'],
+        },
+        {
+            name: 'playgroundWorker',
+            fileName: 'playgroundWorker.mjs',
+            isEntry: true,
+            imports: ['bson.mjs', 'runtime.mjs'],
+            dynamicImports: [],
+            moduleIds: [babelConfigFileImports.moduleId],
+        },
+        {
+            name: 'playgroundTsPlugin',
+            fileName: 'playgroundTsPlugin.cjs',
+            isEntry: true,
+            imports: ['fs', 'path'],
+            dynamicImports: [],
+            moduleIds: [],
+        },
+        {
+            fileName: 'extension-AbC12345.mjs',
+            imports: ['bson.mjs', 'vscode', 'node:path', 'fs'],
+            dynamicImports: ['kubernetes.mjs'],
+            moduleIds: ['./src/extension.ts'],
+        },
+        {
+            fileName: 'runtime.mjs',
+            imports: ['node:module'],
+            dynamicImports: [],
+            moduleIds: [],
+        },
+        {
+            fileName: 'bson.mjs',
+            imports: ['runtime.mjs'],
+            dynamicImports: ['extension-AbC12345.mjs'],
+            moduleIds: ['./node_modules/bson/lib/bson.cjs'],
+        },
+        {
+            fileName: 'kubernetes.mjs',
+            imports: ['runtime.mjs'],
+            dynamicImports: [],
+            moduleIds: ['./node_modules/@kubernetes/client-node/dist/index.js'],
+        },
+    ];
+    return {
+        report: {
+            bundler: 'vite',
+            chunkFormat: 'module',
+            chunks,
+            assetHashes: Object.fromEntries(chunks.map((chunk) => [chunk.fileName, 'fixture'])),
+        },
+        bundled: new Map(chunks.map((chunk) => [`extension/${chunk.fileName}`, Buffer.from('')])),
+    };
+}
+
+test('Vite host closures follow static and dynamic edges, including cycles and runtime externals', () => {
+    const { report, bundled } = hostFixture();
+    const graphs = hostGraphs(report, bundled);
+    assert.deepEqual(graphs.main.assets, [
+        'bson.mjs',
+        'extension-AbC12345.mjs',
+        'kubernetes.mjs',
+        'main.mjs',
+        'runtime.mjs',
+    ]);
+    assert.deepEqual(graphs.main.bsonModules, ['node_modules/bson/lib/bson.cjs']);
+    assert.ok(graphs.playgroundWorker.assets.includes('kubernetes.mjs'));
+    assert.deepEqual(graphs.playgroundTsPlugin.bsonModules, []);
+    assert.deepEqual([...viteChunkClosure(report, 'main', ['main.mjs'], bundled, { host: true }).assets].sort(), [
+        'main.mjs',
+        'runtime.mjs',
+    ]);
+});
+
+test('host BSON invariant requires one per host/worker and permits zero or one, never two, in the plugin', () => {
+    for (const name of ['main', 'playgroundWorker', 'playgroundTsPlugin']) {
+        const { report, bundled } = hostFixture();
+        const entry = report.chunks.find((chunk) => chunk.name === name);
+        entry.moduleIds.push('./node_modules/other/node_modules/bson/lib/bson.mjs');
+        if (name === 'playgroundTsPlugin') {
+            hostGraphs(report, bundled);
+            entry.moduleIds.push('./node_modules/bson/lib/bson.cjs');
+        }
+        assert.throws(() => hostGraphs(report, bundled), new RegExp(`${name}: expected .* one BSON module, got 2`));
+    }
+    const { report, bundled } = hostFixture();
+    report.chunks.find((chunk) => chunk.fileName === 'bson.mjs').moduleIds = [];
+    assert.throws(() => hostGraphs(report, bundled), /main: expected exactly one BSON module, got 0/);
+    report.chunks[0].moduleIds.push('./node_modules/bson/lib/bson.cjs');
+    assert.throws(() => hostGraphs(report, bundled), /playgroundWorker: expected exactly one BSON module, got 0/);
+});
+
+test('host graph edges require report chunks and packaged chunks, and obsolete reports require regeneration', () => {
+    const { report, bundled } = hostFixture();
+    assert.throws(() => hostGraphs({ bundler: 'webpack' }, bundled), /non-Vite host bundle report; regenerate/);
+    for (const edge of ['imports', 'dynamicImports']) {
+        report.chunks[0][edge].push('absent.mjs');
+        assert.throws(() => hostGraphs(report, bundled), /main: bundle report missing chunk absent\.mjs/);
+        report.chunks[0][edge].pop();
+    }
+    bundled.delete('extension/kubernetes.mjs');
+    assert.throws(() => hostGraphs(report, bundled), /main: missing chunk kubernetes\.mjs/);
+    bundled.set('extension/kubernetes.mjs', Buffer.from(''));
+    const hash = report.assetHashes['playgroundTsPlugin.cjs'];
+    delete report.assetHashes['playgroundTsPlugin.cjs'];
+    assert.throws(
+        () => hostGraphs(report, bundled),
+        /playgroundTsPlugin: host bundle report missing assetHashes ownership/,
+    );
+    report.assetHashes['playgroundTsPlugin.cjs'] = hash;
+    report.chunks[0].isEntry = false;
+    assert.throws(() => hostGraphs(report, bundled), /missing host entry main/);
+});
+
+test('Kubernetes SDK must remain outside the entire main static closure', () => {
+    const { report, bundled } = hostFixture();
+    hostGraphs(report, bundled);
+    report.chunks.find((chunk) => chunk.fileName === 'runtime.mjs').imports.push('kubernetes.mjs');
+    assert.throws(() => hostGraphs(report, bundled), /main: static closure must exclude @kubernetes\/client-node/);
+});
+
+test('dynamic runtime externals are allowed only in host-owned .mjs, not views, CJS or other packages', () => {
+    const { report, bundled } = hostFixture();
+    bundled.set('extension/playgroundWorker.mjs', Buffer.from(babelLoaderSource));
+    for (const reference of ['http', 'https', 'fs/promises', 'node:test', 'vscode']) {
+        bundled.set('extension/main.mjs', Buffer.from(`import('${reference}');`));
+        inspectJavaScript(bundled, [report]);
+        bundled.set('extension/main.mjs', Buffer.from(`import(\`${reference}\`);`));
+        inspectJavaScript(bundled, [report]);
+        assert.throws(
+            () =>
+                inspectJavaScript(
+                    new Map([
+                        ['extension/views.js', Buffer.from(`export function render(){};import('${reference}');`)],
+                    ]),
+                    [{ ...report, chunks: [], assetHashes: { 'views.js': 'fixture' } }],
+                ),
+            /missing dynamic import/,
+        );
+        bundled.set('extension/playgroundTsPlugin.cjs', Buffer.from(`import('${reference}');`));
+        assert.throws(() => inspectJavaScript(bundled, [report]), /playgroundTsPlugin\.cjs: missing dynamic import/);
+        bundled.set('extension/playgroundTsPlugin.cjs', Buffer.from(''));
+    }
+    bundled.set('extension/main.mjs', Buffer.from('import("@azure/arm-mongocluster");'));
+    assert.throws(() => inspectJavaScript(bundled, [report]), /missing dynamic import/);
+    bundled.set('extension/main.mjs', Buffer.from('import("./absent.mjs");'));
+    assert.throws(() => inspectJavaScript(bundled, [report]), /missing dynamic import/);
+});
+
+const babelLoaderSource = 'var require_import=__commonJSMin((e,m)=>{m.exports=function import_(t){return import(t)}});';
+
+test('Babel config-file allowance requires host module ownership, exact factory/helper/parameter shape and count', () => {
+    const { report, bundled } = hostFixture();
+    bundled.set('extension/playgroundWorker.mjs', Buffer.from(babelLoaderSource));
+    inspectJavaScript(bundled, [report]);
+    for (const invalid of [
+        babelLoaderSource.replace('import(t)', 'import(other)'),
+        babelLoaderSource.replace('import(t)', 'import(`${t}`)'),
+        babelLoaderSource.replace('import_', 'loadSomething'),
+        babelLoaderSource.replace('return import(t)', 't="./missing.mjs";return import(t)'),
+        babelLoaderSource.replace('m.exports', 'other.exports'),
+        babelLoaderSource.replace('require_import', 'other_factory'),
+        babelLoaderSource.replace('__commonJSMin', 'other_wrapper'),
+        'function import_(t){return import(t)}',
+        'const t="./missing.mjs";import(t)',
+    ]) {
+        bundled.set('extension/playgroundWorker.mjs', Buffer.from(invalid));
+        assert.throws(() => inspectJavaScript(bundled, [report]), /nonliteral dynamic import cannot be verified/);
+    }
+    bundled.set(
+        'extension/playgroundWorker.mjs',
+        Buffer.from(babelLoaderSource + `function extra(){${babelLoaderSource}}`),
+    );
+    assert.throws(() => inspectJavaScript(bundled, [report]), /exceeds babelConfigFileImports allowlist/);
+    bundled.set('extension/playgroundWorker.mjs', Buffer.from(''));
+    assert.throws(() => inspectJavaScript(bundled, [report]), /expected exactly 1 babelConfigFileImports/);
+    bundled.set('extension/main.mjs', Buffer.from(babelLoaderSource));
+    assert.throws(() => inspectJavaScript(bundled, [report]), /nonliteral dynamic import cannot be verified/);
+    bundled.set('extension/main.mjs', Buffer.from(''));
+    bundled.set('extension/playgroundWorker.mjs', Buffer.from(babelLoaderSource));
+    const nonHostReport = { ...report, chunks: report.chunks.filter((chunk) => chunk.name !== 'main') };
+    assert.throws(() => inspectJavaScript(bundled, [nonHostReport]), /nonliteral dynamic import cannot be verified/);
+    report.chunks[1].moduleIds = [];
+    assert.throws(() => inspectJavaScript(bundled, [report]), /nonliteral dynamic import cannot be verified/);
 });
 
 test('manifest assets derive generic local file paths and JSON pointers, including string and object icons', () => {
@@ -314,12 +513,79 @@ test('.cjs is inspected as CommonJS and .mjs as a module', () => {
     );
     bundled.set('extension/worker.cjs', Buffer.from('module.exports.text = "import.meta.dirname";'));
     inspectJavaScript(bundled, [viewReport, report]);
+    inspectJavaScript(bundled, [viewReport, { ...report, chunkFormat: 'commonjs' }]);
     bundled.set('extension/worker.cjs', Buffer.from('export const value = 1;'));
     assert.throws(() => inspectJavaScript(bundled, [viewReport, report]), /sourceType: module/);
     bundled.set('extension/worker.cjs', Buffer.from('import("./missing.mjs");'));
     assert.throws(() => inspectJavaScript(bundled, [viewReport, report]), /missing dynamic import/);
     bundled.set('extension/worker.cjs', Buffer.from('console.log("DEVSERVER");'));
     assert.throws(() => inspectJavaScript(bundled, [viewReport, report]), /development-server/);
+});
+
+test('host chunks and the CJS plugin require their own report ownership and matching packaged hashes', () => {
+    const { createHash } = require('node:crypto');
+    const host = hostFixture();
+    const views = viteFixture();
+    host.bundled.set('extension/playgroundWorker.mjs', Buffer.from(babelLoaderSource));
+    views.bundled.set('extension/views.js', Buffer.from('export function render(){}'));
+    const bundled = new Map([
+        ['extension.vsixmanifest', Buffer.from('<xml/>')],
+        ['[Content_Types].xml', Buffer.from('<xml/>')],
+        ['extension/package.json', Buffer.from('{"main":"./main.mjs"}')],
+        ['extension/package.nls.json', Buffer.from('{}')],
+        ['extension/LICENSE.md', Buffer.from('license')],
+        ['extension/NOTICE.html', Buffer.from('notice')],
+        ...runtimeAssets.map((asset) => [asset.path, Buffer.from('fixture')]),
+        ...host.bundled,
+        ...views.bundled,
+    ]);
+    for (const { report } of [host, views]) {
+        for (const asset of Object.keys(report.assetHashes)) {
+            report.assetHashes[asset] = createHash('sha256')
+                .update(bundled.get(`extension/${asset}`))
+                .digest('hex');
+        }
+    }
+    const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'documentdb-host-ownership-'));
+    const filename = path.join(directory, 'fixture.vsix');
+    const writeReports = () => {
+        fs.writeFileSync(path.join(directory, 'host.json'), JSON.stringify(host.report));
+        fs.writeFileSync(path.join(directory, 'views.json'), JSON.stringify(views.report));
+    };
+    try {
+        writeReports();
+        writeVsix(filename, bundled);
+        inspect(filename, { reports: directory });
+        const pluginHash = host.report.assetHashes['playgroundTsPlugin.cjs'];
+        delete host.report.assetHashes['playgroundTsPlugin.cjs'];
+        views.report.assetHashes['playgroundTsPlugin.cjs'] = pluginHash;
+        writeReports();
+        assert.throws(
+            () => inspect(filename, { reports: directory }),
+            /playgroundTsPlugin: host bundle report missing assetHashes ownership/,
+        );
+        host.report.assetHashes['playgroundTsPlugin.cjs'] = pluginHash;
+        delete views.report.assetHashes['playgroundTsPlugin.cjs'];
+        for (const asset of ['main.mjs', 'playgroundWorker.mjs', 'playgroundTsPlugin.cjs', 'runtime.mjs']) {
+            const hash = host.report.assetHashes[asset];
+            delete host.report.assetHashes[asset];
+            writeReports();
+            assert.throws(() => inspect(filename, { reports: directory }), /unowned script/);
+            host.report.assetHashes[asset] = hash;
+            writeReports();
+            const data = bundled.get(`extension/${asset}`);
+            bundled.set(`extension/${asset}`, Buffer.concat([data, Buffer.from('\n/* changed bytes */')]));
+            writeVsix(filename, bundled);
+            assert.throws(
+                () => inspect(filename, { reports: directory }),
+                /bundle report does not match packaged JavaScript/,
+            );
+            bundled.set(`extension/${asset}`, data);
+            writeVsix(filename, bundled);
+        }
+    } finally {
+        fs.rmSync(directory, { recursive: true, force: true });
+    }
 });
 
 test('production render export, native imports and webpack lazy chunks are checked', () => {

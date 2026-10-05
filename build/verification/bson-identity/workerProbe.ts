@@ -3,7 +3,7 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-// Built with `webpack.config.ext.cjs` as the `playgroundWorker` entry. The worker thread has its
+// Built with `vite.config.ext.mjs` as the `playgroundWorker` entry. The worker thread has its
 // own module graph, so identity is checked separately from the host.
 import * as bson from 'bson';
 import * as mongodb from 'mongodb';

@@ -8,8 +8,8 @@ All harness files and bundle reports are excluded from the VSIX.
 `npm run package` and `npm run package-prerelease` use `build-prod`: Vite for the extension host
 (`vite.config.ext.mjs`, ES modules plus the CommonJS TS server plugin) and for the webviews.
 `npm run build-dev` builds the same combination unminified with source maps, and `npm run watch:ext`
-rebuilds the host on change. Since Stage 5 there is no webpack host build: `webpack.config.ext.cjs`
-only configures the `bson` identity probes below. The webviews keep a webpack fallback
+rebuilds the host on change. Since Stage 5 there is no webpack host config: the `bson` identity
+probes below also reuse the shipped Vite host environment. The webviews keep a webpack fallback
 (`webpack-prod-wv`, `webpack-dev-wv`, `watch:views-webpack`) until Stage 6.
 
 `npm run watch:views` now starts Vite on port 18080 and serves `/views.js` without an existing
@@ -21,8 +21,7 @@ because Vite reports development build errors in the browser overlay.
 ## L1: offline inspection
 
 Production Vite host and views builds generate hash-bound reports in `reports/` (`host.json`
-covers `main.mjs`, `playgroundWorker.mjs`, their chunks and `playgroundTsPlugin.cjs`). The host side
-of the checks below still describes the webpack host report until it is ported to that shape.
+covers `main.mjs`, `playgroundWorker.mjs`, their chunks and `playgroundTsPlugin.cjs`).
 The webpack views fallback also generates a report. Enable its optional visual analyzer with
 `BUNDLE_ANALYZE=true`; it writes `reports/views.html` without starting a server.
 
@@ -40,11 +39,19 @@ package files and the resolved `package.json` main entry, bundle-report ownershi
 literal dynamic imports, webpack-owned lazy-chunk references, Vite literal `new URL(..., import.meta.url)`
 assets (fonts and workers), development-server strings, `import.meta` in
 CommonJS bundles (including `.cjs`), and reachable BSON implementations. Reports must match the packaged JavaScript
-hashes and record each compilation's `chunkFormat`; every JavaScript file of a `commonjs`
-compilation (today `main.js`, `playgroundWorker.js`, `playgroundTsPlugin.js` and their chunks) is
-parsed and rejected if it contains `import.meta`, which a `require` cannot load (Stage 3 found
-webpack leaving `import.meta.dirname` in `main.js`). Host and playground graphs
-require one BSON implementation; browser graphs allow zero because today's webviews do not bundle
+hashes and record each compilation's `chunkFormat`. `.mjs` files are ES modules; `.cjs` files
+(including `playgroundTsPlugin.cjs`) are CommonJS even in the combined host report and reject
+`import.meta`, which a `require` cannot load. Host `main` and `playgroundWorker` graphs include
+the entry plus all chunks reachable through both `imports` and `dynamicImports`: the thin
+`main.mjs` loader dynamically imports the extension implementation. Runtime externals (Node
+built-ins and `vscode`) are not packaged chunks; every other graph edge must exist in the report
+and VSIX. These two graphs require exactly one BSON implementation; the TS plugin graph permits
+zero or one, never duplicates. Every host graph chunk must have an `assetHashes` entry in the
+host report itself; ownership by a views report cannot substitute for host provenance.
+Non-Vite host reports fail with a regenerate message; the retained
+webpack graph reader and numeric `.e(chunkId)` checks apply only to webpack-owned views files.
+The `main` static closure (imports only) must exclude `@kubernetes/client-node`, preserving its
+dynamic discovery boundary. Browser graphs allow zero because today's webviews do not bundle
 BSON, but reject duplicates. Webpack views retain the shared `views` entry fallback. With a Vite
 views report (`bundler: 'vite'`), each graph is the `views.js` entry's static import closure plus
 that view's lazy chunk and its static import closure, never every dynamic child. The lazy chunk's
@@ -56,8 +63,16 @@ The packaged manifest's top-level icon and local file paths under `contributes` 
 with missing paths reported alongside their JSON pointers; URLs, substitutions and codicons are excluded.
 An explicit `runtimeAssets` list also requires shipped files read without manifest declarations
 (shell declarations, prompts, runtime icons and Query Insights debug overrides), with a reason per file.
+It also records the worker's `extensionPath`-relative `.mjs` entry and the TS plugin's `.cjs` target.
+The latter is loaded through a runtime-created
+`<ext>/node_modules/documentdb-playground-ts-plugin/{package.json,index.cjs}` stub pointing at
+`../../playgroundTsPlugin.cjs`; the stub itself is not a packaged asset.
 
-Nonliteral imports fail except for `monacoModuleLoaderImports`, which permits one-expression,
+Literal dynamic imports of Node built-ins (`node:`-prefixed or in `module.builtinModules`) and
+`vscode` are accepted only in host-report-owned `.mjs` files. Every other literal import must
+resolve to a packaged file, including imports in views and CommonJS files.
+
+Nonliteral imports fail except for two named, reviewed allowances. `monacoModuleLoaderImports` permits one-expression,
 empty-quasi templates wrapping `asBrowserUri(...).toString(...)` calls in Vite-owned
 `monaco-<hash>.js` (maximum one) or `editor.worker-<hash>.js` / `json.worker-<hash>.js` (maximum two),
 or an Identifier in the Monaco chunk only; both forms must be inside a function.
@@ -67,6 +82,19 @@ because our worker entries pass request-handler factories and foreign modules ar
 Expression-free template strings, also emitted by Vite's minifier, are resolved as literal strings
 for imports and URL assets; they do not use this allowlist.
 
+`babelConfigFileImports` permits exactly one import per host-owned `.mjs` chunk reporting
+`node_modules/@babel/core/lib/config/files/import.cjs`. In today's build that is
+`playgroundWorker.mjs`, alongside Babel's `module-types.js`. The argument must be the sole
+identifier parameter of the named `function import_`; its entire body must be
+`return import(parameter)`. That function must be assigned to the second CommonJS factory
+parameter's `.exports`, as the factory's only statement, inside the `require_import`
+declarator's `__commonJSMin`/`__commonJS` call. Other functions, wrappers, arguments, writes,
+templates, top-level imports, missing imports and a second matching import fail closed.
+Upstream `module-types.js` calls this helper with a `pathToFileURL(filepath).toString() +
+"?import"` URL when loading native ESM configuration files; the helper's argument is a
+parameter, so L1 validates the exported helper structure rather than claiming interprocedural
+URL provenance. Any Babel/bundler shape change requires re-review, not broadening the allowance.
+
 ### `bson` identity (runtime)
 
 L1 counts the `node_modules/**/bson/lib/bson.*` modules in each shipped graph. It cannot see a copy
@@ -75,8 +103,8 @@ the graph has today. The host Vite config therefore pins `bson` with a `resolve.
 to the CommonJS entry the driver `require`s. Both Vite views and the webpack views fallback pin
 bson's browser entry.
 [`bson-identity/check.cjs`](./bson-identity/check.cjs) builds two probe entries with
-`webpack.config.ext.cjs` (production mode, same `bson` pin, loaders and externals as the former
-webpack host build; not yet ported to the Vite host config), runs them in Node
+`vite.config.ext.mjs` (production mode, reusing its `host` environment, root aliases, resolve
+settings, externals, defines, and ES output), runs them in Node
 and requires every route to `ObjectId` to be one constructor, separately for the `main` and
 `playgroundWorker` graphs. Routes: `mongodb`; `bson` from TypeScript compiled like `src/`; `bson`
 and `mongodb` from an ES module (as our ESM-only packages would import them); and, in the host, a
@@ -97,12 +125,17 @@ tolerance are informational, with content hashes normalized when pairing renamed
 webpack chunks remain distinct). The JSON result includes `manifestReport`: `added`, `removed`,
 `sizeChanges`, total `vsixBytes` delta and `graphAssetBytes` sums. A short summary goes to stderr;
 stdout stays JSON. `--manifest-report <file>` writes just the report; CI uploads it separately.
-The proof has eight rejection controls (including missing contributed grammar and runtime shell declarations)
+The proof has eight original rejection controls (including missing contributed grammar and runtime shell declarations;
+the CommonJS `import.meta` control now mutates `playgroundTsPlugin.cjs`)
 and one positive, unrelated README-image asset-change reporting control. Vite adds
 `missing-lazy-chunk` (the entry's missing dynamic import fires first),
 `monaco-in-local-quick-start`, `duplicate-bson`, `nonliteral-import` and
 `allowlisted-shape-at-top-level`; webpack prints `SKIP` for these five.
 Report mutations use temporary copies, never the supplied reports.
+Five host controls additionally reject `missing-host-lazy-chunk`, `duplicate-host-bson`,
+`missing-ts-plugin`, `second-babel-nonliteral-import` and `kubernetes-in-main-static-closure`.
+Host controls refresh copied hashes to model matching newly built output and assert the intended
+diagnostic, not a stale-report failure. With Vite views the proof prints 19 PASS lines in total.
 Review intentional artifact changes before regenerating the version-1 baseline (its format is unchanged):
 
 ```bash
