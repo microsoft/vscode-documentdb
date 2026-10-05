@@ -11,6 +11,8 @@ const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 const vm = require('node:vm');
+const net = require('node:net');
+const { randomInt } = require('node:crypto');
 const {
     TARGET_ID,
     LATE_COMMANDS,
@@ -229,6 +231,23 @@ test('Linux without DISPLAY fails loudly before network download; non-Linux need
     await assert.rejects(requireDisplay({ DISPLAY: ':98765' }, 'linux'), /Cannot reach DISPLAY/);
     await requireDisplay({}, 'darwin');
     await requireDisplay({}, 'win32');
+});
+
+test('Linux accepts a reachable abstract X11 socket without a filesystem socket', {
+    skip: process.platform !== 'linux',
+}, async (context) => {
+    const display = randomInt(100000, 1000000);
+    const server = net.createServer((socket) => socket.end());
+    context.after(() => new Promise((resolve, reject) => {
+        server.close((error) => error ? reject(error) : resolve());
+    }));
+    await new Promise((resolve, reject) => {
+        server.once('error', reject);
+        server.listen(`\0/tmp/.X11-unix/X${display}`, resolve);
+    });
+    assert.equal(fs.existsSync(`/tmp/.X11-unix/X${display}`), false);
+    await requireDisplay({ DISPLAY: `:${display}` }, 'linux');
+    await requireDisplay({ DISPLAY: `unix:${display}.0` }, 'linux');
 });
 
 test('process wrapper captures output, reports nonzero exits, missing executables, and timeouts', async (context) => {

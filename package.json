@@ -80,6 +80,7 @@
     "test:verification": "node --test build/verification/*.test.cjs build/verification/activation/*.test.cjs build/verification/bson-identity/*.test.cjs && vitest run --config build/verification/browser/vitest.config.ts",
     "test:vsix": "node build/verification/activation/run.cjs",
     "prove:activation": "node build/verification/activation/prove.cjs",
+    "measure:activation": "node build/verification/activation/timing.cjs",
     "prepare:browser-check": "tsx --tsconfig build/verification/browser/tsconfig.json build/verification/browser/harness.ts prepare",
     "serve:browser-check": "tsx --tsconfig build/verification/browser/tsconfig.json build/verification/browser/harness.ts serve",
     "prebuild-dev": "npm run build --workspaces --if-present",

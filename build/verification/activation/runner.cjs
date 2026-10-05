@@ -73,21 +73,34 @@ async function requireDisplay(environment, platform) {
         throw new Error(`${help} DISPLAY=${JSON.stringify(display)}`);
     }
     const host = match[1];
-    await new Promise((resolve, reject) => {
-        const socket = !host || host === 'unix'
-            ? net.createConnection({ path: `/tmp/.X11-unix/X${match[2]}` })
-            : net.createConnection({ host, port: 6000 + Number(match[2]) });
-        socket.setTimeout(1500);
-        socket.once('connect', () => {
-            socket.destroy();
-            resolve(undefined);
-        });
-        socket.once('error', (error) => reject(new Error(`${help} Cannot reach DISPLAY=${display}: ${error.message}`)));
-        socket.once('timeout', () => {
-            socket.destroy();
-            reject(new Error(`${help} Timed out reaching DISPLAY=${display}.`));
-        });
-    });
+    // Like Xlib on Linux, try the abstract socket before the filesystem one: a user-local Xvfb
+    // cannot create /tmp/.X11-unix/X<n> when that directory is a read-only (WSLg) mount.
+    const candidates = !host || host === 'unix'
+        ? [{ path: `\0/tmp/.X11-unix/X${match[2]}` }, { path: `/tmp/.X11-unix/X${match[2]}` }]
+        : [{ host, port: 6000 + Number(match[2]) }];
+    /** @type {Error | undefined} */
+    let lastError;
+    for (const candidate of candidates) {
+        try {
+            await new Promise((resolve, reject) => {
+                const socket = net.createConnection(candidate);
+                socket.setTimeout(1500);
+                socket.once('connect', () => {
+                    socket.destroy();
+                    resolve(undefined);
+                });
+                socket.once('error', (error) => reject(new Error(`${help} Cannot reach DISPLAY=${display}: ${error.message}`)));
+                socket.once('timeout', () => {
+                    socket.destroy();
+                    reject(new Error(`${help} Timed out reaching DISPLAY=${display}.`));
+                });
+            });
+            return;
+        } catch (error) {
+            lastError = error instanceof Error ? error : new Error(String(error));
+        }
+    }
+    throw lastError;
 }
 
 /**

@@ -87,7 +87,10 @@ with a simulated host; they are not a substitute for running both controls again
 the production VSIX in a real extension host.
 
 Linux requires a reachable X11 server (`DISPLAY`); Electron is forced to X11 so
-`xvfb-run` is deterministic. Only on Linux with `GITHUB_ACTIONS=true`, the test
+`xvfb-run` is deterministic. Local Linux/WSL displays may use an abstract X11
+socket (`\0/tmp/.X11-unix/X<n>`); the runner accepts it even when the corresponding
+filesystem socket is absent. It checks reachability, not just whether `DISPLAY`
+is set. Only on Linux with `GITHUB_ACTIONS=true`, the test
 Electron launch also uses `--no-sandbox`, following `@vscode/test-electron`'s
 launch flag to avoid the downloaded SUID helper's ownership/mode restrictions.
 This is scoped to the trusted activation probe and VSIX in ephemeral user data;
@@ -97,3 +100,41 @@ use this same guarded launch. The harness never installs system packages. If the
 local display is unavailable, run the offline tests and defer both real-host
 controls to CI. Workers, native optional modules, the TS server plugin, webviews,
 and real backend integrations remain outside L3.
+
+## Activation timing comparison
+
+```sh
+npm run measure:activation -- path/to/production.vsix
+npm run measure:activation -- path/to/production.vsix --runs 5 --json timing.json
+# Offline tests include the timing parsers:
+node --test build/verification/activation/*.test.cjs
+```
+
+The [timing entry point](./timing.cjs) defaults to five full L3 launches. Each
+installs the same VSIX into fresh extensions/user-data directories and must pass
+the existing activation, command, and log gates. Child processes set
+`DEBUGTELEMETRY=verbose` (prints telemetry locally without sending it), and each
+run keeps artifacts until its measurements have been parsed, then deletes them.
+Failed L3 runs or parsing failures fail loudly and retain diagnostics.
+
+`codeLoadMs` is the millisecond timestamp interval in the target's `exthost.log`
+from `ExtensionService#_doActivateExtension` to
+`ExtensionService#_callActivateOptional`, including module loading and context
+creation. The intervening `loadModule` record must identify the installed target;
+both `[cjs]` and `[esm]` are accepted. This is the load-time quantity shown by
+**Developer: Show Running Extensions**.
+
+`activateMs` and `mainFileLoadMs` come from `duration` and `mainFileLoad` in the
+successful `vscode-documentdb/activate` telemetry event, converting seconds to
+milliseconds. `activateMs` measures time inside the extension's activate telemetry
+callback; `totalMs` is each run's `codeLoadMs + activateMs`, not the whole VS Code
+launch. `mainFileLoadMs` is recorded but is not a reliable comparison metric yet:
+the webpack host hoists the require before its performance timer, reporting zero.
+
+The harness prints each run and medians (plus code-load min/max). Optional JSON
+contains the VSIX path, pinned VS Code version, per-run measurements, and
+median/min/max for every metric. GitHub runners and WSL timings are noisy and
+include cache/scheduling effects; only before/after comparisons made on the same
+machine with this same method are meaningful. Linux needs a reachable X11 display
+(including an abstract socket); use an existing local display environment or
+`xvfb-run` in CI.
