@@ -105,7 +105,7 @@ test('injector resolves the production extensionless main and explicit CommonJS/
         injectSwallowedError(installed, manifest);
         const mutated = fs.readFileSync(filename, 'utf8');
         assert.match(mutated, new RegExp(INJECTION_MARKER));
-        assert.equal(mutated.startsWith('import { createRequire'), entry.esm);
+        assert.equal(mutated.startsWith('import * as __documentdbL3VSCode from "vscode";'), entry.esm);
         assert.equal(mutated.endsWith(source), true);
     }
 });

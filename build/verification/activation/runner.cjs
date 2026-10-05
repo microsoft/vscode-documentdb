@@ -194,8 +194,11 @@ function injectSwallowedError(directory, manifest) {
         throw new Error('The L3 negative-control injector does not support a shebang activation entry.');
     }
     const esm = entry.endsWith('.mjs') || (manifest.type === 'module' && !entry.endsWith('.cjs'));
+    // An ES module extension must import `vscode` the way the bundle does: VS Code serves ESM imports
+    // of `vscode` through its own loader hook, and `createRequire(...)('vscode')` returns a different
+    // API object, so patching that one never reaches the extension's registrations.
     const loader = esm
-        ? 'import { createRequire as __documentdbL3Require } from "node:module"; const __documentdbL3VSCode = __documentdbL3Require(import.meta.url)("vscode");'
+        ? 'import * as __documentdbL3VSCode from "vscode";'
         : 'const __documentdbL3VSCode = require("vscode");';
     const prefix = `${loader}
 const __documentdbL3Register = __documentdbL3VSCode.commands.registerCommand;
