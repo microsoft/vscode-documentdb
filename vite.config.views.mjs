@@ -111,6 +111,9 @@ export default defineConfig(async ({ command, mode }) => {
                     entryFileNames: 'views.js',
                     chunkFileNames: '[name]-[hash].js',
                     assetFileNames: '[name]-[hash][extname]',
+                    // Vite drops legal comments when minifying; webpack kept them (in *.LICENSE.txt
+                    // files). Keep them inline.
+                    comments: { legal: true },
                     // Not `keepNames`: swc's `keepClassNames` never reached production, because
                     // webpack's terser pass mangled class names afterwards (1,456 one- or two-letter
                     // class names in the webpack views.js). Keeping names would add about 460 KB.
