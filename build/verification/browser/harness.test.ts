@@ -8,6 +8,8 @@ import { describe, it, expect, vi } from 'vitest';
 import { existsSync, mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { resolve, join } from 'node:path';
+import { runInNewContext } from 'node:vm';
+import { type HarnessCall } from './core/fakeVsCodeApi';
 import { fixtures } from './fixtures';
 import { prepare, serve, validatePrefix } from './harness';
 import { augmentTemplate, hostTemplate, inertJson } from './template';
@@ -55,6 +57,37 @@ describe('Stage 0 L2 production browser harness', (): void => {
             }
             expect(readFileSync(join(output, 'manifest.json'), 'utf8')).toContain(markedCss
                 ? 'Remove only style[data-documentdb-views-css]' : 'Remove all style elements for webpack/style-loader');
+            const runtime = readFileSync(join(output, 'site/runtime.js'), 'utf8');
+            const browser: {
+                acquireVsCodeApi?: typeof window.acquireVsCodeApi;
+                __harnessCalls?: HarnessCall[];
+                postMessage: ReturnType<typeof vi.fn>;
+                addEventListener: () => void;
+                location: { origin: string };
+            } = { postMessage: vi.fn(), addEventListener: (): void => {}, location: { origin: 'http://127.0.0.1:18081' } };
+            const microtasks: (() => void)[] = [];
+            runInNewContext(runtime, {
+                window: browser, console: { error: vi.fn() },
+                document: {
+                    getElementById: (): { textContent: string } => ({ textContent: JSON.stringify({
+                        ...fixtures.atlasCredentials, view: 'atlasCredentials', assetRoot: '/stage0/l2/artifact', brokenCss: false,
+                    }) }),
+                    addEventListener: (): void => {},
+                },
+                queueMicrotask: (callback: () => void): void => { microtasks.push(callback); },
+            });
+            const acquire = browser.acquireVsCodeApi;
+            if (!acquire) {
+                throw new Error('Generated classic runtime did not synchronously install acquireVsCodeApi');
+            }
+            const api = acquire();
+            api.postMessage({ id: 'generated', op: { type: 'mutation', path: 'atlasCredentials.submitApiKey', input: {} } });
+            expect(browser.__harnessCalls).toEqual([{ path: 'atlasCredentials.submitApiKey', type: 'mutation', input: {} }]);
+            microtasks.forEach((callback): void => { callback(); });
+            expect(browser.postMessage.mock.calls).toEqual([
+                [{ id: 'generated', result: { success: true } }, browser.location.origin],
+                [{ id: 'generated', complete: true }, browser.location.origin],
+            ]);
         } finally {
             vi.restoreAllMocks();
             rmSync(temporary, { recursive: true });

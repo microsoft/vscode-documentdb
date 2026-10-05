@@ -124,6 +124,18 @@ Pages are served under `/stage0/l2/`, with no query strings. Generation extracts
 the host's production HTML template, including its CSP and boot script. Typed fixtures respond to
 known tRPC calls; unknown paths are errors rather than success-shaped defaults.
 
+The browser-only [fixture core](./browser/core/) is shared with L2-dev. It exports router-typed
+fixture paths, inferred inputs/outputs, response contracts and `fakeVsCodeApi(rpc, errors)`.
+The factory returns a single-acquire VS Code API and exposes every procedure's `{ path, type, input }`
+on `window.__harnessCalls`; abort/stop control messages are not procedure calls. Escaping actions
+(URL opening, copying, opening a connection) are recorded and require explicit response fixtures,
+never performed. L2 retains its unique, ordered `rpcPaths` report derived from this log.
+`harness.ts` uses `transpileModule` to inline the core's modules into the existing classic
+`runtime.js`, with a small closed module lookup that rejects unexpected imports. This installs the
+API synchronously before the unchanged production boot module, adds no network requests, and needs
+neither `eval` nor CSP/chunk-check exceptions. The source modules remain plain ESM TypeScript with
+type-only app/protocol imports, so the Vite dev server can load the same core directly.
+
 Open `/stage0/l2/pages/collectionView.html` in the integrated browser, then run this Playwright tool
 snippet:
 

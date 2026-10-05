@@ -13,9 +13,9 @@ import { inertJson } from './template';
 const base: HarnessFixture = {
     view: 'atlasCredentials', config: {}, assetRoot: '/stage0/l2/artifact', brokenCss: false,
     monaco: false, content: ['Settled fixture'], styles: [], rpc: {
-        'fixture.query': { type: 'query', results: [{ message: 'fixture response' }] },
-        'fixture.mutation': { type: 'mutation', results: [], undefinedResult: true },
-        'fixture.subscription': { type: 'subscription', results: [{ state: 'ready' }], keepOpen: true },
+        'localQuickStart.checkPort': { type: 'query', results: [{ message: 'fixture response' }] },
+        'common.reportEvent': { type: 'mutation', results: [], undefinedResult: true },
+        'localQuickStart.onInstanceChanged': { type: 'subscription', results: [{ state: 'ready' }], keepOpen: true },
     },
 };
 let constructedWorkers = 0;
@@ -79,7 +79,7 @@ describe('Stage 0 L2 fixture transport', (): void => {
     it('answers the real {id, op} protocol with result then completion', async (): Promise<void> => {
         const messages = vi.spyOn(window, 'postMessage').mockImplementation((): void => {});
         const api = await boot();
-        api.postMessage({ id: 'query-id', op: { type: 'query', path: 'fixture.query', input: undefined } });
+        api.postMessage({ id: 'query-id', op: { type: 'query', path: 'localQuickStart.checkPort', input: undefined } });
         await Promise.resolve();
         expect(messages.mock.calls.map((call): unknown => call[0])).toEqual([
             { id: 'query-id', result: { message: 'fixture response' } }, { id: 'query-id', complete: true },
@@ -89,7 +89,7 @@ describe('Stage 0 L2 fixture transport', (): void => {
     it('preserves an explicit void result instead of turning JSON undefined into null', async (): Promise<void> => {
         const messages = vi.spyOn(window, 'postMessage').mockImplementation((): void => {});
         const api = await boot();
-        api.postMessage({ id: 'mutation-id', op: { type: 'mutation', path: 'fixture.mutation' } });
+        api.postMessage({ id: 'mutation-id', op: { type: 'mutation', path: 'common.reportEvent' } });
         await Promise.resolve();
         expect(messages.mock.calls.map((call): unknown => call[0])).toEqual([
             { id: 'mutation-id', result: undefined }, { id: 'mutation-id', complete: true },
@@ -112,20 +112,20 @@ describe('Stage 0 L2 fixture transport', (): void => {
         vi.spyOn(window, 'postMessage').mockImplementation((): void => {});
         const api = await boot();
         expect((): void => api.postMessage({ op: {} })).toThrow('Invalid tRPC request');
-        expect((): void => api.postMessage({ id: 'wrong-type', op: { type: 'mutation', path: 'fixture.query' } }))
-            .toThrow('No mutation fixture for fixture.query');
+        expect((): void => api.postMessage({ id: 'wrong-type', op: { type: 'mutation', path: 'localQuickStart.checkPort' } }))
+            .toThrow('No mutation fixture for localQuickStart.checkPort');
     });
 
     it('keeps streaming fixtures open and honors stop before delivery', async (): Promise<void> => {
         const messages = vi.spyOn(window, 'postMessage').mockImplementation((): void => {});
         const api = await boot();
-        api.postMessage({ id: 'sub-1', op: { type: 'subscription', path: 'fixture.subscription' } });
+        api.postMessage({ id: 'sub-1', op: { type: 'subscription', path: 'localQuickStart.onInstanceChanged' } });
         await Promise.resolve();
         expect(messages.mock.calls.map((call): unknown => call[0])).toEqual([{ id: 'sub-1', result: { state: 'ready' } }]);
         messages.mockClear();
-        api.postMessage({ id: 'sub-2', op: { type: 'subscription', path: 'fixture.subscription' } });
-        api.postMessage({ id: 'sub-2', op: { type: 'subscription.stop', path: 'fixture.subscription' } });
-        api.postMessage({ id: 'sub-1', op: { type: 'abort', path: 'fixture.subscription' } });
+        api.postMessage({ id: 'sub-2', op: { type: 'subscription', path: 'localQuickStart.onInstanceChanged' } });
+        api.postMessage({ id: 'sub-2', op: { type: 'subscription.stop', path: 'localQuickStart.onInstanceChanged' } });
+        api.postMessage({ id: 'sub-1', op: { type: 'abort', path: 'localQuickStart.onInstanceChanged' } });
         await Promise.resolve();
         expect(messages).not.toHaveBeenCalled();
     });
@@ -136,6 +136,22 @@ describe('Stage 0 L2 fixture transport', (): void => {
         expect(api.setState({ active: true })).toEqual({ active: true });
         expect(api.getState()).toEqual({ active: true });
         expect((): unknown => window.acquireVsCodeApi()).toThrow('more than once');
+    });
+
+    it('keeps rpcPaths unique and ordered while exposing every procedure call', async (): Promise<void> => {
+        vi.spyOn(window, 'postMessage').mockImplementation((): void => {});
+        const api = await boot();
+        const path = 'localQuickStart.checkPort';
+        api.postMessage({ id: 'first', op: { type: 'query', path, input: { port: 10260 } } });
+        api.postMessage({ id: 'second', op: { type: 'query', path, input: { port: 10261 } } });
+        api.postMessage({ id: 'third', op: { type: 'mutation', path: 'common.reportEvent', input: undefined } });
+        api.postMessage({ id: 'stop', op: { type: 'subscription.stop', path } });
+        expect(window.__harnessCalls).toEqual([
+            { path, type: 'query', input: { port: 10260 } },
+            { path, type: 'query', input: { port: 10261 } },
+            { path: 'common.reportEvent', type: 'mutation', input: undefined },
+        ]);
+        expect((await window.stage0Harness.check()).rpcPaths).toEqual([path, 'common.reportEvent']);
     });
 
     it('records CSP and preload failures in the persisted assertion surface', async (): Promise<void> => {

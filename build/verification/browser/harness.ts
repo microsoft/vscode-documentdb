@@ -27,6 +27,30 @@ export function validatePrefix(prefix: string): void {
     }
 }
 
+function browserRuntime(): string {
+    const compile = (filename: string): string => transpileModule(readFileSync(join(__dirname, filename), 'utf8'), {
+        compilerOptions: { module: ModuleKind.CommonJS, target: ScriptTarget.ES2023 },
+    }).outputText;
+    // Inline only these browser modules: a classic script installs the API synchronously before
+    // the unchanged host boot module. No eval, Node loader, or extra CSP/chunk exceptions.
+    const modules = ['core/fixtures', 'core/fakeVsCodeApi'].map((name): string =>
+        `modules[${JSON.stringify(`./${name}`)}] = (() => {
+const exports = {};
+${compile(`${name}.ts`)}
+return exports;
+})();`).join('\n');
+    return `(() => {
+const modules = {};
+const require = (name) => {
+    if (!Object.hasOwn(modules, name)) throw new Error('Unexpected browser runtime dependency: ' + name);
+    return modules[name];
+};
+${modules}
+const exports = {};
+${compile('runtime.ts')}
+})();\n`;
+}
+
 export function prepare(options: HarnessOptions): void {
     validatePrefix(options.prefix);
     const origin = new URL(options.origin);
@@ -58,11 +82,7 @@ export function prepare(options: HarnessOptions): void {
     cpSync(assetDirectory, join(site, 'artifact'), { recursive: true });
     const assetRoot = `${options.prefix}/artifact`;
     cpSync(join(__dirname, 'theme.css'), join(site, 'theme.css'));
-    const runtime = transpileModule(readFileSync(join(__dirname, 'runtime.ts'), 'utf8'), {
-        compilerOptions: { module: ModuleKind.ESNext, target: ScriptTarget.ES2023 },
-    }).outputText.replace(/^export \{\};?$/gm, '');
-    // Type-only imports leave no runtime imports; compile as a browser classic script.
-    writeFileSync(join(site, 'runtime.js'), runtime);
+    writeFileSync(join(site, 'runtime.js'), browserRuntime());
     for (const [view, fixture] of Object.entries(fixtures)) {
         const html = hostTemplate(options.repository, assetRoot, origin.origin, view, fixture.config);
         writeFileSync(join(site, 'pages', `${view}.html`), augmentTemplate(html, { ...fixture, view, assetRoot, brokenCss: false }, options.prefix));

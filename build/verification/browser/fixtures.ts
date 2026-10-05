@@ -3,9 +3,7 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { type AnyProcedure, type AnyRouter, type inferRouterInputs, type inferRouterOutputs } from '@trpc/server';
 import { type WebviewName } from '../../../src/webviews/_integration/WebviewRegistry';
-import { type AppRouter } from '../../../src/webviews/_integration/appRouter';
 import { type AtlasCredentialsWebviewConfig } from '../../../src/webviews/documentdb/atlasCredentials/atlasCredentialsController';
 import { type ClusterDashboardWebviewConfigurationType } from '../../../src/webviews/documentdb/clusterDashboard/clusterDashboardController';
 import { type CollectionViewWebviewConfigurationType } from '../../../src/webviews/documentdb/collectionView/collectionViewController';
@@ -13,27 +11,15 @@ import { type DocumentsViewWebviewConfigurationType } from '../../../src/webview
 import { type LocalQuickStartConfigurationType } from '../../../src/webviews/documentdb/localQuickStart/localQuickStartController';
 import { InstanceState, type DockerStatusResult, type InstanceStatusUpdate } from '../../../src/services/localQuickStart/quickStartTypes';
 import { type CellValue } from '../../../src/utils/slickgrid/CellValue';
+import { type FixtureInputs, type FixtureOutputs, type RpcFixture, type RpcFixtures } from './core/fixtures';
 
-type Inputs = inferRouterInputs<AppRouter>;
-type Outputs = inferRouterOutputs<AppRouter>;
+type Inputs = FixtureInputs;
+type Outputs = FixtureOutputs;
 type CollectionOutputs = Outputs['mongoClusters']['collectionView'];
-type ProcedurePaths<T> = {
-    [K in keyof T & string]: T[K] extends AnyProcedure ? K :
-        T[K] extends AnyRouter ? `${K}.${ProcedurePaths<T[K]['_def']['record']>}` :
-            T[K] extends Record<string, unknown> ? `${K}.${ProcedurePaths<T[K]>}` : never;
-}[keyof T & string];
-type FixturePaths = ProcedurePaths<AppRouter['_def']['record']>;
-
-export interface RpcFixture {
-    readonly type: 'query' | 'mutation' | 'subscription';
-    readonly results: readonly unknown[];
-    readonly keepOpen?: boolean;
-    readonly undefinedResult?: boolean;
-}
 
 export interface ViewFixture {
     readonly config: unknown;
-    readonly rpc: Readonly<Record<string, RpcFixture>>;
+    readonly rpc: RpcFixtures;
     readonly content: readonly string[];
     readonly styles: readonly StyleExpectation[];
     readonly monaco: boolean;
@@ -112,7 +98,7 @@ const common = {
     'common.reportEvent': reply<void>('mutation', undefined),
     'common.reportError': reply<void>('mutation', undefined),
     'common.surveyPing': reply<void>('mutation', undefined),
-} satisfies Partial<Record<FixturePaths, RpcFixture>>;
+} satisfies RpcFixtures;
 
 export const fixtures = {
     collectionView: {
@@ -193,7 +179,7 @@ export const fixtures = {
             'atlasCredentials.submitApiKey': reply<Outputs['atlasCredentials']['submitApiKey']>('mutation', { success: true }),
         },
     },
-} satisfies Record<WebviewName, Omit<ViewFixture, 'rpc'> & { rpc: Partial<Record<FixturePaths, RpcFixture>> }>;
+} satisfies Record<WebviewName, ViewFixture>;
 
 // Compile-time input checks keep the fixture interactions aligned with the live routers.
 export const atlasInput: Inputs['atlasCredentials']['submitApiKey'] = {

@@ -3,10 +3,10 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { type VsCodeLinkRequestMessage, type VsCodeLinkResponseMessage } from '../../../packages/vscode-ext-webview/src/shared/wireProtocol';
-import { type WebviewApi } from 'vscode-webview';
 import { type WebviewName } from '../../../src/webviews/_integration/WebviewRegistry';
-import { type HarnessFixture, type RpcFixture, type StyleExpectation } from './fixtures';
+import { fakeVsCodeApi } from './core/fakeVsCodeApi';
+import { isRpcFixture } from './core/fixtures';
+import { type HarnessFixture, type StyleExpectation } from './fixtures';
 
 export interface BrowserReport {
     readonly view: string;
@@ -50,12 +50,6 @@ function isStringArray(value: unknown): value is string[] {
     return isUnknownArray(value) && value.every((item: unknown): boolean => typeof item === 'string');
 }
 
-function isRpcFixture(value: unknown): value is RpcFixture {
-    return isObject(value) && (value.type === 'query' || value.type === 'mutation' || value.type === 'subscription') &&
-        isUnknownArray(value.results) && (value.keepOpen === undefined || typeof value.keepOpen === 'boolean') &&
-        (value.undefinedResult === undefined || typeof value.undefinedResult === 'boolean');
-}
-
 function isStyleExpectation(value: unknown): value is StyleExpectation {
     return isObject(value) && typeof value.selector === 'string' && typeof value.property === 'string' &&
         typeof value.expected === 'string';
@@ -73,10 +67,6 @@ function isHarnessFixture(value: unknown): value is HarnessFixture {
         value.styles.every(isStyleExpectation) && isObject(value.rpc) && Object.values(value.rpc).every(isRpcFixture);
 }
 
-function request(value: unknown): value is VsCodeLinkRequestMessage {
-    return isObject(value) && typeof value.id === 'string' && isObject(value.op) && typeof value.op.type === 'string';
-}
-
 const element = document.getElementById('stage0-fixture');
 if (!element?.textContent) {
     throw new Error('Stage 0 fixture data missing');
@@ -87,9 +77,6 @@ if (!isHarnessFixture(parsedFixture)) {
 }
 const fixture = parsedFixture;
 const errors: string[] = [];
-const rpcPaths = new Set<string>();
-const subscriptions = new Set<string>();
-let acquired = false;
 let probeMarker: string | undefined;
 let editorWorkerProof: EditorWorkerProof | undefined;
 const workerRecords: WorkerRecord[] = [];
@@ -235,58 +222,7 @@ document.addEventListener('securitypolicyviolation', (event: SecurityPolicyViola
 });
 window.addEventListener('vite:preloadError', (): void => { errors.push('vite:preloadError'); });
 
-function send(message: VsCodeLinkResponseMessage): void {
-    window.postMessage(message, window.location.origin);
-}
-
-function receive(value: unknown): void {
-    if (!request(value)) {
-        errors.push('Invalid tRPC request');
-        throw new Error('Invalid tRPC request');
-    }
-    const { id, op } = value;
-    if (op.type === 'subscription.stop' || op.type === 'abort') {
-        subscriptions.delete(id);
-        return;
-    }
-    rpcPaths.add(op.path);
-    const response = Object.hasOwn(fixture.rpc, op.path) ? fixture.rpc[op.path] : undefined;
-    if (!response || response.type !== op.type) {
-        const message = `No ${op.type} fixture for ${op.path}`;
-        errors.push(message);
-        send({ id, error: { name: 'FixtureError', message }, complete: true });
-        throw new Error(message);
-    }
-    if (response.keepOpen) {
-        subscriptions.add(id);
-    }
-    queueMicrotask((): void => {
-        if (response.keepOpen && !subscriptions.has(id)) {
-            return;
-        }
-        for (const result of response.results) {
-            send({ id, result });
-        }
-        if (response.undefinedResult) {
-            send({ id, result: undefined });
-        }
-        if (!response.keepOpen) {
-            send({ id, complete: true });
-        }
-    });
-}
-
-window.acquireVsCodeApi = <StateType = unknown>(): WebviewApi<StateType> => {
-    if (acquired) {
-        throw new Error('acquireVsCodeApi called more than once');
-    }
-    acquired = true;
-    let state: StateType | undefined;
-    return {
-        postMessage: receive, getState: (): StateType | undefined => state,
-        setState: <T extends StateType | undefined>(next: T): T => { state = next; return next; },
-    };
-};
+window.acquireVsCodeApi = fakeVsCodeApi(fixture.rpc, errors);
 
 // Production CSS lives in JS: remove only Vite's marked bundle stylesheet, preserving
 // Fluent/Griffel runtime styles; webpack/style-loader still requires removing all styles.
@@ -346,6 +282,7 @@ async function check(): Promise<BrowserReport> {
             }
         }
     }
+    const rpcPaths = new Set(window.__harnessCalls.map((call): string => call.path));
     return { view: fixture.view, errors: [...new Set([...failures, ...errors])], rpcPaths: [...rpcPaths],
         styles, chunks, worker: editorWorkerProof, brokenCss: fixture.brokenCss };
 }
