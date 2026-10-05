@@ -365,6 +365,9 @@ plugin in a real editor; Kubernetes, Atlas and Azure discovery against real back
       exact file list and per-file size tolerance are a candidate for replacement by a PR report
       (added/removed files, size deltas, per-view sizes), keeping the invariant assertions as hard
       failures. The design is not decided; until it is, the exact list stays as implemented.
+      **Decided for Stage 4 (2026-10-05), as a pragmatic choice:** option A, recorded under
+      Stage 4. The operator was asked, was unavailable and asked for the option best aligned with
+      this direction; it is not an operator approval and is confirmed or reversed at G4.
     - **First ADO run (2026-10-02) failed L1 on `NOTICE.html`:** 1,854,647 bytes against the
       committed 536,377. ADO's `notice@0` task regenerates the file and falls back to the
       committed copy if it fails, so its size depends on the pipeline, not the build. The file
@@ -1854,6 +1857,11 @@ plugin in a real editor; Kubernetes, Atlas and Azure discovery against real back
 
 ### Combined checkpoint G1-3 (after Stage 3)
 
+- **G1-3 passed (operator, 2026-10-05):** the operator confirmed that Stages 0 to 3 are
+  confirmed and tested. This supersedes the earlier pending G1-3 status notes. No new checks
+  were run to record this confirmation; the separate L1 file-list decision remains open
+  before Stage 4. (Taken pragmatically on 2026-10-05, before Stage 4 work; see Stage 4.)
+
 What the operator actually has to do. Everything else in Stages 1 to 3 is covered by L0 to L3, the
 Stage 3 package checks and the three AI reviews.
 
@@ -1902,6 +1910,28 @@ Stage 0 must also be made.
 
 - **Models:** author **Claude Opus 5.5**, reviewer **GPT-6 Sol**. Vite config, CSS inlining, workers
   and chunking each have several plausible-but-wrong solutions; L2 catches most regressions.
+  - **Execution (operator instruction, 2026-10-05):** a Claude Opus 5.5 coordinator runs the stage
+    through sequential subagents: **GPT-6.1 Sol** for routine configuration, single-view work,
+    fixtures, tests and documentation; **Claude Opus 5.5** for CSS/CSP, workers, the chunk graph
+    and interop. Each task below names its author. The review is by **GPT-6.1 Sol** in a fresh
+    session, not GPT-6 Sol as picked above (operator instruction). The branch stays on its
+    `v0.11.0` base with no `main` merge, continuing the Stage 1 operator decision.
+  - **L1 manifest decision (2026-10-05, pragmatic, not operator-approved):** the operator was asked
+    before implementation, was unavailable and asked for the option best aligned with the recorded
+    direction ("a PR that adds or removes assets must not fail L1"). Chosen, **option A**: the
+    file list and per-file sizes become a non-failing report (added and removed files, size
+    deltas, per-view graph sizes, content hashes stripped from chunk names), printed and written
+    as JSON. Hard failures stay for every invariant (the `render` export; every static and dynamic
+    import target present; no dev-server strings; no `import.meta` in CommonJS; report-to-asset
+    hash provenance; one `bson` per host graph and at most one per view graph; Local Quick Start
+    and Atlas Credentials exclude Monaco and SlickGrid), plus a short required-files list and
+    S3-F05's rule that every packaged JavaScript file is owned by a bundle report.
+    Alternatives offered: **B**, keep the exact list as a gate through Stage 5 with hash-stripped
+    names and a Stage 4 re-baseline, deciding the report at Stage 6. Rejected: every chunk change
+    would fail L1, against the recorded direction, and need a re-baseline. **C**, option A plus
+    the Stage 6 size budget pulled forward. Not chosen: Stage 6 owns the budget. This applies
+    Stage 6's "apply the L1 manifest decision" task early; the size budget stays in Stage 6.
+    Confirm or reverse at G4.
 - **Goal:** each webview loads only what it uses. Today `webpack.config.views.js` forces a single
   6.4 MB `views.js` (`LimitChunkCountPlugin({ maxChunks: 1 })`), so Local Quick Start and Atlas
   Credentials load Monaco and SlickGrid without using either.
