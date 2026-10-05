@@ -8,7 +8,7 @@ const { createHash } = require('node:crypto');
 const fs = require('node:fs');
 const path = require('node:path');
 const { parse } = require('acorn');
-const { simple } = require('acorn-walk');
+const { ancestor, fullAncestor } = require('acorn-walk');
 const { readVsix } = require('./vsix.cjs');
 
 const viewModules = {
@@ -277,10 +277,107 @@ function literalString(node, allowTemplate = false) {
     }
 }
 
-function monacoModuleLoaderImportLimit(filename, source) {
+function isFunction(node) {
+    return ['FunctionDeclaration', 'FunctionExpression', 'ArrowFunctionExpression'].includes(node.type);
+}
+
+function isScope(node) {
+    return (
+        isFunction(node) ||
+        [
+            'Program',
+            'BlockStatement',
+            'CatchClause',
+            'ForStatement',
+            'ForInStatement',
+            'ForOfStatement',
+            'SwitchStatement',
+        ].includes(node.type)
+    );
+}
+
+function bindingNames(pattern) {
+    if (!pattern) return [];
+    if (pattern.type === 'Identifier') return [pattern.name];
+    if (pattern.type === 'RestElement') return bindingNames(pattern.argument);
+    if (pattern.type === 'AssignmentPattern') return bindingNames(pattern.left);
+    if (pattern.type === 'ArrayPattern') return pattern.elements.flatMap(bindingNames);
+    if (pattern.type === 'ObjectPattern')
+        return pattern.properties.flatMap((property) =>
+            bindingNames(property.type === 'RestElement' ? property.argument : property.value),
+        );
+    return [];
+}
+
+function workerUriForm(expression) {
+    const callee = expression?.callee;
+    const uri = callee?.object;
+    return (
+        expression?.type === 'CallExpression' &&
+        callee?.type === 'MemberExpression' &&
+        !callee.computed &&
+        callee.property.name === 'toString' &&
+        uri?.type === 'CallExpression' &&
+        uri.callee.type === 'MemberExpression' &&
+        !uri.callee.computed &&
+        uri.callee.property.name === 'asBrowserUri'
+    );
+}
+
+function moduleLoaderBindings(tree) {
+    const bindings = new Map();
+    const assignments = [];
+    function record(scope, pattern, node, value, valueScope = scope) {
+        if (!bindings.has(scope)) bindings.set(scope, new Map());
+        for (const name of bindingNames(pattern)) {
+            const names = bindings.get(scope);
+            if (!names.has(name)) names.set(name, []);
+            names.get(name).push({ node, value, scope: valueScope });
+        }
+    }
+    fullAncestor(tree, (node, _state, ancestors) => {
+        const scopes = ancestors.filter(isScope);
+        const scope = scopes.at(-1);
+        if (node.type === 'VariableDeclarator') {
+            const declaration = ancestors.at(-2);
+            const bindingScope =
+                declaration.kind === 'var'
+                    ? scopes.findLast((entry) => isFunction(entry) || entry.type === 'Program')
+                    : scope;
+            record(bindingScope, node.id, node, node.id.type === 'Identifier' ? node.init : node.id);
+        } else if (isFunction(node)) {
+            for (const parameter of node.params) record(node, parameter, node, parameter);
+            if (node.id) record(node.type === 'FunctionDeclaration' ? scopes.at(-2) : node, node.id, node, node);
+        } else if (node.type === 'ClassDeclaration') {
+            record(scope, node.id, node, node);
+        } else if (node.type === 'CatchClause') {
+            record(scope, node.param, node, node);
+        } else if (node.type === 'AssignmentExpression' || node.type === 'UpdateExpression') {
+            assignments.push({ node, scopes });
+        }
+    });
+    for (const { node, scopes } of assignments) {
+        const target = node.type === 'AssignmentExpression' ? node.left : node.argument;
+        for (const name of bindingNames(target)) {
+            const scope = scopes.findLast((entry) => bindings.get(entry)?.has(name)) || scopes.at(-1);
+            record(
+                scope,
+                { type: 'Identifier', name },
+                node,
+                node.operator === '=' && target.type === 'Identifier' ? node.right : node,
+                scopes.at(-1),
+            );
+        }
+    }
+    return bindings;
+}
+
+function monacoModuleLoaderImportLimit(filename, node, ancestors, bindings) {
+    const source = node.source;
     const allowance = monacoModuleLoaderImports.find((entry) => entry.filename.test(filename));
     if (
         !allowance ||
+        !ancestors.some(isFunction) ||
         source.type !== 'TemplateLiteral' ||
         source.expressions.length !== 1 ||
         source.quasis.length !== 2 ||
@@ -289,18 +386,24 @@ function monacoModuleLoaderImportLimit(filename, source) {
         return 0;
     }
     const expression = source.expressions[0];
-    const callee = expression.callee;
-    const uri = callee?.object;
-    const workerForm =
-        expression.type === 'CallExpression' &&
-        callee.type === 'MemberExpression' &&
-        !callee.computed &&
-        callee.property.name === 'toString' &&
-        uri.type === 'CallExpression' &&
-        uri.callee.type === 'MemberExpression' &&
-        !uri.callee.computed &&
-        uri.callee.property.name === 'asBrowserUri';
-    return workerForm || (allowance.allowIdentifier && expression.type === 'Identifier') ? allowance.maximum : 0;
+    if (workerUriForm(expression)) return allowance.maximum;
+    if (allowance.allowIdentifier && expression.type === 'Identifier') {
+        for (const scope of ancestors.filter(isScope).reverse()) {
+            if (scope.type === 'Program') break;
+            const writes = bindings.get(scope)?.get(expression.name);
+            if (writes) {
+                // Stop at the nearest binding, including shadows. Reject unreviewed writes even
+                // after the import: a nested loader callback may run after those writes execute.
+                const values = writes.filter((write) => write.value);
+                return values.length > 0 &&
+                    values.every((write) => workerUriForm(write.value)) &&
+                    values.some((write) => write.node.end <= node.start && ancestors.includes(write.scope))
+                    ? allowance.maximum
+                    : 0;
+            }
+        }
+    }
+    return 0;
 }
 
 function inspectJavaScript(files, reports) {
@@ -321,6 +424,11 @@ function inspectJavaScript(files, reports) {
         let monacoModuleLoaderImportCount = 0;
         assert.ok(!/127\.0\.0\.1:18080|DEVSERVER/.test(source), `${filename}: development-server string in production`);
         const tree = parse(source, { ecmaVersion: 'latest', sourceType: 'module', allowReturnOutsideFunction: true });
+        const bindings =
+            viteOwned &&
+            monacoModuleLoaderImports.some((entry) => entry.allowIdentifier && entry.filename.test(filename))
+                ? moduleLoaderBindings(tree)
+                : new Map();
         if (filename === 'extension/views.js') {
             assert.ok(
                 tree.body.some(
@@ -335,13 +443,13 @@ function inspectJavaScript(files, reports) {
                 'views.js does not export render',
             );
         }
-        simple(tree, {
+        ancestor(tree, {
             MetaProperty(node) {
                 // A CommonJS bundle that contains `import.meta` throws a SyntaxError when `require`d.
                 assert.ok(!(commonJs && node.meta.name === 'import'), `${filename}: import.meta in a CommonJS bundle`);
             },
-            ImportExpression(node) {
-                const maximum = viteOwned ? monacoModuleLoaderImportLimit(filename, node.source) : 0;
+            ImportExpression(node, _state, ancestors) {
+                const maximum = viteOwned ? monacoModuleLoaderImportLimit(filename, node, ancestors, bindings) : 0;
                 if (maximum > 0) {
                     monacoModuleLoaderImportCount++;
                     assert.ok(

@@ -55,8 +55,10 @@ An explicit `runtimeAssets` list also requires shipped files read without manife
 Nonliteral imports fail except for `monacoModuleLoaderImports`, which permits one-expression,
 empty-quasi templates wrapping `asBrowserUri(...).toString(...)` calls in Vite-owned
 `monaco-<hash>.js` (maximum one) or `editor.worker-<hash>.js` / `json.worker-<hash>.js` (maximum two),
-or an Identifier in the Monaco chunk only, because our worker entries pass request-handler factories
-and foreign modules are unused.
+or an Identifier in the Monaco chunk only; both forms must be inside a function.
+The identifier's nearest enclosing function/block binding must come from that same member-call chain
+in a variable initializer or simple assignment, with no unreviewed writes or shadow bindings,
+because our worker entries pass request-handler factories and foreign modules are unused.
 Expression-free template strings, also emitted by Vite's minifier, are resolved as literal strings
 for imports and URL assets; they do not use this allowlist.
 
@@ -92,8 +94,9 @@ stdout stays JSON. `--manifest-report <file>` writes just the report; CI uploads
 The proof has eight rejection controls (including missing contributed grammar and runtime shell declarations)
 and one positive, unrelated README-image asset-change reporting control. Vite adds
 `missing-lazy-chunk` (the entry's missing dynamic import fires first),
-`monaco-in-local-quick-start`, `duplicate-bson` and `nonliteral-import`; webpack prints `SKIP` for
-these four. Report mutations use temporary copies, never the supplied reports.
+`monaco-in-local-quick-start`, `duplicate-bson`, `nonliteral-import` and
+`allowlisted-shape-at-top-level`; webpack prints `SKIP` for these five.
+Report mutations use temporary copies, never the supplied reports.
 Review intentional artifact changes before regenerating the version-1 baseline (its format is unchanged):
 
 ```bash

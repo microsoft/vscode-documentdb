@@ -131,7 +131,13 @@ try {
         [...originalManifestReport.added, 'extension/resources/proof-added.svg'].sort(),
     );
     console.log('PASS: asset-added-and-removed-reported reported without failing');
-    const viteControls = ['missing-lazy-chunk', 'monaco-in-local-quick-start', 'duplicate-bson', 'nonliteral-import'];
+    const viteControls = [
+        'missing-lazy-chunk',
+        'monaco-in-local-quick-start',
+        'duplicate-bson',
+        'nonliteral-import',
+        'allowlisted-shape-at-top-level',
+    ];
     if (views.bundler === 'vite') {
         const { viewModules } = require('./inspect.cjs');
         const lazy = views.chunks.find((chunk) => chunk.facadeModuleId === viewModules.localQuickStart);
@@ -177,6 +183,20 @@ try {
                     );
                 },
                 /views\.js: nonliteral dynamic import cannot be verified/,
+            ],
+            [
+                viteControls[4],
+                (files) => {
+                    const filename = `extension/${monaco.fileName}`;
+                    files.set(
+                        filename,
+                        Buffer.concat([
+                            files.get(filename),
+                            Buffer.from(';const s4Proof="./missing-proof.js";import(`${s4Proof}`);'),
+                        ]),
+                    );
+                },
+                /monaco-[A-Za-z0-9_-]+\.js: nonliteral dynamic import cannot be verified/,
             ],
         ];
         for (const [name, mutateFiles, expected, mutateReport] of controls) {

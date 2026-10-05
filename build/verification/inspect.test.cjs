@@ -547,7 +547,7 @@ test('Vite-owned numeric .e calls are not webpack chunk loaders', () => {
 
 test('Monaco module-loader allowlist is scoped to one exact template in a Vite Monaco chunk', () => {
     const filename = 'extension/monaco-AbC12345.js';
-    const source = 'import(`${t}`);';
+    const source = '(function(e,r){let t=$s.asBrowserUri(`${e}.js`).toString(!0);r(()=>import(`${t}`));});';
     const report = { bundler: 'vite', chunkFormat: 'module', assetHashes: { 'monaco-AbC12345.js': 'fixture' } };
     const bundled = new Map([[filename, Buffer.from(source)]]);
     inspectJavaScript(bundled, [report]);
@@ -597,7 +597,7 @@ test('Monaco module-loader allowlist is scoped to one exact template in a Vite M
 for (const worker of ['editor', 'json']) {
     test(`Monaco ${worker} worker permits two reviewed loader calls, never identifiers or a third import`, () => {
         const filename = `extension/${worker}.worker-AbC12345.js`;
-        const source = 'import(`${FileAccess.asBrowserUri(`${moduleId}.js`).toString(!0)}`);';
+        const source = '(function(moduleId){import(`${FileAccess.asBrowserUri(`${moduleId}.js`).toString(!0)}`);});';
         const report = {
             bundler: 'vite',
             chunkFormat: 'module',
@@ -631,7 +631,9 @@ for (const worker of ['editor', 'json']) {
 test('Monaco loader calls require the reviewed asBrowserUri and toString member-call chain', () => {
     const filename = 'extension/monaco-AbC12345.js';
     const report = { bundler: 'vite', chunkFormat: 'module', assetHashes: { 'monaco-AbC12345.js': 'fixture' } };
-    const bundled = new Map([[filename, Buffer.from('import(`${FileAccess.asBrowserUri(`${n}.js`).toString(!0)}`);')]]);
+    const bundled = new Map([
+        [filename, Buffer.from('function load(n){import(`${FileAccess.asBrowserUri(`${n}.js`).toString(!0)}`);}')],
+    ]);
     inspectJavaScript(bundled, [report]);
     for (const source of [
         'import(`${FileAccess.asBrowserUri(`${n}.js`)}`)',
@@ -642,8 +644,54 @@ test('Monaco loader calls require the reviewed asBrowserUri and toString member-
         'import(`${FileAccess[asBrowserUri](`${n}.js`).toString(!0)}`)',
         'import(`${loadModule(n)}`)',
     ]) {
-        bundled.set(filename, Buffer.from(source));
+        bundled.set(filename, Buffer.from(`function load(n){${source}}`));
         assert.throws(() => inspectJavaScript(bundled, [report]), /nonliteral dynamic import cannot be verified/);
+    }
+});
+
+test('Monaco identifier provenance follows lexical ancestors, including the shipped minified block and callback', () => {
+    const filename = 'extension/monaco-AbC12345.js';
+    const report = { bundler: 'vite', chunkFormat: 'module', assetHashes: { 'monaco-AbC12345.js': 'fixture' } };
+    for (const source of [
+        'function load(e,r){{let t=$s.asBrowserUri(`${e}.js`).toString(!0);r(()=>import(`${t}`).then(o),[],import.meta.url);}}',
+        'function load(e){let t;t=$s.asBrowserUri(`${e}.js`).toString(!0);import(`${t}`);}',
+        'function load(e){t=$s.asBrowserUri(`${e}.js`).toString(!0);import(`${t}`);}',
+        'function load(e){{var t=$s.asBrowserUri(`${e}.js`).toString(!0);}import(`${t}`);}',
+        'class Loader{$loadForeignModule(e){const renamed=Access.asBrowserUri(`${e}.js`).toString(true);return ()=>import(`${renamed}`);}}',
+    ]) {
+        inspectJavaScript(new Map([[filename, Buffer.from(source)]]), [report]);
+    }
+});
+
+test('Monaco rejects top-level shapes, unrelated bindings, shadows, sibling scopes and unreviewed reassignments', () => {
+    const filename = 'extension/monaco-AbC12345.js';
+    const report = { bundler: 'vite', chunkFormat: 'module', assetHashes: { 'monaco-AbC12345.js': 'fixture' } };
+    const worker = '$s.asBrowserUri(`${e}.js`).toString(!0)';
+    for (const source of [
+        'const s4Proof="./missing-proof.js";import(`${s4Proof}`);',
+        `import(\`\${${worker}}\`);`,
+        'function load(){const t="./missing.js";import(`${t}`);}',
+        'function load(){import(`${t}`);}',
+        `function load(e){let t=${worker};return (t)=>import(\`\${t}\`);}`,
+        `function load(e){let t=${worker};{let t="./missing.js";import(\`\${t}\`);}}`,
+        `function load(e){let t=${worker};{let {t}=object;import(\`\${t}\`);}}`,
+        `function load(e){let t=${worker};try{}catch(t){import(\`\${t}\`);}}`,
+        `function load(e){{let t=${worker};}import(\`\${t}\`);}`,
+        `function other(e){let t=${worker};}function load(){import(\`\${t}\`);}`,
+        `function load(e){import(\`\${t}\`);let t=${worker};}`,
+        `function load(e){let t;{t=${worker};}import(\`\${t}\`);}`,
+        `function load(e){let t=${worker};t="./missing.js";import(\`\${t}\`);}`,
+        `function load(e){let t=${worker};r(()=>import(\`\${t}\`));t="./missing.js";}`,
+        `function load(e){let t=${worker};t+=suffix;import(\`\${t}\`);}`,
+        `function load(e){let t=${worker};t++;import(\`\${t}\`);}`,
+        `function load(e){let t;({t}=${worker});import(\`\${t}\`);}`,
+        `let t=${worker};function load(){import(\`\${t}\`);}`,
+    ]) {
+        assert.throws(
+            () => inspectJavaScript(new Map([[filename, Buffer.from(source)]]), [report]),
+            /nonliteral dynamic import cannot be verified/,
+            source,
+        );
     }
 });
 
