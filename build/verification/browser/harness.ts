@@ -7,6 +7,7 @@ import { createHash } from 'node:crypto';
 import { cpSync, existsSync, lstatSync, mkdirSync, readFileSync, realpathSync, writeFileSync } from 'node:fs';
 import { createServer, type Server } from 'node:http';
 import { extname, join, relative, resolve, sep } from 'node:path';
+import { pathToFileURL } from 'node:url';
 import { ModuleKind, ScriptTarget, transpileModule } from 'typescript';
 import { fixtures, type HarnessFixture } from './fixtures';
 import { runIntegratedCheck } from './playwright';
@@ -28,7 +29,7 @@ export function validatePrefix(prefix: string): void {
 }
 
 function browserRuntime(): string {
-    const compile = (filename: string): string => transpileModule(readFileSync(join(__dirname, filename), 'utf8'), {
+    const compile = (filename: string): string => transpileModule(readFileSync(join(import.meta.dirname, filename), 'utf8'), {
         compilerOptions: { module: ModuleKind.CommonJS, target: ScriptTarget.ES2023 },
     }).outputText;
     // Inline only these browser modules: a classic script installs the API synchronously before
@@ -81,7 +82,7 @@ export function prepare(options: HarnessOptions): void {
     mkdirSync(join(site, 'pages'), { recursive: true });
     cpSync(assetDirectory, join(site, 'artifact'), { recursive: true });
     const assetRoot = `${options.prefix}/artifact`;
-    cpSync(join(__dirname, 'theme.css'), join(site, 'theme.css'));
+    cpSync(join(import.meta.dirname, 'theme.css'), join(site, 'theme.css'));
     writeFileSync(join(site, 'runtime.js'), browserRuntime());
     for (const [view, fixture] of Object.entries(fixtures)) {
         const html = hostTemplate(options.repository, assetRoot, origin.origin, view, fixture.config);
@@ -210,7 +211,7 @@ function main(): void {
             throw new Error('prepare requires --vsix');
         }
         prepare({ vsix, output: resolve(output), prefix, origin: flags.get('--origin') ?? `http://127.0.0.1:${port}`,
-            repository: resolve(__dirname, '../../..') });
+            repository: resolve(import.meta.dirname, '../../..') });
         console.log(`L2 pages prepared: ${resolve(output, 'manifest.json')}`);
     } else if (command === 'serve') {
         const server = serve(resolve(output), prefix, port);
@@ -221,6 +222,7 @@ function main(): void {
     }
 }
 
-if (require.main === module) {
+// The root package is `"type": "module"`, so tsx runs this file as an ES module.
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
     main();
 }
