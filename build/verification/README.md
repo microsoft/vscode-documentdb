@@ -3,10 +3,23 @@
 Stage 0 tooling for the [modernization plan](../../docs/ai-and-plans/modernization/build-and-test-stack.md).
 All harness files and bundle reports are excluded from the VSIX.
 
+## Default build and dev loop
+
+`npm run package` and `npm run package-prerelease` use `build-prod`: webpack for the extension
+host, Vite for the webviews. `npm run build-dev` builds the same combination unminified with source maps.
+`webpack-prod` and `webpack-dev` remain all-webpack fallbacks until Stage 6.
+
+`npm run watch:views` now starts Vite on port 18080 and serves `/views.js` without an existing
+`dist/views.js`. The Stage 0 advice to run `npm run webpack-dev-wv` once before starting the
+views watcher applies only to the `watch:views-webpack` fallback, not the default Vite dev loop.
+The VS Code task waits for Vite's ready line; its diagnostic pattern intentionally never matches,
+because Vite reports development build errors in the browser overlay.
+
 ## L1: offline inspection
 
-Production webpack and Vite views builds generate hash-bound reports in `reports/`. Enable the optional webpack visual
-analyzer with `BUNDLE_ANALYZE=true`; it writes `reports/views.html` without starting a server.
+Production webpack host and Vite views builds generate hash-bound reports in `reports/`.
+The webpack views fallback also generates a report. Enable its optional visual analyzer with
+`BUNDLE_ANALYZE=true`; it writes `reports/views.html` without starting a server.
 
 After packaging:
 
@@ -46,8 +59,9 @@ for imports and URL assets; they do not use this allowlist.
 
 L1 counts the `node_modules/**/bson/lib/bson.*` modules in each shipped graph. It cannot see a copy
 under another path (a dependency that vendors or pre-bundles `bson`), and it only sees the importers
-the graph has today. Both webpack configs therefore pin `bson` with a `resolve.alias` (`bson$`): the
-host config to the CommonJS entry the driver `require`s, the views config to bson's browser entry.
+the graph has today. The host webpack config therefore pins `bson` with a `resolve.alias` (`bson$`)
+to the CommonJS entry the driver `require`s. Both Vite views and the webpack views fallback pin
+bson's browser entry.
 [`bson-identity/check.cjs`](./bson-identity/check.cjs) builds two probe entries with the real
 `webpack.config.ext.js` (production mode, same aliases, loaders and externals), runs them in Node
 and requires every route to `ObjectId` to be one constructor, separately for the `main` and
@@ -92,6 +106,9 @@ measured `dist/` file size. Reproduce them with:
 ```bash
 node build/verification/measure.cjs <output-directory>
 ```
+
+Production timings now run `npm run build-prod` to measure the shipped webpack-host/Vite-views build.
+The `webpackSeconds` key and `webpack-N.log` names are retained for comparison with the Stage 0 baseline.
 
 Run measurements without concurrent builds or full test suites. They are machine-specific wall
 times, not CI performance thresholds.

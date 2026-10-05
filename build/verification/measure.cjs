@@ -36,7 +36,7 @@ const measurements = {
     unitTestSeconds: [],
 };
 for (let index = 1; index <= 3; index++) {
-    measurements.webpackSeconds.push(run('npm', ['run', 'webpack-prod'], `webpack-${index}`));
+    measurements.webpackSeconds.push(run('npm', ['run', 'build-prod'], `webpack-${index}`));
     fs.writeFileSync(path.join(outputDirectory, 'measurements.json'), JSON.stringify(measurements, null, 2));
 }
 for (let index = 1; index <= 3; index++) {

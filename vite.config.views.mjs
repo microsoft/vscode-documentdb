@@ -9,7 +9,7 @@
 //
 //   npm run vite-prod-wv    production build, writes build/verification/reports/views.json
 //   npm run vite-dev-wv     unminified build with source maps, no report
-//   npm run vite-serve-wv   dev server on http://localhost:18080 (WebviewController's default)
+//   npm run watch:views    dev server on http://localhost:18080 (WebviewController's default)
 
 import react from '@vitejs/plugin-react';
 import fs from 'node:fs';
