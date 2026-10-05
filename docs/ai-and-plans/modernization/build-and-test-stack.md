@@ -2281,6 +2281,14 @@ Stage 0 must also be made.
 
   Windows and macOS, and the pre-release package script, were not run by the agents.
 
+  - **G4 progress (operator, 2026-10-05):** the operator reported, verbatim, "I tested the app
+    with f5 debugging. I tested the VXIS standaloen build." No issues were reported. A
+    follow-up question was not answered (operator unavailable), so this record assumes no
+    issues and does not itemise what was covered. Items 1 and 3 are recorded as tested by the
+    operator. Still unconfirmed: item 2 (three themes in all five webviews), item 4 (three
+    L2-dev scenarios in the integrated browser) and the three item 5 decisions. **G4 is not
+    yet passed.**
+
 - **Stage 4 record commits:** `44d5488e`, `7abe176b`, `19430f47`, `68079e7a`, `3f7b736c`,
   `9dbb9436` and the commit adding this reconciliation; every implementation commit is cited
   under its task above.
