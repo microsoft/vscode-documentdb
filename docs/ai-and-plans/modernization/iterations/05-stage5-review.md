@@ -107,7 +107,14 @@ test failure. No `npm run package` was run and no default VSIX/report was overwr
   the awaited implementation, not just from `main.mjs`. Do not traverse every dynamic
   child for this check: that would also reject the intended lazy discovery graph.
 - **Copilot comment:** none.
-- **Author decision:** _pending_
+- **Author decision (coordinator, 2026-10-05; not an operator decision):** accepted; option 1.
+  Fixed in `555f9def`: L1 requires exactly one chunk with the `./src/extension.ts` facade,
+  reached directly through `main`'s `dynamicImports`, and checks the imports-only closure of the
+  loader and that implementation together. The implementation's dynamic children stay excluded.
+  `prove:vsix` gains `kubernetes-in-extension-static-closure` (the reviewer's reproduction: an
+  eager import from the implementation chunk, with refreshed copied hashes and sizes) and
+  `missing-extension-implementation-boundary`. It now prints 21 PASS lines. Option 2 (a runtime
+  module-load assertion) was not taken: it is slower and needs a controlled profile.
 
 ### S5-F02: concurrent windows can expose a truncated TS-plugin stub manifest to a reader
 
@@ -153,7 +160,16 @@ test failure. No `npm run package` was run and no default VSIX/report was overwr
   test, including stale-stub replacement. Keep the existing `created`/`replaced`/`existed`
   semantics and explicit EACCES/EROFS handling; option 2 remains the longer-term solution.
 - **Copilot comment:** none.
-- **Author decision:** _pending_
+- **Author decision (coordinator, 2026-10-05; not an operator decision):** accepted; option 1.
+  Fixed in `90374fee`: each changed stub file is written to an exclusive same-directory
+  temporary file (PID and UUID in its name) and renamed over the final name, entry before
+  manifest, with the legacy `index.js` removed only afterwards. A failed write or rename cleans up
+  its temporary file and rethrows the original error, so the EACCES/EROFS handling in
+  `ClustersExtension.ts` is unchanged. Deterministic two-writer/reader tests cover creation and
+  stale replacement (14 tests in `tsPluginStub.test.ts`). On Windows, Node's `renameSync` uses
+  `MoveFileExW` with `MOVEFILE_REPLACE_EXISTING`; a target held open without delete sharing can
+  still fail with `EPERM`/`EBUSY`, which propagates without retry. That path was not run on
+  Windows. Option 2 (#548, a packaged plugin dependency) remains the long-term fix.
 
 ## Independent sweep
 

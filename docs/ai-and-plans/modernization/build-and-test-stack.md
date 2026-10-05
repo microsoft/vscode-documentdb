@@ -2320,43 +2320,237 @@ Stage 0 must also be made.
 - **Models:** author **Claude Opus 5.5**. The alternative is a head-to-head trial against **GPT-6
   Astra**, which is positioned for long autonomous runs with independent verification but costs
   about 2.5 times as much. Whichever writes it, the other reviews. This is the riskiest stage.
+  - **Execution note (2026-10-05):** one Claude Opus 5.5 coordinator session ran the stage through
+    sequential subagents, as the operator's prompt specified: Claude Opus 5.5 for the core host
+    conversion (`644b41ae`, `776f3a87`); GPT-6.1 Sol for the activation timing tool (`b98ab019`), the
+    L1 host port (`770446c2`), the externals audit (`650f2329`) and the dev loop (`0f25c1ec`). The
+    coordinator wrote `4386c580`, `69989ed7` and `f22c0278` directly and checked every subagent diff
+    and re-ran its key acceptance command. The independent review is by GPT-6 Astra in a fresh
+    session (`iterations/05-stage5-review.md`). No head-to-head author trial was run.
 - **Goal:** the extension itself runs as ESM, built by Vite.
 - **Tasks:**
   - `"type": "module"` in the root `package.json`. The Azure Tools migration guide warns that
     telemetry silently breaks without it.
+    - **Done in `776f3a87`.** `"type": "module"` and `"main": "./main.mjs"` flow into
+      `dist/package.json`. Telemetry under ESM: with `DEBUGTELEMETRY=verbose`, every L3 timing launch
+      logs the `activate` event (5 of 5); the non-debug reporter path shows no errors in the L3 logs.
+      The real send path with telemetry enabled is an operator check.
   - A `main.mjs` thin loader that `await import()`s the bundle. Delete root `main.js` and the
     "Launch Extension + Host" configuration.
+    - **Done in `776f3a87`.** `main.ts` is the loader, built as the `main` entry to `dist/main.mjs`
+      (379 bytes plus two small static chunks): it starts `perfStats`, top-level-awaits
+      `import('./src/extension')` (the extension lands in its own dynamic chunk) and delegates
+      `activate`/`deactivate`. `mainFileLoad` now measures the extension chunk's load; with webpack it
+      was always 0, because the hoisted `require` ran before `perfStats` was initialised. Root
+      `main.js` and the "Launch Extension + Host" configuration are deleted.
+    - **Product fix found by L3:** `addConnectionFromRegistry.ts` default-imported `vscode`, which
+      has no default export under ESM (`'vscode' does not provide an export named 'default'`). Fixed
+      in `644b41ae`, with a `no-restricted-syntax` rule against default imports of `vscode`.
   - `vite.config.ext.mjs` with three entries: `main`, `playgroundWorker`, `playgroundTsPlugin`.
+    - **Done in `776f3a87`; watch readiness in `0f25c1ec`.** Two Vite environments run in order by
+      `builder.buildApp`: `host` (ESM `main.mjs`, `playgroundWorker.mjs` and shared
+      `[name]-[hash].mjs` chunks at the dist root) and `tsPlugin` (CommonJS
+      `playgroundTsPlugin.cjs`), because Rolldown emits one format per output. Alternatives
+      considered: a second config file (duplicated settings) and two CLI runs (two watchers).
+      `define` reproduces webpack's `EnvironmentPlugin` (`NODE_ENV`, `IS_BUNDLE`, `DEVSERVER`); no
+      production file contains `DEVSERVER` or `127.0.0.1:18080`. A local `build/vite/copy-assets.mjs`
+      replaces `CopyWebpackPlugin` (no new dependency). Against the baseline VSIX, no non-JavaScript
+      file is missing or added except as intended: webpack's three `*.LICENSE.txt` files are gone
+      (license comments stay inline), `package.json` gains `type`/`main`, and `[Content_Types].xml`
+      lists the new extensions.
+    - **Resolution conditions (coordinator decision, not an operator decision):** Vite's defaults are
+      kept, so dependencies now load their ESM builds where they have one; webpack loaded CommonJS
+      builds because swc compiled our imports to `require`. The webpack graph already had 24 packages
+      bundled twice (CommonJS and ESM builds); the Vite graph has 9. The `module` condition resolves
+      `tslib` to `tslib.es6.mjs`, so Cosmos DB's tslib interop crash does not occur and no alias is
+      needed. The lazy discovery paths were only checked at module load (G5).
+    - **Watch mode:** Vite starts one watcher per environment, and a source edit rebuilds only
+      `host`. A small readiness hook in `buildApp` prints `[vite-ext] host and tsPlugin ready.` once
+      both have built; `.vscode/tasks.json` uses it as the problem matcher's end pattern and captures
+      Rolldown's `╭─[ file:line:col ]` errors. The F5 launch configurations are renamed "(Vite)" and
+      their `outFiles` cover `.mjs`/`.cjs`. A development build packaged into a throwaway VSIX passes
+      L3. F5 in the real UI is an operator check.
   - **The TS server plugin stays CommonJS** (operator, 2026-10-01). TypeScript's plugin loader needs
     a callable factory (`export = pluginModuleFactory`), which an ESM default export does not
     provide. Emit it as a `.cjs` file at the `node_modules/documentdb-playground-ts-plugin` path that
     the `typescriptServerPlugins` contribution resolves.
-  - If the webpack configs stay as a fallback until Stage 6, rename them to `.cjs`: `"type":
-"module"` breaks their CommonJS globals.
+    - **Done in `776f3a87`, with a correction to the path.** vsce hard-ignores `node_modules/**`, so
+      nothing can ship at that path (Stage 4 hand-over). The plugin ships as
+      `dist/playgroundTsPlugin.cjs`, whose `module.exports` is the factory (source `export default`,
+      Rolldown `output.exports: 'default'`; `export =` is illegal under `module: ESNext`). At
+      activation, `src/documentdb/playground/tsPluginStub.ts` writes
+      `<extension>/node_modules/documentdb-playground-ts-plugin/` as `package.json`
+      (`"type": "commonjs"`, `main: index.cjs`) plus `index.cjs` (`require("../../playgroundTsPlugin.cjs")`),
+      so it is CommonJS whatever the root type. Unlike before, a stub from an earlier version is
+      rewritten when its content differs, and a leftover `index.js` is deleted; telemetry gains
+      `stubReplaced`. `src/documentdb/playground/tsPlugin/package.json` was unused and is deleted.
+      Agent smoke test outside VS Code: the factory loads, and completions after
+      `db.users.find({}).` and hover on `find` return results. Inside a real TS server: G5.
+    - **Review fix S5-F02 (`90374fee`):** concurrent windows could expose a truncated stub
+      `package.json` to a TS server. Each changed stub file is now written to an exclusive
+      temporary file and renamed over the final name, entry before manifest. Errors still
+      propagate to the read-only-install handling.
+  - If the webpack configs stay as a fallback until Stage 6, rename them to `.cjs`:
+    `"type": "module"` breaks their CommonJS globals.
+    - **Views:** `webpack.config.views.cjs` (`776f3a87`); `webpack-prod-wv`, `webpack-dev-wv` and
+      `watch:views-webpack` still compile.
+    - **Host fallback removed (coordinator decision, not an operator decision):** a webpack host
+      cannot produce the ESM entry, top-level await and the `.mjs` worker without forking product
+      code, so a "working" fallback would have been fake. The `webpack-prod`, `webpack-dev` and
+      `webpack-*-ext` scripts went in `776f3a87`; `webpack.config.ext.cjs`, kept briefly for the
+      BSON probe, was deleted in `770446c2` once that probe moved to the Vite config. The
+      alternative, a CommonJS webpack host with its own `dist/package.json` and worker name, was
+      rejected for that reason.
   - Audit the 18 externals and drop the ones no longer needed. Every guarded optional
     `require` (`try { require('x') } catch {}`) needs an explicit external. Never mark a type-only
     module external: that turns a compile-time no-op into a runtime `require` that crashes activation.
+    - **Done in `650f2329`.** Each external was checked for installation, for references in the
+      host graph (3,683 module IDs) and guards, and by building without it. Dropped as dead entries
+      (byte-identical output without them): `aws4`, `cpu-features`, `pg-native`, `vs`. Added:
+      `supports-color` (a guarded probe in `debug`; 0-byte change). Kept, each with a reason in the
+      config: the driver's guarded optional dependencies (`kerberos`, `mongodb-client-encryption`,
+      `@mongodb-js/zstd`, `snappy`), `@aws-sdk/credential-providers` and `gcp-metadata` (bundling
+      them would add 365 KB and 55 KB and change webpack's behaviour), `ws`'s `bufferutil` and
+      `utf-8-validate`, `electron` (unresolvable), `os-dns-native`, `ssh2` (proxy-only; bundling adds
+      344 KB), `system-ca`'s two platform loaders, and `@babel/preset-typescript*`. None is
+      type-only. All 99 host files were byte-identical before and after.
+    - **`caniuse-lite` (Stage 0 side finding):** the 2.3 MB came from webpack's dynamic-require
+      contexts in `browserslist`, which eagerly bundled 823 region/feature data modules. Rolldown
+      leaves those two computed requests unbundled, inside `try`/`catch`; the shell rewriter disables
+      Babel and browserslist configuration and supplies no targets, and a copy of the bundled worker
+      with no `node_modules` rewrote code successfully. The worker went from 7.44 MB to 4.17 MB.
+    - **Latent, recorded:** `@mongodb-js/devtools-proxy-support` picks a filesystem `require.resolve`
+      branch for `pac+` proxies when `__webpack_require__` is absent. Our worker never passes proxy
+      options, so the branch is unreachable today.
   - Convert the `__dirname` uses: `src/documentdb/playground/WorkerSessionManager.ts` (worker path)
     and `src/documentdb/playground/tsPlugin/index.ts` (`.d.ts` path).
+    - **Done in `776f3a87`.** The worker path joins `ext.context.extensionPath` and
+      `playgroundWorker.mjs`, independent of which chunk the manager lands in (rejected:
+      `import.meta.dirname`). The TS plugin keeps `__dirname`, valid because its output is CommonJS.
+      Bundled CommonJS code gets `__dirname`/`__filename` through a banner
+      (`__documentdbDirname`/`__documentdbFilename` from `import.meta`) plus a host-only `define`
+      that points the free references at them. A banner declaring `__dirname` itself collided with
+      `open`, which declares its own.
+    - **S3-F01:** still latent and unchanged. `getShellApiDtsContent` is tree-shaken out; if called,
+      `import.meta.dirname` would be the extension root and `..` would point outside it.
+      **S3-F03:** resolved by construction: `import.meta.url` stays real syntax in the ESM output, and
+      no build path is baked in.
   - `keepNames: true` in production. The code compares `constructor.name`, and the current Terser
     config already keeps names for that reason.
+    - **Done in `776f3a87`** (Rolldown `output.keepNames: true` for both environments). Evidence: the
+      minified output contains `ClustersExtension=class{…}`; at runtime, 887 exported classes keep
+      their names.
   - A `createRequire` banner for CommonJS dependencies.
+    - **Not added, on evidence (deviation):** a probe showed Rolldown already rewrites every free
+      `require` (calls, `require.resolve`, `typeof require`) to its own
+      `createRequire(import.meta.url)` helper on `platform: 'node'`. A `require` banner would be dead
+      code that can collide with modules declaring `const require`. The banner only provides the
+      `__dirname`/`__filename` bindings described above.
   - The single `bson` alias from Stage 3.
+    - **Done in `776f3a87`** (`^bson$` to the driver's CommonJS entry). L1: the `main` and
+      `playgroundWorker` graphs each contain only `bson/lib/bson.cjs`. The runtime probe
+      (`bson-identity/check.cjs`, ported to the Vite host config in `770446c2`, S3-F08) shows one
+      `ObjectId` constructor per graph, and its negative control (alias removed) fails as intended.
   - `tsconfig.json`: `module: ESNext`, `moduleResolution: Bundler`, no `baseUrl` and no `"*"` paths
     mapping.
+    - **Done in `776f3a87`, with one deviation.** Under `Bundler`, two packages whose ESM entry ships
+      no types (`mongodb-connection-string-url`, `@mongodb-js/explain-plan-helper`) silently became
+      `any`; lint caught it, tsc did not (no `noImplicitAny`). Two type-only `paths` entries point at
+      their CommonJS `.d.ts`. There is no `"*"` mapping and no `baseUrl`. Bundlers and Vitest do not
+      read `paths`. The `ext` namespace became a typed plain object first (`4386c580`, S2-F04).
   - If the host build turns out to be painful (the 18 externals, three entries, CommonJS interop),
     fall back to esbuild **for the host only**. The webviews stay on Vite.
+    - **Not needed.** Vite handled the three entries, the externals and CommonJS interop.
   - **Port the host side of L1:** the Stage 4 report plugin for `main`, `playgroundWorker` and
     `playgroundTsPlugin`, so the one-BSON-per-host-graph check reads Vite module IDs. With the
     esbuild fallback, produce the same neutral report from its metafile.
+    - **Done in `770446c2`.** `build/vite/bundle-report.mjs` writes `host.json` for both
+      environments (an `append` option merges the `tsPlugin` build and refuses a stale file). L1 now:
+      - requires `main.mjs`, `playgroundWorker.mjs` and `playgroundTsPlugin.cjs`;
+      - builds host graphs through `imports` and `dynamicImports`: exactly one BSON in `main` and
+        `playgroundWorker`, at most one in the TS plugin;
+      - requires host ownership with matching hashes for every host file;
+      - adds a new invariant that `@kubernetes/client-node` is outside `main`'s static closure;
+      - accepts literal `import()` of Node built-ins and `vscode` only in host-owned `.mjs` files;
+      - rejects a non-Vite host report;
+      - keeps Babel's one non-literal `import(filepath)` in the worker as a named allowlist entry,
+        `babelConfigFileImports`, constrained by its owning module
+        (`@babel/core/lib/config/files/import.cjs`), the exact `import_(filepath)` helper shape that
+        only returns `import(filepath)`, its CommonJS factory and declarator, and a count of one. It
+        checks the helper's structure, not interprocedural provenance.
+      - `prove:vsix` prints **19 PASS** lines: the 14 existing ones plus `missing-host-lazy-chunk`,
+        `duplicate-host-bson`, `missing-ts-plugin`, `second-babel-nonliteral-import` and
+        `kubernetes-in-main-static-closure`.
+      - **Review fix S5-F01 (`555f9def`):** the Kubernetes invariant stopped at the thin loader.
+        It now covers the imports-only closure of `main` plus the awaited extension implementation
+        (the chunk with the `./src/extension.ts` facade, required to be a direct dynamic import of
+        `main`). Two controls added: `kubernetes-in-extension-static-closure` and
+        `missing-extension-implementation-boundary`; `prove:vsix` prints **21 PASS** lines.
   - Stage 0 tooling under `"type": "module"`: the `build/verification/**/*.cjs` files keep working.
     Check that the browser harness TypeScript still runs under `tsx` with the new root
     `tsconfig.json`, which its own `tsconfig.json` extends. If the webpack configs are renamed to
     `.cjs`, update their `require` of `BundleReportPlugin.cjs` and the `import/no-internal-modules`
     allowance in `eslint.config.mjs`.
+    - **Done, with two fixes found by running the checks for real.** The `.cjs` tooling works
+      unchanged. `prepare:browser-check` crashed (`require is not defined in ES module scope`): tsx
+      now runs `harness.ts` as ESM, and `test:verification` did not notice because its tests import
+      the harness instead of running its CLI. Fixed in `f22c0278` (`import.meta.dirname`, an
+      `import.meta.url` main check). `prove:activation`'s injected error never fired: VS Code serves
+      ESM imports of `vscode` through its loader hook, and `createRequire(...)('vscode')` returns a
+      different API object. Fixed in `69989ed7` (the injector imports `vscode` as the bundle does).
+      `requireDisplay` now also accepts the abstract X11 socket (`b98ab019`), so L3 runs on this
+      machine with a user-local Xvfb.
+      - The `.cjs` webpack views config keeps its `BundleReportPlugin.cjs` require and ESLint
+        allowance.
+      - S1-F06: `.vscodeignore` no longer lists `extension.bundle.ts`.
 - **Automated verification:** **L3 is the main gate** (activation, late commands, clean logs); L1
   (entry files, chunks, externals present or absent as intended, the TS plugin as `.cjs` at its
   path, one `bson` per entry graph); L2 (views unchanged); L0.
+- **Automated verification results (2026-10-05):** final artifact at `90374fee`: 202 files,
+  8,492,536 bytes, SHA-256 `fd3fbc18…a168a9`. The baseline webpack-host VSIX (CI run 37310145732
+  at `eb0c56dd`) has 139 files and 9,320,460 bytes.
+  - **L3 (main gate):** local `L3 PASS` and `L3 PROOF PASS` on that artifact. L3 runs locally
+    now (user-local Xvfb, abstract socket, Electron's libraries unpacked from `.deb`s under
+    `/tmp`; nothing installed system-wide). CI run
+    [37359454824](https://github.com/microsoft/vscode-documentdb/actions/runs/37359454824) at
+    `69989ed7`: all four jobs green, including L3 and the L3 proof.
+    - CI run 37358462260 at `0f25c1ec` failed one unrelated test:
+      `dockerCommand.test.ts` "kills a command that ignores SIGTERM…", a real-process timing test
+      that Stage 5 did not touch. It passed in every later run and locally. **Watch item.**
+    - The L1 job of run 37361229466 at `f22c0278` was cancelled by the next dispatch
+      (`cancel-in-progress`); it recorded no steps.
+  - **L1:** `verify:vsix` passes, and `prove:vsix` prints 21 PASS lines. The manifest drift against
+    the Stage 0 baseline is informational (option A): 120 added, 42 removed, 1 size change. Graph
+    bytes: `main` 9,875,774 (loader plus everything it reaches, lazy discovery included),
+    `playgroundWorker` 5,362,758 (7,443,125 before), `playgroundTsPlugin` 6,175.
+    `bson-identity/check.cjs --prove`: one `ObjectId` constructor per host graph; the alias-removed
+    control fails.
+  - **L2:** headless, as in Stage 4. Five views verified with 0 errors, worker round-trips in
+    Collection View and Document View, and the CSS-negative control with exactly 7 failures. L2-dev
+    ran on a second Vite dev server on port 18085, because a server started before this session
+    held 18080: 42/42 routes, 60/60 assertions.
+  - **L0:** `npm run build`, repo-wide `npm run lint`, `npx vitest run` (298 files, 4,595 tests),
+    `npm run test:verification` (86 Node and 82 browser tests after the review fixes) and the
+    browser harness type-check pass.
+  - **Activation time** (`npm run measure:activation`, 5 launches each, VS Code 1.109.0, this
+    WSL machine, `b98ab019`): the method combines code loading from the ext host trace log
+    (`_doActivateExtension` to `_callActivateOptional`) with the `activate` telemetry duration
+    under `DEBUGTELEMETRY=verbose`.
+
+    | VSIX                    | codeLoadMs median (min to max) | activateMs | totalMs | mainFileLoadMs |
+    | ----------------------- | ------------------------------ | ---------- | ------- | -------------- |
+    | Baseline (webpack host) | 456 (398 to 665)               | 72         | 528     | 0              |
+    | Stage 5 (Vite ESM host) | 292 (277 to 330)               | 49         | 340     | 288            |
+
+    The reviewer measured 496 ms and 334 ms medians on the same machine. Only same-machine
+    comparisons mean anything. `mainFileLoad` was always 0 under webpack (see the loader task).
+
+  - **AI review:** GPT-6 Astra, fresh session,
+    [05-stage5-review.md](./iterations/05-stage5-review.md): S5-F01 (medium) and S5-F02 (low), both
+    accepted and fixed by coordinator decision (`555f9def`, `90374fee`). The reviewer
+    independently re-ran build, verification tests, L1, the proofs, L3 with its proof, worker and
+    TS plugin probes on the packaged files, and L2.
+
 - **Operator gate G5:** the manual checklist, plus:
   - activation time compared with the baseline;
   - a `vscode://` URI on a cold start (an async loader changes activation order; Cosmos DB fixed a
@@ -2366,6 +2560,43 @@ Stage 0 must also be made.
   - Kubernetes, Atlas and Azure discovery;
   - a connection that uses Kerberos or another native optional dependency, where one is available;
   - telemetry events appear with `DEBUGTELEMETRY` set.
+- **G5 status: not passed.** Stage 5's implementation, review fixes and automated checks are
+  complete; the operator gate has not run. Operator-only checks, on the installed VSIX
+  (`npm run package`, or the CI artifact of the final run):
+  1. The manual checklist (all five webviews, styling, Monaco and its workers, a clean DevTools
+     console, a lazy path, a production build).
+  2. Activation time: "Developer: Show Running Extensions" for this VSIX against the baseline
+     webpack-host VSIX (CI run 37310145732 artifact), or `npm run measure:activation` on your
+     machine. The agents' numbers are above.
+  3. A `vscode://` URI on a cold start. The reviewer's source reading: VS Code 1.109 buffers the
+     URI before `activateByEvent`, and registering the handler drains the buffer. This is not a
+     tested result.
+  4. A playground run (worker), and TS plugin completions and hover in a `.documentdb` file. This
+     includes the first run after installing over an older version, which must replace the old
+     `index.js` stub.
+  5. Kubernetes, Atlas and Azure discovery against real backends: their dependencies now load
+     ESM builds where they have one.
+  6. A connection that uses Kerberos or another native optional dependency, where one is
+     available.
+  7. Telemetry events with `DEBUGTELEMETRY` set, in a real session.
+  8. F5 with the renamed "Default: Launch Extension (Vite)": the `Watch` task reaches ready,
+     breakpoints bind in `.mjs`, and rapid saves rebuild. The reviewer's fixture saw unexplained
+     timeouts with rapid edits.
+  9. Decisions, all made by the coordinator, not the operator:
+     - removing the webpack host fallback;
+     - keeping Vite's default resolution conditions;
+     - two type-only tsconfig `paths` entries;
+     - no `require` banner;
+     - the externals changes;
+     - the review decisions for S5-F01 and S5-F02.
+
+     Also decide whether to record these in a `decisions.md`.
+
+  Windows and macOS were not run by the agents.
+
+- **Stage 5 commits:** `b98ab019`, `4386c580`, `644b41ae`, `776f3a87`, `770446c2`, `650f2329`,
+  `0f25c1ec`, `69989ed7`, `f22c0278` (implementation); `e677026c` (review); `555f9def`, `90374fee`
+  (review fixes); and the documentation commit that adds this record.
 
 ### Stage 6: remove webpack, lock in, TypeScript 6
 
