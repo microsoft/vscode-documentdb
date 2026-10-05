@@ -1940,6 +1940,15 @@ Stage 0 must also be made.
     the default until every check passes, then flip. Keep the webpack views config until Stage 6.
   - Make `src/webviews/_integration/WebviewRegistry.ts` lazy (`React.lazy` per view, `Suspense` in
     `src/webviews/index.tsx`). The `WebviewName` type stays the same.
+    - **Completed in `ca13fcae` (author GPT-6.1 Sol).** Five `React.lazy` entries with literal
+      `import()` paths, `Suspense` (`fallback={null}`) around the view in `render()`; a new
+      `WebviewRegistry.test.tsx` checks deferred loading and the exact five-name union. A view's
+      module now evaluates after `render()` configures l10n; the call-time `l10n.t` rule in
+      `LocalQuickStart.tsx` stays as defensive practice and its comment was corrected.
+      Checks: `npm run build`; `vitest run src/webviews` (38 files, 653 tests); the L2 fixture
+      type-check; `webpack-prod-wv` still exports `render` (webpack still merges everything into
+      one chunk). Negative: a `'notAView'` `webviewName` fails `tsc` (TS2322). The host graph
+      contains neither the registry nor React, so the host's type-only import stays elided.
   - `manualChunks` for `monaco-editor`, Fluent + Griffel, React, and a separate **SlickGrid
     JavaScript chunk** that only the Collection View loads. Record its size: it is the baseline for
     the later grid replacement. Watch the default-import interop: `tsconfig.json` carries
@@ -1979,6 +1988,21 @@ Stage 0 must also be made.
   - Keep `entryFileNames: 'views.js'`. How chunk names meet L1's file list depends on the pending
     L1 manifest decision under Stage 0. With `[name]-[hash].js` chunks (Cosmos DB's choice), any
     file-list comparison must strip the hash.
+    - **L1 manifest report completed in `b47627f1` (author GPT-6.1 Sol)**, implementing option A
+      above. The file list and sizes are reported, not enforced: `manifestReport` (added, removed,
+      size changes beyond the 10% / 4 KiB tolerance, VSIX delta, bytes per graph) goes to stderr
+      and, with `--manifest-report <file>`, to JSON; GitHub Actions uploads it as
+      `L1-manifest-report-<run>`. Added and removed files are paired after normalising content
+      hashes out of names (informational only). New hard failures: nine required files plus the
+      file `package.json` `main` resolves to, and S3-F05's rule that every packaged `.js`, `.cjs`
+      and `.mjs` file is owned by a bundle report (`.cjs` is parsed as CommonJS). All 36 packaged
+      scripts are owned today; no allowlist. `baseline.json` is unchanged and remains the
+      reference. `prove:vsix` now prints six rejections (`missing-file` replaced by
+      `missing-required-file`; `unowned-script` added) and one positive control,
+      `asset-added-and-removed-reported`, that must not fail. Checks: 17 inspector tests,
+      `test:verification` (43 Node and 45 browser tests), the report on the Stage 3 VSIX
+      (0 added, 0 removed, 0 size changes) and all seven proof lines, reproduced by the
+      coordinator.
   - Adapt L2's CSS-negative control: it suppresses webpack's style-loader injection, and the
     inline-CSS plugin injects differently.
   - The Vite views build does not use `BundleReportPlugin`, which ends the Stage 0 `watch:views`
