@@ -2280,7 +2280,6 @@ Stage 0 must also be made.
        modernization work; the plan's decision log and this record hold them for now.
 
   Windows and macOS, and the pre-release package script, were not run by the agents.
-
   - **G4 progress (operator, 2026-10-05):** the operator reported, verbatim, "I tested the app
     with f5 debugging. I tested the VXIS standaloen build." No issues were reported. A
     follow-up question was not answered (operator unavailable), so this record assumes no
