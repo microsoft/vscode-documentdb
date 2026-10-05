@@ -1938,6 +1938,18 @@ Stage 0 must also be made.
 - **Tasks:**
   - Add `vite.config.views.mjs` **next to** webpack, writing to `dist/` the same way. Keep webpack as
     the default until every check passes, then flip. Keep the webpack views config until Stage 6.
+    - **Completed in `cced6402`, `769a2971`, `208e9156`, `cc473c66` (author Claude Opus 5.5).**
+      `vite.config.views.mjs` plus local plugins in `build/vite/` (`monaco.mjs`, `inline-css.mjs`,
+      `bundle-report.mjs`, `webview-dev-entry.mjs`); scripts `vite-prod-wv`, `vite-dev-wv`,
+      `vite-serve-wv` and a temporary `package:vite-views` (webpack host plus Vite views). New
+      devDependency `@vitejs/plugin-react` `~6.1.1` (published 2026-08-28). Fresh-dependency scan:
+      0 fresh of 1,636 locked versions (`api/`: 0 of 116); no pins or overrides. `webpack-prod-wv`
+      still builds. Deviations from the plan's wording, with reasons: `keepNames` is off, because
+      webpack's terser pass already mangled class names in the shipped `views.js` (1,456 one- or
+      two-letter class names), so swc's `keepClassNames` never reached production, and keeping
+      names would add about 460 KB. `src/webviews/static` held only an unreferenced `.gitkeep`, so
+      the Vite build has no public directory. Legal comments stay inline (+6 KB) instead of
+      webpack's `*.LICENSE.txt` files.
   - Make `src/webviews/_integration/WebviewRegistry.ts` lazy (`React.lazy` per view, `Suspense` in
     `src/webviews/index.tsx`). The `WebviewName` type stays the same.
     - **Completed in `ca13fcae` (author GPT-6.1 Sol).** Five `React.lazy` entries with literal
@@ -1953,21 +1965,62 @@ Stage 0 must also be made.
     JavaScript chunk** that only the Collection View loads. Record its size: it is the baseline for
     the later grid replacement. Watch the default-import interop: `tsconfig.json` carries
     `allowSyntheticDefaultImports` "to fix SlickGrid integration".
+    - **Completed in `769a2971`.** Rolldown 1.0's `codeSplitting.groups` (it deprecates
+      `manualChunks` and `advancedChunks`): `preload-helper`, `react`, `fluentui`, `slickgrid`,
+      `monaco`, captured from most shared to least, because a group also absorbs its modules'
+      not-yet-captured dependencies (first attempt: `monaco` absorbed React and the preload helper,
+      and the entry statically imported Monaco). No catch-all vendor group. **SlickGrid chunk:
+      756,981 bytes** (the grid-replacement baseline). Monaco 3,307,430; Fluent UI 704,053;
+      React 190,817; `views.js` 568,837; workers 259,528 and 389,389; font 80,340. Bytes each view
+      loads (entry plus lazy closure, workers excluded), against 6,379,817 for every view under
+      webpack: Local Quick Start 1,561,824; Atlas Credentials 1,515,441; Cluster Dashboard
+      1,704,959; Document View 4,820,202; Collection View 6,052,379. SlickGrid interop worked
+      without changes: L2's grid rows and grid styles pass.
   - CSS: set `build.cssCodeSplit: false` and inline the single stylesheet into the entry chunk,
     as Cosmos DB's `vite-plugin-inline-css.mjs` does. Our webview HTML template emits one
     `<script type="module">` and no stylesheet link, so CSS has to travel through JavaScript. CSS is
     then global to all views, which the operator accepted on 2026-10-01 (SlickGrid's CSS goes away
     with SlickGrid). [VERIFY that this leaves no per-chunk CSS preload references to deleted files;
     the `vite:preloadError` check in L2 catches it if it does.]
+    - **Completed in `769a2971`; verified.** `build/vite/inline-css.mjs` deletes the single CSS
+      asset and appends to `views.js` one `<style data-documentdb-views-css>` insertion. A relative
+      `url()` inside a runtime `<style>` would resolve against the `vscode-webview://` document, so
+      every asset `url()` is rewritten to `new URL('<file>', import.meta.url).href` (the resource
+      URL next to `views.js`); an unresolvable one fails the build. No CSS preload references
+      remain; L2 saw no `vite:preloadError`. CSS order changed: Monaco and SlickGrid CSS now load
+      with the entry, before Fluent's runtime styles; L2's computed-style checks pass.
   - `base: './'`. Keep fonts as files, not `data:` URIs: the webview CSP allows `data:` for images
     only. Do not relax the CSP to make a check pass.
+    - **Completed in `769a2971`.** `base: './'`, `assetsDir: ''`, `assetsInlineLimit: 0`; the
+      codicon font ships as a file and loads under `font-src`. The CSP and the HTML template are
+      unchanged.
   - Keep the `render` named export of the entry (Cosmos DB #3037: an app-mode build dropped it and
     every packaged webview went blank).
+    - **Completed in `769a2971`:** `entryFileNames: 'views.js'` and
+      `preserveEntrySignatures: 'strict'`. L1's `render` check passes on the Vite VSIX, and its
+      `render-renamed` control rejects the renamed export.
   - Make Monaco workers load in both the dev server and the production build (Cosmos DB #3169: a
     `vscode-webview://` page cannot construct a worker from a cross-origin dev URL).
+    - **Completed in `769a2971` (`build/vite/monaco.mjs`).** Today's production mechanism is
+      kept, not Cosmos DB's. The coordinator confirmed that webpack's shipped `views.js` creates a
+      same-origin Blob containing `import "<absolute worker URL>"`. Monaco 0.52 starts every
+      `getWorkerUrl` worker as a module worker, so a classic `importScripts` trampoline would
+      throw. The Vite build does the same: worker scripts are separate files, built as
+      self-contained `iife` scripts, and `getWorkerUrl` returns the same Blob trampoline. The dev
+      server uses the trampoline with ES-module workers and CORS for the webview origin.
+      Rejected: `?worker&inline` (about +870 KB as base64, and its fallback is a `data:` worker
+      the CSP forbids); `new Worker(<resource URL>)` (cross-origin worker scripts are refused).
+      Feature parity: imports of `editor.api` resolve to a wrapper that first imports every
+      feature from Monaco's `metadata.js`, as `monaco-editor-webpack-plugin` did. `editor/contrib`
+      (247 modules), `editor/standalone` (28) and the JSON language match webpack's module list
+      exactly. L2: Collection View's rendered editor completes `$computeUnicodeHighlights` and
+      Document View's completes JSON `doValidation`, both through Blob workers.
   - Point `watch:views` at the Vite dev server. Pre-bundle Fluent / Griffel with `optimizeDeps` and
     warm up the webview sources if the first panel opens slowly.
   - Decide whether Monaco still needs the `sql` language.
+    - **Decided: dropped (`769a2971`).** No `'sql'` Monaco language is used anywhere in `src/`
+      (coordinator and author searches); the webpack build listed it without a consumer. Only
+      `json` is bundled; the query editor's JavaScript tokenizer still loads on demand.
   - **Port L1 to Vite output before the flip.** L1's graph, lazy-chunk and BSON checks read webpack
     stats only (`BundleReportPlugin.cjs`; `entryGraph` and the `.e(chunkId)` check in
     `inspect.cjs`), and `inspect()` requires both `host.json` and `views.json` in that format. In
@@ -1985,6 +2038,32 @@ Stage 0 must also be made.
       reviewed, named allowlist entry; do not drop the check;
     - prove the ported checks fail (missing lazy chunk, Monaco in Local Quick Start, duplicate
       BSON) before relying on them.
+    - **Completed in `8feb2349` and `0e990aef` (author GPT-6.1 Sol; allowlist scope set by the
+      coordinator after inspecting the output).** `inspect.cjs` accepts the webpack host report
+      next to either a webpack or a Vite (`bundler: 'vite'`) views report. The Vite per-view graph
+      is the entry's static closure plus the view's lazy chunk (matched by `facadeModuleId`, and
+      required to be a dynamic import of the entry) and its static closure. A unit test ties the
+      view-to-module map to the literal `import()`s in `WebviewRegistry.ts`. With a Vite report
+      the lightweight-view assertion is on by default. The webpack `.e(n)` check now applies only
+      to webpack-owned files. Every `new URL('<literal>', import.meta.url)` in a Vite file must
+      resolve to a packaged file.
+    - **Allowlist `monacoModuleLoaderImports`:** Monaco's own module loaders, a template-literal
+      `import()` of `X.asBrowserUri(…).toString(…)`: up to two per worker file (the
+      request-handler bootstrap and `$loadForeignModule`) and one in the `monaco-<hash>.js` chunk
+      (`$loadForeignModule`). Our ESM worker entries pass a request-handler factory and no foreign
+      modules are used, so none runs. Only that AST shape, only in Vite-owned files with those
+      names, with count limits. Rejected: widening the allowlist further, or stubbing Monaco's
+      loader in the build.
+    - **Proof on the Vite VSIX:** `verify:vsix` passes, and `prove:vsix` prints the seven earlier
+      lines plus `missing-lazy-chunk`, `monaco-in-local-quick-start`, `duplicate-bson` and
+      `nonliteral-import` rejections. The first fires as a missing dynamic import of the Local
+      Quick Start chunk from `views.js`; the next two mutate a copy of the report. Real rebuild
+      control: a static Monaco import in `LocalQuickStart.tsx`, packaged with Vite, fails first
+      with `localQuickStart must exclude Monaco and SlickGrid`; reverted. The all-webpack VSIX
+      still passes, with the four Vite controls printed as `SKIP`. Tests: 31 inspector tests,
+      `test:verification` 57 Node and 45 browser tests. The positive control now compares the
+      report against the VSIX's own pre-mutation report, so it stays exact on a VSIX that already
+      differs from the baseline. The coordinator re-ran `verify:vsix` on the Vite VSIX (exit 0).
   - Keep `entryFileNames: 'views.js'`. How chunk names meet L1's file list depends on the pending
     L1 manifest decision under Stage 0. With `[name]-[hash].js` chunks (Cosmos DB's choice), any
     file-list comparison must strip the hash.
@@ -2005,6 +2084,45 @@ Stage 0 must also be made.
       coordinator.
   - Adapt L2's CSS-negative control: it suppresses webpack's style-loader injection, and the
     inline-CSS plugin injects differently.
+    - **Completed in `9bc68014` (GPT-6.1 Sol) and `c12ddab8` (coordinator).** With a Vite bundle
+      the negative page removes only `style[data-documentdb-views-css]`, keeping Fluent/Griffel
+      runtime styles, and fails if it never removed one. A webpack bundle keeps the old
+      remove-all-styles mode. Page generation rejects a split `views.js` without the marker,
+      so a renamed marker cannot silently select the webpack mode.
+    - **L2 harness fixes found while running it (`d7e35a86`, coordinator):**
+      1. **A Stage 3 regression.** Since the ts-node → tsx switch, the generated helper contained
+         tsx's `__name(...)` calls and threw `__name is not defined` before checking anything. The
+         Stage 3 review noted L2's browser part had not run on the Stage 3 VSIX. The snippet now
+         defines `__name`.
+      2. **Playwright `waitForFunction`.** In plain Playwright it evaluates its predicate with
+         `eval` in the page, which the production CSP refuses. Readiness is now polled through
+         `page.evaluate`, which runs over the DevTools protocol.
+      3. **Leaked requests.** Requests still in flight from the previous document (Vite's lazy
+         chunks, the unread body of the report upload) were aborted by the next navigation and
+         counted against the next page. Each check now starts from `about:blank`, and the upload
+         body is read. Webpack's single `views.js` had hidden this.
+
+      The CSP, `bypassCSP` and the checks were not relaxed. 58 browser tests pass.
+
+    - **L2 on the Vite VSIX passed (2026-10-05, coordinator).** VSIX `/tmp/s4-vite.vsix`
+      (9,320,476 bytes, `package:vite-views` at `cc473c66` source).
+      - **All five views verified,** with zero unexpected console, page, CSP, preload, network or
+        non-2xx errors, and every computed-style check matched.
+      - **Chunks:** Local Quick Start, Atlas Credentials and Cluster Dashboard fetched neither
+        `monaco-*` nor `slickgrid-*`.
+      - **Workers:** the two worker round-trips completed through Blob workers.
+      - **CSS-negative control:** exactly seven CSS/layout failures and nothing else.
+
+      The all-webpack VSIX also still passes L2 with the changed harness (five views, two
+      round-trips, seven negative failures).
+      **Deviation:** the integrated browser tools were not reachable from this session ("No
+      client was connected"). L2 ran the same generated `integrated-all-checks.js` helper from a
+      headless Playwright Chromium (`playwright-core` 1.54.2 in a throwaway `/tmp` directory, not
+      a repository dependency). The host's missing system libraries were unpacked from Ubuntu
+      `.deb` files into `/tmp` and supplied through `LD_LIBRARY_PATH`, with Playwright's host
+      check skipped; nothing was installed system-wide. This is still a static-origin check, not
+      `vscode-webview://`.
+
   - The Vite views build does not use `BundleReportPlugin`, which ends the Stage 0 `watch:views`
     limitation.
   - **Build L2-dev after the flip**, once L2 passes on the Vite build, so it cannot delay the gate
@@ -2025,6 +2143,7 @@ Stage 0 must also be made.
     - document it where agents look: a short note in `.github/copilot-instructions.md` and an
       update of [live-preview-playwright.md](../live-preview-playwright.md), which describes the
       older hand-made page technique.
+
 - **Automated verification:** L1, now enforcing the per-view graph assertions and recording sizes;
   **L2 is the main gate** (all five views settled on their fixtures, styled, CSP clean, no preload
   errors, worker round-trips complete); L3.
