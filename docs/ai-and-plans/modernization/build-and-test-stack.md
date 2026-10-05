@@ -11,7 +11,7 @@ Playwright E2E suite and how it relates to our parked PR #867.
 reference commit), and revised on 2026-10-01 after an independent review.
 
 **How to read this document.** The [execution plan](#execution-plan) comes first and reads top to
-bottom: scope, ground rules, the automated checks, then Stage 0 to Stage 7 with every task written
+bottom: scope, ground rules, the automated checks, then Stage 0 to Stage 8 with every task written
 into its stage. [Plan background](#plan-background) follows and records why each change exists; it
 is not needed to execute a stage. Everything from the Executive Summary down is the original August
 research. It is the evidence base, and the execution plan overrides it on sequencing and scope.
@@ -94,7 +94,9 @@ Out of scope:
    review of that stage's diff by the stage's reviewer model, committed as
    `docs/ai-and-plans/modernization/iterations/<NN>-<stage>-review.md`. The full Case 2 list and the
    AI pre-review of CONTRIBUTING.md §6 run once, before the PR is marked ready for review. The checks
-   L1 to L3 below run at the end of a stage and in CI, not on every commit.
+   L1 to L3 below run at the end of a stage and in CI, not on every commit. After G6, Stage 7
+   re-evaluates all stage review files together against the merged code, before the E2E hand-over
+   (operator, 2026-10-05).
 5. **Verify the packaged VSIX, not F5.** Every gate installs the packaged VSIX. Cosmos DB's four
    post-migration bugs (blank webviews, missing CSS, Monaco workers, a dev build mistaken for
    production) were all invisible in development mode.
@@ -144,7 +146,7 @@ Out of scope:
 
 ```mermaid
 flowchart LR
-    S0[S0 Baselines and checks] --> S1[S1 Remove legacy tests] --> S2[S2 Jest to Vitest] --> S3[S3 Packages to ESM] --> S4[S4 Views to Vite and splitting] --> S5[S5 Host to ESM and Vite] --> S6[S6 Remove webpack, CI gates, TS 6] --> S7[S7 Hand-over to E2E iteration]
+    S0[S0 Baselines and checks] --> S1[S1 Remove legacy tests] --> S2[S2 Jest to Vitest] --> S3[S3 Packages to ESM] --> S4[S4 Views to Vite and splitting] --> S5[S5 Host to ESM and Vite] --> S6[S6 Remove webpack, CI gates, TS 6] --> S7[S7 Re-evaluate the stage reviews] --> S8[S8 Hand-over to E2E iteration]
 ```
 
 ### The automated checks
@@ -2060,14 +2062,60 @@ Stage 0 must also be made.
      extracted contents.
   6. Approve `release.yml` only for that digest.
 
-### Stage 7: hand-over to the E2E iteration
+### Stage 7: re-evaluate the stage reviews
+
+- **Added by the operator (2026-10-05).** Each stage review judged one stage's diff when it was
+  written. Later stages fix, supersede or invalidate those findings: Stage 5 makes the host ESM,
+  Stage 6 deletes webpack and its tooling, and several findings are explicitly deferred "until G6".
+  Once the whole migration has merged, and before the E2E iteration builds on it, every review file
+  is read again and each finding is judged against the final code.
+- **Models:** each review file is re-evaluated by a model family different from the one that wrote
+  it: **GPT-6.1 Sol** for the files Claude models reviewed (Stages 1 to 3), **Claude Opus 5.5** for
+  the files GPT models reviewed (Stages 0, 4 and 6; Stage 5 follows whichever model reviewed it).
+  The standard context is enough, as in CONTRIBUTING.md §6.1 step 3: every finding is already
+  scoped. Record which model re-evaluated which file.
+- **Goal:** one current account of every review finding from Stages 0 to 6, so that nothing the
+  reviews found is lost between stages, and the E2E iteration starts from a known state.
+- **Inputs:** every `iterations/<NN>-*-review.md` file (00 to 06), the `Author decision` entries in
+  them, each stage's inline record in this plan, `main` at the merge commit, and the release digest
+  from G6.
+- **Tasks:**
+  - For every finding, check it against the code on `main` and record:
+    - its current status: **resolved** (with the commit), **still valid**, **obsolete** (the code it
+      concerned was removed or replaced, for example webpack-only findings after Stage 6), or **false
+      positive in hindsight** (with the evidence);
+    - its severity now, which can differ from the original once the final architecture is known;
+    - whether the recorded author decision was carried out as decided.
+  - Check every item a review deferred to a later stage or to G6 (for example the CI checkout
+    policy, the temporary `overrides`, and anything required before the packages are published).
+    Each one is done, or is listed as open with a reason.
+  - Look across the review files for what a single stage review cannot see: a problem one stage
+    introduced and a later stage reintroduced, findings that share one root cause, and verification
+    gaps that stayed open in every stage (for example a check that never ran on Windows or in a real
+    `vscode-webview://` host).
+  - Run an independent sweep of the merged result, as in CONTRIBUTING.md §6.1 step 4, limited to
+    risks that only appear once all stages are combined.
+  - Write the result to `iterations/07-stage-reviews-reevaluation.md` (`kind: review`,
+    `status: active`): one table per review file (finding ID, original severity, current status,
+    current severity, evidence, action), then the cross-review findings and the sweep, each with
+    solutions, pros and cons and a recommended option, and `**Author decision:** _pending_`.
+  - Do not rewrite the original review files. Set each to `status: historical` and add one line at
+    the top that links to the re-evaluation.
+- **Automated verification:** none beyond what the evidence for each status needs. A finding marked
+  resolved cites the commit and, where one exists, the test or check that now covers it.
+- **Operator gate G7:** decide every finding that is still valid: fix it in a follow-up PR from
+  `main` (CONTRIBUTING.md §6.3), file an issue (CONTRIBUTING.md §6.5), or accept it with a reason
+  recorded in the re-evaluation file. Findings that affect E2E testing go into the Stage 8 hand-over.
+
+### Stage 8: hand-over to the E2E iteration
 
 - **Models:** **Claude Sonnet 5.5** to write the hand-over.
 - **What the E2E iteration inherits:** the L2 harness (to run headless in CI), L2-dev and its typed
   scenarios (to wire their assertions into CI, screenshots as artifacts only), L3 (to extend into
   Extension Host integration tests), the L4 spike notes (B3), and two candidate specs from Cosmos DB
   production fixes: proxy routing through VS Code (#3367) and the URI handler activation race
-  (#3288). Its starting point is [e2e-testing-strategy.md](./e2e-testing-strategy.md).
+  (#3288). Its starting point is [e2e-testing-strategy.md](./e2e-testing-strategy.md), plus the
+  findings G7 routed to it from the Stage 7 re-evaluation.
 
 ### After this iteration
 
