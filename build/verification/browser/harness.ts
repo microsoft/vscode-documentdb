@@ -71,11 +71,15 @@ export function prepare(options: HarnessOptions): void {
                 augmentTemplate(html, { ...fixture, view, assetRoot, brokenCss }, options.prefix));
         }
     }
-    const snippet = `${runIntegratedCheck.toString()}\nreturn await runIntegratedCheck(page, PAGE_URL, EXPECT_CSS_FAILURE);\n`;
+    // tsx (esbuild keepNames) wraps named functions in `__name(...)`; the serialized helper runs in
+    // the Playwright tool's context, which has no such helper.
+    const helper = `const __name = (target, value) => Object.defineProperty(target, 'name', { value, configurable: true });
+${runIntegratedCheck.toString()}`;
+    const snippet = `${helper}\nreturn await runIntegratedCheck(page, PAGE_URL, EXPECT_CSS_FAILURE);\n`;
     writeFileSync(join(options.output, 'integrated-check.js'), snippet);
     const pages = Object.keys(fixtures).map((view): string => `${origin.origin}${options.prefix}/pages/${view}.html`);
     const negative = `${origin.origin}${options.prefix}/pages/collectionView-broken-css.html`;
-    const allChecks = `${runIntegratedCheck.toString()}
+    const allChecks = `${helper}
 const results = [];
 for (const url of ${JSON.stringify(pages)}) {
     results.push(await runIntegratedCheck(page, url));

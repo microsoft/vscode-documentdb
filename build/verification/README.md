@@ -130,7 +130,7 @@ must fail while its other diagnostics remain clean. Reports are persisted in the
 Generation detects Vite's `data-documentdb-views-css` marker in the extracted `views.js`: the negative
 page removes only that marked bundle stylesheet (including late insertions), preserves Fluent/Griffel
 runtime styles, and fails if no marked stylesheet was removed; webpack packages retain all-style removal.
-Stop the server after verification.
+The helper starts each check from `about:blank`, so requests left over from the previous page are not counted, and it polls readiness through `page.evaluate`, so it also runs from a plain Playwright page without `unsafe-eval`. Stop the server after verification.
 
 This is not a real `vscode-webview://` test, an extension-host E2E suite, or proof of backend behavior.
 

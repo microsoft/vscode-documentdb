@@ -40,7 +40,6 @@ export interface IntegratedPage {
     getByRole(role: string, options: { name: string; exact?: boolean }): BrowserLocator;
     locator(selector: string): BrowserLocator;
     readonly keyboard: { insertText: (text: string) => Promise<void> };
-    waitForFunction<A>(predicate: (argument: A) => boolean, argument: A, options: { timeout: number }): Promise<unknown>;
     evaluate<T>(operation: () => T | Promise<T>): Promise<T>;
     evaluate<T, A>(operation: (argument: A) => T | Promise<T>, argument: A): Promise<T>;
 }
@@ -72,6 +71,31 @@ export async function runIntegratedCheck(page: IntegratedPage, url: string, expe
             errors.push(`response: ${response.status()} ${response.url()}`);
         }
     };
+    // Polls through page.evaluate, which runs over the DevTools protocol and is not subject to the
+    // page CSP. Playwright's waitForFunction evaluates its predicate with eval inside the page,
+    // which the production CSP (no 'unsafe-eval') refuses outside the integrated browser.
+    const waitFor = async <A>(predicate: (argument: A) => boolean, argument: A, timeout: number): Promise<void> => {
+        const deadline = Date.now() + timeout;
+        let lastError: unknown;
+        for (;;) {
+            try {
+                if (await page.evaluate(predicate, argument)) {
+                    return;
+                }
+            } catch (error) {
+                // A navigation can destroy the execution context between polls.
+                lastError = error;
+            }
+            if (Date.now() > deadline) {
+                const reason = lastError instanceof Error ? `: ${lastError.message}` : '';
+                throw new Error(`Timed out after ${timeout} ms while ${phase}${reason}`);
+            }
+            await new Promise((resolve): void => { setTimeout(resolve, 100); });
+        }
+    };
+    // Leave the previous document before observing: its in-flight requests (lazy chunks, the last
+    // report upload) would otherwise be aborted by the navigation below and counted against this page.
+    await page.goto('about:blank', { waitUntil: 'domcontentloaded', timeout: 60000 });
     page.on('console', onConsole);
     page.on('pageerror', onError);
     page.on('requestfailed', onRequestFailed);
@@ -81,13 +105,13 @@ export async function runIntegratedCheck(page: IntegratedPage, url: string, expe
             const monacoView = url.endsWith('/collectionView.html') || url.endsWith('/documentView.html') ||
                 url.endsWith('/collectionView-broken-css.html');
             await page.bringToFront();
-            await page.waitForFunction((): boolean => document.visibilityState === 'visible',
-                undefined, { timeout: 60000 });
+            await waitFor((): boolean => document.visibilityState === 'visible',
+                undefined, 60000);
             phase = 'loading the production page';
             await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 60000 });
             await page.bringToFront();
-            await page.waitForFunction((): boolean => document.visibilityState === 'visible' &&
-                window.stage0Harness !== undefined, undefined, { timeout: 60000 });
+            await waitFor((): boolean => document.visibilityState === 'visible' &&
+                window.stage0Harness !== undefined, undefined, 60000);
             phase = 'settling fixture content and editor geometry';
             if (url.endsWith('/localQuickStart.html')) {
                 await page.getByRole('button', { name: 'Continue', exact: true }).click({ timeout: 60000 });
@@ -97,7 +121,7 @@ export async function runIntegratedCheck(page: IntegratedPage, url: string, expe
                 await page.getByRole('textbox', { name: 'Private Key', exact: true }).fill('stage0-private-key', { timeout: 60000 });
                 await page.getByRole('button', { name: 'Verify & Save', exact: true }).click({ timeout: 60000 });
             }
-            await page.waitForFunction((options: { editor: boolean; cssNegative: boolean }): boolean => {
+            await waitFor((options: { editor: boolean; cssNegative: boolean }): boolean => {
                 if (document.visibilityState !== 'visible' || !window.stage0Harness.ready() || document.fonts.status !== 'loaded') {
                     return false;
                 }
@@ -115,7 +139,7 @@ export async function runIntegratedCheck(page: IntegratedPage, url: string, expe
                     const box = element.getBoundingClientRect();
                     return box.width > 0 && box.height > 0;
                 });
-            }, { editor: monacoView, cssNegative: expectedFailure }, { timeout: 60000 });
+            }, { editor: monacoView, cssNegative: expectedFailure }, 60000);
             if (monacoView) {
                 const documentView = url.endsWith('/documentView.html');
                 const label = documentView ? 'Document Editor: Edit the document in JSON format' : 'Filter: Enter the DocumentDB query filter';
@@ -129,28 +153,28 @@ export async function runIntegratedCheck(page: IntegratedPage, url: string, expe
                     await page.locator('.monaco-editor').first().click({ timeout: 60000 });
                 }
                 await editor.focus({ timeout: 60000 });
-                await page.waitForFunction((name: string): boolean => document.visibilityState === 'visible' &&
+                await waitFor((name: string): boolean => document.visibilityState === 'visible' &&
                     document.hasFocus() && document.activeElement?.getAttribute('aria-label') === name,
-                label, { timeout: 60000 });
+                label, 60000);
                 phase = 'clearing the rendered editor before the probe';
                 await editor.press(`${modifier}+A`, { timeout: 60000 });
                 await editor.press('Backspace', { timeout: 60000 });
-                await page.waitForFunction((): boolean =>
+                await waitFor((): boolean =>
                     document.querySelector('.monaco-editor .view-lines')?.textContent?.trim() === '',
-                undefined, { timeout: 60000 });
+                undefined, 60000);
                 phase = 'awaiting the editor-originated worker response';
                 await page.evaluate((): void => window.stage0Harness.beginEditorProbe('stage0_worker_probe'));
                 await page.keyboard.insertText('{ "stage0_worker_probe": "left\u200bright", "invalid": }');
-                await page.waitForFunction((): boolean => window.stage0Harness.editorProbeReady(), undefined, { timeout: 60000 });
+                await waitFor((): boolean => window.stage0Harness.editorProbeReady(), undefined, 60000);
                 phase = 'restoring settled fixture content';
                 if (documentView) {
                     await page.getByRole('button', { name: 'Reload document from the database', exact: true }).click({ timeout: 60000 });
                 } else {
                     await page.locator('.queryEditorActions button').last().click({ timeout: 60000 });
                 }
-                await page.waitForFunction((): boolean => window.stage0Harness.ready() &&
+                await waitFor((): boolean => window.stage0Harness.ready() &&
                     !document.querySelector('.monaco-editor .view-lines')?.textContent?.includes('stage0_worker_probe'),
-                undefined, { timeout: 60000 });
+                undefined, 60000);
             }
         } catch (error) {
             errors.push(`settling (${phase}): ${error instanceof Error ? error.message : String(error)}`);
@@ -177,6 +201,8 @@ export async function runIntegratedCheck(page: IntegratedPage, url: string, expe
             const target = new URL(`../reports/${result.view}${result.brokenCss ? '-broken-css' : ''}`, location.href);
             const response = await fetch(target, { method: 'POST', headers: { 'content-type': 'application/json' },
                 body: JSON.stringify(result) });
+            // Read the body so a following navigation cannot abort it into a requestfailed event.
+            await response.text();
             if (!response.ok) {
                 throw new Error(`Cannot persist L2 report: ${response.status}`);
             }
