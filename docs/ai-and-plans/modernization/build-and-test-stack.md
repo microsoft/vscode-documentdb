@@ -2519,6 +2519,13 @@ Stage 0 must also be made.
       that Stage 5 did not touch. It passed in every later run and locally. **Watch item.**
     - The L1 job of run 37361229466 at `f22c0278` was cancelled by the next dispatch
       (`cancel-in-progress`); it recorded no steps.
+    - **CI at the final tip is pending.** Run 37365486602 at `90374fee` and both CodeQL runs
+      queued for 25 minutes, then were cancelled without starting. Run
+      [37368806263](https://github.com/microsoft/vscode-documentdb/actions/runs/37368806263) at
+      `57928f8e` (same code plus this record) was still queued after 20 minutes, while every run in
+      the repository was waiting for runners. The code changed since the last green CI run
+      (`f22c0278`, `555f9def`, `90374fee`) passed L0, L1 and L3 locally. Read run 37368806263 (or
+      re-dispatch) before G5.
   - **L1:** `verify:vsix` passes, and `prove:vsix` prints 21 PASS lines. The manifest drift against
     the Stage 0 baseline is informational (option A): 120 added, 42 removed, 1 size change. Graph
     bytes: `main` 9,875,774 (loader plus everything it reaches, lazy discovery included),
