@@ -163,6 +163,50 @@ The helper starts each check from `about:blank`, so requests left over from the 
 
 This is not a real `vscode-webview://` test, an extension-host E2E suite, or proof of backend behavior.
 
+## L2-dev: source scenarios
+
+Start `npm run watch:views` and open `http://localhost:18080/scenarios/` (127.0.0.1 also works).
+The serve-only [Vite plugin](../vite/webview-scenarios.mjs) lists every
+`/<view>/<scenario>/<theme>` route; unknown routes return 404 with that list.
+No scenario or helper URL uses query strings, which remote port forwarding mangles.
+Nothing is added to production bundles or the packaged-VSIX L2 gate.
+
+[Scenarios](./browser/scenarios.ts) import all five L2 fixtures as `default`, plus nine Local Quick
+Start states: `introduction`, `configure`, `provisioning`, `success`, `failed-port-in-use`,
+`failed-timeout`, and `docker-missing-windows`, `docker-missing-mac`, `docker-missing-linux`.
+Every state has dark, light and high-contrast routes. The shared core's `TypedRpcFixtures` checks
+procedure paths **and outputs**, including subscription items; escaping actions are only recorded.
+Docker install assertions check exactly one `common.openUrl` call and its platform-specific URL.
+
+With a Playwright `page` already on the dev-server origin, execute this snippet **outside the page**:
+
+```javascript
+const source = await page.evaluate(async () => {
+    const response = await fetch('/scenarios/run-all.js');
+    if (!response.ok) throw new Error('Cannot load L2-dev helper');
+    return response.text();
+});
+const AsyncFunction = Object.getPrototypeOf(async function () {}).constructor;
+return await new AsyncFunction('page', source)(page);
+```
+
+Use `/scenarios/run-all/localQuickStart.js` for one view, or
+`/scenarios/run-all/localQuickStart/dark.js` for one view/theme. Each route starts from `about:blank`.
+The helper drives the scenario's typed click/fill steps, polls `data-ready` with `page.evaluate`
+(not CSP-blocked `waitForFunction`), runs assertions, and returns JSON with `route`, `ready`,
+`errors`, `assertions` and `calls` (`window.__harnessCalls`). A route with steps initially shows its
+entry state: drive `window.__scenario.data.steps` manually or use the helper to reach the named state.
+Readiness checks visible content/selectors and no visible progressbar except in `provisioning`.
+The page keeps monitoring after ready: any console error/warning, page error, unhandled rejection,
+CSP violation or unknown RPC fails it (`data-ready="failed"`, reasons in `window.__harnessErrors`).
+Assertion failures remain separate from readiness failures.
+
+Themes are representative palettes, not live VS Code values. The boot mirrors the host's encoded
+config, l10n and view type, and permits the configured Vite origin under a dev CSP (no unsafe-eval).
+This is not proof of a real `vscode-webview://` origin, backend behavior or production worker
+bundling; keep L2 for those packaged-asset checks. Screenshots are artifacts only, never baselines.
+Stop the dev server when done.
+
 ## L3: installed-VSIX activation
 
 ```bash

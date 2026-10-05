@@ -13,6 +13,14 @@ VS Code Extension for Azure Cosmos DB and the MongoDB API. TypeScript (strict mo
 
 > ⚠️ **NEVER use `npm run compile`** - always use `npm run build` to build the project.
 
+## L2-dev webview scenarios
+
+Start `npm run watch:views`, then open `http://localhost:18080/scenarios/`.
+Use `/<view>/<scenario>/<theme>` (dark, light, high-contrast); never add query strings.
+Fetch `/scenarios/run-all.js` and execute it outside the page with a Playwright `page`;
+it drives typed steps, waits for `data-ready`, and reports assertions/errors/host calls.
+See [the runner recipe](../build/verification/README.md#l2-dev-source-scenarios); screenshots are artifacts, not baselines.
+
 ## Verification: two cases
 
 There are exactly two cases. Work out which one you are in, then run **only** that list.

@@ -37,7 +37,7 @@ export interface HarnessFixture extends ViewFixture {
     readonly brokenCss: false | 'bundle-stylesheet' | 'all-styles';
 }
 
-function reply<T>(type: RpcFixture['type'], result: T): RpcFixture {
+function reply<T>(type: RpcFixture['type'], result: T): Omit<RpcFixture, 'results'> & { readonly results: readonly T[] } {
     if (result === undefined) {
         return { type, results: [], undefinedResult: true };
     }

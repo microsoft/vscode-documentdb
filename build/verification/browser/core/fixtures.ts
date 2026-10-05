@@ -24,6 +24,20 @@ export interface RpcFixture {
 
 export type RpcFixtures = Readonly<Partial<Record<FixturePaths, RpcFixture>>>;
 
+export type FixtureAtPath<T, P extends string> = P extends `${infer Head}.${infer Tail}`
+    ? Head extends keyof T ? FixtureAtPath<T[Head], Tail> : never
+    : P extends keyof T ? T[P] : never;
+
+type StreamItem<T> = T extends AsyncIterable<infer Item> ? Item : T;
+// tRPC's JSON-serialized output inference represents void procedures as never. The wire protocol
+// deliberately supports explicit undefined results, so these fixtures retain the host's void type.
+type FixtureResult<T> = [T] extends [never] ? void : StreamItem<T>;
+export type TypedRpcFixtures = {
+    readonly [P in FixturePaths]?: Omit<RpcFixture, 'results'> & {
+        readonly results: readonly FixtureResult<FixtureAtPath<FixtureOutputs, P>>[];
+    };
+};
+
 export function isRpcFixture(value: unknown): value is RpcFixture {
     return typeof value === 'object' && value !== null && 'type' in value &&
         (value.type === 'query' || value.type === 'mutation' || value.type === 'subscription') &&

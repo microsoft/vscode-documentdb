@@ -20,6 +20,7 @@ import { bundleReport } from './build/vite/bundle-report.mjs'; // eslint-disable
 import { inlineCss } from './build/vite/inline-css.mjs'; // eslint-disable-line import/no-internal-modules
 import { monacoEditor, monacoVirtualModulePrefix } from './build/vite/monaco.mjs'; // eslint-disable-line import/no-internal-modules
 import { webviewDevEntry } from './build/vite/webview-dev-entry.mjs'; // eslint-disable-line import/no-internal-modules
+import { webviewScenarios } from './build/vite/webview-scenarios.mjs'; // eslint-disable-line import/no-internal-modules
 
 const require = createRequire(import.meta.url);
 const root = import.meta.dirname;
@@ -74,6 +75,7 @@ export default defineConfig(async ({ command, mode }) => {
             monaco.plugin,
             react(),
             webviewDevEntry({ entry: `/${entry}`, isAllowedOrigin: isAllowedDevOrigin }),
+            webviewScenarios({ devServerOrigin }),
             inlineCss(),
             isProduction && bundleReport({ outFile: 'build/verification/reports/views.json' }),
         ],
