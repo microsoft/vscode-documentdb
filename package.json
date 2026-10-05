@@ -115,6 +115,7 @@
     "@types/uuid": "~10.0.0",
     "@types/vscode": "~1.109.0",
     "@types/vscode-webview": "~1.57.5",
+    "@vitejs/plugin-react": "~6.1.1",
     "@vscode/l10n-dev": "~0.0.35",
     "@vscode/test-electron": "~2.5.2",
     "@vscode/vsce": "~3.7.1",
