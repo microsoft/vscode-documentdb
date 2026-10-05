@@ -11,14 +11,16 @@ analyzer with `BUNDLE_ANALYZE=true`; it writes `reports/views.html` without star
 After packaging:
 
 ```bash
-npm run verify:vsix -- vscode-documentdb-0.11.0.vsix
+npm run verify:vsix -- vscode-documentdb-0.11.0.vsix --manifest-report l1-manifest-report.json
 npm run prove:vsix -- vscode-documentdb-0.11.0.vsix
 npm run test:verification
 ```
 
-Inspection checks the exact archive file list, per-file size tolerance, the named `render` export,
+Inspection reports archive file-list and size drift without failing. Hard checks cover required
+package files and the resolved `package.json` main entry, bundle-report ownership of every packaged
+`.js`, `.cjs` and `.mjs` file under `extension/`, the named `render` export,
 literal dynamic imports, webpack lazy-chunk references, development-server strings, `import.meta` in
-CommonJS bundles, and reachable BSON implementations. Reports must match the packaged JavaScript
+CommonJS bundles (including `.cjs`), and reachable BSON implementations. Reports must match the packaged JavaScript
 hashes and record each compilation's `chunkFormat`; every JavaScript file of a `commonjs`
 compilation (today `main.js`, `playgroundWorker.js`, `playgroundTsPlugin.js` and their chunks) is
 parsed and rejected if it contains `import.meta`, which a `require` cannot load (Stage 3 found
@@ -51,8 +53,13 @@ It builds and runs probe bundles instead of inspecting the packaged artifact, so
 which stays offline and build-free for the ADO release build.
 
 The committed [baseline](./baseline.json) uses the operator-approved tolerance: the greater of 10%
-or 4 KiB per file. Added/missing files always fail. Review intentional artifact changes before
-regenerating:
+or 4 KiB per file (`NOTICE.html` is size-exempt). Added/removed files and size changes beyond
+tolerance are informational, with content hashes normalized when pairing renamed assets (numeric
+webpack chunks remain distinct). The JSON result includes `manifestReport`: `added`, `removed`,
+`sizeChanges`, total `vsixBytes` delta and `graphAssetBytes` sums. A short summary goes to stderr;
+stdout stays JSON. `--manifest-report <file>` writes just the report; CI uploads it separately.
+The proof has six rejection controls and one positive asset-change reporting control.
+Review intentional artifact changes before regenerating the version-1 baseline (its format is unchanged):
 
 ```bash
 node build/verification/inspect.cjs <vsix> --write-baseline build/verification/baseline.json

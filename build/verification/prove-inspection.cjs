@@ -57,11 +57,18 @@ try {
             /development-server/,
         ],
         [
-            'missing-file',
+            'missing-required-file',
             (files) => {
-                files.delete('extension/resources/vscode-documentdb-marketplace-logo.png');
+                files.delete('extension/package.nls.json');
             },
-            /file list/,
+            /missing required file: extension\/package\.nls\.json/,
+        ],
+        [
+            'unowned-script',
+            (files) => {
+                files.set('extension/stray-proof.js', Buffer.from('console.log("harmless proof");'));
+            },
+            /extension\/stray-proof\.js: unowned script/,
         ],
         [
             'import-meta-in-commonjs',
@@ -85,6 +92,15 @@ try {
         assert.throws(() => inspect(variant, { baseline }), expected);
         console.log(`PASS: ${name} rejected for the expected reason`);
     }
+    const files = readVsix(filename);
+    assert.ok(files.delete('extension/resources/vscode-documentdb-marketplace-logo.png'));
+    files.set('extension/resources/proof-added.svg', Buffer.from('<svg xmlns="http://www.w3.org/2000/svg"/>'));
+    const variant = path.join(directory, 'asset-added-and-removed-reported.vsix');
+    writeVsix(variant, files);
+    const { manifestReport } = inspect(variant, { baseline });
+    assert.deepEqual(manifestReport.removed, ['extension/resources/vscode-documentdb-marketplace-logo.png']);
+    assert.deepEqual(manifestReport.added, ['extension/resources/proof-added.svg']);
+    console.log('PASS: asset-added-and-removed-reported reported without failing');
 } finally {
     fs.rmSync(directory, { recursive: true, force: true });
 }

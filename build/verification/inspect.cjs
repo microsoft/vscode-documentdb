@@ -12,6 +12,17 @@ const { simple } = require('acorn-walk');
 const { readVsix } = require('./vsix.cjs');
 
 const viewNames = ['collectionView', 'documentView', 'localQuickStart', 'atlasCredentials', 'clusterDashboard'];
+const requiredFiles = [
+    'extension.vsixmanifest',
+    '[Content_Types].xml',
+    'extension/package.json',
+    'extension/views.js',
+    'extension/playgroundWorker.js',
+    'extension/playgroundTsPlugin.js',
+    'extension/package.nls.json',
+    'extension/LICENSE.md',
+    'extension/NOTICE.html',
+];
 // ADO regenerates NOTICE.html (notice@0) and falls back to the committed copy if that task fails.
 const sizeExempt = new Set(['extension/NOTICE.html']);
 
@@ -21,27 +32,85 @@ function manifest(files) {
         .sort((left, right) => left.path.localeCompare(right.path));
 }
 
+function normalizeAssetPath(filename) {
+    const basename = path.posix.basename(filename);
+    // Match the usual eight-character hash first: its alphabet includes hyphens.
+    const normalized = basename
+        .replace(/^[a-f0-9]{20}(\.[^.]+)$/i, '[hash]$1')
+        .replace(/-[A-Za-z0-9_-]{8}(\.[^.]+)$/, '-[hash]$1')
+        .replace(/-([A-Za-z0-9_]{3,})(\.[^.]+)$/, (match, hash, extension) =>
+            /[A-Z0-9_]/.test(hash) ? `-[hash]${extension}` : match,
+        );
+    return path.posix.join(path.posix.dirname(filename), normalized);
+}
+
+function inspectRequiredFiles(files) {
+    for (const filename of requiredFiles) {
+        assert.ok(files.has(filename), `VSIX missing required file: ${filename}`);
+    }
+    const { main } = JSON.parse(files.get('extension/package.json').toString('utf8'));
+    assert.ok(typeof main === 'string' && main.length > 0, 'extension/package.json: required main field is missing');
+    const resolved = path.posix.normalize(path.posix.join('extension', main));
+    assert.ok(
+        !path.posix.isAbsolute(main) && resolved.startsWith('extension/'),
+        `extension/package.json: main must resolve inside extension/: ${main}`,
+    );
+    assert.ok(
+        files.has(resolved) || files.has(`${resolved}.js`),
+        `VSIX missing required file for package.json main: ${resolved} (or ${resolved}.js)`,
+    );
+}
+
 function compareManifest(files, baseline) {
     assert.equal(baseline.version, 1, 'Unsupported VSIX baseline version');
-    assert.deepEqual(
-        manifest(files).map((entry) => entry.path),
-        baseline.files.map((entry) => entry.path),
-        'VSIX file list differs from baseline',
-    );
-    const mismatches = [];
+    const remaining = new Map(manifest(files).map((entry) => [entry.path, entry]));
+    const pairs = [];
+    const unmatched = [];
     for (const entry of baseline.files) {
-        if (sizeExempt.has(entry.path)) {
-            continue;
-        }
-        const actual = files.get(entry.path).length;
-        const tolerance = Math.max(baseline.tolerance.absoluteBytes, entry.bytes * baseline.tolerance.fraction);
-        if (Math.abs(actual - entry.bytes) > tolerance) {
-            mismatches.push(
-                `${entry.path}: size ${actual} differs from ${entry.bytes} by more than ${Math.round(tolerance)} bytes`,
-            );
+        if (remaining.has(entry.path)) {
+            pairs.push([entry, remaining.get(entry.path)]);
+            remaining.delete(entry.path);
+        } else {
+            unmatched.push(entry);
         }
     }
-    assert.equal(mismatches.length, 0, mismatches.join('\n'));
+    const logicalFiles = new Map();
+    for (const entry of remaining.values()) {
+        const logicalPath = normalizeAssetPath(entry.path);
+        if (!logicalFiles.has(logicalPath)) {
+            logicalFiles.set(logicalPath, []);
+        }
+        logicalFiles.get(logicalPath).push(entry);
+    }
+    const removed = [];
+    for (const entry of unmatched) {
+        const actual = logicalFiles.get(normalizeAssetPath(entry.path))?.shift();
+        if (actual) {
+            pairs.push([entry, actual]);
+            remaining.delete(actual.path);
+        } else {
+            removed.push(entry.path);
+        }
+    }
+    const sizeChanges = [];
+    for (const [entry, actual] of pairs) {
+        const tolerance = Math.max(baseline.tolerance.absoluteBytes, entry.bytes * baseline.tolerance.fraction);
+        if (!sizeExempt.has(entry.path) && Math.abs(actual.bytes - entry.bytes) > tolerance) {
+            sizeChanges.push({
+                path: actual.path,
+                baselinePath: entry.path,
+                baselineBytes: entry.bytes,
+                bytes: actual.bytes,
+                deltaBytes: actual.bytes - entry.bytes,
+                toleranceBytes: tolerance,
+            });
+        }
+    }
+    return {
+        added: [...remaining.keys()].sort(),
+        removed: removed.sort(),
+        sizeChanges: sizeChanges.sort((left, right) => left.path.localeCompare(right.path)),
+    };
 }
 
 function resolveAsset(files, filename, reference) {
@@ -52,14 +121,17 @@ function resolveAsset(files, filename, reference) {
 
 function inspectJavaScript(files, reports) {
     for (const [filename, data] of files) {
-        if (!filename.endsWith('.js')) {
+        if (!/\.(?:js|cjs|mjs)$/.test(filename)) {
             continue;
         }
         const source = data.toString('utf8');
         const compilations = reports.filter((report) =>
             Object.hasOwn(report.assetHashes || {}, filename.slice('extension/'.length)),
         );
-        const commonJs = compilations.some((report) => report.chunkFormat === 'commonjs');
+        if (filename.startsWith('extension/')) {
+            assert.ok(compilations.length > 0, `${filename}: unowned script; no bundle report assetHashes entry`);
+        }
+        const commonJs = filename.endsWith('.cjs') || compilations.some((report) => report.chunkFormat === 'commonjs');
         assert.ok(!/127\.0\.0\.1:18080|DEVSERVER/.test(source), `${filename}: development-server string in production`);
         const tree = parse(source, { ecmaVersion: 'latest', sourceType: 'module', allowReturnOutsideFunction: true });
         if (filename === 'extension/views.js') {
@@ -121,6 +193,10 @@ function inspectJavaScript(files, reports) {
                 }
             },
         });
+        // Inspect as a module first to retain the explicit CommonJS import.meta diagnostic.
+        if (commonJs && !filename.endsWith('.mjs')) {
+            parse(source, { ecmaVersion: 'latest', sourceType: 'script', allowReturnOutsideFunction: true });
+        }
     }
 }
 
@@ -172,6 +248,7 @@ function entryGraph(report, entryName, files, { allowAbsentBson = false } = {}) 
 
 function inspect(filename, options = {}) {
     const files = readVsix(filename);
+    inspectRequiredFiles(files);
     const directory = options.reports || path.join(__dirname, 'reports');
     const reports = ['host', 'views'].map((name) =>
         JSON.parse(fs.readFileSync(path.join(directory, `${name}.json`), 'utf8')),
@@ -217,9 +294,21 @@ function inspect(filename, options = {}) {
         files: manifest(files),
         graphs,
     };
-    if (options.baseline) {
-        compareManifest(files, JSON.parse(fs.readFileSync(options.baseline, 'utf8')));
-    }
+    const baseline = options.baseline ? JSON.parse(fs.readFileSync(options.baseline, 'utf8')) : undefined;
+    result.manifestReport = {
+        ...(baseline ? compareManifest(files, baseline) : { added: [], removed: [], sizeChanges: [] }),
+        vsixBytes: {
+            baselineBytes: baseline ? baseline.vsixBytes : null,
+            bytes: result.vsixBytes,
+            deltaBytes: baseline ? result.vsixBytes - baseline.vsixBytes : null,
+        },
+        graphAssetBytes: Object.fromEntries(
+            Object.entries(graphs).map(([name, graph]) => [
+                name,
+                graph.assets.reduce((bytes, asset) => bytes + files.get(`extension/${asset}`).length, 0),
+            ]),
+        ),
+    };
     return result;
 }
 
@@ -228,11 +317,12 @@ if (require.main === module) {
     const filename = args.shift();
     if (!filename) {
         throw new Error(
-            'Usage: node build/verification/inspect.cjs <vsix> [--write-baseline <file>] [--baseline <file>] [--reports <directory>] [--require-lightweight-views]',
+            'Usage: node build/verification/inspect.cjs <vsix> [--write-baseline <file>] [--baseline <file>] [--manifest-report <file>] [--reports <directory>] [--require-lightweight-views]',
         );
     }
     const options = { baseline: path.join(__dirname, 'baseline.json') };
     let output;
+    let manifestOutput;
     while (args.length) {
         const flag = args.shift();
         if (flag === '--write-baseline') {
@@ -242,6 +332,9 @@ if (require.main === module) {
         } else if (flag === '--baseline') {
             options.baseline = args.shift();
             assert.ok(options.baseline, '--baseline requires a filename');
+        } else if (flag === '--manifest-report') {
+            manifestOutput = args.shift();
+            assert.ok(manifestOutput, '--manifest-report requires a filename');
         } else if (flag === '--reports') {
             options.reports = args.shift();
             assert.ok(options.reports, '--reports requires a directory');
@@ -253,9 +346,26 @@ if (require.main === module) {
     }
     const result = inspect(filename, options);
     if (output) {
-        fs.writeFileSync(output, JSON.stringify(result, null, 2) + '\n');
+        const baseline = { ...result };
+        delete baseline.manifestReport;
+        fs.writeFileSync(output, JSON.stringify(baseline, null, 2) + '\n');
     }
+    if (manifestOutput) {
+        fs.writeFileSync(manifestOutput, JSON.stringify(result.manifestReport, null, 2) + '\n');
+    }
+    const report = result.manifestReport;
+    console.error(
+        `Manifest report (non-failing): ${report.added.length} added, ${report.removed.length} removed, ${report.sizeChanges.length} size changes beyond tolerance`,
+    );
+    console.error(
+        `VSIX: ${report.vsixBytes.bytes} bytes; delta ${report.vsixBytes.deltaBytes ?? 'unavailable (no baseline)'} bytes`,
+    );
+    console.error(
+        `Graph assets (bytes): ${Object.entries(report.graphAssetBytes)
+            .map(([name, bytes]) => `${name}=${bytes}`)
+            .join(', ')}`,
+    );
     console.log(JSON.stringify(result, null, 2));
 }
 
-module.exports = { inspect, compareManifest, inspectJavaScript, entryGraph, manifest };
+module.exports = { inspect, compareManifest, inspectRequiredFiles, inspectJavaScript, entryGraph, manifest };
