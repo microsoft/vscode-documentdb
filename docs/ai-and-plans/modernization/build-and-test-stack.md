@@ -2017,6 +2017,33 @@ Stage 0 must also be made.
       Document View's completes JSON `doValidation`, both through Blob workers.
   - Point `watch:views` at the Vite dev server. Pre-bundle Fluent / Griffel with `optimizeDeps` and
     warm up the webview sources if the first panel opens slowly.
+    - **Completed with the flip in `10e62925` (GPT-6.1 Sol) and `063e242b` (coordinator).** The
+      four package scripts now run `build-prod` (workspaces prebuilt, then `webpack-prod-ext` and
+      `vite-prod-wv`), and `build-dev` is the development build. `watch:views` is the Vite dev
+      server on `127.0.0.1:18080`, with `optimizeDeps` for Fluent, Griffel, React, Monaco and
+      SlickGrid and `server.warmup` for `src/webviews` (`769a2971`). The `watch:views` task uses
+      a background matcher on Vite's ready line; errors appear in Vite's browser overlay. The
+      fallbacks until Stage 6 are `webpack-prod`, `webpack-dev`, `webpack-*-wv` and
+      `watch:views-webpack`; `package:vite-views` is gone. `measure.cjs` now times `build-prod`.
+      Docs updated: `build/verification/README.md` and `CONTRIBUTING.md`. `.vscodeignore` lists
+      `vite.config*` (packaging runs from `dist/`, so this is consistency only). CI and ADO
+      needed no change: both call `npm run package`. `063e242b` restored the 4-space indentation
+      of `.vscode/tasks.json`, which the flip had reformatted.
+      - **Checks:** `npm run build`. The default `npm run package` gives a Vite VSIX (139 files,
+        9,320,483 bytes, SHA-256 `222b2c13c23d6a30bfaa40c166c12912d0bc1ec3bebe42241a78533ee7e522a1`).
+        `verify:vsix` passes and `prove:vsix` prints all 11 lines. `webpack-prod-wv` still
+        builds. The dev server answers `/views.js` with 200; the matcher regexes were tested
+        against its real output. `build-dev` writes an unminified `views.js`.
+      - **L2 on this default-built VSIX passed (coordinator, headless as above):** five views
+        verified with zero errors and both worker round-trips. Local Quick Start, Atlas
+        Credentials and Cluster Dashboard fetched no Monaco or SlickGrid chunk. The
+        CSS-negative control produced exactly seven failures.
+      - **Known limitation, for Stage 6:** the PR size comment in `.github/workflows/main.yml`
+        (`📐 Collect build sizes`) still reports `dist/views.js` as `webviewSize`, which is now
+        only the 568,837-byte entry. Comparisons with `main` will show a drop of about 90% that
+        is not real. Stage 6's size budget should measure per-view totals from the bundle report.
+      - **Not exercised by the agents:** F5 with HMR in a real editor, and the Windows and
+        pre-release package scripts. Both are operator checks at G4.
   - Decide whether Monaco still needs the `sql` language.
     - **Decided: dropped (`769a2971`).** No `'sql'` Monaco language is used anywhere in `src/`
       (coordinator and author searches); the webpack build listed it without a consumer. Only
@@ -2125,6 +2152,9 @@ Stage 0 must also be made.
 
   - The Vite views build does not use `BundleReportPlugin`, which ends the Stage 0 `watch:views`
     limitation.
+    - **Done with the flip (`10e62925`).** `watch:views` no longer runs webpack, so the
+      `npm run webpack-dev-wv` workaround is no longer needed; it applies only to
+      `watch:views-webpack`. The Vite report plugin runs only in production builds.
   - **Build L2-dev after the flip**, once L2 passes on the Vite build, so it cannot delay the gate
     (see L2-dev under the automated checks):
     - extract the fake `acquireVsCodeApi`, the tRPC answering and the call log from
