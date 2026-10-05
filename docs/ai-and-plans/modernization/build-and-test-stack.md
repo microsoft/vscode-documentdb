@@ -2309,9 +2309,11 @@ Stage 0 must also be made.
 
     Stage 5 may start.
 
-- **Stage 4 record commits:** `44d5488e`, `7abe176b`, `19430f47`, `68079e7a`, `3f7b736c`,
-  `9dbb9436` and the commit adding this reconciliation; every implementation commit is cited
-  under its task above.
+- **Stage 4 record commits** (documentation only): `44d5488e`, `7abe176b`, `19430f47`, `68079e7a`,
+  `3f7b736c`, `9dbb9436`, `eb0c56dd`, `09242508`, `3a3aae89`, `095d14ad`, and the commit that
+  completes this list. Every implementation commit is cited under its task above. The last CI
+  run with code changes is `37310145732` at `eb0c56dd` (green); the later commits change only
+  this plan.
 
 ### Stage 5: extension host to ESM and Vite
 
