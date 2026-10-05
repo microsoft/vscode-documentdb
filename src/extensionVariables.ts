@@ -19,35 +19,39 @@ import { type HelpAndFeedbackBranchDataProvider } from './tree/help-and-feedback
 import { type TreeElement } from './tree/TreeElement';
 
 /**
- * Namespace for common variables used throughout the extension. They must be initialized in the activate() method of extension.ts
+ * Common variables used throughout the extension. They must be initialized in the activate() method of extension.ts
+ *
+ * A plain object rather than a TypeScript `namespace`: Oxc (used by Vite and Vitest) does not rewrite bare-name
+ * references inside a namespace, so a namespace member read or written from inside the namespace would be
+ * decoupled from `ext.<member>` (S2-F04).
  */
-export namespace ext {
-    export let context: vscode.ExtensionContext;
-    export let outputChannel: IAzExtLogOutputChannel;
-    export let playgroundOutputChannel: vscode.OutputChannel;
-    export let playgroundResultProvider: PlaygroundResultProvider;
-    export let isBundle: boolean | undefined;
-    export let secretStorage: vscode.SecretStorage;
-    export const prefix: string = 'documentDB';
-    export let fileSystem: DatabasesFileSystem;
+export interface ExtensionVariables {
+    context: vscode.ExtensionContext;
+    outputChannel: IAzExtLogOutputChannel;
+    playgroundOutputChannel: vscode.OutputChannel;
+    playgroundResultProvider: PlaygroundResultProvider;
+    isBundle: boolean | undefined;
+    secretStorage: vscode.SecretStorage;
+    readonly prefix: string;
+    fileSystem: DatabasesFileSystem;
 
     // TODO: TN improve this: This is a temporary solution to get going.
-    export let copiedCollectionNode: CollectionItem | undefined;
+    copiedCollectionNode: CollectionItem | undefined;
 
     // Since the Azure Resources extension did not update API interface, but added a new interface with activity
     // we have to use the new interface AzureResourcesExtensionApiWithActivity instead of AzureResourcesExtensionApi
-    export let rgApiV2: AzureResourcesExtensionApiWithActivity;
+    rgApiV2: AzureResourcesExtensionApiWithActivity;
 
-    export let state: TreeElementStateManager;
+    state: TreeElementStateManager;
 
     // Azure Resources Extension integration
     //  > Azure Resources Extension: "Resources View"
-    export let azureResourcesVCoreBranchDataProvider: VCoreBranchDataProvider;
-    export let azureResourcesRUBranchDataProvider: RUBranchDataProvider;
+    azureResourcesVCoreBranchDataProvider: VCoreBranchDataProvider;
+    azureResourcesRUBranchDataProvider: RUBranchDataProvider;
 
     //  > Azure Resources Extension: "Workspace View"
-    export let azureResourcesWorkspaceResourceProvider: DocumentDbWorkspaceResourceProvider;
-    export let azureResourcesWorkspaceBranchDataProvider: ClustersWorkspaceBranchDataProvider;
+    azureResourcesWorkspaceResourceProvider: DocumentDbWorkspaceResourceProvider;
+    azureResourcesWorkspaceBranchDataProvider: ClustersWorkspaceBranchDataProvider;
 
     /**
      * This is the access point for the connections tree branch data provider.
@@ -55,11 +59,14 @@ export namespace ext {
      * It's temporarily here, but it's very likely that it will be moved elsewhere
      * once the itnernal API solidifies.
      */
-    export let connectionsBranchDataProvider: ConnectionsBranchDataProvider;
-    export let connectionsTreeView: vscode.TreeView<TreeElement>;
+    connectionsBranchDataProvider: ConnectionsBranchDataProvider;
+    connectionsTreeView: vscode.TreeView<TreeElement>;
 
-    export let discoveryBranchDataProvider: DiscoveryBranchDataProvider;
-    export let discoveryTreeView: vscode.TreeView<TreeElement>;
+    discoveryBranchDataProvider: DiscoveryBranchDataProvider;
+    discoveryTreeView: vscode.TreeView<TreeElement>;
 
-    export let helpAndFeedbackBranchDataProvider: HelpAndFeedbackBranchDataProvider;
+    helpAndFeedbackBranchDataProvider: HelpAndFeedbackBranchDataProvider;
 }
+
+// Members other than `prefix` are assigned during activation, as they were in the former namespace.
+export const ext = { prefix: 'documentDB' } as ExtensionVariables;
