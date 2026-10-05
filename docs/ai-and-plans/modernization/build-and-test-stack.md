@@ -2173,6 +2173,49 @@ Stage 0 must also be made.
     - document it where agents look: a short note in `.github/copilot-instructions.md` and an
       update of [live-preview-playwright.md](../live-preview-playwright.md), which describes the
       older hand-made page technique.
+    - **Shared core completed in `7384241a` (GPT-6.1 Sol).** `build/verification/browser/core/`
+      holds `fakeVsCodeApi` (fake `acquireVsCodeApi`, tRPC answering, unknown path recorded as an
+      error, call log on `window.__harnessCalls`) and the router-typed fixture types. L2's
+      `runtime.ts` and `fixtures.ts` import it; fixture content is unchanged, and `rpcPaths` is
+      derived from the log. The generated `runtime.js` inlines the core through a closed module
+      table, so boot timing and the page CSP are unchanged. A fixture for a non-existent
+      procedure fails `tsc` (TS2353). **L2 still passes unchanged** on the default-built VSIX
+      (coordinator): same five views, same RPC counts, both worker round-trips, seven negative
+      failures.
+    - **L2-dev completed in `d7b50d2b` (GPT-6.1 Sol).**
+      - **Scenarios:** typed scenarios in `build/verification/browser/scenarios.ts`. The five L2
+        defaults are imported, not copied. Nine Local Quick Start states were retyped against
+        today's router, with typed steps and assertions.
+      - **Routes and themes:** a `vite serve`-only plugin (`build/vite/webview-scenarios.mjs`)
+        serves `/<view>/<scenario>/<theme>` (dark, light, high-contrast palettes), an index at
+        `/scenarios/`, and a runner helper at `/scenarios/run-all.js`, with path subsets and no
+        query strings.
+      - **Ready signal and failures:** the page sets `data-ready` to `true` or `failed`. Any
+        `console.error`, page error, CSP violation or unknown tRPC path fails it. The page carries
+        a development CSP equivalent to the host's development CSP; the product CSP is unchanged.
+      - **Docs:** `.github/copilot-instructions.md` (short note), `live-preview-playwright.md`
+        (rewritten around L2-dev, gotchas kept) and an L2-dev section in
+        `build/verification/README.md`.
+      - **Production output unchanged:** the `views.js` hash in the bundle report was identical
+        before and after.
+
+      **Checks:**
+      - 82 browser unit tests pass.
+      - Type negatives: an unknown procedure (TS2353) and a wrong output shape (TS2322).
+      - Every route in all three themes: **42/42 ready, 60/60 assertions, 0 errors**, reproduced
+        independently by the coordinator.
+      - Failure rules: a missing fixture produced `No query fixture for
+        localQuickStart.getDockerStatus`, and an injected `console.error` produced `failed`.
+      - **Mutation proof:** with `457b913e`'s behaviour reverted by hand (the install
+        call-to-action always opens the Docker Engine guide), exactly the
+        `docker-missing-windows` and `docker-missing-mac` Docker Desktop assertions failed
+        (1 call, 0 matching URLs). All else passed, and both passed again after restoring. No
+        genuine app errors surfaced.
+
+      **Limitations:** the palettes and backends are simulated, not a real `vscode-webview://`
+      host. The integrated browser tools were unavailable here, so the runs used the headless
+      recipe recorded under the L2 task. "Open three L2-dev scenarios in the integrated browser"
+      remains a G4 operator check.
 
 - **Automated verification:** L1, now enforcing the per-view graph assertions and recording sizes;
   **L2 is the main gate** (all five views settled on their fixtures, styled, CSP clean, no preload
