@@ -266,9 +266,9 @@ const useStyles = makeStyles({
     },
 });
 
-// Every lookup below is built at CALL time, never at module scope. `WebviewRegistry` imports this
-// component eagerly, so module bodies run before `l10n.config()` in `render()` — a module-scope
-// `l10n.t(...)` is extracted for translation but permanently resolves to the English source string.
+// Build every lookup at call time, never at module scope. `WebviewRegistry` now loads this
+// component after `render()` configures l10n, but call-time translation remains defensive:
+// it avoids freezing strings if the module is imported before configuration elsewhere.
 function stageLabels(): Record<ProvisionStage, string> {
     return {
         checking: l10n.t('Checking Docker'),
