@@ -45,8 +45,14 @@ export function prepare(options: HarnessOptions): void {
     const unpacked = join(options.output, 'unpacked');
     vsixTools.extractVsix(resolve(options.vsix), unpacked);
     const assetDirectory = flatLayout ? unpacked : join(unpacked, 'dist');
-    const brokenCss: HarnessFixture['brokenCss'] = readFileSync(join(assetDirectory, 'views.js'), 'utf8')
-        .includes('data-documentdb-views-css') ? 'bundle-stylesheet' : 'all-styles';
+    const viewsSource = readFileSync(join(assetDirectory, 'views.js'), 'utf8');
+    const brokenCss: HarnessFixture['brokenCss'] = viewsSource.includes('data-documentdb-views-css')
+        ? 'bundle-stylesheet' : 'all-styles';
+    // webpack's single-file views.js has no relative static imports; a split (Vite) entry does. A
+    // split entry without the marker would silently fall back to the webpack control.
+    if (brokenCss === 'all-styles' && /\bfrom\s*["']\.\//.test(viewsSource)) {
+        throw new Error('Split views.js has no data-documentdb-views-css stylesheet marker; cannot build the CSS-negative control');
+    }
     const site = join(options.output, 'site');
     mkdirSync(join(site, 'pages'), { recursive: true });
     cpSync(assetDirectory, join(site, 'artifact'), { recursive: true });

@@ -61,6 +61,23 @@ describe('Stage 0 L2 production browser harness', (): void => {
         }
     });
 
+    it('rejects a split views.js that lacks the bundle stylesheet marker', (): void => {
+        const temporary = mkdtempSync(join(tmpdir(), 'documentdb-l2-unmarked-test-'));
+        const archive = join(temporary, 'fixture.vsix');
+        try {
+            writeFixtureVsix(archive, new Map([
+                ['extension/package.json', Buffer.from('{"name":"fixture"}')],
+                ['extension/views.js', Buffer.from('import { a } from "./react-abc.js"; export function render() {}')],
+                ['extension.vsixmanifest', Buffer.from('<manifest/>')],
+                ['[Content_Types].xml', Buffer.from('<types/>')],
+            ]));
+            expect((): void => prepare({ vsix: archive, output: join(temporary, 'generated'), prefix: '/stage0/l2',
+                origin: 'http://127.0.0.1:18081', repository })).toThrow(/no data-documentdb-views-css stylesheet marker/);
+        } finally {
+            rmSync(temporary, { recursive: true });
+        }
+    });
+
     it('rejects a package without the production entry before creating output', (): void => {
         const temporary = mkdtempSync(join(tmpdir(), 'documentdb-l2-invalid-vsix-test-'));
         try {
