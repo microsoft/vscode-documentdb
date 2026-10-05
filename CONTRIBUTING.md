@@ -204,9 +204,10 @@ code .
    - Select `Launch Extension (webpack)`.
    - Press `F5`.
 
-The `Watch` task builds the extension host with webpack and serves the webviews with Vite
-(`npm run watch:views`). No initial webview build is needed. For an on-disk development build,
-use `npm run build-dev`; `npm run webpack-dev` remains the all-webpack fallback until Stage 6.
+The `Watch` task builds the extension host with Vite in watch mode (`npm run watch:ext`) and serves
+the webviews with Vite (`npm run watch:views`). No initial webview build is needed. For an on-disk
+development build, use `npm run build-dev`. Only the webviews keep a webpack fallback
+(`npm run webpack-dev-wv`) until Stage 6.
 
 ## 4. PR Submission Checklist
 

@@ -293,8 +293,10 @@ export class WorkerSessionManager implements vscode.Disposable {
         this._spawnCount++;
         this._lastSpawnTime = Date.now();
 
-        // Resolve worker script path (same directory as the main bundle in dist/)
-        const workerPath = path.join(__dirname, 'playgroundWorker.js');
+        // The worker is its own bundle entry at the extension root (`dist/` in development). The
+        // extension root, rather than this module's location, keeps the path independent of the
+        // chunk this code is bundled into.
+        const workerPath = path.join(ext.context.extensionPath, 'playgroundWorker.mjs');
         this._worker = new Worker(workerPath);
         this._workerClusterId = clusterId;
 

@@ -6,6 +6,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi, type Mock, type MockInstance } from 'vitest';
 
 import { type IActionContext, type ITelemetryContext, type UserCancelledError } from '@microsoft/vscode-azext-utils';
+import * as path from 'path';
 import * as workerThreads from 'worker_threads';
 import { Worker } from 'worker_threads';
 import { ext } from '../../extensionVariables';
@@ -65,6 +66,7 @@ vi.mock('@microsoft/vscode-azext-utils', async () => {
 
 vi.mock('../../extensionVariables', () => ({
     ext: {
+        context: { extensionPath: '/extension-root' },
         outputChannel: {
             trace: vi.fn(),
             warn: vi.fn(),
@@ -179,6 +181,8 @@ describe('WorkerSessionManager', () => {
                 },
                 1000,
             );
+
+            expect(vi.mocked(Worker)).toHaveBeenCalledWith(path.join('/extension-root', 'playgroundWorker.mjs'));
 
             vi.advanceTimersByTime(1000);
 

@@ -35,7 +35,6 @@ testWorkspace/**
 .swcrc
 .travis.yml
 eslint.config.mjs
-extension.bundle.ts
 main.ts
 prettier.config.mjs
 progress.md

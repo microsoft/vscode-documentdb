@@ -3,8 +3,12 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-// Writes the bundler-neutral views report that L1 reads (`build/verification/reports/views.json`,
-// replacing the webpack report of the same name). Production builds only.
+// Writes the bundler-neutral bundle reports that L1 reads (`build/verification/reports/views.json`
+// and `host.json`, replacing the webpack reports of the same names). Production builds only.
+//
+// The host is two builds (ES module entries, and the CommonJS TS server plugin), which write one
+// report: the second build passes `append: true` to add its files to the report the first one wrote.
+// L1 recognises the CommonJS output by its `.cjs` extension.
 //
 // Shape:
 //   bundler, chunkFormat
@@ -18,11 +22,21 @@ import { createHash } from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 
+/** Same order as `Array.prototype.sort()` without a comparator (UTF-16 code units). */
+function compareFileNames(a, b) {
+    if (a === b) {
+        return 0;
+    }
+    return a < b ? -1 : 1;
+}
+
 /**
- * @param {{ outFile: string }} options Report path, relative to the Vite root.
+ * @param {{ outFile: string, append?: boolean }} options `outFile`: report path, relative to the Vite
+ *     root. `append`: merge into the report an earlier build of the same run wrote, replacing entries
+ *     for the same files, instead of starting a new report.
  * @returns {import('vite').Plugin}
  */
-export function bundleReport({ outFile }) {
+export function bundleReport({ outFile, append = false }) {
     let root = '';
     let outDir = '';
     /** @type {import('rolldown').OutputChunk[]} */
@@ -82,6 +96,26 @@ export function bundleReport({ outFile }) {
                     .map((fileName) => ({ fileName, bytes: read(fileName).length })),
             };
             const target = path.resolve(root, outFile);
+            if (append) {
+                // Only merge into a report written by this process (the earlier build of the same
+                // `vite build`), never into one left over from a previous run.
+                if (!fs.existsSync(target) || fs.statSync(target).mtimeMs < performance.timeOrigin) {
+                    throw new Error(`bundle-report: cannot append to ${outFile}; the build that writes it did not run`);
+                }
+                const existing = JSON.parse(fs.readFileSync(target, 'utf8'));
+                const ownFiles = new Set(Object.keys(report.assetHashes));
+                const keep = (fileName) => !ownFiles.has(fileName);
+                report.assetHashes = Object.fromEntries(
+                    [
+                        ...Object.entries(existing.assetHashes).filter(([fileName]) => keep(fileName)),
+                        ...Object.entries(report.assetHashes),
+                    ].sort(([a], [b]) => compareFileNames(a, b)),
+                );
+                report.chunks = [...existing.chunks.filter((chunk) => keep(chunk.fileName)), ...report.chunks];
+                report.assets = [...existing.assets.filter((asset) => keep(asset.fileName)), ...report.assets].sort(
+                    (a, b) => compareFileNames(a.fileName, b.fileName),
+                );
+            }
             fs.mkdirSync(path.dirname(target), { recursive: true });
             fs.writeFileSync(target, `${JSON.stringify(report, null, 2)}\n`);
         },

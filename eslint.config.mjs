@@ -24,7 +24,6 @@ export default ts.config(
             '**/out',
             '**/node_modules',
             '**/*.d.ts',
-            '**/main.js',
         ],
     },
     {

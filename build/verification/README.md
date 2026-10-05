@@ -5,9 +5,12 @@ All harness files and bundle reports are excluded from the VSIX.
 
 ## Default build and dev loop
 
-`npm run package` and `npm run package-prerelease` use `build-prod`: webpack for the extension
-host, Vite for the webviews. `npm run build-dev` builds the same combination unminified with source maps.
-`webpack-prod` and `webpack-dev` remain all-webpack fallbacks until Stage 6.
+`npm run package` and `npm run package-prerelease` use `build-prod`: Vite for the extension host
+(`vite.config.ext.mjs`, ES modules plus the CommonJS TS server plugin) and for the webviews.
+`npm run build-dev` builds the same combination unminified with source maps, and `npm run watch:ext`
+rebuilds the host on change. Since Stage 5 there is no webpack host build: `webpack.config.ext.cjs`
+only configures the `bson` identity probes below. The webviews keep a webpack fallback
+(`webpack-prod-wv`, `webpack-dev-wv`, `watch:views-webpack`) until Stage 6.
 
 `npm run watch:views` now starts Vite on port 18080 and serves `/views.js` without an existing
 `dist/views.js`. The Stage 0 advice to run `npm run webpack-dev-wv` once before starting the
@@ -17,7 +20,9 @@ because Vite reports development build errors in the browser overlay.
 
 ## L1: offline inspection
 
-Production webpack host and Vite views builds generate hash-bound reports in `reports/`.
+Production Vite host and views builds generate hash-bound reports in `reports/` (`host.json`
+covers `main.mjs`, `playgroundWorker.mjs`, their chunks and `playgroundTsPlugin.cjs`). The host side
+of the checks below still describes the webpack host report until it is ported to that shape.
 The webpack views fallback also generates a report. Enable its optional visual analyzer with
 `BUNDLE_ANALYZE=true`; it writes `reports/views.html` without starting a server.
 
@@ -66,11 +71,12 @@ for imports and URL assets; they do not use this allowlist.
 
 L1 counts the `node_modules/**/bson/lib/bson.*` modules in each shipped graph. It cannot see a copy
 under another path (a dependency that vendors or pre-bundles `bson`), and it only sees the importers
-the graph has today. The host webpack config therefore pins `bson` with a `resolve.alias` (`bson$`)
+the graph has today. The host Vite config therefore pins `bson` with a `resolve.alias` (`^bson$`)
 to the CommonJS entry the driver `require`s. Both Vite views and the webpack views fallback pin
 bson's browser entry.
-[`bson-identity/check.cjs`](./bson-identity/check.cjs) builds two probe entries with the real
-`webpack.config.ext.js` (production mode, same aliases, loaders and externals), runs them in Node
+[`bson-identity/check.cjs`](./bson-identity/check.cjs) builds two probe entries with
+`webpack.config.ext.cjs` (production mode, same `bson` pin, loaders and externals as the former
+webpack host build; not yet ported to the Vite host config), runs them in Node
 and requires every route to `ObjectId` to be one constructor, separately for the `main` and
 `playgroundWorker` graphs. Routes: `mongodb`; `bson` from TypeScript compiled like `src/`; `bson`
 and `mongodb` from an ES module (as our ESM-only packages would import them); and, in the host, a
@@ -116,7 +122,7 @@ measured `dist/` file size. Reproduce them with:
 node build/verification/measure.cjs <output-directory>
 ```
 
-Production timings now run `npm run build-prod` to measure the shipped webpack-host/Vite-views build.
+Production timings now run `npm run build-prod` to measure the shipped Vite host and views build.
 The `webpackSeconds` key and `webpack-N.log` names are retained for comparison with the Stage 0 baseline.
 
 Run measurements without concurrent builds or full test suites. They are machine-specific wall

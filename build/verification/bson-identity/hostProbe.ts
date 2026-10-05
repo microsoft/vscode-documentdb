@@ -3,7 +3,7 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-// Built with the real `webpack.config.ext.js` as the `main` entry. Every route by which the extension
+// Built with `webpack.config.ext.cjs` as the `main` entry. Every route by which the extension
 // host graph reaches `ObjectId` must yield the same constructor.
 import { parse } from '@mongodb-js/shell-bson-parser';
 import * as bson from 'bson';

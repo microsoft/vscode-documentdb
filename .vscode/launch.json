@@ -71,22 +71,6 @@
       }
     },
     {
-      "name": "Launch Extension + Host",
-      "type": "extensionHost",
-      "request": "launch",
-      "runtimeExecutable": "${execPath}",
-      "args": [
-        "--extensionDevelopmentPath=${workspaceFolder}",
-        "--extensionDevelopmentPath=${workspaceFolder}/../vscode-azureresourcegroups"
-      ],
-      "outFiles": ["${workspaceFolder}/out/**/*.js"],
-      "preLaunchTask": "${defaultBuildTask}",
-      "env": {
-        "DEBUGTELEMETRY": "verbose", // set this to "true" to suppress telemetry events in debug console
-        "NODE_DEBUG": ""
-      }
-    },
-    {
       "type": "node",
       "request": "attach",
       "name": "Attach to Language Server",

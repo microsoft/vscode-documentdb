@@ -5,6 +5,12 @@
 
 'use strict';
 
+// NOT A BUILD PATH. The extension host is built by vite.config.ext.mjs: it runs as ES modules
+// (`main.mjs` with top-level await, `playgroundWorker.mjs`, `playgroundTsPlugin.cjs`), which this
+// CommonJS configuration cannot produce, so it has no npm scripts and no host webpack fallback
+// exists. It is kept only because build/verification/bson-identity/check.cjs still builds its
+// probes with it, until that check is ported to the Vite configuration. Removed in Stage 6.
+
 const webpack = require('webpack');
 const path = require('path');
 const CopyWebpackPlugin = require('copy-webpack-plugin');

@@ -1,6 +1,7 @@
 {
   "compilerOptions": {
-    "module": "commonjs",
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
     "target": "ES2023",
     "outDir": "out",
     "lib": ["ES2023", "dom", "dom.iterable", "webworker"],
@@ -16,10 +17,13 @@
     "rootDir": ".",
     "experimentalDecorators": true,
     "resolveJsonModule": true,
-    "baseUrl": "./",
     "alwaysStrict": true,
+    // Types only (bundlers and Vitest do not read `paths`). These packages declare types for their
+    // `require` export but not for their `import` export, an untyped ESM wrapper around the same
+    // CommonJS code, so `moduleResolution: Bundler` would type every import from them as `any`.
     "paths": {
-      "*": ["node_modules/@types/*", "*"]
+      "@mongodb-js/explain-plan-helper": ["./node_modules/@mongodb-js/explain-plan-helper/dist/index.d.ts"],
+      "mongodb-connection-string-url": ["./node_modules/mongodb-connection-string-url/lib/index.d.ts"]
     },
     "jsx": "react-jsx"
   },

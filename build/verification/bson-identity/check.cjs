@@ -3,10 +3,12 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-// Runtime `bson` identity check. Builds small probe entries with the real `webpack.config.ext.js`
-// (same resolve aliases, conditions, loaders, externals and production mode as `main` and
-// `playgroundWorker`), runs them in Node, and requires every route to `ObjectId` in each graph to be
-// the same constructor. L1 counts BSON modules in the shipped graphs; this checks identity at runtime.
+// Runtime `bson` identity check. Builds small probe entries with `webpack.config.ext.cjs` (its
+// resolve aliases, loaders, externals and production mode), runs them in Node, and requires every
+// route to `ObjectId` in each graph to be the same constructor. L1 counts BSON modules in the shipped
+// graphs; this checks identity at runtime. Stage 5 moved the shipped host build to
+// vite.config.ext.mjs (same `bson` pin); until this check is ported to it, it exercises the webpack
+// configuration's equivalent pin, not the shipped bundler.
 
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
@@ -17,13 +19,13 @@ const webpack = require('webpack');
 const { BundleReportPlugin } = require('../BundleReportPlugin.cjs');
 
 const repository = path.resolve(__dirname, '../../..');
-const createConfig = require(path.join(repository, 'webpack.config.ext.js'));
+const createConfig = require(path.join(repository, 'webpack.config.ext.cjs'));
 const probes = { main: 'hostProbe.ts', playgroundWorker: 'workerProbe.ts' };
 const reference = 'mongodb';
 
 function probeConfig(outputPath, { withoutAlias }) {
     const config = createConfig({}, { mode: 'production' });
-    assert.ok(config.resolve?.alias?.bson$, 'webpack.config.ext.js no longer pins bson (resolve.alias.bson$)');
+    assert.ok(config.resolve?.alias?.bson$, 'webpack.config.ext.cjs no longer pins bson (resolve.alias.bson$)');
     if (withoutAlias) {
         delete config.resolve.alias.bson$;
     }
