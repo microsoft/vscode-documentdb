@@ -39,28 +39,28 @@ const bsonEntry = require.resolve('bson');
 
 // Modules the bundles load at runtime instead of bundling. The VSIX ships no node_modules, so apart
 // from `vscode` and Node built-ins these are optional dependencies whose loading is guarded (or
-// never reached): bundling them would fail or pull in native binaries.
+// only reached by shell proxy/configuration paths outside normal worker initialization).
+// Keep guarded requires explicit even when
+// Rolldown leaves them unresolved without an external: missing optional peers can become empty stubs.
 const optionalExternals = new Set([
     // DocumentDB API driver (mongodb) optional dependencies
-    'kerberos',
-    '@mongodb-js/zstd',
-    '@aws-sdk/credential-providers',
-    'gcp-metadata',
-    'snappy',
-    'aws4',
-    'mongodb-client-encryption',
-    // @kubernetes/client-node optional dependencies
-    'bufferutil',
-    'utf-8-validate',
+    'kerberos', // Guarded native loader: getKerberos and devtools-connect.
+    '@mongodb-js/zstd', // Guarded optional compression loader: getZstdLibrary.
+    '@aws-sdk/credential-providers', // Guarded auth loader: getAwsCredentialProvider; preserve webpack behavior.
+    'gcp-metadata', // Guarded auth loader: getGcpMetadata; preserve webpack behavior.
+    'snappy', // Guarded optional compression loader: getSnappy.
+    'mongodb-client-encryption', // Guarded native loader: getMongoDBClientEncryption and devtools-connect.
+    // ws (via @kubernetes/client-node) optional native accelerators
+    'bufferutil', // Guarded buffer-util loader; JavaScript fallback remains available.
+    'utf-8-validate', // Guarded validation loader; Node/JavaScript fallback remains available.
     // @mongosh transitive optional dependencies
-    'electron',
-    'os-dns-native',
-    'cpu-features',
-    'ssh2',
-    'win-export-certificate-and-key',
-    'macos-export-certificate-and-key',
-    // pg optional dependency
-    'pg-native',
+    'electron', // Guarded OIDC browser opener; falls back to bundled open.
+    'os-dns-native', // Guarded devtools-connect DNS loader.
+    'ssh2', // Lazy SSH-proxy-only loader (not try/catch); preserve webpack's external behavior.
+    'win-export-certificate-and-key', // Guarded system-ca Windows certificate loader.
+    'macos-export-certificate-and-key', // Guarded system-ca macOS certificate loader.
+    // Shared diagnostic dependencies
+    'supports-color', // Guarded debug color probe; was already left as a runtime require.
 ]);
 const nodeBuiltins = new Set(builtinModules);
 
@@ -68,11 +68,11 @@ const nodeBuiltins = new Set(builtinModules);
 function isExternal(id) {
     return (
         id === 'vscode' ||
-        id === 'vs' ||
         id.startsWith('node:') ||
         nodeBuiltins.has(id) ||
         optionalExternals.has(id) ||
-        // @babel/preset-typescript and its subpaths (e.g. /package.json)
+        // Babel's optional .cts configuration loader (guarded preset; package.json in its error path).
+        // The shell rewriter disables configuration files, so neither request executes.
         id.startsWith('@babel/preset-typescript')
     );
 }
