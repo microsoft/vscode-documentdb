@@ -8,7 +8,16 @@ const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 const { test } = require('node:test');
-const { compareManifest, inspectRequiredFiles, inspectJavaScript, entryGraph, manifest } = require('./inspect.cjs');
+const {
+    compareManifest,
+    inspectRequiredFiles,
+    inspectJavaScript,
+    entryGraph,
+    viteViewGraph,
+    viewGraphs,
+    viewModules,
+    manifest,
+} = require('./inspect.cjs');
 const { readVsix, writeVsix, extractVsix } = require('./vsix.cjs');
 
 const files = new Map([
@@ -297,4 +306,245 @@ test('entry graph follows lazy chunks and catches duplicate BSON implementations
     report.chunks[0].modules.pop();
     bundled.delete('extension/chunk.js');
     assert.throws(() => entryGraph(report, 'main', bundled), /missing chunk/);
+});
+
+function viteFixture() {
+    const chunks = [
+        {
+            fileName: 'views.js',
+            isEntry: true,
+            imports: ['runtime.js'],
+            dynamicImports: Object.keys(viewModules).map((name) => `${name}.js`),
+            moduleIds: [],
+        },
+        { fileName: 'runtime.js', imports: ['shared.js'], dynamicImports: ['monaco-AbC12345.js'], moduleIds: [] },
+        { fileName: 'shared.js', imports: ['runtime.js'], moduleIds: ['./node_modules/react/index.js'] },
+        {
+            fileName: 'monaco-AbC12345.js',
+            imports: [],
+            moduleIds: ['./node_modules/monaco-editor/esm/vs/editor/editor.api.js'],
+        },
+        { fileName: 'slickgrid.js', imports: [], moduleIds: ['./node_modules/@slickgrid-universal/common/index.js'] },
+        ...Object.entries(viewModules).map(([name, facadeModuleId]) => ({
+            fileName: `${name}.js`,
+            facadeModuleId,
+            imports:
+                name === 'collectionView'
+                    ? ['monaco-AbC12345.js', 'slickgrid.js']
+                    : name === 'documentView'
+                      ? ['monaco-AbC12345.js']
+                      : [],
+            dynamicImports: ['monaco-AbC12345.js'],
+            moduleIds: [facadeModuleId],
+        })),
+    ];
+    return {
+        report: {
+            bundler: 'vite',
+            chunkFormat: 'module',
+            chunks,
+            assetHashes: Object.fromEntries(chunks.map((chunk) => [chunk.fileName, 'fixture'])),
+        },
+        bundled: new Map(chunks.map((chunk) => [`extension/${chunk.fileName}`, Buffer.from('')])),
+    };
+}
+
+test('Vite view graphs include only entry and view static closures, including cycles', () => {
+    const { report, bundled } = viteFixture();
+    const graphs = viewGraphs(report, bundled);
+    assert.deepEqual(graphs.localQuickStart, {
+        assets: ['localQuickStart.js', 'runtime.js', 'shared.js', 'views.js'],
+        bsonModules: [],
+        monaco: false,
+        slickgrid: false,
+    });
+    assert.deepEqual(graphs.collectionView.assets, [
+        'collectionView.js',
+        'monaco-AbC12345.js',
+        'runtime.js',
+        'shared.js',
+        'slickgrid.js',
+        'views.js',
+    ]);
+    assert.equal(graphs.collectionView.monaco, true);
+    assert.equal(graphs.collectionView.slickgrid, true);
+    assert.equal(graphs.documentView.monaco, true);
+    assert.equal(graphs.documentView.slickgrid, false);
+});
+
+test('Vite requires the mapped lazy chunk to be a direct dynamic import of views.js', () => {
+    const { report, bundled } = viteFixture();
+    const lazy = report.chunks.find((chunk) => chunk.fileName === 'localQuickStart.js');
+    lazy.facadeModuleId = null;
+    assert.throws(() => viteViewGraph(report, 'localQuickStart', bundled), /localQuickStart: missing lazy chunk/);
+    lazy.facadeModuleId = viewModules.localQuickStart;
+    report.chunks[0].dynamicImports = [];
+    assert.throws(() => viteViewGraph(report, 'localQuickStart', bundled), /localQuickStart: missing lazy chunk/);
+    report.chunks[0].isEntry = false;
+    assert.throws(() => viteViewGraph(report, 'localQuickStart', bundled), /missing entry views\.js/);
+});
+
+test('every Vite graph chunk must exist in both the report and the VSIX', () => {
+    const { report, bundled } = viteFixture();
+    bundled.delete('extension/shared.js');
+    assert.throws(() => viteViewGraph(report, 'localQuickStart', bundled), /localQuickStart: missing chunk shared\.js/);
+    report.chunks = report.chunks.filter((chunk) => chunk.fileName !== 'shared.js');
+    assert.throws(
+        () => viteViewGraph(report, 'localQuickStart', bundled),
+        /localQuickStart: bundle report missing chunk shared\.js/,
+    );
+});
+
+test('Vite enforces lightweight views by default, even with an explicit false option', () => {
+    for (const name of ['localQuickStart', 'atlasCredentials']) {
+        for (const asset of ['monaco-AbC12345.js', 'slickgrid.js']) {
+            const { report, bundled } = viteFixture();
+            report.chunks.find((chunk) => chunk.fileName === `${name}.js`).imports.push(asset);
+            assert.throws(
+                () => viewGraphs(report, bundled, { requireLightweightViews: false }),
+                (error) => error.message === `${name} must exclude Monaco and SlickGrid`,
+            );
+        }
+    }
+});
+
+test('webpack views keep the shared entry fallback and opt-in lightweight enforcement', () => {
+    const report = {
+        entrypoints: { views: { chunks: [1] } },
+        chunks: [
+            { id: 1, files: ['views.js'], modules: [{ identifier: '/repo/node_modules/monaco-editor/index.js' }] },
+        ],
+    };
+    assert.equal(viewGraphs(report, files).localQuickStart.monaco, true);
+    assert.throws(
+        () => viewGraphs(report, files, { requireLightweightViews: true }),
+        /localQuickStart must exclude Monaco and SlickGrid/,
+    );
+});
+
+test('Vite counts BSON once across shared closures and rejects duplicate implementations', () => {
+    const { report, bundled } = viteFixture();
+    const bson = './node_modules/bson/lib/bson.mjs';
+    report.chunks.find((chunk) => chunk.fileName === 'shared.js').moduleIds.push(bson);
+    const lazy = report.chunks.find((chunk) => chunk.fileName === 'localQuickStart.js');
+    lazy.imports.push('shared.js');
+    lazy.moduleIds.push(bson);
+    assert.deepEqual(viteViewGraph(report, 'localQuickStart', bundled).bsonModules, ['node_modules/bson/lib/bson.mjs']);
+    lazy.moduleIds.push('./node_modules/foo/node_modules/bson/lib/bson.mjs');
+    assert.throws(() => viewGraphs(report, bundled), /localQuickStart: expected at most one BSON module, got 2/);
+});
+
+test('Vite-owned numeric .e calls are not webpack chunk loaders', () => {
+    const { report } = viteFixture();
+    const bundled = new Map(files);
+    bundled.set('extension/views.js', Buffer.from('export function render() {}; x.e(5);'));
+    inspectJavaScript(bundled, [report]);
+});
+
+test('Monaco foreign-module loader allowlist is scoped to one exact template in a Vite Monaco chunk', () => {
+    const filename = 'extension/monaco-AbC12345.js';
+    const source = 'import(`${globalThis.x}`);';
+    const report = { bundler: 'vite', chunkFormat: 'module', assetHashes: { 'monaco-AbC12345.js': 'fixture' } };
+    const bundled = new Map([[filename, Buffer.from(source)]]);
+    inspectJavaScript(bundled, [report]);
+    bundled.set(filename, Buffer.from(source + source));
+    assert.throws(() => inspectJavaScript(bundled, [report]), /nonliteral dynamic import exceeds Monaco/);
+    for (const invalid of [
+        'import(globalThis.x)',
+        'import(`prefix${globalThis.x}`)',
+        'import(`${globalThis.x}suffix`)',
+        'import(`${globalThis.x}${globalThis.y}`)',
+    ]) {
+        bundled.set(filename, Buffer.from(invalid));
+        assert.throws(() => inspectJavaScript(bundled, [report]), /nonliteral dynamic import cannot be verified/);
+    }
+    bundled.set(filename, Buffer.from(source));
+    assert.throws(
+        () => inspectJavaScript(bundled, [{ ...report, bundler: 'webpack' }]),
+        /nonliteral dynamic import cannot be verified/,
+    );
+    for (const other of [
+        'extension/monaco.js',
+        'extension/assets/monaco-AbC12345.js',
+        'extension/other-AbC12345.js',
+        'extension/editor.worker-AbC12345.js',
+        'extension/json.worker-AbC12345.js',
+    ]) {
+        assert.throws(
+            () =>
+                inspectJavaScript(new Map([[other, Buffer.from(source)]]), [
+                    { ...report, assetHashes: { [other.slice('extension/'.length)]: 'fixture' } },
+                ]),
+            /nonliteral dynamic import cannot be verified/,
+        );
+    }
+    const entry = new Map(files);
+    entry.set('extension/views.js', Buffer.from('export function render() {}; ' + source));
+    assert.throws(
+        () => inspectJavaScript(entry, [{ ...viewReport, bundler: 'vite' }]),
+        /views\.js: nonliteral dynamic import cannot be verified/,
+    );
+});
+
+test('Vite expression-free template imports are static references, not allowlisted expressions', () => {
+    const report = {
+        ...viewReport,
+        bundler: 'vite',
+        assetHashes: { ...viewReport.assetHashes, 'chunk.js': 'fixture' },
+    };
+    const bundled = new Map([
+        ['extension/views.js', Buffer.from('export function render() {}; import(`./chunk.js`);')],
+        ['extension/chunk.js', Buffer.from('')],
+    ]);
+    inspectJavaScript(bundled, [report]);
+    assert.throws(
+        () => inspectJavaScript(bundled, [{ ...report, bundler: 'webpack' }]),
+        /nonliteral dynamic import cannot be verified/,
+    );
+    bundled.delete('extension/chunk.js');
+    assert.throws(() => inspectJavaScript(bundled, [report]), /views\.js: missing dynamic import\/asset \.\/chunk\.js/);
+});
+
+test('Vite literal new URL assets resolve relative to the packaged importing file', () => {
+    const report = { ...viewReport, bundler: 'vite', assetHashes: { ...viewReport.assetHashes } };
+    const bundled = new Map(files);
+    for (const asset of ['codicon-AbC12345.ttf', 'editor.worker-AbC12345.js', 'json.worker-AbC12345.js']) {
+        bundled.set(
+            'extension/views.js',
+            Buffer.from(`export function render() {}; new URL("./${asset}?v=1#font", import.meta.url);`),
+        );
+        assert.throws(
+            () => inspectJavaScript(bundled, [report]),
+            (error) => error.message === `extension/views.js: missing dynamic import/asset ./${asset}?v=1#font`,
+        );
+        bundled.set(`extension/${asset}`, Buffer.from(''));
+        report.assetHashes[asset] = 'fixture';
+        inspectJavaScript(bundled, [report]);
+        bundled.set(
+            'extension/views.js',
+            Buffer.from('export function render() {}; new URL(`./' + asset + '`, import.meta.url);'),
+        );
+        inspectJavaScript(bundled, [report]);
+        bundled.delete(`extension/${asset}`);
+        assert.throws(() => inspectJavaScript(bundled, [report]), /missing dynamic import\/asset/);
+    }
+    bundled.set(
+        'extension/views.js',
+        Buffer.from('export function render() {}; new URL("/root.ttf", import.meta.url)'),
+    );
+    assert.throws(() => inspectJavaScript(bundled, [report]), /root-relative asset/);
+});
+
+test('Vite facade-module map matches every literal lazy import in WebviewRegistry', () => {
+    const registryPath = path.resolve(__dirname, '../../src/webviews/_integration/WebviewRegistry.ts');
+    const registry = fs.readFileSync(registryPath, 'utf8');
+    const imports = [...registry.matchAll(/(\w+): React\.lazy\(\(\) =>\s*import\(['"]([^'"]+)['"]\)/g)];
+    assert.deepEqual(
+        Object.fromEntries(
+            imports.map(([, name, module]) => [name, path.resolve(path.dirname(registryPath), `${module}.tsx`)]),
+        ),
+        Object.fromEntries(
+            Object.entries(viewModules).map(([name, module]) => [name, path.resolve(__dirname, '../..', module)]),
+        ),
+    );
 });

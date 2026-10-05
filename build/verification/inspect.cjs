@@ -11,7 +11,13 @@ const { parse } = require('acorn');
 const { simple } = require('acorn-walk');
 const { readVsix } = require('./vsix.cjs');
 
-const viewNames = ['collectionView', 'documentView', 'localQuickStart', 'atlasCredentials', 'clusterDashboard'];
+const viewModules = {
+    collectionView: './src/webviews/documentdb/collectionView/CollectionView.tsx',
+    documentView: './src/webviews/documentdb/documentView/documentView.tsx',
+    localQuickStart: './src/webviews/documentdb/localQuickStart/LocalQuickStart.tsx',
+    atlasCredentials: './src/webviews/documentdb/atlasCredentials/AtlasCredentialsView.tsx',
+    clusterDashboard: './src/webviews/documentdb/clusterDashboard/ClusterDashboard.tsx',
+};
 const requiredFiles = [
     'extension.vsixmanifest',
     '[Content_Types].xml',
@@ -119,6 +125,32 @@ function resolveAsset(files, filename, reference) {
     assert.ok(files.has(resolved), `${filename}: missing dynamic import/asset ${reference}`);
 }
 
+function literalString(node, allowTemplate = false) {
+    if (node?.type === 'Literal' && typeof node.value === 'string') {
+        return node.value;
+    }
+    // Vite's minifier also prints constant strings as expression-free templates.
+    if (
+        allowTemplate &&
+        node?.type === 'TemplateLiteral' &&
+        node.expressions.length === 0 &&
+        node.quasis.length === 1
+    ) {
+        return node.quasis[0].value.cooked;
+    }
+}
+
+function isMonacoForeignModuleLoader(filename, source) {
+    // editorSimpleWorker.$loadForeignModule is unused in our editor worker host; webpack stubbed it.
+    return (
+        /^extension\/monaco-[A-Za-z0-9_-]+\.js$/.test(filename) &&
+        source.type === 'TemplateLiteral' &&
+        source.expressions.length === 1 &&
+        source.quasis.length === 2 &&
+        source.quasis.every((quasi) => quasi.value.raw === '')
+    );
+}
+
 function inspectJavaScript(files, reports) {
     for (const [filename, data] of files) {
         if (!/\.(?:js|cjs|mjs)$/.test(filename)) {
@@ -132,6 +164,9 @@ function inspectJavaScript(files, reports) {
             assert.ok(compilations.length > 0, `${filename}: unowned script; no bundle report assetHashes entry`);
         }
         const commonJs = filename.endsWith('.cjs') || compilations.some((report) => report.chunkFormat === 'commonjs');
+        const viteOwned = compilations.some((report) => report.bundler === 'vite');
+        const webpackCompilations = compilations.filter((report) => report.bundler !== 'vite');
+        let monacoForeignModuleImports = 0;
         assert.ok(!/127\.0\.0\.1:18080|DEVSERVER/.test(source), `${filename}: development-server string in production`);
         const tree = parse(source, { ecmaVersion: 'latest', sourceType: 'module', allowReturnOutsideFunction: true });
         if (filename === 'extension/views.js') {
@@ -154,11 +189,17 @@ function inspectJavaScript(files, reports) {
                 assert.ok(!(commonJs && node.meta.name === 'import'), `${filename}: import.meta in a CommonJS bundle`);
             },
             ImportExpression(node) {
-                assert.ok(
-                    node.source.type === 'Literal' && typeof node.source.value === 'string',
-                    `${filename}: nonliteral dynamic import cannot be verified`,
-                );
-                resolveAsset(files, filename, node.source.value);
+                if (viteOwned && isMonacoForeignModuleLoader(filename, node.source)) {
+                    monacoForeignModuleImports++;
+                    assert.ok(
+                        monacoForeignModuleImports <= 1,
+                        `${filename}: nonliteral dynamic import exceeds Monaco foreign-module loader allowlist`,
+                    );
+                    return;
+                }
+                const reference = literalString(node.source, viteOwned);
+                assert.ok(typeof reference === 'string', `${filename}: nonliteral dynamic import cannot be verified`);
+                resolveAsset(files, filename, reference);
             },
             ImportDeclaration(node) {
                 if (node.source.value.startsWith('.')) {
@@ -170,9 +211,28 @@ function inspectJavaScript(files, reports) {
                     resolveAsset(files, filename, node.source.value);
                 }
             },
+            NewExpression(node) {
+                const [reference, base] = node.arguments;
+                const asset = literalString(reference, viteOwned);
+                if (
+                    viteOwned &&
+                    node.callee.type === 'Identifier' &&
+                    node.callee.name === 'URL' &&
+                    typeof asset === 'string' &&
+                    base?.type === 'MemberExpression' &&
+                    !base.computed &&
+                    base.property.name === 'url' &&
+                    base.object.type === 'MetaProperty' &&
+                    base.object.meta.name === 'import' &&
+                    base.object.property.name === 'meta'
+                ) {
+                    resolveAsset(files, filename, asset);
+                }
+            },
             CallExpression(node) {
                 // webpack lowers import() to its runtime's .e(chunkId) loader.
                 if (
+                    webpackCompilations.length > 0 &&
                     node.callee.type === 'MemberExpression' &&
                     node.callee.property.name === 'e' &&
                     node.arguments.length === 1 &&
@@ -180,12 +240,12 @@ function inspectJavaScript(files, reports) {
                     typeof node.arguments[0].value === 'number'
                 ) {
                     assert.equal(
-                        compilations.length,
+                        webpackCompilations.length,
                         1,
                         `${filename}: missing or ambiguous webpack compilation provenance`,
                     );
                     const id = String(node.arguments[0].value);
-                    const chunk = compilations[0].chunks.find((candidate) => String(candidate.id) === id);
+                    const chunk = webpackCompilations[0].chunks.find((candidate) => String(candidate.id) === id);
                     assert.ok(chunk, `${filename}: missing webpack chunk ${id} in its compilation report`);
                     for (const asset of chunk.files) {
                         assert.ok(files.has(`extension/${asset}`), `${filename}: missing webpack chunk asset ${asset}`);
@@ -231,6 +291,10 @@ function entryGraph(report, entryName, files, { allowAbsentBson = false } = {}) 
         collectModules(chunk.modules, modules);
         pending.push(...(chunk.children || []), ...Object.values(chunk.childrenByOrder || {}).flat());
     }
+    return summarizeGraph(entryName, assets, modules, allowAbsentBson);
+}
+
+function summarizeGraph(entryName, assets, modules, allowAbsentBson) {
     const bsonModules = [...modules].filter((identifier) =>
         /\/node_modules\/bson\/lib\/bson(?:\.bundle)?\.(?:mjs|cjs|js)(?:$|\?)/.test(identifier),
     );
@@ -244,6 +308,49 @@ function entryGraph(report, entryName, files, { allowAbsentBson = false } = {}) 
         monaco: [...modules].some((identifier) => identifier.includes('/monaco-editor/')),
         slickgrid: [...modules].some((identifier) => /\/(?:slickgrid|@slickgrid-universal)\//.test(identifier)),
     };
+}
+
+function viteViewGraph(report, name, files) {
+    const entry = report.chunks.find((chunk) => chunk.isEntry && chunk.fileName === 'views.js');
+    assert.ok(entry, 'Bundle report missing entry views.js');
+    const lazy = report.chunks.find((chunk) => chunk.facadeModuleId === viewModules[name]);
+    assert.ok(lazy && entry.dynamicImports.includes(lazy.fileName), `${name}: missing lazy chunk`);
+    const chunks = new Map(report.chunks.map((chunk) => [chunk.fileName, chunk]));
+    const pending = [entry.fileName, lazy.fileName];
+    const assets = new Set();
+    const modules = new Set();
+    while (pending.length) {
+        const asset = pending.pop();
+        if (assets.has(asset)) {
+            continue;
+        }
+        const chunk = chunks.get(asset);
+        assert.ok(chunk, `${name}: bundle report missing chunk ${asset}`);
+        assert.ok(files.has(`extension/${asset}`), `${name}: missing chunk ${asset}`);
+        assets.add(asset);
+        for (const moduleId of chunk.moduleIds) {
+            modules.add(moduleId.replaceAll('\\', '/'));
+        }
+        // Only static edges: other views' lazy imports are not part of this view's graph.
+        pending.push(...chunk.imports);
+    }
+    return summarizeGraph(name, assets, modules, true);
+}
+
+function viewGraphs(report, files, { requireLightweightViews = false } = {}) {
+    const graphs = {};
+    for (const name of Object.keys(viewModules)) {
+        graphs[name] =
+            report.bundler === 'vite'
+                ? viteViewGraph(report, name, files)
+                : entryGraph(report, report.entrypoints[name] ? name : 'views', files, { allowAbsentBson: true });
+    }
+    if (report.bundler === 'vite' || requireLightweightViews) {
+        for (const name of ['localQuickStart', 'atlasCredentials']) {
+            assert.ok(!graphs[name].monaco && !graphs[name].slickgrid, `${name} must exclude Monaco and SlickGrid`);
+        }
+    }
+    return graphs;
 }
 
 function inspect(filename, options = {}) {
@@ -263,17 +370,8 @@ function inspect(filename, options = {}) {
     const graphs = {
         main: entryGraph(reports[0], 'main', files),
         playgroundWorker: entryGraph(reports[0], 'playgroundWorker', files),
+        ...viewGraphs(reports[1], files, options),
     };
-    for (const name of viewNames) {
-        graphs[name] = entryGraph(reports[1], reports[1].entrypoints[name] ? name : 'views', files, {
-            allowAbsentBson: true,
-        });
-    }
-    if (options.requireLightweightViews) {
-        for (const name of ['localQuickStart', 'atlasCredentials']) {
-            assert.ok(!graphs[name].monaco && !graphs[name].slickgrid, `${name} must exclude Monaco and SlickGrid`);
-        }
-    }
     for (const report of reports) {
         assert.ok(Object.keys(report.assetHashes).length > 0, 'Bundle report has no asset provenance');
         for (const [asset, hash] of Object.entries(report.assetHashes)) {
@@ -368,4 +466,14 @@ if (require.main === module) {
     console.log(JSON.stringify(result, null, 2));
 }
 
-module.exports = { inspect, compareManifest, inspectRequiredFiles, inspectJavaScript, entryGraph, manifest };
+module.exports = {
+    inspect,
+    compareManifest,
+    inspectRequiredFiles,
+    inspectJavaScript,
+    entryGraph,
+    viteViewGraph,
+    viewGraphs,
+    viewModules,
+    manifest,
+};

@@ -5,7 +5,7 @@ All harness files and bundle reports are excluded from the VSIX.
 
 ## L1: offline inspection
 
-Production webpack builds generate hash-bound reports in `reports/`. Enable the optional visual
+Production webpack and Vite views builds generate hash-bound reports in `reports/`. Enable the optional webpack visual
 analyzer with `BUNDLE_ANALYZE=true`; it writes `reports/views.html` without starting a server.
 
 After packaging:
@@ -19,16 +19,27 @@ npm run test:verification
 Inspection reports archive file-list and size drift without failing. Hard checks cover required
 package files and the resolved `package.json` main entry, bundle-report ownership of every packaged
 `.js`, `.cjs` and `.mjs` file under `extension/`, the named `render` export,
-literal dynamic imports, webpack lazy-chunk references, development-server strings, `import.meta` in
+literal dynamic imports, webpack-owned lazy-chunk references, Vite literal `new URL(..., import.meta.url)`
+assets (fonts and workers), development-server strings, `import.meta` in
 CommonJS bundles (including `.cjs`), and reachable BSON implementations. Reports must match the packaged JavaScript
 hashes and record each compilation's `chunkFormat`; every JavaScript file of a `commonjs`
 compilation (today `main.js`, `playgroundWorker.js`, `playgroundTsPlugin.js` and their chunks) is
 parsed and rejected if it contains `import.meta`, which a `require` cannot load (Stage 3 found
 webpack leaving `import.meta.dirname` in `main.js`). Host and playground graphs
 require one BSON implementation; browser graphs allow zero because today's webviews do not bundle
-BSON, but reject duplicates. Each view records its graph even while the views share one bundle.
-Once Stage 4 introduces separate entries, use `--require-lightweight-views` to require Local Quick
-Start and Atlas Credentials to exclude Monaco and SlickGrid.
+BSON, but reject duplicates. Webpack views retain the shared `views` entry fallback. With a Vite
+views report (`bundler: 'vite'`), each graph is the `views.js` entry's static import closure plus
+that view's lazy chunk and its static import closure, never every dynamic child. The lazy chunk's
+`facadeModuleId` must match the registry-backed map and appear in the entry's `dynamicImports`.
+Local Quick Start and Atlas Credentials must exclude Monaco and SlickGrid by default for Vite;
+`--require-lightweight-views` forces the same assertion for webpack.
+
+Nonliteral imports fail except for the named Monaco foreign-module loader allowlist:
+`editorSimpleWorker.$loadForeignModule` in a Vite-owned `monaco-<hash>.js` may contain one
+``import(`${expression}`)`` (one expression, empty template quasis). It is unused in our editor
+worker host; webpack replaced it with a stub. Other files, template shapes and a second occurrence fail.
+Expression-free template strings, also emitted by Vite's minifier, are resolved as literal strings
+for imports and URL assets; they do not use this allowlist.
 
 ### `bson` identity (runtime)
 
@@ -58,7 +69,10 @@ tolerance are informational, with content hashes normalized when pairing renamed
 webpack chunks remain distinct). The JSON result includes `manifestReport`: `added`, `removed`,
 `sizeChanges`, total `vsixBytes` delta and `graphAssetBytes` sums. A short summary goes to stderr;
 stdout stays JSON. `--manifest-report <file>` writes just the report; CI uploads it separately.
-The proof has six rejection controls and one positive asset-change reporting control.
+The proof has six rejection controls and one positive asset-change reporting control. Vite adds
+`missing-lazy-chunk` (the entry's missing dynamic import fires first),
+`monaco-in-local-quick-start`, `duplicate-bson` and `nonliteral-import`; webpack prints `SKIP` for
+these four. Report mutations use temporary copies, never the supplied reports.
 Review intentional artifact changes before regenerating the version-1 baseline (its format is unchanged):
 
 ```bash
@@ -67,7 +81,8 @@ node build/verification/inspect.cjs <vsix> --write-baseline build/verification/b
 
 Downloaded artifacts need their matching bundle reports, not reports from an unrelated local build.
 GitHub Actions uploads them separately; ADO stages `build/verification/reports/*.json` alongside the
-release artifacts. Pass `--reports <downloaded-report-directory>` when inspecting a downloaded VSIX.
+release artifacts. Pass `--reports <downloaded-report-directory>` to either inspection or proof
+for a downloaded VSIX (both default to `build/verification/reports`).
 
 The [measurements](./measurements.json) record three production builds, three unit-test runs (Jest
 at Stage 0; the script now runs Vitest), the median test time, installed package count, and every

@@ -10,10 +10,20 @@ const path = require('node:path');
 const { inspect } = require('./inspect.cjs');
 const { readVsix, writeVsix } = require('./vsix.cjs');
 
-const filename = process.argv[2];
-assert.ok(filename, 'Usage: node build/verification/prove-inspection.cjs <vsix>');
+const args = process.argv.slice(2);
+const filename = args.shift();
+assert.ok(filename, 'Usage: node build/verification/prove-inspection.cjs <vsix> [--reports <directory>]');
+let reports = path.join(__dirname, 'reports');
+while (args.length) {
+    const flag = args.shift();
+    assert.equal(flag, '--reports', `Unknown proof option: ${flag}`);
+    reports = args.shift();
+    assert.ok(reports, '--reports requires a directory');
+}
 const baseline = path.join(__dirname, 'baseline.json');
-inspect(filename, { baseline });
+const options = { baseline, reports };
+inspect(filename, options);
+const views = JSON.parse(fs.readFileSync(path.join(reports, 'views.json'), 'utf8'));
 const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'documentdb-broken-vsix-'));
 try {
     const variants = [
@@ -89,7 +99,7 @@ try {
         mutate(files);
         const variant = path.join(directory, `${name}.vsix`);
         writeVsix(variant, files);
-        assert.throws(() => inspect(variant, { baseline }), expected);
+        assert.throws(() => inspect(variant, options), expected);
         console.log(`PASS: ${name} rejected for the expected reason`);
     }
     const files = readVsix(filename);
@@ -97,10 +107,80 @@ try {
     files.set('extension/resources/proof-added.svg', Buffer.from('<svg xmlns="http://www.w3.org/2000/svg"/>'));
     const variant = path.join(directory, 'asset-added-and-removed-reported.vsix');
     writeVsix(variant, files);
-    const { manifestReport } = inspect(variant, { baseline });
+    const { manifestReport } = inspect(variant, options);
     assert.deepEqual(manifestReport.removed, ['extension/resources/vscode-documentdb-marketplace-logo.png']);
     assert.deepEqual(manifestReport.added, ['extension/resources/proof-added.svg']);
     console.log('PASS: asset-added-and-removed-reported reported without failing');
+    const viteControls = ['missing-lazy-chunk', 'monaco-in-local-quick-start', 'duplicate-bson', 'nonliteral-import'];
+    if (views.bundler === 'vite') {
+        const { viewModules } = require('./inspect.cjs');
+        const lazy = views.chunks.find((chunk) => chunk.facadeModuleId === viewModules.localQuickStart);
+        const monaco = views.chunks.find((chunk) => /^monaco-[A-Za-z0-9_-]+\.js$/.test(chunk.fileName));
+        assert.ok(lazy, 'Proof requires Local Quick Start lazy chunk');
+        assert.ok(monaco, 'Proof requires Monaco chunk');
+        const escapedLazyName = lazy.fileName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        const controls = [
+            [
+                viteControls[0],
+                (files) => {
+                    assert.ok(files.delete(`extension/${lazy.fileName}`));
+                },
+                new RegExp(`views\\.js: missing dynamic import/asset (?:\\./)?${escapedLazyName}`),
+            ],
+            [
+                viteControls[1],
+                undefined,
+                /localQuickStart must exclude Monaco and SlickGrid/,
+                (report) => {
+                    report.chunks.find((chunk) => chunk.fileName === lazy.fileName).imports.push(monaco.fileName);
+                },
+            ],
+            [
+                viteControls[2],
+                undefined,
+                /localQuickStart: expected at most one BSON module, got 2/,
+                (report) => {
+                    report.chunks
+                        .find((chunk) => chunk.fileName === lazy.fileName)
+                        .moduleIds.push(
+                            './node_modules/bson/lib/bson.mjs',
+                            './node_modules/foo/node_modules/bson/lib/bson.mjs',
+                        );
+                },
+            ],
+            [
+                viteControls[3],
+                (files) => {
+                    files.set(
+                        'extension/views.js',
+                        Buffer.concat([files.get('extension/views.js'), Buffer.from(';import(`${globalThis.x}`)')]),
+                    );
+                },
+                /views\.js: nonliteral dynamic import cannot be verified/,
+            ],
+        ];
+        for (const [name, mutateFiles, expected, mutateReport] of controls) {
+            const files = readVsix(filename);
+            mutateFiles?.(files);
+            let controlReports = reports;
+            if (mutateReport) {
+                controlReports = path.join(directory, name);
+                fs.mkdirSync(controlReports);
+                fs.copyFileSync(path.join(reports, 'host.json'), path.join(controlReports, 'host.json'));
+                const report = structuredClone(views);
+                mutateReport(report);
+                fs.writeFileSync(path.join(controlReports, 'views.json'), JSON.stringify(report));
+            }
+            const variant = path.join(directory, `${name}.vsix`);
+            writeVsix(variant, files);
+            assert.throws(() => inspect(variant, { ...options, reports: controlReports }), expected);
+            console.log(`PASS: ${name} rejected for the expected reason`);
+        }
+    } else {
+        for (const name of viteControls) {
+            console.log(`SKIP: ${name} (webpack views report)`);
+        }
+    }
 } finally {
     fs.rmSync(directory, { recursive: true, force: true });
 }
