@@ -50,8 +50,14 @@ zero or one, never duplicates. Every host graph chunk must have an `assetHashes`
 host report itself; ownership by a views report cannot substitute for host provenance.
 Non-Vite host reports fail with a regenerate message; the retained
 webpack graph reader and numeric `.e(chunkId)` checks apply only to webpack-owned views files.
-The `main` static closure (imports only) must exclude `@kubernetes/client-node`, preserving its
-dynamic discovery boundary. Browser graphs allow zero because today's webviews do not bundle
+The union of the `main` and awaited extension implementation static closures (imports only)
+must exclude `@kubernetes/client-node`, preserving its dynamic discovery boundary. The
+implementation must be the unique chunk with `facadeModuleId: './src/extension.ts'` and appear
+in `main`'s `dynamicImports`; a missing or changed boundary fails closed. This invariant does
+not follow dynamic children of the implementation, where lazy discovery legitimately loads the
+SDK. Full-VSIX negative controls cover eager SDK edges from both the loader and implementation
+(the latter mutates packaged bytes and matching report edges, hashes and sizes), and a missing
+implementation facade. Browser graphs allow zero because today's webviews do not bundle
 BSON, but reject duplicates. Webpack views retain the shared `views` entry fallback. With a Vite
 views report (`bundler: 'vite'`), each graph is the `views.js` entry's static import closure plus
 that view's lazy chunk and its static import closure, never every dynamic child. The lazy chunk's

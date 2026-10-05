@@ -724,7 +724,21 @@ function hostGraphs(report, files) {
         const { assets, modules } = viteChunkClosure(report, name, roots, files, { dynamic: true, host: true });
         graphs[name] = summarizeGraph(name, assets, modules, name === 'playgroundTsPlugin');
         if (name === 'main') {
-            const staticGraph = viteChunkClosure(report, name, roots, files, { host: true });
+            const implementations = report.chunks.filter((chunk) => chunk.facadeModuleId === './src/extension.ts');
+            assert.equal(
+                implementations.length,
+                1,
+                'main: expected exactly one extension implementation facade ./src/extension.ts',
+            );
+            const implementation = implementations[0];
+            assert.ok(
+                entry.dynamicImports?.includes(implementation.fileName),
+                'main: extension implementation must be a dynamic import of main',
+            );
+            // The thin loader awaits the implementation before activation; its static imports are startup code too.
+            const staticGraph = viteChunkClosure(report, name, [...roots, implementation.fileName], files, {
+                host: true,
+            });
             assert.ok(
                 ![...staticGraph.modules].some((id) => /\/node_modules\/@kubernetes\/client-node\//.test(id)),
                 'main: static closure must exclude @kubernetes/client-node; keep the SDK behind a dynamic import',

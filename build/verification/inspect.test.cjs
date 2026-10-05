@@ -224,6 +224,7 @@ function hostFixture() {
         },
         {
             fileName: 'extension-AbC12345.mjs',
+            facadeModuleId: './src/extension.ts',
             imports: ['bson.mjs', 'vscode', 'node:path', 'fs'],
             dynamicImports: ['kubernetes.mjs'],
             moduleIds: ['./src/extension.ts'],
@@ -317,11 +318,49 @@ test('host graph edges require report chunks and packaged chunks, and obsolete r
     assert.throws(() => hostGraphs(report, bundled), /missing host entry main/);
 });
 
-test('Kubernetes SDK must remain outside the entire main static closure', () => {
+test('Kubernetes SDK may be a dynamic child but must remain outside the main and implementation static closures', () => {
     const { report, bundled } = hostFixture();
     hostGraphs(report, bundled);
     report.chunks.find((chunk) => chunk.fileName === 'runtime.mjs').imports.push('kubernetes.mjs');
     assert.throws(() => hostGraphs(report, bundled), /main: static closure must exclude @kubernetes\/client-node/);
+});
+
+test('Kubernetes SDK cannot be eagerly imported by the awaited implementation or its static children', () => {
+    for (const fileName of ['extension-AbC12345.mjs', 'bson.mjs']) {
+        const { report, bundled } = hostFixture();
+        report.chunks.find((chunk) => chunk.fileName === fileName).imports.push('kubernetes.mjs');
+        assert.throws(() => hostGraphs(report, bundled), /main: static closure must exclude @kubernetes\/client-node/);
+    }
+});
+
+test('main requires a unique implementation facade, not just an extension module in the graph', () => {
+    for (const facadeModuleId of [null, './src/other-extension.ts']) {
+        const { report, bundled } = hostFixture();
+        report.chunks.find((chunk) => chunk.fileName === 'extension-AbC12345.mjs').facadeModuleId = facadeModuleId;
+        assert.throws(
+            () => hostGraphs(report, bundled),
+            /main: expected exactly one extension implementation facade \.\/src\/extension\.ts/,
+        );
+    }
+    const { report, bundled } = hostFixture();
+    report.chunks.find((chunk) => chunk.fileName === 'bson.mjs').facadeModuleId = './src/extension.ts';
+    assert.throws(
+        () => hostGraphs(report, bundled),
+        /main: expected exactly one extension implementation facade \.\/src\/extension\.ts/,
+    );
+});
+
+test('the implementation must be a dynamic import of main, not only statically or indirectly reachable', () => {
+    for (const imports of [[], ['extension-AbC12345.mjs']]) {
+        const { report, bundled } = hostFixture();
+        report.chunks[0].dynamicImports = [];
+        report.chunks[0].imports.push(...imports);
+        report.chunks.find((chunk) => chunk.fileName === 'runtime.mjs').dynamicImports.push('extension-AbC12345.mjs');
+        assert.throws(
+            () => hostGraphs(report, bundled),
+            /main: extension implementation must be a dynamic import of main/,
+        );
+    }
 });
 
 test('dynamic runtime externals are allowed only in host-owned .mjs, not views, CJS or other packages', () => {

@@ -147,6 +147,8 @@ try {
         chunk.moduleIds.some((id) => /\/node_modules\/@kubernetes\/client-node\//.test(id)),
     );
     assert.ok(kubernetesChunk, 'Proof requires Kubernetes SDK chunk');
+    const implementation = host.chunks.find((chunk) => chunk.facadeModuleId === './src/extension.ts');
+    assert.ok(implementation, 'Proof requires extension implementation facade ./src/extension.ts');
     const hostControls = [
         [
             'missing-host-lazy-chunk',
@@ -196,6 +198,30 @@ try {
                 report.chunks.find((chunk) => chunk.name === 'main').imports.push(kubernetesChunk.fileName);
             },
         ],
+        [
+            'kubernetes-in-extension-static-closure',
+            (files) => {
+                const file = `extension/${implementation.fileName}`;
+                files.set(
+                    file,
+                    Buffer.concat([Buffer.from(`import './${kubernetesChunk.fileName}';\n`), files.get(file)]),
+                );
+            },
+            /main: static closure must exclude @kubernetes\/client-node/,
+            (report) => {
+                report.chunks
+                    .find((chunk) => chunk.facadeModuleId === './src/extension.ts')
+                    .imports.push(kubernetesChunk.fileName);
+            },
+        ],
+        [
+            'missing-extension-implementation-boundary',
+            undefined,
+            /main: expected exactly one extension implementation facade \.\/src\/extension\.ts/,
+            (report) => {
+                report.chunks.find((chunk) => chunk.facadeModuleId === './src/extension.ts').facadeModuleId = null;
+            },
+        ],
     ];
     for (const [name, mutateFiles, expected, mutateReport] of hostControls) {
         const files = readVsix(filename);
@@ -211,6 +237,11 @@ try {
                 report.assetHashes[asset] = createHash('sha256')
                     .update(files.get(`extension/${asset}`))
                     .digest('hex');
+            }
+        }
+        for (const chunk of report.chunks) {
+            if (files.has(`extension/${chunk.fileName}`)) {
+                chunk.bytes = files.get(`extension/${chunk.fileName}`).length;
             }
         }
         fs.writeFileSync(path.join(controlReports, 'host.json'), JSON.stringify(report));
