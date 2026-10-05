@@ -441,16 +441,20 @@ test('Vite-owned numeric .e calls are not webpack chunk loaders', () => {
     inspectJavaScript(bundled, [report]);
 });
 
-test('Monaco foreign-module loader allowlist is scoped to one exact template in a Vite Monaco chunk', () => {
+test('Monaco module-loader allowlist is scoped to one exact template in a Vite Monaco chunk', () => {
     const filename = 'extension/monaco-AbC12345.js';
-    const source = 'import(`${globalThis.x}`);';
+    const source = 'import(`${t}`);';
     const report = { bundler: 'vite', chunkFormat: 'module', assetHashes: { 'monaco-AbC12345.js': 'fixture' } };
     const bundled = new Map([[filename, Buffer.from(source)]]);
     inspectJavaScript(bundled, [report]);
     bundled.set(filename, Buffer.from(source + source));
-    assert.throws(() => inspectJavaScript(bundled, [report]), /nonliteral dynamic import exceeds Monaco/);
+    assert.throws(
+        () => inspectJavaScript(bundled, [report]),
+        /nonliteral dynamic import exceeds monacoModuleLoaderImports allowlist/,
+    );
     for (const invalid of [
         'import(globalThis.x)',
+        'import(`${globalThis.x}`)',
         'import(`prefix${globalThis.x}`)',
         'import(`${globalThis.x}suffix`)',
         'import(`${globalThis.x}${globalThis.y}`)',
@@ -484,6 +488,59 @@ test('Monaco foreign-module loader allowlist is scoped to one exact template in 
         () => inspectJavaScript(entry, [{ ...viewReport, bundler: 'vite' }]),
         /views\.js: nonliteral dynamic import cannot be verified/,
     );
+});
+
+for (const worker of ['editor', 'json']) {
+    test(`Monaco ${worker} worker permits two reviewed loader calls, never identifiers or a third import`, () => {
+        const filename = `extension/${worker}.worker-AbC12345.js`;
+        const source = 'import(`${FileAccess.asBrowserUri(`${moduleId}.js`).toString(!0)}`);';
+        const report = {
+            bundler: 'vite',
+            chunkFormat: 'module',
+            assetHashes: { [`${worker}.worker-AbC12345.js`]: 'fixture' },
+        };
+        const bundled = new Map([[filename, Buffer.from(source)]]);
+        inspectJavaScript(bundled, [report]);
+        bundled.set(filename, Buffer.from(source.repeat(2)));
+        inspectJavaScript(bundled, [report]);
+        bundled.set(filename, Buffer.from(source.repeat(3)));
+        assert.throws(
+            () => inspectJavaScript(bundled, [report]),
+            /nonliteral dynamic import exceeds monacoModuleLoaderImports allowlist/,
+        );
+        bundled.set(filename, Buffer.from('import(`${t}`);'));
+        assert.throws(() => inspectJavaScript(bundled, [report]), /nonliteral dynamic import cannot be verified/);
+        bundled.set(filename, Buffer.from(source));
+        assert.throws(
+            () => inspectJavaScript(bundled, [{ ...report, bundler: 'webpack' }]),
+            /nonliteral dynamic import cannot be verified/,
+        );
+        const entry = new Map(files);
+        entry.set('extension/views.js', Buffer.from('export function render() {}; ' + source));
+        assert.throws(
+            () => inspectJavaScript(entry, [{ ...viewReport, bundler: 'vite' }]),
+            /views\.js: nonliteral dynamic import cannot be verified/,
+        );
+    });
+}
+
+test('Monaco loader calls require the reviewed asBrowserUri and toString member-call chain', () => {
+    const filename = 'extension/monaco-AbC12345.js';
+    const report = { bundler: 'vite', chunkFormat: 'module', assetHashes: { 'monaco-AbC12345.js': 'fixture' } };
+    const bundled = new Map([[filename, Buffer.from('import(`${FileAccess.asBrowserUri(`${n}.js`).toString(!0)}`);')]]);
+    inspectJavaScript(bundled, [report]);
+    for (const source of [
+        'import(`${FileAccess.asBrowserUri(`${n}.js`)}`)',
+        'import(`${FileAccess.other(`${n}.js`).toString(!0)}`)',
+        'import(`${FileAccess.asBrowserUri.toString(!0)}`)',
+        'import(`${FileAccess.asBrowserUri(`${n}.js`).other(!0)}`)',
+        'import(`${FileAccess.asBrowserUri(`${n}.js`)[toString](!0)}`)',
+        'import(`${FileAccess[asBrowserUri](`${n}.js`).toString(!0)}`)',
+        'import(`${loadModule(n)}`)',
+    ]) {
+        bundled.set(filename, Buffer.from(source));
+        assert.throws(() => inspectJavaScript(bundled, [report]), /nonliteral dynamic import cannot be verified/);
+    }
 });
 
 test('Vite expression-free template imports are static references, not allowlisted expressions', () => {

@@ -34,10 +34,11 @@ that view's lazy chunk and its static import closure, never every dynamic child.
 Local Quick Start and Atlas Credentials must exclude Monaco and SlickGrid by default for Vite;
 `--require-lightweight-views` forces the same assertion for webpack.
 
-Nonliteral imports fail except for the named Monaco foreign-module loader allowlist:
-`editorSimpleWorker.$loadForeignModule` in a Vite-owned `monaco-<hash>.js` may contain one
-``import(`${expression}`)`` (one expression, empty template quasis). It is unused in our editor
-worker host; webpack replaced it with a stub. Other files, template shapes and a second occurrence fail.
+Nonliteral imports fail except for `monacoModuleLoaderImports`, which permits one-expression,
+empty-quasi templates wrapping `asBrowserUri(...).toString(...)` calls in Vite-owned
+`monaco-<hash>.js` (maximum one) or `editor.worker-<hash>.js` / `json.worker-<hash>.js` (maximum two),
+or an Identifier in the Monaco chunk only, because our worker entries pass request-handler factories
+and foreign modules are unused.
 Expression-free template strings, also emitted by Vite's minifier, are resolved as literal strings
 for imports and URL assets; they do not use this allowlist.
 

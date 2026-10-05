@@ -22,7 +22,7 @@ while (args.length) {
 }
 const baseline = path.join(__dirname, 'baseline.json');
 const options = { baseline, reports };
-inspect(filename, options);
+const { manifestReport: originalManifestReport } = inspect(filename, options);
 const views = JSON.parse(fs.readFileSync(path.join(reports, 'views.json'), 'utf8'));
 const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'documentdb-broken-vsix-'));
 try {
@@ -108,8 +108,14 @@ try {
     const variant = path.join(directory, 'asset-added-and-removed-reported.vsix');
     writeVsix(variant, files);
     const { manifestReport } = inspect(variant, options);
-    assert.deepEqual(manifestReport.removed, ['extension/resources/vscode-documentdb-marketplace-logo.png']);
-    assert.deepEqual(manifestReport.added, ['extension/resources/proof-added.svg']);
+    assert.deepEqual(
+        manifestReport.removed,
+        [...originalManifestReport.removed, 'extension/resources/vscode-documentdb-marketplace-logo.png'].sort(),
+    );
+    assert.deepEqual(
+        manifestReport.added,
+        [...originalManifestReport.added, 'extension/resources/proof-added.svg'].sort(),
+    );
     console.log('PASS: asset-added-and-removed-reported reported without failing');
     const viteControls = ['missing-lazy-chunk', 'monaco-in-local-quick-start', 'duplicate-bson', 'nonliteral-import'];
     if (views.bundler === 'vite') {

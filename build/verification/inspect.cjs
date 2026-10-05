@@ -18,6 +18,12 @@ const viewModules = {
     atlasCredentials: './src/webviews/documentdb/atlasCredentials/AtlasCredentialsView.tsx',
     clusterDashboard: './src/webviews/documentdb/clusterDashboard/ClusterDashboard.tsx',
 };
+// Monaco's bootstrap loaders are unused: our ESM worker entries pass request-handler factories,
+// and we never use foreign modules. Keep their reviewed import shapes and counts tightly scoped.
+const monacoModuleLoaderImports = [
+    { filename: /^extension\/monaco-[A-Za-z0-9_-]+\.js$/, maximum: 1, allowIdentifier: true },
+    { filename: /^extension\/(?:editor|json)\.worker-[A-Za-z0-9_-]+\.js$/, maximum: 2, allowIdentifier: false },
+];
 const requiredFiles = [
     'extension.vsixmanifest',
     '[Content_Types].xml',
@@ -140,15 +146,30 @@ function literalString(node, allowTemplate = false) {
     }
 }
 
-function isMonacoForeignModuleLoader(filename, source) {
-    // editorSimpleWorker.$loadForeignModule is unused in our editor worker host; webpack stubbed it.
-    return (
-        /^extension\/monaco-[A-Za-z0-9_-]+\.js$/.test(filename) &&
-        source.type === 'TemplateLiteral' &&
-        source.expressions.length === 1 &&
-        source.quasis.length === 2 &&
-        source.quasis.every((quasi) => quasi.value.raw === '')
-    );
+function monacoModuleLoaderImportLimit(filename, source) {
+    const allowance = monacoModuleLoaderImports.find((entry) => entry.filename.test(filename));
+    if (
+        !allowance ||
+        source.type !== 'TemplateLiteral' ||
+        source.expressions.length !== 1 ||
+        source.quasis.length !== 2 ||
+        !source.quasis.every((quasi) => quasi.value.raw === '')
+    ) {
+        return 0;
+    }
+    const expression = source.expressions[0];
+    const callee = expression.callee;
+    const uri = callee?.object;
+    const workerForm =
+        expression.type === 'CallExpression' &&
+        callee.type === 'MemberExpression' &&
+        !callee.computed &&
+        callee.property.name === 'toString' &&
+        uri.type === 'CallExpression' &&
+        uri.callee.type === 'MemberExpression' &&
+        !uri.callee.computed &&
+        uri.callee.property.name === 'asBrowserUri';
+    return workerForm || (allowance.allowIdentifier && expression.type === 'Identifier') ? allowance.maximum : 0;
 }
 
 function inspectJavaScript(files, reports) {
@@ -166,7 +187,7 @@ function inspectJavaScript(files, reports) {
         const commonJs = filename.endsWith('.cjs') || compilations.some((report) => report.chunkFormat === 'commonjs');
         const viteOwned = compilations.some((report) => report.bundler === 'vite');
         const webpackCompilations = compilations.filter((report) => report.bundler !== 'vite');
-        let monacoForeignModuleImports = 0;
+        let monacoModuleLoaderImportCount = 0;
         assert.ok(!/127\.0\.0\.1:18080|DEVSERVER/.test(source), `${filename}: development-server string in production`);
         const tree = parse(source, { ecmaVersion: 'latest', sourceType: 'module', allowReturnOutsideFunction: true });
         if (filename === 'extension/views.js') {
@@ -189,11 +210,12 @@ function inspectJavaScript(files, reports) {
                 assert.ok(!(commonJs && node.meta.name === 'import'), `${filename}: import.meta in a CommonJS bundle`);
             },
             ImportExpression(node) {
-                if (viteOwned && isMonacoForeignModuleLoader(filename, node.source)) {
-                    monacoForeignModuleImports++;
+                const maximum = viteOwned ? monacoModuleLoaderImportLimit(filename, node.source) : 0;
+                if (maximum > 0) {
+                    monacoModuleLoaderImportCount++;
                     assert.ok(
-                        monacoForeignModuleImports <= 1,
-                        `${filename}: nonliteral dynamic import exceeds Monaco foreign-module loader allowlist`,
+                        monacoModuleLoaderImportCount <= maximum,
+                        `${filename}: nonliteral dynamic import exceeds monacoModuleLoaderImports allowlist`,
                     );
                     return;
                 }
