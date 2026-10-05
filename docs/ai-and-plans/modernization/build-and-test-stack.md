@@ -2287,6 +2287,27 @@ Stage 0 must also be made.
     operator. Still unconfirmed: item 2 (three themes in all five webviews), item 4 (three
     L2-dev scenarios in the integrated browser) and the three item 5 decisions. **G4 is not
     yet passed.**
+  - **G4 passed (operator, 2026-10-05).** The operator's confirmations, after the progress note
+    above:
+    - **Item 2:** "themes tests passed on vsix."
+    - **Item 4:** L2-dev was opened in the integrated browser. The operator reported that "all
+      links on quick start seemed to resolve to the same intro page of the quick start
+      webview, but I'm fine with this", and that the colour themes worked there too.
+      Explanation: the Local Quick Start scenarios after `introduction` reach their state
+      through typed click steps, which only the runner helper performs. A route opened by hand
+      shows the entry state, as documented in `live-preview-playwright.md`. The helper's runs
+      reach every state (42/42 routes, 60/60 assertions).
+      **Follow-up, not done:** run a scenario's steps automatically when its route is opened
+      by hand. Carried into the Stage 8 hand-over with L2-dev.
+    - **Item 5, decisions:** "decisions, good." Recorded as confirming L1 option A and the
+      Stage 4 decisions as recorded inline in this plan. No separate `decisions.md` was
+      created; that is the coordinator's reading of the reply, which did not address the
+      file. No rationale beyond the operator's words is recorded.
+    - **PR #867:** not closed, by operator instruction. A note on the PR
+      ([comment](https://github.com/microsoft/vscode-documentdb/pull/867#issuecomment-5998036570))
+      lists what #880 already covers and keeps #867 on hold until the modernization completes.
+
+    Stage 5 may start.
 
 - **Stage 4 record commits:** `44d5488e`, `7abe176b`, `19430f47`, `68079e7a`, `3f7b736c`,
   `9dbb9436` and the commit adding this reconciliation; every implementation commit is cited
@@ -2428,6 +2449,10 @@ Stage 0 must also be made.
   production fixes: proxy routing through VS Code (#3367) and the URI handler activation race
   (#3288). Its starting point is [e2e-testing-strategy.md](./e2e-testing-strategy.md), plus the
   findings G7 routed to it from the Stage 7 re-evaluation.
+  - **Added at G4 (2026-10-05):** L2-dev follow-up: make a scenario route that is opened by hand
+    run its typed steps, so it shows its target state instead of the view's entry state.
+    PR #867 is on hold until the modernization completes; decide then whether to close it as
+    superseded, with credit, or to carry anything over.
 
 ### After this iteration
 
