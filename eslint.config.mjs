@@ -74,6 +74,14 @@ export default ts.config(
                     ],
                 },
             ],
+            'no-restricted-syntax': [
+                'error',
+                {
+                    selector: "ImportDeclaration[source.value='vscode'] > ImportDefaultSpecifier",
+                    message:
+                        "The extension host runs as an ES module, and VS Code's `vscode` module has no default export. Use `import * as vscode from 'vscode'`.",
+                },
+            ],
             'no-unused-vars': ['error', { argsIgnorePattern: '^_' }],
             'no-useless-escape': 'error',
             'license-header/header': [
