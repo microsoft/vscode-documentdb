@@ -20,11 +20,13 @@ function writeFixtureVsix(filename: string, files: Map<string, Buffer>): void {
 }
 
 describe('Stage 0 L2 production browser harness', (): void => {
-    it.each(['views.js', 'dist/views.js'])('uses the shared extension-only extractor for %s layout', (entry: string): void => {
+    it.each([
+        ['views.js', false], ['dist/views.js', false], ['views.js', true], ['dist/views.js', true],
+    ])('uses the shared extension-only extractor for %s layout (marked CSS: %s)', (entry: string, markedCss: boolean): void => {
         const temporary = mkdtempSync(join(tmpdir(), 'documentdb-l2-extraction-test-'));
         const archive = join(temporary, 'fixture.vsix');
         const output = join(temporary, 'generated');
-        const contents = Buffer.from('export function render() {}');
+        const contents = Buffer.from(`export function render() {}${markedCss ? ' /* data-documentdb-views-css */' : ''}`);
         try {
             writeFixtureVsix(archive, new Map([
                 ['extension/package.json', Buffer.from('{"name":"fixture"}')],
@@ -46,6 +48,13 @@ describe('Stage 0 L2 production browser harness', (): void => {
             expect(existsSync(join(output, 'site/pages/documentView.html'))).toBe(true);
             expect(existsSync(join(output, 'site/pages/localQuickStart.html'))).toBe(true);
             expect(existsSync(join(output, 'site/pages/collectionView-broken-css.html'))).toBe(true);
+            const negative = readFileSync(join(output, 'site/pages/collectionView-broken-css.html'), 'utf8');
+            expect(negative).toContain(`"brokenCss":"${markedCss ? 'bundle-stylesheet' : 'all-styles'}"`);
+            for (const view of Object.keys(fixtures)) {
+                expect(readFileSync(join(output, 'site/pages', `${view}.html`), 'utf8')).toContain('"brokenCss":false');
+            }
+            expect(readFileSync(join(output, 'manifest.json'), 'utf8')).toContain(markedCss
+                ? 'Remove only style[data-documentdb-views-css]' : 'Remove all style elements for webpack/style-loader');
         } finally {
             vi.restoreAllMocks();
             rmSync(temporary, { recursive: true });

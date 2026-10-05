@@ -8,7 +8,7 @@ import { cpSync, existsSync, lstatSync, mkdirSync, readFileSync, realpathSync, w
 import { createServer, type Server } from 'node:http';
 import { extname, join, relative, resolve, sep } from 'node:path';
 import { ModuleKind, ScriptTarget, transpileModule } from 'typescript';
-import { fixtures } from './fixtures';
+import { fixtures, type HarnessFixture } from './fixtures';
 import { runIntegratedCheck } from './playwright';
 import { augmentTemplate, hostTemplate } from './template';
 import { vsixTools } from './vsix';
@@ -45,6 +45,8 @@ export function prepare(options: HarnessOptions): void {
     const unpacked = join(options.output, 'unpacked');
     vsixTools.extractVsix(resolve(options.vsix), unpacked);
     const assetDirectory = flatLayout ? unpacked : join(unpacked, 'dist');
+    const brokenCss: HarnessFixture['brokenCss'] = readFileSync(join(assetDirectory, 'views.js'), 'utf8')
+        .includes('data-documentdb-views-css') ? 'bundle-stylesheet' : 'all-styles';
     const site = join(options.output, 'site');
     mkdirSync(join(site, 'pages'), { recursive: true });
     cpSync(assetDirectory, join(site, 'artifact'), { recursive: true });
@@ -60,7 +62,7 @@ export function prepare(options: HarnessOptions): void {
         writeFileSync(join(site, 'pages', `${view}.html`), augmentTemplate(html, { ...fixture, view, assetRoot, brokenCss: false }, options.prefix));
         if (view === 'collectionView') {
             writeFileSync(join(site, 'pages', `${view}-broken-css.html`),
-                augmentTemplate(html, { ...fixture, view, assetRoot, brokenCss: true }, options.prefix));
+                augmentTemplate(html, { ...fixture, view, assetRoot, brokenCss }, options.prefix));
         }
     }
     const snippet = `${runIntegratedCheck.toString()}\nreturn await runIntegratedCheck(page, PAGE_URL, EXPECT_CSS_FAILURE);\n`;
@@ -83,7 +85,9 @@ return results;
         template: 'packages/vscode-ext-webview/src/host/WebviewController.ts',
         templateSha256: createHash('sha256').update(readFileSync(join(options.repository, 'packages/vscode-ext-webview/src/host/WebviewController.ts'))).digest('hex'),
         pages, negative,
-        cssNegativeControl: 'Remove production bundle-inserted style elements; retain host theme and CSP.',
+        cssNegativeControl: brokenCss === 'bundle-stylesheet'
+            ? 'Remove only style[data-documentdb-views-css]; retain Fluent/Griffel runtime styles, host theme and CSP; require a removed bundle stylesheet.'
+            : 'Remove all style elements for webpack/style-loader; retain host theme and CSP.',
     }, null, 2));
 }
 

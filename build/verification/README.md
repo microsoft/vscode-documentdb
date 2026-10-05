@@ -127,6 +127,9 @@ that editor's synchronized model: Unicode highlighting for Collection View, and 
 diagnostics for Document View. Collection View's custom query validator runs on the main thread and
 is not counted as worker proof. A sixth page deliberately drops CSS; its style checks
 must fail while its other diagnostics remain clean. Reports are persisted in the generated output.
+Generation detects Vite's `data-documentdb-views-css` marker in the extracted `views.js`: the negative
+page removes only that marked bundle stylesheet (including late insertions), preserves Fluent/Griffel
+runtime styles, and fails if no marked stylesheet was removed; webpack packages retain all-style removal.
 Stop the server after verification.
 
 This is not a real `vscode-webview://` test, an extension-host E2E suite, or proof of backend behavior.

@@ -63,6 +63,8 @@ describe('Stage 0 L2 fixture transport', (): void => {
 
     it.each([
         { view: 'unknown-view' },
+        { brokenCss: true },
+        { brokenCss: 'unknown-mode' },
         { content: [true] },
         { styles: [{ selector: '.fixture', property: 7, expected: 'flex' }] },
         { rpc: { 'fixture.query': { type: 'query', results: 'invalid' } } },
@@ -262,5 +264,86 @@ describe('Stage 0 L2 fixture transport', (): void => {
         } }));
         expect(window.stage0Harness.editorProbeReady()).toBe(true);
         expect((await window.stage0Harness.check()).errors).toEqual([]);
+    });
+
+    describe('CSS-negative control', (): void => {
+        const observers: MutationObserver[] = [];
+
+        beforeEach((): void => {
+            const NativeMutationObserver = window.MutationObserver;
+            vi.stubGlobal('MutationObserver', class extends NativeMutationObserver {
+                public constructor(callback: MutationCallback) {
+                    super(callback);
+                    observers.push(this);
+                }
+            });
+        });
+        afterEach((): void => {
+            for (const observer of observers) {
+                observer.disconnect();
+            }
+            observers.length = 0;
+            vi.unstubAllGlobals();
+            document.head.querySelectorAll('style, link').forEach((node): void => { node.remove(); });
+        });
+
+        it('removes existing and late Vite bundle styles while retaining Fluent/Griffel styles and host CSS', async (): Promise<void> => {
+            document.head.innerHTML = '<link rel="stylesheet" href="/stage0/l2/theme.css"><style data-make-styles-bucket="d">.fluent { display: flex; }</style><style data-documentdb-views-css>.fixture { display: flex; }</style>';
+            await boot({ ...base, brokenCss: 'bundle-stylesheet' });
+            expect(document.querySelector('style[data-documentdb-views-css]')).toBeNull();
+            document.head.insertAdjacentHTML('beforeend', '<style data-documentdb-views-css>.late { display: flex; }</style><style data-make-styles-bucket="r">.runtime { display: block; }</style>');
+            await Promise.resolve();
+            expect(document.querySelector('style[data-documentdb-views-css]')).toBeNull();
+            expect(document.querySelectorAll('style[data-make-styles-bucket]')).toHaveLength(2);
+            expect(document.querySelector('link[rel="stylesheet"]')?.getAttribute('href')).toBe('/stage0/l2/theme.css');
+            const report = await window.stage0Harness.check();
+            expect(report.errors).toEqual([]);
+            expect(report.brokenCss).toBe('bundle-stylesheet');
+        });
+
+        it('reports measured style failures with no unrelated diagnostics after removing the bundle stylesheet', async (): Promise<void> => {
+            await boot({ ...base, brokenCss: 'bundle-stylesheet',
+                styles: [{ selector: '#css-probe', property: 'display', expected: 'flex' }] });
+            document.body.insertAdjacentHTML('beforeend', '<div id="css-probe">Probe</div><style data-documentdb-views-css>#css-probe { display: flex; }</style>');
+            await Promise.resolve();
+            const report = await window.stage0Harness.check();
+            expect(report.styles).toEqual([{ selector: '#css-probe', property: 'display', expected: 'flex', actual: 'block' }]);
+            expect(report.errors).toEqual(['Style #css-probe display: expected flex, got block', 'Empty layout: #css-probe']);
+        });
+
+        it('fails loudly if only an unmarked or renamed stylesheet is inserted, but accepts a later marked removal', async (): Promise<void> => {
+            await boot({ ...base, brokenCss: 'bundle-stylesheet' });
+            document.head.insertAdjacentHTML('beforeend', '<style data-renamed-views-css>.fixture { display: flex; }</style>');
+            await Promise.resolve();
+            expect((await window.stage0Harness.check()).errors).toEqual(['CSS-negative control removed no bundle stylesheet']);
+            expect(document.querySelector('style[data-renamed-views-css]')).not.toBeNull();
+            document.head.insertAdjacentHTML('beforeend', '<style data-documentdb-views-css>.fixture { display: flex; }</style>');
+            await Promise.resolve();
+            expect((await window.stage0Harness.check()).errors).toEqual([]);
+        });
+
+        it('retains the webpack all-styles behavior for existing and late styles without requiring a marker', async (): Promise<void> => {
+            document.head.innerHTML = '<link rel="stylesheet" href="/stage0/l2/theme.css"><style>.fixture { display: flex; }</style>';
+            await boot({ ...base, brokenCss: 'all-styles' });
+            expect(document.querySelector('style')).toBeNull();
+            document.head.insertAdjacentHTML('beforeend', '<style data-make-styles-bucket="d">.fluent { display: flex; }</style><style data-documentdb-views-css>.fixture { display: flex; }</style>');
+            await Promise.resolve();
+            expect(document.querySelector('style')).toBeNull();
+            expect(document.querySelector('link[rel="stylesheet"]')).not.toBeNull();
+            const report = await window.stage0Harness.check();
+            expect(report.errors).toEqual([]);
+            expect(report.brokenCss).toBe('all-styles');
+        });
+
+        it('never removes styles or requires a bundle stylesheet on normal pages', async (): Promise<void> => {
+            document.head.innerHTML = '<style data-make-styles-bucket="d">.fluent { display: flex; }</style>';
+            await boot();
+            expect((await window.stage0Harness.check()).errors).toEqual([]);
+            document.head.insertAdjacentHTML('beforeend', '<style data-documentdb-views-css>.fixture { display: flex; }</style>');
+            await Promise.resolve();
+            expect(document.querySelectorAll('style')).toHaveLength(2);
+            expect((await window.stage0Harness.check()).errors).toEqual([]);
+            expect(observers).toHaveLength(0);
+        });
     });
 });

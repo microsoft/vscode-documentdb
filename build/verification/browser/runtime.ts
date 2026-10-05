@@ -15,7 +15,7 @@ export interface BrowserReport {
     readonly styles: readonly { selector: string; property: string; actual: string; expected: string }[];
     readonly chunks: readonly string[];
     readonly worker: EditorWorkerProof | undefined;
-    readonly brokenCss: boolean;
+    readonly brokenCss: HarnessFixture['brokenCss'];
 }
 
 export interface EditorWorkerProof {
@@ -66,7 +66,9 @@ function isHarnessFixture(value: unknown): value is HarnessFixture {
         clusterDashboard: true, collectionView: true, documentView: true, localQuickStart: true, atlasCredentials: true,
     } satisfies Record<WebviewName, boolean>;
     return isObject(value) && typeof value.view === 'string' && Object.hasOwn(views, value.view) &&
-        typeof value.assetRoot === 'string' && typeof value.brokenCss === 'boolean' && typeof value.monaco === 'boolean' &&
+        typeof value.assetRoot === 'string' &&
+        (value.brokenCss === false || value.brokenCss === 'bundle-stylesheet' || value.brokenCss === 'all-styles') &&
+        typeof value.monaco === 'boolean' &&
         Object.hasOwn(value, 'config') && isStringArray(value.content) && isUnknownArray(value.styles) &&
         value.styles.every(isStyleExpectation) && isObject(value.rpc) && Object.values(value.rpc).every(isRpcFixture);
 }
@@ -286,13 +288,20 @@ window.acquireVsCodeApi = <StateType = unknown>(): WebviewApi<StateType> => {
     };
 };
 
-// With style-loader, removing an external stylesheet is not a valid negative control:
-// the production CSS lives in JS. This variant drops ONLY styles inserted by the bundle.
+// Production CSS lives in JS: remove only Vite's marked bundle stylesheet, preserving
+// Fluent/Griffel runtime styles; webpack/style-loader still requires removing all styles.
+let removedBundleStylesheets = 0;
 if (fixture.brokenCss) {
     const stripStyles = (): void => {
-        document.querySelectorAll('style').forEach((style): void => { style.remove(); });
+        const styles = document.querySelectorAll(fixture.brokenCss === 'bundle-stylesheet'
+            ? 'style[data-documentdb-views-css]' : 'style');
+        if (fixture.brokenCss === 'bundle-stylesheet') {
+            removedBundleStylesheets += styles.length;
+        }
+        styles.forEach((style): void => { style.remove(); });
     };
     new MutationObserver(stripStyles).observe(document.documentElement, { childList: true, subtree: true });
+    stripStyles();
 }
 
 function ready(): boolean {
@@ -304,6 +313,9 @@ function ready(): boolean {
 
 async function check(): Promise<BrowserReport> {
     const failures = [...errors];
+    if (fixture.brokenCss === 'bundle-stylesheet' && removedBundleStylesheets === 0) {
+        failures.push('CSS-negative control removed no bundle stylesheet');
+    }
     if (!ready()) {
         failures.push(`Fixture content has not settled: ${fixture.content.join(', ')}`);
     }

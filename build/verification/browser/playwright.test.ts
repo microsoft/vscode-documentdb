@@ -66,8 +66,8 @@ describe('Stage 0 L2 integrated browser helper', (): void => {
         expect(page.off).toHaveBeenCalledTimes(4);
     });
 
-    it('accepts only an explicitly broken CSS variant with measured CSS failures', async (): Promise<void> => {
-        const page = fixturePage({ ...good, brokenCss: true, errors: ['Style .slick-cell position: expected absolute, got static'] });
+    it.each(['bundle-stylesheet', 'all-styles'] as const)('accepts only an explicitly broken %s variant with measured CSS failures', async (brokenCss): Promise<void> => {
+        const page = fixturePage({ ...good, brokenCss, errors: ['Style .slick-cell position: expected absolute, got static'] });
         const report = await runIntegratedCheck(page, 'http://localhost/stage0/l2/pages/collectionView-broken-css.html', true);
         expect(report.verified).toBe(true);
         const unbroken = fixturePage(good);
@@ -75,9 +75,16 @@ describe('Stage 0 L2 integrated browser helper', (): void => {
     });
 
     it('does not treat a pageerror as proof that CSS checks work', async (): Promise<void> => {
-        const page = fixturePage({ ...good, brokenCss: true,
+        const page = fixturePage({ ...good, brokenCss: 'bundle-stylesheet',
             errors: ['Style .slick-cell position: expected absolute, got static', 'pageerror: unrelated runtime failure'] });
         await expect(runIntegratedCheck(page, 'http://localhost/stage0/l2/pages/collectionView-broken-css.html', true)).rejects.toThrow('negative control');
+    });
+
+    it('rejects a missing bundle stylesheet even when style checks fail', async (): Promise<void> => {
+        const page = fixturePage({ ...good, brokenCss: 'bundle-stylesheet',
+            errors: ['Style .slick-cell position: expected absolute, got static', 'CSS-negative control removed no bundle stylesheet'] });
+        await expect(runIntegratedCheck(page, 'http://localhost/stage0/l2/pages/collectionView-broken-css.html', true))
+            .rejects.toThrow('CSS-negative control removed no bundle stylesheet');
     });
 
     it('drives Local Quick Start out of introduction', async (): Promise<void> => {

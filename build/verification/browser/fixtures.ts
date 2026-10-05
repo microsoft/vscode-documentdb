@@ -48,7 +48,7 @@ export interface StyleExpectation {
 export interface HarnessFixture extends ViewFixture {
     readonly view: WebviewName;
     readonly assetRoot: string;
-    readonly brokenCss: boolean;
+    readonly brokenCss: false | 'bundle-stylesheet' | 'all-styles';
 }
 
 function reply<T>(type: RpcFixture['type'], result: T): RpcFixture {
