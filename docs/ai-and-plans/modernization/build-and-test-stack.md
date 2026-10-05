@@ -2204,8 +2204,8 @@ Stage 0 must also be made.
       - Type negatives: an unknown procedure (TS2353) and a wrong output shape (TS2322).
       - Every route in all three themes: **42/42 ready, 60/60 assertions, 0 errors**, reproduced
         independently by the coordinator.
-      - Failure rules: a missing fixture produced `No query fixture for
-        localQuickStart.getDockerStatus`, and an injected `console.error` produced `failed`.
+      - Failure rules: a missing fixture for `localQuickStart.getDockerStatus` and an injected
+        `console.error` each produced `failed`, with the reason recorded.
       - **Mutation proof:** with `457b913e`'s behaviour reverted by hand (the install
         call-to-action always opens the Docker Engine guide), exactly the
         `docker-missing-windows` and `docker-missing-mac` Docker Desktop assertions failed
