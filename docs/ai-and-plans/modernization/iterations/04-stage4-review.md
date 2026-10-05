@@ -103,7 +103,14 @@ up; pre-existing author artifacts were not deleted. Only this review file is com
   approve/reverse the manifest decision with this lost coverage disclosed; do not equate the
   present eleven controls with preservation of the old missing-file invariant.
 - **Copilot comment:** none.
-- **Author decision:** _pending_
+- **Author decision (coordinator, 2026-10-05; not an operator decision):** accepted; option 1
+  implemented in `dda2734c`. Manifest-declared local paths (17, derived generically from the
+  packaged `package.json`) and an explicit, commented list of 22 runtime-read assets (the shell
+  `.d.ts`, prompt bodies, panel and tree icons, debug overrides) are hard failures again.
+  Unrelated file drift stays informational. New controls `missing-contributed-grammar` and
+  `missing-runtime-asset` reject the reviewer's two probes with their specific messages. The
+  plan's claim that "hard failures stay for every invariant" was qualified in the Stage 4
+  record. The manifest decision itself still needs the operator at G4.
 
 ### S4-F02: the Monaco allowance identifies a syntax slot, not an unused loader call
 
@@ -141,7 +148,12 @@ up; pre-existing author artifacts were not deleted. Only this review file is com
 - **Recommended:** option 1 before treating the allowlist as a general non-literal-import guard
   in subsequent stages. Preserve fail-closed count limits and reviewed source reasoning.
 - **Copilot comment:** none.
-- **Author decision:** _pending_
+- **Author decision (coordinator, 2026-10-05; not an operator decision):** accepted; option 1
+  implemented in `3bb7e09b`. Both allowed forms must be inside a function. The identifier form
+  must be bound in its enclosing scope from `<X>.asBrowserUri(…).toString(…)` (checked with an
+  acorn ancestor walk). The filename, ownership and count limits are unchanged. New control
+  `allowlisted-shape-at-top-level` rejects the reviewer's probe. Option 2 (patching Monaco's
+  loaders) was rejected as more intrusive than the risk justifies.
 
 ### S4-F03: artifact runtime checks pass, but they do not close the real-origin G4 gate
 
@@ -184,7 +196,10 @@ up; pre-existing author artifacts were not deleted. Only this review file is com
 - **Recommended:** option 1. No source change on this finding; do not close G4 based solely on
   the static browser and activation checks.
 - **Copilot comment:** none.
-- **Author decision:** _pending_
+- **Author decision (coordinator, 2026-10-05; not an operator decision):** accepted as
+  information; no source change. The real-origin, theme, worker, font and F5/HMR checks are
+  listed for the operator at G4, and G4 is not claimed as passed. The reviewer's one-off
+  L2-dev timeout (Windows, light theme) is recorded in the Stage 4 record as a watch item.
 
 ## Independent sweep
 

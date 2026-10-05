@@ -1932,6 +1932,12 @@ Stage 0 must also be made.
     the Stage 6 size budget pulled forward. Not chosen: Stage 6 owns the budget. This applies
     Stage 6's "apply the L1 manifest decision" task early; the size budget stays in Stage 6.
     Confirm or reverse at G4.
+    - **Correction (review S4-F01, 2026-10-05).** "Hard failures stay for every invariant" was
+      not true of `b47627f1` as first landed. The exact list had also protected non-JavaScript
+      runtime assets: deleting the playground grammar or the shell `.d.ts` still passed L1.
+      Fixed in `dda2734c`. Paths declared in the packaged manifest (17) and an explicit,
+      commented list of runtime-read assets (22) are hard failures again; other drift stays
+      informational. At G4, judge option A with this history in view.
 - **Goal:** each webview loads only what it uses. Today `webpack.config.views.js` forces a single
   6.4 MB `views.js` (`LimitChunkCountPlugin({ maxChunks: 1 })`), so Local Quick Start and Atlas
   Credentials load Monaco and SlickGrid without using either.
@@ -2225,6 +2231,59 @@ Stage 0 must also be made.
   `vscode-webview://` origin; F5 plus watch give a working dev loop with HMR. Open three L2-dev
   scenarios in the integrated browser to confirm the agent loop works. Decide whether to close
   PR #867 with credit to its author, now that its goal is covered.
+- **Stage 4 review (`c24216e7`):** GPT-6.1 Sol in a fresh session with no authorship context,
+  [04-stage4-review.md](./iterations/04-stage4-review.md). Departure from this stage's pick (GPT-6
+  Sol): operator instruction. The review is partly same-family, because GPT-6.1 Sol also wrote
+  most Stage 4 tasks; Claude Opus 5.5 wrote the Vite configuration and coordinated.
+  - **Findings:** S4-F01 (medium, lost missing-asset coverage) fixed in `dda2734c`. S4-F02 (low,
+    the Monaco loader allowance accepted any identifier) fixed in `3bb7e09b`. S4-F03 (info,
+    real-origin checks remain G4 work) accepted.
+  - **Decisions:** recorded in the review file by the coordinator, not the operator.
+  - **After the fixes:** `prove:vsix` prints 14 lines (`missing-contributed-grammar`,
+    `missing-runtime-asset` and `allowlisted-shape-at-top-level` added). Tests: 37 inspector
+    tests, `test:verification` 63 Node and 82 browser tests.
+  - **Watch item:** the reviewer's first full L2-dev run had one timeout
+    (`/localQuickStart/docker-missing-windows/light`, waiting for the install call). The full
+    rerun and five isolated retries passed; no cause was found. Track it if it recurs.
+- **Automated verification results (2026-10-05):**
+  - **L0:** `npm run build` passes. Touched unit tests pass (`src/webviews/_integration` and
+    Local Quick Start: 11 files, 147 tests). `test:verification` passes. Scoped ESLint on the
+    31 changed script files: 0 errors (25 warnings, mostly in existing harness files). Prettier
+    is clean on changed files inside its globs.
+  - **CI run [37305697560](https://github.com/microsoft/vscode-documentdb/actions/runs/37305697560)
+    at `9dbb9436`, before the review fixes (dispatch with `enforce_full_run`): all four jobs
+    green.**
+    - Code Quality & Tests: Vitest 297 files.
+    - Build & Package: the default build is now Vite.
+    - L1 on the GitHub-built VSIX: the 11 proof lines, and the same per-view graph sizes as
+      locally.
+    - L3: `L3 PASS` and `L3 PROOF PASS`.
+    - The review-fix commits are pushed with this record; their CI run is reported in the
+      hand-over, not here.
+  - **L2 (main gate):** passed on the default-built VSIX (SHA-256 `222b2c13…`), recorded under
+    the L2 task, and again after the core extraction. It ran headless, because the integrated
+    browser tools were unavailable.
+  - **L2-dev:** 42/42 routes and 60/60 assertions, with the mutation proof.
+- **G4 status: not passed.** Stage 4's implementation and the agents' automated checks are
+  complete; the operator gate has not run. Operator-only checks:
+  1. The manual checklist on the installed VSIX, in a real `vscode-webview://`: all five
+     panels, Monaco editing, a worker round-trip, and no worker, font, CSP or preload errors in
+     DevTools.
+  2. Dark, light and high-contrast themes in all five webviews.
+  3. F5 with `Watch`: Vite dev server, the panel loads from it, HMR updates a component.
+  4. Three L2-dev scenarios in the integrated browser.
+  5. Decisions:
+     - confirm or reverse L1 option A (see S4-F01);
+     - decide whether to close PR #867 with credit to its author;
+     - say whether to add Stage 4's decisions (L1 option A, the worker trampoline,
+       `keepNames` off, Rolldown chunk groups) to a feature `decisions.md`. None exists for the
+       modernization work; the plan's decision log and this record hold them for now.
+
+  Windows and macOS, and the pre-release package script, were not run by the agents.
+
+- **Stage 4 record commits:** `44d5488e`, `7abe176b`, `19430f47`, `68079e7a`, `3f7b736c`,
+  `9dbb9436` and the commit adding this reconciliation; every implementation commit is cited
+  under its task above.
 
 ### Stage 5: extension host to ESM and Vite
 
