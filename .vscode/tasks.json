@@ -29,7 +29,27 @@
             "script": "watch:ext",
             "group": "build",
             "isBackground": true,
-            "problemMatcher": ["$ts-webpack-watch", "$tslint-webpack-watch"],
+            "problemMatcher": {
+                "owner": "vite-ext",
+                "fileLocation": ["relative", "${workspaceFolder}"],
+                "pattern": [
+                    {
+                        "regexp": "^\\[builtin:vite-transform\\]\\s+(.+)$",
+                        "message": 1
+                    },
+                    {
+                        "regexp": "^\\s*╭─\\[\\s+(.+):(\\d+):(\\d+)\\s+\\]\\s*$",
+                        "file": 1,
+                        "line": 2,
+                        "column": 3
+                    }
+                ],
+                "background": {
+                    "activeOnStart": true,
+                    "beginsPattern": "^build started\\.\\.\\.$",
+                    "endsPattern": "^\\[vite-ext\\] host and tsPlugin ready\\.$"
+                }
+            },
             "presentation": {
                 "echo": true,
                 "reveal": "always",

@@ -3,7 +3,7 @@
   "version": "0.2.0",
   "configurations": [
     {
-      "name": "Defaut: Launch Extension (webpack)",
+      "name": "Default: Launch Extension (Vite)",
       "type": "extensionHost",
       "request": "launch",
       "runtimeExecutable": "${execPath}",
@@ -11,7 +11,7 @@
         "--profile=noExtensionsProfile", // uses a local profile with a limited number of installed extensions
         "--extensionDevelopmentPath=${workspaceFolder}/dist"
       ],
-      "outFiles": ["${workspaceFolder}/dist/**/*.js"],
+      "outFiles": ["${workspaceFolder}/dist/**/*.{js,mjs,cjs}"],
       "preLaunchTask": "Watch",
       "autoAttachChildProcesses": true,
       "debugWebWorkerHost": true,
@@ -35,7 +35,7 @@
       }
     },
     {
-      "name": "Launch Extension + AzureResources (webpack)",
+      "name": "Launch Extension + AzureResources (Vite)",
       "type": "extensionHost",
       "request": "launch",
       "runtimeExecutable": "${execPath}",
@@ -44,7 +44,7 @@
         "--extensionDevelopmentPath=${workspaceFolder}/dist",
         "--extensionDevelopmentPath=${workspaceFolder}/../vscode-azureresourcegroups"
       ],
-      "outFiles": ["${workspaceFolder}/dist/**/*.js", "${workspaceFolder}/../vscode-azureresourcegroups/out/**/*.js"],
+      "outFiles": ["${workspaceFolder}/dist/**/*.{js,mjs,cjs}", "${workspaceFolder}/../vscode-azureresourcegroups/out/**/*.js"],
       "preLaunchTask": "Watch",
       "autoAttachChildProcesses": true,
       "debugWebWorkerHost": true,
@@ -87,7 +87,7 @@
       "port": 5870,
       "sourceMaps": true,
       "restart": true,
-      "outFiles": ["${workspaceFolder}/out/src"]
+      "outFiles": ["${workspaceFolder}/dist/**/*.{js,mjs,cjs}"]
     },
     {
       // INSTRUCTIONS

@@ -151,8 +151,24 @@ export default defineConfig(({ mode }) => {
         },
         builder: {
             async buildApp(builder) {
-                await builder.build(builder.environments.host);
-                await builder.build(builder.environments.tsPlugin);
+                // Watch builds return independent watchers, not completed builds.
+                const ready = new Set();
+                for (const name of ['host', 'tsPlugin']) {
+                    const environment = builder.environments[name];
+                    const result = await builder.build(environment);
+                    if (environment.config.build.watch && 'on' in result) {
+                        result.on('event', (event) => {
+                            if (event.code === 'BUNDLE_START' || event.code === 'ERROR') {
+                                ready.delete(name);
+                            } else if (event.code === 'BUNDLE_END') {
+                                ready.add(name);
+                                if (ready.size === 2) {
+                                    environment.logger.info('[vite-ext] host and tsPlugin ready.');
+                                }
+                            }
+                        });
+                    }
+                }
             },
         },
         environments: {

@@ -15,7 +15,7 @@ probes below also reuse the shipped Vite host environment. The webviews keep a w
 `npm run watch:views` now starts Vite on port 18080 and serves `/views.js` without an existing
 `dist/views.js`. The Stage 0 advice to run `npm run webpack-dev-wv` once before starting the
 views watcher applies only to the `watch:views-webpack` fallback, not the default Vite dev loop.
-The VS Code task waits for Vite's ready line; its diagnostic pattern intentionally never matches,
+The `watch:views` VS Code task waits for Vite's ready line; its diagnostic pattern intentionally never matches,
 because Vite reports development build errors in the browser overlay.
 
 ## L1: offline inspection

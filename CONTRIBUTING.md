@@ -201,7 +201,7 @@ code .
 
 2. Start debugging the extension:
    - Switch to the `Run and Debug` panel.
-   - Select `Launch Extension (webpack)`.
+   - Select `Default: Launch Extension (Vite)`.
    - Press `F5`.
 
 The `Watch` task builds the extension host with Vite in watch mode (`npm run watch:ext`) and serves
@@ -250,7 +250,7 @@ Case 2 is also where the AI pre-review in [§6](#6-ai-assisted-review-workflow) 
 
 - **`npm run l10n`** regenerates the localization bundle from the strings passed to `vscode.l10n.t()`. **Never resolve a conflict in `l10n/bundle.l10n.json` by hand** — the file is generated. Take either side, or delete it, then re-run `npm run l10n` and commit the result.
 - **`npm run prettier-fix`** covers Markdown as well as source, so documentation formatting does not drift whenever a file is touched. Fenced code blocks are left exactly as authored: they are often partial or illustrative, and reformatting them to the Markdown tab width would leave every example disagreeing with the code it documents.
-- **`npm run package`** catches webpack host and Vite webview bundling issues and missing assets that unit tests alone will not surface.
+- **`npm run package`** catches Vite host and webview bundling issues and missing assets that unit tests alone will not surface.
 
 ## 5. Documenting Work with AI
 
