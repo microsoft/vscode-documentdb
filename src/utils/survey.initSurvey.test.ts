@@ -59,7 +59,7 @@ vi.mock('@microsoft/vscode-azext-utils', () => {
 beforeAll(() => {
     // Verify the exported references are available
     if (!surveyStateRef || !SurveyConfig || !SurveyConfig.settings || !StateKeys) {
-        throw new Error('SurveyState is missing or invalid. Please compile with "test" mode when using webpack.');
+        throw new Error('SurveyState is missing or invalid. Run these tests with NODE_ENV set to "test".');
     }
 });
 

@@ -9,7 +9,7 @@ import { createServer, type Server } from 'node:http';
 import { extname, join, relative, resolve, sep } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { ModuleKind, ScriptTarget, transpileModule } from 'typescript';
-import { fixtures, type HarnessFixture } from './fixtures';
+import { fixtures } from './fixtures';
 import { runIntegratedCheck } from './playwright';
 import { augmentTemplate, hostTemplate } from './template';
 import { vsixTools } from './vsix';
@@ -29,17 +29,22 @@ export function validatePrefix(prefix: string): void {
 }
 
 function browserRuntime(): string {
-    const compile = (filename: string): string => transpileModule(readFileSync(join(import.meta.dirname, filename), 'utf8'), {
-        compilerOptions: { module: ModuleKind.CommonJS, target: ScriptTarget.ES2023 },
-    }).outputText;
+    const compile = (filename: string): string =>
+        transpileModule(readFileSync(join(import.meta.dirname, filename), 'utf8'), {
+            compilerOptions: { module: ModuleKind.CommonJS, target: ScriptTarget.ES2023 },
+        }).outputText;
     // Inline only these browser modules: a classic script installs the API synchronously before
     // the unchanged host boot module. No eval, Node loader, or extra CSP/chunk exceptions.
-    const modules = ['core/fixtures', 'core/fakeVsCodeApi'].map((name): string =>
-        `modules[${JSON.stringify(`./${name}`)}] = (() => {
+    const modules = ['core/fixtures', 'core/fakeVsCodeApi']
+        .map(
+            (name): string =>
+                `modules[${JSON.stringify(`./${name}`)}] = (() => {
 const exports = {};
 ${compile(`${name}.ts`)}
 return exports;
-})();`).join('\n');
+})();`,
+        )
+        .join('\n');
     return `(() => {
 const modules = {};
 const require = (name) => {
@@ -71,12 +76,10 @@ export function prepare(options: HarnessOptions): void {
     vsixTools.extractVsix(resolve(options.vsix), unpacked);
     const assetDirectory = flatLayout ? unpacked : join(unpacked, 'dist');
     const viewsSource = readFileSync(join(assetDirectory, 'views.js'), 'utf8');
-    const brokenCss: HarnessFixture['brokenCss'] = viewsSource.includes('data-documentdb-views-css')
-        ? 'bundle-stylesheet' : 'all-styles';
-    // webpack's single-file views.js has no relative static imports; a split (Vite) entry does. A
-    // split entry without the marker would silently fall back to the webpack control.
-    if (brokenCss === 'all-styles' && /\bfrom\s*["']\.\//.test(viewsSource)) {
-        throw new Error('Split views.js has no data-documentdb-views-css stylesheet marker; cannot build the CSS-negative control');
+    if (!viewsSource.includes('data-documentdb-views-css')) {
+        throw new Error(
+            'views.js has no data-documentdb-views-css stylesheet marker; cannot build the CSS-negative control',
+        );
     }
     const site = join(options.output, 'site');
     mkdirSync(join(site, 'pages'), { recursive: true });
@@ -86,10 +89,15 @@ export function prepare(options: HarnessOptions): void {
     writeFileSync(join(site, 'runtime.js'), browserRuntime());
     for (const [view, fixture] of Object.entries(fixtures)) {
         const html = hostTemplate(options.repository, assetRoot, origin.origin, view, fixture.config);
-        writeFileSync(join(site, 'pages', `${view}.html`), augmentTemplate(html, { ...fixture, view, assetRoot, brokenCss: false }, options.prefix));
+        writeFileSync(
+            join(site, 'pages', `${view}.html`),
+            augmentTemplate(html, { ...fixture, view, assetRoot, brokenCss: false }, options.prefix),
+        );
         if (view === 'collectionView') {
-            writeFileSync(join(site, 'pages', `${view}-broken-css.html`),
-                augmentTemplate(html, { ...fixture, view, assetRoot, brokenCss }, options.prefix));
+            writeFileSync(
+                join(site, 'pages', `${view}-broken-css.html`),
+                augmentTemplate(html, { ...fixture, view, assetRoot, brokenCss: 'bundle-stylesheet' }, options.prefix),
+            );
         }
     }
     // tsx (esbuild keepNames) wraps named functions in `__name(...)`; the serialized helper runs in
@@ -111,20 +119,43 @@ return results;
     writeFileSync(join(options.output, 'integrated-all-checks.js'), allChecks);
     writeFileSync(join(site, 'integrated-all-checks.js'), allChecks);
     const digest = createHash('sha256').update(readFileSync(options.vsix)).digest('hex');
-    writeFileSync(join(options.output, 'manifest.json'), JSON.stringify({
-        vsix: resolve(options.vsix), sha256: digest, origin: origin.origin, prefix: options.prefix,
-        template: 'packages/vscode-ext-webview/src/host/WebviewController.ts',
-        templateSha256: createHash('sha256').update(readFileSync(join(options.repository, 'packages/vscode-ext-webview/src/host/WebviewController.ts'))).digest('hex'),
-        pages, negative,
-        cssNegativeControl: brokenCss === 'bundle-stylesheet'
-            ? 'Remove only style[data-documentdb-views-css]; retain Fluent/Griffel runtime styles, host theme and CSP; require a removed bundle stylesheet.'
-            : 'Remove all style elements for webpack/style-loader; retain host theme and CSP.',
-    }, null, 2));
+    writeFileSync(
+        join(options.output, 'manifest.json'),
+        JSON.stringify(
+            {
+                vsix: resolve(options.vsix),
+                sha256: digest,
+                origin: origin.origin,
+                prefix: options.prefix,
+                template: 'packages/vscode-ext-webview/src/host/WebviewController.ts',
+                templateSha256: createHash('sha256')
+                    .update(
+                        readFileSync(
+                            join(options.repository, 'packages/vscode-ext-webview/src/host/WebviewController.ts'),
+                        ),
+                    )
+                    .digest('hex'),
+                pages,
+                negative,
+                cssNegativeControl:
+                    'Remove only style[data-documentdb-views-css]; retain Fluent/Griffel runtime styles, host theme and CSP; require a removed bundle stylesheet.',
+            },
+            null,
+            2,
+        ),
+    );
 }
 
 const mime: Readonly<Record<string, string>> = {
-    '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.json': 'application/json',
-    '.svg': 'image/svg+xml', '.png': 'image/png', '.ttf': 'font/ttf', '.woff': 'font/woff', '.woff2': 'font/woff2',
+    '.html': 'text/html',
+    '.js': 'text/javascript',
+    '.css': 'text/css',
+    '.json': 'application/json',
+    '.svg': 'image/svg+xml',
+    '.png': 'image/png',
+    '.ttf': 'font/ttf',
+    '.woff': 'font/woff',
+    '.woff2': 'font/woff2',
 };
 
 export function serve(output: string, prefix: string, port: number): Server {
@@ -143,7 +174,12 @@ export function serve(output: string, prefix: string, port: number): Server {
             response.writeHead(400).end('Invalid URL encoding');
             return;
         }
-        if (request.method === 'POST' && /^reports\/(?:clusterDashboard|collectionView|documentView|localQuickStart|atlasCredentials)(?:-broken-css)?$/.test(pathname)) {
+        if (
+            request.method === 'POST' &&
+            /^reports\/(?:clusterDashboard|collectionView|documentView|localQuickStart|atlasCredentials)(?:-broken-css)?$/.test(
+                pathname,
+            )
+        ) {
             const chunks: Buffer[] = [];
             let size = 0;
             request.on('data', (chunk: Buffer): void => {
@@ -164,7 +200,9 @@ export function serve(output: string, prefix: string, port: number): Server {
                     response.writeHead(400).end(error instanceof Error ? error.message : String(error));
                 }
             });
-            request.on('error', (error: Error): void => { console.error(`L2 report upload failed: ${error.message}`); });
+            request.on('error', (error: Error): void => {
+                console.error(`L2 report upload failed: ${error.message}`);
+            });
             return;
         }
         if (request.method !== 'GET' && request.method !== 'HEAD') {
@@ -172,13 +210,20 @@ export function serve(output: string, prefix: string, port: number): Server {
             return;
         }
         const filename = resolve(root, pathname);
-        if (!filename.startsWith(`${root}${sep}`) || !existsSync(filename) || !lstatSync(filename).isFile() ||
-            relative(root, realpathSync(filename)).startsWith('..')) {
+        if (
+            !filename.startsWith(`${root}${sep}`) ||
+            !existsSync(filename) ||
+            !lstatSync(filename).isFile() ||
+            relative(root, realpathSync(filename)).startsWith('..')
+        ) {
             response.writeHead(404).end('Asset missing or outside L2 prefix');
             return;
         }
-        response.writeHead(200, { 'Content-Type': `${mime[extname(filename)] ?? 'application/octet-stream'}; charset=utf-8`,
-            'Cache-Control': 'no-store', 'X-Content-Type-Options': 'nosniff' });
+        response.writeHead(200, {
+            'Content-Type': `${mime[extname(filename)] ?? 'application/octet-stream'}; charset=utf-8`,
+            'Cache-Control': 'no-store',
+            'X-Content-Type-Options': 'nosniff',
+        });
         response.end(request.method === 'HEAD' ? undefined : readFileSync(filename));
     });
     server.listen(port, '127.0.0.1');
@@ -191,14 +236,20 @@ function main(): void {
     for (let index = 0; index < args.length; index += 2) {
         const name = args[index];
         const value = args[index + 1];
-        if (!['--vsix', '--output', '--port', '--prefix', '--origin'].includes(name) || value === undefined || flags.has(name)) {
+        if (
+            !['--vsix', '--output', '--port', '--prefix', '--origin'].includes(name) ||
+            value === undefined ||
+            flags.has(name)
+        ) {
             throw new Error(`Invalid L2 option: ${name}`);
         }
         flags.set(name, value);
     }
     const output = flags.get('--output');
     if (!output) {
-        throw new Error('Usage: harness.ts prepare|serve --output <fresh-directory> [--vsix <production.vsix>] [--port 18081] [--prefix /stage0/l2] [--origin http://127.0.0.1:18081]');
+        throw new Error(
+            'Usage: harness.ts prepare|serve --output <fresh-directory> [--vsix <production.vsix>] [--port 18081] [--prefix /stage0/l2] [--origin http://127.0.0.1:18081]',
+        );
     }
     const port = Number(flags.get('--port') ?? 18081);
     if (!Number.isInteger(port) || port < 1024 || port > 65535) {
@@ -210,13 +261,23 @@ function main(): void {
         if (!vsix) {
             throw new Error('prepare requires --vsix');
         }
-        prepare({ vsix, output: resolve(output), prefix, origin: flags.get('--origin') ?? `http://127.0.0.1:${port}`,
-            repository: resolve(import.meta.dirname, '../../..') });
+        prepare({
+            vsix,
+            output: resolve(output),
+            prefix,
+            origin: flags.get('--origin') ?? `http://127.0.0.1:${port}`,
+            repository: resolve(import.meta.dirname, '../../..'),
+        });
         console.log(`L2 pages prepared: ${resolve(output, 'manifest.json')}`);
     } else if (command === 'serve') {
         const server = serve(resolve(output), prefix, port);
-        server.on('error', (error: Error): void => { console.error(error); process.exitCode = 1; });
-        server.on('listening', (): void => { console.log(`L2 listening at http://127.0.0.1:${port}${prefix}/pages/collectionView.html`); });
+        server.on('error', (error: Error): void => {
+            console.error(error);
+            process.exitCode = 1;
+        });
+        server.on('listening', (): void => {
+            console.log(`L2 listening at http://127.0.0.1:${port}${prefix}/pages/collectionView.html`);
+        });
     } else {
         throw new Error(`Unknown L2 command: ${command}`);
     }

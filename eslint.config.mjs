@@ -49,12 +49,7 @@ export default ts.config(
             'import/no-internal-modules': [
                 'error',
                 {
-                    allow: [
-                        'antlr4ts/**',
-                        'yaml/types',
-                        '**/components/**/*.scss',
-                        'build/verification/BundleReportPlugin.cjs',
-                    ],
+                    allow: ['antlr4ts/**', 'yaml/types', '**/components/**/*.scss'],
                 },
             ],
             'no-case-declarations': 'error',

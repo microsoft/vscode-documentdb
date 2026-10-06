@@ -128,8 +128,9 @@ both `[cjs]` and `[esm]` are accepted. This is the load-time quantity shown by
 successful `vscode-documentdb/activate` telemetry event, converting seconds to
 milliseconds. `activateMs` measures time inside the extension's activate telemetry
 callback; `totalMs` is each run's `codeLoadMs + activateMs`, not the whole VS Code
-launch. `mainFileLoadMs` is recorded but is not a reliable comparison metric yet:
-the webpack host hoists the require before its performance timer, reporting zero.
+launch. `mainFileLoadMs` records the Vite loader's awaited dynamic import of the
+extension implementation. Historical webpack measurements reported zero because
+that host hoisted the require before its performance timer.
 
 The harness prints each run and medians (plus code-load min/max). Optional JSON
 contains the VSIX path, pinned VS Code version, per-run measurements, and

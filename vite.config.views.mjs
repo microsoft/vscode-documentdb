@@ -4,8 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 // Vite build of the webviews (`src/webviews/index.tsx` -> `dist/views.js` + lazy chunks).
-// Runs next to `webpack.config.views.cjs` until the Stage 4 flip; see
-// docs/ai-and-plans/modernization/build-and-test-stack.md (Stage 4).
+// See docs/ai-and-plans/modernization/build-and-test-stack.md (Stage 4).
 //
 //   npm run vite-prod-wv    production build, writes build/verification/reports/views.json
 //   npm run vite-dev-wv     unminified build with source maps, no report
@@ -26,7 +25,7 @@ const require = createRequire(import.meta.url);
 const root = import.meta.dirname;
 const entry = 'src/webviews/index.tsx';
 
-// Same pin as webpack.config.views.cjs: one `bson` if a view ever imports it (none does today; L1
+// Pin one `bson` if a view ever imports it (none does today; L1
 // allows zero per view graph and rejects two), resolved to bson's browser entry.
 const bsonBrowserEntry = path.join(path.dirname(require.resolve('bson')), 'bson.mjs');
 if (!fs.existsSync(bsonBrowserEntry)) {

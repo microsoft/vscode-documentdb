@@ -51,20 +51,36 @@ function isStringArray(value: unknown): value is string[] {
 }
 
 function isStyleExpectation(value: unknown): value is StyleExpectation {
-    return isObject(value) && typeof value.selector === 'string' && typeof value.property === 'string' &&
-        typeof value.expected === 'string';
+    return (
+        isObject(value) &&
+        typeof value.selector === 'string' &&
+        typeof value.property === 'string' &&
+        typeof value.expected === 'string'
+    );
 }
 
 function isHarnessFixture(value: unknown): value is HarnessFixture {
     const views = {
-        clusterDashboard: true, collectionView: true, documentView: true, localQuickStart: true, atlasCredentials: true,
+        clusterDashboard: true,
+        collectionView: true,
+        documentView: true,
+        localQuickStart: true,
+        atlasCredentials: true,
     } satisfies Record<WebviewName, boolean>;
-    return isObject(value) && typeof value.view === 'string' && Object.hasOwn(views, value.view) &&
+    return (
+        isObject(value) &&
+        typeof value.view === 'string' &&
+        Object.hasOwn(views, value.view) &&
         typeof value.assetRoot === 'string' &&
-        (value.brokenCss === false || value.brokenCss === 'bundle-stylesheet' || value.brokenCss === 'all-styles') &&
+        (value.brokenCss === false || value.brokenCss === 'bundle-stylesheet') &&
         typeof value.monaco === 'boolean' &&
-        Object.hasOwn(value, 'config') && isStringArray(value.content) && isUnknownArray(value.styles) &&
-        value.styles.every(isStyleExpectation) && isObject(value.rpc) && Object.values(value.rpc).every(isRpcFixture);
+        Object.hasOwn(value, 'config') &&
+        isStringArray(value.content) &&
+        isUnknownArray(value.styles) &&
+        value.styles.every(isStyleExpectation) &&
+        isObject(value.rpc) &&
+        Object.values(value.rpc).every(isRpcFixture)
+    );
 }
 
 const element = document.getElementById('stage0-fixture');
@@ -98,17 +114,31 @@ function observeWorkerRequest(record: WorkerRecord, message: unknown): void {
     }
     if (method === '$acceptNewModel') {
         const model: unknown = args[0];
-        if (isObject(model) && typeof model.url === 'string' && typeof model.EOL === 'string' && isStringArray(model.lines)) {
+        if (
+            isObject(model) &&
+            typeof model.url === 'string' &&
+            typeof model.EOL === 'string' &&
+            isStringArray(model.lines)
+        ) {
             record.models.set(model.url, model.lines.join(model.EOL));
         } else {
             errors.push('Unsupported editor worker model synchronization format');
         }
     }
-    if (method === '$acceptModelChanged' && typeof args[0] === 'string' && isObject(args[1]) && isUnknownArray(args[1].changes)) {
+    if (
+        method === '$acceptModelChanged' &&
+        typeof args[0] === 'string' &&
+        isObject(args[1]) &&
+        isUnknownArray(args[1].changes)
+    ) {
         const changes: { offset: number; length: number; text: string }[] = [];
         for (const change of args[1].changes) {
-            if (!isObject(change) || typeof change.text !== 'string' ||
-                typeof change.rangeOffset !== 'number' || typeof change.rangeLength !== 'number') {
+            if (
+                !isObject(change) ||
+                typeof change.text !== 'string' ||
+                typeof change.rangeOffset !== 'number' ||
+                typeof change.rangeLength !== 'number'
+            ) {
                 errors.push(`Unsupported editor worker model change format: ${args[0]}`);
                 return;
             }
@@ -122,8 +152,13 @@ function observeWorkerRequest(record: WorkerRecord, message: unknown): void {
         // Monaco may deliver one input event per character. Reconstruct the synchronized
         // model instead of requiring the whole probe marker in a single change.
         for (const change of changes.sort((left, right): number => right.offset - left.offset)) {
-            if (!Number.isInteger(change.offset) || !Number.isInteger(change.length) || change.offset < 0 ||
-                change.length < 0 || change.offset + change.length > text.length) {
+            if (
+                !Number.isInteger(change.offset) ||
+                !Number.isInteger(change.length) ||
+                change.offset < 0 ||
+                change.length < 0 ||
+                change.offset + change.length > text.length
+            ) {
                 errors.push(`Invalid editor worker model change range: ${args[0]}`);
                 return;
             }
@@ -146,7 +181,12 @@ function observeWorkerRequest(record: WorkerRecord, message: unknown): void {
         operation = '$computeUnicodeHighlights';
         modelUri = args[0];
     }
-    if (operation && typeof modelUri === 'string' && record.models.get(modelUri)?.includes(probeMarker) && typeof message.req === 'string') {
+    if (
+        operation &&
+        typeof modelUri === 'string' &&
+        record.models.get(modelUri)?.includes(probeMarker) &&
+        typeof message.req === 'string'
+    ) {
         record.pending.set(message.req, { modelUri, method: operation });
     }
 }
@@ -165,14 +205,26 @@ function observeWorkerResponse(record: WorkerRecord, message: unknown): void {
         return;
     }
     const result = message.res;
-    const hasDiagnostic = operation.method === 'doValidation' && isUnknownArray(result) &&
-        result.some((marker: unknown): boolean => isObject(marker) && typeof marker.message === 'string' && marker.severity === 1);
-    const hasUnicodeHighlight = operation.method === '$computeUnicodeHighlights' && isObject(result) &&
-        isUnknownArray(result.ranges) && result.ranges.length > 0;
+    const hasDiagnostic =
+        operation.method === 'doValidation' &&
+        isUnknownArray(result) &&
+        result.some(
+            (marker: unknown): boolean =>
+                isObject(marker) && typeof marker.message === 'string' && marker.severity === 1,
+        );
+    const hasUnicodeHighlight =
+        operation.method === '$computeUnicodeHighlights' &&
+        isObject(result) &&
+        isUnknownArray(result.ranges) &&
+        result.ranges.length > 0;
     if (hasDiagnostic || hasUnicodeHighlight) {
         editorWorkerProof = {
-            source: 'rendered-editor', workerUrl: record.url, modelUri: operation.modelUri,
-            probeMarker, roundTrip: operation.method, result,
+            source: 'rendered-editor',
+            workerUrl: record.url,
+            modelUri: operation.modelUri,
+            probeMarker,
+            roundTrip: operation.method,
+            result,
         };
     }
 }
@@ -199,7 +251,10 @@ if (fixture.monaco) {
             });
         }
 
-        public override postMessage(message: unknown, transferOrOptions?: Transferable[] | StructuredSerializeOptions): void {
+        public override postMessage(
+            message: unknown,
+            transferOrOptions?: Transferable[] | StructuredSerializeOptions,
+        ): void {
             observeWorkerRequest(this.record, message);
             if (Array.isArray(transferOrOptions)) {
                 super.postMessage(message, transferOrOptions);
@@ -215,26 +270,31 @@ console.error = (...values: unknown[]): void => {
     errors.push(`console.error: ${values.map(String).join(' ')}`);
     Reflect.apply(originalError, console, values);
 };
-window.addEventListener('error', (event: ErrorEvent): void => { errors.push(`pageerror: ${event.message}`); });
-window.addEventListener('unhandledrejection', (event: PromiseRejectionEvent): void => { errors.push(`unhandledrejection: ${String(event.reason)}`); });
+window.addEventListener('error', (event: ErrorEvent): void => {
+    errors.push(`pageerror: ${event.message}`);
+});
+window.addEventListener('unhandledrejection', (event: PromiseRejectionEvent): void => {
+    errors.push(`unhandledrejection: ${String(event.reason)}`);
+});
 document.addEventListener('securitypolicyviolation', (event: SecurityPolicyViolationEvent): void => {
     errors.push(`CSP: ${event.violatedDirective}: ${event.blockedURI}`);
 });
-window.addEventListener('vite:preloadError', (): void => { errors.push('vite:preloadError'); });
+window.addEventListener('vite:preloadError', (): void => {
+    errors.push('vite:preloadError');
+});
 
 window.acquireVsCodeApi = fakeVsCodeApi(fixture.rpc, errors);
 
-// Production CSS lives in JS: remove only Vite's marked bundle stylesheet, preserving
-// Fluent/Griffel runtime styles; webpack/style-loader still requires removing all styles.
+// Production CSS lives in JS: remove only the marked bundle stylesheet, preserving
+// Fluent/Griffel runtime styles.
 let removedBundleStylesheets = 0;
 if (fixture.brokenCss) {
     const stripStyles = (): void => {
-        const styles = document.querySelectorAll(fixture.brokenCss === 'bundle-stylesheet'
-            ? 'style[data-documentdb-views-css]' : 'style');
-        if (fixture.brokenCss === 'bundle-stylesheet') {
-            removedBundleStylesheets += styles.length;
-        }
-        styles.forEach((style): void => { style.remove(); });
+        const styles = document.querySelectorAll('style[data-documentdb-views-css]');
+        removedBundleStylesheets += styles.length;
+        styles.forEach((style): void => {
+            style.remove();
+        });
     };
     new MutationObserver(stripStyles).observe(document.documentElement, { childList: true, subtree: true });
     stripStyles();
@@ -242,9 +302,11 @@ if (fixture.brokenCss) {
 
 function ready(): boolean {
     const text = document.body.innerText.replace(/\s+/g, ' ');
-    return fixture.content.every((content): boolean => text.includes(content.replace(/\s+/g, ' '))) &&
+    return (
+        fixture.content.every((content): boolean => text.includes(content.replace(/\s+/g, ' '))) &&
         fixture.styles.every((style): boolean => document.querySelector(style.selector) !== null) &&
-        !document.querySelector('[role="progressbar"]:not([aria-hidden="true"])');
+        !document.querySelector('[role="progressbar"]:not([aria-hidden="true"])')
+    );
 }
 
 async function check(): Promise<BrowserReport> {
@@ -268,10 +330,14 @@ async function check(): Promise<BrowserReport> {
     });
     if (fixture.monaco && !editorWorkerProof) {
         const methods = [...new Set(workerRecords.flatMap((record): string[] => [...record.methods]))];
-        failures.push(`No rendered-editor worker proof for ${fixture.view}; observed methods: ${methods.join(', ') || '<none>'}`);
+        failures.push(
+            `No rendered-editor worker proof for ${fixture.view}; observed methods: ${methods.join(', ') || '<none>'}`,
+        );
     }
-    const chunks = performance.getEntriesByType('resource')
-        .map((entry): string => entry.name).filter((name): boolean => /\.m?js(?:$|\?)/.test(name));
+    const chunks = performance
+        .getEntriesByType('resource')
+        .map((entry): string => entry.name)
+        .filter((name): boolean => /\.m?js(?:$|\?)/.test(name));
     if (!chunks.some((name): boolean => name.endsWith('/views.js'))) {
         failures.push('Production views.js was not fetched');
     }
@@ -283,8 +349,15 @@ async function check(): Promise<BrowserReport> {
         }
     }
     const rpcPaths = new Set(window.__harnessCalls.map((call): string => call.path));
-    return { view: fixture.view, errors: [...new Set([...failures, ...errors])], rpcPaths: [...rpcPaths],
-        styles, chunks, worker: editorWorkerProof, brokenCss: fixture.brokenCss };
+    return {
+        view: fixture.view,
+        errors: [...new Set([...failures, ...errors])],
+        rpcPaths: [...rpcPaths],
+        styles,
+        chunks,
+        worker: editorWorkerProof,
+        brokenCss: fixture.brokenCss,
+    };
 }
 
 function beginEditorProbe(marker: string): void {
@@ -300,6 +373,8 @@ function beginEditorProbe(marker: string): void {
 }
 
 window.stage0Harness = {
-    ready, check, beginEditorProbe,
+    ready,
+    check,
+    beginEditorProbe,
     editorProbeReady: (): boolean => editorWorkerProof !== undefined,
 };

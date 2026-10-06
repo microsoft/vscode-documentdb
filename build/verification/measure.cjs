@@ -32,11 +32,11 @@ function run(command, args, name) {
 const measurements = {
     node: process.version,
     npm: spawnSync('npm', ['--version'], { encoding: 'utf8' }).stdout.trim(),
-    webpackSeconds: [],
+    buildSeconds: [],
     unitTestSeconds: [],
 };
 for (let index = 1; index <= 3; index++) {
-    measurements.webpackSeconds.push(run('npm', ['run', 'build-prod'], `webpack-${index}`));
+    measurements.buildSeconds.push(run('npm', ['run', 'build-prod'], `build-${index}`));
     fs.writeFileSync(path.join(outputDirectory, 'measurements.json'), JSON.stringify(measurements, null, 2));
 }
 for (let index = 1; index <= 3; index++) {

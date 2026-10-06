@@ -17,7 +17,6 @@ const {
     inspectRuntimeAssets,
     runtimeAssets,
     inspectJavaScript,
-    entryGraph,
     hostGraphs,
     viteChunkClosure,
     babelConfigFileImports,
@@ -32,7 +31,7 @@ const files = new Map([
     ['extension/package.json', Buffer.from('{"name":"fixture"}')],
     ['extension/views.js', Buffer.from('export function render() {}')],
 ]);
-const viewReport = { chunkFormat: 'module', assetHashes: { 'views.js': 'fixture' }, chunks: [] };
+const viewReport = { bundler: 'vite', chunkFormat: 'module', assetHashes: { 'views.js': 'fixture' }, chunks: [] };
 
 test('VSIX round-trip and extraction preserve files and exclude archive metadata', () => {
     const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'documentdb-inspect-'));
@@ -545,7 +544,11 @@ test('.cjs is inspected as CommonJS and .mjs as a module', () => {
         ['extension/worker.cjs', Buffer.from('module.exports.dir = import.meta.dirname;')],
         ['extension/module.mjs', Buffer.from('export const url = import.meta.url;')],
     ]);
-    const report = { chunkFormat: 'module', assetHashes: { 'worker.cjs': 'fixture', 'module.mjs': 'fixture' } };
+    const report = {
+        bundler: 'vite',
+        chunkFormat: 'module',
+        assetHashes: { 'worker.cjs': 'fixture', 'module.mjs': 'fixture' },
+    };
     assert.throws(
         () => inspectJavaScript(bundled, [viewReport, report]),
         /worker\.cjs: import\.meta in a CommonJS bundle/,
@@ -595,6 +598,12 @@ test('host chunks and the CJS plugin require their own report ownership and matc
         writeReports();
         writeVsix(filename, bundled);
         inspect(filename, { reports: directory });
+        for (const bundler of ['webpack', undefined]) {
+            views.report.bundler = bundler;
+            writeReports();
+            assert.throws(() => inspect(filename, { reports: directory }), /non-Vite views bundle report; regenerate/);
+        }
+        views.report.bundler = 'vite';
         const pluginHash = host.report.assetHashes['playgroundTsPlugin.cjs'];
         delete host.report.assetHashes['playgroundTsPlugin.cjs'];
         views.report.assetHashes['playgroundTsPlugin.cjs'] = pluginHash;
@@ -627,14 +636,13 @@ test('host chunks and the CJS plugin require their own report ownership and matc
     }
 });
 
-test('production render export, native imports and webpack lazy chunks are checked', () => {
+test('production render export and native imports are checked', () => {
     inspectJavaScript(files, [viewReport]);
     for (const [source, error] of [
         ['export function renamed() {}', /does not export render/],
         ['export function render() {}; import("./absent.js")', /missing dynamic/],
         ['export function render() {}; import("/root.js")', /root-relative/],
         ['export function render() {}; import(variable)', /nonliteral/],
-        ['export function render() {}; r.e(789)', /missing webpack chunk/],
         ['export function render() {}; console.log("DEVSERVER")', /development-server/],
         ['export function render() {}; console.log("127.0.0.1:18080")', /development-server/],
     ]) {
@@ -643,31 +651,12 @@ test('production render export, native imports and webpack lazy chunks are check
         assert.throws(() => inspectJavaScript(broken, [viewReport]), error);
     }
     const split = new Map(files);
-    split.set(
-        'extension/views.js',
-        Buffer.from('function render() {}; export {render}; import("./chunk.js"); r.e(789)'),
-    );
+    split.set('extension/views.js', Buffer.from('function render() {}; export {render}; import("./chunk.js");'));
     split.set('extension/chunk.js', Buffer.from('export const value = 1'));
-    const reports = [
-        { assetHashes: { 'views.js': 'fixture', 'chunk.js': 'fixture' }, chunks: [{ id: 789, files: ['chunk.js'] }] },
-    ];
+    const reports = [{ ...viewReport, assetHashes: { 'views.js': 'fixture', 'chunk.js': 'fixture' } }];
     inspectJavaScript(split, reports);
     split.delete('extension/chunk.js');
     assert.throws(() => inspectJavaScript(split, reports), /missing/);
-});
-
-test('webpack chunk IDs cannot resolve against another compilation', () => {
-    const bundled = new Map([...files, ['extension/main.js', Buffer.from('r.e(789)')]]);
-    const host = { assetHashes: { 'main.js': 'fixture' }, chunks: [] };
-    const views = { assetHashes: { 'views.js': 'fixture' }, chunks: [{ id: 789, files: ['views.js'] }] };
-    assert.throws(
-        () => inspectJavaScript(bundled, [host, views]),
-        /main.js: missing webpack chunk 789 in its compilation/,
-    );
-    host.chunks.push({ id: 789, files: ['main.js'] });
-    inspectJavaScript(bundled, [host, views]);
-    views.assetHashes['main.js'] = 'ambiguous';
-    assert.throws(() => inspectJavaScript(bundled, [host, views]), /ambiguous webpack compilation/);
 });
 
 test('import.meta is rejected in CommonJS bundles only, by syntax rather than text', () => {
@@ -675,46 +664,13 @@ test('import.meta is rejected in CommonJS bundles only, by syntax rather than te
         ...files,
         ['extension/main.js', Buffer.from('module.exports.dir = import.meta.dirname;')],
     ]);
-    const host = { chunkFormat: 'commonjs', assetHashes: { 'main.js': 'fixture' }, chunks: [] };
-    const views = { chunkFormat: 'module', assetHashes: { 'views.js': 'fixture' }, chunks: [] };
+    const host = { bundler: 'vite', chunkFormat: 'commonjs', assetHashes: { 'main.js': 'fixture' }, chunks: [] };
+    const views = viewReport;
     assert.throws(() => inspectJavaScript(bundled, [host, views]), /main\.js: import\.meta in a CommonJS bundle/);
     bundled.set('extension/main.js', Buffer.from('module.exports.text = "import.meta.dirname";'));
     inspectJavaScript(bundled, [host, views]);
     bundled.set('extension/views.js', Buffer.from('export function render() { return import.meta.url; }'));
     inspectJavaScript(bundled, [host, views]);
-});
-
-test('entry graph follows lazy chunks and catches duplicate BSON implementations', () => {
-    const report = {
-        entrypoints: { main: { chunks: [1] } },
-        chunks: [
-            {
-                id: 1,
-                files: ['views.js'],
-                children: [2],
-                modules: [{ modules: [{ identifier: '/repo/node_modules/bson/lib/bson.mjs' }] }],
-            },
-            { id: 2, files: ['chunk.js'], modules: [{ identifier: '/repo/node_modules/monaco-editor/index.js' }] },
-        ],
-    };
-    const bundled = new Map([...files, ['extension/chunk.js', Buffer.from('')]]);
-    const graph = entryGraph(report, 'main', bundled);
-    assert.equal(graph.monaco, true);
-    assert.deepEqual(graph.assets, ['chunk.js', 'views.js']);
-    report.chunks[1].modules.push({ identifier: '/repo/node_modules/bson/lib/bson.cjs' });
-    assert.throws(() => entryGraph(report, 'main', bundled), /exactly one BSON/);
-    report.chunks[1].modules.pop();
-    report.chunks[0].modules = [];
-    assert.throws(() => entryGraph(report, 'main', bundled), /exactly one BSON/);
-    assert.deepEqual(entryGraph(report, 'main', bundled, { allowAbsentBson: true }).bsonModules, []);
-    report.chunks[0].modules = [
-        { identifier: '/repo/node_modules/bson/lib/bson.cjs' },
-        { identifier: '/repo/node_modules/bson/lib/bson.mjs' },
-    ];
-    assert.throws(() => entryGraph(report, 'main', bundled, { allowAbsentBson: true }), /at most one BSON/);
-    report.chunks[0].modules.pop();
-    bundled.delete('extension/chunk.js');
-    assert.throws(() => entryGraph(report, 'main', bundled), /missing chunk/);
 });
 
 function viteFixture() {
@@ -804,31 +760,33 @@ test('every Vite graph chunk must exist in both the report and the VSIX', () => 
     );
 });
 
-test('Vite enforces lightweight views by default, even with an explicit false option', () => {
+test('Vite always enforces lightweight views', () => {
     for (const name of ['localQuickStart', 'atlasCredentials']) {
         for (const asset of ['monaco-AbC12345.js', 'slickgrid.js']) {
             const { report, bundled } = viteFixture();
             report.chunks.find((chunk) => chunk.fileName === `${name}.js`).imports.push(asset);
             assert.throws(
-                () => viewGraphs(report, bundled, { requireLightweightViews: false }),
+                () => viewGraphs(report, bundled),
                 (error) => error.message === `${name} must exclude Monaco and SlickGrid`,
             );
         }
     }
 });
 
-test('webpack views keep the shared entry fallback and opt-in lightweight enforcement', () => {
+test('views reject webpack-format and unidentified reports instead of using the shared entry fallback', () => {
     const report = {
         entrypoints: { views: { chunks: [1] } },
         chunks: [
             { id: 1, files: ['views.js'], modules: [{ identifier: '/repo/node_modules/monaco-editor/index.js' }] },
         ],
     };
-    assert.equal(viewGraphs(report, files).localQuickStart.monaco, true);
-    assert.throws(
-        () => viewGraphs(report, files, { requireLightweightViews: true }),
-        /localQuickStart must exclude Monaco and SlickGrid/,
-    );
+    for (const bundler of ['webpack', undefined]) {
+        assert.throws(() => viewGraphs({ ...report, bundler }, files), /non-Vite views bundle report; regenerate/);
+        assert.throws(
+            () => inspectJavaScript(files, [{ ...viewReport, bundler }]),
+            /non-Vite bundle report; regenerate/,
+        );
+    }
 });
 
 test('Vite counts BSON once across shared closures and rejects duplicate implementations', () => {
@@ -874,7 +832,7 @@ test('Monaco module-loader allowlist is scoped to one exact template in a Vite M
     bundled.set(filename, Buffer.from(source));
     assert.throws(
         () => inspectJavaScript(bundled, [{ ...report, bundler: 'webpack' }]),
-        /nonliteral dynamic import cannot be verified/,
+        /non-Vite bundle report; regenerate/,
     );
     for (const other of [
         'extension/monaco.js',
@@ -922,7 +880,7 @@ for (const worker of ['editor', 'json']) {
         bundled.set(filename, Buffer.from(source));
         assert.throws(
             () => inspectJavaScript(bundled, [{ ...report, bundler: 'webpack' }]),
-            /nonliteral dynamic import cannot be verified/,
+            /non-Vite bundle report; regenerate/,
         );
         const entry = new Map(files);
         entry.set('extension/views.js', Buffer.from('export function render() {}; ' + source));
@@ -1013,7 +971,7 @@ test('Vite expression-free template imports are static references, not allowlist
     inspectJavaScript(bundled, [report]);
     assert.throws(
         () => inspectJavaScript(bundled, [{ ...report, bundler: 'webpack' }]),
-        /nonliteral dynamic import cannot be verified/,
+        /non-Vite bundle report; regenerate/,
     );
     bundled.delete('extension/chunk.js');
     assert.throws(() => inspectJavaScript(bundled, [report]), /views\.js: missing dynamic import\/asset \.\/chunk\.js/);

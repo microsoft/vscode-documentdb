@@ -332,9 +332,8 @@ async function surveyPromptIfCandidate(triggerAction?: string): Promise<void> {
 
 /**
  * This section is only for tests
- * Currently we use swc which doesn't support "@internal" alongside with the stripInternal option.
- * So we rely on webpack to set the NODE_ENV to 'test' and return the real states for tests only.
- * Once we can switch to tsc or swc adds this option, we should remove the (process.env.NODE_ENV === 'test') checks.
+ * Vitest sets NODE_ENV to 'test'; production Vite builds set it to 'production',
+ * so these helpers expose the real states only under tests.
  */
 
 /**

@@ -3,11 +3,11 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { describe, it, expect, vi } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
-import { existsSync, mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { resolve, join } from 'node:path';
+import { join, resolve } from 'node:path';
 import { runInNewContext } from 'node:vm';
 import { type HarnessCall } from './core/fakeVsCodeApi';
 import { fixtures } from './fixtures';
@@ -22,94 +22,133 @@ function writeFixtureVsix(filename: string, files: Map<string, Buffer>): void {
 }
 
 describe('Stage 0 L2 production browser harness', (): void => {
-    it.each([
-        ['views.js', false], ['dist/views.js', false], ['views.js', true], ['dist/views.js', true],
-    ])('uses the shared extension-only extractor for %s layout (marked CSS: %s)', (entry: string, markedCss: boolean): void => {
-        const temporary = mkdtempSync(join(tmpdir(), 'documentdb-l2-extraction-test-'));
-        const archive = join(temporary, 'fixture.vsix');
-        const output = join(temporary, 'generated');
-        const contents = Buffer.from(`export function render() {}${markedCss ? ' /* data-documentdb-views-css */' : ''}`);
-        try {
-            writeFixtureVsix(archive, new Map([
-                ['extension/package.json', Buffer.from('{"name":"fixture"}')],
-                [`extension/${entry}`, contents],
-                ['extension.vsixmanifest', Buffer.from('<manifest/>')],
-                ['[Content_Types].xml', Buffer.from('<types/>')],
-            ]));
-            const read = vi.spyOn(vsixTools, 'readVsix');
-            const extract = vi.spyOn(vsixTools, 'extractVsix');
-            prepare({ vsix: archive, output, prefix: '/stage0/l2', origin: 'http://127.0.0.1:18081', repository });
-            expect(read).toHaveBeenCalledWith(archive);
-            expect(extract).toHaveBeenCalledWith(archive, join(output, 'unpacked'));
-            expect(readFileSync(join(output, 'site/artifact/views.js'))).toEqual(contents);
-            expect(existsSync(join(output, 'unpacked/extension.vsixmanifest'))).toBe(false);
-            expect(existsSync(join(output, 'unpacked/[Content_Types].xml'))).toBe(false);
-            expect(existsSync(join(output, 'site/pages/atlasCredentials.html'))).toBe(true);
-            expect(existsSync(join(output, 'site/pages/clusterDashboard.html'))).toBe(true);
-            expect(existsSync(join(output, 'site/pages/collectionView.html'))).toBe(true);
-            expect(existsSync(join(output, 'site/pages/documentView.html'))).toBe(true);
-            expect(existsSync(join(output, 'site/pages/localQuickStart.html'))).toBe(true);
-            expect(existsSync(join(output, 'site/pages/collectionView-broken-css.html'))).toBe(true);
-            const negative = readFileSync(join(output, 'site/pages/collectionView-broken-css.html'), 'utf8');
-            expect(negative).toContain(`"brokenCss":"${markedCss ? 'bundle-stylesheet' : 'all-styles'}"`);
-            for (const view of Object.keys(fixtures)) {
-                expect(readFileSync(join(output, 'site/pages', `${view}.html`), 'utf8')).toContain('"brokenCss":false');
-            }
-            expect(readFileSync(join(output, 'manifest.json'), 'utf8')).toContain(markedCss
-                ? 'Remove only style[data-documentdb-views-css]' : 'Remove all style elements for webpack/style-loader');
-            const runtime = readFileSync(join(output, 'site/runtime.js'), 'utf8');
-            const browser: {
-                acquireVsCodeApi?: typeof window.acquireVsCodeApi;
-                __harnessCalls?: HarnessCall[];
-                postMessage: ReturnType<typeof vi.fn>;
-                addEventListener: () => void;
-                location: { origin: string };
-            } = { postMessage: vi.fn(), addEventListener: (): void => {}, location: { origin: 'http://127.0.0.1:18081' } };
-            const microtasks: (() => void)[] = [];
-            runInNewContext(runtime, {
-                window: browser, console: { error: vi.fn() },
-                document: {
-                    getElementById: (): { textContent: string } => ({ textContent: JSON.stringify({
-                        ...fixtures.atlasCredentials, view: 'atlasCredentials', assetRoot: '/stage0/l2/artifact', brokenCss: false,
-                    }) }),
+    it.each(['views.js', 'dist/views.js'])(
+        'uses the shared extension-only extractor for %s layout with marked CSS',
+        (entry: string): void => {
+            const temporary = mkdtempSync(join(tmpdir(), 'documentdb-l2-extraction-test-'));
+            const archive = join(temporary, 'fixture.vsix');
+            const output = join(temporary, 'generated');
+            const contents = Buffer.from('export function render() {} /* data-documentdb-views-css */');
+            try {
+                writeFixtureVsix(
+                    archive,
+                    new Map([
+                        ['extension/package.json', Buffer.from('{"name":"fixture"}')],
+                        [`extension/${entry}`, contents],
+                        ['extension.vsixmanifest', Buffer.from('<manifest/>')],
+                        ['[Content_Types].xml', Buffer.from('<types/>')],
+                    ]),
+                );
+                const read = vi.spyOn(vsixTools, 'readVsix');
+                const extract = vi.spyOn(vsixTools, 'extractVsix');
+                prepare({ vsix: archive, output, prefix: '/stage0/l2', origin: 'http://127.0.0.1:18081', repository });
+                expect(read).toHaveBeenCalledWith(archive);
+                expect(extract).toHaveBeenCalledWith(archive, join(output, 'unpacked'));
+                expect(readFileSync(join(output, 'site/artifact/views.js'))).toEqual(contents);
+                expect(existsSync(join(output, 'unpacked/extension.vsixmanifest'))).toBe(false);
+                expect(existsSync(join(output, 'unpacked/[Content_Types].xml'))).toBe(false);
+                expect(existsSync(join(output, 'site/pages/atlasCredentials.html'))).toBe(true);
+                expect(existsSync(join(output, 'site/pages/clusterDashboard.html'))).toBe(true);
+                expect(existsSync(join(output, 'site/pages/collectionView.html'))).toBe(true);
+                expect(existsSync(join(output, 'site/pages/documentView.html'))).toBe(true);
+                expect(existsSync(join(output, 'site/pages/localQuickStart.html'))).toBe(true);
+                expect(existsSync(join(output, 'site/pages/collectionView-broken-css.html'))).toBe(true);
+                const negative = readFileSync(join(output, 'site/pages/collectionView-broken-css.html'), 'utf8');
+                expect(negative).toContain('"brokenCss":"bundle-stylesheet"');
+                for (const view of Object.keys(fixtures)) {
+                    expect(readFileSync(join(output, 'site/pages', `${view}.html`), 'utf8')).toContain(
+                        '"brokenCss":false',
+                    );
+                }
+                expect(readFileSync(join(output, 'manifest.json'), 'utf8')).toContain(
+                    'Remove only style[data-documentdb-views-css]',
+                );
+                const runtime = readFileSync(join(output, 'site/runtime.js'), 'utf8');
+                const browser: {
+                    acquireVsCodeApi?: typeof window.acquireVsCodeApi;
+                    __harnessCalls?: HarnessCall[];
+                    postMessage: ReturnType<typeof vi.fn>;
+                    addEventListener: () => void;
+                    location: { origin: string };
+                } = {
+                    postMessage: vi.fn(),
                     addEventListener: (): void => {},
-                },
-                queueMicrotask: (callback: () => void): void => { microtasks.push(callback); },
-            });
-            const acquire = browser.acquireVsCodeApi;
-            if (!acquire) {
-                throw new Error('Generated classic runtime did not synchronously install acquireVsCodeApi');
+                    location: { origin: 'http://127.0.0.1:18081' },
+                };
+                const microtasks: (() => void)[] = [];
+                runInNewContext(runtime, {
+                    window: browser,
+                    console: { error: vi.fn() },
+                    document: {
+                        getElementById: (): { textContent: string } => ({
+                            textContent: JSON.stringify({
+                                ...fixtures.atlasCredentials,
+                                view: 'atlasCredentials',
+                                assetRoot: '/stage0/l2/artifact',
+                                brokenCss: false,
+                            }),
+                        }),
+                        addEventListener: (): void => {},
+                    },
+                    queueMicrotask: (callback: () => void): void => {
+                        microtasks.push(callback);
+                    },
+                });
+                const acquire = browser.acquireVsCodeApi;
+                if (!acquire) {
+                    throw new Error('Generated classic runtime did not synchronously install acquireVsCodeApi');
+                }
+                const api = acquire();
+                api.postMessage({
+                    id: 'generated',
+                    op: { type: 'mutation', path: 'atlasCredentials.submitApiKey', input: {} },
+                });
+                expect(browser.__harnessCalls).toEqual([
+                    { path: 'atlasCredentials.submitApiKey', type: 'mutation', input: {} },
+                ]);
+                microtasks.forEach((callback): void => {
+                    callback();
+                });
+                expect(browser.postMessage.mock.calls).toEqual([
+                    [{ id: 'generated', result: { success: true } }, browser.location.origin],
+                    [{ id: 'generated', complete: true }, browser.location.origin],
+                ]);
+            } finally {
+                vi.restoreAllMocks();
+                rmSync(temporary, { recursive: true });
             }
-            const api = acquire();
-            api.postMessage({ id: 'generated', op: { type: 'mutation', path: 'atlasCredentials.submitApiKey', input: {} } });
-            expect(browser.__harnessCalls).toEqual([{ path: 'atlasCredentials.submitApiKey', type: 'mutation', input: {} }]);
-            microtasks.forEach((callback): void => { callback(); });
-            expect(browser.postMessage.mock.calls).toEqual([
-                [{ id: 'generated', result: { success: true } }, browser.location.origin],
-                [{ id: 'generated', complete: true }, browser.location.origin],
-            ]);
-        } finally {
-            vi.restoreAllMocks();
-            rmSync(temporary, { recursive: true });
-        }
-    });
+        },
+    );
 
-    it('rejects a split views.js that lacks the bundle stylesheet marker', (): void => {
-        const temporary = mkdtempSync(join(tmpdir(), 'documentdb-l2-unmarked-test-'));
-        const archive = join(temporary, 'fixture.vsix');
-        try {
-            writeFixtureVsix(archive, new Map([
-                ['extension/package.json', Buffer.from('{"name":"fixture"}')],
-                ['extension/views.js', Buffer.from('import { a } from "./react-abc.js"; export function render() {}')],
-                ['extension.vsixmanifest', Buffer.from('<manifest/>')],
-                ['[Content_Types].xml', Buffer.from('<types/>')],
-            ]));
-            expect((): void => prepare({ vsix: archive, output: join(temporary, 'generated'), prefix: '/stage0/l2',
-                origin: 'http://127.0.0.1:18081', repository })).toThrow(/no data-documentdb-views-css stylesheet marker/);
-        } finally {
-            rmSync(temporary, { recursive: true });
-        }
-    });
+    it.each(['export function render() {}', 'import { a } from "./react-abc.js"; export function render() {}'])(
+        'rejects an entry without the bundle stylesheet marker: %s',
+        (source: string): void => {
+            const temporary = mkdtempSync(join(tmpdir(), 'documentdb-l2-unmarked-test-'));
+            const archive = join(temporary, 'fixture.vsix');
+            try {
+                writeFixtureVsix(
+                    archive,
+                    new Map([
+                        ['extension/package.json', Buffer.from('{"name":"fixture"}')],
+                        ['extension/views.js', Buffer.from(source)],
+                        ['extension.vsixmanifest', Buffer.from('<manifest/>')],
+                        ['[Content_Types].xml', Buffer.from('<types/>')],
+                    ]),
+                );
+                expect((): void =>
+                    prepare({
+                        vsix: archive,
+                        output: join(temporary, 'generated'),
+                        prefix: '/stage0/l2',
+                        origin: 'http://127.0.0.1:18081',
+                        repository,
+                    }),
+                ).toThrow(/no data-documentdb-views-css stylesheet marker/);
+            } finally {
+                rmSync(temporary, { recursive: true });
+            }
+        },
+    );
 
     it('rejects a package without the production entry before creating output', (): void => {
         const temporary = mkdtempSync(join(tmpdir(), 'documentdb-l2-invalid-vsix-test-'));
@@ -117,8 +156,9 @@ describe('Stage 0 L2 production browser harness', (): void => {
             const archive = join(temporary, 'fixture.vsix');
             const output = join(temporary, 'generated');
             writeFixtureVsix(archive, new Map([['extension/package.json', Buffer.from('{"name":"fixture"}')]]));
-            expect((): void => prepare({ vsix: archive, output, prefix: '/stage0/l2',
-                origin: 'http://127.0.0.1:18081', repository })).toThrow('Packaged production views.js missing');
+            expect((): void =>
+                prepare({ vsix: archive, output, prefix: '/stage0/l2', origin: 'http://127.0.0.1:18081', repository }),
+            ).toThrow('Packaged production views.js missing');
             expect(existsSync(output)).toBe(false);
         } finally {
             rmSync(temporary, { recursive: true });
@@ -126,7 +166,13 @@ describe('Stage 0 L2 production browser harness', (): void => {
     });
 
     it('covers all five registry keys with populated fixture contracts', (): void => {
-        expect(Object.keys(fixtures).sort()).toEqual(['atlasCredentials', 'clusterDashboard', 'collectionView', 'documentView', 'localQuickStart']);
+        expect(Object.keys(fixtures).sort()).toEqual([
+            'atlasCredentials',
+            'clusterDashboard',
+            'collectionView',
+            'documentView',
+            'localQuickStart',
+        ]);
         for (const fixture of Object.values(fixtures)) {
             expect(fixture.content.length).toBeGreaterThan(0);
             expect(fixture.styles.length).toBeGreaterThan(0);
@@ -134,7 +180,13 @@ describe('Stage 0 L2 production browser harness', (): void => {
     });
 
     it('executes the production host template and retains its CSP and boot script unchanged', (): void => {
-        const html = hostTemplate(repository, '/stage0/l2/artifact', 'http://127.0.0.1:18081', 'collectionView', fixtures.collectionView.config);
+        const html = hostTemplate(
+            repository,
+            '/stage0/l2/artifact',
+            'http://127.0.0.1:18081',
+            'collectionView',
+            fixtures.collectionView.config,
+        );
         const augmented = augmentTemplate(html, fixtures.collectionView, '/stage0/l2');
         const csp = /http-equiv="Content-Security-Policy" content="([^"]+)"/.exec(html)?.[1];
         expect(csp).toBeDefined();
@@ -160,9 +212,12 @@ describe('Stage 0 L2 production browser harness', (): void => {
         expect(JSON.parse(encoded)).toEqual(value);
     });
 
-    it.each(['/', '/stage0/', '/stage0?x=1', '/stage0/../assets', '//stage0'])('rejects invalid prefix %s', (prefix: string): void => {
-        expect((): void => validatePrefix(prefix)).toThrow();
-    });
+    it.each(['/', '/stage0/', '/stage0?x=1', '/stage0/../assets', '//stage0'])(
+        'rejects invalid prefix %s',
+        (prefix: string): void => {
+            expect((): void => validatePrefix(prefix)).toThrow();
+        },
+    );
 
     it('serves only query-free prefixed paths and persists browser reports', async (): Promise<void> => {
         const output = mkdtempSync(join(tmpdir(), 'documentdb-l2-test-'));
@@ -170,7 +225,9 @@ describe('Stage 0 L2 production browser harness', (): void => {
         writeFileSync(join(output, 'site', 'views.js'), 'export const render = () => {};');
         const server = serve(output, '/stage0/l2', 0);
         try {
-            await new Promise<void>((resolve): void => { server.once('listening', resolve); });
+            await new Promise<void>((resolve): void => {
+                server.once('listening', resolve);
+            });
             const address = server.address();
             if (!address || typeof address === 'string') {
                 throw new Error('Test server has no TCP address');
@@ -180,12 +237,23 @@ describe('Stage 0 L2 production browser harness', (): void => {
             expect((await fetch(`${origin}/views.js`)).status).toBe(404);
             expect((await fetch(`${origin}/stage0/l2/views.js?x=1`)).status).toBe(404);
             expect((await fetch(`${origin}/stage0/l2/missing.js`)).status).toBe(404);
-            expect((await fetch(`${origin}/stage0/l2/reports/collectionView`, {
-                method: 'POST', body: JSON.stringify({ verified: true }),
-            })).status).toBe(201);
+            expect(
+                (
+                    await fetch(`${origin}/stage0/l2/reports/collectionView`, {
+                        method: 'POST',
+                        body: JSON.stringify({ verified: true }),
+                    })
+                ).status,
+            ).toBe(201);
         } finally {
             await new Promise<void>((resolve, reject): void => {
-                server.close((error): void => { if (error) { reject(error); } else { resolve(); } });
+                server.close((error): void => {
+                    if (error) {
+                        reject(error);
+                    } else {
+                        resolve();
+                    }
+                });
             });
             rmSync(output, { recursive: true });
         }

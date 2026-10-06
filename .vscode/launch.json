@@ -29,7 +29,6 @@
       "env": {
         "DEBUGTELEMETRY": "verbose", // set this to "verbose" to see telemetry events in debug console
         "NODE_DEBUG": "",
-        "DEBUG_WEBPACK": "",
         "DEVSERVER": "true",
         "STOP_ON_ENTRY": "false" // stop on entry is not allowed for "type": "extensionHost", therefore, it's emulated here (review main.ts)
       }
@@ -44,7 +43,10 @@
         "--extensionDevelopmentPath=${workspaceFolder}/dist",
         "--extensionDevelopmentPath=${workspaceFolder}/../vscode-azureresourcegroups"
       ],
-      "outFiles": ["${workspaceFolder}/dist/**/*.{js,mjs,cjs}", "${workspaceFolder}/../vscode-azureresourcegroups/out/**/*.js"],
+      "outFiles": [
+        "${workspaceFolder}/dist/**/*.{js,mjs,cjs}",
+        "${workspaceFolder}/../vscode-azureresourcegroups/out/**/*.js"
+      ],
       "preLaunchTask": "Watch",
       "autoAttachChildProcesses": true,
       "debugWebWorkerHost": true,
@@ -65,7 +67,6 @@
       "env": {
         "DEBUGTELEMETRY": "verbose", // set this to "true" to suppress telemetry events in debug console
         "NODE_DEBUG": "",
-        "DEBUG_WEBPACK": "",
         "DEVSERVER": "true",
         "STOP_ON_ENTRY": "false" // stop on entry is not allowed for "type": "extensionHost", therefore, it's emulated here (review main.ts)
       }

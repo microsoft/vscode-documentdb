@@ -42,6 +42,5 @@ gulp*
 stats.json
 test-results.xml
 tsconfig.*
-webpack.config*
 vite.config*
 work-summary.md

@@ -8,6 +8,4 @@ declare global {
         const template = <T>(data: T): string => '';
         export default template;
     }
-
-    declare var __webpack_public_path__: string;
 }

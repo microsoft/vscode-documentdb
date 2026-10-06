@@ -60,7 +60,7 @@ export const WEBVIEW_CONFIG = {
         dev: { dir: 'out/src/webviews', file: 'index.js' },
     },
     /**
-     * URL of the local Vite/webpack dev server used when running the
+     * URL of the local Vite dev server used when running the
      * extension in development mode.
      */
     devServerHost: 'http://localhost:18080',

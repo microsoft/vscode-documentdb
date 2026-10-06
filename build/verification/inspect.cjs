@@ -479,6 +479,9 @@ function babelConfigFileImportLimit(node, ancestors) {
 }
 
 function inspectJavaScript(files, reports) {
+    for (const report of reports) {
+        assert.equal(report.bundler, 'vite', 'Obsolete non-Vite bundle report; regenerate with npm run package');
+    }
     for (const [filename, data] of files) {
         if (!/\.(?:js|cjs|mjs)$/.test(filename)) {
             continue;
@@ -507,7 +510,6 @@ function inspectJavaScript(files, reports) {
                             chunk.moduleIds.includes(babelConfigFileImports.moduleId),
                     ),
             );
-        const webpackCompilations = compilations.filter((report) => report.bundler !== 'vite');
         let monacoModuleLoaderImportCount = 0;
         let babelConfigFileImportCount = 0;
         assert.ok(!/127\.0\.0\.1:18080|DEVSERVER/.test(source), `${filename}: development-server string in production`);
@@ -587,29 +589,6 @@ function inspectJavaScript(files, reports) {
                     resolveAsset(files, filename, asset);
                 }
             },
-            CallExpression(node) {
-                // webpack lowers import() to its runtime's .e(chunkId) loader.
-                if (
-                    webpackCompilations.length > 0 &&
-                    node.callee.type === 'MemberExpression' &&
-                    node.callee.property.name === 'e' &&
-                    node.arguments.length === 1 &&
-                    node.arguments[0].type === 'Literal' &&
-                    typeof node.arguments[0].value === 'number'
-                ) {
-                    assert.equal(
-                        webpackCompilations.length,
-                        1,
-                        `${filename}: missing or ambiguous webpack compilation provenance`,
-                    );
-                    const id = String(node.arguments[0].value);
-                    const chunk = webpackCompilations[0].chunks.find((candidate) => String(candidate.id) === id);
-                    assert.ok(chunk, `${filename}: missing webpack chunk ${id} in its compilation report`);
-                    for (const asset of chunk.files) {
-                        assert.ok(files.has(`extension/${asset}`), `${filename}: missing webpack chunk asset ${asset}`);
-                    }
-                }
-            },
         });
         if (babelOwned) {
             assert.equal(
@@ -623,40 +602,6 @@ function inspectJavaScript(files, reports) {
             parse(source, { ecmaVersion: 'latest', sourceType: 'script', allowReturnOutsideFunction: true });
         }
     }
-}
-
-function collectModules(modules, collected) {
-    for (const module of modules || []) {
-        if (module.identifier) {
-            collected.add(module.identifier.replaceAll('\\', '/'));
-        }
-        collectModules(module.modules, collected);
-    }
-}
-
-function entryGraph(report, entryName, files, { allowAbsentBson = false } = {}) {
-    const entry = report.entrypoints[entryName];
-    assert.ok(entry, `Bundle report missing entry ${entryName}`);
-    const pending = [...entry.chunks];
-    const visited = new Set();
-    const modules = new Set();
-    const assets = new Set();
-    while (pending.length) {
-        const id = pending.pop();
-        if (visited.has(id)) {
-            continue;
-        }
-        visited.add(id);
-        const chunk = report.chunks.find((candidate) => candidate.id === id);
-        assert.ok(chunk, `Bundle report missing entry chunk ${id}`);
-        for (const asset of chunk.files) {
-            assert.ok(files.has(`extension/${asset}`), `${entryName}: missing chunk ${asset}`);
-            assets.add(asset);
-        }
-        collectModules(chunk.modules, modules);
-        pending.push(...(chunk.children || []), ...Object.values(chunk.childrenByOrder || {}).flat());
-    }
-    return summarizeGraph(entryName, assets, modules, allowAbsentBson);
 }
 
 function summarizeGraph(entryName, assets, modules, allowAbsentBson) {
@@ -748,18 +693,14 @@ function hostGraphs(report, files) {
     return graphs;
 }
 
-function viewGraphs(report, files, { requireLightweightViews = false } = {}) {
+function viewGraphs(report, files) {
+    assert.equal(report.bundler, 'vite', 'Obsolete non-Vite views bundle report; regenerate with npm run package');
     const graphs = {};
     for (const name of Object.keys(viewModules)) {
-        graphs[name] =
-            report.bundler === 'vite'
-                ? viteViewGraph(report, name, files)
-                : entryGraph(report, report.entrypoints[name] ? name : 'views', files, { allowAbsentBson: true });
+        graphs[name] = viteViewGraph(report, name, files);
     }
-    if (report.bundler === 'vite' || requireLightweightViews) {
-        for (const name of ['localQuickStart', 'atlasCredentials']) {
-            assert.ok(!graphs[name].monaco && !graphs[name].slickgrid, `${name} must exclude Monaco and SlickGrid`);
-        }
+    for (const name of ['localQuickStart', 'atlasCredentials']) {
+        assert.ok(!graphs[name].monaco && !graphs[name].slickgrid, `${name} must exclude Monaco and SlickGrid`);
     }
     return graphs;
 }
@@ -780,10 +721,11 @@ function inspect(filename, options = {}) {
         );
     }
     assert.equal(reports[0].bundler, 'vite', 'Obsolete non-Vite host bundle report; regenerate with npm run package');
+    assert.equal(reports[1].bundler, 'vite', 'Obsolete non-Vite views bundle report; regenerate with npm run package');
     inspectJavaScript(files, reports);
     const graphs = {
         ...hostGraphs(reports[0], files),
-        ...viewGraphs(reports[1], files, options),
+        ...viewGraphs(reports[1], files),
     };
     for (const report of reports) {
         assert.ok(Object.keys(report.assetHashes).length > 0, 'Bundle report has no asset provenance');
@@ -829,7 +771,7 @@ if (require.main === module) {
     const filename = args.shift();
     if (!filename) {
         throw new Error(
-            'Usage: node build/verification/inspect.cjs <vsix> [--write-baseline <file>] [--baseline <file>] [--manifest-report <file>] [--reports <directory>] [--require-lightweight-views]',
+            'Usage: node build/verification/inspect.cjs <vsix> [--write-baseline <file>] [--baseline <file>] [--manifest-report <file>] [--reports <directory>]',
         );
     }
     const options = { baseline: path.join(__dirname, 'baseline.json') };
@@ -850,8 +792,6 @@ if (require.main === module) {
         } else if (flag === '--reports') {
             options.reports = args.shift();
             assert.ok(options.reports, '--reports requires a directory');
-        } else if (flag === '--require-lightweight-views') {
-            options.requireLightweightViews = true;
         } else {
             throw new Error(`Unknown inspection option: ${flag}`);
         }
@@ -893,7 +833,6 @@ module.exports = {
     inspectRuntimeAssets,
     runtimeAssets,
     inspectJavaScript,
-    entryGraph,
     viteViewGraph,
     viewGraphs,
     viewModules,

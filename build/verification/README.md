@@ -8,13 +8,11 @@ All harness files and bundle reports are excluded from the VSIX.
 `npm run package` and `npm run package-prerelease` use `build-prod`: Vite for the extension host
 (`vite.config.ext.mjs`, ES modules plus the CommonJS TS server plugin) and for the webviews.
 `npm run build-dev` builds the same combination unminified with source maps, and `npm run watch:ext`
-rebuilds the host on change. Since Stage 5 there is no webpack host config: the `bson` identity
-probes below also reuse the shipped Vite host environment. The webviews keep a webpack fallback
-(`webpack-prod-wv`, `webpack-dev-wv`, `watch:views-webpack`) until Stage 6.
+rebuilds the host on change. Vite is the only bundler for both targets; the `bson` identity
+probes below also reuse the shipped Vite host environment.
 
 `npm run watch:views` now starts Vite on port 18080 and serves `/views.js` without an existing
-`dist/views.js`. The Stage 0 advice to run `npm run webpack-dev-wv` once before starting the
-views watcher applies only to the `watch:views-webpack` fallback, not the default Vite dev loop.
+`dist/views.js`. No initial views build is needed.
 The `watch:views` VS Code task waits for Vite's ready line; its diagnostic pattern intentionally never matches,
 because Vite reports development build errors in the browser overlay.
 
@@ -22,8 +20,6 @@ because Vite reports development build errors in the browser overlay.
 
 Production Vite host and views builds generate hash-bound reports in `reports/` (`host.json`
 covers `main.mjs`, `playgroundWorker.mjs`, their chunks and `playgroundTsPlugin.cjs`).
-The webpack views fallback also generates a report. Enable its optional visual analyzer with
-`BUNDLE_ANALYZE=true`; it writes `reports/views.html` without starting a server.
 
 After packaging:
 
@@ -36,7 +32,7 @@ npm run test:verification
 Inspection reports archive file-list and size drift without failing. Hard checks cover required
 package files and the resolved `package.json` main entry, bundle-report ownership of every packaged
 `.js`, `.cjs` and `.mjs` file under `extension/`, the named `render` export,
-literal dynamic imports, webpack-owned lazy-chunk references, Vite literal `new URL(..., import.meta.url)`
+literal dynamic imports, Vite literal `new URL(..., import.meta.url)`
 assets (fonts and workers), development-server strings, `import.meta` in
 CommonJS bundles (including `.cjs`), and reachable BSON implementations. Reports must match the packaged JavaScript
 hashes and record each compilation's `chunkFormat`. `.mjs` files are ES modules; `.cjs` files
@@ -48,8 +44,7 @@ built-ins and `vscode`) are not packaged chunks; every other graph edge must exi
 and VSIX. These two graphs require exactly one BSON implementation; the TS plugin graph permits
 zero or one, never duplicates. Every host graph chunk must have an `assetHashes` entry in the
 host report itself; ownership by a views report cannot substitute for host provenance.
-Non-Vite host reports fail with a regenerate message; the retained
-webpack graph reader and numeric `.e(chunkId)` checks apply only to webpack-owned views files.
+Non-Vite host and views reports fail with a regenerate message.
 The union of the `main` and awaited extension implementation static closures (imports only)
 must exclude `@kubernetes/client-node`, preserving its dynamic discovery boundary. The
 implementation must be the unique chunk with `facadeModuleId: './src/extension.ts'` and appear
@@ -58,12 +53,10 @@ not follow dynamic children of the implementation, where lazy discovery legitima
 SDK. Full-VSIX negative controls cover eager SDK edges from both the loader and implementation
 (the latter mutates packaged bytes and matching report edges, hashes and sizes), and a missing
 implementation facade. Browser graphs allow zero because today's webviews do not bundle
-BSON, but reject duplicates. Webpack views retain the shared `views` entry fallback. With a Vite
-views report (`bundler: 'vite'`), each graph is the `views.js` entry's static import closure plus
+BSON, but reject duplicates. Each views graph is the `views.js` entry's static import closure plus
 that view's lazy chunk and its static import closure, never every dynamic child. The lazy chunk's
 `facadeModuleId` must match the registry-backed map and appear in the entry's `dynamicImports`.
-Local Quick Start and Atlas Credentials must exclude Monaco and SlickGrid by default for Vite;
-`--require-lightweight-views` forces the same assertion for webpack.
+Local Quick Start and Atlas Credentials must always exclude Monaco and SlickGrid.
 
 The packaged manifest's top-level icon and local file paths under `contributes` are required,
 with missing paths reported alongside their JSON pointers; URLs, substitutions and codicons are excluded.
@@ -106,8 +99,7 @@ URL provenance. Any Babel/bundler shape change requires re-review, not broadenin
 L1 counts the `node_modules/**/bson/lib/bson.*` modules in each shipped graph. It cannot see a copy
 under another path (a dependency that vendors or pre-bundles `bson`), and it only sees the importers
 the graph has today. The host Vite config therefore pins `bson` with a `resolve.alias` (`^bson$`)
-to the CommonJS entry the driver `require`s. Both Vite views and the webpack views fallback pin
-bson's browser entry.
+to the CommonJS entry the driver `require`s. Vite views pin bson's browser entry.
 [`bson-identity/check.cjs`](./bson-identity/check.cjs) builds two probe entries with
 `vite.config.ext.mjs` (production mode, reusing its `host` environment, root aliases, resolve
 settings, externals, defines, and ES output), runs them in Node
@@ -136,12 +128,13 @@ the CommonJS `import.meta` control now mutates `playgroundTsPlugin.cjs`)
 and one positive, unrelated README-image asset-change reporting control. Vite adds
 `missing-lazy-chunk` (the entry's missing dynamic import fires first),
 `monaco-in-local-quick-start`, `duplicate-bson`, `nonliteral-import` and
-`allowlisted-shape-at-top-level`; webpack prints `SKIP` for these five.
+`allowlisted-shape-at-top-level`. All controls are mandatory.
 Report mutations use temporary copies, never the supplied reports.
-Five host controls additionally reject `missing-host-lazy-chunk`, `duplicate-host-bson`,
-`missing-ts-plugin`, `second-babel-nonliteral-import` and `kubernetes-in-main-static-closure`.
+Seven host controls additionally reject `missing-host-lazy-chunk`, `duplicate-host-bson`,
+`missing-ts-plugin`, `second-babel-nonliteral-import`, `kubernetes-in-main-static-closure`,
+`kubernetes-in-extension-static-closure` and `missing-extension-implementation-boundary`.
 Host controls refresh copied hashes to model matching newly built output and assert the intended
-diagnostic, not a stale-report failure. With Vite views the proof prints 19 PASS lines in total.
+diagnostic, not a stale-report failure. The proof prints 21 PASS lines in total.
 Review intentional artifact changes before regenerating the version-1 baseline (its format is unchanged):
 
 ```bash
@@ -162,7 +155,8 @@ node build/verification/measure.cjs <output-directory>
 ```
 
 Production timings now run `npm run build-prod` to measure the shipped Vite host and views build.
-The `webpackSeconds` key and `webpack-N.log` names are retained for comparison with the Stage 0 baseline.
+New measurements use `buildSeconds` and `build-N.log`. The committed Stage 0 measurements remain
+unchanged and readable with their historical `webpackSeconds` key.
 
 Run measurements without concurrent builds or full test suites. They are machine-specific wall
 times, not CI performance thresholds.
@@ -210,9 +204,10 @@ that editor's synchronized model: Unicode highlighting for Collection View, and 
 diagnostics for Document View. Collection View's custom query validator runs on the main thread and
 is not counted as worker proof. A sixth page deliberately drops CSS; its style checks
 must fail while its other diagnostics remain clean. Reports are persisted in the generated output.
-Generation detects Vite's `data-documentdb-views-css` marker in the extracted `views.js`: the negative
+Generation requires Vite's `data-documentdb-views-css` marker in the extracted `views.js`: the negative
 page removes only that marked bundle stylesheet (including late insertions), preserves Fluent/Griffel
-runtime styles, and fails if no marked stylesheet was removed; webpack packages retain all-style removal.
+runtime styles, and fails if no marked stylesheet was removed. An unmarked entry is rejected,
+including a single-file entry; there is no all-style removal fallback.
 The helper starts each check from `about:blank`, so requests left over from the previous page are not counted, and it polls readiness through `page.evaluate`, so it also runs from a plain Playwright page without `unsafe-eval`. Stop the server after verification.
 
 This is not a real `vscode-webview://` test, an extension-host E2E suite, or proof of backend behavior.

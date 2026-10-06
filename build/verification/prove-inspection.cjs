@@ -250,95 +250,82 @@ try {
         assert.throws(() => inspect(variant, { ...options, reports: controlReports }), expected);
         console.log(`PASS: ${name} rejected for the expected reason`);
     }
-    const viteControls = [
-        'missing-lazy-chunk',
-        'monaco-in-local-quick-start',
-        'duplicate-bson',
-        'nonliteral-import',
-        'allowlisted-shape-at-top-level',
+    const { viewModules } = require('./inspect.cjs');
+    const lazy = views.chunks.find((chunk) => chunk.facadeModuleId === viewModules.localQuickStart);
+    const monaco = views.chunks.find((chunk) => /^monaco-[A-Za-z0-9_-]+\.js$/.test(chunk.fileName));
+    assert.ok(lazy, 'Proof requires Local Quick Start lazy chunk');
+    assert.ok(monaco, 'Proof requires Monaco chunk');
+    const escapedLazyName = lazy.fileName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const controls = [
+        [
+            'missing-lazy-chunk',
+            (files) => {
+                assert.ok(files.delete(`extension/${lazy.fileName}`));
+            },
+            new RegExp(`views\\.js: missing dynamic import/asset (?:\\./)?${escapedLazyName}`),
+        ],
+        [
+            'monaco-in-local-quick-start',
+            undefined,
+            /localQuickStart must exclude Monaco and SlickGrid/,
+            (report) => {
+                report.chunks.find((chunk) => chunk.fileName === lazy.fileName).imports.push(monaco.fileName);
+            },
+        ],
+        [
+            'duplicate-bson',
+            undefined,
+            /localQuickStart: expected at most one BSON module, got 2/,
+            (report) => {
+                report.chunks
+                    .find((chunk) => chunk.fileName === lazy.fileName)
+                    .moduleIds.push(
+                        './node_modules/bson/lib/bson.mjs',
+                        './node_modules/foo/node_modules/bson/lib/bson.mjs',
+                    );
+            },
+        ],
+        [
+            'nonliteral-import',
+            (files) => {
+                files.set(
+                    'extension/views.js',
+                    Buffer.concat([files.get('extension/views.js'), Buffer.from(';import(`${globalThis.x}`)')]),
+                );
+            },
+            /views\.js: nonliteral dynamic import cannot be verified/,
+        ],
+        [
+            'allowlisted-shape-at-top-level',
+            (files) => {
+                const filename = `extension/${monaco.fileName}`;
+                files.set(
+                    filename,
+                    Buffer.concat([
+                        files.get(filename),
+                        Buffer.from(';const s4Proof="./missing-proof.js";import(`${s4Proof}`);'),
+                    ]),
+                );
+            },
+            /monaco-[A-Za-z0-9_-]+\.js: nonliteral dynamic import cannot be verified/,
+        ],
     ];
-    if (views.bundler === 'vite') {
-        const { viewModules } = require('./inspect.cjs');
-        const lazy = views.chunks.find((chunk) => chunk.facadeModuleId === viewModules.localQuickStart);
-        const monaco = views.chunks.find((chunk) => /^monaco-[A-Za-z0-9_-]+\.js$/.test(chunk.fileName));
-        assert.ok(lazy, 'Proof requires Local Quick Start lazy chunk');
-        assert.ok(monaco, 'Proof requires Monaco chunk');
-        const escapedLazyName = lazy.fileName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-        const controls = [
-            [
-                viteControls[0],
-                (files) => {
-                    assert.ok(files.delete(`extension/${lazy.fileName}`));
-                },
-                new RegExp(`views\\.js: missing dynamic import/asset (?:\\./)?${escapedLazyName}`),
-            ],
-            [
-                viteControls[1],
-                undefined,
-                /localQuickStart must exclude Monaco and SlickGrid/,
-                (report) => {
-                    report.chunks.find((chunk) => chunk.fileName === lazy.fileName).imports.push(monaco.fileName);
-                },
-            ],
-            [
-                viteControls[2],
-                undefined,
-                /localQuickStart: expected at most one BSON module, got 2/,
-                (report) => {
-                    report.chunks
-                        .find((chunk) => chunk.fileName === lazy.fileName)
-                        .moduleIds.push(
-                            './node_modules/bson/lib/bson.mjs',
-                            './node_modules/foo/node_modules/bson/lib/bson.mjs',
-                        );
-                },
-            ],
-            [
-                viteControls[3],
-                (files) => {
-                    files.set(
-                        'extension/views.js',
-                        Buffer.concat([files.get('extension/views.js'), Buffer.from(';import(`${globalThis.x}`)')]),
-                    );
-                },
-                /views\.js: nonliteral dynamic import cannot be verified/,
-            ],
-            [
-                viteControls[4],
-                (files) => {
-                    const filename = `extension/${monaco.fileName}`;
-                    files.set(
-                        filename,
-                        Buffer.concat([
-                            files.get(filename),
-                            Buffer.from(';const s4Proof="./missing-proof.js";import(`${s4Proof}`);'),
-                        ]),
-                    );
-                },
-                /monaco-[A-Za-z0-9_-]+\.js: nonliteral dynamic import cannot be verified/,
-            ],
-        ];
-        for (const [name, mutateFiles, expected, mutateReport] of controls) {
-            const files = readVsix(filename);
-            mutateFiles?.(files);
-            let controlReports = reports;
-            if (mutateReport) {
-                controlReports = path.join(directory, name);
-                fs.mkdirSync(controlReports);
-                fs.copyFileSync(path.join(reports, 'host.json'), path.join(controlReports, 'host.json'));
-                const report = structuredClone(views);
-                mutateReport(report);
-                fs.writeFileSync(path.join(controlReports, 'views.json'), JSON.stringify(report));
-            }
-            const variant = path.join(directory, `${name}.vsix`);
-            writeVsix(variant, files);
-            assert.throws(() => inspect(variant, { ...options, reports: controlReports }), expected);
-            console.log(`PASS: ${name} rejected for the expected reason`);
+    for (const [name, mutateFiles, expected, mutateReport] of controls) {
+        const files = readVsix(filename);
+        mutateFiles?.(files);
+        let controlReports = reports;
+        if (mutateReport) {
+            controlReports = path.join(directory, name);
+            fs.mkdirSync(controlReports);
+            fs.copyFileSync(path.join(reports, 'host.json'), path.join(controlReports, 'host.json'));
+            const report = structuredClone(views);
+            mutateReport(report);
+            fs.writeFileSync(path.join(controlReports, 'views.json'), JSON.stringify(report));
         }
-    } else {
-        for (const name of viteControls) {
-            console.log(`SKIP: ${name} (webpack views report)`);
-        }
+        const variant = path.join(directory, `${name}.vsix`);
+        writeVsix(variant, files);
+        assert.throws(() => inspect(variant, { ...options, reports: controlReports }), expected);
+        console.log(`PASS: ${name} rejected for the expected reason`);
     }
 } finally {
     fs.rmSync(directory, { recursive: true, force: true });
