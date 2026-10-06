@@ -14,8 +14,9 @@ network isolation constraint on the official ADO build, and the rule for decidin
 belongs. Written during the modernization re-review
 ([build-and-test-stack.md, execution plan](./build-and-test-stack.md#execution-plan)).
 
-Marked facts: [MEASURED] was read from the pipeline files on 2026-09-30. [INFERRED] is reasoning,
-not verified. "Planned" rows describe later modernization work. Stage 0 now wires L1 and L3;
+Marked facts: [MEASURED] was read from the pipeline files on 2026-09-30, with checkout, reporting
+and artifact wiring updated in Stage 6 on 2026-10-06. [INFERRED] is reasoning, not verified.
+"Planned" rows describe later modernization work. L1 and L3 are wired;
 the operator-run ADO build and the G0 manual checklist remain outstanding.
 
 ## In short
@@ -45,10 +46,12 @@ the operator-run ADO build and the G0 manual checklist remain outstanding.
 
 All of them install from **public npmjs**: there is no `.npmrc` at the repository root.
 
-Stage 1 temporarily makes every checkout in `main.yml` use the PR head SHA (or `github.sha`
-for push/manual runs), not GitHub's synthetic PR merge ref. This keeps the packaged artifact
-and L1 baseline on the same `v0.11.0` lockfile as local/ADO builds. The orchestrator made this
-decision while the operator was unavailable; review it at G1-3 and revisit it before G6.
+All four checkouts in `main.yml` use `actions/checkout`'s default ref: GitHub's synthetic
+**merge ref for PRs**, and `github.sha` for push/manual runs. Stage 6 restores this policy
+for S1-F01 by coordinator decision, reverting Stage 1's temporary PR-head override.
+The package, L1 and L3 jobs therefore use the same merge tree as the quality checks, exercising
+integration with the base branch rather than just the contributor's head. The seed workflow also
+uses the default checkout; no other workflow has the temporary override.
 
 ### Azure DevOps (`.azure-pipelines/`)
 
@@ -155,6 +158,55 @@ in a browser, and L3 installs the VSIX into a downloaded VS Code and checks that
 | Legacy `🧪 Test` step            | removed in Stage 1                | n/a                                      | **removed**                  | Retired no-op harness; unit tests run on GitHub and L3 must not download VS Code in ADO |
 | Dependency freshness             | manual (skill)                    | future work, not planned                 | implicit (`npm ci` fails)    | Release builds are prepared from quarantine-clear versions (2.1)                        |
 | Sign, verify signature, publish  | ADO                               | no                                       | yes                          |                                                                                         |
+
+### 3.1 Reports, artifacts and PR size feedback (Stage 6)
+
+On GitHub Actions, **Build & Package** still depends on **Code Quality & Tests** and produces
+`Artifacts-<run_id>` (VSIX/tgz) and `Bundle-reports-<run_id>` (`build/verification/reports/*.json`).
+Bundle-report upload uses `if: always()` and treats missing files as an error. **VSIX inspection
+(L1)** downloads those two artifacts, runs the offline inspection and rejection proofs, and
+uploads `L1-manifest-report-<run_id>` with `if: always()` (missing reports warn, because failures
+before size evaluation may not write one). The report contains informational manifest drift and
+the enforced per-graph `sizeBudget`; an over-budget inspection writes the report and still
+fails the job. **Installed VSIX activation (L3)** independently consumes the VSIX from Build &
+Package, runs on GitHub only, and keeps its failure-diagnostics artifact unchanged.
+
+L1 now owns size collection, cache save/restore and the `<!-- build-size-report -->` PR comment.
+The shared [report formatter](../../../build/verification/build-size-report.cjs) reads L1's
+`sizeBudget.graphs` without reimplementing graph traversal. It reports all five views, the views
+entry, both Monaco workers, all host graphs (including `mainStartup`), and the VSIX total, with
+exact PR bytes, base bytes, delta and budget status/limit. Shared chunks occur in multiple graphs,
+so these rows are not additive. The old `dist/views.js` metric is no longer used as a proxy for
+all webviews.
+
+Push builds of `main` cache only successful L1 results, using the unchanged
+`build-sizes-<ref>-<sha>` key. The JSON format is now
+`{version: 2, vsixSize, graphSizes: {<graph>: <bytes>}}`, including `vsix` in `graphSizes`.
+The manual **Build Size Cache** seed mode packages and inspects the selected ref, publishes the
+same report artifacts, and uses the same formatter/cache format; verify mode remains a
+schema-independent cache lookup, so old entries are still accepted. PR restore tries the exact
+base SHA, then the branch prefix. Restored data is renamed before collecting PR sizes, so a miss
+cannot accidentally become a PR-as-base comparison.
+
+The PR comment updates its existing marker comment, links the VSIX and both report artifacts,
+and runs with `if: always()` even after a budget failure; it does not turn the failed L1 check
+green. Legacy `{vsixSize, webviewSize}` cache entries still give a VSIX delta, but explicitly say
+per-graph base values are unavailable instead of showing a false reduction. With no base, deltas
+are `N/A`; if an earlier invariant prevents the L1 report, the comment says measurements are
+unavailable. As before, token-written comments are restricted to same-repository PRs; fork PRs
+still get artifacts and job logs. Packaging/L1/L3 run for PRs to `main` or `release/**`, pushes
+to `main`, and dispatches on those refs or with `enforce_full_run`; feature-target PRs otherwise
+run only quality/tests under the existing job condition.
+
+ADO's unsigned-VSIX inspection uses `--manifest-report` and enforces the same budget **before
+signing**. A report-only `CopyFiles@2` step, with `condition: succeededOrFailed()`, stages
+`build/verification/l1-manifest-report.json` and `build/verification/reports/*.json` under the
+existing OneBranch `ob_outputDirectory`, whose contents are published as pipeline artifacts.
+This moves report staging out of the final success-only package-copy step without duplicating
+it. A failed inspection still prevents signing and the final package/signature staging; only
+diagnostic reports are staged on failure. No signing, feed, pool or release policy changed, and
+there is no L3 in ADO. YAML and task ordering were checked locally; the governed template and an
+actual ADO run remain operator verification.
 
 ## 4. The gap between the two VSIXs, and how to close it
 

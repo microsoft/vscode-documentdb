@@ -125,6 +125,17 @@ tolerance are informational, with content hashes normalized when pairing renamed
 webpack chunks remain distinct). The JSON result includes `manifestReport`: `added`, `removed`,
 `sizeChanges`, total `vsixBytes` delta and `graphAssetBytes` sums. A short summary goes to stderr;
 stdout stays JSON. `--manifest-report <file>` writes just the report; CI uploads it separately.
+GitHub Actions publishes `Bundle-reports-<run_id>` from the package job and
+`L1-manifest-report-<run_id>` from L1, including on inspection failure. L1's PR comment reads the
+report's `sizeBudget` measurements, not the thin `views.js` entry. Push builds and manual cache
+seeding use `{version: 2, vsixSize, graphSizes}` in the existing `build-sizes-<ref>-<sha>` cache;
+legacy `{vsixSize, webviewSize}` baselines compare only the VSIX and mark graph deltas unavailable.
+The shared [`build-size-report.cjs`](./build-size-report.cjs) formats those measurements and writes
+the cache without recalculating graph closures. It is also covered by `test:verification`.
+ADO passes `--manifest-report` before signing and stages the L1 JSON with the bundle reports in
+its existing OneBranch pipeline artifact, even if inspection fails. See the
+[pipeline guide](../../docs/ai-and-plans/modernization/pipelines-readme.md#31-reports-artifacts-and-pr-size-feedback-stage-6)
+for job conditions, artifact paths and the merge-ref checkout policy.
 The proof has eight original rejection controls (including missing contributed grammar and runtime shell declarations;
 the CommonJS `import.meta` control now mutates `playgroundTsPlugin.cjs`)
 and one positive, unrelated README-image asset-change reporting control. Vite adds
