@@ -2738,6 +2738,40 @@ Stage 0 must also be made.
       devDependencies) is byte-identical, so no shipped code changed.
   - CI: add a size budget with a tolerance to L1, in GitHub Actions and in the ADO build. Keep L3 on
     GitHub Actions. Publish the bundle report as a PR artifact.
+    - **L1 size budget, done in `f53df711` (Claude Opus 5.5).** `verify:vsix` enforces
+      `build/verification/size-budget.json`, so GitHub Actions and ADO, which both call it, get the
+      budget without a pipeline change. It measures per-graph totals from the hash-checked bundle
+      reports, not `views.js` alone: the five per-view graphs (the same definition as the
+      lightweight-view check), `viewsEntry`, the two Monaco workers, host `main` (everything the
+      loader reaches), `mainStartup` (the closure the Kubernetes invariant uses),
+      `playgroundWorker`, `playgroundTsPlugin`, and the VSIX file. **Tolerance (coordinator
+      decision, mirroring the operator-approved per-file tolerance): fail only above budget by
+      more than 10% or 4 KiB, whichever is greater.** Decreases never fail; a decrease beyond the
+      tolerance prints a note. A graph in the budget but not in the artifact, or the reverse,
+      fails. The budget changes only through an explicit
+      `npm run verify:vsix -- <vsix> --write-size-budget`. Results go to stderr as a table and
+      into the `--manifest-report` JSON (`sizeBudget`), written before a failing exit. **This
+      keeps the G4 split:** the per-file manifest drift against `baseline.json` stays
+      informational; the budget is a separate, aggregate invariant.
+      - **Controls:** `size-budget-collection-view` and `size-budget-host-startup` in `prove:vsix`
+        (each fails on exactly the inflated graphs). **Real rebuild:** about 300 KB of literal
+        added to `LocalQuickStart.tsx` failed `verify:vsix` with only
+        `Size budget failed: localQuickStart is 1861867 bytes, over its limit of 1718013`; the
+        change was reverted and never committed.
+      - **Limitation:** ADO regenerates a larger `NOTICE.html`. Compressed, that should stay well
+        inside the `vsix` graph's 850 KB tolerance, but no ADO run has confirmed it.
+    - **F17 `keepNames` check, done in `64a7992f` (Claude Opus 5.5).** The suggested
+      `RemoveMeBaseCachedBranchDataProvider` is tree-shaken out of the bundle. The name-dependent
+      reader that ships is Query Insights, whose telemetry records `err.constructor.name` as
+      `errorKind` and receives `UserCancelledError` on cancellation. L1 requires every class in
+      the `main` graph with the unminified member `_isUserCancelledError` to have the runtime
+      name `UserCancelledError`, and fails if none exists. Evidence: a throwaway build with
+      `keepNames: false` emitted `var W=class extends Error{…}`. Control:
+      `keepnames-class-name-lost`.
+      The views keep `keepNames` off (Stage 4 decision).
+    - **Checks:** `prove:vsix` prints **24 PASS** lines (the 21 earlier plus the three above;
+      re-run by the coordinator). `test:verification`: 93 Node and 79 browser tests.
+      `npm run build` and `npm run lint` pass. VSIX 8,493,810 bytes, SHA-256 `5cd02e81…26b1c`.
   - Write a build-rationale document like Cosmos DB's `docs/webview-build.md`: one place that
     explains every non-obvious Vite setting (`base`, workers, CSS inlining, chunking, CSP).
   - Bump TypeScript to 6.x with feed-safe versions. Keep the packages' `NodeNext` configurations and
