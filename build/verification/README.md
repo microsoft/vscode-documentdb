@@ -365,6 +365,9 @@ npm run verify:packages -- --no-build --keep --report <file.json>
 [`package-checks/check-packages.mjs`](./package-checks/check-packages.mjs) packs every workspace
 into a temp directory outside the repository and, for each tarball, runs:
 
+- a fail-closed check rejecting every `*.test.*` and `*.spec.*` file, including declarations and
+  source maps left by older incremental builds. A packed fixture with a planted `dist/x.test.js`
+  must be rejected for exactly this reason; builds do not clean composite `dist` output;
 - `publint --strict` and `@arethetypeswrong/cli` (pinned versions, through `npx`; they are not
   dependencies). The only accepted ATTW finding is `CJSResolvesToESM` for TypeScript's node16
   CommonJS resolution, which is inherent to an ESM-only package; the CommonJS probe below shows

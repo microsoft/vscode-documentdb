@@ -7,7 +7,7 @@
 //
 //   node build/verification/package-checks/check-packages.mjs [--no-build] [--keep] [--report <file>]
 //
-// 1. `npm pack`s each workspace into a temp directory outside the repository.
+// 1. `npm pack`s each workspace into a temp directory outside the repository and rejects test files.
 // 2. publint and @arethetypeswrong/cli on each tarball (pinned versions, through npx).
 // 3. Static scan of every shipped .js file for top-level await, which `require(esm)` rejects.
 // 4. Two throwaway consumer projects with the tarballs unpacked into node_modules (all other
@@ -16,10 +16,11 @@
 //    - Vitest probe: imports every entry point under Vitest, with a `vscode` alias for
 //      `vscode-ext-webview/host`, and runs the DOM-dependent calls under jsdom.
 //    Every probe makes the representative calls in calls.mjs, not only imports.
-// 5. Controls: the Vitest probe again without inlining, which must fail for the documented reasons.
+// 5. Controls: a tarball with a planted test, and Vitest without inlining, must fail as documented.
 //
 // Exit code 0 only when every result matches the expectations below.
 
+import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
 import {
     cpSync,
@@ -34,6 +35,7 @@ import {
 } from 'node:fs';
 import { tmpdir } from 'node:os';
 import * as path from 'node:path';
+import { packedTestFailure } from './packed-tests.cjs';
 import { hasTopLevelAwait } from './top-level-await.mjs';
 
 const PUBLINT = 'publint@0.3.24';
@@ -149,6 +151,7 @@ try {
         version: entry.version,
         tarball: path.join(tarballs, entry.filename),
         files: entry.entryCount,
+        packedPaths: entry.files.map((file) => file.path),
         bytes: entry.size,
     }));
     const ours = new Set(packed.map((entry) => entry.name));
@@ -191,6 +194,9 @@ try {
 
     for (const entry of packed) {
         note(entry.name, 'tarball', `${path.basename(entry.tarball)} (${entry.files} files, ${entry.bytes} bytes)`);
+        const testFailure = packedTestFailure(entry.name, entry.packedPaths);
+        note(entry.name, 'packedTests', testFailure ?? 'none');
+        if (testFailure) failures.push(testFailure);
 
         const publint = run('npx', ['--yes', PUBLINT, 'run', entry.tarball, '--strict'], { cwd: workDir });
         const publintOutput = `${publint.stdout}${publint.stderr}`.trim();
@@ -272,6 +278,23 @@ try {
     if (missingSources.some((line) => [...ours].some((name) => line.includes(name)))) {
         failures.push(`vitest reported sourcemaps without sources for our packages:\n${missingSources.join('\n')}`);
     }
+
+    const testFixture = path.join(workDir, 'packed-test-control');
+    mkdirSync(path.join(testFixture, 'dist'), { recursive: true });
+    writeFileSync(
+        path.join(testFixture, 'package.json'),
+        JSON.stringify({ name: 'packed-test-control', version: '1.0.0', files: ['dist'] }),
+    );
+    writeFileSync(path.join(testFixture, 'dist', 'x.test.js'), 'export {};\n');
+    const testPack = run('npm', ['pack', '--json', '--pack-destination', tarballs], { cwd: testFixture });
+    assert.equal(testPack.status, 0, `Packed-test control npm pack failed: ${testPack.stderr}`);
+    const [testTarball] = JSON.parse(testPack.stdout);
+    const testControlFailure = packedTestFailure(
+        testTarball.name,
+        testTarball.files.map((file) => file.path),
+    );
+    assert.equal(testControlFailure, 'packed-test-control: packed test files are forbidden: dist/x.test.js');
+    report.packedTestControl = { status: 'expected failure', failure: testControlFailure };
 
     // Control: without inlining, Vitest hands both packages to Node, which must fail exactly as
     // documented (Fluent's named exports; the host entry's bare `vscode` import).
