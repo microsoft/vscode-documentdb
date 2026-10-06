@@ -10,6 +10,8 @@ All harness files and bundle reports are excluded from the VSIX.
 `npm run build-dev` builds the same combination unminified with source maps, and `npm run watch:ext`
 rebuilds the host on change. Vite is the only bundler for both targets; the `bson` identity
 probes below also reuse the shipped Vite host environment.
+See the [Vite build rationale](../vite/README.md) for why each non-obvious setting exists and which
+checks guard it.
 
 `npm run watch:views` now starts Vite on port 18080 and serves `/views.js` without an existing
 `dist/views.js`. No initial views build is needed.

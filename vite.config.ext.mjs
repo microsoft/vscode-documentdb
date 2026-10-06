@@ -5,6 +5,7 @@
 
 // Vite build of the extension host. Writes into `dist/` next to the webview build
 // (vite.config.views.mjs); `dist/` is the extension folder that gets packaged.
+// Settings and rationale: build/vite/README.md.
 //
 //   npm run vite-prod-ext   production build, writes build/verification/reports/host.json
 //   npm run vite-dev-ext    unminified build with source maps, no report

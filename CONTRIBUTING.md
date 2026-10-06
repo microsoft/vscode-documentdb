@@ -207,6 +207,8 @@ code .
 The `Watch` task builds the extension host with Vite in watch mode (`npm run watch:ext`) and serves
 the webviews with Vite (`npm run watch:views`). No initial webview build is needed. For an on-disk
 development build, use `npm run build-dev`. Vite is the only bundler for both targets.
+See the [Vite build rationale](build/vite/README.md) for settings, plugins and the checks guarding
+the `npm run package` output.
 
 ## 4. PR Submission Checklist
 
