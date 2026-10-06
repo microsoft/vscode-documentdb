@@ -2661,8 +2661,10 @@ Stage 0 must also be made.
         `vscode-azext-azureutils`' `import()` form (via `__toESM`) in a probe built with the host
         config; that factory is tree-shaken out of the VSIX. VSIX 8,494,062 bytes, SHA-256
         `74571b1d…c9c0f1`; host output +5,449 bytes. `verify:vsix` passes, `prove:vsix` prints 21
-        PASS lines, and local `L3 PASS` and `L3 PROOF PASS`. Not run by agents: discovery
-        against Azure. The re-test list below is for the operator.
+        PASS lines, and local `L3 PASS` and `L3 PROOF PASS`. CI run
+        [37481473032](https://github.com/microsoft/vscode-documentdb/actions/runs/37481473032) at
+        `ec76e7bc`: all four jobs green. Not run by agents: discovery against Azure. The re-test
+        list below is for the operator.
       - **Follow-up (option 3):** [#990](https://github.com/microsoft/vscode-documentdb/issues/990)
         (labels `dependencies`, `on-hold`): after #880 merges, upgrade
         `@microsoft/vscode-azext-azureauth` to its ES module build (5.1.1 stable, or 6.x) and
