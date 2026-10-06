@@ -2519,13 +2519,12 @@ Stage 0 must also be made.
       that Stage 5 did not touch. It passed in every later run and locally. **Watch item.**
     - The L1 job of run 37361229466 at `f22c0278` was cancelled by the next dispatch
       (`cancel-in-progress`); it recorded no steps.
-    - **CI at the final tip is pending.** Run 37365486602 at `90374fee` and both CodeQL runs
-      queued for 25 minutes, then were cancelled without starting. Run
+    - **CI at the final tip:** run 37365486602 at `90374fee` and both CodeQL runs queued for
+      25 minutes and were cancelled without starting, while every run in the repository was
+      waiting for runners. Run
       [37368806263](https://github.com/microsoft/vscode-documentdb/actions/runs/37368806263) at
-      `57928f8e` (same code plus this record) was still queued after 20 minutes, while every run in
-      the repository was waiting for runners. The code changed since the last green CI run
-      (`f22c0278`, `555f9def`, `90374fee`) passed L0, L1 and L3 locally. Read run 37368806263 (or
-      re-dispatch) before G5.
+      `57928f8e` (the same code plus this record) is **green**: all four jobs, 21 unique `prove:vsix`
+      controls, `L3 PASS` and `L3 PROOF PASS`.
   - **L1:** `verify:vsix` passes, and `prove:vsix` prints 21 PASS lines. The manifest drift against
     the Stage 0 baseline is informational (option A): 120 added, 42 removed, 1 size change. Graph
     bytes: `main` 9,875,774 (loader plus everything it reaches, lazy discovery included),
@@ -2600,6 +2599,59 @@ Stage 0 must also be made.
      Also decide whether to record these in a `decisions.md`.
 
   Windows and macOS were not run by the agents.
+  - **G5 progress (operator, 2026-10-06), recorded verbatim:** "manual check on F5 debugging."
+    "rapid saving, no issues." "the path via azure resources, where the discovery is done, works -
+    I can authenticate and see all webviews like: dashoard, collection view and document view."
+    Azure discovery fails with
+    `Error: Cannot read properties of undefined (reading 'SubscriptionClient')`. The operator
+    asked to collect issues for now; nothing below is fixed yet. Items 8 (F5, rapid saves) and,
+    for the Azure Resources path only, item 5 are reported working. Kubernetes and Atlas discovery
+    and the other items are not yet reported. **G5 is not passed.**
+  - **G5 issues collected (not fixed):**
+    - **G5-I01: Azure discovery fails: Rolldown drops the module namespace of a lowered dynamic
+      import (Stage 5 regression; affects the production VSIX too).**
+      - **Cause (confirmed):** `@microsoft/vscode-azext-azureauth` 4.1.1 is CommonJS. Its
+        `VSCodeAzureSubscriptionProvider.getSubscriptionClient` (used by the Discovery view's
+        Azure plugins) and `AzureDevOpsSubscriptionProvider.getSubscriptionClient` load
+        `@azure/arm-resources-subscriptions` with
+        `Promise.resolve().then(() => require('@azure/arm-resources-subscriptions'))`. That is
+        TypeScript's CommonJS lowering of `import()`. Vite resolves that package to its ES module
+        build. Rolldown 1.0.3 then compiles the call to `init_esm()` (the module's initialiser,
+        which returns `undefined`) instead of `(init_esm(), __toCommonJS(ns))`, so
+        `armSubs.SubscriptionClient` throws.
+      - **Evidence:** in the packaged `extension-Ba-j8fsQ.mjs`, both call sites are
+        `Promise.resolve().then(()=>U())`, where `U` is defined with `__esmMin`. A standalone
+        Rolldown 1.0.3 reproduction (kept in the coordinator's session files, not committed)
+        returns `undefined` for exactly that expression-bodied arrow. The same call with a block
+        body (`() => { return require('x') }`), a `function` expression, or a plain `require` is
+        bundled correctly. The `sideEffects` field makes no difference. A scan of every packaged
+        host `.mjs` finds **exactly these two call sites**.
+      - **Why the Azure Resources path works:** it uses the ES module build of
+        `vscode-azext-azureutils`, which calls a real `await import(...)`.
+      - **Why the checks missed it:** webpack bundled the CommonJS build, so this is new in Stage 5.
+        L3 does not exercise discovery. The externals audit and the review looked for unresolved
+        or unbundled requires, not for a bundled require that evaluates to `undefined`. No
+        matching Rolldown issue was found in a quick search.
+      - **Options:**
+        1. Alias `@azure/arm-resources-subscriptions` to its CommonJS build in
+           `vite.config.ext.mjs`. Pros: one line; webpack's behaviour for this package. Cons: it
+           fixes only this package; the next one with the same pattern breaks silently unless
+           L1 catches it.
+        2. A small Vite transform, limited to CommonJS files under `node_modules`, that rewrites
+           this exact expression into a block body. Pros: covers every package. Cons: rewrites
+           dependency source; must be removed once Rolldown is fixed.
+        3. Upgrade `@microsoft/vscode-azext-azureauth` to a dual-format release (6.x is already in
+           the tree as `vscode-azext-azureutils`' dependency, at `6.0.0-alpha.8`). Pros: also
+           removes the S2-F03 `require('vscode')` split. Cons: a major-version, pre-release
+           upgrade with API changes.
+        4. In addition to any of these, add an L1 invariant (with a `prove:vsix` control) that
+           rejects `Promise.resolve().then(() => <ESM init>())` in host chunks, and report the
+           bug to Rolldown with the reproduction.
+      - **Recommended:** 4 plus 1 now, so L1 guards against recurrence; 3 later. **Decision:**
+        _pending (operator)_.
+      - **Re-test after the fix:** Azure discovery (vCore, RU, VM), the tenant and subscription
+        filter wizard, and new connection and update credentials through Azure (they use the
+        same provider).
 
 - **Stage 5 commits:** `b98ab019`, `4386c580`, `644b41ae`, `776f3a87`, `770446c2`, `650f2329`,
   `0f25c1ec`, `69989ed7`, `f22c0278` (implementation); `e677026c` (review); `555f9def`, `90374fee`
