@@ -2798,6 +2798,21 @@ Stage 0 must also be made.
       test the branch head. `pipelines-readme.md` is updated.
   - Write a build-rationale document like Cosmos DB's `docs/webview-build.md`: one place that
     explains every non-obvious Vite setting (`base`, workers, CSS inlining, chunking, CSP).
+    - **Done in `8e2699c0` (GPT-6.1 Sol): [build/vite/README.md](../../../build/vite/README.md),**
+      covering both `vite.config.views.mjs` and `vite.config.ext.mjs`. Location (coordinator
+      decision): next to the local Vite plugins it explains, since `docs/` is the published user
+      documentation site. Both configs' header comments, `CONTRIBUTING.md` and
+      `build/verification/README.md` link to it; the configs changed only in that comment.
+      - **Views:** `base`, asset and font settings under the CSP, the `render` export, lazy views
+        and the chunk-group order, CSS inlining, Monaco workers through the Blob trampoline,
+        `keepNames` off, the dev server and the scenario plugin.
+      - **Host:** the two environments; the `__dirname`/`__filename` banner and `define`, and why
+        there is no `require` banner; `keepNames`; the `bson` and
+        `@azure/arm-resources-subscriptions` aliases (#990); the externals by reason;
+        resolution conditions; asset copying; the TS plugin and its stub; the watch readiness
+        hook.
+      - It ends with a table of which check guards each setting, and how to change a setting
+        safely.
   - Bump TypeScript to 6.x with feed-safe versions. Keep the packages' `NodeNext` configurations and
     run every package build.
     - **Done in `9fb027d7` (Claude Opus 5.5).** `typescript` `~6.0.3` (2026-04-16; 6.0 is the only
