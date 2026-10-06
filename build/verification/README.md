@@ -29,7 +29,8 @@ npm run prove:vsix -- vscode-documentdb-0.11.0.vsix
 npm run test:verification
 ```
 
-Inspection reports archive file-list and size drift without failing. Hard checks cover required
+Inspection reports archive file-list and per-file size drift without failing; per-graph sizes are
+enforced by the [size budget](#size-budget-enforced). Hard checks cover required
 package files and the resolved `package.json` main entry, bundle-report ownership of every packaged
 `.js`, `.cjs` and `.mjs` file under `extension/`, the named `render` export,
 literal dynamic imports, Vite literal `new URL(..., import.meta.url)`
@@ -134,12 +135,65 @@ Seven host controls additionally reject `missing-host-lazy-chunk`, `duplicate-ho
 `missing-ts-plugin`, `second-babel-nonliteral-import`, `kubernetes-in-main-static-closure`,
 `kubernetes-in-extension-static-closure` and `missing-extension-implementation-boundary`.
 Host controls refresh copied hashes to model matching newly built output and assert the intended
-diagnostic, not a stale-report failure. The proof prints 21 PASS lines in total.
+diagnostic, not a stale-report failure. Stage 6 adds two size-budget controls (below). The proof
+prints 23 PASS lines in total.
+Proof variants are written with deflated entries, so their VSIX size stays comparable to `vsce`
+output and within the `vsix` budget.
 Review intentional artifact changes before regenerating the version-1 baseline (its format is unchanged):
 
 ```bash
 node build/verification/inspect.cjs <vsix> --write-baseline build/verification/baseline.json
 ```
+
+### Size budget (enforced)
+
+Unlike the per-file manifest report, the [size budget](./size-budget.json) is a hard failure, and
+`verify:vsix` enforces it by default (so the GitHub Actions and ADO inspection steps run it). It
+budgets the packaged bytes of whole graphs, not single files. Every counted file must be owned by
+the bundle report its graph comes from, and L1 checks those reports' hashes against the packaged
+bytes, so the sizes are those of the files inside the VSIX:
+
+| Graph                                                                                       | Files counted                                                                                                                                  |
+| ------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
+| `main`                                                                                      | the `main.mjs` loader and every host chunk reachable through `imports` and `dynamicImports`                                                    |
+| `mainStartup`                                                                               | the imports-only closure of `main.mjs` plus the awaited `./src/extension.ts` implementation chunk (the Kubernetes invariant's startup closure) |
+| `playgroundWorker`                                                                          | `playgroundWorker.mjs` and everything it reaches, static and dynamic                                                                           |
+| `playgroundTsPlugin`                                                                        | `playgroundTsPlugin.cjs` and its static closure                                                                                                |
+| `viewsEntry`                                                                                | `views.js` and its static import closure                                                                                                       |
+| `collectionView`, `documentView`, `localQuickStart`, `atlasCredentials`, `clusterDashboard` | the per-view graph above: the `views.js` static closure plus the view's lazy chunk and its static closure                                      |
+| `editorWorker`, `jsonWorker`                                                                | each Monaco worker script (`<name>.worker-<hash>.js`, self-contained classic scripts)                                                          |
+| `vsix`                                                                                      | the compressed VSIX file                                                                                                                       |
+
+A graph fails when it exceeds its budget by more than the tolerance, **10% or 4 KiB, whichever is
+greater** (a coordinator decision for Stage 6, mirroring the operator-approved per-file tolerance).
+Decreases never fail; a graph more than the tolerance below its budget prints a note suggesting an
+update. A graph in the budget but not in the artifact, or in the artifact but not in the budget, also
+fails, so a renamed or added view, worker or host entry cannot escape the budget. The budget is
+checked after every other invariant, so an invariant failure is always reported first. ADO's
+regenerated `NOTICE.html` is larger than the committed copy; compressed, the difference stays well
+inside the `vsix` tolerance.
+
+`verify:vsix` prints a table (graph, bytes, budget, limit, delta, status) to stderr. The JSON from
+`--manifest-report <file>` (and `manifestReport` on stdout) includes it as `sizeBudget`:
+`enforced`, `tolerance`, `graphs` (`graph`, `bytes`, `budgetBytes`, `limitBytes`, `deltaBytes`,
+`status`: `ok`, `below`, `over`, `missing` or `unbudgeted`), `failures` and `notes`. On a budget
+failure the report and table are still written before the command exits non-zero.
+`--size-budget <file>` checks against another budget file.
+
+Update the budget only for an intended size change, from a fresh `npm run package`, and commit it
+with the change that caused it. Writing never runs implicitly; it still runs every invariant, but
+does not enforce the budget it replaces, and keeps that file's tolerance:
+
+```bash
+npm run verify:vsix -- vscode-documentdb-0.11.0.vsix --write-size-budget            # build/verification/size-budget.json
+npm run verify:vsix -- vscode-documentdb-0.11.0.vsix --write-size-budget <file>     # another path
+```
+
+Proof controls: `size-budget-collection-view` appends a compressible comment past the
+`collectionView` limit to the Collection View lazy chunk, and `size-budget-host-startup` does the
+same to the extension implementation chunk. Both refresh the copied host and views reports' hashes
+and chunk sizes, and require the failure to be the size budget for exactly the expected graphs
+(`collectionView`; `main` and `mainStartup`).
 
 Downloaded artifacts need their matching bundle reports, not reports from an unrelated local build.
 GitHub Actions uploads them separately; ADO stages `build/verification/reports/*.json` alongside the

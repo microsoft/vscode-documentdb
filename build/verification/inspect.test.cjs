@@ -24,6 +24,12 @@ const {
     viewGraphs,
     viewModules,
     manifest,
+    defaultSizeTolerance,
+    evaluateSizeBudget,
+    formatSizeTable,
+    measureSizeGraphs,
+    readSizeBudget,
+    sizeBudgetFile,
 } = require('./inspect.cjs');
 const { readVsix, writeVsix, extractVsix } = require('./vsix.cjs');
 
@@ -569,6 +575,7 @@ test('host chunks and the CJS plugin require their own report ownership and matc
     const host = hostFixture();
     const views = viteFixture();
     host.bundled.set('extension/playgroundWorker.mjs', Buffer.from(babelLoaderSource));
+    host.bundled.set('extension/main.mjs', Buffer.from('export {};'));
     views.bundled.set('extension/views.js', Buffer.from('export function render(){}'));
     const bundled = new Map([
         ['extension.vsixmanifest', Buffer.from('<xml/>')],
@@ -597,7 +604,32 @@ test('host chunks and the CJS plugin require their own report ownership and matc
     try {
         writeReports();
         writeVsix(filename, bundled);
-        inspect(filename, { reports: directory });
+        const { manifestReport } = inspect(filename, { reports: directory });
+        assert.equal(manifestReport.sizeBudget.enforced, false);
+        const measured = Object.fromEntries(
+            manifestReport.sizeBudget.graphs.map((entry) => [entry.graph, entry.bytes]),
+        );
+        const budgetFile = path.join(directory, 'size-budget.json');
+        fs.writeFileSync(budgetFile, JSON.stringify({ version: 1, tolerance: defaultSizeTolerance, graphs: measured }));
+        assert.deepEqual(
+            inspect(filename, { reports: directory, sizeBudget: budgetFile }).manifestReport.sizeBudget.failures,
+            [],
+        );
+        fs.writeFileSync(
+            budgetFile,
+            JSON.stringify({
+                version: 1,
+                tolerance: { fraction: 0, absoluteBytes: 0 },
+                graphs: { ...measured, main: 0 },
+            }),
+        );
+        assert.throws(
+            () => inspect(filename, { reports: directory, sizeBudget: budgetFile }),
+            (error) =>
+                /^Size budget failed: main is \d+ bytes, over its limit of 0 \(budget 0, \+\d+\)/.test(error.message) &&
+                error.sizeBudget.failures.join() === 'main' &&
+                error.inspection.manifestReport.sizeBudget === error.sizeBudget,
+        );
         for (const bundler of ['webpack', undefined]) {
             views.report.bundler = bundler;
             writeReports();
@@ -1018,5 +1050,161 @@ test('Vite facade-module map matches every literal lazy import in WebviewRegistr
         Object.fromEntries(
             Object.entries(viewModules).map(([name, module]) => [name, path.resolve(__dirname, '../..', module)]),
         ),
+    );
+});
+
+test('VSIX writer can deflate entries and keeps stored entries when deflating does not help', () => {
+    const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'documentdb-inspect-deflate-'));
+    try {
+        const input = new Map([
+            ['extension/package.json', Buffer.from('{}')],
+            ['extension/views.js', Buffer.from('export function render() {}\n'.repeat(1000))],
+        ]);
+        const stored = path.join(directory, 'stored.vsix');
+        const deflated = path.join(directory, 'deflated.vsix');
+        writeVsix(stored, input);
+        writeVsix(deflated, input, { compress: true });
+        assert.deepEqual(readVsix(deflated), input);
+        assert.ok(fs.statSync(deflated).size < fs.statSync(stored).size / 10);
+    } finally {
+        fs.rmSync(directory, { recursive: true, force: true });
+    }
+});
+
+const budget = (graphs, tolerance = defaultSizeTolerance) => ({ version: 1, tolerance, graphs });
+
+test('size budget fails a graph more than ten percent over budget and passes within tolerance', () => {
+    const passing = evaluateSizeBudget({ views: 110_000 }, budget({ views: 100_000 }));
+    assert.deepEqual(passing.failures, []);
+    assert.deepEqual(passing.graphs, [
+        { graph: 'views', bytes: 110_000, budgetBytes: 100_000, limitBytes: 110_000, deltaBytes: 10_000, status: 'ok' },
+    ]);
+    const failing = evaluateSizeBudget({ views: 110_001 }, budget({ views: 100_000 }));
+    assert.deepEqual(failing.failures, ['views']);
+    assert.equal(failing.graphs[0].status, 'over');
+    assert.equal(failing.graphs[0].deltaBytes, 10_001);
+});
+
+test('size budget applies the 4 KiB floor to small graphs', () => {
+    assert.deepEqual(evaluateSizeBudget({ plugin: 6000 + 4096 }, budget({ plugin: 6000 })).failures, []);
+    assert.deepEqual(evaluateSizeBudget({ plugin: 6000 + 4097 }, budget({ plugin: 6000 })).failures, ['plugin']);
+    assert.equal(evaluateSizeBudget({ plugin: 0 }, budget({ plugin: 0 })).graphs[0].limitBytes, 4096);
+});
+
+test('size budget decreases never fail and note an update only beyond the tolerance', () => {
+    const small = evaluateSizeBudget({ views: 90_000 }, budget({ views: 100_000 }));
+    assert.deepEqual([small.failures, small.notes, small.graphs[0].status], [[], [], 'ok']);
+    const large = evaluateSizeBudget({ views: 1 }, budget({ views: 100_000 }));
+    assert.deepEqual(large.failures, []);
+    assert.equal(large.graphs[0].status, 'below');
+    assert.match(
+        large.notes[0],
+        /^views is 99999 bytes below its budget \(100000\); consider updating it with --write-size-budget$/,
+    );
+});
+
+test('size budget fails graphs missing from either the artifact or the budget', () => {
+    const result = evaluateSizeBudget({ main: 10, renamedView: 10 }, budget({ main: 10, localQuickStart: 10 }));
+    assert.deepEqual(result.failures, ['renamedView', 'localQuickStart']);
+    assert.deepEqual(
+        result.graphs.map((entry) => [entry.graph, entry.status]),
+        [
+            ['main', 'ok'],
+            ['renamedView', 'unbudgeted'],
+            ['localQuickStart', 'missing'],
+        ],
+    );
+    const table = formatSizeTable(result);
+    assert.equal(table.length, 4);
+    assert.match(table[0], /^graph\s+bytes\s+budget\s+limit\s+delta\s+status$/);
+    assert.match(table[3], /^localQuickStart\s+-\s+10\s+4106\s+-\s+missing$/);
+});
+
+test('size budget files are validated and the committed budget covers every graph with the coordinator tolerance', () => {
+    const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'documentdb-size-budget-'));
+    try {
+        const file = path.join(directory, 'budget.json');
+        for (const [content, error] of [
+            [{ ...budget({}), version: 2 }, /unsupported size budget version/],
+            [budget({}, { fraction: -1, absoluteBytes: 0 }), /tolerance/],
+            [budget({}, { fraction: 0.1 }), /tolerance/],
+            [budget({ main: -1 }), /main budget must be a byte count/],
+            [budget({ main: 1.5 }), /main budget must be a byte count/],
+        ]) {
+            fs.writeFileSync(file, JSON.stringify(content));
+            assert.throws(() => readSizeBudget(file), error);
+        }
+    } finally {
+        fs.rmSync(directory, { recursive: true, force: true });
+    }
+    const committed = readSizeBudget(sizeBudgetFile);
+    assert.deepEqual(committed.tolerance, { fraction: 0.1, absoluteBytes: 4096 });
+    assert.deepEqual(Object.keys(committed.graphs).sort(), [
+        'atlasCredentials',
+        'clusterDashboard',
+        'collectionView',
+        'documentView',
+        'editorWorker',
+        'jsonWorker',
+        'localQuickStart',
+        'main',
+        'mainStartup',
+        'playgroundTsPlugin',
+        'playgroundWorker',
+        'viewsEntry',
+        'vsix',
+    ]);
+});
+
+test('size graphs sum packaged bytes of report-owned host, startup, view, entry and worker closures', () => {
+    const host = hostFixture();
+    const views = viteFixture();
+    views.report.assetHashes['editor.worker-Ab_C-12x.js'] = 'fixture';
+    views.report.assetHashes['codicon-AbC12345.ttf'] = 'fixture';
+    const bundled = new Map([...host.bundled, ...views.bundled]);
+    const sizes = {
+        'main.mjs': 1,
+        'runtime.mjs': 10,
+        'extension-AbC12345.mjs': 100,
+        'bson.mjs': 1000,
+        'kubernetes.mjs': 10_000,
+    };
+    for (const [asset, bytes] of Object.entries(sizes)) {
+        bundled.set(`extension/${asset}`, Buffer.alloc(bytes));
+    }
+    bundled.set('extension/views.js', Buffer.alloc(3));
+    bundled.set('extension/localQuickStart.js', Buffer.alloc(5));
+    bundled.set('extension/editor.worker-Ab_C-12x.js', Buffer.alloc(7));
+    bundled.set('extension/codicon-AbC12345.ttf', Buffer.alloc(100_000));
+    const graphs = { ...hostGraphs(host.report, bundled), ...viewGraphs(views.report, bundled) };
+    const measured = measureSizeGraphs(bundled, host.report, views.report, graphs, 42);
+    assert.deepEqual(Object.keys(measured), [
+        'main',
+        'mainStartup',
+        'playgroundWorker',
+        'playgroundTsPlugin',
+        'viewsEntry',
+        ...Object.keys(viewModules),
+        'editorWorker',
+        'vsix',
+    ]);
+    assert.equal(measured.main, 11_111);
+    // The startup closure excludes the dynamic-only Kubernetes chunk.
+    assert.equal(measured.mainStartup, 1111);
+    assert.equal(measured.viewsEntry, 3);
+    assert.equal(measured.localQuickStart, 8);
+    assert.equal(measured.editorWorker, 7);
+    assert.equal(measured.vsix, 42);
+    views.report.assetHashes['editor.worker-Zz_Y-98x.js'] = 'fixture';
+    bundled.set('extension/editor.worker-Zz_Y-98x.js', Buffer.alloc(1));
+    assert.throws(
+        () => measureSizeGraphs(bundled, host.report, views.report, graphs, 42),
+        /editorWorker: more than one packaged worker script/,
+    );
+    delete views.report.assetHashes['editor.worker-Zz_Y-98x.js'];
+    delete views.report.assetHashes['localQuickStart.js'];
+    assert.throws(
+        () => measureSizeGraphs(bundled, host.report, views.report, graphs, 42),
+        /localQuickStart: size budget counts localQuickStart\.js, which its bundle report does not own/,
     );
 });

@@ -8,7 +8,7 @@ const { createHash } = require('node:crypto');
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
-const { inspect, viteChunkClosure, babelConfigFileImports } = require('./inspect.cjs');
+const { inspect, viteChunkClosure, babelConfigFileImports, sizeBudgetFile } = require('./inspect.cjs');
 const { readVsix, writeVsix } = require('./vsix.cjs');
 
 const args = process.argv.slice(2);
@@ -22,7 +22,7 @@ while (args.length) {
     assert.ok(reports, '--reports requires a directory');
 }
 const baseline = path.join(__dirname, 'baseline.json');
-const options = { baseline, reports };
+const options = { baseline, reports, sizeBudget: sizeBudgetFile };
 const { manifestReport: originalManifestReport } = inspect(filename, options);
 const views = JSON.parse(fs.readFileSync(path.join(reports, 'views.json'), 'utf8'));
 const host = JSON.parse(fs.readFileSync(path.join(reports, 'host.json'), 'utf8'));
@@ -114,7 +114,7 @@ try {
         const files = readVsix(filename);
         mutate(files);
         const variant = path.join(directory, `${name}.vsix`);
-        writeVsix(variant, files);
+        writeVsix(variant, files, { compress: true });
         assert.throws(() => inspect(variant, options), expected);
         console.log(`PASS: ${name} rejected for the expected reason`);
     }
@@ -122,7 +122,7 @@ try {
     assert.ok(files.delete('extension/resources/readme/vscode-documentdb-hero-screenshot.png'));
     files.set('extension/resources/proof-added.svg', Buffer.from('<svg xmlns="http://www.w3.org/2000/svg"/>'));
     const variant = path.join(directory, 'asset-added-and-removed-reported.vsix');
-    writeVsix(variant, files);
+    writeVsix(variant, files, { compress: true });
     const { manifestReport } = inspect(variant, options);
     assert.deepEqual(
         manifestReport.removed,
@@ -246,7 +246,7 @@ try {
         }
         fs.writeFileSync(path.join(controlReports, 'host.json'), JSON.stringify(report));
         const variant = path.join(directory, `${name}.vsix`);
-        writeVsix(variant, files);
+        writeVsix(variant, files, { compress: true });
         assert.throws(() => inspect(variant, { ...options, reports: controlReports }), expected);
         console.log(`PASS: ${name} rejected for the expected reason`);
     }
@@ -323,8 +323,62 @@ try {
             fs.writeFileSync(path.join(controlReports, 'views.json'), JSON.stringify(report));
         }
         const variant = path.join(directory, `${name}.vsix`);
-        writeVsix(variant, files);
+        writeVsix(variant, files, { compress: true });
         assert.throws(() => inspect(variant, { ...options, reports: controlReports }), expected);
+        console.log(`PASS: ${name} rejected for the expected reason`);
+    }
+    // Size budget: inflate packaged chunks past their graphs' limits with a compressible comment, so
+    // the VSIX total stays within its own budget, and refresh both reports' hashes and sizes so the
+    // only remaining violation is the budget.
+    const sizeEntries = new Map(originalManifestReport.sizeBudget.graphs.map((entry) => [entry.graph, entry]));
+    const collectionViewChunk = views.chunks.find((chunk) => chunk.facadeModuleId === viewModules.collectionView);
+    assert.ok(collectionViewChunk, 'Proof requires the Collection View lazy chunk');
+    const sizeControls = [
+        ['size-budget-collection-view', collectionViewChunk.fileName, ['collectionView']],
+        ['size-budget-host-startup', implementation.fileName, ['main', 'mainStartup']],
+    ];
+    for (const [name, asset, expectedFailures] of sizeControls) {
+        const inflation =
+            Math.max(
+                ...expectedFailures.map((graph) => sizeEntries.get(graph).limitBytes - sizeEntries.get(graph).bytes),
+            ) + 1024;
+        const files = readVsix(filename);
+        const file = `extension/${asset}`;
+        files.set(file, Buffer.concat([files.get(file), Buffer.from(`\n/*${'x'.repeat(inflation)}*/\n`)]));
+        const controlReports = path.join(directory, name);
+        fs.mkdirSync(controlReports);
+        for (const [reportName, original] of [
+            ['host', host],
+            ['views', views],
+        ]) {
+            const report = structuredClone(original);
+            for (const reportAsset of Object.keys(report.assetHashes)) {
+                if (files.has(`extension/${reportAsset}`)) {
+                    report.assetHashes[reportAsset] = createHash('sha256')
+                        .update(files.get(`extension/${reportAsset}`))
+                        .digest('hex');
+                }
+            }
+            for (const chunk of report.chunks) {
+                if (files.has(`extension/${chunk.fileName}`)) {
+                    chunk.bytes = files.get(`extension/${chunk.fileName}`).length;
+                }
+            }
+            fs.writeFileSync(path.join(controlReports, `${reportName}.json`), JSON.stringify(report));
+        }
+        const variant = path.join(directory, `${name}.vsix`);
+        writeVsix(variant, files, { compress: true });
+        assert.throws(
+            () => inspect(variant, { ...options, reports: controlReports }),
+            (error) => {
+                assert.match(error.message, /^Size budget failed: /);
+                assert.deepEqual(error.sizeBudget.failures, expectedFailures);
+                for (const graph of expectedFailures) {
+                    assert.match(error.message, new RegExp(`\\b${graph} is \\d+ bytes, over its limit`));
+                }
+                return true;
+            },
+        );
         console.log(`PASS: ${name} rejected for the expected reason`);
     }
 } finally {

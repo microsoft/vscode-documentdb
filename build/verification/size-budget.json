@@ -1,0 +1,23 @@
+{
+  "version": 1,
+  "description": "L1 size budget: packaged bytes per graph (see build/verification/README.md). Update intentionally with npm run verify:vsix -- <vsix> --write-size-budget",
+  "tolerance": {
+    "fraction": 0.1,
+    "absoluteBytes": 4096
+  },
+  "graphs": {
+    "main": 9881410,
+    "mainStartup": 3354692,
+    "playgroundWorker": 5362758,
+    "playgroundTsPlugin": 6175,
+    "viewsEntry": 1467848,
+    "collectionView": 6052389,
+    "documentView": 4820212,
+    "localQuickStart": 1561830,
+    "atlasCredentials": 1515447,
+    "clusterDashboard": 1704965,
+    "editorWorker": 259528,
+    "jsonWorker": 389389,
+    "vsix": 8493810
+  }
+}
