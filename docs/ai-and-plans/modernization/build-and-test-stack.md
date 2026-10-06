@@ -2994,6 +2994,93 @@ Stage 0 must also be made.
   5. Run L1 and L3 on that exact file (`npm run test:vsix -- <signed.vsix>`), and an L2 pass on its
      extracted contents.
   6. Approve `release.yml` only for that digest.
+- **Hand-over checks (Case 2, 2026-10-06, at `00bc1337` plus a one-line review-note fix):**
+  - **Case 2:** `npm run l10n` (bundle unchanged), `npm run prettier-fix` (no changes),
+    `npm run lint`, `npx vitest run` (298 files, 4,603 tests), `npm run build` and
+    `npm run package` all pass. The final production VSIX has 204 files, 8,493,839 bytes, SHA-256
+    `8107ee56…ab863`; `verify:vsix` passes on it.
+  - **CONTRIBUTING.md §6 pre-review:**
+    [06-pr-pre-review.md](./iterations/06-pr-pre-review.md), range `v0.11.0..ec7c7ff1`. Step 1
+    was Claude Opus 5.5; steps 3 and 4 (validation and sweep) were GPT-6.1 Sol. Findings: 2
+    medium, 4 low, 0 high.
+    - **PR-F01:** the lockfile conflict with `main`, which also changes the bundled
+      `browserslist`.
+    - **PR-F02:** `verify:packages` runs in no publish path.
+    - **PR-F03 to PR-F06:** package changelogs, CommonJS leftovers (`out/`, `BUNDLE_ANALYZE`,
+      `.swcrc` in `.vscodeignore`), Prettier globs that skip `build/`, and documentation
+      placement and staleness.
+  - **§6 blockers, not satisfied:**
+    - Step 2: the Copilot reviewer has not reviewed the draft (0 comments).
+    - §6.2: the author's decisions are pending for PR-F01 to PR-F06, and for 35 findings in the
+      Stage 1 to 3 review files, which still read _pending_.
+
+    The coordinator did not write those decisions; §6.2 belongs to the author.
+
+- **G6 status: not passed.** Stage 6's implementation, review fixes and automated checks are
+  complete. Nothing below has been done by the agents. **The PR stays in draft.**
+  - **Installed-VSIX checklist, on Linux and on Windows or macOS.** Use the VSIX from the final CI
+    run or `npm run package`, installed in VS Code 1.109 or newer, not F5:
+    1. All five webviews: rendering, styling, the three themes, Monaco editing and its workers,
+       and a clean DevTools console (no worker, font, CSP or preload errors).
+    2. A playground run (worker), and TS plugin completions and hover in a `.documentdb` file,
+       including the first run after installing over an older version (the `index.js` stub is
+       replaced).
+    3. A `vscode://` URI on a cold start.
+    4. Azure discovery (vCore, RU, VM), the tenant and subscription filter wizard, and new
+       connection and update credentials through Azure. This is G5-I01's re-test on the
+       installed VSIX.
+    5. Kubernetes and Atlas discovery against real backends.
+    6. A connection that uses Kerberos or another native optional dependency, where available.
+    7. Telemetry events with `DEBUGTELEMETRY` set.
+    8. Activation time in "Developer: Show Running Extensions" (the agents' numbers are above).
+    9. On Windows or macOS: `npm run package` (the `package:win32` script on Windows) and F5
+       with the `Watch` task. Paths in the worker, the TS plugin stub and the problem matchers
+       have not run on those platforms.
+
+    Items 2 to 7 are the G5 checks carried here when G5 was closed.
+
+  - **Operator-only pipeline checks:**
+    - Queue `build-npm-packages.yml` on this branch (S2-F01: Vitest on Windows).
+    - The first ADO extension build (F11: Vite, Rolldown and esbuild from the internal feed;
+      L1's new `vsix` budget against ADO's larger `NOTICE.html`).
+  - **Outstanding decisions:**
+    - **G5 item 9** (coordinator decisions): removing the webpack host fallback, Vite's default
+      resolution conditions, the two type-only `paths` entries, no `require` banner, the
+      externals changes, and S5-F01/S5-F02. Also whether to record them in a `decisions.md`.
+    - **Stage 6 coordinator decisions:** closing G5 with its checks carried into G6; the
+      size-budget tolerance (10% or 4 KiB) and its graphs; restoring the merge-ref checkout
+      (S1-F01); removing five overrides while keeping `vite: $vite`; the build document's
+      location; the S6-F01 and S6-F02 fixes.
+    - **Publishing:** whether to publish `@microsoft/vscode-ext-webview` `/host` as ESM-only,
+      given that unbundled CommonJS `require` hangs the extension host (S3-F02).
+    - **Pre-review:** PR-F01 to PR-F06. **PR-F01 decides how #880 reaches `main`:** it
+      conflicts with `main` in `package-lock.json`. By ground rule 1, take one side and
+      regenerate with `.nvmrc`'s Node and npm, within the feed quarantine, never by hand. That
+      overrides the Stage 1 no-merge decision only by operator choice, and the merged tree
+      then needs a new CI run and a fresh L1/L2/L3 pass.
+    - **Still-open options:** G5-I01 option 4 (an L1 guard against Rolldown's lowered-`import()`
+      bug); #990 after the merge; the milestone (#880 carries `0.11.2`); PR #867, on hold.
+  - **Release sequence (the operator's actions; none may be skipped or reordered):**
+    1. Resolve the merge with `main` as decided under PR-F01, and get a green CI run on the
+       merge result. Satisfy the §6 blockers. Mark the PR ready only with authorization, and
+       merge it.
+    2. Publish the package versions decided at G3, from `main`, after `npm run verify:packages`
+       passes on that commit.
+    3. Build the extension in ADO from `main`, with versions past the feed quarantine.
+    4. Download the signed VSIX and record its SHA-256.
+    5. On that exact file:
+       - L1: `npm run verify:vsix -- <signed.vsix>` and `npm run prove:vsix -- <signed.vsix>`;
+       - L3: `npm run test:vsix -- <signed.vsix>` and
+         `npm run prove:activation -- <signed.vsix>`;
+       - L2 on its extracted contents: `npm run prepare:browser-check -- --vsix <signed.vsix> …`,
+         then the served check.
+    6. Approve `release.yml` only for that digest.
+
+- **Stage 6 commits:** `0843c1d0` (webpack removal); `9fb027d7` (TypeScript 6); `6c6cf71d`
+  (S3-F06); `dee7773e` (overrides); `f53df711`, `64a7992f` (size budget, `keepNames`);
+  `3ac5b4a5`, `19f34777` (CI and ADO); `8e2699c0` (build document); `5fc49e8c` (S3-F02 probe);
+  `b09b7629`, `9b489252` (review fixes S6-F01, S6-F02); `b13883e6` (stage review);
+  `00bc1337` (PR pre-review); and the `S6: record …` documentation commits.
 
 ### Stage 7: re-evaluate the stage reviews
 
