@@ -2999,6 +2999,13 @@ Stage 0 must also be made.
     `npm run lint`, `npx vitest run` (298 files, 4,603 tests), `npm run build` and
     `npm run package` all pass. The final production VSIX has 204 files, 8,493,839 bytes, SHA-256
     `8107ee56…ab863`; `verify:vsix` passes on it.
+  - **CI at the final code:** run
+    [37517835337](https://github.com/microsoft/vscode-documentdb/actions/runs/37517835337) at
+    `d371572b`: all four jobs green, 25 unique `prove:vsix` PASS controls, `L3 PASS`,
+    `L3 PROOF PASS` and `UNBUNDLED HOST PROBE PASS`. It uploaded `Bundle-reports-…`,
+    `L1-manifest-report-…` and `Artifacts-…`. This was a dispatch on the branch head: GitHub
+    cannot build a merge ref while #880 conflicts, so the merge result is untested (PR-F01). ADO
+    has not run.
   - **CONTRIBUTING.md §6 pre-review:**
     [06-pr-pre-review.md](./iterations/06-pr-pre-review.md), range `v0.11.0..ec7c7ff1`. Step 1
     was Claude Opus 5.5; steps 3 and 4 (validation and sweep) were GPT-6.1 Sol. Findings: 2
