@@ -150,7 +150,7 @@ Seven host controls additionally reject `missing-host-lazy-chunk`, `duplicate-ho
 `kubernetes-in-extension-static-closure` and `missing-extension-implementation-boundary`.
 Host controls refresh copied hashes to model matching newly built output and assert the intended
 diagnostic, not a stale-report failure. Stage 6 adds `keepnames-class-name-lost` to the host
-controls and two size-budget controls (below). The proof prints 24 PASS lines in total.
+controls and three size-budget controls (below). The proof prints 25 PASS lines in total.
 Proof variants are written with deflated entries, so their VSIX size stays comparable to `vsce`
 output and within the `vsix` budget.
 Review intentional artifact changes before regenerating the version-1 baseline (its format is unchanged):
@@ -174,7 +174,8 @@ bytes, so the sizes are those of the files inside the VSIX:
 | `playgroundWorker`                                                                          | `playgroundWorker.mjs` and everything it reaches, static and dynamic                                                                           |
 | `playgroundTsPlugin`                                                                        | `playgroundTsPlugin.cjs` and its static closure                                                                                                |
 | `viewsEntry`                                                                                | `views.js` and its static import closure                                                                                                       |
-| `collectionView`, `documentView`, `localQuickStart`, `atlasCredentials`, `clusterDashboard` | the per-view graph above: the `views.js` static closure plus the view's lazy chunk and its static closure                                      |
+| `viewsAssets`                                                                               | every non-JavaScript asset owned by the views bundle report (fonts, CSS and future CSS-linked resources), counted once                         |
+| `collectionView`, `documentView`, `localQuickStart`, `atlasCredentials`, `clusterDashboard` | JavaScript closures only: the `views.js` static closure plus the view's lazy chunk and its static closure                                      |
 | `editorWorker`, `jsonWorker`                                                                | each Monaco worker script (`<name>.worker-<hash>.js`, self-contained classic scripts)                                                          |
 | `vsix`                                                                                      | the compressed VSIX file                                                                                                                       |
 
@@ -207,7 +208,10 @@ Proof controls: `size-budget-collection-view` appends a compressible comment pas
 `collectionView` limit to the Collection View lazy chunk, and `size-budget-host-startup` does the
 same to the extension implementation chunk. Both refresh the copied host and views reports' hashes
 and chunk sizes, and require the failure to be the size budget for exactly the expected graphs
-(`collectionView`; `main` and `mainStartup`).
+(`collectionView`; `main` and `mainStartup`). `size-budget-views-assets` grows the codicon font
+past the `viewsAssets` limit, refreshing its copied report hash and asset size, and requires exactly
+`viewsAssets` to fail. Per-view rows budget JavaScript closures, not all loaded resources;
+`viewsAssets` separately budgets every report-owned non-script view asset with the same hash binding.
 
 ### Host class names (`keepNames`, review item F17)
 

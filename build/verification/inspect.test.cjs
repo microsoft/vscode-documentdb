@@ -581,6 +581,8 @@ test('host chunks and the CJS plugin require their own report ownership and matc
     host.bundled.set('extension/playgroundWorker.mjs', Buffer.from(babelLoaderSource));
     host.bundled.set('extension/main.mjs', Buffer.from(keptClassSource));
     views.bundled.set('extension/views.js', Buffer.from('export function render(){}'));
+    views.bundled.set('extension/codicon-fixture.ttf', Buffer.alloc(100));
+    views.report.assetHashes['codicon-fixture.ttf'] = 'fixture';
     const bundled = new Map([
         ['extension.vsixmanifest', Buffer.from('<xml/>')],
         ['[Content_Types].xml', Buffer.from('<xml/>')],
@@ -613,6 +615,15 @@ test('host chunks and the CJS plugin require their own report ownership and matc
         const measured = Object.fromEntries(
             manifestReport.sizeBudget.graphs.map((entry) => [entry.graph, entry.bytes]),
         );
+        assert.equal(measured.viewsAssets, 100);
+        bundled.set('extension/codicon-fixture.ttf', Buffer.alloc(101));
+        writeVsix(filename, bundled);
+        assert.throws(
+            () => inspect(filename, { reports: directory }),
+            /codicon-fixture\.ttf: bundle report does not match packaged JavaScript/,
+        );
+        bundled.set('extension/codicon-fixture.ttf', Buffer.alloc(100));
+        writeVsix(filename, bundled);
         const budgetFile = path.join(directory, 'size-budget.json');
         fs.writeFileSync(budgetFile, JSON.stringify({ version: 1, tolerance: defaultSizeTolerance, graphs: measured }));
         assert.deepEqual(
@@ -1175,6 +1186,7 @@ test('size budget files are validated and the committed budget covers every grap
         'mainStartup',
         'playgroundTsPlugin',
         'playgroundWorker',
+        'viewsAssets',
         'viewsEntry',
         'vsix',
     ]);
@@ -1208,6 +1220,7 @@ test('size graphs sum packaged bytes of report-owned host, startup, view, entry 
         'playgroundWorker',
         'playgroundTsPlugin',
         'viewsEntry',
+        'viewsAssets',
         ...Object.keys(viewModules),
         'editorWorker',
         'vsix',
@@ -1216,6 +1229,7 @@ test('size graphs sum packaged bytes of report-owned host, startup, view, entry 
     // The startup closure excludes the dynamic-only Kubernetes chunk.
     assert.equal(measured.mainStartup, 1111);
     assert.equal(measured.viewsEntry, 3);
+    assert.equal(measured.viewsAssets, 100_000);
     assert.equal(measured.localQuickStart, 8);
     assert.equal(measured.editorWorker, 7);
     assert.equal(measured.vsix, 42);
@@ -1230,6 +1244,59 @@ test('size graphs sum packaged bytes of report-owned host, startup, view, entry 
     assert.throws(
         () => measureSizeGraphs(bundled, host.report, views.report, graphs, 42),
         /localQuickStart: size budget counts localQuickStart\.js, which its bundle report does not own/,
+    );
+});
+
+test('viewsAssets counts every owned non-script asset, excluding JavaScript and unrelated files', () => {
+    const host = hostFixture();
+    const views = viteFixture();
+    const bundled = new Map([...host.bundled, ...views.bundled]);
+    for (const [asset, bytes] of Object.entries({
+        'codicon-fixture.ttf': 100,
+        'styles.css': 20,
+        'images/icon.svg': 7,
+        'future-resource.bin': 3,
+        'helper.js': 1000,
+        'helper.cjs': 1000,
+        'helper.mjs': 1000,
+    })) {
+        views.report.assetHashes[asset] = 'fixture';
+        bundled.set(`extension/${asset}`, Buffer.alloc(bytes));
+    }
+    host.report.assetHashes['host-only.ttf'] = 'fixture';
+    bundled.set('extension/host-only.ttf', Buffer.alloc(1000));
+    bundled.set('extension/unowned.ttf', Buffer.alloc(1000));
+    // Report size metadata cannot substitute for the packaged bytes.
+    views.report.assets = [{ fileName: 'codicon-fixture.ttf', bytes: 1 }];
+    const graphs = { ...hostGraphs(host.report, bundled), ...viewGraphs(views.report, bundled) };
+    assert.equal(measureSizeGraphs(bundled, host.report, views.report, graphs, 42).viewsAssets, 130);
+    bundled.delete('extension/styles.css');
+    assert.throws(
+        () => measureSizeGraphs(bundled, host.report, views.report, graphs, 42),
+        /viewsAssets: missing packaged asset styles\.css/,
+    );
+});
+
+test('viewsAssets remains required even when the views report owns no non-script assets', () => {
+    const host = hostFixture();
+    const views = viteFixture();
+    const bundled = new Map([...host.bundled, ...views.bundled]);
+    const graphs = { ...hostGraphs(host.report, bundled), ...viewGraphs(views.report, bundled) };
+    const measured = measureSizeGraphs(bundled, host.report, views.report, graphs, 42);
+    assert.equal(measured.viewsAssets, 0);
+    assert.deepEqual(evaluateSizeBudget(measured, budget(measured)).failures, []);
+    const withoutAssets = { ...measured };
+    delete withoutAssets.viewsAssets;
+    assert.deepEqual(evaluateSizeBudget(measured, budget(withoutAssets)).failures, ['viewsAssets']);
+    assert.deepEqual(evaluateSizeBudget(withoutAssets, budget(measured)).failures, ['viewsAssets']);
+});
+
+test('view asset growth fails only viewsAssets while JavaScript and VSIX graphs stay within tolerance', () => {
+    const measured = { viewsAssets: 100_000, collectionView: 6_000_000, vsix: 8_500_000 };
+    assert.deepEqual(evaluateSizeBudget({ ...measured, viewsAssets: 110_000 }, budget(measured)).failures, []);
+    assert.deepEqual(
+        evaluateSizeBudget({ ...measured, viewsAssets: 110_001, vsix: 8_756_000 }, budget(measured)).failures,
+        ['viewsAssets'],
     );
 });
 

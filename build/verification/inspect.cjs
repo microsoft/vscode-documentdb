@@ -865,6 +865,7 @@ function measureSizeGraphs(files, hostReport, viewsReport, graphs, vsixBytes) {
     };
     const views = {
         viewsEntry: [...viteChunkClosure(viewsReport, 'viewsEntry', ['views.js'], files).assets],
+        viewsAssets: Object.keys(viewsReport.assetHashes).filter((asset) => !/\.(?:js|cjs|mjs)$/.test(asset)),
         ...Object.fromEntries(Object.keys(viewModules).map((name) => [name, graphs[name].assets])),
         ...monacoWorkerAssets(viewsReport, files),
     };
@@ -879,6 +880,7 @@ function measureSizeGraphs(files, hostReport, viewsReport, graphs, vsixBytes) {
                     Object.hasOwn(report.assetHashes, asset),
                     `${name}: size budget counts ${asset}, which its bundle report does not own`,
                 );
+                assert.ok(files.has(`extension/${asset}`), `${name}: missing packaged asset ${asset}`);
                 return bytes + files.get(`extension/${asset}`).length;
             }, 0);
         }
