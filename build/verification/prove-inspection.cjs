@@ -8,7 +8,14 @@ const { createHash } = require('node:crypto');
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
-const { inspect, viteChunkClosure, babelConfigFileImports, sizeBudgetFile } = require('./inspect.cjs');
+const {
+    inspect,
+    viteChunkClosure,
+    babelConfigFileImports,
+    keptClassNames,
+    keptClassNameSites,
+    sizeBudgetFile,
+} = require('./inspect.cjs');
 const { readVsix, writeVsix } = require('./vsix.cjs');
 
 const args = process.argv.slice(2);
@@ -149,6 +156,14 @@ try {
     assert.ok(kubernetesChunk, 'Proof requires Kubernetes SDK chunk');
     const implementation = host.chunks.find((chunk) => chunk.facadeModuleId === './src/extension.ts');
     assert.ok(implementation, 'Proof requires extension implementation facade ./src/extension.ts');
+    const [keptClass] = keptClassNames;
+    const keptClassSites = [...fullMain.assets].sort().flatMap((asset) =>
+        keptClassNameSites(originalFiles.get(`extension/${asset}`).toString('utf8'), keptClass).map((site) => ({
+            asset,
+            ...site,
+        })),
+    );
+    assert.ok(keptClassSites.length > 0, `Proof requires the ${keptClass.name} class in the main graph`);
     const hostControls = [
         [
             'missing-host-lazy-chunk',
@@ -213,6 +228,23 @@ try {
                     .find((chunk) => chunk.facadeModuleId === './src/extension.ts')
                     .imports.push(kubernetesChunk.fileName);
             },
+        ],
+        [
+            'keepnames-class-name-lost',
+            (files) => {
+                // What the minifier emits without keepNames: the class gets a short inner name.
+                const { asset, node } = keptClassSites[0];
+                const file = `extension/${asset}`;
+                const source = files.get(file).toString('utf8');
+                const mutated = node.id
+                    ? `${source.slice(0, node.id.start)}W${source.slice(node.id.end)}`
+                    : `${source.slice(0, node.start + 'class'.length)} W${source.slice(node.start + 'class'.length)}`;
+                assert.equal(source.slice(node.start, node.start + 'class'.length), 'class');
+                files.set(file, Buffer.from(mutated));
+            },
+            new RegExp(
+                `keepNames: class with member ${keptClass.member} is named "W" at runtime, expected "${keptClass.name}"`,
+            ),
         ],
         [
             'missing-extension-implementation-boundary',

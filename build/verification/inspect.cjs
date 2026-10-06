@@ -9,7 +9,7 @@ const fs = require('node:fs');
 const { builtinModules } = require('node:module');
 const path = require('node:path');
 const { parse } = require('acorn');
-const { ancestor, fullAncestor } = require('acorn-walk');
+const { ancestor, fullAncestor, simple } = require('acorn-walk');
 const { readVsix } = require('./vsix.cjs');
 
 const viewModules = {
@@ -139,6 +139,15 @@ const sizeExempt = new Set(['extension/NOTICE.html']);
 const sizeBudgetFile = path.join(__dirname, 'size-budget.json');
 // Coordinator decision (Stage 6), mirroring the operator-approved per-file tolerance.
 const defaultSizeTolerance = { fraction: 0.1, absoluteBytes: 4096 };
+// The host build sets Rolldown `keepNames` because runtime code reads `constructor.name`. Each entry
+// names one class in the `main` graph, located by a member name the minifier does not rename.
+const keptClassNames = [
+    {
+        name: 'UserCancelledError',
+        member: '_isUserCancelledError',
+        reason: 'Query Insights telemetry records err.constructor.name as errorKind, and its stream path throws @microsoft/vscode-azext-utils UserCancelledError on cancellation',
+    },
+];
 
 function manifest(files) {
     return [...files]
@@ -711,6 +720,120 @@ function viewGraphs(report, files) {
     return graphs;
 }
 
+function classRuntimeName(node, parent) {
+    // Rolldown's keepNames helper form, and an explicit static `name`, override the binding name.
+    for (const element of node.body.body) {
+        if (element.type === 'StaticBlock') {
+            for (const statement of element.body) {
+                const call = statement.type === 'ExpressionStatement' ? statement.expression : undefined;
+                if (
+                    call?.type === 'CallExpression' &&
+                    call.callee.type === 'Identifier' &&
+                    call.callee.name === '__name' &&
+                    call.arguments.length === 2 &&
+                    call.arguments[0].type === 'ThisExpression' &&
+                    typeof literalString(call.arguments[1], true) === 'string'
+                ) {
+                    return literalString(call.arguments[1], true);
+                }
+            }
+        } else if (
+            element.type === 'PropertyDefinition' &&
+            element.static &&
+            !element.computed &&
+            element.key.type === 'Identifier' &&
+            element.key.name === 'name' &&
+            typeof literalString(element.value, true) === 'string'
+        ) {
+            return literalString(element.value, true);
+        }
+    }
+    if (node.id) {
+        return node.id.name;
+    }
+    // Anonymous class expressions take their name from the binding they initialise (NamedEvaluation).
+    if (parent?.type === 'VariableDeclarator' && parent.init === node && parent.id.type === 'Identifier') {
+        return parent.id.name;
+    }
+    if (
+        parent?.type === 'AssignmentExpression' &&
+        parent.operator === '=' &&
+        parent.right === node &&
+        parent.left.type === 'Identifier'
+    ) {
+        return parent.left.name;
+    }
+    if (parent?.type === 'AssignmentPattern' && parent.right === node && parent.left.type === 'Identifier') {
+        return parent.left.name;
+    }
+    if (
+        (parent?.type === 'Property' || parent?.type === 'PropertyDefinition') &&
+        parent.value === node &&
+        !parent.computed
+    ) {
+        return parent.key.type === 'Identifier' ? parent.key.name : String(parent.key.value);
+    }
+    return '';
+}
+
+function hasClassMember(node, member) {
+    let found = node.body.body.some(
+        (element) =>
+            element.type === 'PropertyDefinition' &&
+            !element.computed &&
+            element.key.type === 'Identifier' &&
+            element.key.name === member,
+    );
+    simple(node.body, {
+        AssignmentExpression(assignment) {
+            const target = assignment.left;
+            found ||=
+                target.type === 'MemberExpression' &&
+                target.object.type === 'ThisExpression' &&
+                !target.computed &&
+                target.property.name === member;
+        },
+    });
+    return found;
+}
+
+/** Every class in `source` carrying `entry.member`, with the `.name` it has at runtime. */
+function keptClassNameSites(source, entry) {
+    if (!source.includes(entry.member)) {
+        return [];
+    }
+    const sites = [];
+    const tree = parse(source, { ecmaVersion: 'latest', sourceType: 'module', allowReturnOutsideFunction: true });
+    const visit = (node, _state, ancestors) => {
+        if (hasClassMember(node, entry.member)) {
+            sites.push({ node, name: classRuntimeName(node, ancestors.at(-2)) });
+        }
+    };
+    ancestor(tree, { ClassDeclaration: visit, ClassExpression: visit });
+    return sites;
+}
+
+function inspectKeptClassNames(files, assets) {
+    for (const entry of keptClassNames) {
+        let count = 0;
+        for (const asset of [...assets].sort()) {
+            const filename = `extension/${asset}`;
+            for (const site of keptClassNameSites(files.get(filename).toString('utf8'), entry)) {
+                count++;
+                assert.equal(
+                    site.name,
+                    entry.name,
+                    `${filename}: keepNames: class with member ${entry.member} is named "${site.name || '(anonymous)'}" at runtime, expected "${entry.name}"; the host build must keep class names (${entry.reason})`,
+                );
+            }
+        }
+        assert.ok(
+            count > 0,
+            `keepNames: no class with member ${entry.member} (${entry.name}) in the main graph; re-review keptClassNames (${entry.reason})`,
+        );
+    }
+}
+
 function monacoWorkerAssets(report, files) {
     const chunkFiles = new Set(report.chunks.map((chunk) => chunk.fileName));
     const workers = {};
@@ -901,6 +1024,7 @@ function inspect(filename, options = {}) {
             );
         }
     }
+    inspectKeptClassNames(files, graphs.main.assets);
     const result = {
         version: 1,
         tolerance: { fraction: 0.1, absoluteBytes: 4096 },
@@ -1056,6 +1180,9 @@ module.exports = {
     defaultSizeTolerance,
     evaluateSizeBudget,
     formatSizeTable,
+    inspectKeptClassNames,
+    keptClassNames,
+    keptClassNameSites,
     measureSizeGraphs,
     readSizeBudget,
     sizeBudgetFile,

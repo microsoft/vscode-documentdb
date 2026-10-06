@@ -121,7 +121,8 @@ export default defineConfig(({ mode }) => {
     /** @type {import('rolldown').OutputOptions} */
     const sharedOutput = {
         // The code compares `constructor.name` (webpack kept names with swc `keepClassNames` and
-        // Terser `keep_classnames`/`keep_fnames`).
+        // Terser `keep_classnames`/`keep_fnames`). L1 asserts a kept class name in the packaged host
+        // (`keptClassNames` in build/verification/inspect.cjs).
         keepNames: true,
         // Keep license comments inline (webpack's Terser moved them into `*.LICENSE.txt` files).
         comments: { legal: true },

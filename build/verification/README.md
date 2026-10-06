@@ -30,7 +30,8 @@ npm run test:verification
 ```
 
 Inspection reports archive file-list and per-file size drift without failing; per-graph sizes are
-enforced by the [size budget](#size-budget-enforced). Hard checks cover required
+enforced by the [size budget](#size-budget-enforced), and the host's kept class names by the
+[`keepNames` invariant](#host-class-names-keepnames-review-item-f17). Hard checks cover required
 package files and the resolved `package.json` main entry, bundle-report ownership of every packaged
 `.js`, `.cjs` and `.mjs` file under `extension/`, the named `render` export,
 literal dynamic imports, Vite literal `new URL(..., import.meta.url)`
@@ -135,8 +136,8 @@ Seven host controls additionally reject `missing-host-lazy-chunk`, `duplicate-ho
 `missing-ts-plugin`, `second-babel-nonliteral-import`, `kubernetes-in-main-static-closure`,
 `kubernetes-in-extension-static-closure` and `missing-extension-implementation-boundary`.
 Host controls refresh copied hashes to model matching newly built output and assert the intended
-diagnostic, not a stale-report failure. Stage 6 adds two size-budget controls (below). The proof
-prints 23 PASS lines in total.
+diagnostic, not a stale-report failure. Stage 6 adds `keepnames-class-name-lost` to the host
+controls and two size-budget controls (below). The proof prints 24 PASS lines in total.
 Proof variants are written with deflated entries, so their VSIX size stays comparable to `vsce`
 output and within the `vsix` budget.
 Review intentional artifact changes before regenerating the version-1 baseline (its format is unchanged):
@@ -194,6 +195,23 @@ Proof controls: `size-budget-collection-view` appends a compressible comment pas
 same to the extension implementation chunk. Both refresh the copied host and views reports' hashes
 and chunk sizes, and require the failure to be the size budget for exactly the expected graphs
 (`collectionView`; `main` and `mainStartup`).
+
+### Host class names (`keepNames`, review item F17)
+
+The host build sets Rolldown `output.keepNames: true` because runtime code reads
+`constructor.name`: the Query Insights stream path records `err.constructor.name` as the telemetry
+`errorKind`, and throws `@microsoft/vscode-azext-utils`' `UserCancelledError` on cancellation (Azure
+Identity spans and `getClusterMetadata` read class names too). L1 locates every class in the `main`
+graph with a `_isUserCancelledError` member (a property name the minifier does not rename) and
+requires its runtime name to be `UserCancelledError`, by JavaScript naming rules: the class's own
+name, else the binding an anonymous class expression initialises, overridden by a
+`static { __name(this, "...") }` block or a static `name` field. With `keepNames` the packaged chunk
+has `var UserCancelledError=class extends Error{_isUserCancelledError=!0;…`; a build without it
+emitted `var W=class extends Error{…}` (runtime name `W`), and mangled product classes to
+`var ds=class e extends Error`. A missing class also fails, for re-review of `keptClassNames` in
+`inspect.cjs`. The `keepnames-class-name-lost` control gives the packaged class the inner name `W`
+(as the minifier does without `keepNames`), with matching report hashes. The views build keeps
+`keepNames` off (a Stage 4 decision).
 
 Downloaded artifacts need their matching bundle reports, not reports from an unrelated local build.
 GitHub Actions uploads them separately; ADO stages `build/verification/reports/*.json` alongside the

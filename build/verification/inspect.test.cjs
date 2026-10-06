@@ -27,6 +27,9 @@ const {
     defaultSizeTolerance,
     evaluateSizeBudget,
     formatSizeTable,
+    inspectKeptClassNames,
+    keptClassNames,
+    keptClassNameSites,
     measureSizeGraphs,
     readSizeBudget,
     sizeBudgetFile,
@@ -396,6 +399,7 @@ test('dynamic runtime externals are allowed only in host-owned .mjs, not views, 
     assert.throws(() => inspectJavaScript(bundled, [report]), /missing dynamic import/);
 });
 
+const keptClassSource = 'var UserCancelledError=class extends Error{_isUserCancelledError=!0;stepName};export{};';
 const babelLoaderSource = 'var require_import=__commonJSMin((e,m)=>{m.exports=function import_(t){return import(t)}});';
 
 test('Babel config-file allowance requires host module ownership, exact factory/helper/parameter shape and count', () => {
@@ -575,7 +579,7 @@ test('host chunks and the CJS plugin require their own report ownership and matc
     const host = hostFixture();
     const views = viteFixture();
     host.bundled.set('extension/playgroundWorker.mjs', Buffer.from(babelLoaderSource));
-    host.bundled.set('extension/main.mjs', Buffer.from('export {};'));
+    host.bundled.set('extension/main.mjs', Buffer.from(keptClassSource));
     views.bundled.set('extension/views.js', Buffer.from('export function render(){}'));
     const bundled = new Map([
         ['extension.vsixmanifest', Buffer.from('<xml/>')],
@@ -630,6 +634,26 @@ test('host chunks and the CJS plugin require their own report ownership and matc
                 error.sizeBudget.failures.join() === 'main' &&
                 error.inspection.manifestReport.sizeBudget === error.sizeBudget,
         );
+        host.bundled.set(
+            'extension/main.mjs',
+            Buffer.from(keptClassSource.replace('class extends', 'class e extends')),
+        );
+        bundled.set('extension/main.mjs', host.bundled.get('extension/main.mjs'));
+        host.report.assetHashes['main.mjs'] = createHash('sha256')
+            .update(bundled.get('extension/main.mjs'))
+            .digest('hex');
+        writeReports();
+        writeVsix(filename, bundled);
+        assert.throws(
+            () => inspect(filename, { reports: directory }),
+            /main\.mjs: keepNames: class with member _isUserCancelledError is named "e"/,
+        );
+        bundled.set('extension/main.mjs', Buffer.from(keptClassSource));
+        host.report.assetHashes['main.mjs'] = createHash('sha256')
+            .update(bundled.get('extension/main.mjs'))
+            .digest('hex');
+        writeReports();
+        writeVsix(filename, bundled);
         for (const bundler of ['webpack', undefined]) {
             views.report.bundler = bundler;
             writeReports();
@@ -1206,5 +1230,45 @@ test('size graphs sum packaged bytes of report-owned host, startup, view, entry 
     assert.throws(
         () => measureSizeGraphs(bundled, host.report, views.report, graphs, 42),
         /localQuickStart: size budget counts localQuickStart\.js, which its bundle report does not own/,
+    );
+});
+
+test('keepNames sites report the runtime class name for every emitted shape', () => {
+    const [entry] = keptClassNames;
+    const name = (source) => keptClassNameSites(source, entry).map((site) => site.name);
+    const body = '{_isUserCancelledError=!0}';
+    assert.deepEqual(name(`var UserCancelledError=class extends Error${body}`), ['UserCancelledError']);
+    assert.deepEqual(name(`var Ao=class UserCancelledError extends Error${body}`), ['UserCancelledError']);
+    assert.deepEqual(name(`class UserCancelledError extends Error${body}`), ['UserCancelledError']);
+    assert.deepEqual(name(`let W;W=class extends Error${body}`), ['W']);
+    assert.deepEqual(
+        name(`var W=class extends Error{static{__name(this,"UserCancelledError")}_isUserCancelledError=!0}`),
+        ['UserCancelledError'],
+    );
+    assert.deepEqual(name(`var W=class extends Error{constructor(){super(),this._isUserCancelledError=!0}}`), ['W']);
+    assert.deepEqual(name(`var W=class e extends Error${body}`), ['e']);
+    assert.deepEqual(name(`f(class extends Error${body})`), ['']);
+    assert.deepEqual(name(`var W=class extends Error{other=!0};const s="_isUserCancelledError"`), []);
+    assert.deepEqual(name('var W=class extends Error{}'), []);
+});
+
+test('keepNames invariant requires the kept class in the main graph, with its name, in every copy', () => {
+    const check = (sources) =>
+        inspectKeptClassNames(
+            new Map(Object.entries(sources).map(([asset, source]) => [`extension/${asset}`, Buffer.from(source)])),
+            Object.keys(sources),
+        );
+    check({ 'main.mjs': keptClassSource, 'other.mjs': 'export const x = 1;' });
+    assert.throws(
+        () => check({ 'main.mjs': 'export {};' }),
+        /keepNames: no class with member _isUserCancelledError \(UserCancelledError\) in the main graph/,
+    );
+    assert.throws(
+        () => check({ 'a.mjs': keptClassSource, 'b.mjs': keptClassSource.replace('UserCancelledError=', 'W=') }),
+        /extension\/b\.mjs: keepNames: class with member _isUserCancelledError is named "W" at runtime, expected "UserCancelledError"/,
+    );
+    assert.throws(
+        () => check({ 'main.mjs': 'f(class extends Error{_isUserCancelledError=!0})' }),
+        /is named "\(anonymous\)" at runtime/,
     );
 });
