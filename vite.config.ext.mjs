@@ -147,7 +147,17 @@ export default defineConfig(({ mode }) => {
             'process.env.DEVSERVER': JSON.stringify(isDev ? 'true' : ''),
         },
         resolve: {
-            alias: [{ find: /^bson$/, replacement: bsonEntry }],
+            alias: [
+                { find: /^bson$/, replacement: bsonEntry },
+                // G5-I01: Rolldown 1.0.3 drops the namespace of azureauth's lowered import() in
+                // VSCodeAzureSubscriptionProvider and AzureDevOpsSubscriptionProvider.
+                // Pin CommonJS to restore webpack's behaviour for this package.
+                // TODO(#990): Remove when @microsoft/vscode-azext-azureauth uses real import().
+                {
+                    find: /^@azure\/arm-resources-subscriptions$/,
+                    replacement: require.resolve('@azure/arm-resources-subscriptions'),
+                },
+            ],
         },
         builder: {
             async buildApp(builder) {
