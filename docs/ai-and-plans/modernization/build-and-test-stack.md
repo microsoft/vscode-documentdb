@@ -2882,6 +2882,36 @@ Stage 0 must also be made.
       and the CSS-negative page with exactly 7 errors.
   - Apply the L1 manifest decision recorded under Stage 0 (PR report or gate) before L1 runs on
     PRs to `main`.
+    - **Already done:** option A landed in Stage 4 (`b47627f1`, with the S4-F01 correction
+      `dda2734c`) and the operator confirmed it at G4. Stage 6 keeps that split: manifest drift is
+      reported, invariants fail, and the new size budget is a separate enforced invariant.
+  - **Review finding S3-F02 (before publishing the packages), done in `5fc49e8c` (Claude Opus
+    5.5).** `npm run probe:host-unbundled` packs `@microsoft/vscode-ext-webview`, installs the
+    tarball offline into throwaway **unbundled** extensions, and launches VS Code 1.109.0 through
+    the L3 machinery. Each variant calls `openWebview`, which uses the package's own `vscode`
+    binding (`createWebviewPanel`, `Uri.file`, `asWebviewUri`, `EventEmitter`), and checks the
+    panel, the tab and disposal. Results, the same on VS Code 1.115.0:
+    - ES module extension, static `import`: **pass**.
+    - ES module extension, `await import()`: **pass**.
+    - CommonJS extension, `await import()`: **pass**.
+    - **CommonJS extension, `require('@microsoft/vscode-ext-webview/host')`: the extension host
+      hangs** ("Extension host … is unresponsive"), with no error. The author's reading of VS
+      Code's source: `import 'vscode'` reaches ES modules through an asynchronous loader hook
+      that waits on the extension host's main thread, which a synchronous `require()` of an ES
+      module blocks.
+    - Negative control (`/host` mutated to import `vscode-does-not-exist`): fails with
+      `Cannot find package 'vscode-does-not-exist'`.
+
+    The probe expects the hang (a 40 s timeout, checking where the code stopped), so a VS Code
+    that fixes it fails the probe and prompts a docs update. The package's README and
+    MIGRATION.md now say what is supported, including the TypeScript caveat (`module: commonjs`
+    turns `import()` into `require()`). Package code, exports and versions are unchanged. CI
+    runs the probe in the L3 job (about 71 s locally, 46 s of it the expected hang).
+    `test:verification`: 117 Node and 79 browser tests (the CI wiring added 7 Node tests, the
+    probe 17). **For G6:** publishing `/host` as ESM-only excludes unbundled CommonJS `require`
+    consumers. Shipping a CommonJS build (the review's option 3) was not done; it contradicts
+    the Stage 3 ESM-only decision.
+
 - **Automated verification:** L0 to L3, plus a comparison with the Stage 0 baselines, recorded in
   this document.
 - **Operator gate G6:** the full manual checklist on Windows or macOS as well as Linux. Then:
