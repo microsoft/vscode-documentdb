@@ -9,3 +9,7 @@ declare global {
         export default template;
     }
 }
+
+// Stylesheets are side-effect imports that Vite compiles. TypeScript 6 checks that side-effect imports
+// resolve (`noUncheckedSideEffectImports`), so declare them as modules without exports.
+declare module '*.scss' {}

@@ -6,6 +6,12 @@
     "outDir": "out",
     "lib": ["ES2023", "dom", "dom.iterable", "webworker"],
     "sourceMap": true,
+    // TypeScript 6 defaults `strict` to true. This project has never enabled it as a whole; it opts
+    // into individual checks below (`strictNullChecks`, `noImplicitThis`, `alwaysStrict`).
+    "strict": false,
+    // TypeScript 6 defaults `types` to []. Host code uses Node globals (`process`, `Buffer`, timers),
+    // which must not depend on a dependency's `/// <reference types="node" />` to be in scope.
+    "types": ["node"],
     "esModuleInterop": true, // added by tnaum to help with Denque integration, happy to discuss other approaches
     "allowSyntheticDefaultImports": true, // added by tnaum to fix SlickGrid integration, eager to discuss other approaches
     "noImplicitThis": true,

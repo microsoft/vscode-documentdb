@@ -5,6 +5,6 @@
         "types": ["node"],
         "rootDir": "../../.."
     },
-    "include": ["./**/*.ts", "./**/*.d.cts"],
+    "include": ["./**/*.ts", "./**/*.d.cts", "../../../src/webviews/typings.d.ts"],
     "exclude": []
 }
