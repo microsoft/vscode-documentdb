@@ -2914,6 +2914,60 @@ Stage 0 must also be made.
 
 - **Automated verification:** L0 to L3, plus a comparison with the Stage 0 baselines, recorded in
   this document.
+- **Automated verification results (2026-10-06, HEAD `221b1bb2`, run by a GPT-6.1 Sol agent; the
+  coordinator re-ran L3 and `verify:vsix` on the final file):**
+  - **Final artifact:** 204 files, 8,493,839 bytes, SHA-256 `44f15bd6…f0117c`. A repackage at the
+    same commit gives the same file contents with new ZIP timestamps, hence a new digest. Stage 6
+    as a whole changed no shipped code: against the Stage 5 VSIX, only `extension/package.json`
+    differs.
+  - **L1:** `verify:vsix` passes, with every budget graph at +0 (VSIX +29 bytes from
+    `package.json`). `prove:vsix` prints **24 PASS** lines. The `bson` identity check passes
+    and its alias-removed control fails. Manifest drift against Stage 0 (informational): 122
+    added, 42 removed, 1 size change.
+  - **L3:** `L3 PASS` (re-run by the coordinator), `L3 PROOF PASS`, and the unbundled `/host`
+    probe passes.
+  - **L2:** headless (deviation, as in Stages 4 and 5): `L2 HEADLESS PASS`, five views with
+    0 errors, both worker round-trips, and the CSS-negative page with exactly 7 errors. Local
+    Quick Start, Atlas Credentials and Cluster Dashboard fetched no Monaco or SlickGrid chunk.
+    **L2-dev:** 42/42 routes, 60/60 assertions.
+  - **L0:** `npm run build`, `npm run lint`, `npx vitest run` (298 files, 4,603 tests, in each of
+    the three timing runs), `test:verification` (117 Node, 79 browser), and `verify:packages`
+    (six packages) pass.
+  - **CI:** run
+    [37502819886](https://github.com/microsoft/vscode-documentdb/actions/runs/37502819886) at
+    `243d6d95` (webpack removal, TypeScript 6, budget, CI wiring): all four jobs green. The
+    probe step and the record commits came later; their run is reported in the hand-over.
+  - **Comparison with Stage 0** (same machine, Node 22.21.1, npm 10.9.3):
+
+    | Measure                           | Stage 0 (`v0.11.0`)                | Stage 6                       |
+    | --------------------------------- | ---------------------------------- | ----------------------------- |
+    | Production build (3 runs, median) | 120.139 s (webpack)                | **16.258 s** (Vite), −86%     |
+    | Unit tests (3 runs, median)       | 42.205 s (Jest)                    | 67.773 s (Vitest), +61%       |
+    | Installed packages                | 1,836                              | **1,255** (−581)              |
+    | `dist`                            | 32,628,226 bytes, 123 files        | 25,910,776 bytes, 203 files   |
+    | VSIX                              | 9,597,420 bytes, 124 files         | 8,493,839 bytes, 204 files    |
+    | Bytes a lightweight view loads    | 6,490,321 (`views.js`, every view) | 1,515,447 to 1,704,965        |
+    | Document View, Collection View    | 6,490,321 each                     | 4,820,212 and 6,052,389       |
+    | Playground worker                 | 7,443,125                          | 5,362,758                     |
+    | Host `main`                       | 4,761,367 (`main.js`)              | 9,881,410 (startup 3,354,692) |
+
+    The test-time increase is the Vitest worker cap that S2-F02 recorded (25%, unchanged since
+    Stage 2), not a Stage 6 change. Host byte figures are not like for like: Stage 0's
+    `main.js` excludes webpack's lazy chunks, and Stage 6's `main` includes every reachable
+    chunk.
+
+  - **Activation time** (`measure:activation`, 5 launches each, VS Code 1.109.0, this machine):
+
+    | VSIX                    | codeLoadMs median (min to max) | activateMs | totalMs | `activate` telemetry |
+    | ----------------------- | ------------------------------ | ---------- | ------- | -------------------- |
+    | Baseline (webpack host) | 375 (363 to 396)               | 57         | 429     | 5 of 5               |
+    | Stage 5                 | 266 (256 to 278)               | 58         | 321     | 5 of 5               |
+    | Stage 6                 | 266 (248 to 273)               | 66         | 327     | 5 of 5               |
+
+    F17's telemetry item: all 15 launches of packaged builds captured the `activate` event under
+    `DEBUGTELEMETRY=verbose`. That is evidence from the packaged build, not a new automated
+    check.
+
 - **Operator gate G6:** the full manual checklist on Windows or macOS as well as Linux. Then:
   1. Run the full Case 2 list and the CONTRIBUTING.md §6 AI pre-review; mark the PR ready for
      review; merge it into `main`.
