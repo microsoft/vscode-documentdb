@@ -2714,6 +2714,28 @@ Stage 0 must also be made.
 - **Tasks:**
   - Delete the webpack configs, loaders and plugins. Record the installed package count against the
     baseline (Cosmos DB's went from 1,385 to 784).
+    - **Done in `0843c1d0` (GPT-6.1 Sol).** Stage 5 had already removed the host config, its scripts
+      and the host webpack probe. This commit deletes `webpack.config.views.cjs`, `.swcrc`, the
+      `webpack-prod-wv`, `webpack-dev-wv` and `(pre)watch:views-webpack` scripts, the
+      `webpack.config*` line in `.vscodeignore` and `DEBUG_WEBPACK` in `.vscode/launch.json`.
+      Fifteen devDependencies were removed, each after a repository search showed that only the
+      webpack config used it: `webpack`, `webpack-cli`, `webpack-dev-server`,
+      `webpack-bundle-analyzer`, `swc-loader`, `@swc/core`, `@swc/cli`, `css-loader`,
+      `style-loader`, `sass-loader`, `copy-webpack-plugin`, `terser-webpack-plugin`,
+      `monaco-editor-webpack-plugin`, `@pmmmwh/react-refresh-webpack-plugin` and `react-refresh`
+      (`@vitejs/plugin-react` brings its own refresh runtime). Kept: `sass` (Vite and the Fluent UI
+      package compile SCSS). `terser` stays only as Vite's optional peer; no config selects it.
+      **Addition:** `@types/ws` `~8.18.1`, at its already-locked version, because the Kubernetes
+      port-forward code had been relying on webpack-dev-server to install it. Comments that
+      described webpack as the current build were updated (`survey.ts`, `configuration.ts`,
+      `resizeObserverLoopDetector.ts` and two READMEs); no product behaviour changed.
+    - **Installed packages** (`npm ls --all --parseable`, root excluded): Stage 0 **1,836**;
+      Stage 5 tip **1,645**; after this commit **1,287**. The lockfile lost 383 entries, gained
+      none, and changed no retained version. Fresh-dependency scan: 0 fresh of 1,273 root
+      versions and 0 of 116 in `api/`; no pins or overrides were added.
+    - **Artifact:** VSIX 204 files, 8,493,872 bytes, SHA-256 `9103970f…87b833`. Against the
+      Stage 5 VSIX (`74571b1d…`), every file except `extension/package.json` (scripts and
+      devDependencies) is byte-identical, so no shipped code changed.
   - CI: add a size budget with a tolerance to L1, in GitHub Actions and in the ADO build. Keep L3 on
     GitHub Actions. Publish the bundle report as a PR artifact.
   - Write a build-rationale document like Cosmos DB's `docs/webview-build.md`: one place that
@@ -2722,6 +2744,22 @@ Stage 0 must also be made.
     run every package build.
   - Remove the webpack-only Stage 0 tooling: `BundleReportPlugin.cjs`, the `.e(chunkId)` branch in
     `inspect.cjs` and its tests, and the ESLint allowance. Rerun `npm run prove:vsix` afterwards.
+    - **Done in `0843c1d0` (GPT-6.1 Sol).** Deleted `BundleReportPlugin.cjs` and its ESLint
+      allowance. `inspect.cjs` loses the `.e(chunkId)` check, webpack stats and nested-module
+      parsing, the shared-entry fallback and the opt-in lightweight-view switch. A non-Vite views
+      report now fails, as a non-Vite host report already did; tests cover both the webpack
+      format and an unidentified report. `prove-inspection.cjs` loses its webpack `SKIP`
+      branches. The L2 harness loses webpack detection and the remove-all-styles negative mode:
+      page generation rejects any `views.js` without the inline-CSS marker, and the negative
+      page fails if it removed no marked style. `measure.cjs` writes new timings as
+      `buildSeconds`; the committed Stage 0 `measurements.json` is unchanged.
+    - **`prove:vsix`: 21 PASS lines, as before; no control was retired.** All 21 controls apply to
+      Vite output. The coordinator re-ran it on the new VSIX (21) and `test:verification`
+      (84 Node, 79 browser tests, down from 86 and 82; the removed tests covered only webpack
+      branches).
+    - **L2 (headless, as in Stages 4 and 5; the integrated browser tools are not reachable from
+      agent sessions):** `L2 HEADLESS PASS`, five views with 0 errors, both worker round-trips,
+      and the CSS-negative page with exactly 7 errors.
   - Apply the L1 manifest decision recorded under Stage 0 (PR report or gate) before L1 runs on
     PRs to `main`.
 - **Automated verification:** L0 to L3, plus a comparison with the Stage 0 baselines, recorded in
