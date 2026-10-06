@@ -2647,15 +2647,33 @@ Stage 0 must also be made.
         4. In addition to any of these, add an L1 invariant (with a `prove:vsix` control) that
            rejects `Promise.resolve().then(() => <ESM init>())` in host chunks, and report the
            bug to Rolldown with the reproduction.
-      - **Recommended:** 4 plus 1 now, so L1 guards against recurrence; 3 later. **Decision:**
-        _pending (operator)_.
+      - **Recommended:** 4 plus 1 now, so L1 guards against recurrence; 3 later.
+      - **Decision (operator, 2026-10-06), verbatim:** "fix using the option 1, and create an
+        issue that references this PR and says that once that PR is merged, we're to implement
+        the opton 3." Option 4 (the L1 invariant and the upstream report) was not chosen and is
+        not done.
+      - **Fixed in `370efdf2`:** `vite.config.ext.mjs` aliases `@azure/arm-resources-subscriptions`
+        to its CommonJS entry (`dist/index.js`), next to the `bson` alias, with
+        `TODO(#990)`. Both azureauth call sites now emit a `__commonJSMin` wrapper. A scan of
+        the packaged host scripts finds 0 lowered imports that resolve to an ES module
+        initialiser (2 before). The fix agent ran both exact load expressions, outside the repo,
+        against the packaged chunks: `SubscriptionClient` is a constructor. The same holds for
+        `vscode-azext-azureutils`' `import()` form (via `__toESM`) in a probe built with the host
+        config; that factory is tree-shaken out of the VSIX. VSIX 8,494,062 bytes, SHA-256
+        `74571b1d…c9c0f1`; host output +5,449 bytes. `verify:vsix` passes, `prove:vsix` prints 21
+        PASS lines, and local `L3 PASS` and `L3 PROOF PASS`. Not run by agents: discovery
+        against Azure. The re-test list below is for the operator.
+      - **Follow-up (option 3):** [#990](https://github.com/microsoft/vscode-documentdb/issues/990)
+        (labels `dependencies`, `on-hold`): after #880 merges, upgrade
+        `@microsoft/vscode-azext-azureauth` to its ES module build (5.1.1 stable, or 6.x) and
+        remove the alias. It also covers the S2-F03 test hook.
       - **Re-test after the fix:** Azure discovery (vCore, RU, VM), the tenant and subscription
         filter wizard, and new connection and update credentials through Azure (they use the
         same provider).
 
 - **Stage 5 commits:** `b98ab019`, `4386c580`, `644b41ae`, `776f3a87`, `770446c2`, `650f2329`,
   `0f25c1ec`, `69989ed7`, `f22c0278` (implementation); `e677026c` (review); `555f9def`, `90374fee`
-  (review fixes); and the documentation commit that adds this record.
+  (review fixes); `370efdf2` (G5-I01 fix); and the documentation commits that add this record.
 
 ### Stage 6: remove webpack, lock in, TypeScript 6
 
