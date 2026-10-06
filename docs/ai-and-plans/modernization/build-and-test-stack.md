@@ -2682,6 +2682,17 @@ Stage 0 must also be made.
       - **Re-test after the fix:** Azure discovery (vCore, RU, VM), the tenant and subscription
         filter wizard, and new connection and update credentials through Azure (they use the
         same provider).
+  - **G5 closed (operator, 2026-10-06), recorded verbatim from the Stage 6 prompt:** "The
+    operator reports Stage 5 is done." This record still listed open items at that point: the
+    installed-VSIX re-test of G5-I01 (no waiver recorded), Kubernetes and Atlas discovery, the
+    cold-start `vscode://` URI, the playground and TS plugin in a real editor, native-auth
+    connections, `DEBUGTELEMETRY`, and the item 9 decisions. The Stage 6 coordinator asked once
+    which of them the confirmation covers; the operator was unavailable and asked for the option
+    best aligned with the request. **Coordinator decision, not an operator decision:** G5 is
+    treated as closed, so Stage 6 may start. The checks that this record does not show as run
+    are not recorded as passed: they move into the G6 installed-VSIX checklist (Stage 6). The
+    item 9 decisions are not recorded as approved; they stay open for G6, together with whether
+    to record them in a `decisions.md`.
 
 - **Stage 5 commits:** `b98ab019`, `4386c580`, `644b41ae`, `776f3a87`, `770446c2`, `650f2329`,
   `0f25c1ec`, `69989ed7`, `f22c0278` (implementation); `e677026c` (review); `555f9def`, `90374fee`
@@ -2691,6 +2702,14 @@ Stage 0 must also be made.
 
 - **Models:** author **Claude Sonnet 5.5**, reviewer **GPT-6 Sol**. Escalate to Claude Opus 5.5 if
   the TypeScript 6 bump surfaces type errors that need judgment.
+  - **Execution note (operator prompt, 2026-10-06), a departure from the author pick:** a Claude
+    Opus 5.5 coordinator runs the stage through sequential, bounded subagents, choosing per task
+    between **GPT-6.1 Sol** (well-specified cleanup, CI, tests, documentation) and **Claude Opus
+    5.5** (difficult TypeScript errors, build contracts, verification design). Claude Sonnet 5.5
+    writes nothing. The coordinator checks every subagent diff and re-runs its key acceptance
+    command. The review stays with **GPT-6 Sol**, in a fresh session without the authors'
+    reasoning. The branch stays on its `v0.11.0` base, with no `main` merge or rebase (Stage 1
+    operator decision).
 - **Goal:** one build pipeline, guarded in CI, and the release.
 - **Tasks:**
   - Delete the webpack configs, loaders and plugins. Record the installed package count against the
