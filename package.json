@@ -198,14 +198,9 @@
     "vscode-uri": "~3.1.0",
     "zod": "~4.3.6"
   },
-  "//overrides": "Pin transitive dependencies: glob 12.0.x for latest, test-exclude 7 for compatibility. Modernization Stage 2 (temporary, remove before G6): vite follows the direct pin because npm 10.9 crashes resolving the vite 8.3 devtools peer chain; chai, std-env and tinyrainbow are held below versions inside the 7-day freshness window. Stage 6: ignore 7.x (typescript-eslint, globby) stays on 7.0.5 for the same reason; the version-selector key leaves eslint's ignore 5.x alone, which an override scoped to @typescript-eslint/eslint-plugin did not (it leaked through the eslint peer edge).",
+  "//overrides": "Pin transitive dependencies: glob 12.0.x for latest. vite follows the direct pin because npm 10.9.3 crashes (\"Cannot read properties of null (reading 'edgesOut')\") when it resolves vitest's vite peer chain from scratch without it (re-checked in Modernization Stage 6).",
   "overrides": {
-    "chai": "6.2.2",
     "glob": "~12.0.0",
-    "ignore@^7": "7.0.5",
-    "std-env": "4.2.0",
-    "test-exclude": "~7.0.1",
-    "tinyrainbow": "3.1.1",
     "vite": "$vite"
   },
   "extensionDependencies": [],
