@@ -2968,6 +2968,23 @@ Stage 0 must also be made.
     `DEBUGTELEMETRY=verbose`. That is evidence from the packaged build, not a new automated
     check.
 
+- **AI review:** GPT-6 Sol, fresh session, given the plan as of `8472f112`, the Stage 6 diff
+  without this record, the earlier findings and the check results, but not the authors'
+  reasoning: [06-stage6-review.md](./iterations/06-stage6-review.md), range
+  `8472f112..ece5acf8`. The reviewer re-ran the build, package, budgets, `prove:vsix`,
+  `test:verification`, Vitest, the package checks, L3 with its proof, the `/host` probe, L2,
+  L2-dev and the dependency scan in an isolated copy, all passing, and read CI run
+  [37509399673](https://github.com/microsoft/vscode-documentdb/actions/runs/37509399673) at
+  `ece5acf8` (all four jobs green). Findings: two low, both accepted and fixed by coordinator
+  decision:
+  - **S6-F01 (`b09b7629`):** an incremental build could publish stale compiled tests;
+    `verify:packages` now fails on any packed test output.
+  - **S6-F02 (`9b489252`):** the codicon font was in no budget graph; a required
+    `viewsAssets` graph covers every non-script asset of the views report.
+
+  After the fixes, `prove:vsix` prints **25 PASS** lines and `test:verification` runs 123 Node
+  and 79 browser tests.
+
 - **Operator gate G6:** the full manual checklist on Windows or macOS as well as Linux. Then:
   1. Run the full Case 2 list and the CONTRIBUTING.md §6 AI pre-review; mark the PR ready for
      review; merge it into `main`.
