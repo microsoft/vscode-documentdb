@@ -2772,6 +2772,30 @@ Stage 0 must also be made.
     - **Checks:** `prove:vsix` prints **24 PASS** lines (the 21 earlier plus the three above;
       re-run by the coordinator). `test:verification`: 93 Node and 79 browser tests.
       `npm run build` and `npm run lint` pass. VSIX 8,493,810 bytes, SHA-256 `5cd02e81…26b1c`.
+    - **CI and ADO wiring, done in `19f34777` (GPT-6.1 Sol).** The PR size comment no longer reports
+      `dist/views.js` (since Stage 4 only the 0.57 MB entry, which showed a false 90% drop). It
+      moved from Build & Package into the L1 job and reports all 13 budget graphs from the L1
+      report (`build/verification/build-size-report.cjs`, with tests), each with PR bytes, base
+      bytes, delta and budget status. It still posts when the budget fails, and L1 still fails.
+      Base sizes keep the `build-sizes-<ref>-<sha>` cache key and are saved by `push` builds of
+      `main` and by `seed-build-cache.yml` in a new `{version: 2, vsixSize, graphSizes}` format.
+      Against an old-format base, the comment compares only the VSIX and says per-graph base
+      values are unavailable. The bundle reports (`Bundle-reports-<run>`) and the L1 report with
+      manifest drift and the budget (`L1-manifest-report-<run>`) are uploaded with `always()`,
+      so a failing L1 still publishes them. **ADO:** `verify:vsix` still runs before signing,
+      now enforcing the budget and writing `--manifest-report`. A `succeededOrFailed()` step
+      stages the L1 JSON and the bundle reports into the pipeline output. Signing, feeds, pools
+      and release logic are unchanged. **Not run:** ADO (agents cannot queue it); its YAML was
+      parsed and read against the existing steps. The `github-script` code ran locally with
+      stubs against a real L1 report: old-format, new-format and missing bases, and a failing
+      budget. L3 stays on GitHub Actions only.
+    - **Review finding S1-F01, done in `3ac5b4a5` (coordinator decision, GPT-6.1 Sol):** the four
+      temporary `ref: ${{ github.event.pull_request.head.sha || github.sha }}` checkout overrides
+      from Stage 1 are removed, so PRs test GitHub's merge ref again. Push and dispatch runs
+      already used `github.sha`. Reason: the override was kept only because L1 failed on
+      lockfile drift against the exact manifest, which became informational under option A.
+      PR-triggered CI does not run on #880 while it conflicts with `main`, so dispatches still
+      test the branch head. `pipelines-readme.md` is updated.
   - Write a build-rationale document like Cosmos DB's `docs/webview-build.md`: one place that
     explains every non-obvious Vite setting (`base`, workers, CSS inlining, chunking, CSP).
   - Bump TypeScript to 6.x with feed-safe versions. Keep the packages' `NodeNext` configurations and
