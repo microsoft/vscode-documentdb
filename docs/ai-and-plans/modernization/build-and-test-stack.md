@@ -2665,13 +2665,16 @@ Stage 0 must also be made.
         [37481473032](https://github.com/microsoft/vscode-documentdb/actions/runs/37481473032) at
         `ec76e7bc`: all four jobs green. Not run by agents: discovery against Azure. The re-test
         list below is for the operator.
-      - **Operator re-test (2026-10-06), verbatim:** "I retested on debugger". The operator
-        did not state the outcome; this record does not claim a pass. The coordinator's view,
+      - **Operator re-test (2026-10-06), verbatim:** "I retested on debugger", then "the outcom
+        of debugger to be recorded". **Recorded as passed under F5: Azure discovery works after
+        the fix.** This is the coordinator's reading. The operator asked for the outcome to be
+        recorded without reporting a failure, and had reported the original failure at once. A
+        follow-up question went unanswered (operator unavailable). The coordinator's view,
         given in reply: the F5 build uses the same `vite.config.ext.mjs` alias, and the bug
         showed in both builds, so the debugger re-test covers the fix. The VSIX-only differences
         are covered by the bundle scan, the runtime probe on the packaged chunks, and L3. Under
         ground rule 5, a re-test on the installed VSIX is still the gate's default. It stays
-        **open**, to be done or waived by the operator.
+        **open**, to be done or waived by the operator; no waiver has been given.
       - **Follow-up (option 3):** [#990](https://github.com/microsoft/vscode-documentdb/issues/990)
         (labels `dependencies`, `on-hold`): after #880 merges, upgrade
         `@microsoft/vscode-azext-azureauth` to its ES module build (5.1.1 stable, or 6.x) and
