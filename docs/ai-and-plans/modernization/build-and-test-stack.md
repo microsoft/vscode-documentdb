@@ -2742,6 +2742,53 @@ Stage 0 must also be made.
     explains every non-obvious Vite setting (`base`, workers, CSS inlining, chunking, CSP).
   - Bump TypeScript to 6.x with feed-safe versions. Keep the packages' `NodeNext` configurations and
     run every package build.
+    - **Done in `9fb027d7` (Claude Opus 5.5).** `typescript` `~6.0.3` (2026-04-16; 6.0 is the only
+      6.x line) and `typescript-eslint` `~8.58.2`, the smallest version whose peer range
+      (`<6.1.0`) admits 6.0. No workspace package declares its own `typescript`. `api/` keeps
+      `^5.8.2`: it is a separate project with its own lockfile and api-extractor, outside the
+      extension build. TS 6 reported no deprecations. Every error came from a changed default,
+      and each is fixed with an explicit setting, not a suppression (no `ignoreDeprecations`,
+      `@ts-ignore`, `any` or rule disable):
+      - **`types` now defaults to `[]`:** `"types": ["node"]` in the `schema-analyzer` and
+        `shell-api-types` build configs, as the two webview packages already had. The root also
+        gets it: it still compiled, but only because dependencies carry
+        `/// <reference types="node" />`.
+      - **`strict` now defaults to `true`:** the root never enabled `strict` and opts into
+        individual checks, so it sets `"strict": false` explicitly (71 errors otherwise). Rejected:
+        fixing the 71 errors, mostly command callback types, as out of scope.
+      - **`noUncheckedSideEffectImports` now defaults to `true`:** 26 errors on `.scss` imports,
+        fixed by `declare module '*.scss' {}` in `src/webviews/typings.d.ts` (also included by the
+        browser harness config). Rejected: `vite/client` in `types` (it would make
+        `import.meta.env` and asset imports legal in host code) and turning the option off.
+      - The packages keep `NodeNext`; the root keeps `ESNext` with `Bundler`, no `baseUrl` and no
+        `"*"` mapping. **The two type-only `paths` entries are still needed:** without
+        `mongodb-connection-string-url`, `tsc` reports 182 errors; without
+        `@mongodb-js/explain-plan-helper`, the import silently becomes `any` (TS7016 under
+        `noImplicitAny`, 59 `no-unsafe-*` lint errors).
+    - **Dependencies:** the lockfile changed only the TypeScript and typescript-eslint packages
+      (and their hoisting). `ignore` 7.0.12 (2026-10-02) was briefly overridden to 7.0.5, then
+      removed with the other overrides (below). Installed packages: 1,287 → **1,255**.
+      Fresh-dependency scan: 0 fresh of 1,275 root versions and 0 of 116 in `api/`.
+    - **Checks (author):** `npm run build`, every workspace build, `npm run verify:packages`
+      ("All package checks passed."), repo-wide `npm run lint`, `npx vitest run` (298 files,
+      4,603 tests), `test:verification` (84 Node, 79 browser), the browser harness type-check,
+      L2-dev (42/42 routes, 60/60 assertions, `L2-DEV PASS`), `verify:vsix` and `prove:vsix`
+      (21 PASS). The VSIX (8,494,005 bytes, `ba005701…94aa9d`) differs from the webpack-removal
+      VSIX only in `extension/package.json`. TypeScript does not reach the bundles: Vite does
+      not use `tsc`.
+    - **Review finding S3-F06, done in `6c6cf71d`:** the `operator-registry`, `shell-api-types` and
+      `shell-runtime` build configs exclude `src/**/*.test.ts`. Their tarballs drop from 87 to 63,
+      21 to 17 and 47 to 31 files, with no test file left. The root `tsc` now type-checks those
+      11 test sources directly (before, it saw only their emitted `.d.ts`).
+    - **Temporary overrides (ground rule 6, S2-F06), done in `dee7773e` (coordinator):** `chai`,
+      `std-env`, `tinyrainbow`, `test-exclude` and `ignore@^7` are removed. Without them,
+      `npm install` leaves `package-lock.json` byte-identical, and the scan still reports 0 fresh.
+      Two of the versions they masked are still inside the window (`chai` 6.3.0 and `tinyrainbow`
+      3.2.0, until 2026-10-07); the lockfile, not an override, keeps them out. **`vite: $vite`
+      stays:** resolving the lockfile from scratch with npm 10.9.3 (`--before=2026-09-28`, in a
+      scratch copy) still fails with `Cannot read properties of null (reading 'edgesOut')`
+      without it, and succeeds with it. `glob` `~12.0.0` predates this work and stays. The
+      `//overrides` comment states both reasons.
   - Remove the webpack-only Stage 0 tooling: `BundleReportPlugin.cjs`, the `.e(chunkId)` branch in
     `inspect.cjs` and its tests, and the ESLint allowance. Rerun `npm run prove:vsix` afterwards.
     - **Done in `0843c1d0` (GPT-6.1 Sol).** Deleted `BundleReportPlugin.cjs` and its ESLint
