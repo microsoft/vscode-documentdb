@@ -385,3 +385,38 @@ entry, because of Fluent UI's own packaging (see that package's README), so the 
 exactly that failure. A control run of the Vitest probe without inlining must fail for the same
 reason and for the host entry's bare `vscode` import. Rerun this after any change to a package's
 `package.json`, `tsconfig` or entry points.
+
+### Unbundled `vscode-ext-webview/host` in VS Code (S3-F02)
+
+```bash
+npm run probe:host-unbundled                 # builds the package first; needs a display (xvfb-run in CI)
+npm run probe:host-unbundled -- --no-build --keep --vscode 1.115.0
+```
+
+The Node probes above fake `vscode`, so they cannot show whether VS Code resolves the static
+`import 'vscode'` in `/host` when another extension loads the package without bundling it.
+[`package-checks/unbundled-host-probe.cjs`](./package-checks/unbundled-host-probe.cjs) packs the
+package, installs the tarball into throwaway unbundled extensions with `npm install --offline` (the
+required peers pinned to this lockfile's tarball URLs), and launches each one as the development
+extension of the L3 VS Code (`engines.vscode` minimum, `.vscode-test/` cache, fresh profile). The
+probe, in [`package-checks/unbundled-host/`](./package-checks/unbundled-host/), opens and disposes a
+real webview through `openWebview`, which uses the package's own `vscode` binding
+(`createWebviewPanel`, `Uri.file`, `asWebviewUri`, `EventEmitter`), and checks the tab in the
+workbench. Expected and enforced:
+
+| Variant            | How the extension loads `/host`                                  | Expected                                        |
+| ------------------ | ---------------------------------------------------------------- | ----------------------------------------------- |
+| `commonjs-require` | `require()` from a CommonJS extension                            | hang in `require()`, host reported unresponsive |
+| `commonjs-import`  | `await import()` from a CommonJS extension                       | pass                                            |
+| `esm-static`       | static `import` from an ES module extension                      | pass                                            |
+| `esm-dynamic`      | `await import()` from an ES module extension                     | pass                                            |
+| `control`          | `commonjs-import` with `/host` importing `vscode-does-not-exist` | fail at load for that specifier                 |
+
+`require()` deadlocks because VS Code serves `import 'vscode'` from an asynchronous `module.register`
+resolve hook that posts to the extension host's main thread and waits, while `require(esm)` blocks
+that thread. The probe locates the hang through a trace file (the receipt is never written) and
+VS Code's `is unresponsive` message, with a 40-second timeout for that variant. A change in either
+direction (for example a VS Code fix that makes `require()` work) fails the run so the package
+README and MIGRATION.md can be updated. The whole run takes about 70 seconds; GitHub Actions runs it
+in the L3 job. Linux only so far, one VS Code version per run, and the probe is a development
+extension rather than an installed VSIX.

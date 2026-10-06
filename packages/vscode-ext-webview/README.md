@@ -149,6 +149,10 @@ export function activate(ctx: vscode.ExtensionContext) {
 }
 ```
 
+> This static import is for an extension that is bundled or is an ES module.
+> An unbundled CommonJS extension must load `./host` with `await import()`, not
+> `require()`; see [Loading `./host`](#loading-host-in-the-extension-host).
+
 `openWebview` returns a `WebviewController` handle exposing `panel`,
 `onDisposed`, `revealToForeground`, `dispose`, and `isDisposed`. It opens the
 panel, renders the HTML, and wires the tRPC dispatch pump. Procedure activity
@@ -398,6 +402,31 @@ import { connectTrpc, createEventChannel, vscodeLink } from '@microsoft/vscode-e
 // Webview, React hooks.
 import { useTrpcClient, useConfiguration, WithWebviewContext } from '@microsoft/vscode-ext-webview/react';
 ```
+
+### Loading `./host` in the extension host
+
+The package is ESM-only, and `./host` imports `vscode` with a static `import`.
+VS Code supplies `vscode` to ES modules through an asynchronous loader hook, so
+how your extension loads `./host` matters:
+
+| How the extension loads `./host`                                                   | Supported                        |
+| ---------------------------------------------------------------------------------- | -------------------------------- |
+| Bundled (esbuild, webpack, Vite, …) with `vscode` kept external                    | Yes                              |
+| Unbundled ES module extension (`"type": "module"`): `import` or `import()`         | Yes                              |
+| Unbundled CommonJS extension: `await import('@microsoft/vscode-ext-webview/host')` | Yes                              |
+| Unbundled CommonJS extension: `require('@microsoft/vscode-ext-webview/host')`      | **No: the extension host hangs** |
+
+`require()` of `./host` deadlocks rather than throwing. Node's `require(esm)`
+loads the module synchronously on the extension host's main thread, while VS
+Code resolves its `import 'vscode'` on the loader-hook thread by asking that same
+main thread for the API object. VS Code then reports the extension host as
+unresponsive. In unbundled CommonJS code, load `./host` with `await import()`
+(for example inside `activate`). If TypeScript compiles that code, use `module`
+`node16` or `nodenext`: `module: commonjs` rewrites `import()` to `require()`.
+`require()` of the shared entry (`.`), which does not import `vscode`, works.
+
+The unbundled rows were verified on VS Code 1.109.0 and 1.115.0 (Linux) with the
+packed package. DocumentDB for VS Code ships the bundled form and checks it in CI.
 
 ## What's inside
 

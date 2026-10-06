@@ -286,6 +286,11 @@ jobs:
                   xvfb-run -a npm run test:vsix -- "${packages[0]}"
                   xvfb-run -a npm run prove:activation -- "${packages[0]}"
 
+            - name: Probe the packed vscode-ext-webview /host in unbundled extensions (S3-F02)
+              env:
+                  TMPDIR: ${{ runner.temp }}
+              run: xvfb-run -a npm run probe:host-unbundled
+
             - name: Upload activation failure diagnostics
               if: failure()
               uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
@@ -294,6 +299,10 @@ jobs:
                   path: |
                       ${{ runner.temp }}/documentdb-l3-*/**/*.log
                       ${{ runner.temp }}/documentdb-l3-*/log-report.json
+                      ${{ runner.temp }}/documentdb-host-probe-*/**/*.log
+                      ${{ runner.temp }}/documentdb-host-probe-*/*/trace.txt
+                      ${{ runner.temp }}/documentdb-host-probe-*/*/result.json
+                      ${{ runner.temp }}/documentdb-host-probe-*/report.json
                   if-no-files-found: warn
 
     # Run on push to `main`/`release/**` (for cache seeding) and for PRs to main/release/**

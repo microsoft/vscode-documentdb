@@ -16,6 +16,37 @@ The package is now **ESM-only**. No API, wire-protocol or behaviour changes.
 - CommonJS code can still `require()` it on Node.js 20.19 / 22.12 or later
   (`require(esm)`); the package has no top-level `await`. It declares
   `engines.node` `>=22.18.0`; VS Code 1.105 and later ship Node.js 22.19 or newer.
+  The exception is `./host` inside the VS Code extension host; see the next item.
+- **Unbundled CommonJS extensions must not `require()` `./host`.** It hangs the
+  extension host instead of throwing: VS Code resolves the module's
+  `import 'vscode'` through an asynchronous loader hook that needs the main
+  thread `require()` is blocking. Load it with `await import()` instead, move
+  the extension to ESM, or bundle it. Verified on VS Code 1.109.0 and 1.115.0;
+  unbundled ESM extensions and `import()` from CommonJS work. See
+  [Loading `./host`](./README.md#loading-host-in-the-extension-host).
+
+  **Before (`0.10.x`, unbundled CommonJS):**
+
+  ```js
+  const { openWebview } = require('@microsoft/vscode-ext-webview/host');
+
+  function activate(context) {
+    // ... openWebview(context, { ... })
+  }
+  ```
+
+  **After (`0.11.0`):**
+
+  ```js
+  async function activate(context) {
+    const { openWebview } = await import('@microsoft/vscode-ext-webview/host');
+    // ... openWebview(context, { ... })
+  }
+  ```
+
+  TypeScript must keep that `import()`: compile with `module` `node16` or
+  `nodenext`, because `module: commonjs` rewrites it to `require()`.
+
 - Bundlers resolve it as before. `./host` imports `vscode` with a static
   `import`, so keep `vscode` external in the extension-host bundle.
 - Test runners: the host entry is no longer CommonJS, so a `vscode` alias in
