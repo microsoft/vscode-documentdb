@@ -439,8 +439,8 @@ new sweep findings. Partly valid findings retain only the narrowed risks describ
   the tag-base decision, hand-merge the lockfile, bypass quarantine or treat pre-merge reports
   as proof of merged/released bytes.
 - Run and record all Case 2 checks and the remaining pre-merge G6 manual platform checklist.
-  This draft review did not run that suite. The completed review must later be committed by
-  the author; it remains uncommitted as requested here.
+  This draft review did not run that suite. The coordinator committed this file
+  (`00bc1337`); the author's decisions are recorded in it later.
 
 After merge, carry out G6's package publication, ADO build and exact signed-file verification
 before release approval. Steps 3 and 4 are complete; neither ready-for-review nor release
