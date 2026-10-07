@@ -3306,19 +3306,25 @@ Stage 0 must also be made.
     standard context (CONTRIBUTING.md §6.1 step 3: every finding is already scoped). Record which
     model re-evaluated which file.
 
-  | Review file                                            | Written by                                         | Re-evaluated by           |
-  | ------------------------------------------------------ | -------------------------------------------------- | ------------------------- |
-  | `00-stage0-review.md`                                  | GPT-6 Sol                                          | Claude Opus 5.5           |
-  | `01-stage1-review.md` to `03-stage3-review.md`         | Claude Opus 5.5                                    | GPT-6.1 Sol               |
-  | `04-stage4-review.md`                                  | GPT-6.1 Sol                                        | Claude Opus 5.5           |
-  | `05-stage5-review.md`                                  | GPT-6 Astra                                        | Claude Opus 5.5           |
-  | `06-stage6-review.md`, S6-F01 and S6-F02               | GPT-6 Sol                                          | Claude Opus 5.5           |
-  | `06-stage6-review.md`, addendum (S6-F03, S6-F04)       | Claude Opus 5.5                                    | GPT-6.1 Sol               |
-  | `06-pr-pre-review.md` (PR-F01 to PR-F06)               | Claude Opus 5.5 (step 1), GPT-6.1 Sol (steps 3, 4) | GPT-6 Sol                 |
-  | Cross-review findings and the combined-migration sweep | n/a                                                | GPT-6 Sol (wrote no code) |
-
-  GPT-6 Sol for the last two rows is a coordinator choice: the authors of Stages 4 to 6 include
-  both Claude Opus 5.5 and GPT-6.1 Sol, so neither is independent of the combined result.
+  | Review file                                            | Written by                                         | Re-evaluated by |
+  | ------------------------------------------------------ | -------------------------------------------------- | --------------- |
+  | `00-stage0-review.md`                                  | GPT-6 Sol                                          | Claude Opus 5.5 |
+  | `01-stage1-review.md` to `03-stage3-review.md`         | Claude Opus 5.5                                    | GPT-6 Astra     |
+  | `04-stage4-review.md`                                  | GPT-6.1 Sol                                        | Claude Opus 5.5 |
+  | `05-stage5-review.md`                                  | GPT-6 Astra                                        | Claude Opus 5.5 |
+  | `06-stage6-review.md`, S6-F01 and S6-F02               | GPT-6 Sol                                          | Claude Opus 5.5 |
+  | `06-stage6-review.md`, addendum (S6-F03, S6-F04)       | Claude Opus 5.5                                    | GPT-6 Astra     |
+  | `06-pr-pre-review.md` (PR-F01 to PR-F06)               | Claude Opus 5.5 (step 1), GPT-6.1 Sol (steps 3, 4) | GPT-6 Astra     |
+  | Cross-review findings and the combined-migration sweep | n/a                                                | GPT-6 Astra     |
+  - **Reviewer level (operator, 2026-10-07):** "yes for the stage 7 allow models on the astra
+    and opus 5.5 level for the reviews". The re-evaluations use **GPT-6 Astra** on the GPT
+    side, instead of GPT-6.1 Sol or GPT-6 Sol, and **Claude Opus 5.5** on the Claude side.
+    This overrides ground rule 7's preference for cheaper models: GPT-6 Astra costs about 2.5
+    times as much as GPT-6.1 Sol.
+  - **Two rows are coordinator choices.** GPT-6 Astra takes the PR pre-review, because it
+    wrote neither of that review's passes. It also takes the cross-review findings and the
+    sweep, because it wrote no code in Stages 4 to 6, while both Claude Opus 5.5 and GPT-6.1 Sol
+    did.
 
 - **Goal:** one current account of every review finding from Stages 0 to 6 and the PR
   pre-review, so that nothing the reviews found is lost between stages. Every still-valid
