@@ -3185,6 +3185,11 @@ Stage 0 must also be made.
       then needs a new CI run and a fresh L1/L2/L3 pass.
     - **Still-open options:** G5-I01 option 4 (an L1 guard against Rolldown's lowered-`import()`
       bug); #990 after the merge; the milestone (#880 carries `0.11.2`); PR #867, on hold.
+    - **Toolchain versions, after the merge:**
+      [#991](https://github.com/microsoft/vscode-documentdb/issues/991) (operator request,
+      2026-10-07). Align `.nvmrc`, npm, `packageManager`, `@types/node` and `engines` with the
+      Node of VS Code's extension host: 22.21.1 in VS Code 1.109, 22.22.1 in 1.115, while
+      `.nvmrc` pins 22.18. Not done in #880.
   - **Release sequence (the operator's actions; none may be skipped or reordered):**
     1. Resolve the merge with `main` as decided under PR-F01, and get a green CI run on the
        merge result. Satisfy the §6 blockers. Mark the PR ready only with authorization, and
