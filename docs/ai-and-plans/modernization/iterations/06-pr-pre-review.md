@@ -95,7 +95,11 @@ status: active
        **Cons:** postpones accepted updates; still needs merged-tree and G6 verification.
   - **Recommended:** 1, at the operator-authorized integration point, not a premature `main`
     merge. Keep the existing baseline as a comparison; do not silently re-baseline changed inputs.
-- **Author decision:** _pending_
+- **Author decision (operator, 2026-10-07):** "we'll merge remove our overrides. we'll accept
+  the risk of ADO failing, we had to take are of it during the pipeline development, now we can
+  relax this while we're working on the rest." `main` is merged into the branch, with the lockfile
+  regenerated, not hand-merged. The overrides are removed, and the 7-day feed quarantine is
+  relaxed. The merged tree then needs a new CI run and L1/L2/L3 before #880 merges.
 
 ### PR-F02: the ESM package checks run in no pipeline, including both publish paths
 
@@ -148,7 +152,10 @@ status: active
        checking the final publication archives against them. **Pros:** smaller immediate change.
        **Cons:** operator-dependent; ordinary CI and later publishes remain unguarded.
   - **Recommended:** 1. Option 2 is a possible explicitly accepted interim release procedure.
-- **Author decision:** _pending_
+- **Author decision (operator, 2026-10-07):** "the reveiw finigs will be addressed befre we
+  mare the PR." To be fixed before #880 merges. Since this review,
+  `npm-publish-documentdb-js.yml` gates its publish job on `verify:packages` (`c0fd83c8`,
+  `dd5b767d`); the ADO path for the two `@microsoft` packages remains.
 
 ### PR-F03: three `@documentdb-js` packages ship the same breaking changes as `schema-analyzer` 2.0.0 with no release note
 
@@ -188,7 +195,8 @@ status: active
     2. Add changelogs or migration guides and include them in each `files` list. **Pros:** durable
        release history. **Cons:** additional files and packaging maintenance.
   - **Recommended:** 1; retain the operator-approved versions.
-- **Author decision:** _pending_
+- **Author decision (operator, 2026-10-07):** "all release notes will be updaetd before the
+  merge." Addressed with the release notes before #880 merges.
 
 ### PR-F04: leftovers of the removed CommonJS dev layout and webpack tooling
 
@@ -236,7 +244,8 @@ status: active
        **Cons:** continued unnecessary output and stale configuration.
   - **Recommended:** 1 after confirming no supported consumer of root `out/`; this is cleanup,
     not a reason to claim the current extension is broken.
-- **Author decision:** _pending_
+- **Author decision (operator, 2026-10-07):** "the reveiw finigs will be addressed befre we
+  mare the PR." To be fixed before #880 merges.
 
 ### PR-F05: the formatting gate does not cover the new `build/` tooling tree
 
@@ -268,7 +277,8 @@ status: active
     2. Add a separate tooling-format command and call it from CI and Case 2.
        **Pros:** isolates the tooling scope. **Cons:** another command/checklist can drift.
   - **Recommended:** 1. This review does not format tooling or run repository-wide formatting.
-- **Author decision:** _pending_
+- **Author decision (operator, 2026-10-07):** "the reveiw finigs will be addressed befre we
+  mare the PR." To be fixed before #880 merges.
 
 ### PR-F06: after merge, the knowledge base does not lead to the build-stack rationale, and one active feature design states the opposite
 
@@ -312,7 +322,8 @@ status: active
        **Pros:** follows the current knowledge-base layout. **Cons:** broader link churn and
        history/intent separation work.
   - **Recommended:** 1; do not rewrite historical decisions or sweep unrelated feature docs.
-- **Author decision:** _pending_
+- **Author decision (operator, 2026-10-07):** "the reveiw finigs will be addressed befre we
+  mare the PR." To be fixed before #880 merges.
 
 ### Checked without a finding
 

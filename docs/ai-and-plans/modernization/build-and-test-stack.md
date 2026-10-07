@@ -60,6 +60,9 @@ Out of scope:
      release tag instead. (Operator, 2026-10-02: the branch was rebased onto `v0.11.0` once, because
      the ADO build rejected fresh Dependabot versions that a `main` merge had brought in.) After
      Stage 2, convert any Jest tests that arrive with a merge;
+     - **Changed (operator, 2026-10-07, PR-F01):** "we'll merge remove our overrides." `main` is
+       merged into the branch with a merge commit before #880 merges, reversing the Stage 1
+       no-merge decision. The quarantine condition above is relaxed (ground rule 6).
    - never hand-merge `package-lock.json` (or `l10n/bundle.l10n.json`). Take either side and
      regenerate it with the Node and npm versions from `.nvmrc`, so CI's `npm ci` accepts it;
    - maintain the mandatory inline execution record defined in ground rule 8.
@@ -109,6 +112,12 @@ Out of scope:
    until it reports none. Exit code 3 means the lookup was incomplete; rerun before concluding.
    Record the scan result (counts, and every version pinned back or overridden) under the stage's
    task. Remove overrides that are no longer needed before G6.
+   - **Relaxed (operator, 2026-10-07):** "we'll accept the risk of ADO failing, we had to take
+     are of it during the pipeline development, now we can relax this while we're working on the
+     rest." From then on, fresh versions are not pinned back or overridden for the quarantine;
+     an ADO failure on a fresh version is an accepted risk. Running the scan and recording its
+     counts is still useful evidence. The release build (G6 step 3) still needs versions the
+     feed accepts.
 7. **Models.** Each stage names an author model and a reviewer model. The rules behind the picks:
    - author and reviewer come from **different model families**, so they tend to catch different
      mistakes;
@@ -3187,6 +3196,62 @@ Stage 0 must also be made.
       - `publish` was skipped, and pending deployments are `[]`;
       - npm still lists 0.8.1 for all four packages, last modified in May.
 
+  - **G6 decisions (operator, 2026-10-07), recorded verbatim:**
+    - "A passed, jsut say that uri wasn't tested, but i accept the risk." **The installed-VSIX
+      checklist has passed**, with one exception: item 3, the cold-start `vscode://` URI, **was
+      not tested, and the operator accepts that risk.** "A" refers to the coordinator's numbered
+      G6 to-do list, whose section A was this checklist.
+    - "PR-Fx: we'll merge remove our overrides. we'll accept the risk of ADO failing, we had to
+      take are of it during the pipeline development, now we can relax this while we're working
+      on the rest." **PR-F01 decided:** `main` is merged into the branch, reversing the Stage 1
+      no-merge decision, and the branch's remaining overrides go. **Ground rule 6's 7-day feed
+      quarantine is relaxed** for the rest of this work: ADO may fail on fresh versions.
+      Coordinator's reading of "our overrides": both remaining entries, `vite: $vite` (an npm
+      10.9.3 workaround) and `glob ~12.0.0` (it predates this work). It is unconfirmed whether
+      the `glob` entry is meant; check it during the merge.
+    - "I guess we can drop all snapshot tests etc - this was only relevan tduring the
+      moddernization." **Coordinator's reading, not confirmed:** the Stage 0 baseline
+      comparison, which is modernization-only:
+      - `build/verification/baseline.json`, `measurements.json` and `measure.cjs`;
+      - L1's informational manifest-drift report against that baseline, which now only reports
+        the webpack-to-Vite difference (122 added, 42 removed).
+
+      The L1 invariants, the size budget and the proof controls stay. The four product
+      `toMatchSnapshot` tests in `promptTemplates.test.ts` predate the modernization and are
+      not meant. The operator was asked which was meant and was unavailable. Nothing is deleted
+      yet; this is to be done with the review findings before the merge.
+
+    - "the reveiw finigs will be addressed befre we mare the PR." PR-F02 to PR-F06 and the
+      pending stage-review findings are fixed or decided before #880 merges.
+    - "there are still some stages to be done." Recorded as stated. The plan puts Stage 7
+      after the merge and Stage 8 after Stage 7; the operator has not changed that order.
+    - "all release notes will be updaetd before the merge." This covers PR-F03 (changelog
+      notes for the packages that became ESM-only) and the extension's release notes.
+    - **S3-F02**, asked by the operator: "I udnestand that we can just ship every package ESM
+      only as others can easily use them.?" **Coordinator's answer: yes,** with one documented
+      exception. Checked on 2026-10-07 with Node 22.21:
+      - the four `@documentdb-js` packages and the shared entry of
+        `@microsoft/vscode-ext-webview` load through both `import` and plain `require()`
+        (Node's `require(esm)`; their `engines` already require Node 22.18 or later);
+      - `@microsoft/vscode-ext-webview-fluentui` was already ESM-only at `v0.11.0`. It is a
+        webview package for bundlers and loads in plain Node through neither form, because
+        Fluent's CommonJS build doesn't expose named exports there. Unchanged by this PR.
+      - **The exception:** an unbundled CommonJS extension that calls `require()` on
+        `@microsoft/vscode-ext-webview/host` hangs VS Code's extension host. The package's
+        README and MIGRATION.md say to use `import`, `await import()` or a bundler.
+
+      **Recorded as the plan:** every package ships ESM-only.
+
+- **G6 status after these decisions: not passed.** The installed-VSIX checklist is done.
+  Remaining before the merge:
+  - merge `main` and remove the overrides (PR-F01);
+  - fix or decide the review findings;
+  - remove the Stage 0 baseline tooling, once confirmed;
+  - update the release notes;
+  - the Copilot reviewer pass;
+  - Case 2 on the merged tree.
+
+  Then the release sequence below.
   - **Outstanding decisions:**
     - **G5 item 9** (coordinator decisions): removing the webpack host fallback, Vite's default
       resolution conditions, the two type-only `paths` entries, no `require` banner, the
