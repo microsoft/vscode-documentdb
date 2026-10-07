@@ -1,7 +1,9 @@
 ---
 kind: review
-status: active
+status: historical
 ---
+
+> Re-evaluated against the merged branch in Stage 7: see [07-stage-reviews-reevaluation.md](./07-stage-reviews-reevaluation.md).
 
 # PR #880 AI pre-review (CONTRIBUTING.md §6)
 

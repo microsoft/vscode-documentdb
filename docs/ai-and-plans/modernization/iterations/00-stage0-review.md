@@ -3,6 +3,8 @@ kind: review
 status: historical
 ---
 
+> Re-evaluated against the merged branch in Stage 7: see [07-stage-reviews-reevaluation.md](./07-stage-reviews-reevaluation.md).
+
 # Stage 0 AI review
 
 Reviewer: **GPT-6 Sol**, as specified in the execution plan. Reviewed implementation commit

@@ -1,7 +1,9 @@
 ---
 kind: review
-status: active
+status: historical
 ---
+
+> Re-evaluated against the merged branch in Stage 7: see [07-stage-reviews-reevaluation.md](./07-stage-reviews-reevaluation.md).
 
 # Stage 3 AI review: our packages to ESM
 
