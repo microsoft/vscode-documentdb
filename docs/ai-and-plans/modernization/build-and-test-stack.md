@@ -3225,6 +3225,11 @@ Stage 0 must also be made.
       pending stage-review findings are fixed or decided before #880 merges.
     - "there are still some stages to be done." Recorded as stated. The plan puts Stage 7
       after the merge and Stage 8 after Stage 7; the operator has not changed that order.
+      **Confirmed by the operator (2026-10-07):** "this is indeed ending stage 6 with a merge,
+      and then stage 7 goes through all reviews. correct?" Yes. Before the merge: the PR
+      pre-review findings (PR-F01 to PR-F06), the Copilot reviewer's comments and Case 2. The
+      35 Stage 1 to 3 findings still marked _pending_ get their status and decision in Stage 7,
+      against the merged code, unless the operator decides otherwise.
     - "all release notes will be updaetd before the merge." This covers PR-F03 (changelog
       notes for the packages that became ESM-only) and the extension's release notes.
     - **S3-F02**, asked by the operator: "I udnestand that we can just ship every package ESM
