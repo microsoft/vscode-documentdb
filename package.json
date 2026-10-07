@@ -199,9 +199,8 @@
     "vscode-uri": "~3.1.0",
     "zod": "~4.3.6"
   },
-  "//overrides": "Pin transitive dependencies: glob 12.0.x for latest. vite follows the direct pin because npm 10.9.3 crashes (\"Cannot read properties of null (reading 'edgesOut')\") when it resolves vitest's vite peer chain from scratch without it (re-checked in Modernization Stage 6).",
+  "//overrides": "vite follows the direct pin because npm 10.9.3 crashes (\"Cannot read properties of null (reading 'edgesOut')\") when it resolves vitest's vite peer chain from scratch without it (re-checked in Modernization Stage 6).",
   "overrides": {
-    "glob": "~12.0.0",
     "vite": "$vite"
   },
   "extensionDependencies": [],
