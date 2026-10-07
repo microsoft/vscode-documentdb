@@ -11,7 +11,7 @@ Playwright E2E suite and how it relates to our parked PR #867.
 reference commit), and revised on 2026-10-01 after an independent review.
 
 **How to read this document.** The [execution plan](#execution-plan) comes first and reads top to
-bottom: scope, ground rules, the automated checks, then Stage 0 to Stage 8 with every task written
+bottom: scope, ground rules, the automated checks, then Stage 0 to Stage 10 with every task written
 into its stage. [Plan background](#plan-background) follows and records why each change exists; it
 is not needed to execute a stage. Everything from the Executive Summary down is the original August
 research. It is the evidence base, and the execution plan overrides it on sequencing and scope.
@@ -49,11 +49,12 @@ Out of scope:
 ### Ground rules
 
 1. **One branch, one PR** (operator, 2026-10-01). All stages are committed to
-   `dev/tnaum/modernization`, and its single draft PR to `main` merges only after Stage 6 passes.
+   `dev/tnaum/modernization`, and its single draft PR to `main` merges in Stage 9, after Stages 7
+   and 8 (operator, 2026-10-07; until then it merged after Stage 6).
    Coding agents must:
    - commit to this branch only, never to `main`, and open no separate per-stage PRs;
    - prefix commit subjects with the stage, for example `S2: convert schema-analyzer tests to Vitest`;
-   - keep the PR in draft until G6; CI runs on every push through it;
+   - keep the PR in draft until Stage 9 marks it ready; CI runs on every push through it;
    - bring in `main` with a merge commit, not a rebase. Merge `main` at the start of every stage and
      before every gate, but only up to a commit whose lockfile is past the 7-day ADO feed
      quarantine. If `main` carries fresher versions, merge an older `main` commit or the latest
@@ -62,7 +63,9 @@ Out of scope:
      Stage 2, convert any Jest tests that arrive with a merge;
      - **Changed (operator, 2026-10-07, PR-F01):** "we'll merge remove our overrides." `main` is
        merged into the branch with a merge commit before #880 merges, reversing the Stage 1
-       no-merge decision. The quarantine condition above is relaxed (ground rule 6).
+       no-merge decision. The quarantine condition above was relaxed at the same time, and
+       **restored** the same day (operator: "okay, let's undo that relaxation."): merge only a
+       `main` commit whose lockfile is past the 7-day quarantine. The merge opens Stage 7.
    - never hand-merge `package-lock.json` (or `l10n/bundle.l10n.json`). Take either side and
      regenerate it with the Node and npm versions from `.nvmrc`, so CI's `npm ci` accepts it;
    - maintain the mandatory inline execution record defined in ground rule 8.
@@ -92,14 +95,15 @@ Out of scope:
      commit. The operator reviews the list at G1-3.
 3. **Release.** `main` is not touched until the PR merges, so this plan does not block releases from
    `main`. The modernization reaches users only after the merge, through the release steps in
-   Stage 6.
+   Stage 9 (moved there from G6 on 2026-10-07).
 4. **The repository's verification rules apply.** Case 1 while working. Every stage ends with an AI
    review of that stage's diff by the stage's reviewer model, committed as
    `docs/ai-and-plans/modernization/iterations/<NN>-<stage>-review.md`. The full Case 2 list and the
    AI pre-review of CONTRIBUTING.md §6 run once, before the PR is marked ready for review. The checks
-   L1 to L3 below run at the end of a stage and in CI, not on every commit. After G6, Stage 7
-   re-evaluates all stage review files together against the merged code, before the E2E hand-over
-   (operator, 2026-10-05).
+   L1 to L3 below run at the end of a stage and in CI, not on every commit. Stage 7 re-evaluates
+   all review files together against the code after `main` has been merged into the branch
+   (operator, 2026-10-05; moved before the PR merges on 2026-10-07). Stage 8 fixes what G7
+   decides, and Stage 9 marks the PR ready, merges and releases it.
 5. **Verify the packaged VSIX, not F5.** Every gate installs the packaged VSIX. Cosmos DB's four
    post-migration bugs (blank webviews, missing CSS, Monaco workers, a dev build mistaken for
    production) were all invisible in development mode.
@@ -118,6 +122,12 @@ Out of scope:
      an ADO failure on a fresh version is an accepted risk. Running the scan and recording its
      counts is still useful evidence. The release build (G6 step 3) still needs versions the
      feed accepts.
+   - **Relaxation undone (operator, 2026-10-07, the same day):** "okay, let's undo that
+     relaxation." The rule above applies again, unchanged, until the release. Reason (the
+     coordinator's, which the operator accepted): the release is built in ADO from `main` right
+     after the merge. A fresh version would break that build mid-release and invalidate the ADO
+     evidence already collected. `main`'s lockfile had a single fresh version that day
+     (`electron-to-chromium` 1.5.443, clear from 2026-10-07 14:13 UTC).
 7. **Models.** Each stage names an author model and a reviewer model. The rules behind the picks:
    - author and reviewer come from **different model families**, so they tend to catch different
      mistakes;
@@ -155,7 +165,7 @@ Out of scope:
 
 ```mermaid
 flowchart LR
-    S0[S0 Baselines and checks] --> S1[S1 Remove legacy tests] --> S2[S2 Jest to Vitest] --> S3[S3 Packages to ESM] --> S4[S4 Views to Vite and splitting] --> S5[S5 Host to ESM and Vite] --> S6[S6 Remove webpack, CI gates, TS 6] --> S7[S7 Re-evaluate the stage reviews] --> S8[S8 Hand-over to E2E iteration]
+    S0[S0 Baselines and checks] --> S1[S1 Remove legacy tests] --> S2[S2 Jest to Vitest] --> S3[S3 Packages to ESM] --> S4[S4 Views to Vite and splitting] --> S5[S5 Host to ESM and Vite] --> S6[S6 Remove webpack, CI gates, TS 6] --> S7[S7 Merge main, re-evaluate all reviews] --> S8[S8 Fix the decided findings] --> S9[S9 Ready, merge and release] --> S10[S10 Hand-over to E2E iteration]
 ```
 
 ### The automated checks
@@ -2307,7 +2317,7 @@ Stage 0 must also be made.
       shows the entry state, as documented in `live-preview-playwright.md`. The helper's runs
       reach every state (42/42 routes, 60/60 assertions).
       **Follow-up, not done:** run a scenario's steps automatically when its route is opened
-      by hand. Carried into the Stage 8 hand-over with L2-dev.
+      by hand. Carried into the Stage 10 hand-over with L2-dev.
     - **Item 5, decisions:** "decisions, good." Recorded as confirming L1 option A and the
       Stage 4 decisions as recorded inline in this plan. No separate `decisions.md` was
       created; that is the coordinator's reading of the reply, which did not address the
@@ -2994,7 +3004,9 @@ Stage 0 must also be made.
   After the fixes, `prove:vsix` prints **25 PASS** lines and `test:verification` runs 123 Node
   and 79 browser tests.
 
-- **Operator gate G6:** the full manual checklist on Windows or macOS as well as Linux. Then:
+- **Operator gate G6:** the full manual checklist on Windows or macOS as well as Linux. Then
+  (**restructured on 2026-10-07: steps 1 to 6 below moved to Stage 9**, after Stages 7 and 8 run
+  on this PR):
   1. Run the full Case 2 list and the CONTRIBUTING.md §6 AI pre-review; mark the PR ready for
      review; merge it into `main`.
   2. Publish the package versions decided at G3, from `main`.
@@ -3206,6 +3218,8 @@ Stage 0 must also be made.
       on the rest." **PR-F01 decided:** `main` is merged into the branch, reversing the Stage 1
       no-merge decision, and the branch's remaining overrides go. **Ground rule 6's 7-day feed
       quarantine is relaxed** for the rest of this work: ADO may fail on fresh versions.
+      **The relaxation was undone the same day** (operator: "okay, let's undo that relaxation.");
+      see ground rules 1 and 6. The merge itself stands and opens Stage 7.
       Coordinator's reading of "our overrides": both remaining entries, `vite: $vite` (an npm
       10.9.3 workaround) and `glob ~12.0.0` (it predates this work). It is unconfirmed whether
       the `glob` entry is meant; check it during the merge.
@@ -3229,7 +3243,8 @@ Stage 0 must also be made.
       and then stage 7 goes through all reviews. correct?" Yes. Before the merge: the PR
       pre-review findings (PR-F01 to PR-F06), the Copilot reviewer's comments and Case 2. The
       35 Stage 1 to 3 findings still marked _pending_ get their status and decision in Stage 7,
-      against the merged code, unless the operator decides otherwise.
+      against the merged code, unless the operator decides otherwise. **Superseded by the
+      restructure below:** Stage 7 now runs on this PR, before it merges.
     - "all release notes will be updaetd before the merge." This covers PR-F03 (changelog
       notes for the packages that became ESM-only) and the extension's release notes.
     - **S3-F02**, asked by the operator: "I udnestand that we can just ship every package ESM
@@ -3247,53 +3262,29 @@ Stage 0 must also be made.
 
       **Recorded as the plan:** every package ships ESM-only.
 
-- **G6 status after these decisions: not passed.** The installed-VSIX checklist is done.
-  Remaining before the merge:
-  - merge `main` and remove the overrides (PR-F01);
-  - fix or decide the review findings;
-  - remove the Stage 0 baseline tooling, once confirmed;
-  - update the release notes;
-  - the Copilot reviewer pass;
-  - Case 2 on the merged tree.
-
-  Then the release sequence below.
-  - **Outstanding decisions:**
-    - **G5 item 9** (coordinator decisions): removing the webpack host fallback, Vite's default
-      resolution conditions, the two type-only `paths` entries, no `require` banner, the
-      externals changes, and S5-F01/S5-F02. Also whether to record them in a `decisions.md`.
-    - **Stage 6 coordinator decisions:** closing G5 with its checks carried into G6; the
-      size-budget tolerance (10% or 4 KiB) and its graphs; restoring the merge-ref checkout
-      (S1-F01); removing five overrides while keeping `vite: $vite`; the build document's
-      location; the S6-F01 and S6-F02 fixes.
-    - **Publishing:** whether to publish `@microsoft/vscode-ext-webview` `/host` as ESM-only,
-      given that unbundled CommonJS `require` hangs the extension host (S3-F02).
-    - **Pre-review:** PR-F01 to PR-F06. **PR-F01 decides how #880 reaches `main`:** it
-      conflicts with `main` in `package-lock.json`. By ground rule 1, take one side and
-      regenerate with `.nvmrc`'s Node and npm, within the feed quarantine, never by hand. That
-      overrides the Stage 1 no-merge decision only by operator choice, and the merged tree
-      then needs a new CI run and a fresh L1/L2/L3 pass.
-    - **Still-open options:** G5-I01 option 4 (an L1 guard against Rolldown's lowered-`import()`
-      bug); #990 after the merge; the milestone (#880 carries `0.11.2`); PR #867, on hold.
-    - **Toolchain versions, after the merge:**
-      [#991](https://github.com/microsoft/vscode-documentdb/issues/991) (operator request,
-      2026-10-07). Align `.nvmrc`, npm, `packageManager`, `@types/node` and `engines` with the
-      Node of VS Code's extension host: 22.21.1 in VS Code 1.109, 22.22.1 in 1.115, while
-      `.nvmrc` pins 22.18. Not done in #880.
-  - **Release sequence (the operator's actions; none may be skipped or reordered):**
-    1. Resolve the merge with `main` as decided under PR-F01, and get a green CI run on the
-       merge result. Satisfy the §6 blockers. Mark the PR ready only with authorization, and
-       merge it.
-    2. Publish the package versions decided at G3, from `main`, after `npm run verify:packages`
-       passes on that commit.
-    3. Build the extension in ADO from `main`, with versions past the feed quarantine.
-    4. Download the signed VSIX and record its SHA-256.
-    5. On that exact file:
-       - L1: `npm run verify:vsix -- <signed.vsix>` and `npm run prove:vsix -- <signed.vsix>`;
-       - L3: `npm run test:vsix -- <signed.vsix>` and
-         `npm run prove:activation -- <signed.vsix>`;
-       - L2 on its extracted contents: `npm run prepare:browser-check -- --vsix <signed.vsix> …`,
-         then the served check.
-    6. Approve `release.yml` only for that digest.
+- **Restructure (operator, 2026-10-07), recorded verbatim:** "in that case, it would make sense
+  to still maintain that 7 days quiartaine. and.. peform stage 7 on this PR, ont on main.
+  Opinion?" After the coordinator agreed, with the condition that `main` is merged into the
+  branch first so the re-evaluation sees the merged code: "okay, let's undo that relaxation."
+  and "basically, we'll add more stages between 7 and 8and.. why don't you just do it and write
+  it straigt to the plan."
+  - **Applied by the coordinator in the commit that adds this note.**
+    - Ground rules 1 and 6: the 7-day quarantine applies again.
+    - The PR stays in draft until Stage 9.
+    - New order: **Stage 7**, merge `main` into the branch, then re-evaluate every review on
+      the branch; **Stage 8**, fix what G7 decides; **Stage 9**, mark ready, merge and release
+      (G6's former steps 1 to 6); **Stage 10**, the E2E hand-over (formerly Stage 8).
+  - The operator said more stages may follow between 7 and the hand-over. Add them as their own
+    sections before Stage 10.
+- **G6 status: closed by the restructure** (the coordinator's reading of the operator's
+  instruction; the operator did not write "G6 passed").
+  - **Passed:** the installed-VSIX checklist on Linux and Windows, except the cold-start
+    `vscode://` URI, untested by the operator's accepted risk.
+  - **Green on Windows agents, with their artifacts verified:** the ADO extension and npm-package
+    builds.
+  - **Decided:** PR-F01 to PR-F06.
+  - **Moved:** everything else that G6 listed. The open decisions go to G7. The release sequence
+    goes to Stage 9.
 
 - **Stage 6 commits:** `0843c1d0` (webpack removal); `9fb027d7` (TypeScript 6); `6c6cf71d`
   (S3-F06); `dee7773e` (overrides); `f53df711`, `64a7992f` (size budget, `keepNames`);
@@ -3301,60 +3292,202 @@ Stage 0 must also be made.
   `b09b7629`, `9b489252` (review fixes S6-F01, S6-F02); `b13883e6` (stage review);
   `00bc1337` (PR pre-review); and the `S6: record …` documentation commits.
 
-### Stage 7: re-evaluate the stage reviews
+### Stage 7: merge `main`, then re-evaluate every review (on this PR)
 
-- **Added by the operator (2026-10-05).** Each stage review judged one stage's diff when it was
-  written. Later stages fix, supersede or invalidate those findings: Stage 5 makes the host ESM,
-  Stage 6 deletes webpack and its tooling, and several findings are explicitly deferred "until G6".
-  Once the whole migration has merged, and before the E2E iteration builds on it, every review file
-  is read again and each finding is judged against the final code.
-- **Models:** each review file is re-evaluated by a model family different from the one that wrote
-  it: **GPT-6.1 Sol** for the files Claude models reviewed (Stages 1 to 3), **Claude Opus 5.5** for
-  the files GPT models reviewed (Stages 0, 4 and 6; Stage 5 follows whichever model reviewed it).
-  The standard context is enough, as in CONTRIBUTING.md §6.1 step 3: every finding is already
-  scoped. Record which model re-evaluated which file.
-- **Goal:** one current account of every review finding from Stages 0 to 6, so that nothing the
-  reviews found is lost between stages, and the E2E iteration starts from a known state.
-- **Inputs:** every `iterations/<NN>-*-review.md` file (00 to 06), the `Author decision` entries in
-  them, each stage's inline record in this plan, `main` at the merge commit, and the release digest
-  from G6.
-- **Tasks:**
-  - For every finding, check it against the code on `main` and record:
-    - its current status: **resolved** (with the commit), **still valid**, **obsolete** (the code it
-      concerned was removed or replaced, for example webpack-only findings after Stage 6), or **false
-      positive in hindsight** (with the evidence);
-    - its severity now, which can differ from the original once the final architecture is known;
+- **Added by the operator (2026-10-05); moved before the PR merges (operator, 2026-10-07; see the
+  restructure note under G6).** Each stage review judged one stage's diff when it was written.
+  Later stages fix, supersede or invalidate those findings. Before #880 merges, every review file
+  is read again and each finding is judged against the branch after `main` has been merged into
+  it, which is the code that will ship.
+- **Models:**
+  - A **Claude Opus 5.5** coordinator runs the stage through sequential subagents, as in
+    Stages 5 and 6.
+  - Each review file is re-evaluated by a model family different from the one that wrote it, at
+    standard context (CONTRIBUTING.md §6.1 step 3: every finding is already scoped). Record which
+    model re-evaluated which file.
+
+  | Review file                                            | Written by                                         | Re-evaluated by           |
+  | ------------------------------------------------------ | -------------------------------------------------- | ------------------------- |
+  | `00-stage0-review.md`                                  | GPT-6 Sol                                          | Claude Opus 5.5           |
+  | `01-stage1-review.md` to `03-stage3-review.md`         | Claude Opus 5.5                                    | GPT-6.1 Sol               |
+  | `04-stage4-review.md`                                  | GPT-6.1 Sol                                        | Claude Opus 5.5           |
+  | `05-stage5-review.md`                                  | GPT-6 Astra                                        | Claude Opus 5.5           |
+  | `06-stage6-review.md`, S6-F01 and S6-F02               | GPT-6 Sol                                          | Claude Opus 5.5           |
+  | `06-stage6-review.md`, addendum (S6-F03, S6-F04)       | Claude Opus 5.5                                    | GPT-6.1 Sol               |
+  | `06-pr-pre-review.md` (PR-F01 to PR-F06)               | Claude Opus 5.5 (step 1), GPT-6.1 Sol (steps 3, 4) | GPT-6 Sol                 |
+  | Cross-review findings and the combined-migration sweep | n/a                                                | GPT-6 Sol (wrote no code) |
+
+  GPT-6 Sol for the last two rows is a coordinator choice: the authors of Stages 4 to 6 include
+  both Claude Opus 5.5 and GPT-6.1 Sol, so neither is independent of the combined result.
+
+- **Goal:** one current account of every review finding from Stages 0 to 6 and the PR
+  pre-review, so that nothing the reviews found is lost between stages. Every still-valid
+  finding gets a decision before the PR merges.
+- **Step 7.1, merge `main` into the branch (PR-F01; ground rule 1).** This must come first.
+  - **Pick the commit.** Run the fresh-dependency scan on `main`'s lockfile. Merge the newest
+    `main` commit that has no version inside the 7-day window. On 2026-10-07, `main` was
+    `1380b758` (12 commits after `v0.11.0`), with one fresh version that cleared at 14:13 UTC.
+  - **How:** a merge commit, never a rebase or force push. Never hand-merge `package-lock.json`
+    or `l10n/bundle.l10n.json`: take either side, regenerate with `.nvmrc`'s Node and npm
+    (10.9.3), then run `npm run l10n`. Convert any Jest test that arrives from `main` to Vitest.
+    Expect `main`'s Dependabot bumps. One of them, `browserslist` 4.28.2 to 4.29.3, changes code
+    bundled into `playgroundWorker.mjs`: check it against the size budget, and update the budget
+    only on purpose, with the reason.
+  - **Overrides:** remove `glob ~12.0.0` if the scan and a from-scratch resolution stay clean
+    without it. This is the coordinator's reading of the operator's "remove our overrides", to
+    be confirmed at G7. Keep `vite: $vite`: npm 10.9.3 still crashes without it, and #991
+    re-tests that with a newer npm.
+  - **Then verify the merged tree:**
+    - `npm run build`, `npx vitest run`, `npm run test:verification` and
+      `npm run verify:packages`;
+    - `npm run package`, then `verify:vsix` and `prove:vsix` (25 controls);
+    - L2 and L2-dev, then L3 with its proof, and `npm run probe:host-unbundled`;
+    - a dispatch of `main.yml` (`enforce_full_run=true`). Once the conflict is gone, PR-triggered
+      CI also runs on the merge ref.
+    - a dry run of `npm-publish-documentdb-js.yml` (`dry_run` defaults to `true`).
+
+    Ask the operator to queue both ADO builds on the merged branch. The release depends on ADO
+    accepting the merged lockfile.
+
+  - Record the merge commit, the lockfile changes, the scan result and every check inline here.
+
+- **Step 7.2, re-evaluate:**
+  - For every finding, check it against the branch after step 7.1 and record:
+    - its current status: **resolved** (with the commit), **still valid**, **obsolete** (the
+      code it concerned was removed or replaced, for example webpack-only findings after
+      Stage 6), or **false positive in hindsight** (with the evidence);
+    - its severity now, which can differ from the original once the final architecture is
+      known;
     - whether the recorded author decision was carried out as decided.
-  - Check every item a review deferred to a later stage or to G6 (for example the CI checkout
-    policy, the temporary `overrides`, and anything required before the packages are published).
-    Each one is done, or is listed as open with a reason.
+
+    This includes the 35 Stage 1 to 3 findings whose author decision still reads _pending_.
+    Their decision is taken at G7 and recorded in the re-evaluation file.
+
+  - Check every item a review deferred to a later stage or to G6, for example the S1-F01
+    checkout policy, the temporary `overrides`, and S2-F01, S3-F02 and S3-F06 before
+    publishing. Each one is done, or is listed as open with a reason.
   - Look across the review files for what a single stage review cannot see: a problem one stage
-    introduced and a later stage reintroduced, findings that share one root cause, and verification
-    gaps that stayed open in every stage (for example a check that never ran on Windows or in a real
-    `vscode-webview://` host).
-  - Run an independent sweep of the merged result, as in CONTRIBUTING.md §6.1 step 4, limited to
-    risks that only appear once all stages are combined.
+    introduced and a later stage reintroduced, findings that share one root cause, and
+    verification gaps that stayed open in every stage. Examples: a check that never ran on
+    macOS or in a real `vscode-webview://` host, and the untested cold-start URI.
+  - Run an independent sweep of the merged branch, as in CONTRIBUTING.md §6.1 step 4, limited
+    to risks that appear only once all stages are combined.
   - Write the result to `iterations/07-stage-reviews-reevaluation.md` (`kind: review`,
-    `status: active`): one table per review file (finding ID, original severity, current status,
-    current severity, evidence, action), then the cross-review findings and the sweep, each with
-    solutions, pros and cons and a recommended option, and `**Author decision:** _pending_`.
-  - Do not rewrite the original review files. Set each to `status: historical` and add one line at
-    the top that links to the re-evaluation.
-- **Automated verification:** none beyond what the evidence for each status needs. A finding marked
-  resolved cites the commit and, where one exists, the test or check that now covers it.
-- **Operator gate G7:** decide every finding that is still valid: fix it in a follow-up PR from
-  `main` (CONTRIBUTING.md §6.3), file an issue (CONTRIBUTING.md §6.5), or accept it with a reason
-  recorded in the re-evaluation file. Findings that affect E2E testing go into the Stage 8 hand-over.
+    `status: active`). It holds one table per review file (finding ID, original severity, current
+    status, current severity, evidence, action). Then come the cross-review findings and the
+    sweep, each with solutions, pros and cons, a recommended option and
+    `**Author decision:** _pending_`.
+  - Do not rewrite the original review files. Set each to `status: historical` and add one line
+    at the top that links to the re-evaluation.
 
-### Stage 8: hand-over to the E2E iteration
+- **Automated verification:** step 7.1's checks. For step 7.2, only what the evidence for each
+  status needs: a finding marked resolved cites the commit and, where one exists, the test or
+  check that now covers it.
+- **Operator gate G7:**
+  - **Decide every still-valid finding:** fix it in Stage 8 on this branch, file an issue
+    (CONTRIBUTING.md §6.5), or accept it with a reason recorded in the re-evaluation file.
+    Findings that affect E2E testing also go into the Stage 10 hand-over.
+  - **Confirm or reverse the open coordinator decisions:**
+    - the six G5 item 9 decisions: the webpack host fallback removal, Vite's default resolution
+      conditions, the two type-only `paths` entries, no `require` banner, the externals changes,
+      and S5-F01 and S5-F02;
+    - the Stage 6 decisions: closing G5 with its checks carried into G6, the size budget (10% or
+      4 KiB, 14 graphs), the merge-ref checkout (S1-F01), the overrides, the location of
+      `build/vite/README.md`, and the fixes for S6-F01 to S6-F04.
+  - **Confirm the two readings:**
+    - "snapshot tests" means the Stage 0 baseline comparison (`baseline.json`,
+      `measurements.json`, `measure.cjs` and L1's manifest-drift report), not the product's
+      prompt-template snapshots;
+    - "our overrides" includes `glob`.
+  - **Decide:** whether to record the decisions in a `decisions.md`; the milestone for #880
+    (currently `0.11.2`); and G5-I01 option 4, an L1 guard against Rolldown's lowered-`import()`
+    bug.
 
+### Stage 8: fix the decided findings (on this PR)
+
+- **Added by the operator (2026-10-07).**
+- **Models:** a Claude Opus 5.5 coordinator with sequential subagents, as in Stage 6: GPT-6.1 Sol
+  for well-specified cleanup, CI, tests and documentation, and Claude Opus 5.5 for build contracts
+  and verification design. Reviewer: **GPT-6 Sol** in a fresh session, without the authors'
+  reasoning, written to `iterations/08-stage8-review.md` in the format of the earlier stage
+  reviews.
+- **Tasks:**
+  - **The fixes the operator chose at G7,** one commit per work item (CONTRIBUTING.md §6.3). They
+    include the PR pre-review findings, which the operator decided to fix before the merge:
+    - PR-F02: `verify:packages` in the ADO path for the two `@microsoft` packages. The
+      `@documentdb-js` path has had it since `c0fd83c8`.
+    - PR-F04: the `out/` emit, `BUNDLE_ANALYZE` in `main.yml`, `.swcrc` in `.vscodeignore`, and
+      `WEBVIEW_CONFIG.bundle.dev`.
+    - PR-F05: Prettier globs that cover `build/`.
+    - PR-F06: the modernization docs in the knowledge-base index, and the stale
+      `features/webview-ext-package/design.md`.
+  - **Remove the Stage 0 baseline tooling,** if confirmed at G7: `baseline.json`,
+    `measurements.json`, `measure.cjs` and L1's manifest-drift report against the baseline.
+    Keep every L1 invariant, the size budget, the required-file and runtime-asset lists, and the
+    proof controls. The `asset-added-and-removed-reported` control depends on the drift report:
+    retire it only with a recorded reason. The Stage 0 numbers stay in this plan's records.
+  - **Release notes** (operator: "all release notes will be updaetd before the merge"):
+    - the extension's `CHANGELOG.md` and `docs/release-notes/`, using the
+      `writing-release-notes` skill;
+    - notes in the package changelogs on the ESM-only and `engines` changes (PR-F03).
+
+    The operator reviews them at G8.
+
+  - **Re-merge `main` if needed:** if `main` has moved since step 7.1 in build, test or
+    packaging areas, merge it again (quarantine-clean) and review that difference.
+
+- **Automated verification:** Case 1 for each work item. At the end: `npm run package`,
+  `verify:vsix`, `prove:vsix`, L2, L2-dev, L3 with its proof, `verify:packages`, and a green CI
+  dispatch.
+- **Operator gate G8:** review the fixes, the release notes and the Stage 8 review, and decide its
+  findings.
+
+### Stage 9: ready for review, merge and release
+
+- **Added by the operator (2026-10-07).** These are G6's former steps 1 to 6.
+- **The agents never merge, publish, approve a deployment or approve a release.** Each of those is
+  an operator action, taken only with explicit authorization. Agents prepare the evidence and run
+  the checks.
+- **Tasks:**
+  1. **The Copilot reviewer pass (CONTRIBUTING.md §6 step 2).** Request it on #880, merge its
+     comments into `06-pr-pre-review.md` with links, address them (§6.3, replying in each
+     thread), and record the author's decisions.
+  2. **The full Case 2 list** on the final tree, with the `prepare-pull-request` skill: milestone,
+     description and blockers.
+  3. **Mark #880 ready for review** (operator authorization), get the human review, and merge it
+     into `main` (operator).
+  4. **Publish the package versions decided at G3, from `main`.** `@documentdb-js/*`: dispatch
+     `npm-publish-documentdb-js.yml` with `dry_run=false`, select the packages, and approve the
+     environment; dry-run it on the same commit first. `@microsoft/*`: the ADO npm-package
+     pipeline. Both run `verify:packages` once PR-F02 is fixed.
+  5. **Build the extension in ADO from `main`,** with versions past the feed quarantine.
+     Download the signed VSIX and record its SHA-256.
+  6. **On that exact file:**
+     - L1: `npm run verify:vsix -- <signed.vsix>` and `npm run prove:vsix -- <signed.vsix>`;
+     - L3: `npm run test:vsix -- <signed.vsix>` and `npm run prove:activation -- <signed.vsix>`;
+     - L2 on its extracted contents: `npm run prepare:browser-check -- --vsix <signed.vsix> …`,
+       then the served check;
+     - a per-file comparison with a local build of the same commit (2026-10-07 precedent: only
+       CRLF text endings and `NOTICE.html` differ).
+  7. **Approve `release.yml` only for that digest.**
+- **Operator gate G9:** the release is approved for the recorded digest.
+
+### Stage 10: hand-over to the E2E iteration
+
+- **Formerly Stage 8; renumbered on 2026-10-07.**
 - **Models:** **Claude Sonnet 5.5** to write the hand-over.
-- **What the E2E iteration inherits:** the L2 harness (to run headless in CI), L2-dev and its typed
-  scenarios (to wire their assertions into CI, screenshots as artifacts only), L3 (to extend into
-  Extension Host integration tests), the L4 spike notes (B3), and two candidate specs from Cosmos DB
-  production fixes: proxy routing through VS Code (#3367) and the URI handler activation race
-  (#3288). Its starting point is [e2e-testing-strategy.md](./e2e-testing-strategy.md), plus the
-  findings G7 routed to it from the Stage 7 re-evaluation.
+- **What the E2E iteration inherits:**
+  - the L2 harness, to run headless in CI;
+  - L2-dev and its typed scenarios, to wire their assertions into CI, with screenshots as
+    artifacts only;
+  - L3, to extend into Extension Host integration tests;
+  - the L4 spike notes (B3);
+  - two candidate specs from Cosmos DB production fixes: proxy routing through VS Code (#3367)
+    and the URI handler activation race (#3288). The cold-start URI was not tested manually at
+    G6; the operator accepted that risk.
+
+  Its starting point is [e2e-testing-strategy.md](./e2e-testing-strategy.md), plus the findings
+  that G7 routed to it from the Stage 7 re-evaluation.
   - **Added at G4 (2026-10-05):** L2-dev follow-up: make a scenario route that is opened by hand
     run its typed steps, so it shows its target state instead of the view's entry state.
     PR #867 is on hold until the modernization completes; decide then whether to close it as
@@ -3363,6 +3496,10 @@ Stage 0 must also be made.
 ### After this iteration
 
 - Replace SlickGrid: [slickgrid-removal.md](./slickgrid-removal.md).
+- [#990](https://github.com/microsoft/vscode-documentdb/issues/990): upgrade
+  `@microsoft/vscode-azext-azureauth` and remove the G5-I01 alias.
+- [#991](https://github.com/microsoft/vscode-documentdb/issues/991): align the Node.js and npm
+  toolchain versions with VS Code's extension host.
 - Deferred items: [future-work.md](./future-work.md).
 
 ---

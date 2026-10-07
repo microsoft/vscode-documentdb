@@ -100,6 +100,9 @@ status: active
   relax this while we're working on the rest." `main` is merged into the branch, with the lockfile
   regenerated, not hand-merged. The overrides are removed, and the 7-day feed quarantine is
   relaxed. The merged tree then needs a new CI run and L1/L2/L3 before #880 merges.
+  **Changed the same day (operator):** "okay, let's undo that relaxation." The 7-day quarantine
+  applies again, so merge a quarantine-clean `main` commit. The merge is now step 7.1 of the
+  plan, run on this PR before the Stage 7 re-evaluation.
 
 ### PR-F02: the ESM package checks run in no pipeline, including both publish paths
 
