@@ -15,7 +15,8 @@ belongs. Written during the modernization re-review
 ([build-and-test-stack.md, execution plan](./build-and-test-stack.md#execution-plan)).
 
 Marked facts: [MEASURED] was read from the pipeline files on 2026-09-30, with checkout, reporting
-and artifact wiring updated in Stage 6 on 2026-10-06. [INFERRED] is reasoning, not verified.
+and artifact wiring updated in Stage 6 on 2026-10-06 and the npm dry-run path on 2026-10-07.
+[INFERRED] is reasoning, not verified.
 "Planned" rows describe later modernization work. L1 and L3 are wired;
 the operator-run ADO build and the G0 manual checklist remain outstanding.
 
@@ -39,7 +40,7 @@ the operator-run ADO build and the G0 manual checklist remain outstanding.
 | `main.yml` ("CI")                     | PRs to `main`, `release/**`, `feature/**`; push to `main`; manual | Build the workspaces, `l10n:check`, lint, Prettier, unit tests (`npm test`, Vitest); build and package a VSIX artifact, with a PR comment; L1 inspection and L3 activation/proofs |
 | `api-extractor.yaml`                  | Push to `main` and `release/**`; PRs                              | Extracts the public API typings                                                                                                                                                   |
 | `api-publish.yaml`                    | Manual                                                            | Publishes the API typings package to npm                                                                                                                                          |
-| `npm-publish-documentdb-js.yml`       | Manual, one checkbox per package                                  | Publishes the four `@documentdb-js/*` packages to npmjs with provenance                                                                                                           |
+| `npm-publish-documentdb-js.yml`       | Manual; `dry_run` defaults to `true`, one checkbox per package       | Builds/tests/verifies packages and dry-runs publication; explicit real publication to npmjs with provenance requires successful verification and environment approval             |
 | `bump-version-pr.yaml`                | Manual                                                            | Opens the version bump PR after a release                                                                                                                                         |
 | `deploy-documentation-production.yml` | Push to `main` touching `docs/**`; manual                         | Deploys the documentation site                                                                                                                                                    |
 | `seed-build-cache.yml`                | Manual (`seed` / `verify`)                                        | Build-size cache                                                                                                                                                                  |
@@ -150,6 +151,7 @@ in a browser, and L3 installs the VSIX into a downloaded VS Code and checks that
 | Build / type check               | both                              | yes                                      | yes                          | ADO must build what it signs                                                            |
 | Lint, Prettier, `l10n:check`     | GitHub                            | yes (gate)                               | no                           | PR feedback; no effect on the artifact                                                  |
 | Unit tests (Vitest)              | GitHub; ADO only for npm packages | yes (gate)                               | optional                     | Need no network, so they can run in ADO, but GitHub already gates every PR              |
+| `verify:packages` / publish dry-run | GitHub npm publish workflow     | gates the `@documentdb-js/*` publish job; not general PR CI | not wired                    | Packed-test, export/type and consumer checks need public validator downloads; the ADO `@microsoft/*` publish path remains a gap |
 | Package the VSIX                 | both                              | yes (PR artifact, and input to L3)       | yes (**the one that ships**) |                                                                                         |
 | **L1** artifact inspection       | implemented; local pass           | wired as a separate job                  | **wired before signing**     | Needs no network. Rerun on the downloaded ADO artifact at release time (section 4)      |
 | **L2** production-bundle harness | integrated-browser pass           | later, headless (needs browser binaries) | no                           | Browser download                                                                        |
@@ -207,6 +209,52 @@ it. A failed inspection still prevents signing and the final package/signature s
 diagnostic reports are staged on failure. No signing, feed, pool or release policy changed, and
 there is no L3 in ADO. YAML and task ordering were checked locally; the governed template and an
 actual ADO run remain operator verification.
+
+### 3.2 `@documentdb-js/*`: safe verification and gated publication
+
+`npm-publish-documentdb-js.yml` remains manual-only. Its `dry_run` input defaults to `true`:
+
+- The **Verify packages (publish dry-run)** job has only `contents: read`, no environment and no
+  OIDC permission. It checks out the dispatch commit, selects Node from `.nvmrc`, installs npm
+  **11.5.1** and runs `npm ci`, `npm run build --workspaces --if-present`,
+  `npm run test --workspaces --if-present`, and `npm run verify:packages`. The latter packs all
+  six workspaces and checks packed-test rejection, exports/types and representative consumer
+  calls (including rejection controls).
+- It then runs `npm publish --dry-run --workspace <package>` for each selected
+  `@documentdb-js/*` package. With `dry_run=true` and no package selected, it dry-runs **all four**.
+  A dry-run never requires a reviewer to approve an environment, never requests `id-token: write`,
+  and never schedules the publish job.
+- **Publish to npmjs.com** has `needs: verify` and `if: ${{ !inputs.dry_run }}`. A real-publish
+  dispatch must select at least one package; otherwise verification fails before environment
+  approval can be requested. The publish job preserves the protected
+  `npm-publish-documentdb-js-scope` environment, `id-token: write`, Trusted Publishing and
+  per-package `--provenance` publication. It installs/builds again in its own checkout; the
+  verifier does not transfer the exact checked tarballs into that job.
+
+The npm pin fixes the September 30 `main` run's `EBADENGINE`: `npm@latest` resolved to npm
+12.2.0, requiring Node `^22.22.2 || ^24.15.0 || >=26.0.0`, while `.nvmrc` selected 22.18.0.
+npm 11.5.1 supports Trusted Publishing and Node `^20.17.0 || >=22.9.0`; it was published on
+2025-07-24, well outside the seven-day quarantine.
+
+**Operator procedure:** first dispatch with `dry_run=true` on the intended commit and inspect
+verification and all selected dry-run results. For the modernization release, publish from
+`main` only after merge and the release prerequisites in the execution plan are satisfied:
+dispatch with `dry_run=false`, enable the desired `publish_*` checkboxes, wait for verification
+to pass, and have an authorized reviewer approve `npm-publish-documentdb-js-scope`. Its branch
+protection rules still apply (the September 30 `release/v0.11.0` run was rejected before any
+step because that branch was not allowed to deploy).
+
+Before a real dispatch, check the package versions are not already published and confirm each
+package's npm Trusted Publisher configuration matches this repository, workflow and environment.
+Dry-run success cannot validate OIDC authentication or npm-side publisher settings. Nothing in
+this change modifies those settings or environment policy. This closes PR-F02's missing
+verification gate for this GitHub publish path, **not** the ADO `@microsoft/*` path or general PR CI.
+
+**Validation (2026-10-07):** branch dry-run
+[37618213760](https://github.com/microsoft/vscode-documentdb/actions/runs/37618213760), at
+`c0fd83c857855189c941e386080c2ea05a548665`, passed verification and all four publication dry-runs.
+The publish job was **skipped**, the pending-deployments API returned `[]`, and registry version
+lists were unchanged before and after; no package was published. Real publication was not tested.
 
 ## 4. The gap between the two VSIXs, and how to close it
 
