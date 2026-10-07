@@ -40,7 +40,7 @@ the operator-run ADO build and the G0 manual checklist remain outstanding.
 | `main.yml` ("CI")                     | PRs to `main`, `release/**`, `feature/**`; push to `main`; manual | Build the workspaces, `l10n:check`, lint, Prettier, unit tests (`npm test`, Vitest); build and package a VSIX artifact, with a PR comment; L1 inspection and L3 activation/proofs |
 | `api-extractor.yaml`                  | Push to `main` and `release/**`; PRs                              | Extracts the public API typings                                                                                                                                                   |
 | `api-publish.yaml`                    | Manual                                                            | Publishes the API typings package to npm                                                                                                                                          |
-| `npm-publish-documentdb-js.yml`       | Manual; `dry_run` defaults to `true`, one checkbox per package       | Builds/tests/verifies packages and dry-runs publication; explicit real publication to npmjs with provenance requires successful verification and environment approval             |
+| `npm-publish-documentdb-js.yml`       | Manual; `dry_run` defaults to `true`, one checkbox per package    | Builds/tests/verifies packages and dry-runs publication; explicit real publication to npmjs with provenance requires successful verification and environment approval             |
 | `bump-version-pr.yaml`                | Manual                                                            | Opens the version bump PR after a release                                                                                                                                         |
 | `deploy-documentation-production.yml` | Push to `main` touching `docs/**`; manual                         | Deploys the documentation site                                                                                                                                                    |
 | `seed-build-cache.yml`                | Manual (`seed` / `verify`)                                        | Build-size cache                                                                                                                                                                  |
@@ -145,21 +145,21 @@ The check names L1 to L3 come from the modernization plan
 L1 inspects the unzipped VSIX against a committed manifest, L2 renders the production webview bundle
 in a browser, and L3 installs the VSIX into a downloaded VS Code and checks that it activates.
 
-| Check                            | Today                             | GitHub Actions (planned)                 | ADO official build (planned) | Why                                                                                     |
-| -------------------------------- | --------------------------------- | ---------------------------------------- | ---------------------------- | --------------------------------------------------------------------------------------- |
-| `npm ci`                         | both                              | public npmjs                             | internal feed                | Different sources, see 2.1                                                              |
-| Build / type check               | both                              | yes                                      | yes                          | ADO must build what it signs                                                            |
-| Lint, Prettier, `l10n:check`     | GitHub                            | yes (gate)                               | no                           | PR feedback; no effect on the artifact                                                  |
-| Unit tests (Vitest)              | GitHub; ADO only for npm packages | yes (gate)                               | optional                     | Need no network, so they can run in ADO, but GitHub already gates every PR              |
-| `verify:packages` / publish dry-run | GitHub npm publish workflow     | gates the `@documentdb-js/*` publish job; not general PR CI | not wired                    | Packed-test, export/type and consumer checks need public validator downloads; the ADO `@microsoft/*` publish path remains a gap |
-| Package the VSIX                 | both                              | yes (PR artifact, and input to L3)       | yes (**the one that ships**) |                                                                                         |
-| **L1** artifact inspection       | implemented; local pass           | wired as a separate job                  | **wired before signing**     | Needs no network. Rerun on the downloaded ADO artifact at release time (section 4)      |
-| **L2** production-bundle harness | integrated-browser pass           | later, headless (needs browser binaries) | no                           | Browser download                                                                        |
-| **L3** installed-VSIX smoke      | implemented; CI proof pending     | wired as a separate job on PRs           | **no**                       | Downloads VS Code; local machine has no display/Xvfb                                    |
-| E2E suite (future iteration)     | not yet                           | yes                                      | no                           | Downloads VS Code, browsers, Docker images                                              |
-| Legacy `🧪 Test` step            | removed in Stage 1                | n/a                                      | **removed**                  | Retired no-op harness; unit tests run on GitHub and L3 must not download VS Code in ADO |
-| Dependency freshness             | manual (skill)                    | future work, not planned                 | implicit (`npm ci` fails)    | Release builds are prepared from quarantine-clear versions (2.1)                        |
-| Sign, verify signature, publish  | ADO                               | no                                       | yes                          |                                                                                         |
+| Check                               | Today                             | GitHub Actions (planned)                                    | ADO official build (planned) | Why                                                                                                                             |
+| ----------------------------------- | --------------------------------- | ----------------------------------------------------------- | ---------------------------- | ------------------------------------------------------------------------------------------------------------------------------- |
+| `npm ci`                            | both                              | public npmjs                                                | internal feed                | Different sources, see 2.1                                                                                                      |
+| Build / type check                  | both                              | yes                                                         | yes                          | ADO must build what it signs                                                                                                    |
+| Lint, Prettier, `l10n:check`        | GitHub                            | yes (gate)                                                  | no                           | PR feedback; no effect on the artifact                                                                                          |
+| Unit tests (Vitest)                 | GitHub; ADO only for npm packages | yes (gate)                                                  | optional                     | Need no network, so they can run in ADO, but GitHub already gates every PR                                                      |
+| `verify:packages` / publish dry-run | GitHub npm publish workflow       | gates the `@documentdb-js/*` publish job; not general PR CI | not wired                    | Packed-test, export/type and consumer checks need public validator downloads; the ADO `@microsoft/*` publish path remains a gap |
+| Package the VSIX                    | both                              | yes (PR artifact, and input to L3)                          | yes (**the one that ships**) |                                                                                                                                 |
+| **L1** artifact inspection          | implemented; local pass           | wired as a separate job                                     | **wired before signing**     | Needs no network. Rerun on the downloaded ADO artifact at release time (section 4)                                              |
+| **L2** production-bundle harness    | integrated-browser pass           | later, headless (needs browser binaries)                    | no                           | Browser download                                                                                                                |
+| **L3** installed-VSIX smoke         | implemented; CI proof pending     | wired as a separate job on PRs                              | **no**                       | Downloads VS Code; local machine has no display/Xvfb                                                                            |
+| E2E suite (future iteration)        | not yet                           | yes                                                         | no                           | Downloads VS Code, browsers, Docker images                                                                                      |
+| Legacy `🧪 Test` step               | removed in Stage 1                | n/a                                                         | **removed**                  | Retired no-op harness; unit tests run on GitHub and L3 must not download VS Code in ADO                                         |
+| Dependency freshness                | manual (skill)                    | future work, not planned                                    | implicit (`npm ci` fails)    | Release builds are prepared from quarantine-clear versions (2.1)                                                                |
+| Sign, verify signature, publish     | ADO                               | no                                                          | yes                          |                                                                                                                                 |
 
 ### 3.1 Reports, artifacts and PR size feedback (Stage 6)
 
@@ -216,7 +216,7 @@ actual ADO run remain operator verification.
 
 - The **Verify packages (publish dry-run)** job has only `contents: read`, no environment and no
   OIDC permission. It checks out the dispatch commit, selects Node from `.nvmrc`, installs npm
-  **11.5.1** and runs `npm ci`, `npm run build --workspaces --if-present`,
+  **11.20.0** and runs `npm ci`, `npm run build --workspaces --if-present`,
   `npm run test --workspaces --if-present`, and `npm run verify:packages`. The latter packs all
   six workspaces and checks packed-test rejection, exports/types and representative consumer
   calls (including rejection controls).
@@ -233,8 +233,11 @@ actual ADO run remain operator verification.
 
 The npm pin fixes the September 30 `main` run's `EBADENGINE`: `npm@latest` resolved to npm
 12.2.0, requiring Node `^22.22.2 || ^24.15.0 || >=26.0.0`, while `.nvmrc` selected 22.18.0.
-npm 11.5.1 supports Trusted Publishing and Node `^20.17.0 || >=22.9.0`; it was published on
-2025-07-24, well outside the seven-day quarantine.
+npm 11.20.0 supports Trusted Publishing (11.5.1 and later) and Node `^20.17.0 || >=22.9.0`; it
+was published on 2026-09-22, outside the seven-day quarantine (review S6-F03: the minimum
+version had never published from this workflow). Only the publish job serializes on the
+`publish-documentdb-js-packages` concurrency group, so dry runs never queue behind a publish
+that awaits approval (S6-F04).
 
 **Operator procedure:** first dispatch with `dry_run=true` on the intended commit and inspect
 verification and all selected dry-run results. For the modernization release, publish from

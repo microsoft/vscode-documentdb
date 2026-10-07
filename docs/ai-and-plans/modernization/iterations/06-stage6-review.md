@@ -166,13 +166,135 @@ timestamps. Browser checks used the supplied headless Chromium kit without CSP b
   step 3. The author/operator must decide findings; the tests here are independent
   probes, not operator approval of G6.
 
+## Addendum: post-review commits c0fd83c8 and afda4095
+
+- **Reviewer:** Claude Opus 5.5, fresh session, independent of the change. GPT-6.1 Sol authored
+  it and Claude Opus 5.5 coordinated it, so the coordinator is the same model family as this
+  reviewer. No different-vendor validation is claimed.
+- **Range:** `c0fd83c8` (dry-run verification path in
+  [npm-publish-documentdb-js.yml](../../../../.github/workflows/npm-publish-documentdb-js.yml))
+  and `afda4095` (section 3.2 and table rows in [pipelines-readme.md](../pipelines-readme.md)),
+  read at `858ac6d2`. `build-and-test-stack.md` was deliberately not read.
+- **Method:** read both diffs and the complete resulting workflow. Then checked each dispatch
+  path, gating rule, permission and toolchain claim against GitHub run data, npm registry
+  metadata and the npm CLI source. Read-only only: no dispatch, deployment approval, branch
+  switch, commit or push.
+- **Checks run:**
+  - Parsed the workflow YAML. Top-level `permissions` is `contents: read`. `verify` has no
+    environment and only `contents: read`. `publish` has `needs: verify`,
+    `if: ${{ !inputs.dry_run }}` (with an implicit `success()`), the environment, and the
+    only `id-token: write`. `dry_run` is `type: boolean` with `default: true`.
+  - `gh run view` and `gh api .../runs/<id>/jobs`, plus check-run annotations, for runs
+    `36747514676`, `36747427248`, `26247397357`, `26247427842`, `37618213760` and the
+    May successes `26245694916` and `26251212914`. The September `main` log shows
+    `EBADENGINE`: npm 12.2.0 requires `^22.22.2 || ^24.15.0 || >=26.0.0`, and Node is v22.18.0.
+    npm 12.2.0 was published at 16:46Z, seven minutes before that run. The `release/v0.11.0`
+    annotation says that branch "is not allowed to deploy" to the environment, and no step
+    ran. `26247397357` failed on "No package selected". The logs of `26247427842` have
+    expired (HTTP 410). Its job started at 20:11Z, after the approval wait, and failed in the
+    operator-registry publish step. The registry shows operator-registry 0.8.1 was already
+    published at 18:55Z, during `26245694916`. This points to a duplicate-version rejection
+    (inferred; not a configuration fault). All four diagnoses agree with the docs or with
+    the new "check versions are not already published" step.
+  - Dry-run log `37618213760`: npm 11.5.1 installed; build; per-workspace tests for all six
+    workspaces; `verify:packages` reported "All package checks passed". All four
+    `npm publish --dry-run` steps reached "Publishing to https://registry.npmjs.org/ ...
+    (dry-run)". The publish job was skipped. Registry version lists are still
+    `0.8.0`/`0.8.1` for all four packages.
+  - npm CLI source at `v11.5.1` (`lib/commands/publish.js`, `lib/utils/oidc.js`):
+    `--dry-run` runs only the workspace's `prepublishOnly` and a pack that does not write to
+    disk. It never calls `libpub`, and it still rejects versions that are already published.
+    Without `ACTIONS_ID_TOKEN_REQUEST_*`, OIDC is skipped. No `@documentdb-js/*` package and
+    no root script defines `prepublishOnly`, `prepack`, `prepare` or `publish`. No package
+    depends on another `@documentdb-js/*` package. `check-packages.mjs` only packs locally and
+    runs `npx` validators.
+  - `npm view`: npm 11.5.1 has engines `^20.17.0 || >=22.9.0` and was published 2025-07-24.
+    The sampled later versions 11.5.2, 11.6.2, 11.15.0, 11.19.1 and 11.21.0 have the same
+    engines. `.nvmrc` is `22.18`.
+  - Environment `npm-publish-documentdb-js-scope` (read through `gh api`): it requires
+    reviewers, with `prevent_self_review: false`, and only protected branches may deploy.
+  - Boolean handling, by reasoning only (no dispatch): `inputs.*` is typed boolean. Omitting
+    `dry_run` (UI, `gh workflow run`, REST) applies `true`. `VERIFY_ALL` renders as
+    `'true'`/`'false'` and is compared as a string. An unrecognised string value would be
+    truthy and so stay a dry run. If GitHub coerced such a value to `false`, real
+    publication would still need a selected package, a passing `verify` and environment
+    approval.
+  - Accepted without a finding: the publish job rebuilds instead of reusing the verified
+    tarballs. It builds the same `github.sha` with the same lockfile through `npm ci`
+    (integrity-checked) and the same pinned npm and Node. Not re-running tests there is
+    covered by `needs: verify` on the same SHA.
+  - `npx prettier --check` on `pipelines-readme.md` **fails** (table column alignment in the
+    `afda4095` rows). This is not a finding: the PR is a draft, and Case 2 `prettier-fix`
+    corrects it. It must not be missed at handoff.
+
+### S6-F03: the npm pin is the oldest Trusted Publishing release, not the one last proven here
+
+- **Severity:** low. A real publish could fail, so the risk is to availability, not to
+  safety. **Validation:** confirmed with registry metadata and npm source. That the May
+  publishes used npm 11.15.0 is an inference, because their logs have expired.
+- **Where:** [publish workflow](../../../../.github/workflows/npm-publish-documentdb-js.yml),
+  the two `npm install -g npm@11.5.1` steps; [pipelines-readme section 3.2](../pipelines-readme.md).
+- **What is wrong.** The last successful real publications (2026-05-21) ran `npm@latest`,
+  and at that time `latest` was npm 11.15.0 (published 2026-05-20; npm 12 had only a
+  prerelease). The fix pins 11.5.1, the first release that meets the Trusted Publishing
+  minimum. That version is ten months older and has never published from this workflow.
+  The dry-run cannot exercise OIDC exchange or provenance signing (the docs say so), so the
+  first real use of this npm happens during the release itself. setup-node has also moved
+  from v5 to v7 since May. The sampled later 11.x releases have the same Node engines
+  (`>=22.9.0`), so the old version buys no compatibility.
+- **Solutions:**
+  1. Pin the newest 11.x that is outside the seven-day quarantine (today 11.20.0, published
+     2026-09-22; 11.21.0 becomes eligible after 2026-10-07T18:08Z). Keep it exact.
+     **Pros:** closer to the version that last published and includes later fixes;
+     equally deterministic. **Cons:** still not exercised by a real publish before
+     release; the pin needs a deliberate bump later.
+  2. Keep 11.5.1 and record in section 3.2 that the first real dispatch also validates
+     this npm version. **Pros:** no change. **Cons:** keeps the least-proven version on
+     the release path.
+- **Recommended:** 1, with the version and its publication date recorded in section 3.2.
+- **Copilot comment:** none.
+- **Author decision (coordinator, 2026-10-07; not an operator decision):** accepted; the
+  recommendation. Both jobs now install npm 11.20.0 (2026-09-22; Node `^20.17.0 || >=22.9.0`),
+  the newest 11.x outside the seven-day quarantine. Fixed in the commit that adds this
+  decision; the dry run after it is recorded in the plan.
+
+### S6-F04: one static concurrency group puts dry runs and real publications in one queue
+
+- **Severity:** low. The effect is operational and fails closed: nothing publishes
+  unintentionally. **Validation:** by reasoning from the workflow and GitHub's documented
+  concurrency semantics; not reproduced, because no dispatch was allowed.
+- **Where:** [publish workflow](../../../../.github/workflows/npm-publish-documentdb-js.yml),
+  the top-level `concurrency: publish-documentdb-js-packages`, `cancel-in-progress: false`.
+- **What is wrong.** Before this change every run was a publication, so one global group
+  made sense. Now dry runs are the default and are recommended on any branch before a
+  release, and they share that group. GitHub keeps at most one pending run per group and
+  cancels the older pending run when another is queued. A real publication dispatched
+  while a dry run is in progress is therefore cancelled if anyone dispatches another run
+  before it starts. A real publication waiting for environment approval holds the group
+  for as long as approval takes, and every dry run on every branch waits behind it.
+- **Solutions:**
+  1. Move the concurrency group to the `publish` job (job-level
+     `concurrency: publish-documentdb-js-packages`), and either drop the workflow-level group
+     or key it on `github.ref` and `inputs.dry_run`. **Pros:** real publications stay
+     serialized, and dry runs never block or cancel them. **Cons:** small YAML change;
+     section 3.2 needs a sentence on it.
+  2. Keep the group and document "do not dispatch while a publication is pending".
+     **Pros:** no change. **Cons:** relies on operators knowing GitHub's pending-run
+     replacement rule.
+- **Recommended:** 1.
+- **Copilot comment:** none.
+- **Author decision (coordinator, 2026-10-07; not an operator decision):** accepted; the
+  recommendation. The concurrency group moved from the workflow to the publish job, so dry runs
+  no longer queue behind, or cancel, a pending publication. Real publications still serialize
+  with `cancel-in-progress: false`. Fixed in the same commit.
+
 ## Summary for G6
 
 | Severity | Count |
 | -------- | ----- |
 | high     | 0     |
 | medium   | 0     |
-| low      | 2     |
+| low      | 4     |
 | info     | 0     |
 
 The isolated Stage 6 build, package, budgets, negative controls, browser checks,
@@ -185,3 +307,5 @@ Windows/macOS. Then run Case 2 and the required AI pre-review, mark #880 ready,
 merge, publish the decided package versions, build and sign in ADO from `main`,
 record the signed digest, run L1/L2/L3 on **that exact signed file**, and approve
 release only for that digest. None of those operator actions is claimed complete.
+The addendum reviews the `@documentdb-js/*` publish-workflow fix: no unintended publication
+path was found, and it adds two low findings (S6-F03 npm pin, S6-F04 concurrency) for decision.
