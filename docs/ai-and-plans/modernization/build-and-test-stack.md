@@ -3356,6 +3356,98 @@ Stage 0 must also be made.
     accepting the merged lockfile.
 
   - Record the merge commit, the lockfile changes, the scan result and every check inline here.
+  - **Done (2026-10-07): merge `946f7961`, `glob` override removed in `63a69976`.** Authors: a
+    GPT-6.1 Sol subagent for the merge, the lockfile and the `glob` test, and a second GPT-6.1 Sol
+    subagent for the verification run. The coordinator read both diffs and re-ran the key checks.
+    - **Commit picked:** `main` was still `1380b758`. The scan of its lockfiles at 14:25 UTC: root
+      1,772 versions / 1,599 packages, **0 fresh** (one entry not on the registry); `api/` 116 /
+      106, 0 fresh; exit 0. Its one fresh version, `electron-to-chromium` 1.5.443, had cleared at
+      14:13 UTC.
+    - **What arrived:** since the merge base `5fd3fb89`, `main` changed three files. The two ADO
+      release pipelines rename their source pipelines (`vscode-documentdb - vsix - build`,
+      `vscode-documentdb - npm - build`) and merged cleanly. `package-lock.json` carries Dependabot
+      bumps only; `main`'s `package.json` did not change. No test file and no l10n string arrived,
+      so there was nothing to convert from Jest.
+    - **Lockfile, not hand-merged:** the branch side, then
+      `npm update <the nine bumped names> --before=2026-09-30T14:26:58Z` with Node 22.18.0 and npm
+      10.9.3 (`fnm exec`), plus a `--package-lock-only` pass that completes `brace-expansion` 2.x.
+      The coordinator's comparison: exactly `main`'s 17 changed entries and no other change.
+      `browserslist` 4.28.2 → 4.29.3, `caniuse-lite` 1.0.30001790 → 1.0.30001814,
+      `electron-to-chromium` 1.5.344 → 1.5.443, `node-releases` 2.0.38 → 2.0.57,
+      `update-browserslist-db` 1.2.3 → 1.3.3, `baseline-browser-mapping` 2.11.23 → 2.11.26,
+      `markdown-it` 14.1.1 → 14.3.2, `undici` 7.28.0 → 7.30.0, and `brace-expansion` 1.1.18 →
+      1.1.21 (seven nested copies), 2.1.4 → 2.1.7 and 5.0.9 → 5.0.12 (under `glob`). Entries only
+      `main` still has (`@xhmikosr/decompress*`, nested `brace-expansion` under
+      `@typescript-eslint/*`) stay out. A plain `npm install` leaves the lockfile unchanged, and
+      `npm run l10n` leaves the bundle byte-identical.
+      - Considered and rejected: taking `main`'s lockfile and regenerating. It would re-resolve
+        every branch-only dependency (Vite, Vitest and their trees) to versions no stage tested.
+    - **Overrides:**
+      - **`glob ~12.0.0` removed in `63a69976` (coordinator decision, for G7).** From-scratch
+        resolutions in scratch copies (npm 10.9.3, a 7-day `--before`, `--ignore-scripts`)
+        succeed with and without it; the scan of the candidate: 1,228 / 1,143, 0 fresh. In the
+        tree the removal adds 25 lockfile entries and changes none. `@vscode/l10n-dev` now gets
+        `glob` **10.5.0** and `@vscode/vsce` **11.1.0**: both dev-only, both **deprecated** on npm
+        ("Old versions of glob are not supported, and contain widely publicized security
+        vulnerabilities, which have been fixed in the current version"). `rimraf` gets 13.0.6; the
+        direct `glob` stays 12.0.0. `npm audit --package-lock-only` is the same with and without
+        the override (21 advisories: 1 low, 4 moderate, 15 high, 1 critical, the same packages);
+        `main`'s lockfile has 55. The override (`0d00d843`, 2025-11-26) existed to stay on the
+        latest `glob`. `git revert 63a69976` restores it.
+      - **`vite: $vite` kept:** the npm 10.9.3 crash; #991 re-tests it.
+    - **Scan after the regeneration:** root 1,286 / 1,202, **0 fresh**; `api/` 116 / 106, 0
+      fresh; exit 0 (re-run by the coordinator at 15:06 UTC).
+    - **Size budget:** all 14 graphs `ok`. `playgroundWorker` is 5,384,540 bytes against its
+      5,362,758-byte budget (+21,782, +0.41%; limit 5,899,033): the `browserslist` bump. `vsix` is
+      +9,988 bytes. Every other graph is unchanged to the byte. The budget is unchanged; no
+      decision is needed.
+    - **Checks on `63a69976`:**
+      - **L0** (subagent): `npm run build`; `npx vitest run` **298 files / 4,603 tests** (unchanged,
+        `main` brought no tests); `npm run test:verification` 123 Node and 79 browser tests;
+        `npm run lint`; `npm run verify:packages` ("All package checks passed.").
+      - **L1:** `npm run package` gives `vscode-documentdb-0.11.0.vsix`, 204 files, 8,503,798
+        bytes, SHA-256 `51dbc566…bc4d` (copied to the kit's `artifacts/s7-63a69976.vsix`).
+        `verify:vsix` exit 0; `prove:vsix` **25 PASS, 0 FAIL** (re-run by the coordinator).
+      - **L2:** `L2 HEADLESS PASS`: five views with 0 errors, worker round-trips in Collection View
+        and Document View, and exactly 7 errors on the CSS-negative page. **Deviation:** headless,
+        as in Stages 4 to 6; the integrated browser tools were still not reachable.
+      - **L2-dev: the first runs failed, on port 18087** (subagent and coordinator): 36 of 42
+        routes ready; the Collection View and Document View default routes could not create
+        Monaco workers. Cause: `vite.config.views.mjs` fixes `server.origin` to
+        `http://localhost:18080`, the development CSP origin, so worker URLs always point at that
+        port. Nothing was serving it, and a Playwright probe recorded
+        `net::ERR_CONNECTION_REFUSED` for the worker module. Not a merge regression. On port 18080,
+        free at the time: `routes=42 ready=42 errors=0 assertions=60/60`, **`L2-DEV PASS`**
+        (coordinator). The earlier stages' passes on 18087 loaded their workers from the
+        operator's Watch server on 18080, which serves the same tree. The kit's recipe is
+        corrected (outside the repository); X7-F09 in the re-evaluation records it.
+      - **L3:** the subagent's run was invalid. It put `TMPDIR` inside the checkout, believing
+        `/tmp` was off limits, and the L3 isolation guard rejected the install location, as
+        designed. The coordinator's re-run with the kit: **`L3 PASS`** and **`L3 PROOF PASS`**.
+        `npm run probe:host-unbundled`: `UNBUNDLED HOST PROBE PASS` (CommonJS `require` hangs as
+        expected, `import()` and ESM pass, the control fails).
+      - **Watch item:** `dockerCommand.test.ts` passed locally and in both CI runs; no recurrence.
+      - **GitHub Actions, all green:** PR-triggered CI on the merge ref,
+        [37638469920](https://github.com/microsoft/vscode-documentdb/actions/runs/37638469920),
+        the first merge-ref run since S1-F01's restoration (`3ac5b4a5`); and the dispatch with
+        `enforce_full_run=true`,
+        [37638523801](https://github.com/microsoft/vscode-documentdb/actions/runs/37638523801)
+        (Code Quality & Tests, Build & Package, L1, L3). #880 is no longer conflicting (draft,
+        `MERGEABLE`).
+      - **Publish dry run**
+        [37638589114](https://github.com/microsoft/vscode-documentdb/actions/runs/37638589114) at
+        `63a69976`. Checked before the dispatch: the workflow is unchanged since `dd5b767d`, and
+        the publish job, its environment and `id-token: write` are reachable only with
+        `dry_run=false`. `verify` passed with npm 11.20.0, `All package checks passed.` and four
+        `(dry-run)` publishes; `publish` was skipped; pending deployments are `[]`; npm still lists
+        0.8.1 for all four packages.
+      - **ADO: pending (operator).** Requested at G7: queue the extension build and the
+        npm-package build on `dev/tnaum/modernization` at `63a69976` or later. If the drops land
+        in `/tmp/<date>-checks/`, the coordinator verifies them as under "ADO artifact
+        verification (coordinator, 2026-10-07)".
+    - **For later briefs:** both GPT-6.1 Sol subagents assumed `/tmp` was off limits and wrote to
+      ignored paths inside the checkout (`node_modules/.s7-verification/`, `._local/`). That breaks
+      L3's isolation guard. Briefs must say that `/tmp` and the kit's directories may be used.
 
 - **Step 7.2, re-evaluate:**
   - For every finding, check it against the branch after step 7.1 and record:
@@ -3385,6 +3477,45 @@ Stage 0 must also be made.
     `**Author decision:** _pending_`.
   - Do not rewrite the original review files. Set each to `status: historical` and add one line
     at the top that links to the re-evaluation.
+  - **Done (2026-10-07) in `4ce40970`:**
+    [07-stage-reviews-reevaluation.md](./iterations/07-stage-reviews-reevaluation.md). The eight
+    originals are `status: historical`, with one added line linking to it (`00` was already
+    historical); nothing else in them changed.
+    - **Who:** eight independent, read-only re-evaluators, as in the table above. Claude Opus 5.5
+      took `00`, `04`, `05` and the main Stage 6 review. GPT-6 Astra took `01`, `02`, `03`, the
+      Stage 6 addendum with the PR pre-review, and the cross-review with the sweep. Each was
+      given the review file, the plan's record for its stage and the code at `946f7961`, the
+      merged HEAD before the `glob` commit, and nothing the Stage 7 authors reasoned. A GPT-6.1
+      Sol subagent assembled the file from their outputs; the coordinator checked its counts and
+      the originals' diffs.
+    - **Result, 64 findings:** 19 resolved, **34 still valid** (2 medium, 18 low, 14 info, none
+      high or critical), 2 obsolete, 9 false positives in hindsight. Seven of those nine are
+      Stage 2's informational confirmations (S2-F08 to S2-F14), where "false positive" means no
+      defect exists. Several of the 14 info items are also confirmations (S3-F09 to S3-F11).
+    - **The 35 pending Stage 1 to 3 decisions:** each has a status and a recommended action in
+      the file; the decisions are taken at G7.
+    - **Deferred items:** S1-F01's checkout policy is restored (`3ac5b4a5`), and PR CI ran on the
+      merge ref for the first time in step 7.1. The temporary overrides are gone (`dee7773e`,
+      `63a69976`), except `vite: $vite` (#991). S2-F01 ran on Windows in ADO by the operator's
+      account at G6, without a recorded commit for the npm build. S3-F02 is resolved by
+      `5fc49e8c`. S3-F06's compiled tests are fixed (`6c6cf71d`, `b09b7629`); its
+      declaration-map remainder is still valid.
+    - **Cross-review and sweep (GPT-6 Astra):** X7-F01 (medium: package verification depends on
+      the publishing route), X7-F02 to X7-F08 (low and info: dynamic interop coverage, macOS,
+      browser gates headless, the cold-start URI, telemetry ingestion, record drift, a lost
+      ambiguous-owner guard in L1), and SW7-F01 (low: the package-test exclusion dropped strict
+      type-checking of those tests). The coordinator added X7-F09 (info: L2-dev's worker origin
+      is fixed at port 18080; see step 7.1). Each has solutions and
+      `**Author decision:** _pending_`. Eight overlaps between re-evaluations were checked
+      against the code; three had conflicting statuses and were reconciled (S2-F01 resolved,
+      S2-F04 and S3-F06 still valid for their remaining part).
+    - **Coordinator note after the re-evaluation:** PR-F01's remaining gap was judged at
+      `946f7961`, before step 7.1's checks ran. Since then L2, L2-dev, L3 and both CI runs have
+      passed on `63a69976`; what remains of PR-F01 is the two ADO builds.
+    - **Limitations:** the re-evaluators read code and history and ran no build. The
+      verification behind every status is step 7.1's, at `63a69976`. Commits cited in the
+      Stage 0 review predate the branch's rebase onto `v0.11.0`; the Stage 0 re-evaluator mapped
+      them to their rebased equivalents with `git patch-id`.
 
 - **Automated verification:** step 7.1's checks. For step 7.2, only what the evidence for each
   status needs: a finding marked resolved cites the commit and, where one exists, the test or
@@ -3408,6 +3539,76 @@ Stage 0 must also be made.
   - **Decide:** whether to record the decisions in a `decisions.md`; the milestone for #880
     (currently `0.11.2`); and G5-I01 option 4, an L1 guard against Rolldown's lowered-`import()`
     bug.
+  - **G7 list (coordinator, 2026-10-07).** Answer by number. "Rec." is the recommendation in
+    [07-stage-reviews-reevaluation.md](./iterations/07-stage-reviews-reevaluation.md), where every
+    item has its evidence, and for X7 and SW7 its options.
+    - **A. Still-valid findings, already decided at G6 (fix in Stage 8):**
+      - **1.** PR-F02 (medium) with X7-F01 (medium): `verify:packages` missing from general CI and the
+        ADO path. Rec.: X7-F01 option 1, checks in general CI and an offline check of the
+        ADO-built tarballs.
+      - **2.** PR-F03 (low) with S3-F12 (info): migration notes for the ESM-only packages, including
+        the TypeScript `node16`-CommonJS consumer caveat.
+      - **3.** PR-F04 (low) with S2-F07 (low): the `out/` emit and other leftovers, and a root no-emit
+        type-check in Code Quality & Tests.
+      - **4.** PR-F05 (low): Prettier coverage of `build/`.
+      - **5.** PR-F06 (low): the knowledge-base index and the stale design document.
+      - **6.** PR-F01 (medium): only the two ADO builds remain (see C).
+    - **B. Still-valid findings to decide. Rec. "fix in Stage 8" unless stated:**
+      - **7.** S1-F02 (low): missing error-helper assertions.
+      - **8.** S1-F03 (low): delete the unused environment helper and its self-tests.
+      - **9.** S1-F04, S2-F04, S2-F05, S3-F07 (low): the plan's Stage 1 to 3 records contain wrong
+        facts (CI runs, the namespace explanation). Rec.: the coordinator corrects them.
+      - **10.** S2-F03 (low): set Vitest's `pool` and `isolate` explicitly, with a mock-identity test;
+        the hook's removal stays in #990.
+      - **11.** S3-F01 (low): the latent wrong directory in `getShellApiDtsContent()`.
+      - **12.** S3-F04 (low) with X7-F02 (low): dynamic `import('bson')` routes in both identity
+        probes, and a production-config probe for the lowered-`import()` pattern (this is
+        G5-I01 option 4; see 26).
+      - **13.** SW7-F01 (low): no-emit strict type-checks for the package tests excluded from emit.
+      - **14.** X7-F08 (info): restore L1's exactly-one-owner rule for packaged scripts.
+      - **15.** X7-F07 (low): separate implemented, observed, attested and pending in the records.
+        Rec.: option 1; the re-evaluation file does most of it. Ask the operator for the ADO
+        npm build's run link and commit (S2-F01).
+      - **16.** S1-F07 (info): CI checkouts persist Git credentials. Rec.: file an issue.
+      - **17.** S2-F02 (low): unit-test wall time and the worker cap. Rec.: file an issue.
+      - **18.** S3-F06 remainder (low): declaration maps point at sources the tarballs don't ship.
+        Rec.: file an issue.
+      - **19.** S3-F13 (info): stale maintenance URLs. Rec.: file an issue.
+      - **20.** S5-SW12 with X7-F03 (low): no run on macOS. Rec.: accept with the reason, or file an
+        issue.
+      - **21.** S5-SW5 with X7-F05 (low): the cold-start URI, already accepted at G6. Rec.: keep the
+        acceptance and carry it to Stage 10.
+      - **22.** X7-F04 (info): browser gates are headless, not a real `vscode-webview://` origin. Rec.:
+        option 1, carried to Stage 10.
+      - **23.** X7-F06 with S5-SW8 (info): telemetry was never confirmed at the service. Rec.: option
+        2, carried to Stage 10.
+      - **24.** X7-F09 (info): L2-dev's worker origin is fixed at port 18080. Rec.: one sentence in
+        `build/verification/README.md` now, and a fail-fast check in the E2E iteration.
+      - **25.** Accept with the recorded reasons, no action: S3-F08, S3-F09, S3-F10, S3-F11, S5-SW1,
+        S5-SW2, S5-SW3, S5-SW4; and S5-SW10 (Case 2 runs in Stage 9).
+    - **C. Operator actions:**
+      - **26.** G5-I01 option 4 (see 12).
+      - **27.** Queue the ADO extension build and the npm-package build on
+        `dev/tnaum/modernization` at `63a69976` or later. The coordinator verifies the drops.
+      - **28.** `decisions.md`: create one for this feature, or keep the decisions in this plan?
+      - **29.** The milestone for #880: still `0.11.2`?
+    - **D. Coordinator decisions to confirm or reverse:**
+      - **30.** The six G5 item 9 decisions (S5-SW11), listed above.
+      - **31.** The Stage 6 decisions listed above.
+      - **32.** **Stage 7:** the `glob` override removed (`63a69976`), although it brings back two
+        deprecated, already-patched dev-only `glob` copies (10.5.0, 11.1.0). `npm audit` is
+        unchanged. Reverse with `git revert 63a69976`.
+      - **33.** **Stage 7:** the lockfile was regenerated from the branch side, with `main`'s bumps
+        applied by `npm update --before=<7 days ago>`, rather than from `main`'s side.
+      - **34.** **Stage 6:** G6 closed by the restructure; the operator did not write "G6 passed".
+    - **E. The two readings to confirm:**
+      - **35.** "snapshot tests" means the Stage 0 baseline comparison, not the prompt-template
+        snapshots.
+      - **36.** "our overrides" includes `glob` (acted on in 32).
+- **Stage 7 commits:** `946f7961` (merge of `main` `1380b758`), `63a69976` (the `glob`
+  override), `4ce40970` (the re-evaluation), and the `S7: record …` documentation commit.
+  **Status: stopped at G7; Stage 8 has not started.** Case 1 applied throughout; the Case 2
+  list runs in Stage 9.
 
 ### Stage 8: fix the decided findings (on this PR)
 
