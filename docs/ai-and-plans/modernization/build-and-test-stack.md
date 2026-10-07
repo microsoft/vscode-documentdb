@@ -3132,6 +3132,41 @@ Stage 0 must also be made.
     - **Pre-existing, for information:** the shipped text files have CRLF endings because ADO
       checks out on a Windows agent with `.gitattributes` `* text=auto`; both are unchanged
       since `v0.11.0`.
+  - **`@documentdb-js` publish workflow (operator request, 2026-10-07: "investigate how to run
+    the npm build action on github, I think it was failing … don't release to npm"). Done in
+    `c0fd83c8` and `afda4095` (GPT-6.1 Sol, checked by the coordinator).**
+    `npm-publish-documentdb-js.yml` builds and publishes the four `@documentdb-js/*` packages.
+    It has no build-only mode, and any run that gets past the environment approval publishes.
+    - **Why earlier runs failed (from the run logs and annotations):**
+      - 36747514676 (`main`, 2026-09-30): `npm install -g npm@latest` resolved npm 12.2.0, which
+        refuses Node 22.18 (`EBADENGINE`, requires `^22.22.2`). A config issue, fixed here.
+      - 36747427248 (`release/v0.11.0`): the environment's deployment-branch rule rejected the
+        ref (`Branch "release/v0.11.0" is not allowed to deploy to …`). This is environment
+        policy, not a bug; publish from `main`.
+      - May runs: one had no package selected. Another most likely republished
+        `operator-registry@0.8.1`, already published 75 minutes earlier; its logs have expired,
+        so this is an inference.
+    - **Fix:**
+      - npm is pinned to `11.5.1` (2025-07-24; Node `>=22.9.0`; the minimum version for Trusted
+        Publishing) instead of `npm@latest`.
+      - A new `verify` job runs with no environment and only `contents: read`. It builds the
+        workspaces, runs their tests, runs `npm run verify:packages`, and runs
+        `npm publish --dry-run` for the selected packages (all four if none is selected).
+      - A new `dry_run` input **defaults to `true`**. The `publish` job keeps its environment,
+        OIDC and provenance unchanged, and runs only with `dry_run=false`, after `verify`
+        passes.
+
+      This closes PR-F02 for this publish path; the ADO path for the two `@microsoft` packages
+      still does not run `verify:packages`. `pipelines-readme.md` describes how to publish.
+
+    - **Proof that nothing was published:** dry run
+      [37618213760](https://github.com/microsoft/vscode-documentdb/actions/runs/37618213760) at
+      `c0fd83c8`. `verify` was green, with four `(dry-run)` publishes (operator-registry 0.9.0,
+      schema-analyzer 2.0.0, shell-api-types 0.9.0, shell-runtime 0.9.0) and
+      `All package checks passed.`. `publish` was **skipped**, pending deployments are `[]`,
+      and npm still lists 0.8.1 as the latest version of all four, last modified 2026-05-21.
+    - **For G6 release step 2 (operator):** after the merge, dispatch on `main` with
+      `dry_run=false`, select the packages, and approve the environment.
 
   - **Outstanding decisions:**
     - **G5 item 9** (coordinator decisions): removing the webpack host fallback, Vite's default
