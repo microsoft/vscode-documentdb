@@ -3050,6 +3050,32 @@ Stage 0 must also be made.
     - Queue `build-npm-packages.yml` on this branch (S2-F01: Vitest on Windows).
     - The first ADO extension build (F11: Vite, Rolldown and esbuild from the internal feed;
       L1's new `vsix` budget against ADO's larger `NOTICE.html`).
+  - **G6 progress (operator, 2026-10-07), recorded verbatim:** "both pipeliens vsix and npm
+    package on ado have successfuly ended with 'green'" and "I checked the vsix built locally
+    for various scenarios around auth, webviews, and shell, no issues spotted, some
+    autocompletion in mocao was tested as well."
+    - **Coordinator's reading, not confirmed by the operator:**
+      - The ADO npm-packages build answers S2-F01 (Vitest on Windows): **done by the operator**.
+      - The ADO extension build answers F11 (Vite, Rolldown and esbuild from the internal
+        feed): **done by the operator**.
+      - If that build's commit includes `f53df711` or later, its pre-signing L1 step also
+        enforced the size budget against ADO's `NOTICE.html`.
+    - **Not stated:** the commit both ADO runs built, and the platform and commit of the
+      locally built VSIX. Those runs were branch builds, so they do not replace release steps
+      3 to 5, which use the signed VSIX built from `main`.
+    - **Installed-VSIX checklist, what the report covers:** item 1 (webviews and Monaco
+      completion) and item 6 (authentication) on one platform. The shell is not on the list.
+      Not yet reported: items 2 to 5 and 7 to 9, and a second platform.
+    - **Artifact check, requested by the coordinator:** the agents cannot reach ADO (no
+      organization recorded; the Azure CLI needs an interactive login). With the operator's
+      download, the coordinator would run on the ADO-built VSIX:
+      - L1, `prove:vsix`, L3 and L2;
+      - a per-file comparison with a local build of the same commit (the F02 idea: only
+        `NOTICE.html` should differ).
+
+      On the npm tarballs: a content comparison with `npm pack` of the same commit, so the
+      local `verify:packages` result applies to them. Not done yet.
+
   - **Outstanding decisions:**
     - **G5 item 9** (coordinator decisions): removing the webpack host fallback, Vite's default
       resolution conditions, the two type-only `paths` entries, no `require` banner, the
