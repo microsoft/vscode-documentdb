@@ -100,7 +100,7 @@ resources:
     pipelines:
         - pipeline: npmBuild
           project: 'CosmosDB'
-          source: '\VSCode Extensions\vscode-documentdb Build npm packages'
+          source: '\VSCode Extensions\vscode-documentdb - npm - build'
 
 variables:
     system.debug: ${{ parameters.debug }}

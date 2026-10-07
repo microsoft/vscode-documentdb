@@ -36,7 +36,7 @@ resources:
     pipelines:
         - pipeline: build # Alias for your build pipeline source
           project: 'CosmosDB'
-          source: '\VSCode Extensions\vscode-documentdb Build VSIX' # name of the pipeline that produces the artifacts
+          source: '\VSCode Extensions\vscode-documentdb - vsix - build' # name of the pipeline that produces the artifacts
 
 variables:
     system.debug: ${{ parameters.debug }}
