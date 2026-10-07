@@ -3167,6 +3167,25 @@ Stage 0 must also be made.
       and npm still lists 0.8.1 as the latest version of all four, last modified 2026-05-21.
     - **For G6 release step 2 (operator):** after the merge, dispatch on `main` with
       `dry_run=false`, select the packages, and approve the environment.
+    - **Independent review of `c0fd83c8` and `afda4095`:** Claude Opus 5.5 in a fresh session,
+      appended to [06-stage6-review.md](./iterations/06-stage6-review.md). The reviewer found no
+      path that publishes by accident, confirmed the diagnoses, and raised two low findings,
+      fixed in `dd5b767d` by coordinator decision:
+      - **S6-F03:** the pin was npm 11.5.1, the oldest Trusted Publishing release, which had
+        never published from this workflow. It is now **11.20.0** (2026-09-22).
+      - **S6-F04:** dry runs and real publishes shared one concurrency queue. The group now
+        sits on the publish job only.
+
+      The same commit fixes `pipelines-readme.md` table padding from `afda4095`, which failed
+      `npm run prettier`. The reviewer is the same model family as the coordinator.
+
+    - **Dry run after the fixes:**
+      [37625969263](https://github.com/microsoft/vscode-documentdb/actions/runs/37625969263) at
+      `dd5b767d`, dispatched after a scripted check of the pushed workflow:
+      - `verify` passed, with `npm@11.20.0`, `All package checks passed.` and four
+        `(dry-run)` publishes;
+      - `publish` was skipped, and pending deployments are `[]`;
+      - npm still lists 0.8.1 for all four packages, last modified in May.
 
   - **Outstanding decisions:**
     - **G5 item 9** (coordinator decisions): removing the webpack host fallback, Vite's default
