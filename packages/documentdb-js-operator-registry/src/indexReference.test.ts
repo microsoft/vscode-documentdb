@@ -3,12 +3,14 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+import { describe, expect, test } from 'vitest';
+
 /**
  * Verifies the generated index reference data (scraped from the compatibility
  * page's "Index types" and "Index properties" tables).
  */
 
-import { INDEX_PROPERTIES, INDEX_TYPES } from './index';
+import { INDEX_PROPERTIES, INDEX_TYPES } from './index.js';
 
 describe('index reference', () => {
     test('exposes the documented index types', () => {

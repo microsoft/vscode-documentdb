@@ -3,6 +3,8 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+import { afterAll, beforeEach, describe, expect, test, vi, type Mock } from 'vitest';
+
 /**
  * TDD Behavior Tests — Dynamic Schema Integration (WI-3)
  *
@@ -21,7 +23,7 @@
 
 // ClustersClient is mocked at module level — its deep dependencies
 // (MongoClient, @microsoft/vscode-azext-utils) are not needed for cache tests.
-jest.mock('../../../ClustersClient');
+vi.mock('../../../ClustersClient');
 
 import { ClustersClient } from '../../../ClustersClient';
 import { SchemaStore } from '../../../SchemaStore';
@@ -49,7 +51,7 @@ describe('TDD: CollectionNameCache', () => {
         CollectionNameCache.getInstance().dispose();
         cache = CollectionNameCache.getInstance();
         SchemaStore.getInstance().reset();
-        jest.clearAllMocks();
+        vi.clearAllMocks();
     });
 
     afterAll(() => {
@@ -67,13 +69,13 @@ describe('TDD: CollectionNameCache', () => {
      * ClustersClient._collectionsCache works in production.
      */
     function mockClustersClient(collections: Array<{ name: string }>): {
-        listCollections: jest.Mock;
-        getCachedCollections: jest.Mock;
+        listCollections: Mock;
+        getCachedCollections: Mock;
     } {
-        const mockListCollections = jest.fn().mockResolvedValue(collections);
-        const mockGetCachedCollections = jest.fn().mockReturnValue(undefined);
+        const mockListCollections = vi.fn().mockResolvedValue(collections);
+        const mockGetCachedCollections = vi.fn().mockReturnValue(undefined);
 
-        (ClustersClient.getClient as jest.Mock).mockResolvedValue({
+        (ClustersClient.getClient as Mock).mockResolvedValue({
             listCollections: async (...args: unknown[]): Promise<Array<{ name: string }>> => {
                 const result = (await mockListCollections(...args)) as Array<{ name: string }>;
                 // After listCollections populates the real cache, getCachedCollections
@@ -82,7 +84,7 @@ describe('TDD: CollectionNameCache', () => {
                 return result;
             },
         });
-        (ClustersClient.getExistingClient as jest.Mock).mockReturnValue({
+        (ClustersClient.getExistingClient as Mock).mockReturnValue({
             getCachedCollections: mockGetCachedCollections,
         });
 
@@ -157,8 +159,8 @@ describe('TDD: CollectionNameCache', () => {
 
         test('reads from ClustersClient cache without triggering network calls when data is warm', () => {
             // Simulate ClustersClient already having cached data (from tree expansion)
-            (ClustersClient.getExistingClient as jest.Mock).mockReturnValue({
-                getCachedCollections: jest.fn().mockReturnValue([{ name: 'orders' }, { name: 'users' }]),
+            (ClustersClient.getExistingClient as Mock).mockReturnValue({
+                getCachedCollections: vi.fn().mockReturnValue([{ name: 'orders' }, { name: 'users' }]),
             });
 
             const names = cache.getCollectionNames(TEST_CONNECTION.clusterId, TEST_CONNECTION.databaseName);
@@ -171,8 +173,8 @@ describe('TDD: CollectionNameCache', () => {
 
         test('gracefully handles ClustersClient errors', async () => {
             // Ensure no cached data is available
-            (ClustersClient.getExistingClient as jest.Mock).mockReturnValue(undefined);
-            (ClustersClient.getClient as jest.Mock).mockRejectedValue(new Error('Connection lost'));
+            (ClustersClient.getExistingClient as Mock).mockReturnValue(undefined);
+            (ClustersClient.getClient as Mock).mockRejectedValue(new Error('Connection lost'));
 
             // Should not throw
             cache.getCollectionNames(TEST_CONNECTION.clusterId, TEST_CONNECTION.databaseName);

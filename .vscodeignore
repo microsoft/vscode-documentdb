@@ -35,8 +35,6 @@ testWorkspace/**
 .swcrc
 .travis.yml
 eslint.config.mjs
-extension.bundle.ts
-jest.config.js
 main.ts
 prettier.config.mjs
 progress.md
@@ -44,5 +42,5 @@ gulp*
 stats.json
 test-results.xml
 tsconfig.*
-webpack.config*
+vite.config*
 work-summary.md

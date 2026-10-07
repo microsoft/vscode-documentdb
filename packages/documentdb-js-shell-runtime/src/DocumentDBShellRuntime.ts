@@ -7,16 +7,16 @@ import { ShellInstanceState } from '@mongosh/shell-api';
 import { ShellEvaluator } from '@mongosh/shell-evaluator';
 import { type MongoClient } from 'mongodb';
 import vm from 'vm';
-import { CommandInterceptor } from './CommandInterceptor';
-import { DocumentDBServiceProvider } from './DocumentDBServiceProvider';
-import { HelpProvider } from './HelpProvider';
-import { ResultTransformer } from './ResultTransformer';
+import { CommandInterceptor } from './CommandInterceptor.js';
+import { DocumentDBServiceProvider } from './DocumentDBServiceProvider.js';
+import { HelpProvider } from './HelpProvider.js';
+import { ResultTransformer } from './ResultTransformer.js';
 import {
     type ShellEvalOptions,
     type ShellEvaluationResult,
     type ShellRuntimeCallbacks,
     type ShellRuntimeOptions,
-} from './types';
+} from './types.js';
 
 /**
  * Matches `<cmd> <arg>` on a single line. Used to extract the argument text

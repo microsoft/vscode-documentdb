@@ -3,6 +3,8 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+import { afterEach, beforeAll, describe, expect, it } from 'vitest';
+
 import { act, createElement, useLayoutEffect, type FunctionComponent } from 'react';
 // eslint-disable-next-line import/no-internal-modules -- react-dom/client is React 19's only root API
 import { createRoot, type Root } from 'react-dom/client';

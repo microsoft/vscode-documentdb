@@ -3,13 +3,15 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+import { afterEach, beforeEach, describe, expect, it, vi, type MockInstance } from 'vitest';
+
 import { type IActionContext } from '@microsoft/vscode-azext-utils';
 import * as vscode from 'vscode';
 import { ConnectionDiagnosticsService } from '../services/connectionDiagnosticsService';
 import { BaseExtendedTreeDataProvider } from './BaseExtendedTreeDataProvider';
 import { type TreeElement } from './TreeElement';
 
-jest.mock('../extensionVariables', () => ({
+vi.mock('../extensionVariables', () => ({
     ext: {
         state: { wrapItemInStateHandling: (item: unknown) => item },
     },
@@ -44,19 +46,19 @@ function actionContext(): IActionContext {
 const clusterElement = { id: 'view/cluster/db', cluster: { clusterId: 'cluster-1' } } as unknown as TreeElement;
 
 describe('BaseExtendedTreeDataProvider error translation', () => {
-    let showErrorMessage: jest.SpyInstance;
+    let showErrorMessage: MockInstance;
 
     beforeEach(() => {
         ConnectionDiagnosticsService.resetForTests();
-        // The vscode mock exposes showErrorMessage as a shared jest.fn(), so its call history
+        // The vscode mock exposes showErrorMessage as a shared vi.fn(), so its call history
         // survives restoreAllMocks and has to be cleared explicitly.
-        showErrorMessage = jest.spyOn(vscode.window, 'showErrorMessage').mockResolvedValue(undefined);
+        showErrorMessage = vi.spyOn(vscode.window, 'showErrorMessage').mockResolvedValue(undefined);
         showErrorMessage.mockClear();
     });
 
     afterEach(() => {
         ConnectionDiagnosticsService.resetForTests();
-        jest.restoreAllMocks();
+        vi.restoreAllMocks();
     });
 
     it('shows the explanation and suppresses the default notification', async () => {
@@ -107,7 +109,7 @@ describe('BaseExtendedTreeDataProvider error translation', () => {
     });
 
     it('does not consult providers for an element that has no cluster', async () => {
-        const explain = jest.fn().mockResolvedValue('should not be used');
+        const explain = vi.fn().mockResolvedValue('should not be used');
         ConnectionDiagnosticsService.registerProvider({ id: 'test', explain });
 
         await expect(

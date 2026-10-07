@@ -3,6 +3,8 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+import { describe, expect, it, vi } from 'vitest';
+
 import { type MongoClient } from 'mongodb';
 
 import { getClusterMetadata, getTelemetryShape } from './getClusterMetadata';
@@ -82,7 +84,7 @@ describe('getClusterMetadata', () => {
         };
 
         const adminDb = {
-            command: jest.fn(async (command: Record<string, number>): Promise<unknown> => {
+            command: vi.fn(async (command: Record<string, number>): Promise<unknown> => {
                 if (command.buildInfo === 1) {
                     return { version: '1.0.0', platform: 'test', storageEngines: ['wiredTiger'] };
                 }

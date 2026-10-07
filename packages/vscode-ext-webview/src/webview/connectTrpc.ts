@@ -21,10 +21,10 @@ import {
     isTransportResponseMessage,
     type VsCodeLinkRequestMessage,
     type VsCodeLinkResponseMessage,
-} from '../shared/wireProtocol';
-import { type ErrorHandler, eventLink } from './errorLink';
-import { createEventChannel, type ObserverErrorHandler, type RpcEventChannel } from './events';
-import { vscodeLink } from './vscodeLink';
+} from '../shared/wireProtocol.js';
+import { type ErrorHandler, eventLink } from './errorLink.js';
+import { createEventChannel, type ObserverErrorHandler, type RpcEventChannel } from './events.js';
+import { vscodeLink } from './vscodeLink.js';
 
 /**
  * The slice of the VS Code webview API that {@link connectTrpc} needs: a way to

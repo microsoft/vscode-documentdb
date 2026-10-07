@@ -3,60 +3,60 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+
 import { Task, TaskService, TaskState, type TaskStatus } from './taskService';
 
 // Mock extensionVariables (ext) module
-jest.mock('../../extensionVariables', () => ({
+vi.mock('../../extensionVariables', () => ({
     ext: {
         outputChannel: {
-            appendLine: jest.fn(), // Mock appendLine as a no-op function
-            error: jest.fn(),
-            trace: jest.fn(),
-            debug: jest.fn(),
-            warn: jest.fn(),
-            info: jest.fn(),
-            appendLog: jest.fn(),
-            show: jest.fn(),
+            appendLine: vi.fn(), // Mock appendLine as a no-op function
+            error: vi.fn(),
+            trace: vi.fn(),
+            debug: vi.fn(),
+            warn: vi.fn(),
+            info: vi.fn(),
+            appendLog: vi.fn(),
+            show: vi.fn(),
         },
     },
 }));
 
 // Mock @microsoft/vscode-azext-utils module
-jest.mock('@microsoft/vscode-azext-utils', () => ({
-    callWithTelemetryAndErrorHandling: jest.fn(
-        async (_eventName: string, callback: (context: any) => Promise<void>) => {
-            // Mock telemetry context
-            const mockContext = {
-                telemetry: {
-                    properties: {},
-                    measurements: {},
-                },
-                errorHandling: {
-                    suppressDisplay: false,
-                },
-            };
-            return await callback(mockContext);
-        },
-    ),
+vi.mock('@microsoft/vscode-azext-utils', () => ({
+    callWithTelemetryAndErrorHandling: vi.fn(async (_eventName: string, callback: (context: any) => Promise<void>) => {
+        // Mock telemetry context
+        const mockContext = {
+            telemetry: {
+                properties: {},
+                measurements: {},
+            },
+            errorHandling: {
+                suppressDisplay: false,
+            },
+        };
+        return await callback(mockContext);
+    }),
 }));
 
 // Mock vscode module
-jest.mock('vscode', () => ({
+vi.mock('vscode', () => ({
     l10n: {
         t: (key: string, ...args: string[]): string => {
             return args.length > 0 ? `${key} ${args.join(' ')}` : key;
         },
     },
-    ThemeIcon: jest.fn().mockImplementation((id: string) => ({
-        id,
-    })),
-    EventEmitter: jest.fn().mockImplementation(() => {
+    ThemeIcon: vi.fn().mockImplementation(function (id: string) {
+        return { id };
+    }),
+    EventEmitter: vi.fn().mockImplementation(function () {
         const listeners: Array<(...args: any[]) => void> = [];
         return {
-            event: jest.fn((listener: (...args: any[]) => void) => {
+            event: vi.fn((listener: (...args: any[]) => void) => {
                 listeners.push(listener);
                 return {
-                    dispose: jest.fn(() => {
+                    dispose: vi.fn(() => {
                         const index = listeners.indexOf(listener);
                         if (index > -1) {
                             listeners.splice(index, 1);
@@ -64,10 +64,10 @@ jest.mock('vscode', () => ({
                     }),
                 };
             }),
-            fire: jest.fn((data: any) => {
+            fire: vi.fn((data: any) => {
                 listeners.forEach((listener) => listener(data));
             }),
-            dispose: jest.fn(),
+            dispose: vi.fn(),
         };
     }),
 }));

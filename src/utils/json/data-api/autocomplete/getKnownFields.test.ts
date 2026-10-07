@@ -3,6 +3,8 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+import { describe, expect, it } from 'vitest';
+
 import { type FieldEntry, getKnownFields, SchemaAnalyzer } from '@documentdb-js/schema-analyzer';
 import { ObjectId } from 'bson';
 

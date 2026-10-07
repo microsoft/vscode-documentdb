@@ -5,8 +5,8 @@
 
 import { type AnyRouter } from '@trpc/server';
 import type * as vscode from 'vscode';
-import { type BaseRouterContext } from '../shared/BaseRouterContext';
-import { WebviewController, type WebviewControllerOptions } from './WebviewController';
+import { type BaseRouterContext } from '../shared/BaseRouterContext.js';
+import { WebviewController, type WebviewControllerOptions } from './WebviewController.js';
 
 /**
  * The greenfield front door: opens a webview panel and returns its

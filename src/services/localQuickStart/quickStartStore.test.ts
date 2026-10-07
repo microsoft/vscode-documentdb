@@ -3,6 +3,8 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+
 /**
  * The Quick Start durable state lives in the shared storage service: one item per alias holding the
  * instance's record in `properties` and its connection string in `secrets`.

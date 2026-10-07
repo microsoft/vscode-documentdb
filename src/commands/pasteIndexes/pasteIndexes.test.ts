@@ -3,6 +3,8 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+
 import { AzureWizard, type IActionContext } from '@microsoft/vscode-azext-utils';
 import { CredentialCache } from '../../documentdb/CredentialCache';
 import { CopyPasteBufferService } from '../../services/CopyPasteBufferService';
@@ -10,16 +12,18 @@ import { createIndexCopier } from '../../services/taskService/data-api/indexes/c
 import { type IndexesItem } from '../../tree/documentdb/IndexesItem';
 import { pasteIndexes } from './pasteIndexes';
 
-jest.mock('../../documentdb/CredentialCache', () => ({ CredentialCache: { hasCredentials: jest.fn() } }));
-jest.mock('../../services/CopyPasteBufferService', () => ({
-    CopyPasteBufferService: { getIndexes: jest.fn(), clearIndexes: jest.fn().mockResolvedValue(undefined) },
+vi.mock('../../documentdb/CredentialCache', () => ({ CredentialCache: { hasCredentials: vi.fn() } }));
+vi.mock('../../services/CopyPasteBufferService', () => ({
+    CopyPasteBufferService: { getIndexes: vi.fn(), clearIndexes: vi.fn().mockResolvedValue(undefined) },
 }));
-jest.mock('../../services/taskService/data-api/indexes/createIndexCopier', () => ({ createIndexCopier: jest.fn() }));
-jest.mock('@microsoft/vscode-azext-utils', () => ({
-    AzureWizard: jest.fn().mockImplementation(() => ({
-        prompt: jest.fn().mockResolvedValue(undefined),
-        execute: jest.fn().mockResolvedValue(undefined),
-    })),
+vi.mock('../../services/taskService/data-api/indexes/createIndexCopier', () => ({ createIndexCopier: vi.fn() }));
+vi.mock('@microsoft/vscode-azext-utils', () => ({
+    AzureWizard: vi.fn().mockImplementation(function () {
+        return {
+            prompt: vi.fn().mockResolvedValue(undefined),
+            execute: vi.fn().mockResolvedValue(undefined),
+        };
+    }),
     AzureWizardPromptStep: class {},
     AzureWizardExecuteStep: class {},
     UserCancelledError: class UserCancelledError extends Error {},
@@ -38,13 +42,13 @@ const targetNode = {
 
 describe('pasteIndexes', () => {
     beforeEach(() => {
-        jest.clearAllMocks();
-        jest.mocked(CredentialCache.hasCredentials).mockReturnValue(true);
-        jest.mocked(createIndexCopier).mockReturnValue({} as ReturnType<typeof createIndexCopier>);
+        vi.clearAllMocks();
+        vi.mocked(CredentialCache.hasCredentials).mockReturnValue(true);
+        vi.mocked(createIndexCopier).mockReturnValue({} as ReturnType<typeof createIndexCopier>);
     });
 
     it('rejects an empty copied-index buffer with an actionable message', async () => {
-        jest.mocked(CopyPasteBufferService.getIndexes).mockReturnValue(undefined);
+        vi.mocked(CopyPasteBufferService.getIndexes).mockReturnValue(undefined);
         const context = createContext();
 
         await expect(pasteIndexes(context, targetNode)).rejects.toThrow('Use Copy Index or Copy Indexes first');
@@ -56,7 +60,7 @@ describe('pasteIndexes', () => {
     });
 
     it('rejects the same source and target collection using stable identity', async () => {
-        jest.mocked(CopyPasteBufferService.getIndexes).mockReturnValue({
+        vi.mocked(CopyPasteBufferService.getIndexes).mockReturnValue({
             source: { clusterId: 'target', databaseName: 'targetDb', collectionName: 'targetCollection' },
             sourceConnectionName: 'Target',
             scope: { kind: 'allIndexes' },
@@ -70,7 +74,7 @@ describe('pasteIndexes', () => {
     });
 
     it('accepts a cross-connection target and leaves the buffer intact', async () => {
-        jest.mocked(CopyPasteBufferService.getIndexes).mockReturnValue({
+        vi.mocked(CopyPasteBufferService.getIndexes).mockReturnValue({
             source: { clusterId: 'source', databaseName: 'sourceDb', collectionName: 'sourceCollection' },
             sourceConnectionName: 'Source',
             scope: { kind: 'index', indexName: 'email_1' },
@@ -97,7 +101,7 @@ describe('pasteIndexes', () => {
     });
 
     it('passes a copied subset into the wizard', async () => {
-        jest.mocked(CopyPasteBufferService.getIndexes).mockReturnValue({
+        vi.mocked(CopyPasteBufferService.getIndexes).mockReturnValue({
             source: { clusterId: 'source', databaseName: 'sourceDb', collectionName: 'sourceCollection' },
             sourceConnectionName: 'Source',
             scope: { kind: 'indexes', indexNames: ['email_1', 'region_1'] },
@@ -112,12 +116,12 @@ describe('pasteIndexes', () => {
     });
 
     it('clears a copied selection whose source connection is stale', async () => {
-        jest.mocked(CopyPasteBufferService.getIndexes).mockReturnValue({
+        vi.mocked(CopyPasteBufferService.getIndexes).mockReturnValue({
             source: { clusterId: 'source', databaseName: 'sourceDb', collectionName: 'sourceCollection' },
             sourceConnectionName: 'Source',
             scope: { kind: 'allIndexes' },
         });
-        jest.mocked(CredentialCache.hasCredentials).mockReturnValue(false);
+        vi.mocked(CredentialCache.hasCredentials).mockReturnValue(false);
 
         const context = createContext();
         await expect(pasteIndexes(context, targetNode)).rejects.toThrow('source connection is no longer available');

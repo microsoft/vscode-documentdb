@@ -1,6 +1,6 @@
 {
   "name": "@microsoft/vscode-ext-webview-fluentui",
-  "version": "1.1.0",
+  "version": "1.1.1",
   "description": "Makes Fluent UI look native inside a VS Code webview: a React theming layer that tracks the user's active workbench theme, plus a small set of provider-agnostic components.",
   "type": "module",
   "main": "dist/index.js",
@@ -43,7 +43,7 @@
     "build": "tsc -p . && tsc -p type-tests",
     "build:monaco-color-ids": "node scripts/build-monaco-color-ids.mjs",
     "clean": "rimraf dist tsconfig.tsbuildinfo",
-    "test": "jest --config jest.config.cjs",
+    "test": "vitest run --config ../../vitest.config.ts --project vscode-ext-webview-fluentui",
     "prettier-fix": "prettier -w \"src/**/*.@(js|ts|jsx|tsx|json|md)\" \"./*.@(js|ts|jsx|tsx|json|md)\""
   },
   "repository": {

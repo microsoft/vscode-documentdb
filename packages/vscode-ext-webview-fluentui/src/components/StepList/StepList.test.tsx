@@ -3,7 +3,8 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { afterEach, beforeAll, describe, expect, jest, test } from '@jest/globals';
+import { afterEach, beforeAll, describe, expect, test, vi } from 'vitest';
+
 import { act, type ReactElement } from 'react';
 import { cleanupSurfaces, installTestEnvironment, renderSurface } from '../testing/renderSurface.js';
 import { StepList, StepListItem } from './index.js';
@@ -33,7 +34,7 @@ describe('StepList', () => {
     });
 
     test('a navigable step reports its value; a non-navigable one is focusable but inert', async () => {
-        const onSelect = jest.fn<(value: string) => void>();
+        const onSelect = vi.fn<(value: string) => void>();
         const { root } = await renderSurface(steps('configure', onSelect));
 
         const buttons = Array.from(root.querySelectorAll('button'));

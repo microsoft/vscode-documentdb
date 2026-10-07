@@ -3,8 +3,10 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { type BaseRouterContext } from './BaseRouterContext';
-import { initWebviewTrpc } from './initWebviewTrpc';
+import { describe, expect, it } from 'vitest';
+
+import { type BaseRouterContext } from './BaseRouterContext.js';
+import { initWebviewTrpc } from './initWebviewTrpc.js';
 
 type TestContext = BaseRouterContext & {
     workspaceRoot: string;

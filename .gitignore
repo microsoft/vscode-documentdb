@@ -271,6 +271,7 @@ grammar/.antlr
 
 dist
 stats.json
+build/verification/reports/
 *.tgz
 *.zip
 *.tsbuildinfo

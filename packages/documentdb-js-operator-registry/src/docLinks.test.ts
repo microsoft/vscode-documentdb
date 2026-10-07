@@ -3,11 +3,13 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+import { describe, expect, test } from 'vitest';
+
 /**
  * Unit tests for docLinks.ts — URL generation for DocumentDB operator docs.
  */
 
-import { getDocBase, getDocLink } from './index';
+import { getDocBase, getDocLink } from './index.js';
 
 describe('docLinks', () => {
     test('getDocBase returns the expected base URL', () => {

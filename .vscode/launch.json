@@ -3,7 +3,7 @@
   "version": "0.2.0",
   "configurations": [
     {
-      "name": "Defaut: Launch Extension (webpack)",
+      "name": "Default: Launch Extension (Vite)",
       "type": "extensionHost",
       "request": "launch",
       "runtimeExecutable": "${execPath}",
@@ -11,7 +11,7 @@
         "--profile=noExtensionsProfile", // uses a local profile with a limited number of installed extensions
         "--extensionDevelopmentPath=${workspaceFolder}/dist"
       ],
-      "outFiles": ["${workspaceFolder}/dist/**/*.js"],
+      "outFiles": ["${workspaceFolder}/dist/**/*.{js,mjs,cjs}"],
       "preLaunchTask": "Watch",
       "autoAttachChildProcesses": true,
       "debugWebWorkerHost": true,
@@ -29,13 +29,12 @@
       "env": {
         "DEBUGTELEMETRY": "verbose", // set this to "verbose" to see telemetry events in debug console
         "NODE_DEBUG": "",
-        "DEBUG_WEBPACK": "",
         "DEVSERVER": "true",
         "STOP_ON_ENTRY": "false" // stop on entry is not allowed for "type": "extensionHost", therefore, it's emulated here (review main.ts)
       }
     },
     {
-      "name": "Launch Extension + AzureResources (webpack)",
+      "name": "Launch Extension + AzureResources (Vite)",
       "type": "extensionHost",
       "request": "launch",
       "runtimeExecutable": "${execPath}",
@@ -44,7 +43,10 @@
         "--extensionDevelopmentPath=${workspaceFolder}/dist",
         "--extensionDevelopmentPath=${workspaceFolder}/../vscode-azureresourcegroups"
       ],
-      "outFiles": ["${workspaceFolder}/dist/**/*.js", "${workspaceFolder}/../vscode-azureresourcegroups/out/**/*.js"],
+      "outFiles": [
+        "${workspaceFolder}/dist/**/*.{js,mjs,cjs}",
+        "${workspaceFolder}/../vscode-azureresourcegroups/out/**/*.js"
+      ],
       "preLaunchTask": "Watch",
       "autoAttachChildProcesses": true,
       "debugWebWorkerHost": true,
@@ -65,66 +67,8 @@
       "env": {
         "DEBUGTELEMETRY": "verbose", // set this to "true" to suppress telemetry events in debug console
         "NODE_DEBUG": "",
-        "DEBUG_WEBPACK": "",
         "DEVSERVER": "true",
         "STOP_ON_ENTRY": "false" // stop on entry is not allowed for "type": "extensionHost", therefore, it's emulated here (review main.ts)
-      }
-    },
-    {
-      "name": "Launch Extension + Host",
-      "type": "extensionHost",
-      "request": "launch",
-      "runtimeExecutable": "${execPath}",
-      "args": [
-        "--extensionDevelopmentPath=${workspaceFolder}",
-        "--extensionDevelopmentPath=${workspaceFolder}/../vscode-azureresourcegroups"
-      ],
-      "outFiles": ["${workspaceFolder}/out/**/*.js"],
-      "preLaunchTask": "${defaultBuildTask}",
-      "env": {
-        "DEBUGTELEMETRY": "verbose", // set this to "true" to suppress telemetry events in debug console
-        "NODE_DEBUG": ""
-      }
-    },
-    {
-      "name": "Launch Tests",
-      "type": "extensionHost",
-      "request": "launch",
-      "runtimeExecutable": "${execPath}",
-      "args": [
-        "--extensionDevelopmentPath=${workspaceFolder}",
-        "--extensionTestsPath=${workspaceFolder}/out/test/index",
-        "${workspaceFolder}/test/test.code-workspace"
-      ],
-      "outFiles": ["${workspaceFolder}/out/**/*.js"],
-      "preLaunchTask": "${defaultBuildTask}",
-      "env": {
-        "MOCHA_grep": "", // RegExp of tests to run (empty for all)
-        "MOCHA_timeout": "0", // Disable time-outs
-        "DEBUGTELEMETRY": "true", // set this to "verbose" to see telemetry events in debug console
-        "NODE_DEBUG": "",
-        "AzCode_EnableLongRunningTestsLocal": ""
-      }
-    },
-    {
-      "name": "Launch Tests (webpack)",
-      "type": "extensionHost",
-      "request": "launch",
-      "runtimeExecutable": "${execPath}",
-      "args": [
-        "--extensionDevelopmentPath=${workspaceFolder}",
-        "--extensionTestsPath=${workspaceFolder}/dist/test/index",
-        "${workspaceFolder}/test/test.code-workspace"
-      ],
-      "outFiles": ["${workspaceFolder}/dist/**/*.js"],
-      "preLaunchTask": "npm: webpack",
-      "env": {
-        "MOCHA_grep": "", // RegExp of tests to run (empty for all)
-        "MOCHA_timeout": "0", // Disable time-outs
-        "DEBUGTELEMETRY": "true", // set this to "verbose" to see telemetry events in debug console
-        "NODE_DEBUG": "",
-        "DEBUG_WEBPACK": "1",
-        "ENABLE_LONG_RUNNING_TESTS": ""
       }
     },
     {
@@ -144,7 +88,7 @@
       "port": 5870,
       "sourceMaps": true,
       "restart": true,
-      "outFiles": ["${workspaceFolder}/out/src"]
+      "outFiles": ["${workspaceFolder}/dist/**/*.{js,mjs,cjs}"]
     },
     {
       // INSTRUCTIONS

@@ -3,6 +3,8 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+
 import { type IActionContext } from '@microsoft/vscode-azext-utils';
 import { ConflictResolutionStrategy, type DocumentDetails, type EnsureTargetExistsResult } from '../types';
 import { StreamingDocumentWriter, StreamingWriterError } from './StreamingDocumentWriter';
@@ -18,23 +20,23 @@ import {
 } from './writerTypes.internal';
 
 // Mock extensionVariables (ext) module
-jest.mock('../../../../extensionVariables', () => ({
+vi.mock('../../../../extensionVariables', () => ({
     ext: {
         outputChannel: {
-            appendLine: jest.fn(),
-            error: jest.fn(),
-            warn: jest.fn(),
-            debug: jest.fn(),
-            trace: jest.fn(),
-            appendLog: jest.fn(),
-            show: jest.fn(),
-            info: jest.fn(),
+            appendLine: vi.fn(),
+            error: vi.fn(),
+            warn: vi.fn(),
+            debug: vi.fn(),
+            trace: vi.fn(),
+            appendLog: vi.fn(),
+            show: vi.fn(),
+            info: vi.fn(),
         },
     },
 }));
 
 // Mock vscode module
-jest.mock('vscode', () => ({
+vi.mock('vscode', () => ({
     l10n: {
         t: (key: string, ...args: string[]): string => {
             return args.length > 0 ? `${key} ${args.join(' ')}` : key;
@@ -429,7 +431,7 @@ describe('StreamingDocumentWriter', () => {
         writer = new MockStreamingWriter('testdb', 'testcollection');
         writer.clearStorage();
         writer.clearErrorConfig();
-        jest.clearAllMocks();
+        vi.clearAllMocks();
     });
 
     // =========================================================================

@@ -3,6 +3,8 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+import { beforeEach, describe, expect, it, vi, type Mock } from 'vitest';
+
 import { type IActionContext } from '@microsoft/vscode-azext-utils';
 import * as vscode from 'vscode';
 import {
@@ -72,10 +74,10 @@ describe('tryDecodeUrlEncodedPassword', () => {
 
 describe('showConnectionFailedAndMaybeOfferDecodedRetry', () => {
     // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
-    const showErrorMessage: jest.Mock = vscode.window.showErrorMessage as unknown as jest.Mock;
+    const showErrorMessage: Mock = vscode.window.showErrorMessage as unknown as Mock;
 
     beforeEach(() => {
-        jest.clearAllMocks();
+        vi.clearAllMocks();
     });
 
     it('shows error dialog without retry button when password is not URL-encoded', async () => {

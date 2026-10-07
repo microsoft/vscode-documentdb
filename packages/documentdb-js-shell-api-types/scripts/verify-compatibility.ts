@@ -19,12 +19,12 @@
  *
  * Usage:
  *   npm run verify
- *   npx ts-node packages/documentdb-js-shell-api-types/scripts/verify-compatibility.ts
+ *   npx tsx packages/documentdb-js-shell-api-types/scripts/verify-compatibility.ts
  */
 
 import * as fs from 'fs';
 import * as path from 'path';
-import { getRequiredServerCommands, SHELL_API_METHODS } from '../src/methodRegistry';
+import { getRequiredServerCommands, SHELL_API_METHODS } from '../src/methodRegistry.js';
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -33,7 +33,7 @@ import { getRequiredServerCommands, SHELL_API_METHODS } from '../src/methodRegis
 const COMPAT_PAGE_URL =
     'https://raw.githubusercontent.com/MicrosoftDocs/azure-databases-docs/main/articles/documentdb/compatibility-query-language.md';
 
-const OUTPUT_FILE = path.join(__dirname, '..', 'resources', 'scraped', 'compatibility-commands.md');
+const OUTPUT_FILE = path.join(import.meta.dirname, '..', 'resources', 'scraped', 'compatibility-commands.md');
 
 // ---------------------------------------------------------------------------
 // Types

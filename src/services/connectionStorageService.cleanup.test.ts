@@ -3,6 +3,8 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+
 import { type IActionContext } from '@microsoft/vscode-azext-utils';
 import { API } from '../DocumentDBExperiences';
 import {
@@ -85,42 +87,42 @@ const telemetryContextMock = {
     telemetry: { properties: {}, measurements: {} },
     errorHandling: { issueProperties: {} },
     ui: {
-        showWarningMessage: jest.fn(),
-        onDidFinishPrompt: jest.fn(),
-        showQuickPick: jest.fn(),
-        showInputBox: jest.fn(),
-        showOpenDialog: jest.fn(),
-        showWorkspaceFolderPick: jest.fn(),
+        showWarningMessage: vi.fn(),
+        onDidFinishPrompt: vi.fn(),
+        showQuickPick: vi.fn(),
+        showInputBox: vi.fn(),
+        showOpenDialog: vi.fn(),
+        showWorkspaceFolderPick: vi.fn(),
     },
     valuesToMask: [],
 };
 
-jest.mock('@microsoft/vscode-azext-utils', () => ({
-    callWithTelemetryAndErrorHandling: jest.fn(
+vi.mock('@microsoft/vscode-azext-utils', () => ({
+    callWithTelemetryAndErrorHandling: vi.fn(
         async (_eventName: string, callback: (context: IActionContext) => Promise<unknown>) => {
             await callback(telemetryContextMock as unknown as IActionContext);
             return undefined;
         },
     ),
     apiUtils: {
-        getAzureExtensionApi: jest.fn().mockResolvedValue(undefined),
+        getAzureExtensionApi: vi.fn().mockResolvedValue(undefined),
     },
 }));
 
-jest.mock('vscode', () => ({
+vi.mock('vscode', () => ({
     l10n: {
-        t: jest.fn((str: string) => str),
+        t: vi.fn((str: string) => str),
     },
     extensions: {
-        getExtension: jest.fn().mockReturnValue(undefined),
+        getExtension: vi.fn().mockReturnValue(undefined),
     },
 }));
 
 const mockStorage = new MockStorage();
 
-jest.mock('./storageService', () => ({
+vi.mock('./storageService', () => ({
     StorageService: {
-        get: jest.fn(() => mockStorage),
+        get: vi.fn(() => mockStorage),
     },
     StorageNames: {
         Connections: 'connections',
@@ -130,25 +132,25 @@ jest.mock('./storageService', () => ({
     },
 }));
 
-jest.mock('../extension', () => ({
-    isVCoreAndRURolloutEnabled: jest.fn().mockResolvedValue(false),
+vi.mock('../extension', () => ({
+    isVCoreAndRURolloutEnabled: vi.fn().mockResolvedValue(false),
 }));
 
-jest.mock('../extensionVariables', () => ({
+vi.mock('../extensionVariables', () => ({
     ext: {
         context: {
             globalState: {
-                get: jest.fn().mockReturnValue(0),
-                update: jest.fn().mockResolvedValue(undefined),
+                get: vi.fn().mockReturnValue(0),
+                update: vi.fn().mockResolvedValue(undefined),
             },
         },
         outputChannel: {
-            appendLog: jest.fn(),
-            trace: jest.fn(),
-            debug: jest.fn(),
-            info: jest.fn(),
-            warn: jest.fn(),
-            error: jest.fn(),
+            appendLog: vi.fn(),
+            trace: vi.fn(),
+            debug: vi.fn(),
+            info: vi.fn(),
+            warn: vi.fn(),
+            error: vi.fn(),
         },
     },
 }));
@@ -156,7 +158,7 @@ jest.mock('../extensionVariables', () => ({
 describe('ConnectionStorageService - Cleanup Functions', () => {
     beforeEach(async () => {
         mockStorage.clear();
-        jest.clearAllMocks();
+        vi.clearAllMocks();
         // Reset the private static storage service instance and bootstrap promise
         (ConnectionStorageService as any)._storageService = undefined;
         (ConnectionStorageService as any)._bootstrap = undefined;

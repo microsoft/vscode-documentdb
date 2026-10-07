@@ -3,8 +3,10 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+import { describe, expect, it } from 'vitest';
+
 import { type Document, type WithId } from 'mongodb';
-import { SchemaAnalyzer } from '../src/SchemaAnalyzer';
+import { SchemaAnalyzer } from '../src/SchemaAnalyzer.js';
 
 interface TaggedDocumentCase {
     readonly label: string;

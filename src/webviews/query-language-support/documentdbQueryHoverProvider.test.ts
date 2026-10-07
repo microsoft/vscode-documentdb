@@ -3,6 +3,8 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+import { describe, expect, test } from 'vitest';
+
 import { type FieldCompletionData } from '../../utils/json/data-api/autocomplete/toFieldCompletionItems';
 import { getHoverContent, type FieldDataLookup } from './documentdbQueryHoverProvider';
 

@@ -3,6 +3,8 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
 import { ShellSpinner } from './ShellSpinner';
 
 /** Backspace-space-backspace sequence used to erase one character. */
@@ -13,7 +15,7 @@ describe('ShellSpinner', () => {
     let write: (data: string) => void;
 
     beforeEach(() => {
-        jest.useFakeTimers();
+        vi.useFakeTimers();
         output = '';
         write = (data: string) => {
             output += data;
@@ -21,7 +23,7 @@ describe('ShellSpinner', () => {
     });
 
     afterEach(() => {
-        jest.useRealTimers();
+        vi.useRealTimers();
     });
 
     describe('start and stop', () => {
@@ -39,7 +41,7 @@ describe('ShellSpinner', () => {
             const spinner = new ShellSpinner(write, false, 300);
             spinner.start();
 
-            jest.advanceTimersByTime(300);
+            vi.advanceTimersByTime(300);
 
             // cursor-hide + first frame character
             expect(output).toContain('\x1b[?25l');
@@ -51,19 +53,19 @@ describe('ShellSpinner', () => {
         it('should animate through frames using backspace', () => {
             const spinner = new ShellSpinner(write, false, 0);
             spinner.start();
-            jest.advanceTimersByTime(0);
+            vi.advanceTimersByTime(0);
 
             // First frame
             expect(output).toContain('⠋');
 
             output = '';
-            jest.advanceTimersByTime(80);
+            vi.advanceTimersByTime(80);
             // Should backspace over previous frame & write new one
             expect(output).toContain(BS);
             expect(output).toContain('⠙');
 
             output = '';
-            jest.advanceTimersByTime(80);
+            vi.advanceTimersByTime(80);
             expect(output).toContain(BS);
             expect(output).toContain('⠹');
 
@@ -73,7 +75,7 @@ describe('ShellSpinner', () => {
         it('should erase spinner character on stop', () => {
             const spinner = new ShellSpinner(write, false, 0);
             spinner.start();
-            jest.advanceTimersByTime(0);
+            vi.advanceTimersByTime(0);
 
             output = '';
             spinner.stop();
@@ -87,17 +89,17 @@ describe('ShellSpinner', () => {
             const spinner = new ShellSpinner(write, false, 300);
             spinner.start();
 
-            jest.advanceTimersByTime(100);
+            vi.advanceTimersByTime(100);
             spinner.stop();
 
-            jest.advanceTimersByTime(500);
+            vi.advanceTimersByTime(500);
             expect(output).toBe('');
         });
 
         it('should be safe to call stop multiple times', () => {
             const spinner = new ShellSpinner(write, false, 0);
             spinner.start();
-            jest.advanceTimersByTime(0);
+            vi.advanceTimersByTime(0);
 
             spinner.stop();
             spinner.stop();
@@ -117,7 +119,7 @@ describe('ShellSpinner', () => {
         it('should apply ANSI blue when color is enabled', () => {
             const spinner = new ShellSpinner(write, true, 0);
             spinner.start();
-            jest.advanceTimersByTime(0);
+            vi.advanceTimersByTime(0);
 
             expect(output).toContain('\x1b[34m');
             expect(output).toContain('\x1b[0m');
@@ -128,7 +130,7 @@ describe('ShellSpinner', () => {
         it('should not apply color codes when color is disabled', () => {
             const spinner = new ShellSpinner(write, false, 0);
             spinner.start();
-            jest.advanceTimersByTime(0);
+            vi.advanceTimersByTime(0);
 
             expect(output).not.toContain('\x1b[34m');
             expect(output).toContain('⠋');
@@ -141,7 +143,7 @@ describe('ShellSpinner', () => {
         it('should erase the spinner character on hide', () => {
             const spinner = new ShellSpinner(write, false, 0);
             spinner.start();
-            jest.advanceTimersByTime(0);
+            vi.advanceTimersByTime(0);
 
             output = '';
             spinner.hide();
@@ -153,13 +155,13 @@ describe('ShellSpinner', () => {
         it('should re-render on next interval tick after hide', () => {
             const spinner = new ShellSpinner(write, false, 0);
             spinner.start();
-            jest.advanceTimersByTime(0);
+            vi.advanceTimersByTime(0);
 
             spinner.hide();
             output = '';
 
             // Next tick should re-render without first erasing (since _rendered is false)
-            jest.advanceTimersByTime(80);
+            vi.advanceTimersByTime(80);
             expect(output).toContain('⠙');
             // Should NOT contain a backspace before — nothing to erase
             expect(output).toBe('⠙');
@@ -182,7 +184,7 @@ describe('ShellSpinner', () => {
         it('should render label text after the spinner character', () => {
             const spinner = new ShellSpinner(write, false, 0, 'Loading...');
             spinner.start();
-            jest.advanceTimersByTime(0);
+            vi.advanceTimersByTime(0);
 
             expect(output).toContain('⠋ Loading...');
 
@@ -192,7 +194,7 @@ describe('ShellSpinner', () => {
         it('should erase full label+spinner on stop', () => {
             const spinner = new ShellSpinner(write, false, 0, 'Working...');
             spinner.start();
-            jest.advanceTimersByTime(0);
+            vi.advanceTimersByTime(0);
 
             output = '';
             spinner.stop();
@@ -207,7 +209,7 @@ describe('ShellSpinner', () => {
         it('should update label via setLabel', () => {
             const spinner = new ShellSpinner(write, false, 0, 'Step 1');
             spinner.start();
-            jest.advanceTimersByTime(0);
+            vi.advanceTimersByTime(0);
             expect(output).toContain('Step 1');
 
             output = '';
@@ -221,7 +223,7 @@ describe('ShellSpinner', () => {
         it('should remove label when setLabel(undefined) is called', () => {
             const spinner = new ShellSpinner(write, false, 0, 'Working...');
             spinner.start();
-            jest.advanceTimersByTime(0);
+            vi.advanceTimersByTime(0);
 
             output = '';
             spinner.setLabel(undefined);
@@ -247,15 +249,15 @@ describe('ShellSpinner', () => {
         it('should cycle back to first frame after full sequence', () => {
             const spinner = new ShellSpinner(write, false, 0);
             spinner.start();
-            jest.advanceTimersByTime(0);
+            vi.advanceTimersByTime(0);
 
             // 10 frames — advance through 9 to reach last, then 1 more wraps
             for (let i = 0; i < 9; i++) {
-                jest.advanceTimersByTime(80);
+                vi.advanceTimersByTime(80);
             }
 
             output = '';
-            jest.advanceTimersByTime(80);
+            vi.advanceTimersByTime(80);
             expect(output).toContain('⠋');
 
             spinner.stop();

@@ -3,14 +3,18 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+
+import { callWithTelemetryAndErrorHandling } from '@microsoft/vscode-azext-utils';
+import { ext } from '../../../../extensionVariables';
 import { KUBERNETES_PORT_FORWARD_METADATA_PROPERTY } from '../../portForwardMetadata';
 import { KubernetesResourceItem } from './KubernetesResourceItem';
 
-const mockHasCredentials = jest.fn();
-const mockGetClient = jest.fn();
+const mockHasCredentials = vi.fn();
+const mockGetClient = vi.fn();
 
-jest.mock('@vscode/l10n', () => ({
-    t: jest.fn((message: string, values?: Record<string, string>) => {
+vi.mock('@vscode/l10n', () => ({
+    t: vi.fn((message: string, values?: Record<string, string>) => {
         if (!values) {
             return message;
         }
@@ -19,7 +23,7 @@ jest.mock('@vscode/l10n', () => ({
     }),
 }));
 
-jest.mock('vscode', () => ({
+vi.mock('vscode', () => ({
     ThemeIcon: class ThemeIcon {
         constructor(public readonly id: string) {}
     },
@@ -45,7 +49,7 @@ jest.mock('vscode', () => ({
         }
     },
     l10n: {
-        t: jest.fn((message: string) => message),
+        t: vi.fn((message: string) => message),
     },
     TreeItemCollapsibleState: {
         None: 0,
@@ -63,15 +67,15 @@ jest.mock('vscode', () => ({
                 token: { onCancellationRequested: (cb: () => void) => void },
             ) => Promise<unknown>,
         ) => await task(undefined, { onCancellationRequested: () => {} }),
-        showErrorMessage: jest.fn(),
-        showWarningMessage: jest.fn(),
-        showInformationMessage: jest.fn(),
+        showErrorMessage: vi.fn(),
+        showWarningMessage: vi.fn(),
+        showInformationMessage: vi.fn(),
     },
 }));
 
-jest.mock('@microsoft/vscode-azext-utils', () => ({
+vi.mock('@microsoft/vscode-azext-utils', () => ({
     createContextValue: (parts: string[]) => parts.join(';'),
-    callWithTelemetryAndErrorHandling: jest.fn(
+    callWithTelemetryAndErrorHandling: vi.fn(
         async (_eventName: string, callback: (context: unknown) => Promise<unknown>) =>
             await callback({
                 telemetry: { properties: {}, measurements: {} },
@@ -79,7 +83,7 @@ jest.mock('@microsoft/vscode-azext-utils', () => ({
                 valuesToMask: [],
             }),
     ),
-    createGenericElement: jest.fn((options: Record<string, unknown>) => options),
+    createGenericElement: vi.fn((options: Record<string, unknown>) => options),
     AzureWizard: class AzureWizard {
         constructor(_context: unknown, _options: unknown) {}
         public async prompt(): Promise<void> {}
@@ -87,53 +91,53 @@ jest.mock('@microsoft/vscode-azext-utils', () => ({
     UserCancelledError: class UserCancelledError extends Error {},
 }));
 
-jest.mock('../../../../extensionVariables', () => ({
+vi.mock('../../../../extensionVariables', () => ({
     ext: {
         settingsKeys: { showDashboardOnConnect: 'documentDB.userInterface.showDashboardOnConnect' },
         outputChannel: {
-            append: jest.fn(),
-            appendLine: jest.fn(),
-            debug: jest.fn(),
+            append: vi.fn(),
+            appendLine: vi.fn(),
+            debug: vi.fn(),
         },
         state: {
-            notifyChildrenChanged: jest.fn(),
+            notifyChildrenChanged: vi.fn(),
         },
     },
 }));
 
-jest.mock('../../../../services/SettingsService', () => ({
-    SettingsService: { getSetting: jest.fn().mockReturnValue(false) },
+vi.mock('../../../../services/SettingsService', () => ({
+    SettingsService: { getSetting: vi.fn().mockReturnValue(false) },
 }));
 
-jest.mock('../../../../documentdb/CredentialCache', () => ({
+vi.mock('../../../../documentdb/CredentialCache', () => ({
     CredentialCache: {
         hasCredentials: (...args: unknown[]) => mockHasCredentials(...args),
-        deleteCredentials: jest.fn(),
-        setAuthCredentials: jest.fn(),
+        deleteCredentials: vi.fn(),
+        setAuthCredentials: vi.fn(),
     },
 }));
 
-jest.mock('../../../../documentdb/ClustersClient', () => ({
+vi.mock('../../../../documentdb/ClustersClient', () => ({
     ClustersClient: {
-        exists: jest.fn().mockReturnValue(false),
+        exists: vi.fn().mockReturnValue(false),
         getClient: (...args: unknown[]) => mockGetClient(...args),
-        deleteClient: jest.fn(),
+        deleteClient: vi.fn(),
     },
 }));
 
-jest.mock('../../../../tree/api/createGenericElementWithContext', () => ({
-    createGenericElementWithContext: jest.fn((options: Record<string, unknown>) => options),
+vi.mock('../../../../tree/api/createGenericElementWithContext', () => ({
+    createGenericElementWithContext: vi.fn((options: Record<string, unknown>) => options),
 }));
 
 // Mock kubernetesClient module
-const mockLoadConfiguredKubeConfig = jest.fn();
-const mockCreateCoreApi = jest.fn();
-const mockResolveServiceEndpoint = jest.fn();
-const mockResolveDocumentDBCredentials = jest.fn();
-const mockResolveGenericServiceCredentials = jest.fn();
-const mockBuildPortForwardConnectionString = jest.fn();
+const mockLoadConfiguredKubeConfig = vi.fn();
+const mockCreateCoreApi = vi.fn();
+const mockResolveServiceEndpoint = vi.fn();
+const mockResolveDocumentDBCredentials = vi.fn();
+const mockResolveGenericServiceCredentials = vi.fn();
+const mockBuildPortForwardConnectionString = vi.fn();
 
-jest.mock('../../kubernetesClient', () => ({
+vi.mock('../../kubernetesClient', () => ({
     loadConfiguredKubeConfig: (...args: unknown[]) => mockLoadConfiguredKubeConfig(...args),
     createCoreApi: (...args: unknown[]) => mockCreateCoreApi(...args),
     resolveServiceEndpoint: (...args: unknown[]) => mockResolveServiceEndpoint(...args),
@@ -143,8 +147,8 @@ jest.mock('../../kubernetesClient', () => ({
 }));
 
 // Mock PortForwardTunnelManager
-const mockStartTunnel = jest.fn();
-jest.mock('../../portForwardTunnel', () => ({
+const mockStartTunnel = vi.fn();
+vi.mock('../../portForwardTunnel', () => ({
     PortForwardTunnelManager: {
         getInstance: () => ({
             startTunnel: mockStartTunnel,
@@ -153,19 +157,19 @@ jest.mock('../../portForwardTunnel', () => ({
 }));
 
 // Mock promptForLocalPort
-const mockPromptForLocalPort = jest.fn();
-jest.mock('../../promptForLocalPort', () => ({
+const mockPromptForLocalPort = vi.fn();
+vi.mock('../../promptForLocalPort', () => ({
     promptForLocalPort: (...args: unknown[]) => mockPromptForLocalPort(...args),
 }));
 
 // Mock the source store so getSource() returns a known label without touching StorageService.
-const mockGetSource = jest.fn(async (id: string) => ({ id, label: `Label for ${id}`, kind: 'default' as const }));
-jest.mock('../../sources/sourceStore', () => ({
+const mockGetSource = vi.fn(async (id: string) => ({ id, label: `Label for ${id}`, kind: 'default' as const }));
+vi.mock('../../sources/sourceStore', () => ({
     getSource: (...args: unknown[]) => mockGetSource(...(args as [string])),
 }));
 
 // Mock the icons util so the cluster icon path resolves without an extension context.
-jest.mock('../../../../utils/icons', () => ({
+vi.mock('../../../../utils/icons', () => ({
     getResourcesPath: () => '/resources',
 }));
 
@@ -180,10 +184,10 @@ function iconDarkPath(iconPath: unknown): string {
 
 describe('KubernetesResourceItem', () => {
     beforeEach(() => {
-        jest.clearAllMocks();
+        vi.clearAllMocks();
         mockHasCredentials.mockReturnValue(true);
         mockGetClient.mockResolvedValue({
-            listDatabases: jest.fn().mockResolvedValue([{ name: 'appdb' }]),
+            listDatabases: vi.fn().mockResolvedValue([{ name: 'appdb' }]),
         });
     });
 
@@ -812,20 +816,12 @@ describe('KubernetesResourceItem', () => {
             expect(creds).toBeDefined();
             expect(creds?.connectionString).toBe('mongodb://10.0.0.1:30017/');
 
-            // eslint-disable-next-line @typescript-eslint/no-require-imports
-            const { ext } = require('../../../../extensionVariables') as {
-                ext: { outputChannel: { appendLine: jest.Mock } };
-            };
             expect(ext.outputChannel.appendLine).toHaveBeenCalledWith(warningText);
         });
 
         it('should set endpointWarning telemetry property for ready endpoint with warning', async () => {
             const capturedProperties: Record<string, string> = {};
-            // Access the jest.fn() spy created in the module mock factory.
-            // jest.requireMock returns `any`, so we access properties directly.
-            // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access
-            const mockFn = jest.requireMock('@microsoft/vscode-azext-utils').callWithTelemetryAndErrorHandling;
-            // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
+            const mockFn = vi.mocked(callWithTelemetryAndErrorHandling);
             mockFn.mockImplementationOnce(
                 async (_eventName: string, callback: (ctx: unknown) => Promise<unknown>) =>
                     await callback({
@@ -864,9 +860,7 @@ describe('KubernetesResourceItem', () => {
 
         it('should not set endpointWarning for ready endpoint without warning', async () => {
             const capturedProperties: Record<string, string> = {};
-            // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access
-            const mockFn = jest.requireMock('@microsoft/vscode-azext-utils').callWithTelemetryAndErrorHandling;
-            // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
+            const mockFn = vi.mocked(callWithTelemetryAndErrorHandling);
             mockFn.mockImplementationOnce(
                 async (_eventName: string, callback: (ctx: unknown) => Promise<unknown>) =>
                     await callback({

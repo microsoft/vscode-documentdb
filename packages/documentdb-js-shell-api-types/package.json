@@ -1,19 +1,28 @@
 {
   "name": "@documentdb-js/shell-api-types",
-  "version": "0.8.1",
+  "version": "0.9.0",
   "description": "TypeScript type definitions and method-to-command registry for the DocumentDB shell API",
+  "type": "module",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./typeDefs/*": "./typeDefs/*",
+    "./package.json": "./package.json"
+  },
   "files": [
     "dist",
     "typeDefs"
   ],
   "scripts": {
-    "build": "tsc -p . && tsc -p tsconfig.scripts.json --noEmit",
+    "build": "tsc -p . && tsc -p scripts --noEmit",
     "clean": "rimraf dist tsconfig.tsbuildinfo",
-    "test": "jest --config jest.config.js",
+    "test": "vitest run --config ../../vitest.config.ts --project documentdb-js-shell-api-types",
     "prettier-fix": "prettier -w \"(scripts|src)/**/*.@(js|ts|jsx|tsx|json|md)\" \"./*.@(js|ts|jsx|tsx|json|md)\"",
-    "verify": "ts-node scripts/verify-compatibility.ts"
+    "verify": "tsx scripts/verify-compatibility.ts"
   },
   "repository": {
     "type": "git",
@@ -23,5 +32,8 @@
   "license": "MIT",
   "publishConfig": {
     "access": "public"
+  },
+  "engines": {
+    "node": ">=22.18.0"
   }
 }

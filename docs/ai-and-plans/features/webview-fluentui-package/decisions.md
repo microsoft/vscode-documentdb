@@ -16,7 +16,7 @@ created: 2026-08-18
 | 0003 | No dependency between the two packages, in either direction    | Accepted            | Accepted as proposed                                                    | 2026-08-18 | -    |
 | 0004 | Three invariants: provider independence, layering, facade      | Accepted            | Accepted as proposed                                                    | 2026-08-18 | -    |
 | 0005 | ESM-only, despite the sibling being CommonJS                   | Accepted (modified) | `typesVersions` reinstated when 0016 was corrected                      | 2026-08-18 | -    |
-| 0006 | Tests stay CommonJS, transformed by `@swc/jest`                | Accepted            | Accepted as proposed                                                    | 2026-08-18 | -    |
+| 0006 | Tests stay CommonJS, transformed by `@swc/jest`                | Superseded          | Accepted as proposed                                                    | 2026-08-18 | -    |
 | 0007 | v1 public entries are `.` and `./components`                   | Accepted (modified) | `./styles.css` dropped after 0010                                       | 2026-08-18 | -    |
 | 0008 | The token list and palette math stay internal                  | Accepted (modified) | Proposal left it open; evidence closed it                               | 2026-08-18 | -    |
 | 0009 | The `adaptive` flag is deleted, not defaulted                  | Accepted (modified) | Proposal was to flip the default to `true`                              | 2026-08-18 | -    |
@@ -218,7 +218,12 @@ unchanged; only the `typesVersions` clause was wrong.
 
 ## 0006 - Tests stay CommonJS, transformed by `@swc/jest`
 
-**Status:** Accepted · **Date:** 2026-08-18
+**Status:** Superseded · **Date:** 2026-08-18
+
+> Superseded by the modernization's Stage 2 (Jest to Vitest; see
+> [build-and-test-stack.md](../../modernization/build-and-test-stack.md)). The package's tests now
+> run as the `vscode-ext-webview-fluentui` project of the root `vitest.config.ts`, under jsdom,
+> transformed by Vite; `jest.config.cjs` and `@swc/jest` were removed. The record below is history.
 
 ### Decision
 

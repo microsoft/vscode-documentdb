@@ -3,6 +3,8 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+import { afterEach, describe, expect, it, vi } from 'vitest';
+
 import { vscodeColorIdToCSSVariable } from './cssVariable';
 import { readVSCodeThemeColors } from './readVSCodeThemeColors';
 import { getVSCodeThemeColorsVersion, subscribeToVSCodeThemeColors } from './themeColorsStore';
@@ -69,7 +71,7 @@ describe('readVSCodeThemeColors', () => {
 
 describe('themeColorsStore', () => {
     it('reports a new version when the root custom properties are rewritten', async () => {
-        const listener = jest.fn();
+        const listener = vi.fn();
         const unsubscribe = subscribeToVSCodeThemeColors(listener);
         const before = getVSCodeThemeColorsVersion();
 
@@ -89,7 +91,7 @@ describe('themeColorsStore', () => {
         document.body.setAttribute('data-vscode-theme-kind', 'vscode-dark');
         document.body.setAttribute('data-vscode-theme-id', 'Default Dark Modern');
 
-        const listener = jest.fn();
+        const listener = vi.fn();
         const unsubscribe = subscribeToVSCodeThemeColors(listener);
         const before = getVSCodeThemeColorsVersion();
 
@@ -105,7 +107,7 @@ describe('themeColorsStore', () => {
     });
 
     it('stops observing once the last listener unsubscribes', async () => {
-        const listener = jest.fn();
+        const listener = vi.fn();
         subscribeToVSCodeThemeColors(listener)();
 
         document.documentElement.style.setProperty('--vscode-editor-background', '#303030');
@@ -119,7 +121,7 @@ describe('themeColorsStore', () => {
     // snapshot to the next subscriber. Re-subscribing has to invalidate it.
     it('reports a new version when observation resumes after a gap', () => {
         const before = getVSCodeThemeColorsVersion();
-        const unsubscribe = subscribeToVSCodeThemeColors(jest.fn());
+        const unsubscribe = subscribeToVSCodeThemeColors(vi.fn());
 
         expect(getVSCodeThemeColorsVersion()).toBeGreaterThan(before);
 

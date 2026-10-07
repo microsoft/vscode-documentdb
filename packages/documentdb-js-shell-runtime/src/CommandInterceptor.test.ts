@@ -3,7 +3,9 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { CommandInterceptor } from './CommandInterceptor';
+import { beforeEach, describe, expect, it } from 'vitest';
+
+import { CommandInterceptor } from './CommandInterceptor.js';
 
 describe('CommandInterceptor', () => {
     let interceptor: CommandInterceptor;

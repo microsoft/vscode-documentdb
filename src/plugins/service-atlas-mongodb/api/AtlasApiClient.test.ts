@@ -3,26 +3,28 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-jest.mock('vscode', () => ({
+import { beforeEach, describe, expect, it, vi, type Mock } from 'vitest';
+
+vi.mock('vscode', () => ({
     ThemeIcon: class ThemeIcon {
         constructor(public readonly id: string) {}
     },
     l10n: {
-        t: jest.fn((message: string, ...args: string[]) =>
+        t: vi.fn((message: string, ...args: string[]) =>
             args.reduce<string>((m, value, index) => m.replace(`{${String(index)}}`, value), message),
         ),
     },
 }));
 
-jest.mock('../../../extensionVariables', () => ({
+vi.mock('../../../extensionVariables', () => ({
     ext: {
-        outputChannel: { trace: jest.fn(), info: jest.fn(), warn: jest.fn(), error: jest.fn(), appendLine: jest.fn() },
+        outputChannel: { trace: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn(), appendLine: vi.fn() },
     },
 }));
 
-jest.mock('./AtlasDigestAuth', () => ({
-    parseDigestChallenge: jest.fn(() => ({ realm: 'realm', nonce: 'nonce', qop: 'auth' })),
-    computeDigestHeader: jest.fn(() => 'Digest computed-value'),
+vi.mock('./AtlasDigestAuth', () => ({
+    parseDigestChallenge: vi.fn(() => ({ realm: 'realm', nonce: 'nonce', qop: 'auth' })),
+    computeDigestHeader: vi.fn(() => 'Digest computed-value'),
 }));
 
 import { ext } from '../../../extensionVariables';
@@ -32,7 +34,7 @@ import { computeDigestHeader } from './AtlasDigestAuth';
 
 const session = { type: 'serviceaccount', accessToken: 'token-1' } as const;
 
-const fetchMock = jest.fn();
+const fetchMock = vi.fn();
 
 function jsonResponse(body: unknown, status = 200, headers: Record<string, string> = {}): Response {
     return {
@@ -63,8 +65,8 @@ function requestedUrls(): string[] {
 
 beforeEach(() => {
     fetchMock.mockReset();
-    (ext.outputChannel.warn as jest.Mock).mockClear();
-    (ext.outputChannel.trace as jest.Mock).mockClear();
+    (ext.outputChannel.warn as Mock).mockClear();
+    (ext.outputChannel.trace as Mock).mockClear();
     global.fetch = fetchMock as unknown as typeof fetch;
 });
 
@@ -92,7 +94,7 @@ describe('AtlasApiClient error reporting', () => {
         expect((error as AtlasApiError).detail).toContain('203.0.113.9');
         expect((error as AtlasApiError).parameters).toEqual(['203.0.113.9']);
 
-        const warning = String((ext.outputChannel.warn as jest.Mock).mock.calls[0][0]);
+        const warning = String((ext.outputChannel.warn as Mock).mock.calls[0][0]);
         expect(warning).toContain('errorCode=IP_ADDRESS_NOT_ON_ACCESS_LIST');
         expect(warning).toContain('reason=Forbidden');
         expect(warning).toContain('detail=IP address 203.0.113.9');
@@ -110,7 +112,7 @@ describe('AtlasApiClient error reporting', () => {
 
         await expect(new AtlasApiClient(session).listProjects()).rejects.toBeInstanceOf(AtlasApiError);
 
-        const traced = (ext.outputChannel.trace as jest.Mock).mock.calls.map((call) => String(call[0])).join('\n');
+        const traced = (ext.outputChannel.trace as Mock).mock.calls.map((call) => String(call[0])).join('\n');
         expect(traced).toContain('retry-after=30');
         expect(traced).toContain('x-ratelimit-remaining=0');
         expect(traced).toContain('x-request-id=req-abc');
@@ -127,7 +129,7 @@ describe('AtlasApiClient error reporting', () => {
 
         await expect(new AtlasApiClient(session).listProjects()).rejects.toBeInstanceOf(AtlasApiError);
 
-        expect(String((ext.outputChannel.warn as jest.Mock).mock.calls[0][0])).toContain('body=<html>Bad Gateway');
+        expect(String((ext.outputChannel.warn as Mock).mock.calls[0][0])).toContain('body=<html>Bad Gateway');
     });
 });
 
@@ -201,7 +203,7 @@ describe('AtlasApiClient pagination', () => {
         const clusters = await new AtlasApiClient(session).listClusters('g1');
 
         expect(clusters[0].paused).toBe(true);
-        const traced = (ext.outputChannel.trace as jest.Mock).mock.calls.map((call) => String(call[0])).join('\n');
+        const traced = (ext.outputChannel.trace as Mock).mock.calls.map((call) => String(call[0])).join('\n');
         expect(traced).toContain(
             'cluster "PausedCluster": state=IDLE, paused=true, type=REPLICASET, provider=AWS, region=US_EAST_1, tier=M10, connectionString=available',
         );
@@ -239,7 +241,7 @@ describe('AtlasApiClient pagination', () => {
             .mockResolvedValueOnce(jsonResponse(page(1, 0, 1)));
 
         const refresher = {
-            tryRefreshIfPossible: jest
+            tryRefreshIfPossible: vi
                 .fn()
                 .mockResolvedValue({ type: 'serviceaccount', accessToken: 'token-2' } as const),
         };
@@ -257,7 +259,7 @@ describe('AtlasApiClient pagination', () => {
         // the failure take twice as long to surface.
         fetchMock.mockResolvedValueOnce(jsonResponse({ detail: 'IP address is not allowed' }, 403));
 
-        const refresher = { tryRefreshIfPossible: jest.fn() };
+        const refresher = { tryRefreshIfPossible: vi.fn() };
 
         await expect(new AtlasApiClient(session, refresher).listProjects()).rejects.toBeInstanceOf(AtlasApiError);
         expect(refresher.tryRefreshIfPossible).not.toHaveBeenCalled();
@@ -282,7 +284,7 @@ describe('AtlasApiClient API Key Digest authentication', () => {
     }
 
     beforeEach(() => {
-        (computeDigestHeader as jest.Mock).mockClear();
+        (computeDigestHeader as Mock).mockClear();
     });
 
     it('signs the full request-target including the query string, not just the path', async () => {
@@ -293,7 +295,7 @@ describe('AtlasApiClient API Key Digest authentication', () => {
 
         await new AtlasApiClient(apiKeySession).listProjects();
 
-        const digestUri = (computeDigestHeader as jest.Mock).mock.calls[0][1] as string;
+        const digestUri = (computeDigestHeader as Mock).mock.calls[0][1] as string;
         expect(digestUri).toBe('/api/atlas/v2/groups?itemsPerPage=500&pageNum=1');
     });
 
@@ -310,7 +312,7 @@ describe('AtlasApiClient API Key Digest authentication', () => {
         await client.listProjects();
 
         expect(fetchMock).toHaveBeenCalledTimes(3);
-        const nonceCounts = (computeDigestHeader as jest.Mock).mock.calls.map((call) => call[5] as number);
+        const nonceCounts = (computeDigestHeader as Mock).mock.calls.map((call) => call[5] as number);
         expect(nonceCounts).toEqual([1, 2]);
     });
 
@@ -327,7 +329,7 @@ describe('AtlasApiClient API Key Digest authentication', () => {
         await client.listProjects();
         await client.listProjects();
 
-        const nonceCounts = (computeDigestHeader as jest.Mock).mock.calls.map((call) => call[5] as number);
+        const nonceCounts = (computeDigestHeader as Mock).mock.calls.map((call) => call[5] as number);
         // 1 = first challenge answered; 2 = pre-emptive attempt on the second call; 1 = counter reset
         // after the re-challenge adopts the fresh nonce.
         expect(nonceCounts).toEqual([1, 2, 1]);

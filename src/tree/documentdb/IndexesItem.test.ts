@@ -3,6 +3,8 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+import { beforeEach, describe, expect, it, vi, type Mock } from 'vitest';
+
 import {
     ClustersClient,
     type CollectionItemModel,
@@ -13,12 +15,12 @@ import { type Experience } from '../../DocumentDBExperiences';
 import { type BaseClusterModel, type TreeCluster } from '../models/BaseClusterModel';
 import { compareIndexNames, IndexesItem } from './IndexesItem';
 
-jest.mock('@microsoft/vscode-azext-utils', () => ({
-    createContextValue: jest.fn((values: string[]) => values.join(';')),
+vi.mock('@microsoft/vscode-azext-utils', () => ({
+    createContextValue: vi.fn((values: string[]) => values.join(';')),
 }));
 
-const notifyChildrenChangedMock = jest.fn();
-jest.mock('../../extensionVariables', () => ({
+const notifyChildrenChangedMock = vi.fn();
+vi.mock('../../extensionVariables', () => ({
     ext: {
         state: {
             notifyChildrenChanged: (...args: unknown[]) => notifyChildrenChangedMock(...args),
@@ -26,15 +28,15 @@ jest.mock('../../extensionVariables', () => ({
     },
 }));
 
-jest.mock('../../utils/accumulatingTelemetry', () => ({
-    meterSilentCatch: jest.fn(),
+vi.mock('../../utils/accumulatingTelemetry', () => ({
+    meterSilentCatch: vi.fn(),
 }));
 
-jest.mock('../../documentdb/ClustersClient', () => ({
+vi.mock('../../documentdb/ClustersClient', () => ({
     ClustersClient: {
-        getClient: jest.fn(),
+        getClient: vi.fn(),
     },
-    getIndexExclusionReason: jest.fn(() => undefined),
+    getIndexExclusionReason: vi.fn(() => undefined),
 }));
 
 describe('compareIndexNames', () => {
@@ -109,17 +111,17 @@ describe('IndexesItem - async index loading', () => {
         { name: 'name_1', key: { name: 1 } } as unknown as IndexItemModel,
     ];
 
-    let listIndexesMock: jest.Mock;
-    let listSearchIndexesMock: jest.Mock;
+    let listIndexesMock: Mock;
+    let listSearchIndexesMock: Mock;
 
     beforeEach(() => {
-        jest.clearAllMocks();
+        vi.clearAllMocks();
         notifyChildrenChangedMock.mockReset();
 
-        listIndexesMock = jest.fn().mockResolvedValue([...sampleIndexes]);
-        listSearchIndexesMock = jest.fn().mockRejectedValue(new Error('not supported'));
+        listIndexesMock = vi.fn().mockResolvedValue([...sampleIndexes]);
+        listSearchIndexesMock = vi.fn().mockRejectedValue(new Error('not supported'));
 
-        (ClustersClient.getClient as jest.Mock).mockResolvedValue({
+        (ClustersClient.getClient as Mock).mockResolvedValue({
             listIndexes: listIndexesMock,
             listSearchIndexesForAtlas: listSearchIndexesMock,
         });

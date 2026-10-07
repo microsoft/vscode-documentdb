@@ -3,46 +3,48 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+
 import { type initWebviewTrpc as InitWebviewTrpc } from '@microsoft/vscode-ext-webview';
 
-const mockListProjects = jest.fn();
-const mockFetchServiceAccountToken = jest.fn();
-const mockGetAtlasCredential = jest.fn();
-const mockReadAtlasCredentialSecrets = jest.fn();
-const mockUpsertAtlasCredential = jest.fn();
-const mockReplaceAtlasCredentialSecrets = jest.fn();
+const mockListProjects = vi.fn();
+const mockFetchServiceAccountToken = vi.fn();
+const mockGetAtlasCredential = vi.fn();
+const mockReadAtlasCredentialSecrets = vi.fn();
+const mockUpsertAtlasCredential = vi.fn();
+const mockReplaceAtlasCredentialSecrets = vi.fn();
 
-jest.mock('vscode', () => ({
+vi.mock('vscode', () => ({
     l10n: {
-        t: jest.fn((message: string, ...args: string[]) =>
+        t: vi.fn((message: string, ...args: string[]) =>
             args.reduce<string>((result, value, index) => result.replace(`{${String(index)}}`, value), message),
         ),
     },
 }));
 
-jest.mock('@vscode/l10n', () => ({
-    t: jest.fn((message: string, ...args: string[]) =>
+vi.mock('@vscode/l10n', () => ({
+    t: vi.fn((message: string, ...args: string[]) =>
         args.reduce<string>((result, value, index) => result.replace(`{${String(index)}}`, value), message),
     ),
 }));
 
-jest.mock('../../../extensionVariables', () => ({
+vi.mock('../../../extensionVariables', () => ({
     ext: {
         outputChannel: {
-            error: jest.fn(),
-            warn: jest.fn(),
-            info: jest.fn(),
-            trace: jest.fn(),
-            show: jest.fn(),
+            error: vi.fn(),
+            warn: vi.fn(),
+            info: vi.fn(),
+            trace: vi.fn(),
+            show: vi.fn(),
         },
     },
 }));
 
-jest.mock('../../../utils/accumulatingTelemetry', () => ({
-    meterSilentCatch: jest.fn(),
+vi.mock('../../../utils/accumulatingTelemetry', () => ({
+    meterSilentCatch: vi.fn(),
 }));
 
-jest.mock('../../../plugins/service-atlas-mongodb/api/AtlasApiClient', () => {
+vi.mock('../../../plugins/service-atlas-mongodb/api/AtlasApiClient', () => {
     class AtlasApiErrorMock extends Error {
         constructor(
             message: string,
@@ -77,7 +79,7 @@ jest.mock('../../../plugins/service-atlas-mongodb/api/AtlasApiClient', () => {
     };
 });
 
-jest.mock('../../../plugins/service-atlas-mongodb/auth/AtlasServiceAccountClient', () => {
+vi.mock('../../../plugins/service-atlas-mongodb/auth/AtlasServiceAccountClient', () => {
     class AtlasTokenErrorMock extends Error {
         constructor(
             message: string,
@@ -94,15 +96,15 @@ jest.mock('../../../plugins/service-atlas-mongodb/auth/AtlasServiceAccountClient
     };
 });
 
-jest.mock('../../../plugins/service-atlas-mongodb/credentials/atlasCredentialStore', () => ({
+vi.mock('../../../plugins/service-atlas-mongodb/credentials/atlasCredentialStore', () => ({
     getAtlasCredential: (...args: unknown[]) => mockGetAtlasCredential(...args) as unknown,
     readAtlasCredentialSecrets: (...args: unknown[]) => mockReadAtlasCredentialSecrets(...args) as unknown,
     replaceAtlasCredentialSecrets: (...args: unknown[]) => mockReplaceAtlasCredentialSecrets(...args) as unknown,
     upsertAtlasCredential: (...args: unknown[]) => mockUpsertAtlasCredential(...args) as unknown,
 }));
 
-jest.mock('../../_integration/trpc', () => {
-    const { initWebviewTrpc } = jest.requireActual<{ initWebviewTrpc: typeof InitWebviewTrpc }>(
+vi.mock('../../_integration/trpc', async () => {
+    const { initWebviewTrpc } = await vi.importActual<{ initWebviewTrpc: typeof InitWebviewTrpc }>(
         '@microsoft/vscode-ext-webview',
     );
     const trpc = initWebviewTrpc();
@@ -129,9 +131,9 @@ function createContext(credentialId?: string): RouterContext & {
         webviewName: 'atlasCredentials',
         credentialId,
         credentialState: { credentialsStored: false },
-        onCredentialPersisted: jest.fn(),
-        onCancelled: jest.fn(),
-        onCredentialsStored: jest.fn(),
+        onCredentialPersisted: vi.fn(),
+        onCancelled: vi.fn(),
+        onCredentialsStored: vi.fn(),
         actionContext: {
             telemetry: { properties: {}, measurements: {} },
         },

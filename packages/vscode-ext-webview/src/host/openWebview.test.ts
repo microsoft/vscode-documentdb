@@ -3,16 +3,15 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-/** @jest-environment jsdom */
+import { describe, expect, it } from 'vitest';
 
-import { describe, expect, it } from '@jest/globals';
 import { setImmediate } from 'timers';
 import * as vscode from 'vscode';
-import { type BaseRouterContext } from '../shared/BaseRouterContext';
-import { initWebviewTrpc } from '../shared/initWebviewTrpc';
-import { type VsCodeLinkRequestMessage } from '../shared/wireProtocol';
-import { openWebview } from './openWebview';
-import { WebviewController } from './WebviewController';
+import { type BaseRouterContext } from '../shared/BaseRouterContext.js';
+import { initWebviewTrpc } from '../shared/initWebviewTrpc.js';
+import { type VsCodeLinkRequestMessage } from '../shared/wireProtocol.js';
+import { openWebview } from './openWebview.js';
+import { WebviewController } from './WebviewController.js';
 
 const sourceLayout = {
     bundled: { dir: 'dist', file: 'views.js' },

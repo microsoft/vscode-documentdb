@@ -3,21 +3,23 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+
 const globalStateBacking = new Map<string, unknown>();
 const secretStorageBacking = new Map<string, string>();
 
-jest.mock('vscode', () => ({
+vi.mock('vscode', () => ({
     ThemeIcon: class ThemeIcon {
         constructor(public readonly id: string) {}
     },
     l10n: {
-        t: jest.fn((message: string, ...args: string[]) =>
+        t: vi.fn((message: string, ...args: string[]) =>
             args.reduce<string>((m, value, index) => m.replace(`{${String(index)}}`, value), message),
         ),
     },
 }));
 
-jest.mock('../../../extensionVariables', () => ({
+vi.mock('../../../extensionVariables', () => ({
     ext: {
         context: {
             extension: { id: 'test-extension' },
@@ -206,7 +208,7 @@ describe('tryAddFileSource', () => {
 
         // Inject a one-shot failure on the FIRST globalState.update call so
         // the original leader's pushItem rejects. Subsequent calls succeed.
-        // We can simulate this without going through `jest.spyOn` on the
+        // We can simulate this without going through `vi.spyOn` on the
         // mocked module because the mock's `update` writes through to the
         // shared `globalStateBacking` Map — temporarily monkey-patching
         // `globalStateBacking.set` is the simplest one-shot fault injector.

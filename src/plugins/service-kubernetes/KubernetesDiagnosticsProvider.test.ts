@@ -3,6 +3,8 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+import { beforeEach, describe, expect, it, vi, type Mock } from 'vitest';
+
 import {
     KubernetesDiagnosticsProvider,
     rememberKubernetesCluster,
@@ -10,11 +12,11 @@ import {
 } from './KubernetesDiagnosticsProvider';
 import { type KubernetesPortForwardMetadata } from './portForwardMetadata';
 
-const hasTunnel = jest.fn();
+const hasTunnel = vi.fn();
 
-jest.mock('./portForwardTunnel', () => ({
+vi.mock('./portForwardTunnel', () => ({
     PortForwardTunnelManager: {
-        getInstance: (): { hasTunnel: jest.Mock } => ({ hasTunnel }),
+        getInstance: (): { hasTunnel: Mock } => ({ hasTunnel }),
     },
 }));
 

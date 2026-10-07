@@ -3,47 +3,49 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+
 import { type IActionContext } from '@microsoft/vscode-azext-utils';
 
-const mockStopAll = jest.fn();
+const mockStopAll = vi.fn();
 
-jest.mock('vscode', () => ({
+vi.mock('vscode', () => ({
     ThemeIcon: class ThemeIcon {
         constructor(public readonly id: string) {}
     },
     l10n: {
-        t: jest.fn((message: string) => message),
+        t: vi.fn((message: string) => message),
     },
 }));
 
-jest.mock('../../extensionVariables', () => ({
+vi.mock('../../extensionVariables', () => ({
     ext: {
         context: {
             globalState: {
-                get: jest.fn().mockReturnValue([]),
-                update: jest.fn(),
+                get: vi.fn().mockReturnValue([]),
+                update: vi.fn(),
             },
             extensionUri: {},
         },
         discoveryBranchDataProvider: {
-            refresh: jest.fn(),
-            resetNodeErrorState: jest.fn(),
+            refresh: vi.fn(),
+            resetNodeErrorState: vi.fn(),
         },
         outputChannel: {
-            appendLine: jest.fn(),
-            error: jest.fn(),
-            trace: jest.fn(),
-            warn: jest.fn(),
+            appendLine: vi.fn(),
+            error: vi.fn(),
+            trace: vi.fn(),
+            warn: vi.fn(),
         },
         secretStorage: {
-            get: jest.fn(),
-            store: jest.fn(),
-            delete: jest.fn(),
+            get: vi.fn(),
+            store: vi.fn(),
+            delete: vi.fn(),
         },
     },
 }));
 
-jest.mock('@microsoft/vscode-azext-utils', () => ({
+vi.mock('@microsoft/vscode-azext-utils', () => ({
     createContextValue: (parts: string[]) => parts.join(';'),
     AzureWizardPromptStep: class AzureWizardPromptStep<T> {
         public async prompt(_context: T): Promise<void> {}
@@ -60,13 +62,13 @@ jest.mock('@microsoft/vscode-azext-utils', () => ({
     UserCancelledError: class UserCancelledError extends Error {},
 }));
 
-jest.mock('./sources/migrationV2', () => ({
-    ensureMigration: jest.fn(async () => undefined),
+vi.mock('./sources/migrationV2', () => ({
+    ensureMigration: vi.fn(async () => undefined),
 }));
 
-jest.mock('./portForwardTunnel', () => ({
+vi.mock('./portForwardTunnel', () => ({
     PortForwardTunnelManager: {
-        getInstance: jest.fn(() => ({
+        getInstance: vi.fn(() => ({
             stopAll: mockStopAll,
         })),
     },
@@ -80,7 +82,7 @@ describe('KubernetesDiscoveryProvider (v2)', () => {
     let provider: KubernetesDiscoveryProvider;
 
     beforeEach(() => {
-        jest.clearAllMocks();
+        vi.clearAllMocks();
         provider = new KubernetesDiscoveryProvider();
     });
 

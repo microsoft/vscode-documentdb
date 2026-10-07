@@ -3,6 +3,8 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+import { describe, expect, it, vi } from 'vitest';
+
 import {
     getDockerStartCapability,
     startDockerProvider,
@@ -149,7 +151,7 @@ describe('startDockerProvider', () => {
     });
 
     it('revalidates application availability immediately before launch', async () => {
-        const launchDetached = jest.fn().mockResolvedValue(true);
+        const launchDetached = vi.fn().mockResolvedValue(true);
 
         await expect(
             startDockerProvider(
@@ -188,7 +190,7 @@ describe('startDockerProvider', () => {
         [0, 'started'],
         [1, 'failed'],
     ] as const)('maps a user-service start exit code of %s to %s', async (exitCode, expected) => {
-        const runProcess = jest
+        const runProcess = vi
             .fn()
             .mockResolvedValueOnce({ exitCode: 0, stdout: 'loaded\n' })
             .mockResolvedValueOnce({ exitCode, stdout: '' });

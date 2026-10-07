@@ -3,20 +3,22 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+
 import { UserCancelledError, type IActionContext } from '@microsoft/vscode-azext-utils';
 
-const mockShowInputBox = jest.fn();
-const mockAliasFor = jest.fn(async (): Promise<string | undefined> => undefined);
-const mockSetAlias = jest.fn(async (): Promise<void> => undefined);
-const mockReadAliases = jest.fn(async (): Promise<unknown[]> => []);
-const mockRefreshKubernetesRoot = jest.fn();
+const mockShowInputBox = vi.fn();
+const mockAliasFor = vi.fn(async (): Promise<string | undefined> => undefined);
+const mockSetAlias = vi.fn(async (): Promise<void> => undefined);
+const mockReadAliases = vi.fn(async (): Promise<unknown[]> => []);
+const mockRefreshKubernetesRoot = vi.fn();
 
-jest.mock('vscode', () => ({
+vi.mock('vscode', () => ({
     ThemeIcon: class ThemeIcon {
         constructor(public readonly id: string) {}
     },
     l10n: {
-        t: jest.fn((message: string, ...values: string[]) =>
+        t: vi.fn((message: string, ...values: string[]) =>
             values.reduce<string>((acc, v, i) => acc.replace(`{${String(i)}}`, v), message),
         ),
     },
@@ -25,7 +27,7 @@ jest.mock('vscode', () => ({
     },
 }));
 
-jest.mock('@microsoft/vscode-azext-utils', () => {
+vi.mock('@microsoft/vscode-azext-utils', () => {
     class UserCancelledError extends Error {
         constructor() {
             super('User cancelled');
@@ -35,13 +37,13 @@ jest.mock('@microsoft/vscode-azext-utils', () => {
     return { UserCancelledError };
 });
 
-jest.mock('../sources/aliasStore', () => ({
+vi.mock('../sources/aliasStore', () => ({
     aliasFor: (...args: unknown[]) => mockAliasFor(...(args as [])),
     setAlias: (...args: unknown[]) => mockSetAlias(...(args as [])),
     readAliases: (...args: unknown[]) => mockReadAliases(...(args as [])),
 }));
 
-jest.mock('./refreshKubernetesRoot', () => ({
+vi.mock('./refreshKubernetesRoot', () => ({
     refreshKubernetesRoot: () => mockRefreshKubernetesRoot(),
 }));
 

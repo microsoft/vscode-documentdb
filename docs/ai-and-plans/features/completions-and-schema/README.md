@@ -56,6 +56,10 @@ Sibling areas: [query-playground](../query-playground/README.md),
 - **Schema is shared, not per-tab.** `SchemaStore` accumulates documents from the Collection View,
   the Playground, and the Shell against the same key. One surface feeding bad data degrades all of
   them.
+- **Schema teardown precedes output-channel disposal.** Activation registers the store with
+  `SchemaStore.registerForDisposal`, which keeps its logging dependency alive through final
+  statistics reporting and cache/timer cleanup. A closed-channel exception must not interrupt
+  disposal.
 - **`bson` is imported statically, never via `await import('bson')`.** `bson` ships split
   `import`/`require` export conditions, so a dynamic import loads a second copy of the package and
   every `instanceof` check in `SchemaAnalyzer` silently fails. The same applies to anything that

@@ -3,7 +3,9 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-jest.mock('vscode', () => ({
+import { describe, expect, it, vi } from 'vitest';
+
+vi.mock('vscode', () => ({
     ThemeIcon: class ThemeIcon {
         constructor(public readonly id: string) {}
     },
@@ -16,18 +18,18 @@ jest.mock('vscode', () => ({
     },
     TreeItemCollapsibleState: { None: 0, Collapsed: 1, Expanded: 2 },
     l10n: {
-        t: jest.fn((message: string, ...args: string[]) =>
+        t: vi.fn((message: string, ...args: string[]) =>
             args.reduce<string>((acc, v, i) => acc.replace(`{${String(i)}}`, v), message),
         ),
     },
     window: {
-        showWarningMessage: jest.fn(),
+        showWarningMessage: vi.fn(),
     },
 }));
 
-jest.mock('@microsoft/vscode-azext-utils', () => ({
+vi.mock('@microsoft/vscode-azext-utils', () => ({
     createContextValue: (parts: string[]) => parts.join(';'),
-    callWithTelemetryAndErrorHandling: jest.fn(
+    callWithTelemetryAndErrorHandling: vi.fn(
         async (_eventName: string, callback: (context: unknown) => Promise<unknown>) =>
             await callback({
                 telemetry: { properties: {}, measurements: {} },
@@ -37,29 +39,29 @@ jest.mock('@microsoft/vscode-azext-utils', () => ({
     ),
 }));
 
-jest.mock('../../../extensionVariables', () => ({
+vi.mock('../../../extensionVariables', () => ({
     ext: {
         outputChannel: {
-            error: jest.fn(),
-            warn: jest.fn(),
-            appendLine: jest.fn(),
+            error: vi.fn(),
+            warn: vi.fn(),
+            appendLine: vi.fn(),
         },
     },
 }));
 
-jest.mock('../kubernetesClient', () => ({
-    describeDefaultKubeconfigPath: jest.fn(() => '~/.kube/config'),
-    loadConfiguredKubeConfig: jest.fn(),
-    getContexts: jest.fn(() => []),
+vi.mock('../kubernetesClient', () => ({
+    describeDefaultKubeconfigPath: vi.fn(() => '~/.kube/config'),
+    loadConfiguredKubeConfig: vi.fn(),
+    getContexts: vi.fn(() => []),
 }));
 
-jest.mock('../sources/aliasStore', () => ({
-    aliasMapForSource: jest.fn(async () => new Map()),
-    pruneAliasesForSource: jest.fn(async () => undefined),
+vi.mock('../sources/aliasStore', () => ({
+    aliasMapForSource: vi.fn(async () => new Map()),
+    pruneAliasesForSource: vi.fn(async () => undefined),
 }));
 
-jest.mock('../../../tree/api/createGenericElementWithContext', () => ({
-    createGenericElementWithContext: jest.fn((opts: Record<string, unknown>) => opts),
+vi.mock('../../../tree/api/createGenericElementWithContext', () => ({
+    createGenericElementWithContext: vi.fn((opts: Record<string, unknown>) => opts),
 }));
 
 import type * as vscode from 'vscode';

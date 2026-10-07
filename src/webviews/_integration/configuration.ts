@@ -49,7 +49,7 @@ export const WEBVIEW_CONFIG = {
     },
     /**
      * Layout describing where the extension's webview JavaScript lives on
-     * disk. `bundled` is used when the extension runs from its webpack
+     * disk. `bundled` is used when the extension runs from its bundled
      * output (production: `dist/views.js`). `dev` is used when running
      * from `tsc` output during development (`out/src/webviews/index.js`).
      * These paths are joined with `extensionPath` by the framework at
@@ -60,7 +60,7 @@ export const WEBVIEW_CONFIG = {
         dev: { dir: 'out/src/webviews', file: 'index.js' },
     },
     /**
-     * URL of the local Vite/webpack dev server used when running the
+     * URL of the local Vite dev server used when running the
      * extension in development mode.
      */
     devServerHost: 'http://localhost:18080',

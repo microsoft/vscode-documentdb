@@ -3,6 +3,8 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+import { beforeEach, describe, expect, it, vi, type Mock } from 'vitest';
+
 import { type IActionContext } from '@microsoft/vscode-azext-utils';
 import * as vscode from 'vscode';
 import { type KubeContextInfo } from '../kubernetesClient';
@@ -13,28 +15,28 @@ const telemetryContextMock = {
     telemetry: { properties: {}, measurements: {} },
     errorHandling: { issueProperties: {} },
     ui: {
-        showWarningMessage: jest.fn(),
-        onDidFinishPrompt: jest.fn(),
-        showQuickPick: jest.fn(),
-        showInputBox: jest.fn(),
-        showOpenDialog: jest.fn(),
-        showWorkspaceFolderPick: jest.fn(),
+        showWarningMessage: vi.fn(),
+        onDidFinishPrompt: vi.fn(),
+        showQuickPick: vi.fn(),
+        showInputBox: vi.fn(),
+        showOpenDialog: vi.fn(),
+        showWorkspaceFolderPick: vi.fn(),
     },
     valuesToMask: [],
 };
 
 // --- Mock @microsoft/vscode-azext-utils ---
-jest.mock('@microsoft/vscode-azext-utils', () => ({
-    callWithTelemetryAndErrorHandling: jest.fn(
+vi.mock('@microsoft/vscode-azext-utils', () => ({
+    callWithTelemetryAndErrorHandling: vi.fn(
         async (_eventName: string, callback: (context: IActionContext) => Promise<unknown>) => {
             return await callback(telemetryContextMock as unknown as IActionContext);
         },
     ),
-    createContextValue: jest.fn((values: string[]) => values.join(';')),
+    createContextValue: vi.fn((values: string[]) => values.join(';')),
 }));
 
 // --- Mock vscode ---
-jest.mock('vscode', () => ({
+vi.mock('vscode', () => ({
     TreeItemCollapsibleState: {
         None: 0,
         Collapsed: 1,
@@ -47,50 +49,50 @@ jest.mock('vscode', () => ({
         constructor(public readonly value: string) {}
     },
     l10n: {
-        t: jest.fn((...args: unknown[]) => {
+        t: vi.fn((...args: unknown[]) => {
             // Simple template replacement for l10n.t('text {0}', val)
             const template = args[0] as string;
             return template.replace(/\{(\d+)\}/g, (_match, index) => String(args[Number(index) + 1]));
         }),
     },
     workspace: {
-        getConfiguration: jest.fn(() => ({
-            get: jest.fn((_key: string, defaultValue?: unknown) => defaultValue),
+        getConfiguration: vi.fn(() => ({
+            get: vi.fn((_key: string, defaultValue?: unknown) => defaultValue),
         })),
     },
     window: {
-        showErrorMessage: jest.fn(),
+        showErrorMessage: vi.fn(),
     },
 }));
 
 // --- Mock extensionVariables ---
 // Default implementation respects the defaultValue parameter (2nd arg) so that
 // globalState.get(KEY, {}) returns {} rather than undefined when no specific mock is set.
-const mockGlobalStateGet = jest.fn((_key: string, defaultValue?: unknown) => defaultValue);
-const mockOutputChannelError = jest.fn();
-jest.mock('../../../extensionVariables', () => ({
+const mockGlobalStateGet = vi.fn((_key: string, defaultValue?: unknown) => defaultValue);
+const mockOutputChannelError = vi.fn();
+vi.mock('../../../extensionVariables', () => ({
     ext: {
         context: {
             globalState: {
                 get: (key: string, defaultValue?: unknown) => mockGlobalStateGet(key, defaultValue),
-                update: jest.fn(() => Promise.resolve()),
+                update: vi.fn(() => Promise.resolve()),
             },
         },
         outputChannel: {
-            appendLine: jest.fn(),
+            appendLine: vi.fn(),
             error: (...args: unknown[]) => mockOutputChannelError(...args),
-            trace: jest.fn(),
-            warn: jest.fn(),
+            trace: vi.fn(),
+            warn: vi.fn(),
         },
     },
 }));
 
 // --- Mock kubernetesClient functions ---
-const mockLoadConfiguredKubeConfig = jest.fn();
-const mockCreateCoreApi = jest.fn();
-const mockListNamespaces = jest.fn();
-const mockListDocumentDBServices = jest.fn();
-jest.mock('../kubernetesClient', () => ({
+const mockLoadConfiguredKubeConfig = vi.fn();
+const mockCreateCoreApi = vi.fn();
+const mockListNamespaces = vi.fn();
+const mockListDocumentDBServices = vi.fn();
+vi.mock('../kubernetesClient', () => ({
     loadConfiguredKubeConfig: (...args: unknown[]) => mockLoadConfiguredKubeConfig(...args),
     createCoreApi: (...args: unknown[]) => mockCreateCoreApi(...args),
     listNamespaces: (...args: unknown[]) => mockListNamespaces(...args),
@@ -98,8 +100,8 @@ jest.mock('../kubernetesClient', () => ({
 }));
 
 // --- Mock createGenericElementWithContext ---
-jest.mock('../../../tree/api/createGenericElementWithContext', () => ({
-    createGenericElementWithContext: jest.fn((opts: Record<string, unknown>) => ({
+vi.mock('../../../tree/api/createGenericElementWithContext', () => ({
+    createGenericElementWithContext: vi.fn((opts: Record<string, unknown>) => ({
         id: opts.id,
         label: opts.label,
         contextValue: opts.contextValue,
@@ -118,7 +120,7 @@ const mockResourceItemInstances: Array<{
     parentId: string;
     options?: { showNamespaceInDescription?: boolean };
 }> = [];
-jest.mock('./documentdb/KubernetesResourceItem', () => ({
+vi.mock('./documentdb/KubernetesResourceItem', () => ({
     KubernetesResourceItem: class {
         constructor(
             public readonly journeyCorrelationId: string,
@@ -173,7 +175,7 @@ describe('KubernetesContextItem', () => {
     };
 
     beforeEach(() => {
-        jest.clearAllMocks();
+        vi.clearAllMocks();
         // Reset telemetry context for each test
         telemetryContextMock.telemetry = { properties: {}, measurements: {} };
         // Default: return the defaultValue parameter (2nd arg) so get(KEY, {}) returns {}
@@ -307,7 +309,7 @@ describe('KubernetesContextItem', () => {
         });
 
         it('should return retry node and show a modal when kubeconfig load fails', async () => {
-            (vscode.window.showErrorMessage as jest.Mock).mockClear();
+            (vscode.window.showErrorMessage as Mock).mockClear();
             mockLoadConfiguredKubeConfig.mockRejectedValue(new Error('ENOENT: no such file or directory'));
 
             const item = new KubernetesContextItem('parent', 'default', baseContextInfo, 'corr-1');
@@ -408,7 +410,7 @@ describe('KubernetesContextItem', () => {
         });
 
         it('should return retry node and show a modal when createCoreApi fails', async () => {
-            (vscode.window.showErrorMessage as jest.Mock).mockClear();
+            (vscode.window.showErrorMessage as Mock).mockClear();
             mockCreateCoreApi.mockRejectedValue(new Error('context not found'));
 
             const item = new KubernetesContextItem('parent', 'default', baseContextInfo, 'corr-1');

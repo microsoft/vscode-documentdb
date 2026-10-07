@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.1.1
+
+- Published sourcemaps embed their sources (`inlineSources`), so tools that load them, such as Vitest, no longer warn about missing source files ([#926](https://github.com/microsoft/vscode-documentdb/issues/926)).
+- Documented how to load the package in unit tests under Node.js.
+
 ## 1.1.0
 
 ### Fluent theme tracking

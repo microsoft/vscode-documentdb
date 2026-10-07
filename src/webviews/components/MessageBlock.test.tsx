@@ -3,6 +3,10 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+// @vitest-environment jsdom
+
+import { afterEach, describe, expect, it } from 'vitest';
+
 import { act, type ReactNode } from 'react';
 import { createRoot, type Root } from 'react-dom/client'; // eslint-disable-line import/no-internal-modules
 import { MessageBlock } from './MessageBlock';

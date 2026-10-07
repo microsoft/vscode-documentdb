@@ -3,6 +3,8 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+import { beforeAll, describe, expect, test } from 'vitest';
+
 /**
  * TDD Behavior Tests — HoverProvider + Edge Cases (WI-4)
  *
@@ -19,6 +21,7 @@
 
 import { getAllCompletions, loadOperators } from '@documentdb-js/operator-registry';
 import { getPlaygroundHoverContent } from '../PlaygroundHoverProvider';
+import { detectMethodArgContext, detectPlaygroundContext } from '../playgroundContextDetector';
 
 // Ensure operators are loaded before tests
 beforeAll(() => {
@@ -165,9 +168,7 @@ describe('TDD: Completion Edge Cases', () => {
     // We test context detection for edge cases (E1–E5 from the plan)
     // Context detection is a pure function so it can be tested without VS Code
 
-    // Using the context detector directly
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const { detectPlaygroundContext, detectMethodArgContext } = require('../playgroundContextDetector');
+    // Using the context detector directly (imported at the top of the file)
 
     describe('E1: After comment', () => {
         test('cursor after comment line → top-level', () => {

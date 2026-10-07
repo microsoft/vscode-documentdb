@@ -25,7 +25,7 @@
         "dbaeumer.vscode-eslint",
         "mike-lischke.vscode-antlr4",
         "amodio.tsl-problem-matcher",
-        "Orta.vscode-jest",
+        "vitest.explorer",
         "esbenp.prettier-vscode"
       ],
       "settings": {

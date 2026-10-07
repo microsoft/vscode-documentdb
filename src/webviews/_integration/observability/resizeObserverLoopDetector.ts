@@ -6,15 +6,11 @@
 /**
  * Dev-only detector for a **genuine** ResizeObserver feedback loop.
  *
- * The webview's Content Security Policy forbids `unsafe-eval`, so we cannot use
- * webpack-dev-server's per-error `runtimeErrors` *function* to filter only the
- * benign "ResizeObserver loop …" warning out of the overlay (the client rebuilds
- * such a function with `new Function(...)`, which the CSP blocks). Instead the
- * runtime-error overlay is disabled wholesale in `webpack.config.views.js`. That
- * benign warning is non-fatal anyway — the spec defers, rather than drops, the
- * pending notifications.
+ * Vite's overlay reports build errors, not runtime ResizeObserver warnings. A
+ * benign "ResizeObserver loop ..." warning is non-fatal: the spec defers, rather
+ * than drops, the pending notifications.
  *
- * With the runtime overlay off, we lose the overlay's cue for a *real*,
+ * Without a runtime overlay, we lack an overlay cue for a *real*,
  * continuous loop (a per-frame resize that pegs layout/CPU) too — a blip and a
  * runaway loop emit the identical message; only the **rate** differs. This
  * restores a signal for the real thing: it listens to `window` 'error' events

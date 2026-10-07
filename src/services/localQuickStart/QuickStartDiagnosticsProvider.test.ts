@@ -3,6 +3,8 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+import { afterEach, describe, expect, it, vi } from 'vitest';
+
 import { QuickStartDiagnosticsProvider } from './QuickStartDiagnosticsProvider';
 import { QuickStartService } from './QuickStartService';
 import { InstanceState, type InstanceStatus } from './quickStartTypes';
@@ -20,12 +22,12 @@ function status(clusterId: string, alias = 'default'): InstanceStatus {
 
 describe('QuickStartDiagnosticsProvider', () => {
     afterEach(() => {
-        jest.restoreAllMocks();
+        vi.restoreAllMocks();
     });
 
     it('stays silent for a cluster it does not manage, without probing Docker', async () => {
-        jest.spyOn(QuickStartService, 'listStatuses').mockReturnValue([status('quickstart-cluster')]);
-        const preflight = jest.spyOn(QuickStartService, 'inspectManagedInstance');
+        vi.spyOn(QuickStartService, 'listStatuses').mockReturnValue([status('quickstart-cluster')]);
+        const preflight = vi.spyOn(QuickStartService, 'inspectManagedInstance');
 
         const result = await new QuickStartDiagnosticsProvider().explain({
             clusterId: 'some-other-cluster',
@@ -43,8 +45,8 @@ describe('QuickStartDiagnosticsProvider', () => {
         ['unavailable', 'cannot reach DocumentDB Local'],
         ['dockerUnreachable', 'Docker does not appear to be running'],
     ] as const)('explains a %s container', async (verdict, expected) => {
-        jest.spyOn(QuickStartService, 'listStatuses').mockReturnValue([status('quickstart-cluster')]);
-        jest.spyOn(QuickStartService, 'inspectManagedInstance').mockResolvedValue(verdict);
+        vi.spyOn(QuickStartService, 'listStatuses').mockReturnValue([status('quickstart-cluster')]);
+        vi.spyOn(QuickStartService, 'inspectManagedInstance').mockResolvedValue(verdict);
 
         const result = await new QuickStartDiagnosticsProvider().explain({
             clusterId: 'quickstart-cluster',
@@ -55,8 +57,8 @@ describe('QuickStartDiagnosticsProvider', () => {
     });
 
     it.each(['ready', 'busy'] as const)('stays silent when the container is %s', async (verdict) => {
-        jest.spyOn(QuickStartService, 'listStatuses').mockReturnValue([status('quickstart-cluster')]);
-        jest.spyOn(QuickStartService, 'inspectManagedInstance').mockResolvedValue(verdict);
+        vi.spyOn(QuickStartService, 'listStatuses').mockReturnValue([status('quickstart-cluster')]);
+        vi.spyOn(QuickStartService, 'inspectManagedInstance').mockResolvedValue(verdict);
 
         await expect(
             new QuickStartDiagnosticsProvider().explain({
@@ -67,9 +69,9 @@ describe('QuickStartDiagnosticsProvider', () => {
     });
 
     it('uses the read-only probe, so it never corrects state or shows a warning', async () => {
-        jest.spyOn(QuickStartService, 'listStatuses').mockReturnValue([status('quickstart-cluster')]);
-        const readOnly = jest.spyOn(QuickStartService, 'inspectManagedInstance').mockResolvedValue('foreign');
-        const preflight = jest.spyOn(QuickStartService, 'prepareForConnection');
+        vi.spyOn(QuickStartService, 'listStatuses').mockReturnValue([status('quickstart-cluster')]);
+        const readOnly = vi.spyOn(QuickStartService, 'inspectManagedInstance').mockResolvedValue('foreign');
+        const preflight = vi.spyOn(QuickStartService, 'prepareForConnection');
 
         await new QuickStartDiagnosticsProvider().explain({ clusterId: 'quickstart-cluster', error: new Error('x') });
 
@@ -78,8 +80,8 @@ describe('QuickStartDiagnosticsProvider', () => {
     });
 
     it('re-checks on every failure so a container the user just started is reported as running', async () => {
-        jest.spyOn(QuickStartService, 'listStatuses').mockReturnValue([status('quickstart-cluster')]);
-        const preflight = jest
+        vi.spyOn(QuickStartService, 'listStatuses').mockReturnValue([status('quickstart-cluster')]);
+        const preflight = vi
             .spyOn(QuickStartService, 'inspectManagedInstance')
             .mockResolvedValueOnce('stopped')
             .mockResolvedValueOnce('ready');

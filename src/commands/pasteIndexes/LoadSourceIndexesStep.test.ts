@@ -3,6 +3,9 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+
+import type * as ClustersClientModule from '../../documentdb/ClustersClient';
 import { ClustersClient } from '../../documentdb/ClustersClient';
 import { CredentialCache } from '../../documentdb/CredentialCache';
 import { CopyPasteBufferService, type CopiedIndexScope } from '../../services/CopyPasteBufferService';
@@ -10,21 +13,21 @@ import { type CollectionIndexCopier } from '../../services/taskService/data-api/
 import { LoadSourceIndexesStep } from './LoadSourceIndexesStep';
 import { type PasteIndexesWizardContext } from './PasteIndexesWizardContext';
 
-jest.mock('../../documentdb/ClustersClient', () => {
-    const actual = jest.requireActual('../../documentdb/ClustersClient');
-    return { ...actual, ClustersClient: { getClient: jest.fn() } };
+vi.mock('../../documentdb/ClustersClient', async () => {
+    const actual = await vi.importActual<typeof ClustersClientModule>('../../documentdb/ClustersClient');
+    return { ...actual, ClustersClient: { getClient: vi.fn() } };
 });
 
-jest.mock('../../documentdb/CredentialCache', () => ({
-    CredentialCache: { hasCredentials: jest.fn() },
+vi.mock('../../documentdb/CredentialCache', () => ({
+    CredentialCache: { hasCredentials: vi.fn() },
 }));
 
-jest.mock('../../services/CopyPasteBufferService', () => ({
-    CopyPasteBufferService: { clearIndexes: jest.fn().mockResolvedValue(undefined) },
+vi.mock('../../services/CopyPasteBufferService', () => ({
+    CopyPasteBufferService: { clearIndexes: vi.fn().mockResolvedValue(undefined) },
 }));
 
-jest.mock('../../extensionVariables', () => ({
-    ext: { outputChannel: { error: jest.fn() } },
+vi.mock('../../extensionVariables', () => ({
+    ext: { outputChannel: { error: vi.fn() } },
 }));
 
 function createContext(scope: CopiedIndexScope, indexCopier: CollectionIndexCopier): PasteIndexesWizardContext {
@@ -45,19 +48,19 @@ function createContext(scope: CopiedIndexScope, indexCopier: CollectionIndexCopi
         uniqueIndexNames: [],
         ttlIndexNames: [],
         telemetry: { properties: {}, measurements: {} },
-        ui: { showQuickPick: jest.fn().mockImplementation(async (items: Promise<never>) => items) },
+        ui: { showQuickPick: vi.fn().mockImplementation(async (items: Promise<never>) => items) },
     } as unknown as PasteIndexesWizardContext;
 }
 
 describe('LoadSourceIndexesStep', () => {
-    const listIndexes = jest.fn();
-    const listSearchIndexesForAtlas = jest.fn();
+    const listIndexes = vi.fn();
+    const listSearchIndexesForAtlas = vi.fn();
 
     beforeEach(() => {
-        jest.clearAllMocks();
-        jest.mocked(CredentialCache.hasCredentials).mockReturnValue(true);
-        jest.mocked(ClustersClient.getClient).mockResolvedValue({
-            listCollections: jest.fn().mockResolvedValue([{ name: 'sourceCollection' }]),
+        vi.clearAllMocks();
+        vi.mocked(CredentialCache.hasCredentials).mockReturnValue(true);
+        vi.mocked(ClustersClient.getClient).mockResolvedValue({
+            listCollections: vi.fn().mockResolvedValue([{ name: 'sourceCollection' }]),
             listIndexes,
             listSearchIndexesForAtlas,
         } as unknown as ClustersClient);
@@ -69,7 +72,7 @@ describe('LoadSourceIndexesStep', () => {
     });
 
     it('classifies the full parent catalog and scopes copier summary arguments', async () => {
-        const getSourceIndexSummary = jest.fn().mockResolvedValue({
+        const getSourceIndexSummary = vi.fn().mockResolvedValue({
             count: 2,
             uniqueIndexNames: ['email_1'],
             ttlIndexNames: [],
@@ -103,9 +106,7 @@ describe('LoadSourceIndexesStep', () => {
 
     it('retains ordinary counts and _id exclusion when the advisory search read fails', async () => {
         listSearchIndexesForAtlas.mockRejectedValue(new Error('unsupported'));
-        const getSourceIndexSummary = jest
-            .fn()
-            .mockResolvedValue({ count: 2, uniqueIndexNames: [], ttlIndexNames: [] });
+        const getSourceIndexSummary = vi.fn().mockResolvedValue({ count: 2, uniqueIndexNames: [], ttlIndexNames: [] });
         const context = createContext({ kind: 'allIndexes' }, {
             getSourceIndexSummary,
         } as unknown as CollectionIndexCopier);
@@ -119,7 +120,7 @@ describe('LoadSourceIndexesStep', () => {
 
     it('reports a keyless selected index as unsupported and clears stale state', async () => {
         const context = createContext({ kind: 'index', indexName: 'search' }, {
-            getSourceIndexSummary: jest.fn(),
+            getSourceIndexSummary: vi.fn(),
         } as unknown as CollectionIndexCopier);
 
         await expect(new LoadSourceIndexesStep().prompt(context)).rejects.toThrow(
@@ -129,7 +130,7 @@ describe('LoadSourceIndexesStep', () => {
     });
 
     it('passes one validated selected name to the summary', async () => {
-        const getSourceIndexSummary = jest.fn().mockResolvedValue({
+        const getSourceIndexSummary = vi.fn().mockResolvedValue({
             count: 2,
             uniqueIndexNames: ['email_1'],
             ttlIndexNames: [],
@@ -153,7 +154,7 @@ describe('LoadSourceIndexesStep', () => {
             { name: 'email_1', type: 'traditional', key: { email: 1 }, unique: true },
             { name: 'region_1', type: 'traditional', key: { region: 1 } },
         ]);
-        const getSourceIndexSummary = jest.fn().mockResolvedValue({
+        const getSourceIndexSummary = vi.fn().mockResolvedValue({
             count: 3,
             uniqueIndexNames: ['email_1'],
             ttlIndexNames: [],
@@ -173,7 +174,7 @@ describe('LoadSourceIndexesStep', () => {
 
     it('clears a subset when any selected index is missing', async () => {
         const context = createContext({ kind: 'indexes', indexNames: ['email_1', 'missing_1'] }, {
-            getSourceIndexSummary: jest.fn(),
+            getSourceIndexSummary: vi.fn(),
         } as unknown as CollectionIndexCopier);
 
         await expect(new LoadSourceIndexesStep().prompt(context)).rejects.toThrow('"missing_1"');
@@ -182,7 +183,7 @@ describe('LoadSourceIndexesStep', () => {
 
     it('reports a deleted selected index as missing and clears stale state', async () => {
         const context = createContext({ kind: 'index', indexName: 'missing' }, {
-            getSourceIndexSummary: jest.fn(),
+            getSourceIndexSummary: vi.fn(),
         } as unknown as CollectionIndexCopier);
 
         await expect(new LoadSourceIndexesStep().prompt(context)).rejects.toThrow('index "missing" no longer exists');
@@ -190,11 +191,11 @@ describe('LoadSourceIndexesStep', () => {
     });
 
     it('clears stale state when the source collection no longer exists', async () => {
-        jest.mocked(ClustersClient.getClient).mockResolvedValue({
-            listCollections: jest.fn().mockResolvedValue([]),
+        vi.mocked(ClustersClient.getClient).mockResolvedValue({
+            listCollections: vi.fn().mockResolvedValue([]),
         } as unknown as ClustersClient);
         const context = createContext({ kind: 'allIndexes' }, {
-            getSourceIndexSummary: jest.fn(),
+            getSourceIndexSummary: vi.fn(),
         } as unknown as CollectionIndexCopier);
 
         await expect(new LoadSourceIndexesStep().prompt(context)).rejects.toThrow('source collection');

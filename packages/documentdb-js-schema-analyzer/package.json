@@ -1,9 +1,17 @@
 {
   "name": "@documentdb-js/schema-analyzer",
-  "version": "1.0.0",
+  "version": "2.0.0",
   "description": "Incremental JSON Schema analyzer for DocumentDB API / MongoDB API documents with statistical extensions",
+  "type": "module",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./package.json": "./package.json"
+  },
   "files": [
     "dist",
     "CHANGELOG.md"
@@ -11,7 +19,7 @@
   "scripts": {
     "build": "tsc -p .",
     "clean": "rimraf dist tsconfig.tsbuildinfo",
-    "test": "jest --config jest.config.js"
+    "test": "vitest run --config ../../vitest.config.ts --project documentdb-js-schema-analyzer"
   },
   "repository": {
     "type": "git",
@@ -27,5 +35,8 @@
   },
   "dependencies": {
     "denque": "~2.1.0"
+  },
+  "engines": {
+    "node": ">=22.18.0"
   }
 }

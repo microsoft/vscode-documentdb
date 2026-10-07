@@ -3,24 +3,26 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+import { afterEach, beforeEach, describe, expect, it, vi, type MockedFunction } from 'vitest';
+
 import { type Disposable } from 'vscode';
 import { ext } from '../../../extensionVariables';
 import { QuickStartService, type QuickStartOperation } from '../../../services/localQuickStart/QuickStartService';
 import { createQuickStartProgressBridge } from './quickStartProgressBridge';
 import { buildQuickStartInstanceTreeId } from './quickStartTreeIdentity';
 
-jest.mock('../../../extensionVariables', () => ({
+vi.mock('../../../extensionVariables', () => ({
     ext: {
         state: {
             // The real implementation holds the indicator until the wrapped work settles.
-            runWithTemporaryDescription: jest.fn((_id: string, _description: string, callback: () => Promise<void>) =>
+            runWithTemporaryDescription: vi.fn((_id: string, _description: string, callback: () => Promise<void>) =>
                 callback(),
             ),
         },
     },
 }));
 
-const runWithTemporaryDescription = ext.state.runWithTemporaryDescription as jest.MockedFunction<
+const runWithTemporaryDescription = ext.state.runWithTemporaryDescription as MockedFunction<
     typeof ext.state.runWithTemporaryDescription
 >;
 
@@ -42,7 +44,7 @@ describe('quickStartProgressBridge', () => {
 
     beforeEach(() => {
         runWithTemporaryDescription.mockClear();
-        jest.spyOn(QuickStartService, 'onDidChangeOperation').mockImplementation(((listener: () => void) => {
+        vi.spyOn(QuickStartService, 'onDidChangeOperation').mockImplementation(((listener: () => void) => {
             notify = listener;
             return { dispose: () => undefined };
         }) as typeof QuickStartService.onDidChangeOperation);
@@ -51,12 +53,12 @@ describe('quickStartProgressBridge', () => {
 
     afterEach(() => {
         subscription.dispose();
-        jest.restoreAllMocks();
+        vi.restoreAllMocks();
     });
 
     it('applies node progress to the instance row for the whole operation', async () => {
         const operation = pendingOperation('starting');
-        jest.spyOn(QuickStartService, 'getInFlightOperation').mockReturnValue(operation);
+        vi.spyOn(QuickStartService, 'getInFlightOperation').mockReturnValue(operation);
 
         notify();
         await flush();
@@ -70,7 +72,7 @@ describe('quickStartProgressBridge', () => {
     });
 
     it('does not stack indicators while the same operation is still running', async () => {
-        jest.spyOn(QuickStartService, 'getInFlightOperation').mockReturnValue(pendingOperation('deleting'));
+        vi.spyOn(QuickStartService, 'getInFlightOperation').mockReturnValue(pendingOperation('deleting'));
 
         notify();
         await flush();
@@ -82,7 +84,7 @@ describe('quickStartProgressBridge', () => {
     });
 
     it('picks up the next operation once the previous one has settled', async () => {
-        const inFlight = jest.spyOn(QuickStartService, 'getInFlightOperation');
+        const inFlight = vi.spyOn(QuickStartService, 'getInFlightOperation');
 
         inFlight.mockReturnValue(pendingOperation('stopping'));
         notify();
@@ -101,7 +103,7 @@ describe('quickStartProgressBridge', () => {
     });
 
     it('stays quiet when nothing is running', async () => {
-        jest.spyOn(QuickStartService, 'getInFlightOperation').mockReturnValue(undefined);
+        vi.spyOn(QuickStartService, 'getInFlightOperation').mockReturnValue(undefined);
 
         notify();
         await flush();

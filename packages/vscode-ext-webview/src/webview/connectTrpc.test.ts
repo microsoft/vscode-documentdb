@@ -3,9 +3,11 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { initWebviewTrpc } from '../shared/initWebviewTrpc';
-import { type VsCodeLinkResponseMessage } from '../shared/wireProtocol';
-import { connectTrpc, type VsCodeApiLike } from './connectTrpc';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
+import { initWebviewTrpc } from '../shared/initWebviewTrpc.js';
+import { type VsCodeLinkResponseMessage } from '../shared/wireProtocol.js';
+import { connectTrpc, type VsCodeApiLike } from './connectTrpc.js';
 
 // A router whose *type* parametrizes the client; the resolver bodies are never
 // executed (the client side only proxies calls over the transport).
@@ -16,7 +18,7 @@ const appRouter = router({
 });
 type AppRouter = typeof appRouter;
 
-// The package jest env is `node`, so there is no DOM. We install a minimal
+// The package test environment is `node`, so there is no DOM. We install a minimal
 // `window` that records 'message' listeners and lets a test deliver responses.
 type MessageListener = (event: MessageEvent) => void;
 const messageListeners = new Set<MessageListener>();
@@ -82,7 +84,7 @@ describe('connectTrpc', () => {
 
     it('drives a query through the transport and surfaces a success event', async () => {
         const { api, sent } = echoingApi((id) => ({ id, result: 'pong' }));
-        const onSuccess = jest.fn();
+        const onSuccess = vi.fn();
 
         const { client, events } = connectTrpc<AppRouter>(api);
         events.onSuccess(onSuccess);
@@ -97,8 +99,8 @@ describe('connectTrpc', () => {
 
     it('surfaces an error event and forwards it to the onError option', async () => {
         const { api } = echoingApi((id) => ({ id, error: { name: 'Error', message: 'boom' } }));
-        const onErrorOption = jest.fn();
-        const onErrorChannel = jest.fn();
+        const onErrorOption = vi.fn();
+        const onErrorChannel = vi.fn();
 
         const { client, events } = connectTrpc<AppRouter>(api, { onError: onErrorOption });
         events.onError(onErrorChannel);
@@ -115,8 +117,8 @@ describe('connectTrpc', () => {
 
     it('reports an aborted call via onAborted, not onError', async () => {
         const { api } = echoingApi((id) => ({ id, result: 'never' }));
-        const onError = jest.fn();
-        const onAborted = jest.fn();
+        const onError = vi.fn();
+        const onAborted = vi.fn();
 
         const { client, events } = connectTrpc<AppRouter>(api);
         events.onError(onError);

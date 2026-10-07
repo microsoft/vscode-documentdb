@@ -3,6 +3,8 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+import { describe, expect, test } from 'vitest';
+
 /**
  * Structural invariant tests for all operator entries.
  *
@@ -10,7 +12,7 @@
  * consistent meta tags, and reasonable values.
  */
 
-import { ALL_META_TAGS, getAllCompletions, type OperatorEntry } from './index';
+import { ALL_META_TAGS, getAllCompletions, type OperatorEntry } from './index.js';
 
 const allOperators = getAllCompletions();
 

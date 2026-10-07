@@ -3,6 +3,8 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+import { describe, expect, it } from 'vitest';
+
 import type * as vscode from 'vscode';
 import { PLAYGROUND_LANGUAGE_ID } from '../../documentdb/playground/constants';
 import { createPlaygroundFileName } from './newPlayground';

@@ -3,8 +3,8 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-export { BSONTypes } from './BSONTypes';
-export { getKnownFields, type FieldEntry } from './getKnownFields';
-export { type JSONSchema, type JSONSchemaMap, type JSONSchemaRef } from './JSONSchema';
-export { SchemaAnalyzer, buildFullPaths, getPropertyNamesAtLevel } from './SchemaAnalyzer';
-export { valueToDisplayString } from './ValueFormatters';
+export { BSONTypes } from './BSONTypes.js';
+export { getKnownFields, type FieldEntry } from './getKnownFields.js';
+export { type JSONSchema, type JSONSchemaMap, type JSONSchemaRef } from './JSONSchema.js';
+export { SchemaAnalyzer, buildFullPaths, getPropertyNamesAtLevel } from './SchemaAnalyzer.js';
+export { valueToDisplayString } from './ValueFormatters.js';

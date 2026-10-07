@@ -3,12 +3,15 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-const mockGetTenants = jest.fn();
-const mockIsSignedIn = jest.fn();
-const mockConfigureAzureCredentials = jest.fn();
-const mockOutputChannel = { info: jest.fn(), warn: jest.fn(), error: jest.fn() };
+import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from 'vitest';
 
-jest.mock('../../extensionVariables', () => ({
+const mockGetTenants = vi.fn();
+const mockIsSignedIn = vi.fn();
+// Read eagerly by the credentialsManagement factory below, which `vi.mock` hoists above this line.
+const { mockConfigureAzureCredentials } = vi.hoisted(() => ({ mockConfigureAzureCredentials: vi.fn() }));
+const mockOutputChannel = { info: vi.fn(), warn: vi.fn(), error: vi.fn() };
+
+vi.mock('../../extensionVariables', () => ({
     ext: {
         get outputChannel(): typeof mockOutputChannel {
             return mockOutputChannel;
@@ -16,32 +19,35 @@ jest.mock('../../extensionVariables', () => ({
     },
 }));
 
-jest.mock('@microsoft/vscode-azext-azureauth', () => ({
-    VSCodeAzureSubscriptionProvider: jest.fn().mockImplementation(() => ({
-        getTenants: mockGetTenants,
-        isSignedIn: mockIsSignedIn,
-    })),
+vi.mock('@microsoft/vscode-azext-azureauth', () => ({
+    // A `function`, not an arrow: Vitest 4 calls the implementation with `new`.
+    VSCodeAzureSubscriptionProvider: vi.fn().mockImplementation(function () {
+        return {
+            getTenants: mockGetTenants,
+            isSignedIn: mockIsSignedIn,
+        };
+    }),
 }));
 
-jest.mock('@microsoft/vscode-azext-utils', () => ({
+vi.mock('@microsoft/vscode-azext-utils', () => ({
     AzureWizardPromptStep: class AzureWizardPromptStep {},
 }));
 
-jest.mock('@vscode/l10n', () => ({
-    t: jest.fn((message: string, ...args: unknown[]) =>
+vi.mock('@vscode/l10n', () => ({
+    t: vi.fn((message: string, ...args: unknown[]) =>
         message.replace(/\{(\d+)\}/g, (_match: string, index: string) => String(args[Number(index)])),
     ),
 }));
 
-jest.mock('vscode', () => ({
+vi.mock('vscode', () => ({
     ThemeIcon: class ThemeIcon {
         constructor(public readonly id: string) {}
     },
     QuickPickItemKind: { Separator: -1 },
-    l10n: { t: jest.fn((message: string) => message) },
+    l10n: { t: vi.fn((message: string) => message) },
 }));
 
-jest.mock('../../plugins/api-shared/azure/credentialsManagement', () => ({
+vi.mock('../../plugins/api-shared/azure/credentialsManagement', () => ({
     configureAzureCredentials: mockConfigureAzureCredentials,
 }));
 
@@ -61,12 +67,12 @@ const tenant = {
 
 type PromptTenantStep = NewConnectionPromptTenantStep | UpdateCredentialsPromptTenantStep;
 
-function makeContext(showQuickPick: jest.Mock): IActionContext {
+function makeContext(showQuickPick: Mock): IActionContext {
     return {
         valuesToMask: [],
         telemetry: { properties: {}, measurements: {} },
         errorHandling: {},
-        ui: { showQuickPick, showInputBox: jest.fn().mockResolvedValue(TENANT_ID) } as unknown as IActionContext['ui'],
+        ui: { showQuickPick, showInputBox: vi.fn().mockResolvedValue(TENANT_ID) } as unknown as IActionContext['ui'],
     } as unknown as IActionContext;
 }
 
@@ -82,7 +88,7 @@ function outputText(): string {
 
 function makeFallbackContext(): IActionContext {
     return makeContext(
-        jest.fn().mockImplementation(async (itemsPromise: Promise<unknown[]>) => {
+        vi.fn().mockImplementation(async (itemsPromise: Promise<unknown[]>) => {
             await itemsPromise;
             return { isCustomOption: true };
         }),
@@ -100,14 +106,14 @@ describe.each([
     ['update credentials', () => new UpdateCredentialsPromptTenantStep()],
 ])('PromptTenantStep for %s', (_name, makeStep: () => PromptTenantStep) => {
     beforeEach(() => {
-        jest.clearAllMocks();
+        vi.clearAllMocks();
         mockIsSignedIn.mockReset().mockResolvedValue(true);
         mockGetTenants.mockReset().mockResolvedValue([tenant]);
         mockConfigureAzureCredentials.mockResolvedValue(undefined);
     });
 
     afterEach(() => {
-        jest.useRealTimers();
+        vi.useRealTimers();
         expectPrivateTenantOutput();
     });
 
@@ -137,7 +143,7 @@ describe.each([
 
     it('runs account management before listing tenants when signed out', async () => {
         mockIsSignedIn.mockResolvedValue(false);
-        const showQuickPick = jest.fn().mockImplementation(async (itemsPromise: Promise<unknown[]>) => {
+        const showQuickPick = vi.fn().mockImplementation(async (itemsPromise: Promise<unknown[]>) => {
             const items = await itemsPromise;
             return items.find((item) => (item as { tenant?: unknown }).tenant);
         });
@@ -157,7 +163,7 @@ describe.each([
 
     it('re-enumerates tenants after account management without exiting the wizard', async () => {
         mockIsSignedIn.mockResolvedValue(true);
-        const showQuickPick = jest
+        const showQuickPick = vi
             .fn()
             .mockImplementationOnce(async (items: Promise<unknown[]>) => {
                 await items;
@@ -244,11 +250,11 @@ describe.each([
     });
 
     it('logs sign-in timeout while preserving the existing true fallback', async () => {
-        jest.useFakeTimers();
+        vi.useFakeTimers();
         mockIsSignedIn.mockReturnValue(new Promise<boolean>(() => {}));
 
         const prompt = makeStep().prompt(makeFallbackContext() as never);
-        await jest.advanceTimersByTimeAsync(5000);
+        await vi.advanceTimersByTimeAsync(5000);
         await prompt;
 
         expect(outputText()).toContain('isSignedIn: timed out after 5000 ms; using fallback (signedIn=true)');
@@ -257,7 +263,7 @@ describe.each([
     });
 
     it('logs late tenant completion without replacing the timeout fallback', async () => {
-        jest.useFakeTimers();
+        vi.useFakeTimers();
         let completeLookup!: (tenants: (typeof tenant)[]) => void;
         mockGetTenants.mockReturnValue(
             new Promise<(typeof tenant)[]>((resolve) => {
@@ -267,22 +273,22 @@ describe.each([
         const context = makeFallbackContext();
 
         const prompt = makeStep().prompt(context as never);
-        await jest.advanceTimersByTimeAsync(4999);
+        await vi.advanceTimersByTimeAsync(4999);
         expect(mockOutputChannel.warn).not.toHaveBeenCalled();
-        await jest.advanceTimersByTimeAsync(1);
+        await vi.advanceTimersByTimeAsync(1);
         await prompt;
 
         expect(outputText()).toContain('getTenants: timed out after 5000 ms; using fallback (tenants=0)');
-        await jest.advanceTimersByTimeAsync(1000);
+        await vi.advanceTimersByTimeAsync(1000);
         completeLookup([tenant]);
-        await jest.advanceTimersByTimeAsync(0);
+        await vi.advanceTimersByTimeAsync(0);
 
         expect(outputText()).toContain('completed after timeout in 6000 ms; tenants=1');
         expect(context.telemetry.measurements.availableTenantsCount).toBe(0);
     });
 
     it('logs late provider rejection after a timeout', async () => {
-        jest.useFakeTimers();
+        vi.useFakeTimers();
         let failLookup!: (reason: Error) => void;
         mockGetTenants.mockReturnValue(
             new Promise<(typeof tenant)[]>((_resolve, reject) => {
@@ -291,21 +297,21 @@ describe.each([
         );
 
         const prompt = makeStep().prompt(makeFallbackContext() as never);
-        await jest.advanceTimersByTimeAsync(5000);
+        await vi.advanceTimersByTimeAsync(5000);
         await prompt;
         failLookup(Object.assign(new Error('secret-token'), { code: 'ECONNRESET' }));
-        await jest.advanceTimersByTimeAsync(0);
+        await vi.advanceTimersByTimeAsync(0);
 
         expect(outputText()).toContain('failed after timeout in 5000 ms; type=Error; code=ECONNRESET');
         expect(outputText()).not.toContain('secret-token');
     });
 
     it('offers an explicit retry after timeout and allows 30 seconds for it', async () => {
-        jest.useFakeTimers();
+        vi.useFakeTimers();
         mockGetTenants
             .mockReturnValueOnce(new Promise<(typeof tenant)[]>(() => {}))
             .mockImplementationOnce(() => new Promise((resolve) => setTimeout(() => resolve([tenant]), 29_000)));
-        const showQuickPick = jest
+        const showQuickPick = vi
             .fn()
             .mockImplementationOnce(async (itemsPromise: Promise<{ isRetryOption?: boolean; detail?: string }[]>) => {
                 const items = await itemsPromise;
@@ -321,9 +327,9 @@ describe.each([
         const context = makeContext(showQuickPick);
         const prompt = makeStep().prompt(context as never);
 
-        await jest.advanceTimersByTimeAsync(5000);
+        await vi.advanceTimersByTimeAsync(5000);
         expect(mockGetTenants).toHaveBeenCalledTimes(2);
-        await jest.advanceTimersByTimeAsync(29_000);
+        await vi.advanceTimersByTimeAsync(29_000);
         await prompt;
 
         expect(outputText()).toContain('getTenants: started; timeout=30000 ms.');
@@ -332,9 +338,9 @@ describe.each([
     });
 
     it('keeps manual entry, account management, and retry available after a retry timeout', async () => {
-        jest.useFakeTimers();
+        vi.useFakeTimers();
         mockGetTenants.mockReturnValue(new Promise<(typeof tenant)[]>(() => {}));
-        const showQuickPick = jest
+        const showQuickPick = vi
             .fn()
             .mockImplementationOnce(async (itemsPromise: Promise<{ isRetryOption?: boolean }[]>) =>
                 (await itemsPromise).find((item) => item.isRetryOption),
@@ -358,7 +364,7 @@ describe.each([
             );
         const prompt = makeStep().prompt(makeContext(showQuickPick) as never);
 
-        await jest.advanceTimersByTimeAsync(35_000);
+        await vi.advanceTimersByTimeAsync(35_000);
         await prompt;
 
         expect(mockGetTenants).toHaveBeenCalledTimes(2);
@@ -373,7 +379,7 @@ describe.each([
         } else {
             mockGetTenants.mockResolvedValueOnce([]);
         }
-        const showQuickPick = jest.fn().mockImplementation(
+        const showQuickPick = vi.fn().mockImplementation(
             async (
                 itemsPromise: Promise<
                     {
@@ -396,7 +402,7 @@ describe.each([
 
 describe('unbounded account-management tenant tracing', () => {
     it('logs results without adding a timeout', async () => {
-        jest.clearAllMocks();
+        vi.clearAllMocks();
         const result = await traceTenantLookup('accountManagement.getTenants', () => Promise.resolve([tenant]));
 
         expect(result).toEqual([tenant]);

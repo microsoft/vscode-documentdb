@@ -3,35 +3,37 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
 import { type initWebviewTrpc as InitWebviewTrpc } from '@microsoft/vscode-ext-webview';
 import { API } from '../../../DocumentDBExperiences';
 
-const mockStartDockerProvider = jest.fn();
-const mockIsDockerReady = jest.fn();
-const mockGetStatus = jest.fn();
-const mockRefreshLiveState = jest.fn();
-const mockCanReuseExistingData = jest.fn();
-const mockSuggestPort = jest.fn();
-const mockProvision = jest.fn();
+const mockStartDockerProvider = vi.fn();
+const mockIsDockerReady = vi.fn();
+const mockGetStatus = vi.fn();
+const mockRefreshLiveState = vi.fn();
+const mockCanReuseExistingData = vi.fn();
+const mockSuggestPort = vi.fn();
+const mockProvision = vi.fn();
 
 /** Drives `QuickStartService.onDidChangeStatus` so a test can push status changes at the router. */
 const statusListeners = new Set<() => void>();
 const fireStatusChange = (): void => statusListeners.forEach((listener) => listener());
 
-jest.mock('vscode', () => ({
-    commands: { executeCommand: jest.fn() },
-    env: { clipboard: { writeText: jest.fn() } },
+vi.mock('vscode', () => ({
+    commands: { executeCommand: vi.fn() },
+    env: { clipboard: { writeText: vi.fn() } },
 }));
 
-jest.mock('../../../services/localQuickStart/ContainerRuntime', () => ({
+vi.mock('../../../services/localQuickStart/ContainerRuntime', () => ({
     ContainerRuntime: { isDockerReady: (...args: unknown[]) => mockIsDockerReady(...args) as unknown },
-    getQuickStartOutputChannel: () => ({ show: jest.fn() }),
+    getQuickStartOutputChannel: () => ({ show: vi.fn() }),
     startDockerProvider: () => mockStartDockerProvider() as unknown,
 }));
 
-jest.mock('../../../services/localQuickStart/QuickStartService', () => ({
+vi.mock('../../../services/localQuickStart/QuickStartService', () => ({
     QuickStartService: {
-        discardTimedOutInstance: jest.fn(),
+        discardTimedOutInstance: vi.fn(),
         checkDockerReadiness: (...args: unknown[]) => mockIsDockerReady(...args) as unknown,
         getStatus: (...args: unknown[]) => mockGetStatus(...args) as unknown,
         isBusy: false,
@@ -39,7 +41,7 @@ jest.mock('../../../services/localQuickStart/QuickStartService', () => ({
         refreshLiveState: (...args: unknown[]) => mockRefreshLiveState(...args) as unknown,
         canReuseExistingData: (...args: unknown[]) => mockCanReuseExistingData(...args) as unknown,
         suggestPort: (...args: unknown[]) => mockSuggestPort(...args) as unknown,
-        checkPort: jest.fn(),
+        checkPort: vi.fn(),
         onDidChangeStatus: (listener: () => void) => {
             statusListeners.add(listener);
             return { dispose: () => statusListeners.delete(listener) };
@@ -51,13 +53,13 @@ jest.mock('../../../services/localQuickStart/QuickStartService', () => ({
 // against this file's minimal `vscode` stub. What it does is covered by its own test
 // (`src/tree/connections-view/LocalQuickStart/revealQuickStartInstance.test.ts`); here we only care
 // that the router calls it.
-const mockRevealQuickStartInstance = jest.fn();
-jest.mock('../../../tree/connections-view/LocalQuickStart/revealQuickStartInstance', () => ({
+const mockRevealQuickStartInstance = vi.fn();
+vi.mock('../../../tree/connections-view/LocalQuickStart/revealQuickStartInstance', () => ({
     revealQuickStartInstance: (...args: unknown[]) => mockRevealQuickStartInstance(...args) as unknown,
 }));
 
-jest.mock('../../_integration/trpc', () => {
-    const { initWebviewTrpc } = jest.requireActual<{ initWebviewTrpc: typeof InitWebviewTrpc }>(
+vi.mock('../../_integration/trpc', async () => {
+    const { initWebviewTrpc } = await vi.importActual<{ initWebviewTrpc: typeof InitWebviewTrpc }>(
         '@microsoft/vscode-ext-webview',
     );
     const trpc = initWebviewTrpc();
@@ -70,8 +72,8 @@ jest.mock('../../_integration/trpc', () => {
 });
 
 // Emits through azext-utils, which this file's minimal `vscode` stub cannot load (see above).
-const mockReportWizardStep = jest.fn();
-jest.mock('./wizardTelemetry', () => ({
+const mockReportWizardStep = vi.fn();
+vi.mock('./wizardTelemetry', () => ({
     reportWizardStep: (...args: unknown[]) => mockReportWizardStep(...args) as unknown,
 }));
 
@@ -105,7 +107,7 @@ function createContext(): RouterContext & {
     return {
         dbExperience: API.DocumentDB,
         webviewName: 'localQuickStart',
-        closePanel: jest.fn(),
+        closePanel: vi.fn(),
         actionContext: {
             telemetry: { properties: {}, measurements: {} },
         },

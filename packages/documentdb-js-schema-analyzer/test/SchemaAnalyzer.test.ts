@@ -3,8 +3,10 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { type JSONSchema, type JSONSchemaMap, type JSONSchemaRef } from '../src/JSONSchema';
-import { getPropertyNamesAtLevel, SchemaAnalyzer } from '../src/SchemaAnalyzer';
+import { describe, expect, it } from 'vitest';
+
+import { type JSONSchema, type JSONSchemaMap, type JSONSchemaRef } from '../src/JSONSchema.js';
+import { getPropertyNamesAtLevel, SchemaAnalyzer } from '../src/SchemaAnalyzer.js';
 import {
     arraysWithDifferentDataTypes,
     complexDocument,
@@ -13,7 +15,7 @@ import {
     embeddedDocumentOnly,
     flatDocument,
     sparseDocumentsArray,
-} from './mongoTestDocuments';
+} from './mongoTestDocuments.js';
 
 describe('DocumentDB Schema Analyzer', () => {
     it('prints out schema for testing', () => {

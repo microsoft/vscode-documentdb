@@ -201,8 +201,14 @@ code .
 
 2. Start debugging the extension:
    - Switch to the `Run and Debug` panel.
-   - Select `Launch Extension (webpack)`.
+   - Select `Default: Launch Extension (Vite)`.
    - Press `F5`.
+
+The `Watch` task builds the extension host with Vite in watch mode (`npm run watch:ext`) and serves
+the webviews with Vite (`npm run watch:views`). No initial webview build is needed. For an on-disk
+development build, use `npm run build-dev`. Vite is the only bundler for both targets.
+See the [Vite build rationale](build/vite/README.md) for settings, plugins and the checks guarding
+the `npm run package` output.
 
 ## 4. PR Submission Checklist
 
@@ -219,7 +225,7 @@ A draft PR is **not** a hand-over. It exists to hold commits, CI, and discussion
 
 ```bash
 npm run build                     # catches type errors
-npx jest --no-coverage <path>     # only the tests covering what you touched
+npx vitest run <path>             # only the tests covering what you touched
 ```
 
 Nothing else. `l10n`, `prettier-fix`, `lint`, and `package` each cost minutes and say nothing about whether the change is correct.
@@ -232,7 +238,7 @@ All of these must pass locally. The same checks run in CI, so catching failures 
 npm run l10n            # only if a vscode.l10n.t() string was added, changed, or removed
 npm run prettier-fix
 npm run lint
-npx jest --no-coverage  # full suite
+npx vitest run          # full suite
 npm run build
 npm run package         # catches bundling and missing-asset failures
 ```
@@ -245,7 +251,7 @@ Case 2 is also where the AI pre-review in [§6](#6-ai-assisted-review-workflow) 
 
 - **`npm run l10n`** regenerates the localization bundle from the strings passed to `vscode.l10n.t()`. **Never resolve a conflict in `l10n/bundle.l10n.json` by hand** — the file is generated. Take either side, or delete it, then re-run `npm run l10n` and commit the result.
 - **`npm run prettier-fix`** covers Markdown as well as source, so documentation formatting does not drift whenever a file is touched. Fenced code blocks are left exactly as authored: they are often partial or illustrative, and reformatting them to the Markdown tab width would leave every example disagreeing with the code it documents.
-- **`npm run package`** catches webpack bundling issues and missing assets that unit tests alone will not surface.
+- **`npm run package`** catches Vite host and webview bundling issues and missing assets that unit tests alone will not surface.
 
 ## 5. Documenting Work with AI
 

@@ -84,7 +84,7 @@ export function openAppWebview<TConfiguration>(
         config: options.config,
         sourceLayout: WEBVIEW_CONFIG.bundle,
         devServerHost: WEBVIEW_CONFIG.devServerHost,
-        // `ext.isBundle` (from the webpack `IS_BUNDLE` define) selects the bundle
+        // `ext.isBundle` (from the bundler's `IS_BUNDLE` define) selects the bundle
         // vs tsc layout. It is distinct from the extension mode: the dev server
         // serves the bundled asset name even in development, so a bundled dev
         // build must resolve the `bundled` layout to avoid a 404 on the script.

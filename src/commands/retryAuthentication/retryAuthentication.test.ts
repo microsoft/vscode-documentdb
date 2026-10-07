@@ -3,33 +3,35 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+
 import { ext } from '../../extensionVariables';
 import { retryAuthentication } from './retryAuthentication';
 
-jest.mock('../../extensionVariables', () => ({
+vi.mock('../../extensionVariables', () => ({
     ext: {
         connectionsBranchDataProvider: {
-            resetNodeErrorState: jest.fn(),
-            refresh: jest.fn(),
+            resetNodeErrorState: vi.fn(),
+            refresh: vi.fn(),
         },
         discoveryBranchDataProvider: {
-            resetNodeErrorState: jest.fn(),
-            refresh: jest.fn(),
+            resetNodeErrorState: vi.fn(),
+            refresh: vi.fn(),
         },
         azureResourcesRUBranchDataProvider: {
-            resetNodeErrorState: jest.fn(),
-            refresh: jest.fn(),
+            resetNodeErrorState: vi.fn(),
+            refresh: vi.fn(),
         },
         azureResourcesVCoreBranchDataProvider: {
-            resetNodeErrorState: jest.fn(),
-            refresh: jest.fn(),
+            resetNodeErrorState: vi.fn(),
+            refresh: vi.fn(),
         },
     },
 }));
 
-jest.mock('vscode', () => ({
+vi.mock('vscode', () => ({
     l10n: {
-        t: jest.fn((value: string) => value),
+        t: vi.fn((value: string) => value),
     },
 }));
 
@@ -39,10 +41,10 @@ describe('retryAuthentication', () => {
         errorHandling: { issueProperties: {} },
         valuesToMask: [],
     };
-    const getTreeItem = jest.fn();
+    const getTreeItem = vi.fn();
 
     beforeEach(() => {
-        jest.clearAllMocks();
+        vi.clearAllMocks();
     });
 
     it('retries discovery nodes based on tree id when the context value lacks the view token', async () => {

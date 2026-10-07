@@ -3,6 +3,8 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+import { beforeEach, describe, expect, it, vi, type Mock } from 'vitest';
+
 import { type NewConnectionWizardContext } from '../../../commands/newConnection/NewConnectionWizardContext';
 import { AuthMethodId } from '../../../documentdb/auth/AuthMethod';
 import { type KubeContextInfo, type KubeServiceEndpoint, type KubeServiceInfo } from '../kubernetesClient';
@@ -10,30 +12,30 @@ import { KUBERNETES_PORT_FORWARD_METADATA_PROPERTY } from '../portForwardMetadat
 import { KubernetesExecuteStep } from './KubernetesExecuteStep';
 import { KubernetesWizardProperties } from './SelectContextStep';
 
-const mockLoadConfiguredKubeConfig = jest.fn();
-const mockCreateCoreApi = jest.fn();
-const mockResolveServiceEndpoint = jest.fn();
-const mockResolveDocumentDBCredentials = jest.fn();
-const mockResolveGenericServiceCredentials = jest.fn();
-const mockBuildPortForwardConnectionString = jest.fn();
-const mockStartTunnel = jest.fn();
-const mockPromptForLocalPort = jest.fn();
-const mockShowWarningMessage = jest.fn();
-const mockShowInformationMessage = jest.fn();
-const mockAppendLine = jest.fn();
+const mockLoadConfiguredKubeConfig = vi.fn();
+const mockCreateCoreApi = vi.fn();
+const mockResolveServiceEndpoint = vi.fn();
+const mockResolveDocumentDBCredentials = vi.fn();
+const mockResolveGenericServiceCredentials = vi.fn();
+const mockBuildPortForwardConnectionString = vi.fn();
+const mockStartTunnel = vi.fn();
+const mockPromptForLocalPort = vi.fn();
+const mockShowWarningMessage = vi.fn();
+const mockShowInformationMessage = vi.fn();
+const mockAppendLine = vi.fn();
 
-jest.mock('@microsoft/vscode-azext-utils', () => ({
+vi.mock('@microsoft/vscode-azext-utils', () => ({
     AzureWizardExecuteStep: class AzureWizardExecuteStep {},
     AzureWizardPromptStep: class AzureWizardPromptStep {},
     UserCancelledError: class UserCancelledError extends Error {},
 }));
 
-jest.mock('vscode', () => ({
+vi.mock('vscode', () => ({
     ThemeIcon: class ThemeIcon {
         constructor(public readonly id: string) {}
     },
     l10n: {
-        t: jest.fn((template: string, ...args: unknown[]) =>
+        t: vi.fn((template: string, ...args: unknown[]) =>
             template.replace(/\{(\d+)\}/g, (_match: string, index: string) => String(args[Number(index)])),
         ),
     },
@@ -43,7 +45,7 @@ jest.mock('vscode', () => ({
     },
 }));
 
-jest.mock('../../../extensionVariables', () => ({
+vi.mock('../../../extensionVariables', () => ({
     ext: {
         outputChannel: {
             appendLine: (...args: unknown[]) => mockAppendLine(...args),
@@ -51,7 +53,7 @@ jest.mock('../../../extensionVariables', () => ({
     },
 }));
 
-jest.mock('../kubernetesClient', () => ({
+vi.mock('../kubernetesClient', () => ({
     loadConfiguredKubeConfig: (...args: unknown[]) => mockLoadConfiguredKubeConfig(...args),
     createCoreApi: (...args: unknown[]) => mockCreateCoreApi(...args),
     resolveServiceEndpoint: (...args: unknown[]) => mockResolveServiceEndpoint(...args),
@@ -60,7 +62,7 @@ jest.mock('../kubernetesClient', () => ({
     buildPortForwardConnectionString: (...args: unknown[]) => mockBuildPortForwardConnectionString(...args),
 }));
 
-jest.mock('../portForwardTunnel', () => ({
+vi.mock('../portForwardTunnel', () => ({
     PortForwardTunnelManager: {
         getInstance: () => ({
             startTunnel: (...args: unknown[]) => mockStartTunnel(...args),
@@ -68,17 +70,17 @@ jest.mock('../portForwardTunnel', () => ({
     },
 }));
 
-jest.mock('../promptForLocalPort', () => ({
+vi.mock('../promptForLocalPort', () => ({
     promptForLocalPort: (...args: unknown[]) => mockPromptForLocalPort(...args),
 }));
 
 interface MockUi {
-    readonly showQuickPick: jest.Mock;
-    readonly showInputBox: jest.Mock;
-    readonly onDidFinishPrompt: jest.Mock;
-    readonly showWarningMessage: jest.Mock;
-    readonly showOpenDialog: jest.Mock;
-    readonly showWorkspaceFolderPick: jest.Mock;
+    readonly showQuickPick: Mock;
+    readonly showInputBox: Mock;
+    readonly onDidFinishPrompt: Mock;
+    readonly showWarningMessage: Mock;
+    readonly showOpenDialog: Mock;
+    readonly showWorkspaceFolderPick: Mock;
 }
 
 const selectedContext: KubeContextInfo = {
@@ -93,12 +95,12 @@ const mockCoreApi = { name: 'mock-core-api' };
 
 function createUi(): MockUi {
     return {
-        showQuickPick: jest.fn(),
-        showInputBox: jest.fn(),
-        onDidFinishPrompt: jest.fn(),
-        showWarningMessage: jest.fn(),
-        showOpenDialog: jest.fn(),
-        showWorkspaceFolderPick: jest.fn(),
+        showQuickPick: vi.fn(),
+        showInputBox: vi.fn(),
+        onDidFinishPrompt: vi.fn(),
+        showWarningMessage: vi.fn(),
+        showOpenDialog: vi.fn(),
+        showWorkspaceFolderPick: vi.fn(),
     };
 }
 
@@ -151,7 +153,7 @@ function createWizardContext(selectedService: KubeServiceInfo): NewConnectionWiz
 
 describe('KubernetesExecuteStep', () => {
     beforeEach(() => {
-        jest.clearAllMocks();
+        vi.clearAllMocks();
         mockLoadConfiguredKubeConfig.mockResolvedValue(mockKubeConfig);
         mockCreateCoreApi.mockResolvedValue(mockCoreApi);
         mockResolveServiceEndpoint.mockResolvedValue({

@@ -13,8 +13,8 @@
  */
 
 export { type AnyRouter } from '@trpc/server';
-export { type ObserverErrorContext, type ObserverErrorHandler, type ObserverErrorPhase } from '../webview/events';
-export { useConfiguration } from './useConfiguration';
-export { useRpcEvents } from './useRpcEvents';
-export { useTrpcClient, type TrpcClient } from './useTrpcClient';
-export { WebviewContext, WithWebviewContext, type WebviewContextValue, type WebviewState } from './WebviewContext';
+export { type ObserverErrorContext, type ObserverErrorHandler, type ObserverErrorPhase } from '../webview/events.js';
+export { useConfiguration } from './useConfiguration.js';
+export { useRpcEvents } from './useRpcEvents.js';
+export { useTrpcClient, type TrpcClient } from './useTrpcClient.js';
+export { WebviewContext, WithWebviewContext, type WebviewContextValue, type WebviewState } from './WebviewContext.js';

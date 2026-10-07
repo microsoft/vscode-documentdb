@@ -3,12 +3,14 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
 import * as net from 'net';
 import { type PassThrough } from 'stream';
 
 // Mock vscode
-const mockShowWarningMessage = jest.fn();
-jest.mock('vscode', () => ({
+const mockShowWarningMessage = vi.fn();
+vi.mock('vscode', () => ({
     l10n: { t: (msg: string, ...args: unknown[]) => msg.replace(/\{(\d+)\}/g, (_, i) => String(args[Number(i)])) },
     window: {
         showWarningMessage: (...args: unknown[]) => mockShowWarningMessage(...args),
@@ -16,18 +18,18 @@ jest.mock('vscode', () => ({
 }));
 
 // Mock extensionVariables
-jest.mock('../../extensionVariables', () => ({
+vi.mock('../../extensionVariables', () => ({
     ext: {
-        outputChannel: { appendLine: jest.fn() },
+        outputChannel: { appendLine: vi.fn() },
     },
 }));
 
 // Mock @kubernetes/client-node
-const mockPortForward = jest.fn();
-jest.mock('@kubernetes/client-node', () => ({
-    PortForward: jest.fn().mockImplementation(() => ({
-        portForward: mockPortForward,
-    })),
+const mockPortForward = vi.fn();
+vi.mock('@kubernetes/client-node', () => ({
+    PortForward: vi.fn().mockImplementation(function () {
+        return { portForward: mockPortForward };
+    }),
 }));
 
 // Import after mocks are set up
@@ -40,7 +42,7 @@ import { PortForwardTunnelManager, resolveServiceBackend } from './portForwardTu
 describe('resolveServiceBackend', () => {
     it('should resolve a ready pod and matching target port', async () => {
         const coreApi = {
-            readNamespacedEndpoints: jest.fn().mockResolvedValue({
+            readNamespacedEndpoints: vi.fn().mockResolvedValue({
                 subsets: [
                     {
                         addresses: [{ targetRef: { kind: 'Pod', name: 'mongo-pod-1' } }],
@@ -56,7 +58,7 @@ describe('resolveServiceBackend', () => {
 
     it('should resolve targetPort that differs from servicePort', async () => {
         const coreApi = {
-            readNamespacedEndpoints: jest.fn().mockResolvedValue({
+            readNamespacedEndpoints: vi.fn().mockResolvedValue({
                 subsets: [
                     {
                         addresses: [{ targetRef: { kind: 'Pod', name: 'pod-a' } }],
@@ -72,7 +74,7 @@ describe('resolveServiceBackend', () => {
 
     it('should resolve a named endpoint port when service port differs from target port', async () => {
         const coreApi = {
-            readNamespacedEndpoints: jest.fn().mockResolvedValue({
+            readNamespacedEndpoints: vi.fn().mockResolvedValue({
                 subsets: [
                     {
                         addresses: [{ targetRef: { kind: 'Pod', name: 'pod-a' } }],
@@ -91,7 +93,7 @@ describe('resolveServiceBackend', () => {
 
     it('should fall back to the only endpoint port when named service port has no endpoint name match', async () => {
         const coreApi = {
-            readNamespacedEndpoints: jest.fn().mockResolvedValue({
+            readNamespacedEndpoints: vi.fn().mockResolvedValue({
                 subsets: [
                     {
                         addresses: [{ targetRef: { kind: 'Pod', name: 'pod-a' } }],
@@ -107,7 +109,7 @@ describe('resolveServiceBackend', () => {
 
     it('should not select an arbitrary endpoint port when service port name has no multi-port match', async () => {
         const coreApi = {
-            readNamespacedEndpoints: jest.fn().mockResolvedValue({
+            readNamespacedEndpoints: vi.fn().mockResolvedValue({
                 subsets: [
                     {
                         addresses: [{ targetRef: { kind: 'Pod', name: 'pod-a' } }],
@@ -125,7 +127,7 @@ describe('resolveServiceBackend', () => {
 
     it('should pick the only port when there is a single port entry', async () => {
         const coreApi = {
-            readNamespacedEndpoints: jest.fn().mockResolvedValue({
+            readNamespacedEndpoints: vi.fn().mockResolvedValue({
                 subsets: [
                     {
                         addresses: [{ targetRef: { kind: 'Pod', name: 'pod-b' } }],
@@ -142,7 +144,7 @@ describe('resolveServiceBackend', () => {
 
     it('should skip subsets with no ready addresses and use the next subset', async () => {
         const coreApi = {
-            readNamespacedEndpoints: jest.fn().mockResolvedValue({
+            readNamespacedEndpoints: vi.fn().mockResolvedValue({
                 subsets: [
                     {
                         addresses: [], // no ready pods in first subset
@@ -162,7 +164,7 @@ describe('resolveServiceBackend', () => {
 
     it('should skip addresses without Pod targetRef', async () => {
         const coreApi = {
-            readNamespacedEndpoints: jest.fn().mockResolvedValue({
+            readNamespacedEndpoints: vi.fn().mockResolvedValue({
                 subsets: [
                     {
                         addresses: [
@@ -181,7 +183,7 @@ describe('resolveServiceBackend', () => {
 
     it('should throw when subsets are empty', async () => {
         const coreApi = {
-            readNamespacedEndpoints: jest.fn().mockResolvedValue({ subsets: [] }),
+            readNamespacedEndpoints: vi.fn().mockResolvedValue({ subsets: [] }),
         } as never;
 
         await expect(resolveServiceBackend(coreApi, 'ns', 'my-svc', 27017)).rejects.toThrow(
@@ -191,7 +193,7 @@ describe('resolveServiceBackend', () => {
 
     it('should throw when subsets is undefined', async () => {
         const coreApi = {
-            readNamespacedEndpoints: jest.fn().mockResolvedValue({}),
+            readNamespacedEndpoints: vi.fn().mockResolvedValue({}),
         } as never;
 
         await expect(resolveServiceBackend(coreApi, 'ns', 'svc', 27017)).rejects.toThrow(/No ready pods/);
@@ -199,7 +201,7 @@ describe('resolveServiceBackend', () => {
 
     it('should throw when no port matches and multiple ports exist', async () => {
         const coreApi = {
-            readNamespacedEndpoints: jest.fn().mockResolvedValue({
+            readNamespacedEndpoints: vi.fn().mockResolvedValue({
                 subsets: [
                     {
                         addresses: [{ targetRef: { kind: 'Pod', name: 'pod-x' } }],
@@ -214,7 +216,7 @@ describe('resolveServiceBackend', () => {
 
     it('should throw when addresses have no targetRef', async () => {
         const coreApi = {
-            readNamespacedEndpoints: jest.fn().mockResolvedValue({
+            readNamespacedEndpoints: vi.fn().mockResolvedValue({
                 subsets: [
                     {
                         addresses: [{ ip: '10.0.0.5' }], // no targetRef at all
@@ -229,14 +231,14 @@ describe('resolveServiceBackend', () => {
 
     it('should throw when Endpoints API call fails', async () => {
         const coreApi = {
-            readNamespacedEndpoints: jest.fn().mockRejectedValue(new Error('Forbidden')),
+            readNamespacedEndpoints: vi.fn().mockRejectedValue(new Error('Forbidden')),
         } as never;
 
         await expect(resolveServiceBackend(coreApi, 'ns', 'svc', 27017)).rejects.toThrow('Forbidden');
     });
 
     it('should pass correct arguments to readNamespacedEndpoints', async () => {
-        const mockRead = jest.fn().mockResolvedValue({
+        const mockRead = vi.fn().mockResolvedValue({
             subsets: [
                 {
                     addresses: [{ targetRef: { kind: 'Pod', name: 'p' } }],
@@ -258,7 +260,7 @@ describe('PortForwardTunnelManager', () => {
     let manager: PortForwardTunnelManager;
 
     beforeEach(() => {
-        jest.clearAllMocks();
+        vi.clearAllMocks();
         PortForwardTunnelManager.getInstance().dispose();
         manager = PortForwardTunnelManager.getInstance();
     });
@@ -280,7 +282,7 @@ describe('PortForwardTunnelManager', () => {
             sourceId: overrides?.sourceId ?? 'default',
             kubeConfig: {} as never,
             coreApi: {
-                readNamespacedEndpoints: jest.fn().mockResolvedValue({
+                readNamespacedEndpoints: vi.fn().mockResolvedValue({
                     subsets: [
                         {
                             addresses: [{ targetRef: { kind: 'Pod', name: 'test-pod-abc' } }],
@@ -333,14 +335,14 @@ describe('PortForwardTunnelManager', () => {
     // --- Lifecycle ---
 
     it('should start a tunnel on a free port', async () => {
-        mockPortForward.mockResolvedValue({ on: jest.fn(), close: jest.fn() });
+        mockPortForward.mockResolvedValue({ on: vi.fn(), close: vi.fn() });
         const result = await manager.startTunnel(createMockParams());
         expect(result.outcome).toBe('started');
         expect(hasTunnel()).toBe(true);
     });
 
     it('should return reused for the same source and service key', async () => {
-        mockPortForward.mockResolvedValue({ on: jest.fn(), close: jest.fn() });
+        mockPortForward.mockResolvedValue({ on: vi.fn(), close: vi.fn() });
         const params = createMockParams();
         await manager.startTunnel(params);
         const result = await manager.startTunnel(params);
@@ -349,7 +351,7 @@ describe('PortForwardTunnelManager', () => {
     });
 
     it('should start independent tunnels for identical service keys from different sourceIds', async () => {
-        mockPortForward.mockResolvedValue({ on: jest.fn(), close: jest.fn() });
+        mockPortForward.mockResolvedValue({ on: vi.fn(), close: vi.fn() });
 
         const first = await manager.startTunnel(createMockParams({ sourceId: 'source-a' }));
         const second = await manager.startTunnel(createMockParams({ sourceId: 'source-b' }));
@@ -367,7 +369,7 @@ describe('PortForwardTunnelManager', () => {
     });
 
     it('should not share a pending tunnel start across different sourceIds', async () => {
-        mockPortForward.mockResolvedValue({ on: jest.fn(), close: jest.fn() });
+        mockPortForward.mockResolvedValue({ on: vi.fn(), close: vi.fn() });
 
         const firstStart = manager.startTunnel(createMockParams({ sourceId: 'source-a' }));
         const secondStart = manager.startTunnel(createMockParams({ sourceId: 'source-b' }));
@@ -412,7 +414,7 @@ describe('PortForwardTunnelManager', () => {
     });
 
     it('should allow different tunnels for different services', async () => {
-        mockPortForward.mockResolvedValue({ on: jest.fn(), close: jest.fn() });
+        mockPortForward.mockResolvedValue({ on: vi.fn(), close: vi.fn() });
         await manager.startTunnel(createMockParams({ serviceName: 'svc-a' }));
         await manager.startTunnel(createMockParams({ serviceName: 'svc-b' }));
         expect(hasTunnel({ serviceName: 'svc-a' })).toBe(true);
@@ -420,7 +422,7 @@ describe('PortForwardTunnelManager', () => {
     });
 
     it('should distinguish tunnels by context name', async () => {
-        mockPortForward.mockResolvedValue({ on: jest.fn(), close: jest.fn() });
+        mockPortForward.mockResolvedValue({ on: vi.fn(), close: vi.fn() });
         await manager.startTunnel(createMockParams({ contextName: 'ctx-1' }));
         await manager.startTunnel(createMockParams({ contextName: 'ctx-2' }));
         expect(hasTunnel({ contextName: 'ctx-1' })).toBe(true);
@@ -428,7 +430,7 @@ describe('PortForwardTunnelManager', () => {
     });
 
     it('should distinguish tunnels by namespace', async () => {
-        mockPortForward.mockResolvedValue({ on: jest.fn(), close: jest.fn() });
+        mockPortForward.mockResolvedValue({ on: vi.fn(), close: vi.fn() });
         await manager.startTunnel(createMockParams({ namespace: 'ns-a' }));
         await manager.startTunnel(createMockParams({ namespace: 'ns-b' }));
         expect(hasTunnel({ namespace: 'ns-a' })).toBe(true);
@@ -442,7 +444,7 @@ describe('PortForwardTunnelManager', () => {
     });
 
     it('should list a started tunnel with correct metadata', async () => {
-        mockPortForward.mockResolvedValue({ on: jest.fn(), close: jest.fn() });
+        mockPortForward.mockResolvedValue({ on: vi.fn(), close: vi.fn() });
         const before = new Date();
         await manager.startTunnel(createMockParams({ serviceName: 'my-svc', namespace: 'my-ns', servicePort: 27017 }));
         const after = new Date();
@@ -461,7 +463,7 @@ describe('PortForwardTunnelManager', () => {
     });
 
     it('should list all started tunnels', async () => {
-        mockPortForward.mockResolvedValue({ on: jest.fn(), close: jest.fn() });
+        mockPortForward.mockResolvedValue({ on: vi.fn(), close: vi.fn() });
         await manager.startTunnel(createMockParams({ serviceName: 'svc-a' }));
         await manager.startTunnel(createMockParams({ serviceName: 'svc-b' }));
         const tunnels = manager.listTunnels();
@@ -472,7 +474,7 @@ describe('PortForwardTunnelManager', () => {
     // --- stopTunnel ---
 
     it('should stop a single tunnel and return true', async () => {
-        mockPortForward.mockResolvedValue({ on: jest.fn(), close: jest.fn() });
+        mockPortForward.mockResolvedValue({ on: vi.fn(), close: vi.fn() });
         await manager.startTunnel(createMockParams({ serviceName: 'svc-target' }));
         const stopped = stopTunnel({ serviceName: 'svc-target' });
         expect(stopped).toBe(true);
@@ -491,7 +493,7 @@ describe('PortForwardTunnelManager', () => {
     });
 
     it('should only stop the targeted tunnel and leave others running', async () => {
-        mockPortForward.mockResolvedValue({ on: jest.fn(), close: jest.fn() });
+        mockPortForward.mockResolvedValue({ on: vi.fn(), close: vi.fn() });
         await manager.startTunnel(createMockParams({ serviceName: 'svc-a' }));
         await manager.startTunnel(createMockParams({ serviceName: 'svc-b' }));
         stopTunnel({ serviceName: 'svc-a' });
@@ -500,7 +502,7 @@ describe('PortForwardTunnelManager', () => {
     });
 
     it('should stop only the targeted source when service identity is otherwise identical', async () => {
-        mockPortForward.mockResolvedValue({ on: jest.fn(), close: jest.fn() });
+        mockPortForward.mockResolvedValue({ on: vi.fn(), close: vi.fn() });
         await manager.startTunnel(createMockParams({ sourceId: 'source-a' }));
         await manager.startTunnel(createMockParams({ sourceId: 'source-b' }));
 
@@ -512,14 +514,14 @@ describe('PortForwardTunnelManager', () => {
     });
 
     it('should log when a single tunnel is stopped', async () => {
-        mockPortForward.mockResolvedValue({ on: jest.fn(), close: jest.fn() });
+        mockPortForward.mockResolvedValue({ on: vi.fn(), close: vi.fn() });
         await manager.startTunnel(createMockParams({ serviceName: 'svc-log' }));
         stopTunnel({ serviceName: 'svc-log' });
         expect(ext.outputChannel.appendLine).toHaveBeenCalledWith(expect.stringContaining('svc-log'));
     });
 
     it('should stop all tunnels', async () => {
-        mockPortForward.mockResolvedValue({ on: jest.fn(), close: jest.fn() });
+        mockPortForward.mockResolvedValue({ on: vi.fn(), close: vi.fn() });
         await manager.startTunnel(createMockParams({ serviceName: 'svc-a' }));
         await manager.startTunnel(createMockParams({ serviceName: 'svc-b' }));
         manager.stopAll();
@@ -528,7 +530,7 @@ describe('PortForwardTunnelManager', () => {
     });
 
     it('stopTunnelsForSource closes only tunnels opened against the matching sourceId', async () => {
-        mockPortForward.mockResolvedValue({ on: jest.fn(), close: jest.fn() });
+        mockPortForward.mockResolvedValue({ on: vi.fn(), close: vi.fn() });
         await manager.startTunnel(createMockParams({ sourceId: 'src-keep', serviceName: 'svc-keep' }));
         await manager.startTunnel(createMockParams({ sourceId: 'src-drop', serviceName: 'svc-drop' }));
 
@@ -540,7 +542,7 @@ describe('PortForwardTunnelManager', () => {
     });
 
     it('stopTunnelsForSource closes the matching source even when another source has the same service identity', async () => {
-        mockPortForward.mockResolvedValue({ on: jest.fn(), close: jest.fn() });
+        mockPortForward.mockResolvedValue({ on: vi.fn(), close: vi.fn() });
         await manager.startTunnel(createMockParams({ sourceId: 'src-keep' }));
         await manager.startTunnel(createMockParams({ sourceId: 'src-drop' }));
 
@@ -552,7 +554,7 @@ describe('PortForwardTunnelManager', () => {
     });
 
     it('stopTunnelsForSource is a no-op when no tunnels match the sourceId', async () => {
-        mockPortForward.mockResolvedValue({ on: jest.fn(), close: jest.fn() });
+        mockPortForward.mockResolvedValue({ on: vi.fn(), close: vi.fn() });
         await manager.startTunnel(createMockParams({ sourceId: 'src-a', serviceName: 'svc-a' }));
 
         const closed = manager.stopTunnelsForSource('src-other');
@@ -562,7 +564,7 @@ describe('PortForwardTunnelManager', () => {
     });
 
     it('should cancel a pending start when stopAll is called before listen completes', async () => {
-        mockPortForward.mockResolvedValue({ on: jest.fn(), close: jest.fn() });
+        mockPortForward.mockResolvedValue({ on: vi.fn(), close: vi.fn() });
         const start = manager.startTunnel(createMockParams());
 
         manager.stopAll();
@@ -572,7 +574,7 @@ describe('PortForwardTunnelManager', () => {
     });
 
     it('should cancel a pending start when stopTunnel is called for that key', async () => {
-        mockPortForward.mockResolvedValue({ on: jest.fn(), close: jest.fn() });
+        mockPortForward.mockResolvedValue({ on: vi.fn(), close: vi.fn() });
         const start = manager.startTunnel(createMockParams({ serviceName: 'pending-svc' }));
 
         const stopped = stopTunnel({ serviceName: 'pending-svc' });
@@ -583,7 +585,7 @@ describe('PortForwardTunnelManager', () => {
     });
 
     it('should log when tunnels are stopped', async () => {
-        mockPortForward.mockResolvedValue({ on: jest.fn(), close: jest.fn() });
+        mockPortForward.mockResolvedValue({ on: vi.fn(), close: vi.fn() });
         await manager.startTunnel(createMockParams());
         manager.stopAll();
         expect(ext.outputChannel.appendLine).toHaveBeenCalledWith(
@@ -657,7 +659,7 @@ describe('PortForwardTunnelManager', () => {
         // down its TCP listener) that gets released a few hundred ms
         // later. The new code should bind successfully on the retry
         // without surfacing the "Use existing" prompt at all.
-        mockPortForward.mockResolvedValue({ on: jest.fn(), close: jest.fn() });
+        mockPortForward.mockResolvedValue({ on: vi.fn(), close: vi.fn() });
 
         const blockingServer = net.createServer();
         const port = await new Promise<number>((resolve) => {
@@ -771,7 +773,7 @@ describe('PortForwardTunnelManager', () => {
     });
 
     it('should report a managed port conflict instead of reusing a tunnel from a different sourceId', async () => {
-        mockPortForward.mockResolvedValue({ on: jest.fn(), close: jest.fn() });
+        mockPortForward.mockResolvedValue({ on: vi.fn(), close: vi.fn() });
         const port = await new Promise<number>((resolve) => {
             const tmp = net.createServer();
             tmp.listen(0, '127.0.0.1', () => {
@@ -791,7 +793,7 @@ describe('PortForwardTunnelManager', () => {
     });
 
     it('should not offer to reuse a managed tunnel for a different Kubernetes service on the same local port', async () => {
-        mockPortForward.mockResolvedValue({ on: jest.fn(), close: jest.fn() });
+        mockPortForward.mockResolvedValue({ on: vi.fn(), close: vi.fn() });
         const port = await new Promise<number>((resolve) => {
             const tmp = net.createServer();
             tmp.listen(0, '127.0.0.1', () => {
@@ -815,7 +817,7 @@ describe('PortForwardTunnelManager', () => {
     // --- Output channel ---
 
     it('should log tunnel start to output channel', async () => {
-        mockPortForward.mockResolvedValue({ on: jest.fn(), close: jest.fn() });
+        mockPortForward.mockResolvedValue({ on: vi.fn(), close: vi.fn() });
         await manager.startTunnel(createMockParams());
         expect(ext.outputChannel.appendLine).toHaveBeenCalledWith(
             expect.stringContaining('Port-forward tunnel started'),
@@ -823,7 +825,7 @@ describe('PortForwardTunnelManager', () => {
     });
 
     it('should include namespace and service in log message', async () => {
-        mockPortForward.mockResolvedValue({ on: jest.fn(), close: jest.fn() });
+        mockPortForward.mockResolvedValue({ on: vi.fn(), close: vi.fn() });
         await manager.startTunnel(createMockParams({ namespace: 'prod', serviceName: 'db-primary' }));
         expect(ext.outputChannel.appendLine).toHaveBeenCalledWith(expect.stringContaining('prod'));
         expect(ext.outputChannel.appendLine).toHaveBeenCalledWith(expect.stringContaining('db-primary'));
@@ -832,7 +834,7 @@ describe('PortForwardTunnelManager', () => {
     // --- dispose ---
 
     it('should clean up on dispose', async () => {
-        mockPortForward.mockResolvedValue({ on: jest.fn(), close: jest.fn() });
+        mockPortForward.mockResolvedValue({ on: vi.fn(), close: vi.fn() });
         await manager.startTunnel(createMockParams());
         manager.dispose();
         expect(hasTunnel()).toBe(false);
@@ -862,7 +864,7 @@ describe('PortForwardTunnelManager', () => {
     // --- Connection handling (integration-style) ---
 
     it('should resolve pod and forward when a TCP client connects', async () => {
-        mockPortForward.mockResolvedValue({ on: jest.fn(), close: jest.fn() });
+        mockPortForward.mockResolvedValue({ on: vi.fn(), close: vi.fn() });
 
         const params = createMockParams({ localPort: 0 });
         await manager.startTunnel(params);
@@ -872,8 +874,8 @@ describe('PortForwardTunnelManager', () => {
     });
 
     it('should accept TCP connections and call portForward with resolved pod', async () => {
-        const wsClose = jest.fn();
-        const wsOn = jest.fn();
+        const wsClose = vi.fn();
+        const wsOn = vi.fn();
         mockPortForward.mockResolvedValue({ on: wsOn, close: wsClose });
 
         // Use a known port so we can connect
@@ -913,8 +915,8 @@ describe('PortForwardTunnelManager', () => {
     });
 
     it('should close active sockets and webSockets when stopAll is called', async () => {
-        const wsClose = jest.fn();
-        mockPortForward.mockResolvedValue({ on: jest.fn(), close: wsClose });
+        const wsClose = vi.fn();
+        mockPortForward.mockResolvedValue({ on: vi.fn(), close: wsClose });
 
         const freePort = await new Promise<number>((resolve) => {
             const tmp = net.createServer();
@@ -974,7 +976,7 @@ describe('PortForwardTunnelManager', () => {
             sourceId: 'default',
             kubeConfig: {} as never,
             coreApi: {
-                readNamespacedEndpoints: jest.fn().mockRejectedValue(new Error('Endpoints not found')),
+                readNamespacedEndpoints: vi.fn().mockRejectedValue(new Error('Endpoints not found')),
             } as never,
             contextName: 'test-ctx',
             namespace: 'default',
@@ -1016,7 +1018,7 @@ describe('PortForwardTunnelManager', () => {
             sourceId: 'default',
             kubeConfig: {} as never,
             coreApi: {
-                readNamespacedEndpoints: jest.fn().mockRejectedValue(new Error('Forbidden')),
+                readNamespacedEndpoints: vi.fn().mockRejectedValue(new Error('Forbidden')),
             } as never,
             contextName: 'test-ctx',
             namespace: 'error-ns',

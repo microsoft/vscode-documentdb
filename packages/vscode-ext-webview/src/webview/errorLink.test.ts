@@ -3,10 +3,12 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+import { describe, expect, it, vi, type MockedFunction } from 'vitest';
+
 import { type AnyRouter } from '@trpc/server';
 // eslint-disable-next-line import/no-internal-modules -- tRPC's own link examples import from /server/observable: https://trpc.io/docs/client/links#example
 import { observable } from '@trpc/server/observable';
-import { errorLink, type ErrorHandler } from './errorLink';
+import { errorLink, type ErrorHandler } from './errorLink.js';
 
 /**
  * Build a downstream link that emits one of: `next` value, `error`, or
@@ -52,9 +54,9 @@ function createTestHarness(
     const next = makeDownstreamNext(outcome);
     const obs = linkRuntime({ op, next } as never);
 
-    const onNext = jest.fn();
-    const onError = jest.fn();
-    const onComplete = jest.fn();
+    const onNext = vi.fn();
+    const onError = vi.fn();
+    const onComplete = vi.fn();
     obs.subscribe({ next: onNext, error: onError, complete: onComplete });
 
     return { onNext, onError, onComplete };
@@ -62,7 +64,7 @@ function createTestHarness(
 
 describe('errorLink', () => {
     it('forwards query errors to the consumer onError handler', () => {
-        const handler: jest.MockedFunction<ErrorHandler> = jest.fn();
+        const handler: MockedFunction<ErrorHandler> = vi.fn();
         const { onError } = createTestHarness('query', { kind: 'error', error: new Error('boom') }, handler);
 
         expect(handler).toHaveBeenCalledTimes(1);
@@ -75,7 +77,7 @@ describe('errorLink', () => {
     });
 
     it('forwards mutation errors to the consumer onError handler', () => {
-        const handler: jest.MockedFunction<ErrorHandler> = jest.fn();
+        const handler: MockedFunction<ErrorHandler> = vi.fn();
         const { onError } = createTestHarness('mutation', { kind: 'error', error: new Error('nope') }, handler);
 
         expect(handler).toHaveBeenCalledTimes(1);
@@ -84,7 +86,7 @@ describe('errorLink', () => {
     });
 
     it('normalises non-Error rejections into Error instances', () => {
-        const handler: jest.MockedFunction<ErrorHandler> = jest.fn();
+        const handler: MockedFunction<ErrorHandler> = vi.fn();
         createTestHarness('query', { kind: 'error', error: 'string failure' }, handler);
 
         expect(handler).toHaveBeenCalledTimes(1);
@@ -94,7 +96,7 @@ describe('errorLink', () => {
     });
 
     it('does not forward subscription errors to the consumer handler', () => {
-        const handler: jest.MockedFunction<ErrorHandler> = jest.fn();
+        const handler: MockedFunction<ErrorHandler> = vi.fn();
         const { onError } = createTestHarness('subscription', { kind: 'error', error: new Error('sub') }, handler);
 
         // Subscriptions have their own per-call onError hook; this link must
@@ -107,7 +109,7 @@ describe('errorLink', () => {
     });
 
     it('passes through successful values without invoking the handler', () => {
-        const handler: jest.MockedFunction<ErrorHandler> = jest.fn();
+        const handler: MockedFunction<ErrorHandler> = vi.fn();
         const { onNext, onError, onComplete } = createTestHarness(
             'query',
             { kind: 'next', value: { result: { data: 'ok' } } },
@@ -121,7 +123,7 @@ describe('errorLink', () => {
     });
 
     it('passes through complete signals without invoking the handler', () => {
-        const handler: jest.MockedFunction<ErrorHandler> = jest.fn();
+        const handler: MockedFunction<ErrorHandler> = vi.fn();
         const { onComplete, onError } = createTestHarness('query', { kind: 'complete' }, handler);
 
         expect(handler).not.toHaveBeenCalled();

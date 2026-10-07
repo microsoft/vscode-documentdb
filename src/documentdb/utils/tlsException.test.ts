@@ -3,6 +3,8 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+import { describe, expect, it } from 'vitest';
+
 import { areAllHostsLocal, canonicalizeTlsException, resolveAllowInvalidCertificates } from './tlsException';
 
 describe('canonicalizeTlsException (TLS exception single-source-of-truth, design §7)', () => {

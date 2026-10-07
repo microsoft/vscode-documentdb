@@ -1,10 +1,17 @@
 {
   "compilerOptions": {
-    "module": "commonjs",
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
     "target": "ES2023",
     "outDir": "out",
     "lib": ["ES2023", "dom", "dom.iterable", "webworker"],
     "sourceMap": true,
+    // TypeScript 6 defaults `strict` to true. This project has never enabled it as a whole; it opts
+    // into individual checks below (`strictNullChecks`, `noImplicitThis`, `alwaysStrict`).
+    "strict": false,
+    // TypeScript 6 defaults `types` to []. Host code uses Node globals (`process`, `Buffer`, timers),
+    // which must not depend on a dependency's `/// <reference types="node" />` to be in scope.
+    "types": ["node"],
     "esModuleInterop": true, // added by tnaum to help with Denque integration, happy to discuss other approaches
     "allowSyntheticDefaultImports": true, // added by tnaum to fix SlickGrid integration, eager to discuss other approaches
     "noImplicitThis": true,
@@ -16,24 +23,21 @@
     "rootDir": ".",
     "experimentalDecorators": true,
     "resolveJsonModule": true,
-    "baseUrl": "./",
     "alwaysStrict": true,
+    // Types only (bundlers and Vitest do not read `paths`). These packages declare types for their
+    // `require` export but not for their `import` export, an untyped ESM wrapper around the same
+    // CommonJS code, so `moduleResolution: Bundler` would type every import from them as `any`.
     "paths": {
-      "*": ["node_modules/@types/*", "*"]
+      "@mongodb-js/explain-plan-helper": ["./node_modules/@mongodb-js/explain-plan-helper/dist/index.d.ts"],
+      "mongodb-connection-string-url": ["./node_modules/mongodb-connection-string-url/lib/index.d.ts"]
     },
     "jsx": "react-jsx"
-    /* keept this as comment during the PR work, to be removed
-    "types": ["jest", "mocha", "node"],
-    "typeRoots": [
-      //"typings",
-      "node_modules/@types"
-    ]
-      */
   },
-  "exclude": ["node_modules", ".vscode-test", "packages/*/dist"],
+  "exclude": ["node_modules", ".vscode-test", "packages/*/dist", "packages/*/scripts"],
   "references": [
     { "path": "packages/documentdb-js-schema-analyzer" },
     { "path": "packages/documentdb-js-operator-registry" },
+    { "path": "packages/documentdb-js-shell-api-types" },
     { "path": "packages/documentdb-js-shell-runtime" },
     { "path": "packages/vscode-ext-webview" },
     { "path": "packages/vscode-ext-webview-fluentui" }

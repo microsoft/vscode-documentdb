@@ -3,14 +3,16 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+
 import { type IActionContext } from '@microsoft/vscode-azext-utils';
 import { ext } from '../../../../extensionVariables';
 import { type CollectionIndexCopier, type CopyIndexesOptions } from '../../data-api/indexes/CollectionIndexCopier';
 import { TaskState } from '../../taskService';
 import { CopyIndexesTask, type CopyIndexesConfig } from './CopyIndexesTask';
 
-jest.mock('../../../../extensionVariables', () => ({
-    ext: { outputChannel: { trace: jest.fn(), warn: jest.fn() } },
+vi.mock('../../../../extensionVariables', () => ({
+    ext: { outputChannel: { trace: vi.fn(), warn: vi.fn() } },
 }));
 
 class TestCopyIndexesTask extends CopyIndexesTask {
@@ -45,13 +47,13 @@ function createContext(): IActionContext {
 
 describe('CopyIndexesTask', () => {
     beforeEach(() => {
-        jest.clearAllMocks();
+        vi.clearAllMocks();
     });
 
     it('initializes without database access and leaves validation to copier execution', async () => {
         const copier: CollectionIndexCopier = {
-            getSourceIndexSummary: jest.fn(),
-            copyIndexes: jest.fn(),
+            getSourceIndexSummary: vi.fn(),
+            copyIndexes: vi.fn(),
         };
         const task = new TestCopyIndexesTask(config, copier);
         const signal = new AbortController().signal;
@@ -66,7 +68,7 @@ describe('CopyIndexesTask', () => {
 
     it('maps created and skipped indexes to determinate progress and telemetry', async () => {
         const copier = {
-            copyIndexes: jest.fn().mockImplementation(async (options: CopyIndexesOptions) => {
+            copyIndexes: vi.fn().mockImplementation(async (options: CopyIndexesOptions) => {
                 options.onStart?.(3);
                 options.onProgress?.({ completed: 1, total: 3, indexName: 'email_1' });
                 options.onProgress?.({ completed: 2, total: 3, indexName: 'status_1' });
@@ -111,7 +113,7 @@ describe('CopyIndexesTask', () => {
 
     it('completes an empty all-indexes selection at 100 percent', async () => {
         const copier = {
-            copyIndexes: jest.fn().mockImplementation(async (options: CopyIndexesOptions) => {
+            copyIndexes: vi.fn().mockImplementation(async (options: CopyIndexesOptions) => {
                 options.onStart?.(0);
                 return {
                     selectedIndexCount: 0,
@@ -138,7 +140,7 @@ describe('CopyIndexesTask', () => {
 
     it('records same-connection and same-database telemetry', async () => {
         const copier = {
-            copyIndexes: jest.fn().mockResolvedValue({
+            copyIndexes: vi.fn().mockResolvedValue({
                 selectedIndexCount: 0,
                 createdCount: 0,
                 skippedCount: 0,
@@ -166,7 +168,7 @@ describe('CopyIndexesTask', () => {
 
     it('records a named subset copy scope', async () => {
         const copier = {
-            copyIndexes: jest.fn().mockResolvedValue({
+            copyIndexes: vi.fn().mockResolvedValue({
                 selectedIndexCount: 2,
                 createdCount: 2,
                 skippedCount: 0,
@@ -188,7 +190,7 @@ describe('CopyIndexesTask', () => {
 
     it('reports cancellation with partial progress', async () => {
         const copier = {
-            copyIndexes: jest.fn().mockImplementation(async (options: CopyIndexesOptions) => {
+            copyIndexes: vi.fn().mockImplementation(async (options: CopyIndexesOptions) => {
                 options.onStart?.(4);
                 options.onProgress?.({ completed: 1, total: 4, indexName: 'one' });
                 options.onProgress?.({ completed: 2, total: 4, indexName: 'two' });
@@ -220,7 +222,7 @@ describe('CopyIndexesTask', () => {
         const cancellation = new Error('cancelled');
         cancellation.name = 'AbortError';
         const copier = {
-            copyIndexes: jest.fn().mockImplementation(async (options: CopyIndexesOptions) => {
+            copyIndexes: vi.fn().mockImplementation(async (options: CopyIndexesOptions) => {
                 options.onStart?.(3);
                 controller.abort(cancellation);
                 throw cancellation;
@@ -241,7 +243,7 @@ describe('CopyIndexesTask', () => {
         async (errorName) => {
             const cause = new Error('copy failed');
             cause.name = errorName;
-            const copier = { copyIndexes: jest.fn().mockRejectedValue(cause) } as unknown as CollectionIndexCopier;
+            const copier = { copyIndexes: vi.fn().mockRejectedValue(cause) } as unknown as CollectionIndexCopier;
             const task = new TestCopyIndexesTask(config, copier);
             const context = createContext();
 

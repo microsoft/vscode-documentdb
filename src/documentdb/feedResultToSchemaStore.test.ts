@@ -3,7 +3,9 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-jest.mock('./SchemaStore');
+import { beforeEach, describe, expect, it, vi, type Mock } from 'vitest';
+
+vi.mock('./SchemaStore');
 
 import { ObjectId } from 'mongodb';
 import {
@@ -17,12 +19,12 @@ import { SchemaStore } from './SchemaStore';
 
 const TEST_CLUSTER_ID = 'test-cluster';
 
-function mockSchemaStore(): jest.Mock {
-    const addDocumentsMock = jest.fn();
+function mockSchemaStore(): Mock {
+    const addDocumentsMock = vi.fn();
     const mockStore = {
         addDocuments: addDocumentsMock,
     };
-    (SchemaStore.getInstance as jest.Mock).mockReturnValue(mockStore);
+    (SchemaStore.getInstance as Mock).mockReturnValue(mockStore);
     return addDocumentsMock;
 }
 
@@ -38,10 +40,10 @@ function makeResult(overrides: Partial<SchemaFeedableResult> = {}): SchemaFeedab
 // ─── Tests ───────────────────────────────────────────────────────────────────
 
 describe('feedResultToSchemaStore', () => {
-    let addDocumentsMock: jest.Mock;
+    let addDocumentsMock: Mock;
 
     beforeEach(() => {
-        jest.clearAllMocks();
+        vi.clearAllMocks();
         addDocumentsMock = mockSchemaStore();
     });
 

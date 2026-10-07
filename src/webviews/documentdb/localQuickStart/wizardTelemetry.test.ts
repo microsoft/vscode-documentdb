@@ -3,14 +3,16 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+
 import { type IActionContext, type ITelemetryContext } from '@microsoft/vscode-azext-utils';
 import { InstanceState } from '../../../services/localQuickStart/quickStartTypes';
 import { createWizardSession, reportWizardClosed, reportWizardStep } from './wizardTelemetry';
 
 const mockEvents: Array<{ readonly eventName: string; readonly telemetry: ITelemetryContext }> = [];
 
-jest.mock('@microsoft/vscode-azext-utils', () => ({
-    callWithTelemetryAndErrorHandling: jest.fn((eventName: string, callback: (context: IActionContext) => unknown) => {
+vi.mock('@microsoft/vscode-azext-utils', () => ({
+    callWithTelemetryAndErrorHandling: vi.fn((eventName: string, callback: (context: IActionContext) => unknown) => {
         const context = {
             telemetry: { properties: {}, measurements: {} },
             errorHandling: {},
@@ -20,7 +22,7 @@ jest.mock('@microsoft/vscode-azext-utils', () => ({
     }),
 }));
 
-jest.mock('../../../services/localQuickStart/QuickStartService', () => ({
+vi.mock('../../../services/localQuickStart/QuickStartService', () => ({
     QuickStartService: { getStatus: () => ({ state: 'CredentialsMissing' }) },
 }));
 

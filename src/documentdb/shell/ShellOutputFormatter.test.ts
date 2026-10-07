@@ -3,6 +3,8 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
 import { type ShellHelpDocument, type ShellHelpDocumentLine } from '@documentdb-js/shell-runtime';
 import { EJSON } from 'bson';
 import * as vscode from 'vscode';
@@ -18,8 +20,8 @@ describe('ShellOutputFormatter', () => {
         formatter = new ShellOutputFormatter();
 
         // Default: color enabled
-        jest.spyOn(vscode.workspace, 'getConfiguration').mockReturnValue({
-            get: jest.fn((_key: string, defaultValue?: unknown) => {
+        vi.spyOn(vscode.workspace, 'getConfiguration').mockReturnValue({
+            get: vi.fn((_key: string, defaultValue?: unknown) => {
                 if (_key === 'documentDB.shell.display.colorSupport') {
                     return true;
                 }
@@ -29,7 +31,7 @@ describe('ShellOutputFormatter', () => {
     });
 
     afterEach(() => {
-        jest.restoreAllMocks();
+        vi.restoreAllMocks();
     });
 
     function makeResult(overrides: Partial<SerializableExecutionResult>): SerializableExecutionResult {
@@ -181,8 +183,8 @@ describe('ShellOutputFormatter', () => {
 
     describe('formatResult without colors', () => {
         beforeEach(() => {
-            jest.spyOn(vscode.workspace, 'getConfiguration').mockReturnValue({
-                get: jest.fn((_key: string, defaultValue?: unknown) => {
+            vi.spyOn(vscode.workspace, 'getConfiguration').mockReturnValue({
+                get: vi.fn((_key: string, defaultValue?: unknown) => {
                     if (_key === 'documentDB.shell.display.colorSupport') {
                         return false;
                     }
@@ -225,8 +227,8 @@ describe('ShellOutputFormatter', () => {
         });
 
         it('should format error without color when disabled', () => {
-            jest.spyOn(vscode.workspace, 'getConfiguration').mockReturnValue({
-                get: jest.fn(() => false),
+            vi.spyOn(vscode.workspace, 'getConfiguration').mockReturnValue({
+                get: vi.fn(() => false),
             } as unknown as vscode.WorkspaceConfiguration);
 
             const output = formatter.formatError('Something went wrong');
@@ -243,8 +245,8 @@ describe('ShellOutputFormatter', () => {
         });
 
         it('should format system message without color when disabled', () => {
-            jest.spyOn(vscode.workspace, 'getConfiguration').mockReturnValue({
-                get: jest.fn(() => false),
+            vi.spyOn(vscode.workspace, 'getConfiguration').mockReturnValue({
+                get: vi.fn(() => false),
             } as unknown as vscode.WorkspaceConfiguration);
 
             const output = formatter.formatSystemMessage('Connecting...');
@@ -269,8 +271,8 @@ describe('ShellOutputFormatter', () => {
         });
 
         it('should preserve plain text when color support is disabled', () => {
-            jest.spyOn(vscode.workspace, 'getConfiguration').mockReturnValue({
-                get: jest.fn(() => false),
+            vi.spyOn(vscode.workspace, 'getConfiguration').mockReturnValue({
+                get: vi.fn(() => false),
             } as unknown as vscode.WorkspaceConfiguration);
 
             expect(formatter.formatShellTitle('DocumentDB Shell: Demo')).toBe('DocumentDB Shell: Demo');
@@ -328,8 +330,8 @@ describe('ShellOutputFormatter', () => {
         });
 
         it('should not colorize help text when color is disabled', () => {
-            jest.spyOn(vscode.workspace, 'getConfiguration').mockReturnValue({
-                get: jest.fn(() => false),
+            vi.spyOn(vscode.workspace, 'getConfiguration').mockReturnValue({
+                get: vi.fn(() => false),
             } as unknown as vscode.WorkspaceConfiguration);
 
             const result = makeHelpResult([

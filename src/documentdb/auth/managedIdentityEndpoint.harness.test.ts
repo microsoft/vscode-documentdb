@@ -3,6 +3,8 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
 /**
  * Exercises the REAL `ManagedIdentityCredential` against a local HTTP server standing in for the
  * identity endpoint. No Azure resources are involved.
@@ -68,7 +70,7 @@ describe('ManagedIdentityCredential against a fake identity endpoint', () => {
         requests = [];
         // A fresh module registry per test: MSAL selects and caches its identity source from the
         // environment, so a reused module would keep talking to the previous test's server.
-        jest.resetModules();
+        vi.resetModules();
     });
 
     afterEach(async () => {

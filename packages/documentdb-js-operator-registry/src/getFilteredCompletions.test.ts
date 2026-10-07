@@ -3,6 +3,8 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+import { describe, expect, test } from 'vitest';
+
 /**
  * Unit tests for getFilteredCompletions and completion presets.
  */
@@ -18,7 +20,7 @@ import {
     getAllCompletions,
     getFilteredCompletions,
     loadOperators,
-} from './index';
+} from './index.js';
 
 describe('getFilteredCompletions', () => {
     test('returns all operators when filtering by all top-level meta prefixes', () => {

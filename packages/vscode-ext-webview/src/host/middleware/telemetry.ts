@@ -27,7 +27,7 @@
  * tied to a particular `initWebviewTrpc` call.
  */
 
-import { type MiddlewareResultLike, type ProcedureInvocation } from './types';
+import { type MiddlewareResultLike, type ProcedureInvocation } from './types.js';
 
 /**
  * A minimal telemetry bag (`properties` / `measurements`). Exported as a
