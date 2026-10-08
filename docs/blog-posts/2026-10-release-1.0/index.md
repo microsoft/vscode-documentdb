@@ -6,7 +6,7 @@
 
 <p align="center"><img src="./images/1.0.0_hero.png" alt="DocumentDB for VS Code 1.0" width="800" style="max-width:100%;height:auto;"></p>
 
-DocumentDB for VS Code 1.0 is here. Released alongside [DocumentDB 1.0](https://documentdb.io/) 🔴 **[Input needed: link to the DocumentDB 1.0 announcement]**, the free, open-source extension is a **MongoDB GUI** and DocumentDB GUI built right into Visual Studio Code. It works with DocumentDB, Azure DocumentDB and other MongoDB-compatible databases, wherever they run.
+DocumentDB for VS Code 1.0 is here. Released alongside [DocumentDB 1.0](https://documentdb.io/) 🔴 **[Input needed: link to the DocumentDB 1.0 announcement]**, the free, open-source extension is a **MongoDB GUI** and **DocumentDB GUI**, built right into Visual Studio Code. It works with DocumentDB, Azure DocumentDB and other MongoDB-compatible databases, wherever they run.
 
 The milestone reflects what we built across all the releases on the way to 1.0, over a little more than a year. Version 1.0 focuses on fixes and polish, and celebrates how far that experience has come. Here is the shortest path from reading about DocumentDB 1.0 to working with it: run it locally, bring your own data, and understand what you have.
 
