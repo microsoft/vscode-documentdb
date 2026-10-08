@@ -59,9 +59,12 @@ operator already answered this in the current request.
 
 Suggested question: **Will this release include any screenshots?**
 
-If screenshots are planned, the operator provides the final image files. Store them under
-`docs/release-notes/images/` using `{version}_{feature_name}.png` and reference them using the
-markup in [RELEASE-NOTES-FORMAT.md](./RELEASE-NOTES-FORMAT.md). Do not add image placeholders.
+If screenshots are planned, the operator provides the raw captures. Frame them with the
+[documentation-screenshots](../documentation-screenshots/SKILL.md) skill so they match the
+existing release notes (brand background, consistent text size, numbered steps where needed).
+Store the framed images under `docs/release-notes/images/` using `{version}_{feature_name}.png`
+and reference them using the markup in [RELEASE-NOTES-FORMAT.md](./RELEASE-NOTES-FORMAT.md).
+Do not add image placeholders.
 
 ### Step 2: Determine Version Type
 
@@ -142,4 +145,4 @@ Before completing:
 - [ ] Patch releases append to existing file with `---` separator
 - [ ] `docs/index.md` Release Notes section updated with link to new version
 - [ ] Screenshot question was answered
-- [ ] Every requested screenshot is saved under `docs/release-notes/images/` and referenced
+- [ ] Every requested screenshot is framed with [documentation-screenshots](../documentation-screenshots/SKILL.md), saved under `docs/release-notes/images/` and referenced

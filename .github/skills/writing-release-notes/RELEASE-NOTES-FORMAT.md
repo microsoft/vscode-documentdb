@@ -196,8 +196,9 @@ Store release-note images under `docs/release-notes/images/`.
 
 **Width guidelines:**
 
-- Full-width screenshots: `width="800"`
-- Dialog/panel screenshots: `width="360"` to `width="600"`
+- Screenshots framed with [documentation-screenshots](../documentation-screenshots/SKILL.md): `width="800"` for all of them (every framed image is 1920 px wide, and smaller captures already carry more background, so text stays the same size)
+- Unframed full-width screenshots (older releases): `width="800"`
+- Unframed dialog/panel screenshots (older releases): `width="360"` to `width="600"`
 - Logos/icons: `style="width:40%; min-width:180px; max-width:320px;"`
 
 ## Changelog Link Format
