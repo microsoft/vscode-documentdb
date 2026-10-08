@@ -17,28 +17,9 @@ Usage:
   python frame.py --round <file.png> [...]    only round the outer corners of finished graphics
   python frame.py --measure <file.png>        print row spacing hints to choose a scale
 
-jobs.json (see ../references/example-jobs.json):
-{
-  "src": "originals",     # untouched captures, relative to the jobs.json folder
-  "out": ".",             # framed output, relative to the jobs.json folder
-  "jobs": {
-    "1.0.0_query_playground.png": {},                         # full 1920 capture, default scale
-    "1.0.0_inline_action_buttons.png": {"scale": 0.96},      # small crop, scale chosen by text size
-    "0.9.0_kubernetes_discovery.png": {"scale": 0.81, "pad": [16, 14, 0, 6]},
-    "1.0.0_copy_and_paste.png": {
-      "badges": [[478, 400, "1"], [682, 916, "2"], [782, 551, "3"]],
-      "legend": [["1", [["Right-click the source collection and choose", false], ["Copy Collection…", true]]],
-                 ["2", [["Right-click the target and choose", false], ["Paste Collection…", true]]],
-                 ["3", [["Choose how to handle conflicts, then paste", false]]]]
-    },
-    "1.0.0_authentication_methods.png": {
-      "mode": "panels",
-      "panels": [[58, 78, 1139, 399], [577, 495, 1657, 902]],
-      "badges": [[10, 266, "1"], [529, 651, "2"]],
-      "arrows": [[[1150, 266], [1420, 266], [1420, 480]]]
-    }
-  }
-}
+jobs.json: a "src" folder, an "out" folder (both relative to the jobs file) and one entry per
+image with optional keys: scale, pad, pad_color, mode ("frame" or "panels"), panels, badges,
+legend, arrows. A complete, working example is ../references/example-jobs.json.
 All coordinates (badges, panels, arrows) are in SOURCE pixels of the original capture.
 """
 from PIL import Image, ImageDraw, ImageFilter, ImageFont
@@ -105,7 +86,7 @@ def rounded_mask(w, h, r):
 def round_corners(img, r=None):
     """RGBA copy with transparent, anti-aliased outer corners (radius scales with width)."""
     img = img.convert("RGBA")
-    r = r or round(CANVAS_RADIUS * img.width / CANVAS_W)
+    r = round(CANVAS_RADIUS * img.width / CANVAS_W) if r is None else r
     a = np.minimum(np.asarray(img.getchannel("A")), np.asarray(rounded_mask(img.width, img.height, r)))
     img.putalpha(Image.fromarray(a))
     return img
@@ -194,6 +175,8 @@ def draw_legend(canvas, x, y, total_w, hgt, items, gap=24):
                 lines.append(cur); cur, curw = [], 0
             curw += (sp if cur else 0) + wl; cur.append((wd, bold))
         lines.append(cur)
+        if len(lines) > 2:
+            warn(f"legend card {label} wraps to {len(lines)} lines and overflows its card; shorten the text")
         lh = 32; ty = y + hgt / 2 - lh * len(lines) / 2 + lh / 2
         for line in lines:
             xx = tx
@@ -205,20 +188,36 @@ def draw_legend(canvas, x, y, total_w, hgt, items, gap=24):
 
 
 # ---- Layouts -------------------------------------------------------------------------
-def frame(src, dst, scale=BASE_SCALE, badges=(), legend=None, pad=0, arrows=()):
+def warn(msg):
+    print(f"WARNING: {msg}", file=sys.stderr)
+
+
+def opaque(img):
+    """Flatten transparent captures onto white so they don't leave holes in the card."""
+    if img.getextrema()[3][0] < 255:
+        white = Image.new("RGBA", img.size, (255, 255, 255, 255))
+        white.alpha_composite(img)
+        return white
+    return img
+
+
+def frame(src, dst, scale=BASE_SCALE, badges=(), legend=None, pad=0, pad_color=None, arrows=()):
     """Standard layout: whole capture as one card, centred on a 1920 wide background."""
-    img = Image.open(src).convert("RGBA")
+    img = opaque(Image.open(src).convert("RGBA"))
     if pad:   # extend tight crops with the capture's own background colour (l, t, r, b)
         p = (pad,) * 4 if isinstance(pad, int) else tuple(pad)
-        bgc = img.getpixel((img.width - 2, img.height - 2))
+        bgc = tuple(pad_color) + (255,) if pad_color else img.getpixel((img.width - 2, img.height - 2))
         ext = Image.new("RGBA", (img.width + p[0] + p[2], img.height + p[1] + p[3]), bgc)
         ext.paste(img, (p[0], p[1]))
         img = ext
         badges = [(x + p[0], y + p[1], l) for x, y, l in badges]
         arrows = [[(x + p[0], y + p[1]) for x, y in a] for a in arrows]
     w, h = round(img.width * scale), round(img.height * scale)
+    if w > CANVAS_W - 2 * MARGIN:
+        warn(f"{os.path.basename(src)} is {w} px wide after scaling; it touches or exceeds the {CANVAS_W} px canvas")
     shot = img.resize((w, h), Image.LANCZOS) if (w, h) != img.size else img
     leg_h = 96 if legend else 0
+    # with a legend: 64 above, 48 gap, 96 legend, 48 below
     cw, ch = CANVAS_W, h + 2 * MARGIN + (leg_h + 32 if legend else 0)
     ox, oy = (cw - w) // 2, MARGIN
     canvas = background(cw, ch)
@@ -242,7 +241,10 @@ def frame(src, dst, scale=BASE_SCALE, badges=(), legend=None, pad=0, arrows=()):
 def frame_panels(src, dst, panels, scale=BASE_SCALE, radius=PANEL_RADIUS, badges=(), arrows=()):
     """Floating-panel layout: lift quick-pick panels (x0, y0, x1, y1 inclusive) out of a
     white capture, keep their relative layout, place them straight on the background."""
-    img = Image.open(src).convert("RGBA")
+    img = opaque(Image.open(src).convert("RGBA"))
+    for x0, y0, x1, y1 in panels:
+        if not (0 <= x0 < x1 < img.width and 0 <= y0 < y1 < img.height):
+            raise ValueError(f"panel {[x0, y0, x1, y1]} is outside the {img.width}x{img.height} capture")
     gx0 = min(p[0] for p in panels); gy0 = min(p[1] for p in panels)
     gx1 = max(p[2] for p in panels); gy1 = max(p[3] for p in panels)
     gw, gh = round((gx1 - gx0 + 1) * scale), round((gy1 - gy0 + 1) * scale)
@@ -287,11 +289,16 @@ def run_jobs(jobs_path, only=()):
     cfg = json.load(open(jobs_path, encoding="utf-8"))
     src_dir = os.path.join(base, cfg.get("src", "originals"))
     out_dir = os.path.join(base, cfg.get("out", "."))
+    unknown = [n for n in only if n not in cfg["jobs"]]
+    if unknown:
+        sys.exit(f"ERROR: not in {jobs_path}: {', '.join(unknown)}")
     for name, kw in cfg["jobs"].items():
         if only and name not in only:
             continue
         kw = dict(kw)
         mode = kw.pop("mode", "frame")
+        if mode not in ("frame", "panels"):
+            sys.exit(f"ERROR: {name}: unknown mode '{mode}' (use 'frame' or 'panels')")
         kw["badges"] = [tuple(b) for b in kw.get("badges", [])]
         kw["arrows"] = [[tuple(p) for p in a] for a in kw.get("arrows", [])]
         if "legend" in kw:

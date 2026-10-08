@@ -43,7 +43,7 @@ All values are output pixels on the 1920 px canvas. They are defined as constant
 ### Canvas
 
 - Width is always **1920 px**. Smaller captures are not enlarged to fill it; they get more background, so the set looks structured.
-- Height is the content height plus **64 px** margin at the top and bottom (plus the legend, if present).
+- Height is the content height plus **64 px** margin at the top and bottom. With a legend: 64 px above the screenshot, a 48 px gap, the 96 px legend, and 48 px below it.
 - Outer corners are **32 px, transparent** (RGBA PNG), about 13 px at the 800 px display width. This is intentionally twice the inner screenshot radius, so both read as equally round.
 - No titles or captions inside images. They don't localize; text belongs in the Markdown.
 
@@ -57,15 +57,16 @@ All values are output pixels on the 1920 px canvas. They are defined as constant
 - Full 1920 px captures are scaled to **1792 px wide** (scale 0.9333) and centered.
 - Corner radius **16 px**, hairline border `rgba(0, 0, 0, 30)` at 2 px.
 - Shadow: Fluent 2 **shadow16 at 2x**, an ambient `0 0 4px` black at 12% plus a key `0 16px 32px` black at 14%.
-- **Lanczos** resampling for every resize. Shapes are drawn at 4x and downsampled.
+- **Lanczos** resampling for every resize. Masks, borders, badges and arrows are drawn at 4x and downsampled; shadows are blurred at native size.
+- Captures with transparent areas are flattened onto white first, so they never leave holes in the card.
 
 ### Floating panels (`"mode": "panels"`)
 
-For captures that show quick picks or dialogs floating on white: each panel is lifted out by its bounding box (`[x0, y0, x1, y1]`, inclusive, source pixels) and placed directly on the background, keeping the panels' relative layout. Panels get an 8 px (source) radius and the same shadow, with no outer card. Quick-pick panels have fill `#FBFBFD` and border `#E2E2E5`, which helps find their bounds.
+For captures that show quick picks or dialogs floating on white: each panel is lifted out by its bounding box (`[x0, y0, x1, y1]`, inclusive, source pixels) and placed directly on the background, keeping the panels' relative layout. Panels get an 8 px (source) radius and the same shadow, with no outer card. To find the bounds, scan for the panel border color `#E2E2E5` (panel fill is `#FBFBFD`): the box runs from the outermost border pixel on each side, inclusive, and excludes the panel's own shadow.
 
 ### Tight crops
 
-If text touches the edge of a crop, add `"pad": [left, top, right, bottom]` (source pixels). The capture is extended with its own background color.
+If text touches the edge of a crop, add `"pad": [left, top, right, bottom]` (source pixels), **only on the sides where text touches** and only as much as needed (about 6 to 16 px). Don't pad the other sides for balance. The capture is extended with the color of the pixel near its bottom-right corner; if that pixel is content, set `"pad_color": [r, g, b]` explicitly.
 
 ## Text Size (Most Important Rule)
 
@@ -78,7 +79,7 @@ To choose `scale` for a capture that is not 1920 px wide:
 3. Reference values for full captures (125% scaling): tree rows about **41 px** apart, Indexes table rows about **55 px**, editor lines about **35.5 px**.
 4. `python frame.py --measure capture.png` prints a rough median row spacing. Treat it as a hint and confirm by eye.
 
-Values used for 1.0: tree crop 0.96, Cluster Dashboard 1.12 (captured at a lower zoom), Kubernetes tree 0.81 (captured at a higher zoom), quick picks 0.9333.
+Values used for 1.0 (see the example jobs file): tree crop 0.96, Cluster Dashboard 1.12 (captured at a lower zoom), Kubernetes tree 0.81 with pad `[16, 14, 0, 6]` (captured at a higher zoom, text touched the top and left edges), quick picks 0.9333.
 
 ## Annotations
 
@@ -89,11 +90,14 @@ Use annotations only when they explain a sequence. By default, add none.
 - 56 px rounded square, radius 12, 4 px white border, fill brand blue `#0070E0`.
 - Label in Segoe UI Semibold at 31 px, white, centered. Number the badges 1, 2, 3 in the order the user performs the steps.
 - Shadow: Fluent shadow8 at 2x.
-- Coordinates (`[x, y, "1"]`) are the badge center in source pixels. Place badges **next to** the element they refer to, never covering text or icons. Patterns that work: beside a tree item, level with the relevant line of text, or just outside a panel's left edge, centered on the selected item.
+- Coordinates (`[x, y, "1"]`) are the badge center in source pixels. Place badges **next to** the element they refer to, never covering text or icons:
+  - **Tree items and menu entries:** on the **right**, just past the end of the label (or past the inline buttons and the highlight), where there is free space.
+  - **Dialogs and quick picks:** on the **left**, just outside the panel edge (about 48 source px), level with the line that asks the question or the item the user selects.
+  - Prefer the side with free space; if both sides are free, follow the reading direction (right of tree items, left of panels).
 
 ### Legend cards
 
-Only when badges alone are not self-explanatory (as in `1.0.0_copy_and_paste.png`): a row of equal-width white cards under the screenshot, 48 px below it, 96 px high, 24 px apart, with radius 16, a `#E0E0E0` outline and shadow16. Each card has a badge, then text in Segoe UI 24 px, navy `#252F3E`, with UI names in Semibold. Keep the wording short and imperative, using real UI labels, for example "Right-click the source collection and choose **Copy Collection…**".
+Only when badges alone are not self-explanatory (as in `1.0.0_copy_and_paste.png`): a row of equal-width white cards under the screenshot, 48 px below it, 96 px high, 24 px apart, with radius 16, a `#E0E0E0` outline and shadow16. Each card has a badge, then text in Segoe UI 24 px, navy `#252F3E`, with UI names in Semibold. Keep the wording short and imperative, using real UI labels, for example "Right-click the source collection and choose **Copy Collection…**". At most two lines per card (the script warns if text overflows). **When the operator supplies legend text, use it verbatim**; only split it into regular and Semibold segments.
 
 ### Arrows
 
@@ -101,7 +105,7 @@ To show that one choice leads to the next screen:
 
 - A quadratic Bezier `[[start], [control], [end]]` in source pixels. A corner point such as `[end_x, start_y]` as the control gives a smooth quarter curve.
 - Stroke 6 px in brand blue `#0070E0` with a round start cap, a 22 px filled arrowhead at a 28° half-angle, and a thin white halo so it reads over both UI and background.
-- Start just right of the chosen item, end just above the next panel. For two-step flows, combine badges and an arrow (as in `1.0.0_authentication_methods.png`).
+- Start just right of the chosen item, end just above the next panel. For the landing point, choose `end_x` in the **right third** of the next panel, over empty header space (away from its title text), so the curve is wide and reads as "continue here". For two-step flows, combine badges and an arrow (as in `1.0.0_authentication_methods.png`).
 
 ## Colors
 
