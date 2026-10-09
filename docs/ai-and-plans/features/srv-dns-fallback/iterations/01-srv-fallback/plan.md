@@ -298,7 +298,7 @@ client); `srvMaxHosts` in the URI and in the options × `replicaSet` in the URI,
 TXT; TXT `loadBalanced=true` × one or two targets × `srvMaxHosts`; `srvMaxHosts` and
 `srvServiceName` passed only in the options object.
 
-**Done.** `@M2@` `feat(srv-resolver): pure SRV URI rewrite mirroring the driver`.
+**Done.** `855b9093` `feat(srv-resolver): pure SRV URI rewrite mirroring the driver`.
 `packages/documentdb-js-srv-resolver/src/srvUriRewrite.ts` exports `isSrvConnectionString`,
 `getSrvLookupTarget`, `rewriteSrvUri` and `getSrvRewriteErrorKind` (a `WeakMap` filled at throw
 time, so errors are classified for telemetry without being modified). The host segment is split
@@ -367,6 +367,32 @@ to the second server; `NXDOMAIN` stops; timeout moves on; abort closes the socke
 parsing. Added after review: TXT `NOERROR` without answers and TXT `NXDOMAIN` are reported as "no
 TXT", not as failures (R3); with every server slow, SRV plus TXT plus TCP retries end at the single
 deadline, not at a multiple of it (R4).
+
+**Done.** `@M3@` `feat(srv-resolver): fallback DNS client over UDP and TCP`.
+`packages/documentdb-js-srv-resolver/src/fallbackDnsClient.ts` exports `resolveSrvFallback`,
+`resolveTxtFallback`, `parseDnsServers`, `hasCompressedSrvTarget` and `FallbackDnsError` (Node-shaped:
+`code`, `syscall`, `hostname`, plus `serversTried` and `attempts`). The timing constants live in
+`src/constants.ts`; the logger interface and the cancellation helpers in `src/types.ts`. Each
+attempt's timeout is `min(per-attempt limit, time left until the caller's absolute deadlineAt)`.
+46 tests against a UDP+TCP stub on `127.0.0.1` (`src/test/dnsStubServer.ts`) with a hand-built
+compressed-target reply, including every case listed above, socket-leak checks and the R4 shared
+deadline; three consecutive clean runs.
+
+**Deviation.** Approved by the coordinator (confidence ≥ 85 % each):
+
+- **Cancellation type.** The package cannot throw `UserCancelledError`: it lives in
+  `@microsoft/vscode-azext-utils`, which imports `vscode` (D0020 forbids that). The package rejects
+  with the caller's `signal.reason` when it is an `Error`, otherwise with
+  `SrvResolutionCancelledError`. The extension adapter (WI-4) aborts with a `UserCancelledError` as
+  the reason, so callers get exactly that object back. Rejected alternatives: a string flag on a
+  generic error (callers would have to re-wrap, which the error rule forbids), and copying a
+  `UserCancelledError` look-alike into the package (`instanceof` checks in the extension would fail).
+- **Error codes** use Node's `dns` constants (`ESERVFAIL`, `EREFUSED`, `EFORMERR`, `ENOTIMP`,
+  `EBADRESP`, `ETIMEOUT`, `ECONNREFUSED`), so `fallbackErrorCode` reads like `nodeErrorCode`. The
+  telemetry table's `SERVFAIL` and `REFUSED` become `ESERVFAIL` and `EREFUSED`.
+- **Unparseable `dns.getServers()` entries are skipped** with one trace line each, instead of
+  failing the whole fallback; if none remain, the result is `ECONNREFUSED` as for an empty list.
+- `NOERROR` without answers (`ENODATA`) stops like `NXDOMAIN`: both are authoritative answers.
 
 ---
 
