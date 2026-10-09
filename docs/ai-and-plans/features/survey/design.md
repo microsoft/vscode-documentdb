@@ -38,8 +38,10 @@ Iteration 4 enables the shared code switch in all modes (D0021).
 The `documentdb.surveyInvitationActive` context is false on activation and true only for a
 live invitation. It gates the view and its otherwise empty container. No HTML or webview
 state is restored at startup. The presenter opens the view with `preserveFocus: true`, uses
-`show(true)` once resolved, and returns unavailable after at most 1500 ms if it cannot become
-visible. The rendered message plus current view visibility jointly trigger `onVisible` once.
+`show(true)` once resolved. Presentation relies on the VS Code reveal API without a timeout
+or a separate wait for view resolution or visibility. An unavailable presenter or API failure
+still defers the invitation. The rendered message plus current view visibility jointly trigger
+`onVisible` once, even if resolution or visibility occurs after the reveal API completes.
 Actual editor/terminal focus and moved/hidden behavior are pending operator verification;
 see the Stage 2 Progress in the [implementation plan](./iterations/01-implementation-plan.md).
 
@@ -239,8 +241,8 @@ the successful feature operation. Set the **DocumentDB for VS Code** output chan
 The service traces admitted feature-area usage, new versus already-counted active days and
 the required threshold, same-day/in-flight evaluation skips, admission and eligibility gates,
 cooldown expiry/remaining milliseconds, presentation, permission withdrawal, generic outcomes,
-and persistence success/failure. The presenter distinguishes unavailable destinations,
-reveal timeout, and reveal failure. Logging does not collect activity when admission fails,
+and persistence success/failure. The presenter distinguishes unavailable destinations
+and reveal failure. Logging does not collect activity when admission fails,
 change policy, or expose rating/element identities or database/connection details.
 
 These are local diagnostics, not telemetry events. Counts, dates, and cooldown deadlines

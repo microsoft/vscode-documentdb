@@ -51,10 +51,10 @@ export type SurveyInvitationHandle = vscode.Disposable;
 
 export interface SurveyPresenter {
     /**
-     * Shows the invitation without taking focus from the editor or terminal (D0012).
+     * Requests the invitation be shown without taking focus from the editor or terminal (D0012).
      * Resolves to `undefined` when the destination is unavailable. May reject on failure.
-     * Must settle promptly, without waiting for the user to open a hidden view; resolve
-     * `undefined` if the destination cannot be shown now.
+     * Resolves after the reveal API completes, without waiting for rendering or visibility.
+     * Reports actual visibility separately through `onVisible`.
      */
     present(
         request: SurveyInvitationRequest,

@@ -410,6 +410,9 @@ operator verification are recorded under Stage 2 Progress in the
 Developer-only simulation and reset commands are available in the Extension Development
 Host. Normal survey behavior is enabled through the same code switch in all modes, with all
 ordinary eligibility and permission gates still applied (D0021); no launch setting is required.
+Presentation relies on VS Code's reveal API without a timeout or an additional visibility
+wait. Actual rendering and visibility still determine when the invitation is recorded as
+shown and its cooldown starts.
 Set `DOCUMENTDB_DEBUG_SURVEY_ALWAYS_INVITE=true` in the selected launch configuration
 to show the real invitation on the next milestone, regardless of local eligibility or
 feedback permission. This forced-preview override does not apply in Production or Test,

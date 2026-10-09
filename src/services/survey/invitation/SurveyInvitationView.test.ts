@@ -16,7 +16,6 @@ import { type SurveyPersistedState } from '../surveyTypes';
 import {
     initializeSurveyInvitation,
     SURVEY_ACTIVE_CONTEXT,
-    SURVEY_PRESENTATION_TIMEOUT_MS,
     SURVEY_VIEW_ID,
     SurveyInvitationView,
 } from './SurveyInvitationView';
@@ -264,24 +263,79 @@ describe('SurveyInvitationView', (): void => {
         h.presenter.dispose();
     });
 
-    it('settles promptly for an unavailable or hidden destination and ignores late resolution', async (): Promise<void> => {
+    it('does not wait for view resolution or visibility, and records a late impression only when rendered and visible', async (): Promise<void> => {
         jest.useFakeTimers();
         const h = harness();
         jest.mocked(vscode.commands.executeCommand).mockResolvedValue(undefined);
-        const calls = callbacks();
-        const pending = h.presenter.present(request, calls);
-        await flush();
+        h.service.recordSurveyActivity('connection');
+        await h.service.whenIdle();
+        expect(h.service.getDebugStatus().invitationActive).toBe(true);
+        expect(h.state().nextEligibleAt).toBeUndefined();
+        expect(h.events.some((event): boolean => event.name === 'survey.presentationDeferred')).toBe(false);
+        expect(jest.getTimerCount()).toBe(0);
+        jest.advanceTimersByTime(5000);
         h.surface.visibility(false);
         h.presenter.resolveWebviewView(h.surface.view);
         h.surface.message({ type: 'rendered' });
-        expect(calls.onVisible).not.toHaveBeenCalled();
-        jest.advanceTimersByTime(SURVEY_PRESENTATION_TIMEOUT_MS);
-        expect(await pending).toBeUndefined();
-        expect(trace).toHaveBeenCalledWith('[Survey] Presentation deferred: reveal timed out.');
-        expect(h.surface.view.webview.html).toBe('');
-        h.presenter.resolveWebviewView(h.surface.view);
+        expect(h.surface.view.webview.html).not.toBe('');
+        expect(h.events.some((event): boolean => event.name === 'survey.invitationShown')).toBe(false);
+        expect(h.state().nextEligibleAt).toBeUndefined();
         h.surface.visibility(true);
-        expect(calls.onVisible).not.toHaveBeenCalled();
+        await flush();
+        expect(h.events.filter((event): boolean => event.name === 'survey.invitationShown')).toHaveLength(1);
+        expect(h.state().nextEligibleAt).toBe('2026-10-21T12:00:00.000Z');
+        h.service.dispose();
+        h.presenter.dispose();
+    });
+
+    it.each(['setContext', `${SURVEY_VIEW_ID}.open`])(
+        'ignores late completion of %s after programmatic disposal',
+        async (delayedCommand): Promise<void> => {
+            const h = harness();
+            let complete!: () => void;
+            const pendingCommand = new Promise<void>((resolve): void => {
+                complete = resolve;
+            });
+            jest.mocked(vscode.commands.executeCommand).mockImplementation(async (command): Promise<undefined> => {
+                if (command === delayedCommand) await pendingCommand;
+                return undefined;
+            });
+            const calls = callbacks();
+            const pending = h.presenter.present(request, calls);
+            await flush();
+            h.presenter.dispose();
+            complete();
+            expect(await pending).toBeUndefined();
+            h.presenter.resolveWebviewView(h.surface.view);
+            h.surface.message({ type: 'rendered' });
+            expect(h.surface.view.webview.html).toBe('');
+            expect(calls.onVisible).not.toHaveBeenCalled();
+            expect(calls.onChoice).not.toHaveBeenCalled();
+        },
+    );
+
+    it('cleans up a view closed while the reveal command is pending', async (): Promise<void> => {
+        const h = harness();
+        let complete!: () => void;
+        jest.mocked(vscode.commands.executeCommand).mockImplementation(async (command): Promise<undefined> => {
+            if (command === `${SURVEY_VIEW_ID}.open`) {
+                h.presenter.resolveWebviewView(h.surface.view);
+                await new Promise<void>((resolve): void => {
+                    complete = resolve;
+                });
+            }
+            return undefined;
+        });
+        const calls = callbacks();
+        const pending = h.presenter.present(request, calls);
+        await flush();
+        h.surface.close();
+        complete();
+        expect(await pending).toBeUndefined();
+        expect(calls.onChoice).toHaveBeenCalledTimes(1);
+        expect(calls.onChoice).toHaveBeenCalledWith('dismissed');
+        h.presenter.resolveWebviewView(h.surface.view);
+        expect(h.surface.view.webview.html).toBe('');
         h.presenter.dispose();
     });
 

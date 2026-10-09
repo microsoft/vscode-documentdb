@@ -18,13 +18,11 @@ import { buildSurveyInvitationHtml, type SurveyInvitationStrings } from './surve
 
 export const SURVEY_VIEW_ID = 'documentdb.surveyInvitation';
 export const SURVEY_ACTIVE_CONTEXT = 'documentdb.surveyInvitationActive';
-export const SURVEY_PRESENTATION_TIMEOUT_MS = 1500;
 const PRIVACY_STATEMENT_URL = 'https://go.microsoft.com/fwlink/?LinkId=521839';
 
 interface Invitation {
     readonly request: SurveyInvitationRequest;
     readonly callbacks: SurveyInvitationCallbacks;
-    readonly ready: (visible: boolean) => void;
     rendered: boolean;
     reported: boolean;
     busy: boolean;
@@ -47,31 +45,19 @@ export class SurveyInvitationView implements SurveyPresenter, vscode.WebviewView
             traceSurvey((): string => vscode.l10n.t('[Survey] Presentation deferred: destination unavailable.'));
             return undefined;
         }
-        let ready!: (visible: boolean) => void;
-        const visible = new Promise<boolean>((resolve): void => {
-            ready = resolve;
-        });
         const invitation: Invitation = {
             request,
             callbacks,
-            ready,
             rendered: false,
             reported: false,
             busy: false,
             closed: false,
         };
         this.active = invitation;
-        let timer: ReturnType<typeof setTimeout> | undefined;
-        const timeout = new Promise<boolean>((resolve): void => {
-            timer = setTimeout((): void => {
-                traceSurvey((): string => vscode.l10n.t('[Survey] Presentation deferred: reveal timed out.'));
-                resolve(false);
-            }, SURVEY_PRESENTATION_TIMEOUT_MS);
-        });
-        const reveal = async (): Promise<boolean> => {
+        try {
             await vscode.commands.executeCommand('setContext', SURVEY_ACTIVE_CONTEXT, true);
             if (this.active !== invitation) {
-                return false;
+                return undefined;
             }
             if (this.view) {
                 this.render(invitation);
@@ -80,10 +66,7 @@ export class SurveyInvitationView implements SurveyPresenter, vscode.WebviewView
             } else {
                 await vscode.commands.executeCommand(`${SURVEY_VIEW_ID}.open`, { preserveFocus: true });
             }
-            return visible;
-        };
-        try {
-            if (!(await Promise.race([reveal(), timeout])) || this.active !== invitation) {
+            if (this.active !== invitation || invitation.closed) {
                 this.clear(invitation);
                 return undefined;
             }
@@ -92,8 +75,6 @@ export class SurveyInvitationView implements SurveyPresenter, vscode.WebviewView
             traceSurvey((): string => vscode.l10n.t('[Survey] Presentation deferred: reveal failed.'));
             this.clear(invitation);
             return undefined;
-        } finally {
-            clearTimeout(timer);
         }
     }
 
@@ -117,7 +98,6 @@ export class SurveyInvitationView implements SurveyPresenter, vscode.WebviewView
                 }
                 if (invitation && !invitation.busy) {
                     invitation.busy = true;
-                    invitation.ready(false);
                     void invitation.callbacks.onChoice('dismissed').catch((): void => undefined);
                 }
             }),
@@ -166,7 +146,6 @@ export class SurveyInvitationView implements SurveyPresenter, vscode.WebviewView
         if (!invitation || !this.view?.visible) {
             return;
         }
-        invitation.ready(true);
         if (invitation.rendered && !invitation.reported) {
             invitation.reported = true;
             invitation.callbacks.onVisible();
@@ -251,7 +230,6 @@ export class SurveyInvitationView implements SurveyPresenter, vscode.WebviewView
             return;
         }
         this.active = undefined;
-        invitation.ready(false);
         if (this.view) {
             this.view.webview.html = '';
         }
