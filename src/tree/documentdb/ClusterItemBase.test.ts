@@ -11,6 +11,38 @@ import { type BaseClusterModel, type TreeCluster } from '../models/BaseClusterMo
 import { type TreeElement } from '../TreeElement';
 import { ClusterItemBase, type EphemeralClusterCredentials } from './ClusterItemBase';
 
+jest.mock('vscode', () => ({
+    ...jest.requireActual<typeof import('vscode')>('../../__mocks__/vscode.js'),
+    MarkdownString: class MarkdownString {
+        #delegate: Pick<vscode.MarkdownString, 'value' | 'isTrusted' | 'supportThemeIcons' | 'supportHtml' | 'baseUri'>;
+
+        constructor(value = '', supportThemeIcons = false) {
+            this.#delegate = { value, supportThemeIcons };
+        }
+
+        get value(): string { return this.#delegate.value; }
+        set value(value: string) { this.#delegate.value = value; }
+        get isTrusted(): vscode.MarkdownString['isTrusted'] { return this.#delegate.isTrusted; }
+        set isTrusted(value: vscode.MarkdownString['isTrusted']) { this.#delegate.isTrusted = value; }
+        get supportThemeIcons(): boolean | undefined { return this.#delegate.supportThemeIcons; }
+        set supportThemeIcons(value: boolean | undefined) { this.#delegate.supportThemeIcons = value; }
+        get supportHtml(): boolean | undefined { return this.#delegate.supportHtml; }
+        set supportHtml(value: boolean | undefined) { this.#delegate.supportHtml = value; }
+        get baseUri(): vscode.Uri | undefined { return this.#delegate.baseUri; }
+        set baseUri(value: vscode.Uri | undefined) { this.#delegate.baseUri = value; }
+
+        appendMarkdown(value: string): this {
+            this.#delegate.value += value;
+            return this;
+        }
+
+        appendText(value: string): this {
+            this.#delegate.value += value.replace(/[\\`*_{}[\]()#+\-.!|~]/g, '\\$&');
+            return this;
+        }
+    },
+}));
+
 // Captures telemetry events emitted via callWithTelemetryAndErrorHandling when its callback throws.
 const mockTelemetryEvents: Array<{ eventName: string; properties: Record<string, string>; suppressDisplay?: boolean }> =
     [];
@@ -155,15 +187,20 @@ describe('ClusterItemBase SRV tooltips', (): void => {
         ).ClustersClient;
         jest.mocked(client.getSrvResolution).mockReturnValue({ path: 'fallback', resolvedAt: 1 });
         const item = new TestClusterItem(makeCluster(), null);
-        const original = new vscode.MarkdownString('$(plug) **Reachability:** Direct');
+        const content = '### Cluster heading\n\n$(plug) **Reachability:** Direct\n\n⚠️ **Security:** TLS/SSL Disabled';
+        const original = new vscode.MarkdownString(content);
         original.supportThemeIcons = true;
+        original.isTrusted = false;
+        expect(Object.keys(original)).toEqual([]);
         item.setTooltip(original);
         for (let render = 0; render < 2; render++) {
             const tooltip = item.getTreeItem().tooltip as vscode.MarkdownString;
             expect(tooltip.value.match(/\*\*DNS:\*\*/g)).toHaveLength(1);
+            expect(tooltip.value).toContain(content);
+            expect(tooltip.isTrusted).toBe(false);
             expect(tooltip.supportThemeIcons).toBe(true);
         }
-        expect(original.value).not.toContain('DNS');
+        expect(original.value).toBe(content);
         jest.mocked(client.getSrvResolution).mockReturnValue(undefined);
         expect((item.getTreeItem().tooltip as vscode.MarkdownString).value).toBe(original.value);
     });

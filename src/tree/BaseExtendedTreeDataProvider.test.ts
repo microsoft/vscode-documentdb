@@ -14,6 +14,38 @@ import { type TreeElement } from './TreeElement';
 import { ClusterItemBase, type EphemeralClusterCredentials } from './documentdb/ClusterItemBase';
 import type { BaseClusterModel, TreeCluster } from './models/BaseClusterModel';
 
+jest.mock('vscode', () => ({
+    ...jest.requireActual<typeof import('vscode')>('../__mocks__/vscode.js'),
+    MarkdownString: class MarkdownString {
+        #delegate: Pick<vscode.MarkdownString, 'value' | 'isTrusted' | 'supportThemeIcons' | 'supportHtml' | 'baseUri'>;
+
+        constructor(value = '', supportThemeIcons = false) {
+            this.#delegate = { value, supportThemeIcons };
+        }
+
+        get value(): string { return this.#delegate.value; }
+        set value(value: string) { this.#delegate.value = value; }
+        get isTrusted(): vscode.MarkdownString['isTrusted'] { return this.#delegate.isTrusted; }
+        set isTrusted(value: vscode.MarkdownString['isTrusted']) { this.#delegate.isTrusted = value; }
+        get supportThemeIcons(): boolean | undefined { return this.#delegate.supportThemeIcons; }
+        set supportThemeIcons(value: boolean | undefined) { this.#delegate.supportThemeIcons = value; }
+        get supportHtml(): boolean | undefined { return this.#delegate.supportHtml; }
+        set supportHtml(value: boolean | undefined) { this.#delegate.supportHtml = value; }
+        get baseUri(): vscode.Uri | undefined { return this.#delegate.baseUri; }
+        set baseUri(value: vscode.Uri | undefined) { this.#delegate.baseUri = value; }
+
+        appendMarkdown(value: string): this {
+            this.#delegate.value += value;
+            return this;
+        }
+
+        appendText(value: string): this {
+            this.#delegate.value += value.replace(/[\\`*_{}[\]()#+\-.!|~]/g, '\\$&');
+            return this;
+        }
+    },
+}));
+
 jest.mock('../extensionVariables', () => ({
     ext: {
         state: { wrapItemInStateHandling: (item: unknown) => item },
@@ -160,6 +192,40 @@ describe('fallback tooltip row refresh', (): void => {
             notifySrvResolutionChanged('stable-cluster');
             await expect(provider.fetch(item, actionContext(), listDatabases)).resolves.toBe(newChildren);
             expect(listDatabases).toHaveBeenCalledTimes(2);
+        } finally {
+            provider.dispose();
+        }
+    });
+
+    it('preserves a stored override through the base item and provider tooltip passes', async (): Promise<void> => {
+        const provider = new TestProvider();
+        jest.spyOn(ClustersClient, 'getSrvResolution').mockReturnValue({
+            path: 'fallback', nodeErrorCode: 'EBADRESP', resolvedAt: 1,
+        });
+        const content = '### Cluster heading\n\n⚠️ **Security:** TLS/SSL Disabled';
+        const original = new vscode.MarkdownString(content, true);
+        original.isTrusted = false;
+        class StoredOverrideCluster extends TooltipClusterItem {
+            public constructor() {
+                super();
+                this.tooltipOverride = original;
+            }
+
+            public override getTreeItem(): vscode.TreeItem {
+                return ClusterItemBase.prototype.getTreeItem.call(this);
+            }
+        }
+        const item = new StoredOverrideCluster();
+        try {
+            expect(Object.keys(original)).toEqual([]);
+            for (let render = 0; render < 2; render++) {
+                const tooltip = (await provider.getTreeItem(item)).tooltip as vscode.MarkdownString;
+                expect(tooltip.value).toContain(content);
+                expect(tooltip.value.match(/\*\*DNS:\*\*/g)).toHaveLength(1);
+                expect(tooltip.isTrusted).toBe(false);
+                expect(tooltip.supportThemeIcons).toBe(true);
+            }
+            expect(original.value).toBe(content);
         } finally {
             provider.dispose();
         }

@@ -758,7 +758,7 @@ never touches the error.
 `syscall: 'connect'`) returns `undefined`; a `querySrv EBADRESP` produced with the off switch set
 gets the same neutral text.
 
-**Done.** `@M7@` `feat(srv): SRV DNS diagnostics, troubleshooting page and 0.11.1 notes`.
+**Done.** `cbd711d6` `feat(srv): SRV DNS diagnostics, troubleshooting page and 0.11.1 notes`.
 `src/documentdb/srv/SrvDnsDiagnosticsProvider.ts` (`id: 'srv-dns'`) requires SRV evidence (the
 message starts with `querySrv ` or `syscall === 'querySrv'`) before it looks at the code, which it
 reads from `error.code` or, for worker-relayed errors, from the message. The texts are as planned,
@@ -791,7 +791,7 @@ producing the same neutral text.
 - Update the feature README: code map, the `code` frontmatter, the timeline, and the decision status
   changes.
 
-**Done.** `@M7@` (same commit as WI-7). `docs/user-manual/troubleshooting-srv-dns.md` covers the
+**Done.** `cbd711d6` (same commit as WI-7). `docs/user-manual/troubleshooting-srv-dns.md` covers the
 symptom, the cause, what the fallback does (including the tooltip line), the
 `ELECTRON_RUN_AS_NODE` check for Windows, macOS (`Contents/MacOS/Code` since VS Code 1.110) and
 Linux, the cases the fallback cannot fix, the two workarounds with their caveats, the timing rule
