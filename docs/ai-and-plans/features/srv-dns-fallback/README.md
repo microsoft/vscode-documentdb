@@ -4,14 +4,22 @@ kind: notes
 status: active
 created: 2026-10-09
 code:
+    - packages/documentdb-js-srv-resolver/**
+    - src/documentdb/srv/**
     - src/documentdb/ClustersClient.ts
     - src/documentdb/playground/WorkerSessionManager.ts
+    - src/documentdb/playground/PlaygroundEvaluator.ts
     - src/documentdb/playground/playgroundWorker.ts
+    - src/documentdb/playground/workerOidcAllowedHosts.ts
+    - src/tree/BaseExtendedTreeDataProvider.ts
+    - src/tree/documentdb/ClusterItemBase.ts
+    - src/tree/connections-view/clusterItemPresentation.ts
+    - docs/user-manual/troubleshooting-srv-dns.md
 ---
 
 # SRV DNS fallback
 
-**Status:** planned · **Issue:** [#993](https://github.com/microsoft/vscode-documentdb/issues/993) ·
+**Status:** implemented on the branch (increment 1, M1–M8); manual verification pending · **Issue:** [#993](https://github.com/microsoft/vscode-documentdb/issues/993) ·
 **Branch:** `dev/tnaum/c-ares-workaround`
 
 > Why `mongodb+srv://` connections get their own in-memory SRV resolver as a fallback, and why
@@ -62,16 +70,20 @@ They are not duplicated here.
 
 ## Code map
 
-Planned. Nothing is implemented yet. See the plan for the proposed module layout.
+Increment 1 ([plan](./iterations/01-srv-fallback/plan.md), progress recorded per work item).
 
-| Site                                                                      | Surface                       | Planned change                                              |
-| ------------------------------------------------------------------------- | ----------------------------- | ----------------------------------------------------------- |
-| `src/documentdb/ClustersClient.ts`                                        | Tree, webviews, commands      | Resolve between `configureAuth()` and `new MongoClient()`   |
-| `src/documentdb/playground/WorkerSessionManager.ts`                       | Interactive shell, playground | Resolve on the host before posting `init` to the worker     |
-| `src/documentdb/playground/playgroundWorker.ts`                           | (worker)                      | Unchanged driver call; OIDC allowed hosts sourced from host |
-| `packages/documentdb-js-srv-resolver/` (new, D0020)                         | —                             | URI rewrite, fallback DNS client and core resolve function; no VS Code imports |
-| `src/tree/connections-view/clusterItemPresentation.ts`, `src/tree/documentdb/ClusterItemBase.ts` | Cluster tooltips | One line when the fallback resolved the connection (D0019, WI-10) |
-| `src/services/localQuickStart/QuickStartService.ts`, `connectToClient.ts` | —                             | Out of scope (D0007); `connectToClient` is marked deprecated                                     |
+| Site                                                                                     | Surface                       | What it does                                                                                                          |
+| ---------------------------------------------------------------------------------------- | ----------------------------- | --------------------------------------------------------------------------------------------------------------------- |
+| `packages/documentdb-js-srv-resolver/` (`@documentdb-js/srv-resolver`, not published, D0020) | —                             | No VS Code imports. `srvUriRewrite.ts` (driver-equivalent rewrite), `fallbackDnsClient.ts` (`dns-packet` over UDP/TCP), `resolveSrvForDriver.ts` (probe, preflight, fallback, error and cancellation rules), `report.ts`, `constants.ts` (D0016 timings), `types.ts` |
+| `src/documentdb/srv/prepareDriverConnectionString.ts`                                    | All                           | Extension adapter: environment switches, deadline, trace output, `connect.srvResolution` telemetry, `UserCancelledError` |
+| `src/documentdb/srv/srvResolutionTelemetry.ts`, `srvResolutionSummary.ts`, `srvResolutionTooltip.ts` | All, tree                     | Telemetry properties without hosts or IPs; in-memory summary and change event; the shared tooltip line (D0019)         |
+| `src/documentdb/srv/SrvDnsDiagnosticsProvider.ts`                                        | Error messages                | Neutral, actionable text for `querySrv EBADRESP`/`EFORMERR`/`ECONNREFUSED` (WI-7)                                      |
+| `src/documentdb/ClustersClient.ts`                                                       | Tree, webviews, commands      | Resolves between `configureAuth()` and `new MongoClient()`; `getSrvResolution(clusterId)`                               |
+| `src/documentdb/playground/WorkerSessionManager.ts`, `PlaygroundEvaluator.ts`            | Interactive shell, playground | Resolves on the host before `new Worker()`; per-startup abort; rethrows cancellation                                    |
+| `src/documentdb/playground/playgroundWorker.ts`, `workerOidcAllowedHosts.ts`, `workerTypes.ts` | (worker)                      | Unchanged driver call; OIDC allowed hosts taken from the host                                                          |
+| `src/tree/BaseExtendedTreeDataProvider.ts`, `src/tree/documentdb/ClusterItemBase.ts`, `src/tree/connections-view/clusterItemPresentation.ts` | Cluster tooltips              | Adds the DNS line for fallback connections; fallback-only row refresh                                                  |
+| `docs/user-manual/troubleshooting-srv-dns.md`                                            | Docs                          | Symptoms, confirmation, workarounds, timing, trace, switches                                                           |
+| `src/services/localQuickStart/QuickStartService.ts`, `connectToClient.ts`                | —                             | Out of scope (D0007); `connectToClient` is deprecated                                                                  |
 
 ## Timeline
 
@@ -84,6 +96,7 @@ Planned. Nothing is implemented yet. See the plan for the proposed module layout
 | 2026-10-09 | —   | Requirement: show fallback use in the cluster tooltip (D0019, plan WI-10) | [decisions.md](./decisions.md) |
 | 2026-10-09 | —   | VS Code-independent logic goes into workspace package `@documentdb-js/srv-resolver` (D0020, WI-0) | [decisions.md](./decisions.md) |
 | 2026-10-09 | —   | D0005, D0007–D0010 accepted; `connectToClient` deprecated; iteration 01 moved into a folder | [decisions.md](./decisions.md) |
+| 2026-10-09 | —   | Increment 1 implemented (M1–M8, `406b5f73`…`2855dcc9`); end-of-work review, one finding fixed; manual checks 2–8 pending | [plan.md Outcome](./iterations/01-srv-fallback/plan.md#outcome), [code-review.md](./iterations/01-srv-fallback/code-review.md) |
 
 ## Decisions
 
@@ -113,4 +126,6 @@ marked deprecated), and D0006 is superseded. Every decision is now settled. All 
 4. [iterations/01-srv-fallback/plan.md](./iterations/01-srv-fallback/plan.md): the dev plan
 5. [iterations/01-srv-fallback/design-review.md](./iterations/01-srv-fallback/design-review.md): design review
    findings and the evidence behind them
-6. [future-work.md](./future-work.md): deferred items
+6. [iterations/01-srv-fallback/code-review.md](./iterations/01-srv-fallback/code-review.md): end-of-work
+   code review and its triage
+7. [future-work.md](./future-work.md): deferred items

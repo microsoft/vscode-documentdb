@@ -924,6 +924,21 @@ on dispose) and fires `onDidChangeTreeData` for each row, so VS Code calls `getT
 8. **Slow network.** Throttle or delay DNS (for example `tc qdisc … netem delay 3000ms` in a Linux
    dev container). The fallback should still succeed within the D0016 limits.
 
+**Done (automated).** Every milestone gate ran `npm run build` and the touched tests; the last one
+(M8, after the review fix) passed with 38 suites and 684 tests. The WI-2 differential test, the
+WI-3 stub tests and the WI-4 to WI-7 and WI-10 unit tests are listed under their work items.
+
+**Done (manual step 1).** Run by the coordinator on 2026-10-09 with VS Code's own runtime
+(`Code.exe` with `ELECTRON_RUN_AS_NODE=1`: Node.js 24.21.0, c-ares 1.34.8) against a local UDP stub
+that sends the hand-built compressed-target reply: `dns.promises.Resolver.resolveSrv` failed with
+`querySrv EBADRESP`, and `resolveSrvFallback` decoded both targets with `targetCompressed=true`.
+The same script on Node.js 22.21.1 (c-ares 1.34.5) succeeds on both paths, which confirms the
+regression is in c-ares 1.34.7+.
+
+**Not done / deferred.** Manual steps 2–8 need the operator (a real `.global.` cluster, Entra ID, an
+affected network, Remote, and `tc`). The exact steps were prepared and handed over on 2026-10-09,
+but the operator was not available, so they are **pending**. None of them is claimed as passed.
+
 ---
 
 ## Risks
@@ -1154,5 +1169,55 @@ B and C fight the operator's choice in D0017, because an unbounded probe cannot 
 
 # Outcome
 
-_Not yet written. At hand-over: what was verified (automated and manual, with runtime and c-ares
-versions), what was not, and the Case 2 checks that ran._
+Written at hand-over, 2026-10-09. Branch `dev/tnaum/c-ares-workaround`, on top of `v0.11.0`; not
+pushed, no PR, no `release/0.11.1` branch, the npm package not published (D0015, D0020).
+
+## Commits
+
+| Milestone | Work items  | Commit     | Subject                                                                     |
+| --------- | ----------- | ---------- | --------------------------------------------------------------------------- |
+| M1        | WI-0, WI-1  | `406b5f73` | feat(srv): scaffold @documentdb-js/srv-resolver workspace package           |
+| M2        | WI-2        | `855b9093` | feat(srv-resolver): pure SRV URI rewrite mirroring the driver               |
+| M3        | WI-3        | `023e7446` | feat(srv-resolver): fallback DNS client over UDP and TCP                    |
+| M4        | WI-4        | `be0337b4` | feat(srv): core SRV resolve function, extension adapter and telemetry       |
+| M5        | WI-5, WI-10 | `d7df1147` | feat(srv): wire ClustersClient and show fallback use in the cluster tooltip |
+| M6        | WI-6        | `e5c67354` | feat(srv): resolve SRV on the host for the shell and query playground       |
+| M7        | WI-7, WI-8  | `cbd711d6` | feat(srv): SRV DNS diagnostics, troubleshooting page and 0.11.1 notes       |
+| M8        | review fix  | `2855dcc9` | fix(srv): keep the full cluster tooltip when adding the DNS line            |
+
+The hand-over commit after `2855dcc9` adds this chapter and the feature README update.
+
+## Verified
+
+- **Case 1 checks, at every milestone gate:** `npm run build` and the touched tests passed. The
+  M5/M6 gate ran the widest set (93 suites, 1,791 tests); the final M8 gate passed 38 suites and
+  684 tests.
+- **Bundle placement (D0008):** the resolver code and `dns-packet` are in `dist/main.js` and not in
+  `dist/playgroundWorker.js` (`webpack-dev-ext`, M5/M6 gate).
+- **Freshness (WI-1):** 0 fresh versions in 7 days; `dns-packet@5.6.1` and its dependency are from
+  2023 and 2024.
+- **Regression in the real runtime (WI-9 manual step 1):** VS Code's Node.js 24.21.0 with c-ares
+  1.34.8 rejects the compressed-target replay with `EBADRESP`, and the fallback client decodes it.
+- **Code review (M8):** one medium finding (C1, tooltip content lost in real VS Code), fixed in
+  `2855dcc9`; triage in [code-review.md](./code-review.md).
+
+## Not verified
+
+- **WI-9 manual steps 2–8 are pending operator verification:** forced path against a `.global.`
+  cluster with native auth and Entra ID on every surface, a real compressing resolver, nothing
+  persisted, the unaffected path and its `nodeProbeDurationMs`, Remote, the off switch following the
+  user-manual page, and a slow network. The steps are in WI-9 and in the hand-over message.
+- **Case 2 checks did not run** (`npm run l10n`, `prettier-fix`, `lint`, full `jest`, `package`);
+  they run when the PR is prepared for review. `l10n` is needed: WI-7 and WI-10 add strings. The
+  subagent code has not been through Prettier yet, so `prettier-fix` will reformat several new files.
+
+## Open items
+
+- Run the pending manual checks and record the results here.
+- Case 2 checks, the PR into `release/0.11.1` (created by a maintainer from `v0.11.0`), and the
+  forward-merge into `main` (D0015).
+- Optional release-notes screenshot of the tooltip line (needs an image from the operator).
+- Final package name and the publish workflow entry before the first npm publish (D0020).
+- Deviations recorded under WI-0 to WI-10 were approved by the coordinator at ≥ 80 % confidence;
+  none changed a decision in `decisions.md`. The operator may want to review them, especially the
+  `PlaygroundEvaluator` cancellation fix (WI-6) and the tree refresh mechanism (WI-10).
