@@ -187,7 +187,7 @@ to the `code` frontmatter here and in the feature README.
 **Acceptance:** `npm run build` passes, and a smoke import from the extension resolves to the
 workspace copy.
 
-**Done.** `@M1@` `feat(srv): scaffold @documentdb-js/srv-resolver workspace package`.
+**Done.** `406b5f73` `feat(srv): scaffold @documentdb-js/srv-resolver workspace package`.
 `packages/documentdb-js-srv-resolver` (version `0.1.0`, `publishConfig.access: public`,
 `peerDependencies: mongodb >=6.0.0`) is linked through npm workspaces, listed in the root
 `dependencies`, the root `tsconfig.json` references and the root `jest.config.js` projects. The
@@ -219,7 +219,7 @@ nothing.
 
 **Acceptance:** `npm run build` passes; the worker bundle size is unchanged.
 
-**Done.** `@M1@` (same commit). `dns-packet@5.6.1` and `@types/dns-packet@5.6.5` (dev) are in the
+**Done.** `406b5f73` (same commit). `dns-packet@5.6.1` and `@types/dns-packet@5.6.5` (dev) are in the
 package's manifest. Both `dns-packet@5.6.1` and `@leichtgewicht/ip-codec@2.0.5` were already in the
 lockfile as dev-only transitive dependencies; they lost their `"dev": true` flag, and
 `@types/dns-packet@5.6.5` was added. No other lockfile entry changed. `flagging-fresh-dependencies`
@@ -297,6 +297,37 @@ product where it matters: no TXT (`ENODATA` and `ENOTFOUND`, from Node and from 
 client); `srvMaxHosts` in the URI and in the options × `replicaSet` in the URI, the options and
 TXT; TXT `loadBalanced=true` × one or two targets × `srvMaxHosts`; `srvMaxHosts` and
 `srvServiceName` passed only in the options object.
+
+**Done.** `@M2@` `feat(srv-resolver): pure SRV URI rewrite mirroring the driver`.
+`packages/documentdb-js-srv-resolver/src/srvUriRewrite.ts` exports `isSrvConnectionString`,
+`getSrvLookupTarget`, `rewriteSrvUri` and `getSrvRewriteErrorKind` (a `WeakMap` filled at throw
+time, so errors are classified for telemetry without being modified). The host segment is split
+with the driver's own `HOSTS_REGEX`, userinfo is copied byte for byte, and only the query goes
+through `URLSearchParams`. 172 tests in `srvUriRewrite.test.ts` and
+`srvUriRewrite.differential.test.ts`; the differential suite runs the driver's internal
+`resolveSRVRecord` with mocked DNS and compares on the full target list (R6), with host selection
+tested separately through an injected `random`.
+
+**Deviation (D0004: the driver wins over the rule table).** Approved by the coordinator
+(confidence > 90 %, since D0004 says the driver is the reference):
+
+- TXT `authSource` is applied only when the client has credentials (the driver checks
+  `options.credentials`, `lib/connection_string.js` ~line 101). Skips are reported as
+  `authSource:noCredentials`.
+- A **user** `replicaSet` with `srvMaxHosts` fails with the driver's parse-time message
+  `Cannot use srvMaxHosts option with replicaSet`; only a TXT `replicaSet` gets
+  `Cannot combine replicaSet option with srvMaxHosts`.
+- Load-balanced validation runs on the full target list **before** TXT and again after it, as in
+  the driver (~line 73).
+- A trailing dot is stripped only for the parent-domain check; target hosts keep it, as the
+  driver's `HostAddress` does.
+- A successful but empty TXT answer throws the same `TypeError` as the driver. The fallback client
+  never produces one (`NOERROR` without answers is `ENODATA`), so this is unreachable in practice.
+- The rewrite repeats the SRV-only option conflicts (`directConnection`, `loadBalanced` in the
+  options object) so it is safe on its own; the WI-4 preflight normally raises them first.
+
+Alternative considered: follow the plan's table literally. Rejected because any divergence is
+exactly the drift D0004 forbids, and the differential test would fail.
 
 ---
 
