@@ -2140,79 +2140,88 @@
     "walkthroughs": [
       {
         "id": "documentdb-welcome",
-        "title": "Get Started with DocumentDB",
-        "description": "Connect to any DocumentDB or MongoDB database and start managing data directly inside VS Code.",
+        "title": "Get Started with DocumentDB for VS Code",
+        "description": "The DocumentDB GUI and MongoDB GUI for Azure DocumentDB, DocumentDB and MongoDB. Connect, explore, query and move your data without leaving VS Code.",
         "steps": [
           {
-            "id": "open-extension-v0.4.0",
-            "title": "1. Open the DocumentDB Extension",
-            "description": "Click the DocumentDB icon in the sidebar to get started. This opens the database explorer panel.",
+            "id": "connect-v1.0.0",
+            "title": "Connect to Your Database",
+            "description": "Add a connection with a connection string. Sign in with a username and password, with **Microsoft Entra ID** for Azure DocumentDB, or with no authentication for local databases. Your connections live in the **DocumentDB Connections** view, organized in folders you create.\n[New Connection](command:vscode-documentdb.command.connectionsView.newConnection)",
             "media": {
-              "image": "resources/walkthroughs/sidebar.png",
-              "altText": "DocumentDB in the sidebar"
+              "image": "resources/walkthroughs/authentication-methods.png",
+              "altText": "Choosing an authentication method: Username and Password, Microsoft Entra ID or No Authentication"
             }
           },
           {
-            "id": "connect-database-v0.4.0",
-            "title": "2. Connect to a Database",
-            "description": "Use a connection string or sign in with your cloud provider to connect to **DocumentDB** or **MongoDB**",
+            "id": "documentdb-local-v1.0.0",
+            "title": "No Database Yet? Start DocumentDB Local",
+            "description": "Run the open-source DocumentDB engine on your own machine, no `docker run` command needed. The extension pulls the official image, creates a persistent volume, generates credentials, picks a free port, loads optional sample data and saves the connection for you. Requires Docker. [Learn more](https://microsoft.github.io/vscode-documentdb/user-manual/local-quick-start)\n[Set up DocumentDB Local](command:vscode-documentdb.command.localQuickStart.open)",
             "media": {
-              "image": "resources/walkthroughs/connect.png",
-              "altText": "Connections screen"
+              "image": "resources/walkthroughs/documentdb-local.png",
+              "altText": "DocumentDB Local setup view with Set up DocumentDB Local highlighted in the Connections view"
             }
           },
           {
-            "id": "browse-collections-v0.4.0",
-            "title": "3. Browse Collections",
-            "description": "Explore your collections using Table, Tree, or JSON views. You can view documents with pagination support for large datasets.",
+            "id": "service-discovery-v1.0.0",
+            "title": "Discover Your Clusters on Azure, MongoDB Atlas and Kubernetes",
+            "description": "Skip copying connection strings: sign in once and pick a cluster from a list. **Service Discovery** finds Azure DocumentDB and Azure Cosmos DB for MongoDB (RU) on Azure, your MongoDB Atlas clusters, and DocumentDB clusters in Kubernetes, with port forwarding handled for you. Using the Azure Resources extension? Your Azure databases also appear in the **Azure** view. [Learn more](https://microsoft.github.io/vscode-documentdb/user-manual/service-discovery)\n[Open Service Discovery](command:discoveryView.focus)",
             "media": {
-              "image": "resources/walkthroughs/browse.png",
-              "altText": "Collection view with documents"
+              "image": "resources/walkthroughs/mongodb-atlas-discovery.png",
+              "altText": "Adding a MongoDB Atlas connection with a Service Account or API Key, next to MongoDB Atlas in the Service Discovery view"
             }
           },
           {
-            "id": "run-queries-v0.4.0",
-            "title": "4. Run Queries with Autocomplete",
-            "description": "Use the built-in editor to run find queries. Get syntax highlighting and field name suggestions while you type.",
+            "id": "cluster-dashboard-v1.0.0",
+            "title": "See What You Have",
+            "description": "Right-click a cluster and select **Cluster Dashboard** to see what is in it on one page: connection status, round-trip time, and an inventory of every database and collection with storage size, index size and document count. Sort, filter and drill into any database.\n[Open DocumentDB Connections](command:connectionsView.focus)",
             "media": {
-              "image": "resources/walkthroughs/query.png",
-              "altText": "Query editor with autocomplete"
+              "image": "resources/walkthroughs/cluster-dashboard.png",
+              "altText": "Cluster Dashboard with connection status, storage and document metrics, and a filterable database inventory"
             }
           },
           {
-            "id": "azure-resources-integration-v0.4.0",
-            "title": "5. Use Azure Resources (optional)",
-            "description": "**If you use the Azure Resources extension**, you can now access Azure Cosmos DB for MongoDB (RU) and Azure DocumentDB clusters from the Azure Resource View. This **optional integration** helps you work from the Azure environment you already use. [Read more...](https://github.com/microsoft/vscode-documentdb/discussions/251)",
+            "id": "collection-view-v1.0.0",
+            "title": "Explore Data in the Collection View",
+            "description": "Open any collection to build a query with filter, project and sort editors. Field names, operators and values are suggested from your actual data as you type. Browse the results as a **Table**, a **Tree** or **JSON**, and create, edit or delete documents in place.",
             "media": {
-              "image": "resources/walkthroughs/azure-resources.png",
-              "altText": "Azure Resources integration"
+              "image": "resources/walkthroughs/collection-view.png",
+              "altText": "Collection View with a query, autocompletion suggestions and results in a table"
             }
           },
           {
-            "id": "copy-and-paste-v0.7.0",
-            "title": "6. Copy and Paste Collections",
-            "description": "Quickly copy and paste collections between databases or connections. Perfect for moving smaller datasets and ad-hoc transfers. [Read more...](https://aka.ms/vscode-documentdb-copy-and-paste)",
-            "media": {
-              "image": "resources/walkthroughs/copy-and-paste.png",
-              "altText": "Copy and Paste Collections"
-            }
-          },
-          {
-            "id": "query-playground-v0.8.0",
-            "title": "7. Write Scripts in the Query Playground",
-            "description": "Create `.documentdb.js` files to write and run JavaScript queries with CodeLens execution, autocompletion, and per-file connections. No external tools needed. [Read more...](https://microsoft.github.io/vscode-documentdb/user-manual/query-playground)",
-            "media": {
-              "image": "resources/walkthroughs/query-playground.png",
-              "altText": "Query Playground with CodeLens Run buttons and JavaScript code"
-            }
-          },
-          {
-            "id": "interactive-shell-v0.8.0",
-            "title": "8. Explore with the Interactive Shell",
-            "description": "Open a built-in REPL terminal from any cluster, database, or collection. Use shell commands, tab completion, syntax highlighting, and persistent variables. No external tools needed. [Read more...](https://microsoft.github.io/vscode-documentdb/user-manual/interactive-shell)",
+            "id": "interactive-shell-v1.0.0",
+            "title": "Ask the Next Question in the Interactive Shell",
+            "description": "Right-click a cluster, database or collection and select **Open Interactive Shell**. Use `show dbs`, `use <db>`, persistent variables, syntax highlighting and tab completion, right in a VS Code terminal. Nothing to install: the shell is built in. One click takes your query from the Collection View to the shell and back. [Learn more](https://microsoft.github.io/vscode-documentdb/user-manual/interactive-shell)",
             "media": {
               "image": "resources/walkthroughs/interactive-shell.png",
-              "altText": "Interactive Shell with tab completion and syntax highlighting"
+              "altText": "Interactive Shell with syntax highlighting and tab completion"
+            }
+          },
+          {
+            "id": "query-playground-v1.0.0",
+            "title": "Save Your Work in a Query Playground",
+            "description": "Right-click a database or collection and select **New Query Playground**. Write JavaScript in `.documentdb.js` files, run each block with its own **Run** button, and keep the queries you want to reuse next to your code. [Learn more](https://microsoft.github.io/vscode-documentdb/user-manual/query-playground)",
+            "media": {
+              "image": "resources/walkthroughs/query-playground.png",
+              "altText": "Query Playground with Run buttons above each query block and results in a side panel"
+            }
+          },
+          {
+            "id": "query-insights-v1.0.0",
+            "title": "Find Out Why a Query Is Slow, and Fix It",
+            "description": "Run a query in the Collection View and open the **Query Insights** tab: see the query plan, then execution statistics with a Good, Fair or Poor rating, then optional AI recommendations from GitHub Copilot. Act on them in the **Indexes** tab: create, hide or delete indexes next to the query they affect.",
+            "media": {
+              "image": "resources/walkthroughs/query-insights-streaming.png",
+              "altText": "Query Insights streaming an AI summary and index recommendations"
+            }
+          },
+          {
+            "id": "copy-and-paste-v1.0.0",
+            "title": "Bring Your Data With You",
+            "description": "Copy a collection the way you copy files: right-click it and select **Copy Collection…**, then right-click a database on any connection and select **Paste Collection…**. Move data from MongoDB Atlas or Azure to DocumentDB Local in a few clicks, and choose how to handle duplicates. [Learn more](https://aka.ms/vscode-documentdb-copy-and-paste)",
+            "media": {
+              "image": "resources/walkthroughs/copy-and-paste.png",
+              "altText": "Copy and paste in three steps: copy the source collection, paste it into the target, and choose how to handle conflicts"
             }
           }
         ]
