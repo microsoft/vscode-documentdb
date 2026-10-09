@@ -22,7 +22,6 @@ import {
 } from '../../documentdb/auth/AuthConfig';
 import { type AuthMethodId } from '../../documentdb/auth/AuthMethod';
 import { ShellCommandIds } from '../../documentdb/shell/constants';
-import { withSrvResolutionTooltip } from '../../documentdb/srv/srvResolutionTooltip';
 import { ext } from '../../extensionVariables';
 import { SettingsService } from '../../services/SettingsService';
 import { ConnectionDiagnosticsService } from '../../services/connectionDiagnosticsService';
@@ -440,7 +439,7 @@ export abstract class ClusterItemBase<T extends BaseClusterModel = BaseClusterMo
         // These properties are optional and checked at runtime
         const azureProps = this.cluster as unknown as Partial<AzureClusterModel>;
 
-        const treeItem: vscode.TreeItem = {
+        return {
             id: this.id,
             contextValue: this.contextValue,
             label: this.cluster.name,
@@ -474,7 +473,5 @@ export abstract class ClusterItemBase<T extends BaseClusterModel = BaseClusterMo
                   ),
             collapsibleState: vscode.TreeItemCollapsibleState.Collapsed,
         };
-        treeItem.tooltip = withSrvResolutionTooltip(treeItem.tooltip, this.cluster.clusterId);
-        return treeItem;
     }
 }

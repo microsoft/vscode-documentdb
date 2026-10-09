@@ -27,7 +27,7 @@ When the built-in lookup fails with `EBADRESP`, `EFORMERR` or `ECONNREFUSED`, th
 - The resolved server list exists **only in memory**, for that one connection. It is never saved. Your stored connection string, **Copy Connection String**, **Update Connection String…** and exports all keep the original `mongodb+srv://` string, and every new connection looks up DNS again, so failover keeps working.
 - It works the same way for the tree, the Collection View, the interactive shell and the query playground.
 
-When a connection in the tree was resolved this way, the cluster's tooltip shows a line starting with **DNS:** that says so.
+To see whether a connection was resolved this way, collect a trace (see [Collect a trace for support](#collect-a-trace-for-support)).
 
 Nothing changes for connections where the built-in lookup works.
 

@@ -60,7 +60,7 @@ import {
 } from './LlmEnhancedFeatureApis';
 import { SchemaStore } from './SchemaStore';
 import { prepareDriverConnectionString } from './srv/prepareDriverConnectionString';
-import { notifySrvResolutionChanged, type SrvResolutionSummary } from './srv/srvResolutionSummary';
+import { type SrvResolutionSummary } from './srv/srvResolutionSummary';
 import { ConnectionStartupTimings } from './utils/ConnectionStartupTimings';
 import { getHostsFromConnectionString, hasAzureDomain } from './utils/connectionStringHelpers';
 import { fixupDocumentDbExplain } from './utils/fixupDocumentDbExplain';
@@ -566,9 +566,6 @@ export class ClustersClient {
             // Cluster metadata is set in initClient
             await client.initClient(abortSignal);
             ClustersClient._clients.set(clusterId, client);
-            if (client._srvResolution?.path === 'fallback') {
-                notifySrvResolutionChanged(clusterId);
-            }
         } catch (error) {
             // On failure (including abort), clean up the partially-created client
             void client._mongoClient?.close().catch(() => {

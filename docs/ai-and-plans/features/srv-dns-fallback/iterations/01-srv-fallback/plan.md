@@ -58,7 +58,7 @@ Changing any of them during implementation is a **deviation** (see Progress reco
 | Core rules       | D0001 transient, never persisted · D0002 same system DNS servers only · D0003 `dns-packet` · D0004 driver semantics exactly |
 | When it runs     | D0005 Node probe first · D0012 `EBADRESP`/`EFORMERR`/`ECONNREFUSED` · D0017 unbounded probe, pass-through                   |
 | Where            | D0007 `ClustersClient` + `WorkerSessionManager`; `connectToClient` deprecated · D0008 resolve on the host                   |
-| Observability    | D0009 one `connect.srvResolution` event · D0014 all output at `trace` · D0019 tooltip flag                                  |
+| Observability    | D0009 one `connect.srvResolution` event · D0014 all output at `trace` · ~~D0019 tooltip flag~~ D0021 no tooltip flag        |
 | Switches         | D0010 force switch · D0011 off switch, documented                                                                           |
 | Timing           | D0016 5 s UDP / 10 s TCP / shared cap `min(20 s, connectionTimeout)` · D0018 separate budgets                               |
 | Scope / shipping | D0013 no cached-client refresh · D0015 `v0.11.1` from `release/0.11.1` · D0020 local workspace package                      |
@@ -797,7 +797,7 @@ producing the same neutral text.
   changes.
 
 **Done.** `cbd711d6` (same commit as WI-7). `docs/user-manual/troubleshooting-srv-dns.md` covers the
-symptom, the cause, what the fallback does (including the tooltip line), the
+symptom, the cause, what the fallback does, the
 `ELECTRON_RUN_AS_NODE` check for Windows, macOS (`Contents/MacOS/Code` since VS Code 1.110) and
 Linux, the cases the fallback cannot fix, the two workarounds with their caveats, the timing rule
 (D0016, D0018), how to collect the `[SrvResolution]` trace, and both switches. It also explains how
@@ -893,6 +893,14 @@ on dispose) and fires `onDidChangeTreeData` for each row, so VS Code calls `getT
   `ITelemetryContext['properties']` and `['measurements']`, so the startup contexts (which can hold
   `TelemetryTrustedValue`) type-check.
 
+**Reverted (operator, 2026-10-09).** After reviewing the refresh mechanism, the operator dropped the
+tooltip line: "the price of workarounds is too high". The tooltip helper, the change event, the
+row redraw and every change to `BaseExtendedTreeDataProvider`, `ClusterItemBase`,
+`clusterItemPresentation` and their tests are removed; those files match `v0.11.0` again. Kept:
+`ClustersClient.getSrvResolution(clusterId)` and the host-free `SrvResolutionSummary`, for the
+future cluster dashboard (FW-2). Fallback use is visible in the `[SrvResolution]` trace and in
+telemetry. Recorded as D0021, which supersedes D0019, with the alternatives the operator rejected.
+
 ---
 
 ## WI-9: Verification
@@ -917,9 +925,8 @@ on dispose) and fires `onDidChangeTreeData` for each row, so VS Code calls `getT
 3. **A real compressing resolver.** Use a Linux dev container whose `resolv.conf` points at a small
    forwarding stub that re-encodes SRV targets with compression, or a known affected router. Run
    unforced. Expect `path=fallback`, `nodeErrorCode=EBADRESP` and `targetCompressed=true`.
-4. **Nothing persisted.** After a fallback connection, the cluster tooltip shows the fallback line
-   (WI-10), and "Copy Connection String", "Update Connection
-   String…" and export still show `mongodb+srv://`. Inspect connection storage and secret storage.
+4. **Nothing persisted.** After a fallback connection, "Copy Connection String", "Update Connection
+   String…" and export still show `mongodb+srv://`. (The tooltip line was dropped, D0021.) Inspect connection storage and secret storage.
 5. **Unaffected path.** On a normal network, check `path=node`, that the driver receives the
    original string (trace line), and the `nodeProbeDurationMs` overhead.
 6. **Remote.** Remote-SSH or WSL: resolution runs in the remote extension host and uses its DNS
@@ -1227,8 +1234,7 @@ The hand-over commit after `2855dcc9` adds this chapter and the feature README u
 - Run the pending manual checks and record the results here.
 - The AI pre-review file required by CONTRIBUTING §6, the `0.11.1` version bump, the PR into `release/0.11.1` (created by a maintainer from `v0.11.0`), and the
   forward-merge into `main` (D0015).
-- Optional release-notes screenshot of the tooltip line (needs an image from the operator).
 - Final package name and the publish workflow entry before the first npm publish (D0020).
 - Deviations recorded under WI-0 to WI-10 were approved by the coordinator at ≥ 80 % confidence;
-  none changed a decision in `decisions.md`. The operator may want to review them, especially the
-  `PlaygroundEvaluator` cancellation fix (WI-6) and the tree refresh mechanism (WI-10).
+  none changed a decision in `decisions.md`. The operator reviewed the tree refresh mechanism
+  (WI-10) and dropped the tooltip line altogether (D0021).

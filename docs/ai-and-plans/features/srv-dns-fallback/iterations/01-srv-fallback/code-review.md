@@ -24,6 +24,9 @@ that hold DNS pending and then cancel.
 
 No other findings.
 
+> **Update (2026-10-09).** The operator later removed the tooltip line altogether (D0021), so C1's
+> code no longer exists.
+
 ## Areas checked and found correct
 
 The reviewer reported these as checked, with no finding:

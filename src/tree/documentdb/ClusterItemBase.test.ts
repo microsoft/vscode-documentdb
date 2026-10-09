@@ -11,58 +11,6 @@ import { type BaseClusterModel, type TreeCluster } from '../models/BaseClusterMo
 import { type TreeElement } from '../TreeElement';
 import { ClusterItemBase, type EphemeralClusterCredentials } from './ClusterItemBase';
 
-jest.mock('vscode', () => ({
-    ...jest.requireActual<typeof vscode>('../../__mocks__/vscode.js'),
-    MarkdownString: class MarkdownString {
-        #delegate: Pick<vscode.MarkdownString, 'value' | 'isTrusted' | 'supportThemeIcons' | 'supportHtml' | 'baseUri'>;
-
-        constructor(value = '', supportThemeIcons = false) {
-            this.#delegate = { value, supportThemeIcons };
-        }
-
-        get value(): string {
-            return this.#delegate.value;
-        }
-        set value(value: string) {
-            this.#delegate.value = value;
-        }
-        get isTrusted(): vscode.MarkdownString['isTrusted'] {
-            return this.#delegate.isTrusted;
-        }
-        set isTrusted(value: vscode.MarkdownString['isTrusted']) {
-            this.#delegate.isTrusted = value;
-        }
-        get supportThemeIcons(): boolean | undefined {
-            return this.#delegate.supportThemeIcons;
-        }
-        set supportThemeIcons(value: boolean | undefined) {
-            this.#delegate.supportThemeIcons = value;
-        }
-        get supportHtml(): boolean | undefined {
-            return this.#delegate.supportHtml;
-        }
-        set supportHtml(value: boolean | undefined) {
-            this.#delegate.supportHtml = value;
-        }
-        get baseUri(): vscode.Uri | undefined {
-            return this.#delegate.baseUri;
-        }
-        set baseUri(value: vscode.Uri | undefined) {
-            this.#delegate.baseUri = value;
-        }
-
-        appendMarkdown(value: string): this {
-            this.#delegate.value += value;
-            return this;
-        }
-
-        appendText(value: string): this {
-            this.#delegate.value += value.replace(/[\\`*_{}[\]()#+\-.!|~]/g, '\\$&');
-            return this;
-        }
-    },
-}));
-
 // Captures telemetry events emitted via callWithTelemetryAndErrorHandling when its callback throws.
 const mockTelemetryEvents: Array<{ eventName: string; properties: Record<string, string>; suppressDisplay?: boolean }> =
     [];
@@ -112,7 +60,7 @@ jest.mock('../../documentdb/CredentialCache', () => ({
 }));
 
 jest.mock('../../documentdb/ClustersClient', () => ({
-    ClustersClient: { getClient: jest.fn(), exists: jest.fn().mockReturnValue(false), getSrvResolution: jest.fn() },
+    ClustersClient: { getClient: jest.fn(), exists: jest.fn().mockReturnValue(false) },
 }));
 
 jest.mock('../../extensionVariables', () => ({
@@ -161,10 +109,6 @@ class TestClusterItem extends ClusterItemBase {
     public getCredentials(): Promise<EphemeralClusterCredentials | undefined> {
         return Promise.resolve(undefined);
     }
-
-    public setTooltip(tooltip: string | vscode.MarkdownString): void {
-        this.tooltipOverride = tooltip;
-    }
 }
 
 function makeCluster(): TreeCluster<BaseClusterModel> {
@@ -179,59 +123,6 @@ function makeCluster(): TreeCluster<BaseClusterModel> {
 function makeClient(listDatabases: jest.Mock): ClustersClient {
     return { listDatabases } as unknown as ClustersClient;
 }
-
-describe('ClusterItemBase SRV tooltips', (): void => {
-    afterEach((): void => {
-        jest.mocked(
-            jest.requireMock<{ ClustersClient: typeof ClustersClient }>('../../documentdb/ClustersClient')
-                .ClustersClient.getSrvResolution,
-        ).mockReset();
-    });
-
-    it.each(['node', 'fallback', 'nodeErrorPassthrough', undefined] as const)(
-        'includes the DNS line only for %s',
-        (path): void => {
-            const client = jest.requireMock<{ ClustersClient: typeof ClustersClient }>(
-                '../../documentdb/ClustersClient',
-            ).ClustersClient;
-            jest.mocked(client.getSrvResolution).mockReturnValue(path ? { path, resolvedAt: 1 } : undefined);
-            const item = new TestClusterItem({ ...makeCluster(), treeId: 'folder/cluster-1' }, null);
-            const tooltip = item.getTreeItem().tooltip as vscode.MarkdownString;
-            expect(tooltip.value.includes('**DNS:**')).toBe(path === 'fallback');
-            expect(client.getSrvResolution).toHaveBeenLastCalledWith('cluster-1');
-        },
-    );
-
-    it('appends once to discovery overrides without mutating their markdown or theme-icon options', (): void => {
-        const client = jest.requireMock<{ ClustersClient: typeof ClustersClient }>(
-            '../../documentdb/ClustersClient',
-        ).ClustersClient;
-        jest.mocked(client.getSrvResolution).mockReturnValue({ path: 'fallback', resolvedAt: 1 });
-        const item = new TestClusterItem(makeCluster(), null);
-        const content = '### Cluster heading\n\n$(plug) **Reachability:** Direct\n\n⚠️ **Security:** TLS/SSL Disabled';
-        const original = new vscode.MarkdownString(content);
-        original.supportThemeIcons = true;
-        original.isTrusted = false;
-        expect(Object.keys(original)).toEqual([]);
-        item.setTooltip(original);
-        for (let render = 0; render < 2; render++) {
-            const tooltip = item.getTreeItem().tooltip as vscode.MarkdownString;
-            expect(tooltip.value.match(/\*\*DNS:\*\*/g)).toHaveLength(1);
-            expect(tooltip.value).toContain(content);
-            expect(tooltip.isTrusted).toBe(false);
-            expect(tooltip.supportThemeIcons).toBe(true);
-        }
-        expect(original.value).toBe(content);
-        jest.mocked(client.getSrvResolution).mockReturnValue(undefined);
-        expect((item.getTreeItem().tooltip as vscode.MarkdownString).value).toBe(original.value);
-    });
-
-    it('preserves plain-text overrides when no fallback was used', (): void => {
-        const item = new TestClusterItem(makeCluster(), null);
-        item.setTooltip('plain *text*');
-        expect(item.getTreeItem().tooltip).toBe('plain *text*');
-    });
-});
 
 describe('ClusterItemBase.getChildren — listDatabases failure handling', () => {
     beforeEach(() => {

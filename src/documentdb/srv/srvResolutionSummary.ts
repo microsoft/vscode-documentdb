@@ -4,18 +4,11 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { type SrvResolutionPath, type SrvResolutionReport } from '@documentdb-js/srv-resolver';
-import { EventEmitter, type Event } from 'vscode';
 
-let srvResolutionChanged: EventEmitter<string> | undefined;
-export const onDidChangeSrvResolution: Event<string> = (listener, thisArgs, disposables) => {
-    srvResolutionChanged ??= new EventEmitter<string>();
-    return srvResolutionChanged.event(listener, thisArgs, disposables);
-};
-
-export function notifySrvResolutionChanged(clusterId: string): void {
-    srvResolutionChanged?.fire(clusterId);
-}
-
+/**
+ * In-memory summary of how a connection's SRV record was resolved. No host names, no connection
+ * string; never persisted. Kept on `ClustersClient` for a future cluster dashboard (D0021).
+ */
 export interface SrvResolutionSummary {
     readonly path: SrvResolutionPath;
     readonly nodeErrorCode?: string;

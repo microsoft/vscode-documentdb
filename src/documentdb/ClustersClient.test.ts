@@ -20,7 +20,7 @@ import { NoAuthHandler } from './auth/NoAuthHandler';
 import { ClustersClient, getIndexExclusionReason, type IndexItemModel } from './ClustersClient';
 import { CredentialCache } from './CredentialCache';
 import { prepareDriverConnectionString } from './srv/prepareDriverConnectionString';
-import { onDidChangeSrvResolution, type SrvResolutionSummary } from './srv/srvResolutionSummary';
+import { type SrvResolutionSummary } from './srv/srvResolutionSummary';
 import * as connectionStringHelpers from './utils/connectionStringHelpers';
 import { getClusterMetadata, getDomainMetadata } from './utils/getClusterMetadata';
 import * as tlsException from './utils/tlsException';
@@ -361,9 +361,7 @@ describe('regular connection startup diagnostics', () => {
             input.startupTelemetry!.measurements.srvResolutionDurationMs = 5;
             return { connectionString: rewritten, options: preparedOptions, srvResolution: 'fallback', summary };
         });
-        const changed = jest.fn();
-        const listener = onDidChangeSrvResolution(changed);
-        try {
+        {
             const client = await ClustersClient.getClient(clusterId);
             await Promise.resolve();
             expect(MongoClient).toHaveBeenCalledWith(rewritten, preparedOptions);
@@ -379,13 +377,8 @@ describe('regular connection startup diagnostics', () => {
                 properties: { srvResolution: 'fallback' },
                 measurements: { srvResolutionDurationMs: 5 },
             });
-            expect(changed).toHaveBeenCalledTimes(1);
-            expect(changed).toHaveBeenCalledWith(clusterId);
             await ClustersClient.getClient(clusterId);
             expect(prepareDriverConnectionString).toHaveBeenCalledTimes(1);
-            expect(changed).toHaveBeenCalledTimes(1);
-        } finally {
-            listener.dispose();
         }
     });
 
@@ -426,20 +419,12 @@ describe('regular connection startup diagnostics', () => {
                 srvResolution: path,
                 summary,
             });
-            const changed = jest.fn();
-            const listener = onDidChangeSrvResolution(changed);
-            try {
-                await ClustersClient.getClient(clusterId);
-                expect(ClustersClient.getSrvResolution(clusterId)).toBe(summary);
-                expect(ClustersClient.getSrvResolution(`folder/${clusterId}`)).toBeUndefined();
-                expect(JSON.stringify(ClustersClient.getSrvResolution(clusterId)) ?? '').not.toContain('host');
-                expect(changed).toHaveBeenCalledTimes(path === 'fallback' ? 1 : 0);
-                await ClustersClient.deleteClient(clusterId);
-                expect(ClustersClient.getSrvResolution(clusterId)).toBeUndefined();
-                expect(changed).toHaveBeenCalledTimes(path === 'fallback' ? 1 : 0);
-            } finally {
-                listener.dispose();
-            }
+            await ClustersClient.getClient(clusterId);
+            expect(ClustersClient.getSrvResolution(clusterId)).toBe(summary);
+            expect(ClustersClient.getSrvResolution(`folder/${clusterId}`)).toBeUndefined();
+            expect(JSON.stringify(ClustersClient.getSrvResolution(clusterId)) ?? '').not.toContain('host');
+            await ClustersClient.deleteClient(clusterId);
+            expect(ClustersClient.getSrvResolution(clusterId)).toBeUndefined();
         },
     );
 

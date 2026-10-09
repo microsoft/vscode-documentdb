@@ -550,7 +550,10 @@ setting suggests, and a dead DNS server adds the probe's timeout (D0017). Both a
 
 ## 0019 — The UI shows whether the fallback was used: the tooltip now, the dashboard later
 
-**Status:** Accepted · **Date:** 2026-10-09 · **Raised by:** operator requirement
+**Status:** Superseded by D0021 · **Date:** 2026-10-09 · **Raised by:** operator requirement
+
+> **Superseded (2026-10-09).** After implementation, the operator dropped the tooltip line (D0021).
+> The in-memory summary stays for the dashboard. The original decision is kept below as written.
 
 ### Decision
 
@@ -624,3 +627,51 @@ published later, whenever the operator decides.
   installed `mongodb` driver, so a consumer on another driver version is protected only if those
   tests run in its CI.
 - The name must be final before the first publish.
+
+---
+
+## 0021 — No tooltip flag in v0.11.1; the trace shows fallback use, the dashboard will later
+
+**Status:** Accepted · **Date:** 2026-10-09 · **Raised by:** operator, after reviewing the WI-10
+implementation; supersedes D0019
+
+### Decision
+
+The cluster tooltip does **not** show whether the fallback resolved a connection. The tooltip line,
+the row redraw after a fallback connection and every change to the tree code are removed; the tree
+files are back to their `v0.11.0` state. Fallback use stays visible in the `[SrvResolution]` trace
+output (D0014) and in telemetry (D0009). `ClustersClient` keeps the in-memory, host-free
+`SrvResolutionSummary` (`getSrvResolution(clusterId)`), so the cluster dashboard can show it later
+(future-work FW-2).
+
+### Why
+
+The operator: the price of the workarounds is too high. VS Code builds a tree row's tooltip when it
+draws the row, before the user expands it and connects. Showing the line therefore needs a redraw
+after connecting, and redrawing an expanded row always makes VS Code fetch its children again (one
+extra `listDatabases`). Every way around that adds edge cases to code all trees share:
+
+- a children cache to reuse the first listing could show stale databases once if the row was
+  collapsed when the redraw fired;
+- redrawing on disconnect to remove the line would silently reconnect an expanded row;
+- reusing the client's database list behind a short-lived flag adds time-based state to the
+  cluster's child listing.
+
+The users who need to know can read the trace, and the dashboard is the better place to show it.
+
+### Rejected alternatives
+
+- **Keep the tooltip with the row redraw** (the implementation in `d7df1147` and `2855dcc9`): one
+  extra listing per fallback connection, plus the risk surface above in shared tree code.
+- **Reuse the first listing** (children cache in the base provider, or the client's database cache
+  behind a one-time flag): avoids the extra query, adds stale-data edge cases.
+- **Build the tooltip lazily on hover (`resolveTreeItem`)**: VS Code resolves it once per drawn
+  row, so a hover before connecting hides the line until the next redraw anyway.
+- **Show the line only after a manual refresh**: simplest, but users would rarely see it when it
+  matters.
+
+### Consequences
+
+- WI-10 is reverted, except for the summary on `ClustersClient`. The M8 review finding C1 (tooltip
+  content lost) no longer applies.
+- No new user-facing strings remain from WI-10.

@@ -116,7 +116,6 @@ jest.mock('../../../../documentdb/CredentialCache', () => ({
 jest.mock('../../../../documentdb/ClustersClient', () => ({
     ClustersClient: {
         exists: jest.fn().mockReturnValue(false),
-        getSrvResolution: jest.fn(),
         getClient: (...args: unknown[]) => mockGetClient(...args),
         deleteClient: jest.fn(),
     },
