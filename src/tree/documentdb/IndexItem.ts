@@ -12,6 +12,7 @@ import {
     type IndexItemModel,
 } from '../../documentdb/ClustersClient';
 import { type Experience } from '../../DocumentDBExperiences';
+import { escapeMarkdown, formatInlineCode } from '../../webviews/utils/escapeMarkdown';
 import { type BaseClusterModel, type TreeCluster } from '../models/BaseClusterModel';
 import { type TreeElement } from '../TreeElement';
 import { type TreeElementWithContextValue } from '../TreeElementWithContextValue';
@@ -96,14 +97,14 @@ export class IndexItem implements TreeElement, TreeElementWithExperience, TreeEl
 
     private buildTooltip(): vscode.MarkdownString {
         const md = new vscode.MarkdownString();
-        md.supportHtml = true;
-        md.isTrusted = true;
-        md.supportThemeIcons = true;
+        md.supportHtml = false;
+        md.isTrusted = false;
+        md.supportThemeIcons = false;
 
-        md.appendMarkdown(`### ${this.indexInfo.name}\n\n`);
+        md.appendMarkdown(`### ${escapeMarkdown(this.indexInfo.name)}\n\n`);
 
         const badges: string[] = [];
-        badges.push(`\`${this.indexInfo.type}\``);
+        badges.push(formatInlineCode(this.indexInfo.type));
         if (this.indexInfo.unique) {
             badges.push('`unique`');
         }
@@ -119,7 +120,7 @@ export class IndexItem implements TreeElement, TreeElementWithExperience, TreeEl
 
         if (this.indexInfo.key === undefined) {
             md.appendMarkdown(
-                `${vscode.l10n.t('This {0} index cannot be copied by Copy/Paste Indexes.', this.getIndexTypeLabel())}\n\n`,
+                `${escapeMarkdown(vscode.l10n.t('This {0} index cannot be copied by Copy/Paste Indexes.', this.getIndexTypeLabel()))}\n\n`,
             );
         }
 
@@ -162,7 +163,7 @@ export class IndexItem implements TreeElement, TreeElementWithExperience, TreeEl
         // Render properties in a clean format
         if (properties.length > 0) {
             for (const prop of properties) {
-                md.appendMarkdown(`**${prop.label}:** ${prop.value}  \n`);
+                md.appendMarkdown(`**${prop.label}:** ${escapeMarkdown(prop.value)}  \n`);
             }
             md.appendMarkdown('\n');
         }
@@ -178,14 +179,12 @@ export class IndexItem implements TreeElement, TreeElementWithExperience, TreeEl
                 // For simple indexes, show inline
                 const keyStrings = keyEntries.map(([field, order]) => {
                     const orderStr = order === -1 ? 'desc' : order === 1 ? 'asc' : String(order);
-                    return `\`${field}\`: ${orderStr}`;
+                    return `${formatInlineCode(field)}: ${escapeMarkdown(orderStr)}`;
                 });
                 md.appendMarkdown(keyStrings.join(', ') + '\n\n');
             } else {
                 // For complex indexes, show as code block
-                md.appendMarkdown('```json\n');
-                md.appendMarkdown(JSON.stringify(this.indexInfo.key, null, 2));
-                md.appendMarkdown('\n```\n\n');
+                this.appendJsonCodeblock(md, this.indexInfo.key);
             }
         }
 
@@ -193,70 +192,22 @@ export class IndexItem implements TreeElement, TreeElementWithExperience, TreeEl
         if (this.indexInfo.partialFilterExpression) {
             md.appendMarkdown('---\n\n');
             md.appendMarkdown('**Partial Filter Expression**\n\n');
-            md.appendMarkdown('```json\n');
-            md.appendMarkdown(JSON.stringify(this.indexInfo.partialFilterExpression, null, 2));
-            md.appendMarkdown('\n```\n\n');
+            this.appendJsonCodeblock(md, this.indexInfo.partialFilterExpression);
         }
 
         // Fields (for search indexes)
         if (this.indexInfo.fields && Array.isArray(this.indexInfo.fields) && this.indexInfo.fields.length > 0) {
             md.appendMarkdown('---\n\n');
             md.appendMarkdown('**Search Fields**\n\n');
-            md.appendMarkdown('```json\n');
-            md.appendMarkdown(JSON.stringify(this.indexInfo.fields, null, 2));
-            md.appendMarkdown('\n```\n\n');
+            this.appendJsonCodeblock(md, this.indexInfo.fields);
         }
 
-        // // Action buttons at the bottom
-        // md.appendMarkdown('---\n\n');
-        // md.appendMarkdown('**Actions:**\n\n');
-
-        // // Create command URIs with encoded arguments
-        // const dropIndexArgs = encodeURIComponent(
-        //     JSON.stringify([
-        //         {
-        //             cluster: this.cluster.id,
-        //             databaseInfo: this.databaseInfo.name,
-        //             collectionInfo: this.collectionInfo.name,
-        //             indexInfo: this.indexInfo.name,
-        //         },
-        //     ]),
-        // );
-
-        // const hideUnhideArgs = encodeURIComponent(
-        //     JSON.stringify([
-        //         {
-        //             cluster: this.cluster.id,
-        //             databaseInfo: this.databaseInfo.name,
-        //             collectionInfo: this.collectionInfo.name,
-        //             indexInfo: this.indexInfo.name,
-        //         },
-        //     ]),
-        // );
-
-        // // TODO: wire up buttons with actual commands
-        // // Drop index button (only if not _id index)
-        // if (this.indexInfo.name !== '_id_') {
-        //     md.appendMarkdown(
-        //         `[$(trash) Drop Index](command:vscode-documentdb.command.dropIndex?${dropIndexArgs} "Delete this index") &nbsp;&nbsp;`,
-        //     );
-        // }
-
-        // // Hide/Unhide button
-        // if (this.indexInfo.name !== '_id_') {
-        //     const hideUnhideText = this.indexInfo.hidden ? '$(eye) Unhide Index' : '$(eye-closed) Hide Index';
-        //     const hideUnhideCommand = this.indexInfo.hidden
-        //         ? 'vscode-documentdb.command.unhideIndex'
-        //         : 'vscode-documentdb.command.hideIndex';
-        //     const hideUnhideTooltip = this.indexInfo.hidden
-        //         ? 'Make this index visible'
-        //         : 'Hide this index from queries';
-
-        //     md.appendMarkdown(
-        //         `[${hideUnhideText}](command:${hideUnhideCommand}?${hideUnhideArgs} "${hideUnhideTooltip}") &nbsp;&nbsp;`,
-        //     );
-        // }
-
         return md;
+    }
+
+    private appendJsonCodeblock(md: vscode.MarkdownString, value: object): void {
+        // A fixed fence is safe: pretty-printed JSON escapes newlines inside strings,
+        // so no output line can begin with backticks and close the block early.
+        md.appendMarkdown(`\`\`\`json\n${JSON.stringify(value, null, 2)}\n\`\`\`\n\n`);
     }
 }

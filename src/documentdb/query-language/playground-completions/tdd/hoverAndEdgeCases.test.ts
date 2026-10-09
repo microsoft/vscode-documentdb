@@ -18,11 +18,44 @@
  */
 
 import { getAllCompletions, loadOperators } from '@documentdb-js/operator-registry';
+import { type FieldEntry } from '@documentdb-js/schema-analyzer';
 import { getPlaygroundHoverContent } from '../PlaygroundHoverProvider';
 
 // Ensure operators are loaded before tests
 beforeAll(() => {
     loadOperators();
+});
+
+describe('Playground hover Markdown policy', (): void => {
+    test('operator documentation is untrusted with its authored body, HTML, and link intact', (): void => {
+        const entry = getAllCompletions().find((candidate): boolean => candidate.value === '$gt');
+        expect(entry).toBeDefined();
+        expect(entry!.link).toMatch(/^https?:\/\//);
+
+        const hover = getPlaygroundHoverContent('$gt');
+        expect(hover).not.toBeNull();
+        expect(hover!.contents[0]).toEqual({
+            value: [`**${entry!.value}**`, '---', '<br>', entry!.description, `[ⓘ Documentation](${entry!.link})`].join(
+                '\n\n',
+            ),
+            isTrusted: false,
+            supportHtml: true,
+        });
+    });
+
+    test('field text remains escaped with omitted trust and existing HTML support', (): void => {
+        const field: FieldEntry = {
+            path: 'field[note]',
+            bsonType: 'string',
+            type: 'string',
+            isSparse: false,
+        };
+        const hover = getPlaygroundHoverContent(field.path, (): FieldEntry => field);
+        expect(hover).not.toBeNull();
+        expect(hover!.contents[0].value).toContain('**field\\[note\\]**');
+        expect(hover!.contents[0].isTrusted).toBeUndefined();
+        expect(hover!.contents[0].supportHtml).toBe(true);
+    });
 });
 
 // =====================================================================
