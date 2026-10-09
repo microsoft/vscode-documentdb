@@ -10,6 +10,7 @@ import * as vscode from 'vscode';
 import { ext } from '../../extensionVariables';
 import { ConnectionDiagnosticsService } from '../../services/connectionDiagnosticsService';
 import { maskSecrets } from '../../services/localQuickStart/outputMasking';
+import { recordSurveyActivity } from '../../services/survey/SurveyService';
 import { settingsKeys } from '../../settingsKeys';
 import { type CompletionCategory } from '../../telemetry/completionCategories';
 import { accumulateTelemetry } from '../../utils/accumulatingTelemetry';
@@ -770,6 +771,7 @@ export class DocumentDBShellPty implements vscode.Pseudoterminal {
             // Feed query result documents to SchemaStore for field completions.
             // Failure is non-critical.
             this.maybeFeedSchemaStore(result);
+            recordSurveyActivity('interactiveShell');
         });
     }
 

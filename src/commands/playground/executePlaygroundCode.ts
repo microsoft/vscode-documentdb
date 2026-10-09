@@ -22,6 +22,7 @@ import { getHostsFromConnectionString } from '../../documentdb/utils/connectionS
 import { addDomainInfoToProperties } from '../../documentdb/utils/getClusterMetadata';
 import { ext } from '../../extensionVariables';
 import { ConnectionDiagnosticsService } from '../../services/connectionDiagnosticsService';
+import { recordSurveyActivity } from '../../services/survey/SurveyService';
 import { classifyCodeBlock } from '../../utils/classifyCommand';
 import { promptAndConnectPlayground } from './connectDatabase';
 
@@ -220,6 +221,9 @@ export async function executePlaygroundCode(
                         await ext.playgroundResultProvider.showResult(sourceUri, formattedOutput);
                     }
 
+                    if (!cancelled) {
+                        recordSurveyActivity('queryPlayground');
+                    }
                     // result: 'Succeeded' is set automatically by the framework
                 } catch (error: unknown) {
                     // Update session telemetry even on failure (worker may have spawned before failing)

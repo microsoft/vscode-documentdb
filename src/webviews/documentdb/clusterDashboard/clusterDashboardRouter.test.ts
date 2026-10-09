@@ -3,6 +3,8 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+jest.mock('../../../services/survey/SurveyService', (): object => ({ recordSurveyActivity: jest.fn() }));
+
 import { type initWebviewTrpc as InitWebviewTrpc } from '@microsoft/vscode-ext-webview';
 import { type Document, type MongoClient } from 'mongodb';
 import * as vscode from 'vscode';

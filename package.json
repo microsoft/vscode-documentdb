@@ -8,7 +8,7 @@
   "description": "DocumentDB and MongoDB GUI: Connect to databases, run queries, and manage your data. Supports working with databases across both cloud-based and local environments.",
   "enableMongoClusters": true,
   "engines": {
-    "vscode": "^1.105.0",
+    "vscode": "^1.106.0",
     "node": ">=22.18.0",
     "npm": ">=10.0.0"
   },
@@ -109,7 +109,7 @@
     "@types/react-dom": "~19.2.3",
     "@types/semver": "~7.7.1",
     "@types/uuid": "~10.0.0",
-    "@types/vscode": "~1.105.0",
+    "@types/vscode": "~1.106.0",
     "@types/vscode-webview": "~1.57.5",
     "@vscode/l10n-dev": "~0.0.35",
     "@vscode/test-cli": "~0.0.12",
@@ -234,9 +234,25 @@
           "title": "DocumentDB",
           "icon": "resources/vscode-documentdb-sidebar-icon.svg"
         }
+      ],
+      "secondarySidebar": [
+        {
+          "id": "documentdb-survey",
+          "title": "%survey.containerTitle%",
+          "icon": "resources/vscode-documentdb-sidebar-icon.svg"
+        }
       ]
     },
     "views": {
+      "documentdb-survey": [
+        {
+          "id": "documentdb.surveyInvitation",
+          "name": "%survey.viewTitle%",
+          "type": "webview",
+          "when": "documentdb.surveyInvitationActive",
+          "icon": "resources/vscode-documentdb-sidebar-icon.svg"
+        }
+      ],
       "documentDB": [
         {
           "id": "connectionsView",
@@ -325,6 +341,23 @@
       }
     ],
     "commands": [
+      {
+        "command": "vscode-documentdb.debug.survey.showInvitation",
+        "title": "_DocumentDB: Survey: Show Invitation"
+      },
+      {
+        "command": "vscode-documentdb.debug.survey.simulateMilestone",
+        "title": "_DocumentDB: Survey: Simulate Milestone"
+      },
+      {
+        "command": "vscode-documentdb.debug.survey.resetState",
+        "title": "_DocumentDB: Survey: Reset State"
+      },
+      {
+        "category": "DocumentDB",
+        "command": "vscode-documentdb.command.giveFeedback",
+        "title": "%survey.giveFeedbackTitle%"
+      },
       {
         "//": "[ConnectionsView] New Connection",
         "category": "DocumentDB",
@@ -1526,6 +1559,18 @@
       ],
       "explorer/context": [],
       "commandPalette": [
+        {
+          "command": "vscode-documentdb.debug.survey.showInvitation",
+          "when": "documentdb.isDevelopmentMode"
+        },
+        {
+          "command": "vscode-documentdb.debug.survey.simulateMilestone",
+          "when": "documentdb.isDevelopmentMode"
+        },
+        {
+          "command": "vscode-documentdb.debug.survey.resetState",
+          "when": "documentdb.isDevelopmentMode"
+        },
         {
           "command": "vscode-documentdb.command.clusterDashboard.context.viewCollections",
           "when": "never"

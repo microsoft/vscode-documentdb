@@ -27,6 +27,7 @@ import { buildStaticAnalysisSummary } from '../../../../documentdb/queryInsights
 import { StreamingResponseParser } from '../../../../documentdb/queryInsights/streamingResponseParser';
 import { ext } from '../../../../extensionVariables';
 import { QueryInsightsAIService } from '../../../../services/ai/QueryInsightsAIService';
+import { recordSurveyActivity } from '../../../../services/survey/SurveyService';
 import { publicProcedureWithTelemetry, router } from '../../../_integration/trpc';
 import { type RouterContext } from '../collectionViewRouter';
 import { type QueryInsightsStreamEvent } from '../types/queryInsightsStream';
@@ -581,6 +582,7 @@ export const queryInsightsEventsRouter = router({
                     if (abortController.signal.aborted) {
                         return;
                     }
+                    recordSurveyActivity('queryInsights');
                     yield completeEvent;
                 }
                 // Reaching this point means the terminal `complete` event
