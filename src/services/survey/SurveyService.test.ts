@@ -568,7 +568,7 @@ describe('SurveyService', (): void => {
         await h.callbacks().onChoice('neverAgain');
         expect(notification).toHaveBeenCalledTimes(1);
         expect(notification).toHaveBeenCalledWith(
-            "Saving your choice not to be asked for feedback again failed. It still applies until VS Code restarts.",
+            'Saving your choice not to be asked for feedback again failed. It still applies until VS Code restarts.',
             { modal: true },
         );
         expect(h.handle.dispose).toHaveBeenCalledTimes(1);
@@ -733,7 +733,9 @@ describe('SurveyService', (): void => {
         expect(await h.callbacks().onOpenForm()).toBe('opened');
         expect(h.openExternal.mock.calls).toEqual(Array.from({ length: 5 }, (): string[] => [SURVEY_FORM_URL]));
         expect(h.sent('survey.openForm').map((event): number => event.measurements.attempt)).toEqual([1, 2, 3]);
-        expect(h.sent('survey.openForm').every((event): boolean => event.properties.openResult === 'failure')).toBe(true);
+        expect(h.sent('survey.openForm').every((event): boolean => event.properties.openResult === 'failure')).toBe(
+            true,
+        );
         expect(h.state().nextEligibleAt).toBe(new Date(h.flags.now.getTime() + 180 * DAY_MS).toISOString());
         expect(h.state().lastOutcome).toBe('opened');
         expect(h.handle.dispose).toHaveBeenCalledTimes(1);
@@ -1269,7 +1271,14 @@ describe('survey local diagnostics', (): void => {
                 `[Survey] Persistence ${outcome === 'neverAgain' ? 'opt-out' : 'invitation outcome'}: succeeded.`,
             );
             const output = JSON.stringify(trace.mock.calls);
-            for (const forbidden of ['private-machine-id', INVITATION_ID, SURVEY_FORM_URL, 'rating', 'star', 'elementId']) {
+            for (const forbidden of [
+                'private-machine-id',
+                INVITATION_ID,
+                SURVEY_FORM_URL,
+                'rating',
+                'star',
+                'elementId',
+            ]) {
                 expect(output).not.toContain(forbidden);
             }
             h.service.dispose();
@@ -1320,9 +1329,7 @@ describe('survey local diagnostics', (): void => {
             trace.mockClear();
             h.openExternal.mockRejectedValue(new Error('private-query mongodb://user:secret@private-host/private-db'));
             const result =
-                trigger === 'command'
-                    ? await h.service.openSurveyFormFromCommand()
-                    : await h.callbacks().onOpenForm();
+                trigger === 'command' ? await h.service.openSurveyFormFromCommand() : await h.callbacks().onOpenForm();
             expect(result).toBe('failed');
             expect(trace.mock.calls).toEqual([[`[Survey] Form opening from ${trigger}: failure.`]]);
             expect(h.state().lastOutcome).toBeUndefined();
@@ -1412,24 +1419,21 @@ describe('survey singleton initialization', (): void => {
             invitations: 0,
         },
         { label: 'feedback permission', overrides: {}, level: 'off', invitations: 0 },
-    ])(
-        'development default respects $label',
-        async ({ overrides, level, invitations }): Promise<void> => {
-            jest.mocked(vscode.workspace.getConfiguration).mockReturnValue(configuration(level));
-            const storage = new MemoryStorage();
-            const state: SurveyPersistedState = { ...EMPTY_SURVEY_STATE, activeDayCount: 2, ...overrides };
-            storage.values.set(SURVEY_STATE_KEY, state);
-            const service = initializeSurveyService(context(storage, vscode.ExtensionMode.Development));
-            const present = jest.fn().mockResolvedValue({ dispose: jest.fn() });
-            service.setPresenter({ present });
-            recordSurveyActivity('connection');
-            await service.whenIdle();
-            expect(present).toHaveBeenCalledTimes(invitations);
-            if (state.optedOutAt || level !== 'all') {
-                expect(storage.update).not.toHaveBeenCalled();
-            }
-        },
-    );
+    ])('development default respects $label', async ({ overrides, level, invitations }): Promise<void> => {
+        jest.mocked(vscode.workspace.getConfiguration).mockReturnValue(configuration(level));
+        const storage = new MemoryStorage();
+        const state: SurveyPersistedState = { ...EMPTY_SURVEY_STATE, activeDayCount: 2, ...overrides };
+        storage.values.set(SURVEY_STATE_KEY, state);
+        const service = initializeSurveyService(context(storage, vscode.ExtensionMode.Development));
+        const present = jest.fn().mockResolvedValue({ dispose: jest.fn() });
+        service.setPresenter({ present });
+        recordSurveyActivity('connection');
+        await service.whenIdle();
+        expect(present).toHaveBeenCalledTimes(invitations);
+        if (state.optedOutAt || level !== 'all') {
+            expect(storage.update).not.toHaveBeenCalled();
+        }
+    });
 
     it.each([vscode.ExtensionMode.Production, vscode.ExtensionMode.Test, vscode.ExtensionMode.Development])(
         'always-invite enables the real service only in development, mode %s',

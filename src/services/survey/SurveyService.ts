@@ -410,9 +410,7 @@ export class SurveyService implements vscode.Disposable {
         if (result.overall !== 'eligible') {
             switch (result.firstBlockingGate) {
                 case 'sampling':
-                    traceSurvey((): string =>
-                        vscode.l10n.t('[Survey] Not showing invitation: sampling gate blocked.'),
-                    );
+                    traceSurvey((): string => vscode.l10n.t('[Survey] Not showing invitation: sampling gate blocked.'));
                     break;
                 case 'activeDays':
                     traceSurvey((): string =>
@@ -431,7 +429,9 @@ export class SurveyService implements vscode.Disposable {
                     break;
                 case 'sessionSuppression':
                     traceSurvey((): string =>
-                        vscode.l10n.t('[Survey] Not showing invitation: an invitation was already issued this session.'),
+                        vscode.l10n.t(
+                            '[Survey] Not showing invitation: an invitation was already issued this session.',
+                        ),
                     );
                     break;
             }
@@ -673,7 +673,7 @@ function reportOptOutSaveFailure(): void {
     void Promise.resolve(
         vscode.window.showErrorMessage(
             vscode.l10n.t(
-                "Saving your choice not to be asked for feedback again failed. It still applies until VS Code restarts.",
+                'Saving your choice not to be asked for feedback again failed. It still applies until VS Code restarts.',
             ),
             { modal: true },
         ),

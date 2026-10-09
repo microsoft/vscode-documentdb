@@ -11,35 +11,35 @@ created: 2026-10-07
 > [the implementation plan](./iterations/01-implementation-plan.md). Where a decision overrides
 > the [README](./README.md), this file wins for intent.
 
-| #    | Decision                                                     | Status              | Changed from the proposal?                                             | Date       | PR  |
-| ---- | ------------------------------------------------------------ | ------------------- | ---------------------------------------------------------------------- | ---------- | --- |
-| 0001 | Survey telemetry starts fresh, no legacy event mapping       | Accepted            | Operator correction to the README                                      | 2026-10-07 | -   |
-| 0002 | Requirements confirmed before planning                       | Accepted (modified) | Rating exclusion superseded by D0023; other requirements retained       | 2026-10-07 | -   |
-| 0003 | An active day is the local calendar day                      | Accepted            | Accepted as proposed                                                   | 2026-10-07 | -   |
-| 0004 | Eligibility after 3 active days                              | Accepted (modified) | Proposal was 5                                                         | 2026-10-07 | -   |
-| 0005 | "Ask me later" cooldown is 14 days                           | Accepted            | Accepted as proposed                                                   | 2026-10-07 | -   |
-| 0006 | Cooldown after opening the form is 180 days                  | Accepted            | Accepted as proposed                                                   | 2026-10-07 | -   |
-| 0007 | Closing without a choice waits as long as "Ask me later"     | Accepted (modified) | Proposal was a shorter, 7-day cooldown                                 | 2026-10-07 | -   |
-| 0008 | No sampling at launch, fraction kept at 1.0                  | Accepted            | Accepted as proposed                                                   | 2026-10-07 | -   |
-| 0009 | One long-lived campaign ID                                   | Accepted            | Accepted as proposed                                                   | 2026-10-07 | -   |
-| 0010 | No locale gate; the invitation says the survey is in English | Accepted            | Accepted as proposed; operator confirmed English-only form             | 2026-10-07 | -   |
-| 0011 | Legacy survey state is forgotten                             | Accepted (modified) | Proposal was to migrate; legacy opt-outs ignored too                   | 2026-10-07 | -   |
-| 0012 | Present the invitation right after the milestone             | Accepted (modified) | Proposal was a delayed safe pause                                      | 2026-10-07 | -   |
-| 0013 | The invitation lives in the Secondary Sidebar only           | Accepted (modified) | Proposal was to prototype two destinations                             | 2026-10-07 | -   |
-| 0014 | A plain "Open survey" button sits next to the stars          | Accepted (modified) | D0023 replaces star navigation and identical-message rule              | 2026-10-07 | -   |
-| 0015 | A "Give Feedback" command, no reset command                  | Accepted            | Accepted as proposed                                                   | 2026-10-07 | -   |
-| 0016 | Kill switch is a code constant with a development override   | Superseded by D0020 | Development override removed; production code switch retained          | 2026-10-07 | -   |
-| 0017 | Telemetry wording in the invitation                          | Accepted (modified) | No anonymity claim; D0023 further replaces the no-rating/answer claim   | 2026-10-07 | -   |
-| 0018 | Raise the minimum VS Code version to 1.106.0                 | Accepted            | Raised by the Stage 2 blocker                                          | 2026-10-07 | -   |
-| 0019 | The cooldown starts when the invitation is first visible     | Accepted            | Raised by the Stage 2 review                                           | 2026-10-07 | -   |
-| 0020 | Normal survey behavior works automatically in development    | Superseded by D0021 | Conservative development-only interpretation corrected before validation | 2026-10-08 | #992 |
-| 0021 | Re-enable surveys in production and development              | Accepted (modified) | One enabled code switch for all modes; no enablement environment override | 2026-10-08 | #992 |
-| 0022 | Match the dashboard header and content surfaces              | Accepted            | Smaller identity row, shaded full-width header, editor-background body | 2026-10-08 | #992 |
-| 0023 | Optional local rating, recorded when opening the survey      | Accepted (modified) | Reverses the no-rating telemetry boundary; only Open survey navigates | 2026-10-09 | #992 |
-| 0024 | Complete the task-led UX pass and make rating resettable     | Accepted (modified) | Finish R7/R9; smaller stars with local hover preview and toggle-to-clear; layout/Retry revised by D0025/D0026 | 2026-10-09 | #992 |
+| #    | Decision                                                     | Status              | Changed from the proposal?                                                                                     | Date       | PR   |
+| ---- | ------------------------------------------------------------ | ------------------- | -------------------------------------------------------------------------------------------------------------- | ---------- | ---- |
+| 0001 | Survey telemetry starts fresh, no legacy event mapping       | Accepted            | Operator correction to the README                                                                              | 2026-10-07 | -    |
+| 0002 | Requirements confirmed before planning                       | Accepted (modified) | Rating exclusion superseded by D0023; other requirements retained                                              | 2026-10-07 | -    |
+| 0003 | An active day is the local calendar day                      | Accepted            | Accepted as proposed                                                                                           | 2026-10-07 | -    |
+| 0004 | Eligibility after 3 active days                              | Accepted (modified) | Proposal was 5                                                                                                 | 2026-10-07 | -    |
+| 0005 | "Ask me later" cooldown is 14 days                           | Accepted            | Accepted as proposed                                                                                           | 2026-10-07 | -    |
+| 0006 | Cooldown after opening the form is 180 days                  | Accepted            | Accepted as proposed                                                                                           | 2026-10-07 | -    |
+| 0007 | Closing without a choice waits as long as "Ask me later"     | Accepted (modified) | Proposal was a shorter, 7-day cooldown                                                                         | 2026-10-07 | -    |
+| 0008 | No sampling at launch, fraction kept at 1.0                  | Accepted            | Accepted as proposed                                                                                           | 2026-10-07 | -    |
+| 0009 | One long-lived campaign ID                                   | Accepted            | Accepted as proposed                                                                                           | 2026-10-07 | -    |
+| 0010 | No locale gate; the invitation says the survey is in English | Accepted            | Accepted as proposed; operator confirmed English-only form                                                     | 2026-10-07 | -    |
+| 0011 | Legacy survey state is forgotten                             | Accepted (modified) | Proposal was to migrate; legacy opt-outs ignored too                                                           | 2026-10-07 | -    |
+| 0012 | Present the invitation right after the milestone             | Accepted (modified) | Proposal was a delayed safe pause                                                                              | 2026-10-07 | -    |
+| 0013 | The invitation lives in the Secondary Sidebar only           | Accepted (modified) | Proposal was to prototype two destinations                                                                     | 2026-10-07 | -    |
+| 0014 | A plain "Open survey" button sits next to the stars          | Accepted (modified) | D0023 replaces star navigation and identical-message rule                                                      | 2026-10-07 | -    |
+| 0015 | A "Give Feedback" command, no reset command                  | Accepted            | Accepted as proposed                                                                                           | 2026-10-07 | -    |
+| 0016 | Kill switch is a code constant with a development override   | Superseded by D0020 | Development override removed; production code switch retained                                                  | 2026-10-07 | -    |
+| 0017 | Telemetry wording in the invitation                          | Accepted (modified) | No anonymity claim; D0023 further replaces the no-rating/answer claim                                          | 2026-10-07 | -    |
+| 0018 | Raise the minimum VS Code version to 1.106.0                 | Accepted            | Raised by the Stage 2 blocker                                                                                  | 2026-10-07 | -    |
+| 0019 | The cooldown starts when the invitation is first visible     | Accepted            | Raised by the Stage 2 review                                                                                   | 2026-10-07 | -    |
+| 0020 | Normal survey behavior works automatically in development    | Superseded by D0021 | Conservative development-only interpretation corrected before validation                                       | 2026-10-08 | #992 |
+| 0021 | Re-enable surveys in production and development              | Accepted (modified) | One enabled code switch for all modes; no enablement environment override                                      | 2026-10-08 | #992 |
+| 0022 | Match the dashboard header and content surfaces              | Accepted            | Smaller identity row, shaded full-width header, editor-background body                                         | 2026-10-08 | #992 |
+| 0023 | Optional local rating, recorded when opening the survey      | Accepted (modified) | Reverses the no-rating telemetry boundary; only Open survey navigates                                          | 2026-10-09 | #992 |
+| 0024 | Complete the task-led UX pass and make rating resettable     | Accepted (modified) | Finish R7/R9; smaller stars with local hover preview and toggle-to-clear; layout/Retry revised by D0025/D0026  | 2026-10-09 | #992 |
 | 0025 | Apply the rendering review to the invitation layout          | Accepted (modified) | Compact left-aligned rating, secondary buttons, one helper size, dark logo; centering/stretch revised by D0027 | 2026-10-09 | #992 |
-| 0026 | Report open failures in a modal; remove Retry UI             | Accepted (modified) | Replaces the Open→Retry relabel, status line, and command retry loop; D0027 extends it to opt-out save | 2026-10-09 | #992 |
-| 0027 | Centered smaller rating, stretched actions, no save Retry    | Accepted            | 20 px centered stars, symmetric spacing, "Continue to survey", modal opt-out save failure | 2026-10-09 | #992 |
+| 0026 | Report open failures in a modal; remove Retry UI             | Accepted (modified) | Replaces the Open→Retry relabel, status line, and command retry loop; D0027 extends it to opt-out save         | 2026-10-09 | #992 |
+| 0027 | Centered smaller rating, stretched actions, no save Retry    | Accepted            | 20 px centered stars, symmetric spacing, "Continue to survey", modal opt-out save failure                      | 2026-10-09 | #992 |
 
 > Entries are semantically immutable: append new entries rather than rewriting old ones, and record
 > reversals as a new entry plus a status change above.
@@ -389,7 +389,7 @@ we're good" — the retry code was obsolete and too much code to maintain and te
 
 **Unchanged:** a failed attempt still records no outcome or acceptance cooldown; attempts are
 still unlimited and only the first three invitation attempts emit `survey.openForm`. The
-separate "Retry" on a failed opt-out *save* is not part of this decision and remains.
+separate "Retry" on a failed opt-out _save_ is not part of this decision and remains.
 
 ## 0027: Centered smaller rating, stretched actions, no save Retry
 

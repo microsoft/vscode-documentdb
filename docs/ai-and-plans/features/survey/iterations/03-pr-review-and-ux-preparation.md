@@ -48,13 +48,13 @@ are retained below as history, followed by inline implementation and check resul
 Iteration 2 was documentation-only. Its directions below were then implemented in Iteration 3.
 The original reproduction results describe the pre-fix head, not the repaired implementation.
 
-| Item | Operator direction | Disposition |
-| --- | --- | --- |
-| R1 | Treat overlapping writes as an edge case; accept the last write winning rather than add coordination | Low/P3, closed as accepted risk; existing merge protections remain |
-| R2 | Do not stop a user opening the form after an arbitrary number of attempts; they can see each failure | Medium/P2, implemented and verified; replaced the exhausted-state proposal |
-| R3 | Add a notification if Privacy Statement fails to open | Medium/P2, implemented and verified |
-| R4 | Explore the lifecycle limitation, then leave it as-is | Low/P3, closed after source/API investigation; no behavior change |
-| R5 | Add survey traces for acknowledged activity, active days, and suppression reasons | Medium/P2, implemented and verified |
+| Item | Operator direction                                                                                   | Disposition                                                                |
+| ---- | ---------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------- |
+| R1   | Treat overlapping writes as an edge case; accept the last write winning rather than add coordination | Low/P3, closed as accepted risk; existing merge protections remain         |
+| R2   | Do not stop a user opening the form after an arbitrary number of attempts; they can see each failure | Medium/P2, implemented and verified; replaced the exhausted-state proposal |
+| R3   | Add a notification if Privacy Statement fails to open                                                | Medium/P2, implemented and verified                                        |
+| R4   | Explore the lifecycle limitation, then leave it as-is                                                | Low/P3, closed after source/API investigation; no behavior change          |
+| R5   | Add survey traces for acknowledged activity, active days, and suppression reasons                    | Medium/P2, implemented and verified                                        |
 
 R1 caveat: "last write" is not necessarily the last deliberate preference. It can be a
 background usage update, and there is no overwrite notification. The user may only notice
@@ -63,18 +63,18 @@ existing opt-out/maximum-cooldown merges on ordinary sequential updates.
 
 ### Initial review verification evidence
 
-| Check | Result / boundary |
-| --- | --- |
-| `npm run build` | Passed, including workspace prebuilds and extension TypeScript build. |
-| Focused Jest invocation below | **12 suites, 358 tests passed**, no coverage collection. |
-| `git diff --check origin/main...HEAD` | Passed for the reviewed implementation. |
-| Local overlapping-write probe | Both saves succeed, but a new store sees `isOptedOut === false` after the stale activity write lands. |
-| Local service/browser-open probe | Results are `failed`, `failed`, `failed`, `blocked`; only three browser calls occur. |
-| Browser recovery check | After the third failure, Retry is visible/enabled and copy says "Please try again"; the fourth click changes to unavailable without opening anything. |
-| Browser layout | Expanded explanation at 240/320/480 px, at 100% and 200% CSS zoom: no horizontal document overflow and no unnamed buttons/links/disclosure controls in all six combinations. One dark-theme variable set and English copy only. |
-| Browser keyboard | Initial focus is BODY; Tab visits stars 1-5, Open survey, Ask me later, Never again, disclosure; Enter expands it and the next Tab reaches Privacy Statement. |
-| GitHub checks | Build & Package, Code Quality & Tests, Integration Tests, API typings, CodeQL and CLA reported success during this review. Not a substitute for local handoff checks. |
-| Workbench / external services | Actual focus preservation, Chat displacement, view movement, reload, remote latency, screen-reader speech, live form availability, and KQL execution remain unverified here. |
+| Check                                 | Result / boundary                                                                                                                                                                                                               |
+| ------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `npm run build`                       | Passed, including workspace prebuilds and extension TypeScript build.                                                                                                                                                           |
+| Focused Jest invocation below         | **12 suites, 358 tests passed**, no coverage collection.                                                                                                                                                                        |
+| `git diff --check origin/main...HEAD` | Passed for the reviewed implementation.                                                                                                                                                                                         |
+| Local overlapping-write probe         | Both saves succeed, but a new store sees `isOptedOut === false` after the stale activity write lands.                                                                                                                           |
+| Local service/browser-open probe      | Results are `failed`, `failed`, `failed`, `blocked`; only three browser calls occur.                                                                                                                                            |
+| Browser recovery check                | After the third failure, Retry is visible/enabled and copy says "Please try again"; the fourth click changes to unavailable without opening anything.                                                                           |
+| Browser layout                        | Expanded explanation at 240/320/480 px, at 100% and 200% CSS zoom: no horizontal document overflow and no unnamed buttons/links/disclosure controls in all six combinations. One dark-theme variable set and English copy only. |
+| Browser keyboard                      | Initial focus is BODY; Tab visits stars 1-5, Open survey, Ask me later, Never again, disclosure; Enter expands it and the next Tab reaches Privacy Statement.                                                                   |
+| GitHub checks                         | Build & Package, Code Quality & Tests, Integration Tests, API typings, CodeQL and CLA reported success during this review. Not a substitute for local handoff checks.                                                           |
+| Workbench / external services         | Actual focus preservation, Chat displacement, view movement, reload, remote latency, screen-reader speech, live form availability, and KQL execution remain unverified here.                                                    |
 
 ```bash
 npx --no-install jest --no-coverage --runInBand \
@@ -122,12 +122,12 @@ formatting, lint, or packaging were performed. Case 2 and real workbench checks 
 
 ### Priority
 
-| Priority | Meaning |
-| --- | --- |
-| **P0** | Blocking — the user gets stuck |
-| **P1** | Broken / misleading, or a consistency & safety gap |
-| **P2** | Polish, expectation, or a smaller feature gap |
-| **P3** | Nice-to-have / cosmetic / acknowledged |
+| Priority | Meaning                                            |
+| -------- | -------------------------------------------------- |
+| **P0**   | Blocking — the user gets stuck                     |
+| **P1**   | Broken / misleading, or a consistency & safety gap |
+| **P2**   | Polish, expectation, or a smaller feature gap      |
+| **P3**   | Nice-to-have / cosmetic / acknowledged             |
 
 For code-review triage here, P1 is **High**, P2 is **Medium**, and P3 is **Low**.
 Severity describes the feature when exercised; the production kill switch currently prevents
@@ -135,21 +135,21 @@ automatic invitations. R1 and R4 were downgraded during operator triage; origina
 
 ### Status
 
-| Status | Meaning |
-| --- | --- |
-| 🟠 **Open** | Recorded + analyzed; carries a recommendation but stays a suggestion |
-| 🟡 **Open (soft)** | Open, but the recommendation depends on an investigation or is "as-is" |
-| ✅ **Implemented** | A change was made on this branch and verified (Decision + commit link) |
-| 🚫 **Closed** | Won't fix — with a mandatory one-line reason |
-| 🔗 **Tracked** | Deferred to a repo issue (linked); dropped from the active priority list |
+| Status             | Meaning                                                                  |
+| ------------------ | ------------------------------------------------------------------------ |
+| 🟠 **Open**        | Recorded + analyzed; carries a recommendation but stays a suggestion     |
+| 🟡 **Open (soft)** | Open, but the recommendation depends on an investigation or is "as-is"   |
+| ✅ **Implemented** | A change was made on this branch and verified (Decision + commit link)   |
+| 🚫 **Closed**      | Won't fix — with a mandatory one-line reason                             |
+| 🔗 **Tracked**     | Deferred to a repo issue (linked); dropped from the active priority list |
 
 ### Markers
 
-| Marker | Meaning |
-| --- | --- |
-| ⚠️ **Flag** | Confirmed gap or bug |
-| 💡 **Suggestion** | A design/wording recommendation to react to |
-| 🔍 **Answered** | A "how does this work?" question answered from the code |
+| Marker            | Meaning                                                 |
+| ----------------- | ------------------------------------------------------- |
+| ⚠️ **Flag**       | Confirmed gap or bug                                    |
+| 💡 **Suggestion** | A design/wording recommendation to react to             |
+| 🔍 **Answered**   | A "how does this work?" question answered from the code |
 
 Suggestions below are not operator decisions. Record the chosen direction and its reason
 before implementation; keep every unresolved item in the next iteration.
@@ -205,30 +205,30 @@ erase a successfully saved opt-out or longer cooldown. See its interleaving belo
 
 ### Interaction inventory
 
-| Entry / action | Where it lives | Terminal state / surface | Review note |
-| --- | --- | --- | --- |
-| Nine successful milestones | Appendix C | Suppressed, eligibility-blocked, deferred, or visible invitation | Background failures must not break the original action. |
-| Five stars; Open survey | [HTML](../../../../../src/services/survey/invitation/surveyInvitationHtml.ts), [service](../../../../../src/services/survey/SurveyService.ts) | Stars select locally; only the primary button navigates to the fixed URL | D0023: optional numeric `selectedRating` on opening telemetry, never on selection alone |
-| Retry after failed browser open | [HTML result handler](../../../../../src/services/survey/invitation/surveyInvitationHtml.ts#L153) | Another explicit attempt; permission/lifecycle gates still apply | ✅ R2; navigation is not attempt-capped |
-| Ask me later | [choice handler](../../../../../src/services/survey/SurveyService.ts#L420) | Card closes, 14-day cooldown unless a later one already applies | No success toast; disappearance is the feedback. |
-| Never again; save-error Retry | [opt-out handler](../../../../../src/services/survey/SurveyService.ts#L429), [notification](../../../../../src/services/survey/SurveyService.ts#L542) | Permanent or in-memory suppression; failed save gets a native non-modal error | ⚠️ R1 for overlapping windows |
-| Explicit hide / move / collapse / switch | [view lifecycle](../../../../../src/services/survey/invitation/SurveyInvitationView.ts#L105) | Dispose records dismissal; temporary invisibility does not | ⚠️ R4 for moves |
-| Explanation disclosure | [HTML](../../../../../src/services/survey/invitation/surveyInvitationHtml.ts#L124) | Inline expansion: local day count, prior outcome, English-only note, telemetry description | Reminder copy derives from persisted state. |
-| Privacy Statement | [host message handler](../../../../../src/services/survey/invitation/SurveyInvitationView.ts) | External page or native failure notification | ✅ R3; no click telemetry |
-| Give Feedback | [command](../../../../../src/commands/giveFeedback/giveFeedback.ts#L12) | External page or native non-modal error/retry | Works despite opt-out, telemetry off, or kill switch off. Never clears opt-out. |
-| Show Invitation / Simulate Milestone / Reset State | [debug commands](../../../../../src/debug/registerDebugCommands.ts#L27) | Forced presentation, real policy evaluation, or silent reset | Development only; Show changes the rest of that session. |
+| Entry / action                                     | Where it lives                                                                                                                                        | Terminal state / surface                                                                   | Review note                                                                             |
+| -------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------- |
+| Nine successful milestones                         | Appendix C                                                                                                                                            | Suppressed, eligibility-blocked, deferred, or visible invitation                           | Background failures must not break the original action.                                 |
+| Five stars; Open survey                            | [HTML](../../../../../src/services/survey/invitation/surveyInvitationHtml.ts), [service](../../../../../src/services/survey/SurveyService.ts)         | Stars select locally; only the primary button navigates to the fixed URL                   | D0023: optional numeric `selectedRating` on opening telemetry, never on selection alone |
+| Retry after failed browser open                    | [HTML result handler](../../../../../src/services/survey/invitation/surveyInvitationHtml.ts#L153)                                                     | Another explicit attempt; permission/lifecycle gates still apply                           | ✅ R2; navigation is not attempt-capped                                                 |
+| Ask me later                                       | [choice handler](../../../../../src/services/survey/SurveyService.ts#L420)                                                                            | Card closes, 14-day cooldown unless a later one already applies                            | No success toast; disappearance is the feedback.                                        |
+| Never again; save-error Retry                      | [opt-out handler](../../../../../src/services/survey/SurveyService.ts#L429), [notification](../../../../../src/services/survey/SurveyService.ts#L542) | Permanent or in-memory suppression; failed save gets a native non-modal error              | ⚠️ R1 for overlapping windows                                                           |
+| Explicit hide / move / collapse / switch           | [view lifecycle](../../../../../src/services/survey/invitation/SurveyInvitationView.ts#L105)                                                          | Dispose records dismissal; temporary invisibility does not                                 | ⚠️ R4 for moves                                                                         |
+| Explanation disclosure                             | [HTML](../../../../../src/services/survey/invitation/surveyInvitationHtml.ts#L124)                                                                    | Inline expansion: local day count, prior outcome, English-only note, telemetry description | Reminder copy derives from persisted state.                                             |
+| Privacy Statement                                  | [host message handler](../../../../../src/services/survey/invitation/SurveyInvitationView.ts)                                                         | External page or native failure notification                                               | ✅ R3; no click telemetry                                                               |
+| Give Feedback                                      | [command](../../../../../src/commands/giveFeedback/giveFeedback.ts#L12)                                                                               | External page or native non-modal error/retry                                              | Works despite opt-out, telemetry off, or kill switch off. Never clears opt-out.         |
+| Show Invitation / Simulate Milestone / Reset State | [debug commands](../../../../../src/debug/registerDebugCommands.ts#L27)                                                                               | Forced presentation, real policy evaluation, or silent reset                               | Development only; Show changes the rest of that session.                                |
 
 ### Error / feedback surface comparison
 
-| Event | Current feedback | Assessment |
-| --- | --- | --- |
-| Survey open fails in invitation | Inline polite status + Retry | Each explicit retry remains available; fixed in R2. |
-| Survey open fails from command | Native non-modal error; user-selected Retry | No navigation attempt cap; dismissing stops the command. |
-| Privacy page cannot open | Native non-modal error for `false` or rejection | Fixed in R3; user can click the link again. |
-| Never again cannot persist | Native non-modal error + user-driven Retry; card closes | Explains the session-only guarantee; existing tests cover retries. |
-| Ask later / dismissal / visibility cooldown cannot persist | In-memory state and a local persistence-failed trace; no new toast | R5 improves diagnosis without adding an unsolicited notification. |
-| Automatic reveal fails / times out | No user error; bounded deferral telemetry and local reason trace | Reasonable for an unsolicited prompt, not a reason to interrupt with a modal. |
-| Survey initialization fails | DocumentDB output-channel error; manual command remains available | Feature isolation is intentional. |
+| Event                                                      | Current feedback                                                   | Assessment                                                                    |
+| ---------------------------------------------------------- | ------------------------------------------------------------------ | ----------------------------------------------------------------------------- |
+| Survey open fails in invitation                            | Inline polite status + Retry                                       | Each explicit retry remains available; fixed in R2.                           |
+| Survey open fails from command                             | Native non-modal error; user-selected Retry                        | No navigation attempt cap; dismissing stops the command.                      |
+| Privacy page cannot open                                   | Native non-modal error for `false` or rejection                    | Fixed in R3; user can click the link again.                                   |
+| Never again cannot persist                                 | Native non-modal error + user-driven Retry; card closes            | Explains the session-only guarantee; existing tests cover retries.            |
+| Ask later / dismissal / visibility cooldown cannot persist | In-memory state and a local persistence-failed trace; no new toast | R5 improves diagnosis without adding an unsolicited notification.             |
+| Automatic reveal fails / times out                         | No user error; bounded deferral telemetry and local reason trace   | Reasonable for an unsolicited prompt, not a reason to interrupt with a modal. |
+| Survey initialization fails                                | DocumentDB output-channel error; manual command remains available  | Feature isolation is intentional.                                             |
 
 There are no new tree rows, database-destructive actions, or clipboard/secret operations in
 this surface. Discovery-provider modal-error conventions do not automatically apply to it.
@@ -249,18 +249,18 @@ It records new open recommendations R6-R10; no UI changes or policy decisions we
 
 ## Priority index
 
-| # | Severity / priority | Item | Confidence | Status |
-| --- | --- | --- | --- | --- |
-| R6 | **High / P1** | [Rating affordance and navigation contract compete](#r6-rating-affordance-and-navigation-contract-compete-) | D0023 optional rating, explicit opening, and disclosed telemetry; tests/browser checks | ✅ Implemented |
-| R8 | **High / P1** | [Star artwork; small-copy concern accepted](#r8-enabled-stars-look-disabled-key-explanations-are-tiny-) | Native radios and matching outline/filled icons; helper size retained | ✅ Implemented |
-| R7 | **Medium / P2** | [Whitespace and heading hierarchy do not express the task](#r7-whitespace-and-heading-hierarchy-do-not-express-the-task-) | Task-led hierarchy/spacing implemented and browser-verified | ✅ Implemented |
-| R10 | **Medium / P2** | [Failure duplicates the primary action and loses keyboard focus](#r10-failure-duplicates-the-primary-action-and-loses-keyboard-focus-) | One primary action; retained keyboard focus verified in browser | ✅ Implemented |
-| R9 | **Low / P3** | [The secondary-action section is visually over-weighted](#r9-the-secondary-action-section-is-visually-over-weighted-) | Quieter equal-access controls/disclosure implemented and verified | ✅ Implemented |
-| R2 | **Medium / P2** | [Retry remains offered after attempts are exhausted](#r2-retry-remains-offered-after-attempts-are-exhausted-) | Regression tests + build | ✅ Implemented |
-| R3 | **Medium / P2** | [Privacy-link failure is silent](#r3-privacy-link-failure-is-silent-) | Regression tests + build | ✅ Implemented |
-| R5 | **Medium / P2** | [Survey activity and eligibility lack local traces](#r5-survey-activity-and-eligibility-lack-local-traces-) | Trace assertions + build | ✅ Implemented |
-| R1 | **Low / P3** | [Concurrent writes can erase Never again](#r1-concurrent-writes-can-erase-never-again-) | High; deterministic interleaving | 🚫 Closed - accepted edge case |
-| R4 | **Low / P3** | [Moving the view is recorded as dismissal](#r4-moving-the-view-is-recorded-as-dismissal-) | High code confidence; live UX pending | 🚫 Closed - leave as-is |
+| #   | Severity / priority | Item                                                                                                                                   | Confidence                                                                             | Status                         |
+| --- | ------------------- | -------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------- | ------------------------------ |
+| R6  | **High / P1**       | [Rating affordance and navigation contract compete](#r6-rating-affordance-and-navigation-contract-compete-)                            | D0023 optional rating, explicit opening, and disclosed telemetry; tests/browser checks | ✅ Implemented                 |
+| R8  | **High / P1**       | [Star artwork; small-copy concern accepted](#r8-enabled-stars-look-disabled-key-explanations-are-tiny-)                                | Native radios and matching outline/filled icons; helper size retained                  | ✅ Implemented                 |
+| R7  | **Medium / P2**     | [Whitespace and heading hierarchy do not express the task](#r7-whitespace-and-heading-hierarchy-do-not-express-the-task-)              | Task-led hierarchy/spacing implemented and browser-verified                            | ✅ Implemented                 |
+| R10 | **Medium / P2**     | [Failure duplicates the primary action and loses keyboard focus](#r10-failure-duplicates-the-primary-action-and-loses-keyboard-focus-) | One primary action; retained keyboard focus verified in browser                        | ✅ Implemented                 |
+| R9  | **Low / P3**        | [The secondary-action section is visually over-weighted](#r9-the-secondary-action-section-is-visually-over-weighted-)                  | Quieter equal-access controls/disclosure implemented and verified                      | ✅ Implemented                 |
+| R2  | **Medium / P2**     | [Retry remains offered after attempts are exhausted](#r2-retry-remains-offered-after-attempts-are-exhausted-)                          | Regression tests + build                                                               | ✅ Implemented                 |
+| R3  | **Medium / P2**     | [Privacy-link failure is silent](#r3-privacy-link-failure-is-silent-)                                                                  | Regression tests + build                                                               | ✅ Implemented                 |
+| R5  | **Medium / P2**     | [Survey activity and eligibility lack local traces](#r5-survey-activity-and-eligibility-lack-local-traces-)                            | Trace assertions + build                                                               | ✅ Implemented                 |
+| R1  | **Low / P3**        | [Concurrent writes can erase Never again](#r1-concurrent-writes-can-erase-never-again-)                                                | High; deterministic interleaving                                                       | 🚫 Closed - accepted edge case |
+| R4  | **Low / P3**        | [Moving the view is recorded as dismissal](#r4-moving-the-view-is-recorded-as-dismissal-)                                              | High code confidence; live UX pending                                                  | 🚫 Closed - leave as-is        |
 
 ## P0 — Blocking (the user gets stuck)
 
@@ -386,16 +386,16 @@ at body size. Do not make the whole panel larger to compensate for tiny subtrees
 **Finding:** Browser measurements at a 346 px CSS viewport agree with the
 [source spacing](../../../../../src/services/survey/invitation/surveyInvitationHtml.ts#L81):
 
-| Relationship | Current value |
-| --- | --- |
-| Header to first content heading | 16 px content inset |
-| "Your Feedback Matters" | 16 px / weight 700 |
-| Promotional heading to question | 28 px |
-| Actual satisfaction question | 14 px / weight 600 |
-| Question to star-control row | 10 px |
-| Star row to endpoint captions | 6 px |
-| Endpoint captions to primary action | 16 px |
-| Helper text to secondary-action group | 20 px |
+| Relationship                              | Current value             |
+| ----------------------------------------- | ------------------------- |
+| Header to first content heading           | 16 px content inset       |
+| "Your Feedback Matters"                   | 16 px / weight 700        |
+| Promotional heading to question           | 28 px                     |
+| Actual satisfaction question              | 14 px / weight 600        |
+| Question to star-control row              | 10 px                     |
+| Star row to endpoint captions             | 6 px                      |
+| Endpoint captions to primary action       | 16 px                     |
+| Helper text to secondary-action group     | 20 px                     |
 | Secondary note to disclosure rule/content | 20 px, then 12 px padding |
 
 The hierarchy promotes the generic message above the real task, while the large gap separates
@@ -756,22 +756,22 @@ remain unverified; passing automated checks does not close those manual tasks.
 
 ### Iteration 1 - pre-assessment
 
-| Item | Decision (why) | Outcome |
-| --- | --- | --- |
-| R1 | Not yet chosen | 🟠 Open; carry into the first fix iteration |
-| R2 | Not yet chosen | 🟠 Open; carry into the first fix iteration |
-| R3 | Not yet chosen | 🟠 Open; carry into the first fix iteration |
-| R4 | Not yet chosen | 🟠 Open; confirm workbench behavior before choosing the fix |
+| Item | Decision (why) | Outcome                                                     |
+| ---- | -------------- | ----------------------------------------------------------- |
+| R1   | Not yet chosen | 🟠 Open; carry into the first fix iteration                 |
+| R2   | Not yet chosen | 🟠 Open; carry into the first fix iteration                 |
+| R3   | Not yet chosen | 🟠 Open; carry into the first fix iteration                 |
+| R4   | Not yet chosen | 🟠 Open; confirm workbench behavior before choosing the fix |
 
 ### Iteration 2 - operator triage and trace investigation
 
-| Item | Decision (why) | Outcome |
-| --- | --- | --- |
-| R1 | Accept the rare overlapping-write outcome rather than add coordination | 🚫 Closed - accepted risk; no implementation change |
-| R2 | Remove the navigation attempt cap; explicit retries already show failures | 🟠 Open → Iteration 3; implementation pending |
-| R3 | Notify on privacy-link failure; no extra workflow | 🟠 Open → Iteration 3; implementation pending |
-| R4 | Explore, then leave as-is per operator request | 🚫 Closed - stable API offers no disposal reason; no implementation change |
-| R5 | Add local traces so usage and suppression can be diagnosed | 🟠 Open → Iteration 3; implementation pending |
+| Item | Decision (why)                                                            | Outcome                                                                    |
+| ---- | ------------------------------------------------------------------------- | -------------------------------------------------------------------------- |
+| R1   | Accept the rare overlapping-write outcome rather than add coordination    | 🚫 Closed - accepted risk; no implementation change                        |
+| R2   | Remove the navigation attempt cap; explicit retries already show failures | 🟠 Open → Iteration 3; implementation pending                              |
+| R3   | Notify on privacy-link failure; no extra workflow                         | 🟠 Open → Iteration 3; implementation pending                              |
+| R4   | Explore, then leave as-is per operator request                            | 🚫 Closed - stable API offers no disposal reason; no implementation change |
+| R5   | Add local traces so usage and suppression can be diagnosed                | 🟠 Open → Iteration 3; implementation pending                              |
 
 ### Iteration 3 coordination
 
@@ -780,11 +780,11 @@ progress updates inline on each finding and in chat. Implement R2/R3/R5 as indiv
 identifiable commits; run the focused Case 1 validation as a batch rather than after every
 edit. R1/R4 remain closed and unchanged. No item becomes Implemented until checks pass.
 
-| Item | Outcome |
-| --- | --- |
-| R2 | ✅ Implemented - `01bcc3de`; test typing repair `618891c6`; 390-test batch plus repaired 6-test suite/build passed |
-| R3 | ✅ Implemented - `3abfa319`; targeted tests and final build passed |
-| R5 | ✅ Implemented - `1ab9bd12`; trace tests and final build passed |
+| Item | Outcome                                                                                                            |
+| ---- | ------------------------------------------------------------------------------------------------------------------ |
+| R2   | ✅ Implemented - `01bcc3de`; test typing repair `618891c6`; 390-test batch plus repaired 6-test suite/build passed |
+| R3   | ✅ Implemented - `3abfa319`; targeted tests and final build passed                                                 |
+| R5   | ✅ Implemented - `1ab9bd12`; trace tests and final build passed                                                    |
 
 No requested code fix carries into Iteration 4. Only the separately listed manual UX,
 privacy/form/enablement, and ready-for-review checks remain.
@@ -848,13 +848,13 @@ primary action is recognizable. The main problem is intentional grouping and tru
 interaction, not a blanket need for more whitespace. Geometry/no-overflow checks from Iteration 4
 did not establish contrast, reading hierarchy, or failed-action focus recovery.
 
-| Item | Evidence / direction | Outcome |
-| --- | --- | --- |
-| R6 | Five interactive stars imply in-place rating; browser-only explanation follows the CTA. Clarify the preview before interaction. | 🟡 Open (soft); operator decision required for structural alternatives |
-| R7 | 28 px headline/question separation; promotional heading heavier than the question. Use task-led hierarchy and an 8/16/24 grouping rhythm. | 🟠 Open; proposal, not an approved pixel specification |
-| R8 | Helper text computes to 10.5248 px; inactive-looking stars composite to approximately 2.38:1 against the preview background. | 🟠 Open; readability/control-contrast improvements recommended |
-| R9 | Filled secondary row plus repeated explanation/disclosure adds visual weight. Try a quieter presentation without obscuring opt-out. | 🟡 Open (soft); optional refinement |
-| R10 | Simulated failure shows Open survey and Retry together and leaves keyboard focus on BODY. | 🟠 Open; one primary action and deliberate focus recovery recommended |
+| Item | Evidence / direction                                                                                                                      | Outcome                                                                |
+| ---- | ----------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------- |
+| R6   | Five interactive stars imply in-place rating; browser-only explanation follows the CTA. Clarify the preview before interaction.           | 🟡 Open (soft); operator decision required for structural alternatives |
+| R7   | 28 px headline/question separation; promotional heading heavier than the question. Use task-led hierarchy and an 8/16/24 grouping rhythm. | 🟠 Open; proposal, not an approved pixel specification                 |
+| R8   | Helper text computes to 10.5248 px; inactive-looking stars composite to approximately 2.38:1 against the preview background.              | 🟠 Open; readability/control-contrast improvements recommended         |
+| R9   | Filled secondary row plus repeated explanation/disclosure adds visual weight. Try a quieter presentation without obscuring opt-out.       | 🟡 Open (soft); optional refinement                                    |
+| R10  | Simulated failure shows Open survey and Retry together and leaves keyboard focus on BODY.                                                 | 🟠 Open; one primary action and deliberate focus recovery recommended  |
 
 **Recommended order:** clarify the browser/preview contract, make the question the main content
 heading, then normalize spacing and readable typography/contrast; finally simplify secondary
@@ -990,19 +990,19 @@ open, failed). Browser geometry, not a workbench or screen-reader check.
 
 The operator was not happy with spacing and rendering but could not tell where. Findings:
 
-| # | Pri | Observation (measured) | Resolution |
-|---|---|---|---|
-| V1 | P1 | Dark themes: the logo's navy glyph vanished on the ~#262626 header; only brackets showed | ✅ Light-glyph SVG variant derived from the repo's vector logo, switched by body theme class |
-| V2 | P2 | 50 px between stars and "Open survey" (8 + empty 18 px label + 24) - the largest gap, inside the main task | ✅ Label 4 px below stars, button 16 px after (38 px when empty) |
-| V3 | P2 | Stars spread by `1fr` columns (59-95 px apart) and centered; label centered under the row, not the star | ✅ 36 px cells, 4 px gaps, left-aligned; label left-aligned |
-| V4 | P2 | "You'll answer this question in the external form" sat above stars that do record a rating | ✅ "Optional: pick a rating, then finish the short survey in your browser." |
-| V5 | P2 | Transparent, centered 50/50 secondary actions looked like labels | ✅ Left-aligned natural-width VS Code secondary buttons |
-| V6 | P2 | Six text sizes (18/16/13/12/11.96/10.52); `.below` 0.92em cascade; disclosure body louder than key notes | ✅ One 12/16 px helper size; disclosure body muted |
-| V7 | P3 | Five title layers; orphaned "Your Feedback Matters" | ✅ Line removed |
-| V8 | P3 | "Ask me later" / "Never again" differ from VS Code vocabulary | ✅ "Remind me later" / "Don't ask again" |
-| V9 | P3 | Failure text plain, below the button; bare "Retry" | ✅ Superseded by D0026 modal |
-| V10 | P3 | Header title wraps at 260 px | 🚫 Closed - acceptable wrapping |
-| V11 | P3 | Three stacked tones in Dark Modern (sidebar title, header, editor body) | 🚫 Closed - D0022 deliberate |
+| #   | Pri | Observation (measured)                                                                                     | Resolution                                                                                   |
+| --- | --- | ---------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------- |
+| V1  | P1  | Dark themes: the logo's navy glyph vanished on the ~#262626 header; only brackets showed                   | ✅ Light-glyph SVG variant derived from the repo's vector logo, switched by body theme class |
+| V2  | P2  | 50 px between stars and "Open survey" (8 + empty 18 px label + 24) - the largest gap, inside the main task | ✅ Label 4 px below stars, button 16 px after (38 px when empty)                             |
+| V3  | P2  | Stars spread by `1fr` columns (59-95 px apart) and centered; label centered under the row, not the star    | ✅ 36 px cells, 4 px gaps, left-aligned; label left-aligned                                  |
+| V4  | P2  | "You'll answer this question in the external form" sat above stars that do record a rating                 | ✅ "Optional: pick a rating, then finish the short survey in your browser."                  |
+| V5  | P2  | Transparent, centered 50/50 secondary actions looked like labels                                           | ✅ Left-aligned natural-width VS Code secondary buttons                                      |
+| V6  | P2  | Six text sizes (18/16/13/12/11.96/10.52); `.below` 0.92em cascade; disclosure body louder than key notes   | ✅ One 12/16 px helper size; disclosure body muted                                           |
+| V7  | P3  | Five title layers; orphaned "Your Feedback Matters"                                                        | ✅ Line removed                                                                              |
+| V8  | P3  | "Ask me later" / "Never again" differ from VS Code vocabulary                                              | ✅ "Remind me later" / "Don't ask again"                                                     |
+| V9  | P3  | Failure text plain, below the button; bare "Retry"                                                         | ✅ Superseded by D0026 modal                                                                 |
+| V10 | P3  | Header title wraps at 260 px                                                                               | 🚫 Closed - acceptable wrapping                                                              |
+| V11 | P3  | Three stacked tones in Dark Modern (sidebar title, header, editor body)                                    | 🚫 Closed - D0022 deliberate                                                                 |
 
 > **Decision (Iteration 9):** apply V1-V9 as proposed ([D0025](../decisions.md#0025-apply-the-rendering-review-to-the-invitation-layout)).
 > **Reason:** the operator agreed with every observation and proposed change.
@@ -1011,7 +1011,7 @@ The operator was not happy with spacing and rendering but could not tell where. 
 > ([D0026](../decisions.md#0026-report-open-failures-in-a-modal-remove-retry-ui)).
 > **Reason (operator):** "we don't need that extra UI for 'retry', just a modal error dialog and
 > we're good" - the retry code was obsolete and too much to maintain and test. The opt-out
-> *save* Retry (R1/R3 area) is a different concern and was left unchanged.
+> _save_ Retry (R1/R3 area) is a different concern and was left unchanged.
 
 > ✅ **Implemented (Iteration 9):** invitation layout, copy, dark logo and host modal in
 > [`49f8c2d3`](https://github.com/microsoft/vscode-documentdb/commit/49f8c2d3); Give Feedback single
@@ -1029,16 +1029,16 @@ The operator was not happy with spacing and rendering but could not tell where. 
 The operator reviewed the Iteration 9 render and asked for refinements
 ([D0027](../decisions.md#0027-centered-smaller-rating-stretched-actions-no-save-retry)):
 
-| # | Request | Resolution |
-|---|---|---|
-| W1 | Helper copy "Pick a rating (optional), then finish..." | ✅ "Pick a rating (optional), then finish the short survey in your browser." |
-| W2 | SVG logo for light themes too | ✅ `documentdb_icon_light.svg` (the repo's vector logo) replaces the PNG |
-| W3 | Opt-out save failure: modal stating the save failed, no Retry | ✅ Modal error; `retrySave` and the retry notification removed |
-| W4 | Space above the stars equal to the existing space below them to the button | ✅ 38 px box gap above = 4 + 18 + 16 below; measured 44 px glyph-to-text both ways |
-| W5 | Remove the "Don't ask again" explanation | ✅ Removed (string and element) |
-| W6 | Stars one default size smaller, centered | ✅ 20 px glyphs in 32 px cells, centered with centered description |
-| W7 | Stretch the two buttons into the primary's box | ✅ `flex: 1 1 140px`; share one row, stack full-width below ~320 px sidebar width |
-| W8 | Better primary label than "Open survey" | ✅ "Continue to survey" - continues from the optional rating and names the destination |
+| #   | Request                                                                    | Resolution                                                                             |
+| --- | -------------------------------------------------------------------------- | -------------------------------------------------------------------------------------- |
+| W1  | Helper copy "Pick a rating (optional), then finish..."                     | ✅ "Pick a rating (optional), then finish the short survey in your browser."           |
+| W2  | SVG logo for light themes too                                              | ✅ `documentdb_icon_light.svg` (the repo's vector logo) replaces the PNG               |
+| W3  | Opt-out save failure: modal stating the save failed, no Retry              | ✅ Modal error; `retrySave` and the retry notification removed                         |
+| W4  | Space above the stars equal to the existing space below them to the button | ✅ 38 px box gap above = 4 + 18 + 16 below; measured 44 px glyph-to-text both ways     |
+| W5  | Remove the "Don't ask again" explanation                                   | ✅ Removed (string and element)                                                        |
+| W6  | Stars one default size smaller, centered                                   | ✅ 20 px glyphs in 32 px cells, centered with centered description                     |
+| W7  | Stretch the two buttons into the primary's box                             | ✅ `flex: 1 1 140px`; share one row, stack full-width below ~320 px sidebar width      |
+| W8  | Better primary label than "Open survey"                                    | ✅ "Continue to survey" - continues from the optional rating and names the destination |
 
 > **Decision (Iteration 10):** apply W1-W8. **Reason (operator):** refinements after seeing the
 > render; the opt-out save failure "is really an edge case", so a modal suffices. Accepted
@@ -1059,11 +1059,11 @@ The earlier clickable-star proposal is no longer the preferred direction after t
 2026-10-09 feedback. Only the Open survey button should navigate. The remaining question is
 how a decorative star row earns its space, not how to fake a rating that cannot be carried forward.
 
-| Option | Pros | Cons |
-| --- | --- | --- |
+| Option                                                                     | Pros                                                                                        | Cons                                                                               |
+| -------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------- |
 | Outline stars at rest; fill the entire row gold on Open survey hover/focus | Keeps the requested visual transition; only the real action is interactive; no chosen score | Adds decoration without functionality; must not look like a saved five-star answer |
-| Static decorative stars; one Open survey action | Honest, calm, and accessible; no pseudo-input or extra tab stops | Does not provide the requested outline-to-gold transition |
-| Omit the stars; use a concise invitation and one action | Simplest model and strongest focus on the actual next step | Loses the visual preview of the survey question and the desired star motif |
+| Static decorative stars; one Open survey action                            | Honest, calm, and accessible; no pseudo-input or extra tab stops                            | Does not provide the requested outline-to-gold transition                          |
+| Omit the stars; use a concise invitation and one action                    | Simplest model and strongest focus on the actual next step                                  | Loses the visual preview of the survey question and the desired star motif         |
 
 💡 **Suggested:** if the star motif stays, treat it explicitly as an illustration. The button-linked
 whole-row effect is a compromise that preserves the requested outline/filled artwork without a
@@ -1077,11 +1077,11 @@ decision and the implementation recorded in Iteration 7.
 **Disposition:** Closed by operator triage in Iteration 2. Alternatives are retained for
 provenance, not as additional work required by this review.
 
-| Option | Pros | Cons |
-| --- | --- | --- |
-| Durable cross-host coordination / atomic persistence | Can uphold the permanent-preference contract despite overlapping updates | More lifecycle and failure handling; must cover local/remote hosts and crashes |
-| Separate append-only opt-out record in a store with suitable concurrency guarantees | Avoids rewriting opt-out as part of ordinary activity | Requires a supported storage design; merely changing the Memento key is not proof of safety |
-| Accept best-effort persistence and revise the promise | Small implementation footprint | Weakens an explicit permanent-choice requirement; needs operator approval and honest UX |
+| Option                                                                              | Pros                                                                     | Cons                                                                                        |
+| ----------------------------------------------------------------------------------- | ------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------- |
+| Durable cross-host coordination / atomic persistence                                | Can uphold the permanent-preference contract despite overlapping updates | More lifecycle and failure handling; must cover local/remote hosts and crashes              |
+| Separate append-only opt-out record in a store with suitable concurrency guarantees | Avoids rewriting opt-out as part of ordinary activity                    | Requires a supported storage design; merely changing the Memento key is not proof of safety |
+| Accept best-effort persistence and revise the promise                               | Small implementation footprint                                           | Weakens an explicit permanent-choice requirement; needs operator approval and honest UX     |
 
 The initial recommendation to strengthen persistence was not selected. The operator accepts
 the existing best-effort behavior for overlapping writes; see R1 for the reason and caveat.
@@ -1149,6 +1149,7 @@ Use only test connections/data for feature milestones.
    should be day three. Always reset before replacing a fixture: the store merges maxima
    and sticky opt-out rather than accepting an arbitrary overwrite. Do not change the OS clock
    or edit the user's storage database.
+
 5. Variants: use count zero for a new installation; add a future `nextEligibleAt` plus
    `lastOutcome: 'askLater'` for cooldown; an elapsed date plus each timed outcome for reminder
    wording; or `optedOutAt` for permanent suppression. Use real absolute dates relative to
@@ -1163,29 +1164,29 @@ R2/R3/R5 rows are manual acceptance checks for the implemented fixes; automated 
 recorded above, not a substitute for observations in the actual workbench.
 R1/R4 remain optional confirmation of accepted limitations, not requests to reopen their fixes.
 
-| Done | Journey / action | Expected observation / evidence to capture |
-| --- | --- | --- |
-| [ ] | Production/default-enabled activation | Activation alone does not invite; successful eligible activity can invite. Permission, active days, cooldowns, and opt-out apply; debug commands remain absent. |
-| [ ] | Fresh state, days one/two/three | No prompt before third distinct host-local day; repeated same-day actions do not increment again. |
-| [ ] | Eligible milestone with editor / terminal focused | Invitation appears without taking typing focus; record actual milestone-to-visible latency. |
-| [ ] | Eligible milestone with Chat focused in Secondary Sidebar | Observe replacement/focus effects; `preserveFocus` alone is not proof that the previous view stays usable. |
-| [ ] | Each star and Open survey | No default rating; stars only select. The primary button sends optional `selectedRating` and opens the unchanged URL; card closes only on success. |
-| [ ] | Repeated browser failures, then success | After R2: fourth and later explicit retries really open the browser; success on a fifth attempt closes the invitation. Repeat Give Feedback; verify telemetry remains bounded. |
-| [ ] | Ask me later; explicit Hide | Distinct outcomes, at least 14-day cooldown; reload does not restore the card. |
-| [ ] | Collapse, switch container, close sidebar | No invented dismissal; visibility cooldown remains. |
-| [ ] | Move to another container | Optional confirmation of accepted R4 behavior: disposal can record dismissed. Compare with explicit Hide and repeat the next session's reveal; no move-detection fix is required. |
-| [ ] | Ignore and reload | No activation restore; a subsequent milestone stays blocked by visibility cooldown. |
-| [ ] | Never again and restart; two windows | Ordinary/sequential paths retain opt-out. R1's concurrent last-writer race is accepted; an overlap probe documents the limitation rather than blocks this PR. |
-| [ ] | Opt-out save failure / Retry | Warning explains session-only suppression; retry saves and does not re-open the invitation. |
-| [ ] | Telemetry changes to error/crash/off while visible or opening | Card closes, no new lifecycle outcome/event after withdrawal; test in Pass B, not forced preview. |
-| [ ] | Give Feedback after opt-out / with telemetry off | Explicit browser request works; opt-out remains; no prohibited survey telemetry. |
-| [ ] | Give Feedback while card is visible | Command currently leaves card open; a later deferral must not shorten its 180-day cooldown. Decide whether leaving it open is desirable. |
-| [ ] | Why text for first invitation and all reminder outcomes | Actual count and correct prior outcome; English note and data-handling explanation remain understandable. |
-| [ ] | Privacy link succeeds/fails | After R3: native notification on false/rejection, link stays usable, and no click telemetry is added. |
-| [ ] | Survey output at Trace level | After R5: acknowledged usage, new/already-counted days, and the actual suppression/defer reason appear locally; counts/dates are not added to telemetry. |
-| [ ] | Previously hidden / moved / slow remote destination | Prompt settles or defers promptly; no delayed unsolicited resurrection. Include visible shell with missing rendered handshake. |
-| [ ] | Real zoom / high contrast / long localized text | No clipping, actionable focus ring, readable stars and endpoints, no horizontal scrolling. Browser CSS zoom is only a proxy. |
-| [ ] | Screen reader and keyboard recovery | Named grouped stars; disclosure reachable; failed-open status announced; usable focus after controls disable/re-enable and after card closes. |
+| Done | Journey / action                                              | Expected observation / evidence to capture                                                                                                                                        |
+| ---- | ------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| [ ]  | Production/default-enabled activation                         | Activation alone does not invite; successful eligible activity can invite. Permission, active days, cooldowns, and opt-out apply; debug commands remain absent.                   |
+| [ ]  | Fresh state, days one/two/three                               | No prompt before third distinct host-local day; repeated same-day actions do not increment again.                                                                                 |
+| [ ]  | Eligible milestone with editor / terminal focused             | Invitation appears without taking typing focus; record actual milestone-to-visible latency.                                                                                       |
+| [ ]  | Eligible milestone with Chat focused in Secondary Sidebar     | Observe replacement/focus effects; `preserveFocus` alone is not proof that the previous view stays usable.                                                                        |
+| [ ]  | Each star and Open survey                                     | No default rating; stars only select. The primary button sends optional `selectedRating` and opens the unchanged URL; card closes only on success.                                |
+| [ ]  | Repeated browser failures, then success                       | After R2: fourth and later explicit retries really open the browser; success on a fifth attempt closes the invitation. Repeat Give Feedback; verify telemetry remains bounded.    |
+| [ ]  | Ask me later; explicit Hide                                   | Distinct outcomes, at least 14-day cooldown; reload does not restore the card.                                                                                                    |
+| [ ]  | Collapse, switch container, close sidebar                     | No invented dismissal; visibility cooldown remains.                                                                                                                               |
+| [ ]  | Move to another container                                     | Optional confirmation of accepted R4 behavior: disposal can record dismissed. Compare with explicit Hide and repeat the next session's reveal; no move-detection fix is required. |
+| [ ]  | Ignore and reload                                             | No activation restore; a subsequent milestone stays blocked by visibility cooldown.                                                                                               |
+| [ ]  | Never again and restart; two windows                          | Ordinary/sequential paths retain opt-out. R1's concurrent last-writer race is accepted; an overlap probe documents the limitation rather than blocks this PR.                     |
+| [ ]  | Opt-out save failure / Retry                                  | Warning explains session-only suppression; retry saves and does not re-open the invitation.                                                                                       |
+| [ ]  | Telemetry changes to error/crash/off while visible or opening | Card closes, no new lifecycle outcome/event after withdrawal; test in Pass B, not forced preview.                                                                                 |
+| [ ]  | Give Feedback after opt-out / with telemetry off              | Explicit browser request works; opt-out remains; no prohibited survey telemetry.                                                                                                  |
+| [ ]  | Give Feedback while card is visible                           | Command currently leaves card open; a later deferral must not shorten its 180-day cooldown. Decide whether leaving it open is desirable.                                          |
+| [ ]  | Why text for first invitation and all reminder outcomes       | Actual count and correct prior outcome; English note and data-handling explanation remain understandable.                                                                         |
+| [ ]  | Privacy link succeeds/fails                                   | After R3: native notification on false/rejection, link stays usable, and no click telemetry is added.                                                                             |
+| [ ]  | Survey output at Trace level                                  | After R5: acknowledged usage, new/already-counted days, and the actual suppression/defer reason appear locally; counts/dates are not added to telemetry.                          |
+| [ ]  | Previously hidden / moved / slow remote destination           | Prompt settles or defers promptly; no delayed unsolicited resurrection. Include visible shell with missing rendered handshake.                                                    |
+| [ ]  | Real zoom / high contrast / long localized text               | No clipping, actionable focus ring, readable stars and endpoints, no horizontal scrolling. Browser CSS zoom is only a proxy.                                                      |
+| [ ]  | Screen reader and keyboard recovery                           | Named grouped stars; disclosure reachable; failed-open status announced; usable focus after controls disable/re-enable and after card closes.                                     |
 
 For every observation record: test mode and overrides, VS Code/OS version, initial state,
 entry point, actual terminal state, screenshot or spoken announcement, and applicable lifecycle
@@ -1209,17 +1210,17 @@ events. Redact identifiers and connection details. Do not infer survey submissio
 No new tree menus or database actions were added for the survey. Exercise the existing
 feature entry point and observe whether its success causes eligibility evaluation.
 
-| Entry / milestone | Owning source | Activity area / success boundary |
-| --- | --- | --- |
-| Local Quick Start completes, including resumed readiness | [localQuickStartRouter](../../../../../src/webviews/documentdb/localQuickStart/localQuickStartRouter.ts#L127) | `connection`; terminal done event |
-| Collection View initial query completes | [collectionViewRouter](../../../../../src/webviews/documentdb/collectionView/collectionViewRouter.ts#L255) | `dataBrowsing`; initial intent, not aborted; refresh/pagination excluded |
-| Document save completes | [documentsViewRouter](../../../../../src/webviews/documentdb/documentView/documentsViewRouter.ts#L112) | `dataBrowsing`; successful save |
-| Playground run completes | [executePlaygroundCode](../../../../../src/commands/playground/executePlaygroundCode.ts#L224) | `queryPlayground`; not cancelled |
-| Interactive shell command evaluates successfully | [DocumentDBShellPty](../../../../../src/documentdb/shell/DocumentDBShellPty.ts#L774) | `interactiveShell`; errors, interrupts, and special-result early returns excluded |
-| Create index succeeds | [indexViewRouter](../../../../../src/webviews/documentdb/collectionView/indexesTab/indexViewRouter.ts#L299) | `dataManagement`; non-success result throws first |
-| Copy collection / indexes task completes | [taskService](../../../../../src/services/taskService/taskService.ts#L342) | `dataManagement`; only those task types in Completed branch |
-| Query Insights AI reaches completion | [queryInsightsEventsRouter](../../../../../src/webviews/documentdb/collectionView/queryInsights/queryInsightsEventsRouter.ts#L585) | `queryInsights`; abort checked before completion |
-| Cluster Dashboard initial inventory loads | [clusterDashboardRouter](../../../../../src/webviews/documentdb/clusterDashboard/clusterDashboardRouter.ts#L250) | `clusterDashboard`; non-null inventory, initial reason, not aborted |
+| Entry / milestone                                        | Owning source                                                                                                                      | Activity area / success boundary                                                  |
+| -------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------- |
+| Local Quick Start completes, including resumed readiness | [localQuickStartRouter](../../../../../src/webviews/documentdb/localQuickStart/localQuickStartRouter.ts#L127)                      | `connection`; terminal done event                                                 |
+| Collection View initial query completes                  | [collectionViewRouter](../../../../../src/webviews/documentdb/collectionView/collectionViewRouter.ts#L255)                         | `dataBrowsing`; initial intent, not aborted; refresh/pagination excluded          |
+| Document save completes                                  | [documentsViewRouter](../../../../../src/webviews/documentdb/documentView/documentsViewRouter.ts#L112)                             | `dataBrowsing`; successful save                                                   |
+| Playground run completes                                 | [executePlaygroundCode](../../../../../src/commands/playground/executePlaygroundCode.ts#L224)                                      | `queryPlayground`; not cancelled                                                  |
+| Interactive shell command evaluates successfully         | [DocumentDBShellPty](../../../../../src/documentdb/shell/DocumentDBShellPty.ts#L774)                                               | `interactiveShell`; errors, interrupts, and special-result early returns excluded |
+| Create index succeeds                                    | [indexViewRouter](../../../../../src/webviews/documentdb/collectionView/indexesTab/indexViewRouter.ts#L299)                        | `dataManagement`; non-success result throws first                                 |
+| Copy collection / indexes task completes                 | [taskService](../../../../../src/services/taskService/taskService.ts#L342)                                                         | `dataManagement`; only those task types in Completed branch                       |
+| Query Insights AI reaches completion                     | [queryInsightsEventsRouter](../../../../../src/webviews/documentdb/collectionView/queryInsights/queryInsightsEventsRouter.ts#L585) | `queryInsights`; abort checked before completion                                  |
+| Cluster Dashboard initial inventory loads                | [clusterDashboardRouter](../../../../../src/webviews/documentdb/clusterDashboard/clusterDashboardRouter.ts#L250)                   | `clusterDashboard`; non-null inventory, initial reason, not aborted               |
 
 **Handoff:** Start the hands-on investigation with Appendix B and report what you see.
 The agent can verify each observation against the code and maintain this document's priority
