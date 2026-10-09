@@ -10,3 +10,5 @@ export * from './constants';
 export * from './fallbackDnsClient';
 export * from './srvUriRewrite';
 export * from './types';
+export * from './resolveSrvForDriver';
+export * from './report';

@@ -27,6 +27,8 @@
         "./*": "${workspaceFolder}/*"
       },
       "env": {
+        // "DOCUMENTDB_DEBUG_FORCE_SRV_FALLBACK": "1",
+        // "DOCUMENTDB_DISABLE_SRV_FALLBACK": "1",
         "DEBUGTELEMETRY": "verbose", // set this to "verbose" to see telemetry events in debug console
         "NODE_DEBUG": "",
         "DEBUG_WEBPACK": "",

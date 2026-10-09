@@ -8,6 +8,7 @@ code:
     - src/documentdb/playground/WorkerSessionManager.ts
     - src/documentdb/playground/playgroundWorker.ts
     - packages/documentdb-js-srv-resolver/**
+    - src/documentdb/srv/**
 ---
 
 # Increment 1: in-memory SRV fallback for `mongodb+srv://` (#993)
@@ -368,7 +369,7 @@ parsing. Added after review: TXT `NOERROR` without answers and TXT `NXDOMAIN` ar
 TXT", not as failures (R3); with every server slow, SRV plus TXT plus TCP retries end at the single
 deadline, not at a multiple of it (R4).
 
-**Done.** `@M3@` `feat(srv-resolver): fallback DNS client over UDP and TCP`.
+**Done.** `023e7446` `feat(srv-resolver): fallback DNS client over UDP and TCP`.
 `packages/documentdb-js-srv-resolver/src/fallbackDnsClient.ts` exports `resolveSrvFallback`,
 `resolveTxtFallback`, `parseDnsServers`, `hasCompressedSrvTarget` and `FallbackDnsError` (Node-shaped:
 `code`, `syscall`, `hostname`, plus `serversTried` and `attempts`). The timing constants live in
@@ -568,6 +569,45 @@ Assert that `notSrv` emits no event. Added after review:
   rejects with `UserCancelledError` (not the probe error), and the probe resolver's `cancel()` was
   called.
 - **R5:** force switch with a successful probe and a failing fallback throws the fallback's error.
+
+**Done.** `@M4@` `feat(srv): core SRV resolve function, extension adapter and telemetry`.
+The package's `resolveSrvForDriver()` (`src/resolveSrvForDriver.ts`, report types in
+`src/report.ts`) implements steps 1–6. The extension adapter
+`src/documentdb/srv/prepareDriverConnectionString.ts` maps the two environment switches to
+`fallback: 'off' | 'force' | 'auto'` (off wins; only the value `1` counts), passes
+`deadlineMs = min(20 s, documentDB.connectionTimeout)`, writes trace lines to
+`ext.outputChannel.trace`, and emits `connect.srvResolution` through
+`srvResolutionTelemetry.ts`. `.vscode/launch.json` has both switches as commented-out `env`
+entries. 99 new tests (58 package, 41 extension), covering every path, R1 with the real driver
+constructor, R2 at each await point (including a DNS error racing the abort), R4 (one deadline
+for SRV and TXT), R5, options identity, and log spies with a credential fixture on success and
+on every error path.
+
+**Deviation.** Approved by the coordinator (confidence ≥ 85 % each):
+
+- **Telemetry wrapper.** `callWithTelemetryAndErrorHandling` swallows a `UserCancelledError` even
+  with `rethrow = true`, lets registered handlers see the error, and sends its `stack`, which for a
+  DNS error contains `_mongodb._tcp.<host>`. The adapter therefore uses the same
+  "original failure" pattern as `ClustersClient.initClient` and `WorkerSessionManager.spawnWorker`:
+  inside the callback it throws a stack-less stand-in (`UserCancelledError` for cancellation, so
+  `result=Canceled`), and outside it rethrows the original object unchanged.
+- **Cancellation.** The adapter links the caller's `abortSignal` to an internal controller that
+  aborts with a `UserCancelledError` as the reason, so the package's cancellation contract (WI-3
+  note) hands back a real `UserCancelledError`.
+- **DNS-server classification** (`dnsServerClass`, `dnsServerIpFamily`) lives in the extension's
+  `srvResolutionTelemetry.ts`, not in the package's `report.ts`, so it reuses
+  `isLocalOrPrivateHost` (plus an explicit loopback check) instead of duplicating it. The report
+  carries the raw `dnsServers` and `srvHost` for local use only; neither reaches telemetry.
+  `isAzureEndpoint` uses `hasAzureDomain`; `isGlobalEndpoint` checks for a `global` DNS label.
+- **Startup summary.** The adapter takes an optional `startupTelemetry` (the enclosing
+  `connect.startup` or `worker.startup` context) and sets `srvResolution` (path or `notSrv`) and
+  `srvResolutionDurationMs` on it, on failure too. It also returns a `summary`
+  (`srvResolutionSummary.ts`) for WI-10. Neither is in the plan's signature; both are additive.
+- **`fallbackErrorCode` values:** the fallback client's Node code (`ETIMEOUT`, `ESERVFAIL`, …),
+  the rewrite kind (`noAddresses`, `parentDomainMismatch`, `txtInvalid`, `optionConflict`),
+  `preflight`, or `txt:<code>` when a TXT failure other than "no record" stopped the fallback.
+- **Forced fallback after a successful probe** writes `forced fallback applied for <host>; …`
+  instead of the "rejected by Node.js" line, because nothing was rejected.
 
 ---
 
