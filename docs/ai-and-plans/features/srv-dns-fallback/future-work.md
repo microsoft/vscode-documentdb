@@ -46,6 +46,9 @@ whether they are reachable. The only way to start over is to reload VS Code or c
    `+srv` host or the host list), then the resolved servers: host, port, role (primary, secondary,
    arbiter, mongos, load balancer), and state (reachable, unknown, unreachable, with the last
    error). Show how it was resolved (`direct`, `SRV via Node.js`, `SRV via fallback`) and when.
+   Increment 1 already provides the data for the tree's connection: `SrvResolutionSummary` from
+   `ClustersClient.getSrvResolution(clusterId)` (D0019). The tooltip shows it today; the dashboard
+   should reuse the same summary, extended to shell and playground sessions.
    Sources: the driver's public SDAM events (`topologyDescriptionChanged`,
    `serverDescriptionChanged`, `serverHeartbeatSucceeded/Failed`), the `srvResolution` result from
    this feature, and `getClusterMetadata`. Avoid reading the driver's internal `client.topology`.

@@ -16,12 +16,12 @@ created: 2026-10-09
 | 0002 | The fallback queries the same system DNS servers, nothing else      | Accepted | Operator position (#993)   | 2026-10-09 | —   |
 | 0003 | Use `dns-packet` in-process, not a native addon or system tools     | Accepted | Operator position (#993)   | 2026-10-09 | —   |
 | 0004 | The rewrite mirrors the driver's SRV semantics exactly              | Accepted | Operator position (#993)   | 2026-10-09 | —   |
-| 0005 | Probe with Node's resolver first; fall back only on a broken reply  | Proposed | —                          | 2026-10-09 | —   |
+| 0005 | Probe with Node's resolver first; fall back only on a broken reply  | Accepted | Operator accepted 2026-10-09 | 2026-10-09 | —   |
 | 0006 | Fallback-eligible codes are `EBADRESP` and `EFORMERR` only          | Superseded by D0012 | Operator chose Q6 option B | 2026-10-09 | —   |
-| 0007 | Two call sites: `ClustersClient` and `WorkerSessionManager`         | Proposed | —                          | 2026-10-09 | —   |
-| 0008 | Shell and playground resolve on the host, not in the worker         | Proposed | —                          | 2026-10-09 | —   |
-| 0009 | One `connect.srvResolution` event per `+srv` connection             | Proposed | —                          | 2026-10-09 | —   |
-| 0010 | A development-only switch forces the fallback path                  | Proposed | —                          | 2026-10-09 | —   |
+| 0007 | Two call sites: `ClustersClient` and `WorkerSessionManager`         | Accepted (modified) | Accepted; `connectToClient` also deprecated | 2026-10-09 | —   |
+| 0008 | Shell and playground resolve on the host, not in the worker         | Accepted | Operator accepted 2026-10-09 | 2026-10-09 | —   |
+| 0009 | One `connect.srvResolution` event per `+srv` connection             | Accepted | Operator accepted 2026-10-09 | 2026-10-09 | —   |
+| 0010 | A development-only switch forces the fallback path                  | Accepted | Operator accepted 2026-10-09 | 2026-10-09 | —   |
 | 0011 | No user setting; an environment variable turns the fallback off, and it is documented | Accepted | Operator chose Q1 A + D, and asked for user docs | 2026-10-09 | —   |
 | 0012 | `ECONNREFUSED` also triggers the fallback                           | Accepted | Operator chose Q6 option B; supersedes D0006 | 2026-10-09 | —   |
 | 0013 | Cached fallback clients are not refreshed in this increment          | Accepted | Operator chose Q3 A; options moved to future work | 2026-10-09 | —   |
@@ -29,6 +29,9 @@ created: 2026-10-09
 | 0015 | Ship as `v0.11.1` from `release/0.11.1`, cut at `v0.11.0`, then forward-merge | Accepted | Operator decision (Q5)     | 2026-10-09 | —   |
 | 0016 | Longer fallback timeouts for slow networks                           | Accepted (modified) | Q7 option A, with longer values (operator) | 2026-10-09 | —   |
 | 0017 | The probe passes every error that skips the fallback to the driver, with no extra time limit | Accepted | Operator chose Q2 A over the recommended D | 2026-10-09 | —   |
+| 0018 | DNS preparation and the shell and playground init timeout have separate budgets | Accepted | Operator chose Q8 A, as recommended | 2026-10-09 | —   |
+| 0019 | The UI shows whether the fallback was used: the tooltip now, the dashboard later | Accepted | Operator requirement     | 2026-10-09 | —   |
+| 0020 | The VS Code-independent logic lives in a workspace package, published at the operator's discretion | Accepted | Operator chose "workspace package now" | 2026-10-09 | —   |
 
 > Entries below are **semantically** immutable: append new entries rather than rewriting old ones,
 > and record reversals as a new entry plus a status change above. Heading text is frozen once
@@ -132,7 +135,7 @@ to diagnose it.
 
 ## 0005 — Probe with Node's resolver first; fall back only on a broken reply
 
-**Status:** Proposed · **Date:** 2026-10-09 · **Raised by:** planning
+**Status:** Accepted (operator, 2026-10-09; was Proposed) · **Date:** 2026-10-09 · **Raised by:** planning
 
 ### Question
 
@@ -178,7 +181,7 @@ Option 1.
 
 > **Superseded (2026-10-09).** Plan question Q6 reopened this entry, and the operator chose to
 > include `ECONNREFUSED` (D0012). The options are in
-> [iterations/01-srv-fallback.md, Q6](./iterations/01-srv-fallback.md#q6-should-econnrefused-trigger-the-fallback).
+> [iterations/01-srv-fallback/plan.md, Q6](./iterations/01-srv-fallback/plan.md#q6-should-econnrefused-trigger-the-fallback).
 > The original proposal is kept below as written.
 
 ### Decision (proposed)
@@ -196,7 +199,7 @@ size of that known gap is measured and can justify `os-dns-native` later.
 
 ## 0007 — Two call sites: `ClustersClient` and `WorkerSessionManager`
 
-**Status:** Proposed · **Date:** 2026-10-09 · **Raised by:** planning
+**Status:** Accepted (modified) (operator, 2026-10-09; was Proposed) · **Date:** 2026-10-09 · **Raised by:** planning
 
 ### Decision (proposed)
 
@@ -212,11 +215,19 @@ that issue #993 lists.
   in `src/` (checked 2026-10-09). Wiring dead code adds test surface for no user benefit. Removing
   it is a separate change.
 
+### Operator modification (2026-10-09)
+
+Accepted, with one addition: `connectToClient` is marked `@deprecated` with a JSDoc comment saying
+it is unused, is not wired to the fallback, and will be removed in a future release. The comment
+was added during planning (`src/documentdb/connectToClient.ts`). The removal itself, together with
+the unused `parseMongoConnectionString`, is left for a later release and is not part of
+`v0.11.1`.
+
 ---
 
 ## 0008 — Shell and playground resolve on the host, not in the worker
 
-**Status:** Proposed · **Date:** 2026-10-09 · **Raised by:** planning
+**Status:** Accepted (operator, 2026-10-09; was Proposed) · **Date:** 2026-10-09 · **Raised by:** planning
 
 ### Decision (proposed)
 
@@ -244,7 +255,7 @@ and the worker bundle would grow.
 
 ## 0009 — One `connect.srvResolution` event per `+srv` connection
 
-**Status:** Proposed · **Date:** 2026-10-09 · **Raised by:** operator request (blast radius and
+**Status:** Accepted (operator, 2026-10-09; was Proposed) · **Date:** 2026-10-09 · **Raised by:** operator request (blast radius and
 "when the solution is applied"), shaped in planning
 
 ### Decision (proposed)
@@ -269,7 +280,7 @@ plan.
 
 ## 0010 — A development-only switch forces the fallback path
 
-**Status:** Proposed · **Date:** 2026-10-09 · **Raised by:** planning, from the request for local
+**Status:** Accepted (operator, 2026-10-09; was Proposed) · **Date:** 2026-10-09 · **Raised by:** planning, from the request for local
 debugging
 
 ### Decision (proposed)
@@ -496,3 +507,120 @@ With dead DNS, the probe adds one default-resolver timeout (about 27 s measured)
 driver's own failure, which itself takes about 2 × 27 s. This is measured as `nodeProbeDurationMs`
 on `path=nodeErrorPassthrough` events. If it turns out to matter, switching to D only changes how
 the probe is created.
+
+---
+
+## 0018 — DNS preparation and the shell and playground init timeout have separate budgets
+
+**Status:** Accepted · **Date:** 2026-10-09 · **Raised by:** design review R4, plan Q8; the operator
+chose A, as recommended
+
+### Decision
+
+On the shell and playground path, `WorkerSessionManager` runs DNS preparation first: the probe
+(D0017), then the fallback if needed, within the D0016 deadline. Only after that does it start the
+full init timeout (`documentDB.connectionTimeout`, default 30 s). Preparation time is not
+subtracted from it. The user documentation states that the connection timeout starts after DNS
+resolution.
+
+### Why
+
+- Every connection gets the same budget for connect, TLS, auth and Entra ID token acquisition,
+  whether or not it needed the fallback.
+- This matches the driver: its own SRV lookup in `MongoClient._connect()` runs before server
+  selection, so `serverSelectionTimeoutMS` never counts DNS either.
+- On the Node.js path, the worker's driver still resolves SRV inside the init timer, as it does
+  today, so that timer covers the same work as before.
+- A shared budget cannot work with D0017's unbounded probe: a slow probe would leave almost nothing
+  for init.
+
+### Rejected alternatives
+
+- **B, one budget** (init gets `connectionTimeout − preparation`): spurious timeouts after a slow
+  probe or a slow fallback.
+- **C, one budget with a floor:** still not a hard bound, and one more constant.
+
+### Consequences
+
+When the fallback is needed, connecting can take up to the D0016 deadline (≤ 20 s) longer than the
+setting suggests, and a dead DNS server adds the probe's timeout (D0017). Both are visible as
+`srvResolutionDurationMs` on `worker.startup`.
+
+---
+
+## 0019 — The UI shows whether the fallback was used: the tooltip now, the dashboard later
+
+**Status:** Accepted · **Date:** 2026-10-09 · **Raised by:** operator requirement
+
+### Decision
+
+The extension keeps an in-memory flag recording whether a cluster's connection was resolved by the
+fallback: an `SrvResolutionSummary` on `ClustersClient`, keyed by `clusterId`, with no hostnames and
+never persisted. This increment shows it as one line in the cluster tooltip (plan WI-10). The
+cluster dashboard shows it later (future-work FW-2).
+
+### Why
+
+Telemetry says how many users hit the fallback, but not whether *this* user's connection did. A
+visible flag lets the user and support confirm it without collecting a trace. Showing it only in
+the tooltip keeps the increment small.
+
+### Consequences
+
+- Without re-rendering, the row would never show the line, because the tooltip is built before the
+  first connection. WI-10 includes re-rendering the row (or resolving the tooltip lazily on
+  hover).
+- In this increment the flag covers the tree's connection only. Shell and playground sessions
+  resolve on their own and report only to trace and telemetry.
+
+---
+
+## 0020 — The VS Code-independent logic lives in a workspace package, published at the operator's discretion
+
+**Status:** Accepted · **Date:** 2026-10-09 · **Raised by:** operator ("could this help another
+MongoDB API extension?"); shaped in chat
+
+### Decision
+
+The URI rewrite, the fallback DNS client and the core resolve function (plan WI-2 to WI-4) go into
+a new workspace package, `packages/documentdb-js-srv-resolver` (working name
+`@documentdb-js/srv-resolver`). It has `mongodb` as a peer dependency and `dns-packet` as a
+dependency. The extension consumes it locally through npm workspaces (`"*"`), the same way as the
+other `@documentdb-js` packages. Telemetry, the output channel, environment switches, localized
+text, the tooltip and the worker wiring stay in the extension. They connect through an injected
+`logger`, an `onReport` callback and plain options. The package is created in this increment and
+published later, whenever the operator decides.
+
+### Why
+
+- About 85 % of the code has no VS Code dependency: an estimated 700–1,000 lines of production
+  code in 4–5 modules, plus 1,000–1,500 lines of tests. That is about the size of
+  `@documentdb-js/shell-api-types` (about 750 lines).
+- A package boundary is enforced by the compiler: the package cannot import `vscode`. A folder
+  under `src/` would rely on discipline, and the code would have to move a second time.
+- Another extension that uses the MongoDB API driver can reuse the fix without copying it.
+
+### Publishing has no effect on the extension (checked 2026-10-09)
+
+- The extension depends on `@documentdb-js/*` with `"*"`, and npm workspaces link the local folder
+  (`node_modules/@documentdb-js/<name> → ../../packages/…`), whether or not a published version
+  exists.
+- The VSIX is built with `vsce package --no-dependencies` from webpack output, and `.vscodeignore`
+  excludes `packages/**` and `node_modules/**`. The package's code ships inside the bundle, not as
+  an npm dependency.
+- Publishing runs through `.github/workflows/npm-publish-documentdb-js.yml` (manual trigger,
+  reviewer approval gate, npm Trusted Publishing). A new package needs its own `publish_*` input and
+  step there, and, as far as I know, its own Trusted Publisher setup on npmjs.com. Neither is part
+  of this increment. (The Azure DevOps ESRP pipeline only publishes `@microsoft`-scoped packages.)
+
+### Rejected alternatives
+
+- **Keep the code in `src/documentdb/srv/` with no `vscode` imports, extract later.** Slightly less
+  risk for the patch, but nothing enforces the boundary, and it means a second move.
+
+### Consequences
+
+- Once published, the package has its own semantic versioning and README. Its tests run against the
+  installed `mongodb` driver, so a consumer on another driver version is protected only if those
+  tests run in its CI.
+- The name must be final before the first publish.
